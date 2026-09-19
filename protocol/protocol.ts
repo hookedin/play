@@ -359,7 +359,8 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
         same(op.developer, ZeroAddress) ||
         !same(keccak256(preimage), op.roundHead)
       : op.prizes.length !== 0 ||
-        !same(op.seed, ZeroHash) ||
+        // The deployed contract lets a transfer carry a seed, so this does too; nothing signs one.
+        (kind !== 4 && !same(op.seed, ZeroHash)) ||
         !same(op.roundHead, ZeroHash) ||
         !same(op.developer, ZeroAddress) ||
         !same(preimage, ZeroHash)) ||

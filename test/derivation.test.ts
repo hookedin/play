@@ -62,8 +62,16 @@ test('contract derive and deriveState agree on every operation kind and invalid 
   const paidOut = await step(f, a, 5, 55n, { counterparty: table });
   await agree(a, paidOut.evidence);
   for (const kind of [4, 5])
-    for (const stray of [{ roundHead: id('a head') }, { seed: id('entropy') }])
-      await disagreeNever(await craft(a, { kind, amount: 30n, counterparty: table, ...stray }), /Invalid transfer/);
+    await disagreeNever(
+      await craft(a, { kind, amount: 30n, counterparty: table, roundHead: id('a head') }),
+      /Invalid transfer/,
+    );
+  await disagreeNever(
+    await craft(a, { kind: 5, amount: 30n, counterparty: table, seed: id('entropy') }),
+    /Invalid transfer/,
+  );
+  // The contract and this code accept the same encodings, a seeded transfer among them.
+  await agree(a, (await step(f, a, 4, 5n, { counterparty: table, seed: id('entropy') })).evidence);
   await disagreeNever(await craft(a, { kind: 5, amount: 0n, counterparty: table }), /Invalid transfer/);
   // Every field a kind does not use must be zero; both sides reject the same encodings.
   await disagreeNever(await craft(a, { kind: 2, amount: 10n, developer: f.owner.address }), /Invalid payment/);

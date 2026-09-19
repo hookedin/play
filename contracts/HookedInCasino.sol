@@ -18,8 +18,8 @@ contract HookedInCasino {
     uint256 private constant KIND_PAYMENT = 2;
     uint256 private constant KIND_TRANSFER = 4;
     uint256 private constant KIND_RECEIVE = 5;
-    // A table buy-in leaves the channel for the casino's escrow; a payout returns whatever the
-    // table's host awarded. The casino attests both, as it attests a transfer's matching debit.
+    // A match stake leaves the channel for the casino's escrow; its payout returns whatever the
+    // match's oracle awarded. The casino attests both, as it attests a transfer's matching debit.
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
     bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 constant STATE_TYPEHASH = keccak256(
@@ -278,15 +278,16 @@ contract HookedInCasino {
         next.transitionHash = keccak256(abi.encode(operationHash, step.preimage));
         bool wager = op.kind == KIND_BET;
         bool credit = op.kind == KIND_RECEIVE;
-        // A transfer and its credit name the other side: another channel, a table or the bankroll fund.
+        // A transfer and its credit name the other side: another channel, or a match.
         bool linked = credit || op.kind == KIND_TRANSFER;
         // A bet names its round: the preimage must open the signed round head, whichever
         // channel owns that chain. Every bet on one round and seed shares one outcome.
+        // A transfer into a match may carry its seat's seed, for a pot that is settled as a bet.
         if (
             (wager ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seed == bytes32(0)
                     || op.roundHead == bytes32(0) || op.developer == address(0)
                     || keccak256(abi.encodePacked(step.preimage)) != op.roundHead
-                : op.prizes.length != 0 || op.seed != bytes32(0) || op.roundHead != bytes32(0)
+                : op.prizes.length != 0 || (op.seed != bytes32(0) && op.kind != KIND_TRANSFER) || op.roundHead != bytes32(0)
                     || op.developer != address(0) || step.preimage != bytes32(0))
                 || op.amount == 0 || op.amount >= MAX_BALANCE
                 || (linked ? op.counterparty == bytes32(0) || op.counterparty == base.channelId : op.counterparty != bytes32(0))
