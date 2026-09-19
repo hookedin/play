@@ -573,86 +573,44 @@ main {
   border-color: #58492b;
   color: #d1bd87;
 }
-.play-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 27px;
-}
-.back-link {
-  border: 0;
-  background: none;
-  color: #9399aa;
-  font-size: 11px;
-  padding: 0;
-  margin-bottom: 22px;
-}
-.play-heading h1 {
-  font-size: 38px;
-  letter-spacing: -1.5px;
-}
-.play-heading p {
-  font-size: 12px;
-  margin-top: 12px;
-}
-.sandbox-pill {
-  font-size: 8px;
-  color: #9bae9e;
-  border: 1px solid #30423b;
-  background: #15241e;
-  border-radius: 5px;
-  padding: 10px;
-  letter-spacing: 1px;
-}
-.sandbox-pill span {
-  font-size: 13px;
-  margin-right: 5px;
-}
-.game-viewport {
-  border: 1px solid #343045;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #11151c;
-  min-width: 0;
-}
-.frame-chrome {
-  height: 39px;
-  background: #1a1824;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 0 15px;
-  border-bottom: 1px solid #343045;
-  font-size: 9px;
-  color: #908aa4;
-}
-.frame-developer {
-  margin-left: 18px;
-  color: #7f7a94;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.frame-developer code {
-  font: inherit;
-  color: #a9a0c0;
-}
-.frame-lock {
-  margin-left: auto;
-  color: #9a90b4;
-  font-size: 8px;
-}
-.frame-chrome .live-dot {
-  background: #b9a6e7;
-}
 .game-viewport iframe {
   border: 0;
   display: block;
   width: 100%;
-  /* Tall enough that the listed games fit without a second scrollbar inside the page's own. */
-  height: clamp(920px, calc(100vh - 230px), 1100px);
+  height: 100%;
   background: #10151e;
+}
+/* An open game has everything under the top bar: no heading, no frame, no footer. */
+.workspace:has(#page-play:not(.hidden)) {
+  height: 100dvh;
+}
+.workspace:has(#page-play:not(.hidden)) main {
+  max-width: none;
+  padding: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.workspace:has(#page-play:not(.hidden)) .app-footer {
+  display: none;
+}
+#page-play:not(.hidden) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.game-viewport {
+  flex: 1;
+  min-height: 0;
+}
+/* With the developer log open the page scrolls: the game keeps a full screen and the log follows it. */
+.workspace:has(.game-activity:not(.hidden)):has(#page-play:not(.hidden)) {
+  height: auto;
+}
+.workspace:has(.game-activity:not(.hidden)) .game-viewport {
+  flex: none;
+  height: 85dvh;
 }
 .amount-input {
   display: flex;
@@ -941,9 +899,6 @@ main {
   .library-footer a {
     font-size: 8px;
   }
-  .play-heading h1 {
-    font-size: 34px;
-  }
   .wallet-overview {
     grid-template-columns: 1fr;
   }
@@ -1140,25 +1095,6 @@ main {
     font-size: 10px;
     padding: 11px 13px;
     flex-wrap: wrap;
-  }
-  .play-heading {
-    align-items: start;
-    margin-bottom: 22px;
-  }
-  .play-heading h1 {
-    font-size: 32px;
-  }
-  .play-heading p {
-    font-size: 10px;
-    max-width: 230px;
-    line-height: 1.7;
-  }
-  .sandbox-pill {
-    font-size: 6px;
-    letter-spacing: 0.5px;
-    padding: 8px;
-    margin-top: 37px;
-    white-space: nowrap;
   }
   .wallet-overview {
     gap: 15px;
@@ -1898,7 +1834,7 @@ main {
   tab-size: 2;
 }
 .game-activity {
-  margin-top: 24px;
+  margin: 24px 42px 30px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #101620;
@@ -2060,22 +1996,6 @@ main {
     SFMono-Regular,
     monospace;
   color: #8f86ad;
-}
-.game-link-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  font-size: 11px;
-}
-.game-link {
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  color: #c7b3f0;
-  overflow-wrap: anywhere;
-}
-.game-link-row .text-button {
-  font-size: 11px;
-  white-space: nowrap;
 }
 /* The page behind an open dialog stays put. */
 html:has(dialog[open]) {

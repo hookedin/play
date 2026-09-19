@@ -65,6 +65,8 @@ let historyBusy = false,
   historyError: any = null;
 const catalogGames = new Map<string, { manifestURL: string; manifest: any }>();
 const GAME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+// A developer's diagnostic: the game page shows it below the game only when the wallet was opened with ?log.
+$('game-activity').classList.toggle('hidden', !new URLSearchParams(location.search).has('log'));
 const gameLog = createGameLog({
   list: $('game-activity-list'),
   search: $<HTMLInputElement>('game-activity-search'),
@@ -290,6 +292,9 @@ function openFundDialog({ amount, reason }: { amount?: bigint; reason?: string }
     ? `Add money to ${active.manifest.name}`
     : `${active.manifest.name} needs a funded channel`;
   $('fund-reason').textContent = `The game asks for money${reason ? `: “${reason.slice(0, 140)}”` : '.'}`;
+  // The game page shows nothing but the game, so the dialog that grants it money says who it is.
+  $('fund-game').textContent =
+    `Served from ${new URL(active.frame.src).host}. Its developer, ${active.manifest.developer}, earns half of each bet’s fee.`;
   $('fund-channel-note').textContent = wallet.current
     ? 'Your channel is not open for play yet. Check its status in My wallet, then come back to this game.'
     : 'You have no open channel. Receive ETH and open a funded channel in My wallet, then come back to this game.';
@@ -835,16 +840,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     },
     onError: message => toast(message, true),
   });
-  $('active-game-name').textContent = manifest.name;
-  $('active-game-description').textContent =
-    typeof manifest.description === 'string'
-      ? manifest.description.slice(0, 220)
-      : 'An independent game, powered by your wallet.';
-  $('game-host').textContent = entry.host;
-  $('developer-address').textContent = developer;
-  const link = $<HTMLAnchorElement>('game-link');
-  link.href = path;
-  link.textContent = new URL(path, location.origin).href;
   frame.src = entry.href;
   $('frame-slot').replaceChildren(frame);
   showPage('play');
@@ -916,7 +911,6 @@ async function loadLibrary() {
 }
 const libraryLoaded = loadLibrary();
 window.addEventListener('popstate', () => void route(false));
-$<HTMLButtonElement>('back-library').addEventListener('click', () => navigate('library'));
 $<HTMLButtonElement>('clear-game-activity').addEventListener('click', () => gameLog.clear());
 $<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([gameLog.export()], { type: 'application/json' }));
@@ -925,15 +919,6 @@ $<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
   link.download = `hookedin-game-log-${active?.manifest.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'session'}.json`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
-$<HTMLButtonElement>('copy-game-link').addEventListener('click', async () => {
-  if (!active) return;
-  try {
-    await navigator.clipboard.writeText(new URL(active.path, location.origin).href);
-    toast('Game link copied.');
-  } catch {
-    toast('Copy unavailable. Use the address bar.', true);
-  }
 });
 $<HTMLInputElement>('activity-search').addEventListener('input', () => {
   filterActivity(

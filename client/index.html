@@ -122,28 +122,8 @@
         </section>
 
         <section id="page-play" class="page hidden">
-          <div class="play-heading">
-            <div>
-              <button id="back-library" class="back-link">← Game library</button>
-              <h1 id="active-game-name">Game</h1>
-              <p id="active-game-description" class="muted"></p>
-              <p class="game-link-row">
-                <a id="game-link" href="/" class="game-link">/games/…</a
-                ><button id="copy-game-link" class="text-button" type="button">Copy link</button>
-              </p>
-            </div>
-            <div class="sandbox-pill"><span>◇</span> ISOLATED GAME</div>
-          </div>
-          <div class="game-viewport">
-            <div class="frame-chrome">
-              <span class="live-dot"></span><span id="game-host">Game iframe</span
-              ><span class="frame-developer"
-                >Developer <code id="developer-address"></code> · earns half of each bet’s fee</span
-              ><span class="frame-lock">Sandbox active</span>
-            </div>
-            <div id="frame-slot"></div>
-          </div>
-          <section class="game-activity" aria-labelledby="game-activity-title">
+          <div id="frame-slot" class="game-viewport"></div>
+          <section id="game-activity" class="game-activity hidden" aria-labelledby="game-activity-title">
             <div class="game-activity-heading">
               <div>
                 <h2 id="game-activity-title">
@@ -501,6 +481,7 @@
           <button id="fund-cancel" class="button secondary" type="button">Not now</button
           ><button id="fund-confirm" class="button primary" type="submit">Authorize</button>
         </div>
+        <p id="fund-game" class="security-note fund-only"></p>
         <p class="security-note fund-only">
           This amount lasts only while the game stays open: leaving it or closing the tab returns whatever is left to
           your wallet. The game can lose all of it, including winnings, on wagers and payments to its developer.
