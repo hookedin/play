@@ -125,7 +125,7 @@ The operator commits `config/production.json`. It is published as `config.js`, s
 }
 ```
 
-The committed [config/production.json](config/production.json) has no `deployment` yet: add it, with the contract's address and owner, once the HookedIn contract is deployed to Sepolia, and before pointing players at the site.
+The committed [config/production.json](config/production.json) pins the current Sepolia deployment.
 
 `games` is the base URL that serves `catalog.json`; the build copies [catalog.json](catalog.json) into `dist/`, so the wallet's own origin works. `deployment` pins the chain, contract and owner independently of whatever the casino API reports, and lets a fresh browser start in recovery mode while the casino is unreachable. An optional `runtimeHash` additionally pins the keccak-256 hash of the deployed code.
 
