@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachGameBridge, validateRequest } from '../client/bridge.ts';
 
-const request = (id = 'request-1', method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
+const request = (id = 1, method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
 const prize = { rangeStart: '0', rangeEnd: '100', payout: '20' };
 const params = { id: 'op-1', stake: '10', prizes: [prize] };
-const bet = (overrides: any = {}) => request('bet', 'game.bet', { ...params, ...overrides });
+const bet = (overrides: any = {}) => request(1, 'game.bet', { ...params, ...overrides });
 
 class FakeEventTarget {
   listeners = new Set<(event: any) => unknown>();
@@ -68,7 +68,7 @@ function harness(
 
 test('bridge accepts opaque-origin requests only from the bound iframe window', async () => {
   const bridge = harness();
-  await bridge.send(request('forged'), {
+  await bridge.send(request(1), {
     postMessage() {
       throw new Error('Spoofed window must not receive a response');
     },
@@ -77,11 +77,9 @@ test('bridge accepts opaque-origin requests only from the bound iframe window', 
   assert.equal(bridge.replies.length, 0);
   assert.equal(bridge.activity.length, 0, 'Other windows cannot write to the game log');
 
-  await bridge.send(request('real'));
+  await bridge.send(request(2));
   assert.deepEqual(bridge.calls, [{ method: 'wallet.info', params: {} }]);
-  assert.deepEqual(bridge.replies, [
-    { message: { hookedin: true, id: 'real', result: { cash: '100' } }, destination: '*' },
-  ]);
+  assert.deepEqual(bridge.replies, [{ message: { hookedin: true, id: 2, result: { cash: '100' } }, destination: '*' }]);
   bridge.detach();
 });
 
@@ -89,12 +87,12 @@ test('bridge rejects stale game requests and suppresses results completed after 
   const pending = deferred();
   const bridge = harness(() => pending.promise);
   bridge.setCurrent(false);
-  await bridge.send(request('already-stale'));
+  await bridge.send(request(1));
   assert.equal(bridge.calls.length, 0);
   assert.equal(bridge.activity.length, 0);
 
   bridge.setCurrent(true);
-  const operation = bridge.send(request('became-stale'));
+  const operation = bridge.send(request(2));
   assert.equal(bridge.calls.length, 1);
   bridge.setCurrent(false);
   (pending.resolve! as any)({ cash: '50' });
@@ -102,7 +100,7 @@ test('bridge rejects stale game requests and suppresses results completed after 
   assert.equal(bridge.replies.length, 0, 'The new game must not receive the previous game result');
   assert.deepEqual(
     bridge.activity,
-    [{ type: 'request', data: request('became-stale') }],
+    [{ type: 'request', data: request(2) }],
     'Late results must not enter a replacement game log',
   );
   bridge.detach();
@@ -111,21 +109,21 @@ test('bridge rejects stale game requests and suppresses results completed after 
 test('activity includes requests, successful results and every rejection path', async () => {
   const pending = deferred<unknown>();
   const bridge = harness(() => pending.promise);
-  const operation = bridge.send(request('pending'));
-  await bridge.send(request('busy'));
+  const operation = bridge.send(request(1));
+  await bridge.send(request(2));
   pending.resolve({ cash: '75' });
   await operation;
-  await bridge.send(request('pending'));
-  await bridge.send(request('invalid', 'wallet.sign'));
+  await bridge.send(request(1));
+  await bridge.send(request(3, 'wallet.sign'));
   await bridge.send(null);
   assert.deepEqual(
     bridge.activity.map(entry => entry.type),
     ['request', 'request', 'error', 'response', 'request', 'error', 'request', 'error', 'request', 'error'],
   );
-  assert.deepEqual(bridge.activity[0].data, request('pending'));
+  assert.deepEqual(bridge.activity[0].data, request(1));
   assert.match(bridge.activity[2].data.error, /still in progress/);
-  assert.deepEqual(bridge.activity[3].data, { hookedin: true, id: 'pending', result: { cash: '75' } });
-  assert.match(bridge.activity[5].data.error, /only be used once/);
+  assert.deepEqual(bridge.activity[3].data, { hookedin: true, id: 1, result: { cash: '75' } });
+  assert.match(bridge.activity[5].data.error, /larger than the last/);
   assert.match(bridge.activity[7].data.error, /not available/);
   assert.match(bridge.activity[9].data.error, /Invalid HookedIn request/);
   bridge.detach();
@@ -145,8 +143,8 @@ test('diagnostic failures cannot interrupt request execution, error replies or l
       throw new Error('Log unavailable');
     },
   );
-  await bridge.send(request('failed'));
-  await bridge.send(request('success'));
+  await bridge.send(request(1));
+  await bridge.send(request(2));
   assert.equal(bridge.replies[0].message.error, 'Settlement failed');
   assert.deepEqual(bridge.replies[1].message.result, { cash: '100' });
   assert.equal(bridge.calls.length, 2);
@@ -157,12 +155,18 @@ test('diagnostic failures cannot interrupt request execution, error replies or l
   bridge.detach();
 });
 
-test('bridge executes a request ID once even when replayed with a different action', async () => {
+test('bridge executes only a request ID larger than the last, whatever action it carries', async () => {
   const bridge = harness();
-  await bridge.send(request('same', 'game.bet', params));
-  await bridge.send(request('same', 'game.bet', { ...params, stake: '11' }));
+  await bridge.send(request(2, 'game.bet', params));
+  for (const id of [2, 1, 0]) {
+    await bridge.send(request(id, 'game.bet', { ...params, stake: '11' }));
+    assert.deepEqual(bridge.replies.at(-1).message, {
+      hookedin: true,
+      id,
+      error: 'A request ID must be larger than the last.',
+    });
+  }
   assert.deepEqual(bridge.calls, [{ method: 'game.bet', params }]);
-  assert.match(bridge.replies[1].message.error, /only be used once/);
   bridge.detach();
 });
 
@@ -176,19 +180,19 @@ test('bridge serializes operations and does not execute a queued or replayed con
     }
     return { cash: '200' };
   });
-  const operation = bridge.send(request('first', 'game.bet', params));
-  await bridge.send(request('second', 'game.bet', params));
+  const operation = bridge.send(request(1, 'game.bet', params));
+  await bridge.send(request(2, 'game.bet', params));
   assert.equal(bridge.calls.length, 1);
-  assert.equal(bridge.replies[0].message.id, 'second');
+  assert.equal(bridge.replies[0].message.id, 2);
   assert.match(bridge.replies[0].message.error, /still in progress/);
 
   (pending.resolve! as any)({ cash: '100' });
   await operation;
-  await bridge.send(request('second', 'game.bet', params));
+  await bridge.send(request(2, 'game.bet', params));
   assert.equal(bridge.calls.length, 1, 'Rejected concurrent IDs cannot later be replayed');
-  assert.match(bridge.replies.at(-1).message.error, /only be used once/);
+  assert.match(bridge.replies.at(-1).message.error, /larger than the last/);
 
-  await bridge.send(request('third', 'game.bet', params));
+  await bridge.send(request(3, 'game.bet', params));
   assert.equal(bridge.calls.length, 2, 'The bridge accepts a fresh request after settlement');
   assert.deepEqual(bridge.replies.at(-1).message.result, { cash: '200' });
   bridge.detach();
@@ -203,10 +207,10 @@ test('bridge reports operation failure and releases the operation lock', async (
     }
     return null;
   });
-  await bridge.send(request('failed'));
+  await bridge.send(request(1));
   assert.equal(bridge.replies[0].message.error, 'Approval rejected');
   assert.deepEqual(bridge.errors, ['Approval rejected']);
-  await bridge.send(request('next'));
+  await bridge.send(request(2));
   assert.equal(bridge.replies[1].message.result, null);
   assert.equal(bridge.calls.length, 2);
   bridge.detach();
@@ -236,13 +240,13 @@ test('validation excludes wallet signing and private key methods from the iframe
     'wallet.setLimits',
     'wallet.resume',
   ]) {
-    assert.throws(() => validateRequest(request('attack', method)), /not available to games/, method);
+    assert.throws(() => validateRequest(request(1, method)), /not available to games/, method);
   }
 });
 
 test('validation rejects developer and wallet-field injection before dispatch', async () => {
   const bridge = harness();
-  for (const [index, field] of [
+  for (const field of [
     'developer',
     'developerFeeRecipient',
     'recipient',
@@ -255,16 +259,15 @@ test('validation rejects developer and wallet-field injection before dispatch', 
     'approved',
     'limits',
     'grant',
-  ].entries()) {
+  ]) {
     const message = bet({ [field]: 'attacker-controlled' });
-    message.id = `injection-${index}`;
     assert.throws(() => validateRequest(message), /Unexpected game request field/);
     await bridge.send(message);
     assert.match(bridge.replies.at(-1).message.error, /Unexpected game request field/);
   }
   assert.equal(bridge.calls.length, 0);
   assert.throws(() => validateRequest({ ...request(), developer: 'attacker' }), /Invalid HookedIn request/);
-  assert.throws(() => validateRequest(request('read', 'wallet.info', { privateKey: true })), /takes no parameters/);
+  assert.throws(() => validateRequest(request(1, 'wallet.info', { privateKey: true })), /takes no parameters/);
   assert.throws(
     () => validateRequest(bet({ options: { chanceBps: 4950, developer: 'attacker' } })),
     /Unexpected game request field/,
@@ -292,7 +295,7 @@ test('the envelope is bounded structurally, without serializing wide or deep pay
 test('a message relayed by a frame nested inside the game iframe is ignored', async () => {
   const bridge = harness();
   const nested = { postMessage: () => assert.fail('A nested frame must not receive a reply') };
-  await bridge.send(request('nested'), nested);
+  await bridge.send(request(1), nested);
   assert.equal(bridge.calls.length, 0);
   assert.equal(bridge.replies.length, 0);
   assert.equal(bridge.activity.length, 0);
@@ -300,7 +303,7 @@ test('a message relayed by a frame nested inside the game iframe is ignored', as
 });
 
 test('funding requests carry only a suggested amount and a short reason', () => {
-  const fund = (params: any) => validateRequest(request('fund', 'game.requestFunds', params));
+  const fund = (params: any) => validateRequest(request(1, 'game.requestFunds', params));
   assert.deepEqual(fund({}).params, {});
   assert.equal(fund({ amount: '5', reason: 'Double down' }).params.amount, '5');
   assert.throws(() => fund({ amount: '0' }), /range/);
@@ -311,21 +314,40 @@ test('funding requests carry only a suggested amount and a short reason', () => 
     assert.throws(() => fund({ [field]: '1' }), /Unexpected game request field/);
 });
 
+test('table requests carry exact table terms, a table ID or a nonce, and nothing else', () => {
+  const word = '0x' + '22'.repeat(32),
+    table = { host: '0x' + '11'.repeat(20), developer: '0x' + '33'.repeat(20), expiresAt: '1900000000', nonce: word };
+  const buyIn = (overrides: any = {}) =>
+    validateRequest(request(1, 'game.buyIn', { id: 'seat-1', table, amount: '50', ...overrides }));
+  assert.deepEqual(buyIn().params.table, table);
+  for (const bad of [{ host: '0x12' }, { developer: 7 }, { nonce: '0x12' }, { seats: [] }])
+    assert.throws(() => buyIn({ table: { ...table, ...bad } }), /Invalid table/);
+  assert.throws(() => buyIn({ table: [table] }), /Invalid table/);
+  assert.throws(() => buyIn({ table: { ...table, expiresAt: 1900000000 } }), /wei/);
+  assert.throws(() => buyIn({ amount: '0' }), /range/);
+  assert.throws(() => buyIn({ id: 'no spaces' }), /operation ID/);
+  assert.throws(() => buyIn({ tableId: word }), /Unexpected game request field/);
+  assert.equal(validateRequest(request(1, 'game.table', { tableId: word })).params.tableId, word);
+  for (const params of [{}, { tableId: '0x12' }, { tableId: word, id: 'seat-1' }])
+    assert.throws(() => validateRequest(request(1, 'game.table', params)), /Invalid table ID/);
+  assert.equal(validateRequest(request(1, 'game.identify', { nonce: word })).params.nonce, word);
+  for (const params of [{}, { nonce: 7 }, { nonce: word, origin: 'https://attacker.example' }])
+    assert.throws(() => validateRequest(request(1, 'game.identify', params)), /Invalid nonce/);
+});
+
 test('validation accepts only plain parameter records and bounded exact terms', () => {
   for (const value of [[], new Date(), 'params', 1, true, Object.create({ revision: 0 })])
-    assert.throws(() => validateRequest(request('invalid', 'game.bet', value)), /parameters must be an object/);
-  for (const id of ['', -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1, {}, 'x'.repeat(81)])
+    assert.throws(() => validateRequest(request(1, 'game.bet', value)), /parameters must be an object/);
+  for (const id of ['1', -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1, null, {}])
     assert.throws(() => validateRequest(request(id as any)), /Invalid request ID/);
+  assert.equal(validateRequest(request(0)).id, 0);
   for (const stake of ['0', '-1', '1.1', '1e18', '01', 1, '1'.repeat(79)])
     assert.throws(() => validateRequest(bet({ stake })));
   for (const id of ['', 'x'.repeat(65), 'no spaces', 'a/b', 7])
     assert.throws(() => validateRequest(bet({ id })), /operation ID/);
   assert.throws(() => validateRequest(bet({ revision: 1 })), /Unexpected/);
-  assert.equal(
-    validateRequest(request('lookup', 'game.receipt', { id: 'round-1:attempt-2' })).params.id,
-    'round-1:attempt-2',
-  );
-  assert.throws(() => validateRequest(request('lookup', 'game.receipt', {})), /operation ID/);
+  assert.equal(validateRequest(request(1, 'game.receipt', { id: 'round-1:attempt-2' })).params.id, 'round-1:attempt-2');
+  assert.throws(() => validateRequest(request(1, 'game.receipt', {})), /operation ID/);
   assert.throws(() => validateRequest(bet({ outcome: 'win' })), /Unexpected/);
   assert.equal(validateRequest(bet()).params.stake, '10');
   // The stake is paid to enter; up to 64 prizes, which may overlap, each pay within [0, 2^64).
@@ -352,13 +374,13 @@ test('validation accepts only plain parameter records and bounded exact terms', 
     roundHead: '0x' + '22'.repeat(32),
     seed: '0x' + '33'.repeat(32),
   };
-  const shared = (overrides: any) => request('shared', 'game.bet', { ...params, round, ...overrides });
+  const shared = (overrides: any) => request(1, 'game.bet', { ...params, round, ...overrides });
   assert.equal(validateRequest(shared({})).params.round.index, 4);
   assert.throws(() => validateRequest(shared({ round: { ...round, seed: '0x12' } })), /Invalid round/);
   assert.throws(() => validateRequest(shared({ round: { ...round, index: -1 } })), /Invalid round/);
   assert.throws(() => validateRequest(shared({ round: { ...round, host: 'x' } })), /Invalid round/);
-  assert.equal(validateRequest(request('withdraw', 'game.cancel', { id: 'hand-1' })).params.id, 'hand-1');
-  assert.throws(() => validateRequest(request('withdraw', 'game.cancel', { id: 'hand-1', stake: '1' })), /Unexpected/);
+  assert.equal(validateRequest(request(1, 'game.cancel', { id: 'hand-1' })).params.id, 'hand-1');
+  assert.throws(() => validateRequest(request(1, 'game.cancel', { id: 'hand-1', stake: '1' })), /Unexpected/);
   const safe = Object.assign(Object.create(null), params);
-  assert.equal(validateRequest(request('safe', 'game.bet', safe)).params.stake, '10');
+  assert.equal(validateRequest(request(1, 'game.bet', safe)).params.stake, '10');
 });

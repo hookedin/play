@@ -97,11 +97,9 @@ Signed results change the player balance and casino accounting off-chain. Casino
 
 At a consistent confirmed block, reported bankroll is:
 
-    max(0, pool cash - active signed player balances - finalized unpaid claims - accrued unpaid developer commissions - in-flight worst-case reservations - match escrow)
+    max(0, pool cash - active signed player balances - finalized unpaid claims - accrued unpaid developer commissions - in-flight worst-case reservations - escrow)
 
-Match escrow is every open [match](protocol.md#matches)'s pot plus every payout awarded but not yet collected. The pot has left its players' signed balances, but it is held for players, not won by the house: opening a match of plain stakes leaves the bankroll unchanged, and a decided match adds only the casino's half of its rake.
-
-A match whose terms carry prizes settles its stakes as **one bet** when it opens, and the pot is what that bet paid. It is admitted exactly as a round of one bet `{stake: all stakes, prizes}`: the same rule, the same reservation before the preimage is read, the same fee, accrued as commission to the match's developer. The bankroll gains the stakes and loses the pot at that moment, and afterwards holds the pot in escrow like any other.
+Escrow is every [table](protocol.md#tables)'s pot plus every payout awarded but not yet collected. A pot has left its players' signed balances, but it is held for players, not won by the house: a buy-in leaves the bankroll unchanged, and a settlement adds only the casino's half of its rake. A table's rounding dust at its deadline joins the bankroll.
 
 Anyone may add to this capital. An [investment](protocol.md#the-bankroll-fund) is a transfer from a channel into the bankroll that mints shares at `equity / totalShares`, where equity is the reported bankroll before in-flight reservations; a redemption burns them at the same price and owes the player their worth, which counts as escrow until collected. Both leave the price of every other share unchanged, so holders gain and lose only what the bankroll does: losses add to equity and wins and developer commission take from it, pro rata. Investors widen what the Kelly rule admits exactly as the owner's own funding does, and the owner's funding and withdrawals buy and sell house shares at the going price. A redemption never takes money an in-flight round has reserved.
 

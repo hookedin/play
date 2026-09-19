@@ -1,4 +1,4 @@
-import type { Integer, Checkpoint, Operation, Prize, MatchTerms } from '../protocol/types.ts';
+import type { Integer, Checkpoint, Operation, Prize, TableTerms, Settlement } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id, keccak256 } from 'ethers';
 import {
@@ -14,10 +14,9 @@ import {
   rejectionCheckpoint,
   operation,
   outcome,
-  matchId,
-  matchPayouts,
-  matchPot,
-  validateMatch,
+  tableId,
+  validateTable,
+  validateSettlement,
   verifyShareStatement,
   sharesFor,
   valueOf,
@@ -25,7 +24,8 @@ import {
   FUND_ID,
   FUND_TYPES,
   REDEEM_TYPES,
-  RESOLUTION_TYPES,
+  SETTLEMENT_TYPES,
+  IDENTITY_TYPES,
   verifyStep,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
@@ -52,21 +52,6 @@ function hostedRound(round: HostedRound): HostedRound {
     throw new Error('Invalid round');
   return { owner: owner.toLowerCase(), epoch, index, roundHead, seed };
 }
-/** Where a casino says a pot bet settled, or would have. Unsigned and optional: a malformed one is
- * ignored, never an obstacle to accepting the signed result it came with. */
-function reportedRound(round: any) {
-  try {
-    const { owner, epoch, index } = hostedRound({
-      ...round,
-      roundHead: '0x' + '1'.repeat(64),
-      seed: '0x' + '1'.repeat(64),
-    });
-    return { owner, epoch, index };
-  } catch {
-    return null;
-  }
-}
-
 /** A round on someone else's chain: its owner, the address of the table's host, announces the head
  * and seed, collects every player's signed bet and submits them together, so all share one outcome. */
 export interface HostedRound {
@@ -201,13 +186,13 @@ export class ChannelClient extends WalletTransactions {
   ) {
     this.requireDurableState();
     const intent = {
-      // A stake is a transfer into a match and a payout the credit out of it.
+      // A buy-in is a transfer into a table and a payout the credit out of it.
       // An investment is a transfer into the bankroll fund, and redeemed money the credit out of it.
       kind:
-        ({ bet: 1, payment: 2, transfer: 4, stake: 4, invest: 4, payout: 5, divest: 5 } as Record<string, number>)[
+        ({ bet: 1, payment: 2, transfer: 4, buyin: 4, invest: 4, payout: 5, divest: 5 } as Record<string, number>)[
           kind
         ] || 0,
-      amount: BigInt(kind === 'bet' || kind === 'stake' ? input.stake : input.amount),
+      amount: BigInt(kind === 'bet' ? input.stake : input.amount),
       prizes:
         kind === 'bet'
           ? (input.prizes as Prize[]).map(prize => ({
@@ -225,7 +210,7 @@ export class ChannelClient extends WalletTransactions {
         (['kind', 'amount'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
         canonicalJSON(plain(operation.prizes)) !== canonicalJSON(plain(intent.prizes)) ||
         !same(operation.developer, intent.developer) ||
-        (input.matchId && !same(operation.counterparty, input.matchId)) ||
+        (input.source && !same(operation.counterparty, input.source)) ||
         (input.round && (!same(operation.roundHead, input.round.roundHead) || !same(operation.seed, input.round.seed)))
       )
         throw new Error('Operation ID is bound to a different intent (terms or developer)');
@@ -247,8 +232,8 @@ export class ChannelClient extends WalletTransactions {
         if (this.game?.key !== game.key) throw new Error('The game is no longer open');
         if (debit > BigInt(this.game.balance)) throw new Error('Bet exceeds the game balance');
       } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
-      // A match stake or payout names its match, as a transfer names the other channel.
-      let counterparty = input.matchId ?? ZeroHash;
+      // A buy-in or payout names its table, as a transfer names the other channel.
+      let counterparty = input.source ?? ZeroHash;
       if (kind === 'transfer') {
         const opening = await this.api(`/api/channels/${this.currentId}/recipient`, { player: input.recipient });
         await this.verifyRegisteredOpening(opening);
@@ -272,8 +257,7 @@ export class ChannelClient extends WalletTransactions {
         counterparty,
         amount: intent.amount,
         prizes: intent.prizes,
-        // Every seat of a match whose pot is a bet draws its own seed, after the terms fixed the round head.
-        seed: round?.seed ?? (kind === 'stake' && input.terms.prizes.length ? random() : ZeroHash),
+        seed: round?.seed ?? ZeroHash,
         roundHead: round?.roundHead ?? ZeroHash,
         // A bet signed again after its remembered round head proved stale needs a new signed ID.
         operationId: id((await this.getReceipt(operationId + STALE)) ? operationId + ':fresh-head' : operationId),
@@ -282,9 +266,10 @@ export class ChannelClient extends WalletTransactions {
       this.pending = {
         ...(game ? { game } : {}),
         ...(round ? { round: { owner: round.owner, epoch: round.epoch, index: round.index } } : {}),
-        // A hosted bet and a match stake are handed to someone else to submit, not sent by this wallet.
-        ...(input.round || kind === 'stake' ? { hosted: true } : {}),
-        ...(input.matchId ? { match: { id: input.matchId, terms: input.terms, seat: input.seat } } : {}),
+        // A hosted bet is handed to its round's owner to submit, not sent by this wallet.
+        ...(input.round ? { hosted: true } : {}),
+        // A buy-in travels with the terms of its table, which the casino may never have seen.
+        ...(input.terms ? { table: { id: input.source, terms: input.terms } } : {}),
         kind,
         operationId,
         request,
@@ -338,7 +323,12 @@ export class ChannelClient extends WalletTransactions {
             signature: c.playerSignature,
           }
         : undefined;
-    const entry = { request: pending.request, signature: pending.signature, acknowledgment };
+    const entry = {
+      request: pending.request,
+      signature: pending.signature,
+      acknowledgment,
+      ...(pending.table ? { table: pending.table.terms } : {}),
+    };
     // Only its owner can settle a hosted round. Hand the signed bet over, then look for the result.
     if (pending.hosted) {
       const found = await this.api(
@@ -423,18 +413,7 @@ export class ChannelClient extends WalletTransactions {
     } catch {
       /* Invalid optional accounting cannot discard signed settlement or break receipt display. */
     }
-    // A pot bet the casino declined names the round it would have settled on and every seat's seed.
-    // With this wallet's own seed among them, the refusal can be audited once that chain is retired.
-    const declined = rejected && c.pending?.match && response.match,
-      where = declined && reportedRound(declined.round),
-      refused =
-        where &&
-        Array.isArray(declined.seeds) &&
-        same(declined.seeds[c.pending!.match.seat], op.seed) &&
-        !same(op.seed, ZeroHash)
-          ? { terms: c.pending!.match.terms, seeds: declined.seeds, round: where }
-          : null;
-    if (refused) noteEpoch(c, refused.round);
+    const bought = kind === 'buyin' ? c.pending?.table : null;
     // An investment comes back with the casino's signed statement of the holding it bought.
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null;
     const receipt = plain({
@@ -457,24 +436,30 @@ export class ChannelClient extends WalletTransactions {
       ...(c.pending?.round ? { round: c.pending.round } : {}),
       // The seed of a hosted round was the host's, not this wallet's.
       ...(c.pending?.hosted && kind === 'bet' ? { hosted: true } : {}),
-      ...(c.pending?.match ? { matchId: c.pending.match.id } : {}),
-      ...(refused ? { refused } : {}),
+      ...(bought ? { tableId: bought.id } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
       developer,
       commission,
       balance: next.balance,
       createdAt: new Date().toISOString(),
     });
-    // An entered match is a financial record: the casino holds this stake until the oracle these
-    // terms name decides. It travels in backups, and a collected payout is checked against it.
-    const match = c.pending?.match;
-    if (match && !rejected && (kind === 'stake' || c.matches?.[match.id]))
-      c.matches = {
-        ...c.matches,
-        [match.id]:
-          kind === 'stake'
-            ? { terms: match.terms, seat: match.seat, seed: op.seed, ...(game ? { game } : {}) }
-            : { ...c.matches![match.id], collected: String(op.amount) },
+    // A table bought into is a financial record: the casino holds the money until the host these
+    // terms name pays it out. It travels in backups.
+    if (bought && !rejected) {
+      const table = c.tables?.[bought.id] ?? { terms: bought.terms, bought: '0', collected: '0' };
+      c.tables = {
+        ...c.tables,
+        [bought.id]: { ...table, ...(game ? { game } : {}), bought: String(BigInt(table.bought) + BigInt(op.amount)) },
+      };
+    }
+    const paid = kind === 'payout' && !rejected && c.tables?.[String(op.counterparty).toLowerCase()];
+    if (paid)
+      c.tables = {
+        ...c.tables,
+        [String(op.counterparty).toLowerCase()]: {
+          ...paid,
+          collected: String(BigInt(paid.collected) + BigInt(op.amount)),
+        },
       };
     c.pending = null;
     await this.save(receipt, {
@@ -499,7 +484,7 @@ export class ChannelClient extends WalletTransactions {
       return this.withdrawPending();
     });
   }
-  /** Ask the casino to decline the pending bet, stake or transfer offer. */
+  /** Ask the casino to decline the pending bet or transfer offer. */
   async withdrawPending(this: CasinoWallet, receiptId?: string) {
     const pending = this.pending,
       c = this.current!;
@@ -520,99 +505,74 @@ export class ChannelClient extends WalletTransactions {
     const id = receiptId && response.status === 'rejected' ? receiptId : pending.operationId;
     return this.accept(response, id, pending.kind, pending.developer);
   }
-  /** Enter a match: stake against the other seats, with the casino holding every stake until the
-   * oracle named in the terms decides. The signed stake is returned for the game's host to submit
-   * with the others; asking again looks for the result, and the stake can be withdrawn until then. */
-  async stakeMatch(this: CasinoWallet, terms: MatchTerms, operationId: string, game?: GameIntent) {
-    validateMatch(terms);
-    const seat = terms.seats.findIndex(s => same(s.channelId, this.currentId));
-    if (seat < 0) throw new Error('This wallet holds no seat in the match');
-    if (BigInt(terms.expiresAt) * 1000n <= BigInt(Date.now())) throw new Error('Match has already expired');
-    const id = matchId(this.domain, terms);
-    const receipt = await this.perform(
-      'stake',
-      { stake: terms.seats[seat].stake, matchId: id, terms: plain(terms), seat },
+  /** Buy into a table: the amount leaves this channel for a pot the casino holds, and the host named
+   * in the terms says who is paid out of it. The channel is free again at once. */
+  async buyIn(this: CasinoWallet, terms: TableTerms, amount: Integer, operationId: string, game?: GameIntent) {
+    validateTable(terms);
+    if (BigInt(terms.expiresAt) * 1000n <= BigInt(Date.now())) throw new Error('This table has closed');
+    return this.perform(
+      'buyin',
+      { amount, source: tableId(this.domain, terms).toLowerCase(), terms: plain(terms) },
       null,
       operationId,
       game,
     );
-    if (receipt.status !== 'signed') return receipt;
-    // The pot is settled the moment the match opens. A pot the wallet cannot verify is recorded as
-    // an alert on the match; the signed stake stands either way.
-    const status = await this.api(`/api/matches/${id}`).catch(() => null);
-    if (status) await this.noteMatch(id, this.checkedPot(this.current!.matches![id], status));
-    const { stakes, pot, potOutcome } = this.matchStatus(id);
-    if (receipt.pot !== undefined || pot === null) return receipt;
-    // The receipt says what the match plays for, once the wallet has verified it.
-    const played = { ...receipt, stakes, pot, ...(potOutcome ? { potOutcome } : {}) };
-    await this.exclusive(() => this.save(played), { wait: true });
-    return played;
   }
-  /** The pot of an entered match, believed only as far as it can be recomputed: the stakes, or the
-   * signed prizes applied to the preimage of the signed round head and every seat's seed, this
-   * wallet's own among them. */
-  verifyMatchPot(
+  /** What the wallet knows of a table it bought into: what it put in and what it has collected. */
+  tableStatus(this: CasinoWallet, id: string): Record<string, any> {
+    const table = this.current?.tables?.[id.toLowerCase()];
+    return table
+      ? {
+          tableId: id,
+          bought: table.bought,
+          collected: table.collected,
+          ...(table.alert ? { alert: table.alert } : {}),
+        }
+      : { tableId: id, bought: '0', collected: '0' };
+  }
+  /** A payout from a table is believed with the signature of the host its terms name over a
+   * settlement paying this player exactly that amount, or, unsigned, once the table's deadline has
+   * passed and the casino returns what was left of the pot. */
+  verifyPayout(
     this: CasinoWallet,
-    terms: MatchTerms,
-    seat: number,
-    seed: string | undefined,
-    status: { pot: Integer; seeds: string[]; preimage: string },
+    payout: {
+      source: string;
+      amount: Integer;
+      terms: TableTerms;
+      settlement?: { message: Settlement; signature: string } | null;
+    },
   ) {
-    const settled = matchPot(terms, status.seeds, status.preimage);
-    if (seed && !same(status.seeds[seat], seed))
-      throw new Error('The pot was settled without the seed this wallet signed');
-    if (BigInt(settled.pot) !== BigInt(status.pot))
-      throw new Error(`The casino reports a pot of ${status.pot} wei where the match won ${settled.pot}`);
-    return settled;
-  }
-  checkedPot(this: CasinoWallet, match: any, status: any): Record<string, unknown> {
-    try {
-      const { pot, potOutcome } = this.verifyMatchPot(match.terms, match.seat, match.seed, status);
-      const round = potOutcome && reportedRound(status.round);
-      return { pot, ...(potOutcome ? { potOutcome } : {}), ...(round ? { round } : {}) };
-    } catch (error: any) {
-      return { alert: error.message };
+    validateTable(payout.terms);
+    if (!same(tableId(this.domain, payout.terms), payout.source)) throw new Error('Payout names another table');
+    if (!payout.settlement) {
+      if (BigInt(payout.terms.expiresAt) * 1000n > BigInt(Date.now()))
+        throw new Error('Payout is not signed by the host of its table');
+      return;
     }
+    const { message, signature } = payout.settlement;
+    validateSettlement(message);
+    assertSignature(this.domain, SETTLEMENT_TYPES, message, signature, payout.terms.host);
+    const mine = message.payments.find(payment => same(payment.player, this.current!.opening.player));
+    if (!same(message.tableId, payout.source) || !mine || BigInt(mine.amount) !== BigInt(payout.amount))
+      throw new Error(`The casino offers ${payout.amount} wei where the host awarded ${mine?.amount ?? 0}`);
   }
-  /** What the wallet knows of a match it entered. */
-  matchStatus(this: CasinoWallet, id: string): Record<string, any> {
-    const match = this.current?.matches?.[id.toLowerCase()];
-    if (!match) return { matchId: id, status: 'unknown' };
-    const payout =
-      match.outcome === undefined || match.pot === undefined
-        ? null
-        : String(matchPayouts(match.terms, match.pot, match.outcome)[match.seat]);
-    return {
-      matchId: id,
-      status: match.outcome === undefined ? 'open' : match.status,
-      stakes: String(validateMatch(match.terms).stakes),
-      pot: match.pot ?? null,
-      potOutcome: match.potOutcome ?? null,
-      outcome: match.outcome ?? null,
-      payout,
-      collected: payout !== null && (payout === '0' || match.collected === payout),
-      ...(match.alert ? { alert: match.alert } : {}),
+  /** Tell the open game's own server who is playing. The wallet states the page's origin itself, so
+   * a token taken by one game is useless at another's server. It authorizes nothing at the casino. */
+  async identify(this: CasinoWallet, origin: string, nonce: string) {
+    if (!this.current?.key) throw new Error('Open a channel first');
+    if (!/^0x[0-9a-fA-F]{64}$/.test(nonce)) throw new Error('Invalid nonce');
+    const message = {
+      channelId: this.currentId,
+      origin,
+      nonce,
+      expiresAt: String(Math.floor(Date.now() / 1000) + 300),
     };
-  }
-  /** A settled match is only believed with the signature of the oracle its terms named, or, for a
-   * void nobody signed, once its deadline has passed. */
-  verifyMatchOutcome(this: CasinoWallet, terms: MatchTerms, pot: Integer, outcome: Integer, signature?: string | null) {
-    const id = matchId(this.domain, terms),
-      payouts = matchPayouts(terms, pot, outcome);
-    if (signature)
-      assertSignature(
-        this.domain,
-        RESOLUTION_TYPES,
-        { matchId: id, outcome: String(outcome) },
-        signature,
-        terms.oracle,
-      );
-    else if (
-      BigInt(outcome) !== BigInt(validateMatch(terms).outcomes) ||
-      BigInt(terms.expiresAt) * 1000n > BigInt(Date.now())
-    )
-      throw new Error('Match outcome is not signed by its oracle');
-    return payouts;
+    return {
+      message,
+      signature: await this.channelSigner().signTypedData(this.domain, IDENTITY_TYPES, message),
+      player: this.current!.opening.player,
+      signer: this.channelSigner().address,
+    };
   }
   // --- The bankroll fund -------------------------------------------------------------------
 
@@ -620,7 +580,7 @@ export class ChannelClient extends WalletTransactions {
    * price. The money becomes the casino's to bet with. A share is the casino's promise of a part of
    * the bankroll, not protected principal: the wallet can prove what it holds, never what it is worth. */
   async invest(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
-    return this.perform('invest', { amount, matchId: FUND_ID }, null, operationId);
+    return this.perform('invest', { amount, source: FUND_ID }, null, operationId);
   }
   /** The statement for an investment this wallet just made. It is believed as far as it can be
    * checked: the casino's signature, this exact transfer, and the shares its stated price implies.
@@ -680,7 +640,7 @@ export class ChannelClient extends WalletTransactions {
   }
   /** Turn shares back into money. The signed request is saved before it is sent, so a lost reply is
    * asked for again; the casino's statement says what the shares fetched, and that money is then
-   * collected into the open channel like a match payout. */
+   * collected into the open channel like a table's payout. */
   async redeem(this: CasinoWallet, shares: Integer) {
     return this.exclusive(async () => {
       this.ready();
@@ -746,9 +706,9 @@ export class ChannelClient extends WalletTransactions {
     });
   }
 
-  /** Learn how entered matches ended, and collect what they owe: each payout is a credit this
-   * wallet signs only after checking it against the terms it staked on and the oracle's signature. */
-  async collectMatchPayouts(this: CasinoWallet) {
+  /** Collect what tables and the fund owe this player: each payout is a credit this wallet signs
+   * only after checking it against the host's signed settlement, or its own share statement. */
+  async collectPayouts(this: CasinoWallet) {
     if (
       this.busy ||
       this.pending ||
@@ -759,93 +719,50 @@ export class ChannelClient extends WalletTransactions {
       return [];
     const channelId = this.currentId,
       collected: any[] = [];
-    // Matches this wallet lost owe it nothing, so it asks how they ended: at most every half minute
-    // per match, since a match may stay open for days. A payout owed is found below without this.
-    const asked = (this.matchesAsked ??= new Map<string, number>());
-    for (const [id, match] of Object.entries<any>(this.current.matches || {})
-      .filter(([id, m]) => m.outcome === undefined && Date.now() - (asked.get(id) ?? 0) >= 30000)
-      .slice(0, 5)) {
-      asked.set(id, Date.now());
-      const status = await this.api(`/api/matches/${id}`).catch(() => null);
-      if (!status || status.status === 'open' || this.currentId !== channelId) continue;
-      try {
-        const { pot } = this.verifyMatchPot(match.terms, match.seat, match.seed, status);
-        this.verifyMatchOutcome(match.terms, pot, status.outcome, status.signature);
-        await this.noteMatch(id, {
-          pot,
-          outcome: String(status.outcome),
-          status: status.status,
-          signature: status.signature,
-        });
-      } catch (error: any) {
-        await this.noteMatch(id, { alert: error.message });
-      }
-    }
     const due = await this.api(`/api/channels/${channelId}/payouts`);
     if (!Array.isArray(due) || due.length > 256) throw new Error('Invalid payout list');
     for (const payout of due) {
       if (this.currentId !== channelId || this.busy || this.pending) break;
-      if (same(payout.matchId, FUND_ID)) {
+      if (same(payout.source, FUND_ID)) {
         // Redeemed shares: the wallet signs only for an amount one of its own statements priced.
         const owed = this.fund.owed || [],
           at = owed.indexOf(String(payout.amount));
         if (at < 0) continue;
         collected.push(
-          await this.perform('divest', { amount: payout.amount, matchId: FUND_ID }, null, `divest:${payout.seat}`),
+          await this.perform('divest', { amount: payout.amount, source: FUND_ID }, null, `divest:${payout.index}`),
         );
         await this.exclusive(() => this.save(undefined, { fund: { ...this.fund, owed: owed.toSpliced(at, 1) } }), {
           wait: true,
         });
         continue;
       }
-      const id = matchId(this.domain, payout.terms);
+      const id = String(payout.source).toLowerCase();
       try {
-        const seat = payout.terms.seats[payout.seat];
-        if (!same(id, payout.matchId) || !seat || !this.channels[String(seat.channelId).toLowerCase()])
-          throw new Error('Payout is for a match this wallet did not enter');
-        // The seed this wallet signed is remembered by the channel that staked, which may since have closed.
-        const staked = this.channels[String(seat.channelId).toLowerCase()].matches?.[id],
-          { pot } = this.verifyMatchPot(payout.terms, payout.seat, staked?.seed, payout);
-        const owed = this.verifyMatchOutcome(payout.terms, pot, payout.outcome, payout.signature)[payout.seat];
-        if (owed !== BigInt(payout.amount))
-          throw new Error(`The casino offers ${payout.amount} wei where the match owes ${owed}`);
+        this.verifyPayout(payout);
       } catch (error: any) {
-        // Underpayment or a forged outcome is recorded for the player; the wallet signs nothing for it.
-        await this.noteMatch(id, { alert: error.message });
+        // A payout nobody entitled signed is recorded for the player; the wallet signs nothing for it.
+        await this.noteTable(id, { alert: error.message });
         continue;
       }
-      const saved = this.current.matches?.[id];
+      const saved = this.current.tables?.[id];
       collected.push(
         await this.perform(
           'payout',
-          { amount: payout.amount, matchId: id },
+          { amount: payout.amount, source: id },
           null,
-          `payout:${id}:${payout.seat}`,
+          `payout:${id}:${payout.index}`,
           saved?.game && this.game?.key === saved.game.key ? saved.game : undefined,
         ),
       );
-      await this.noteMatch(id, {
-        pot: String(payout.pot),
-        outcome: String(payout.outcome),
-        status: payout.signature ? 'resolved' : 'void',
-        signature: payout.signature,
-      });
     }
     return collected;
   }
-  async noteMatch(this: CasinoWallet, id: string, values: Record<string, unknown>) {
+  async noteTable(this: CasinoWallet, id: string, values: Record<string, unknown>) {
     await this.exclusive(
       async () => {
         const c = this.current;
-        if (!c?.matches?.[id]) return;
-        // A later epoch of a host's chain, seen here, is what lets a refusal on an earlier one be audited.
-        if (values.round) noteEpoch(c, values.round as { owner: string; epoch: number });
-        if (
-          values.outcome !== undefined &&
-          BigInt(values.outcome as string) === BigInt(validateMatch(c.matches[id].terms).outcomes)
-        )
-          values.status = 'void';
-        c.matches = { ...c.matches, [id]: { ...c.matches[id], ...values } };
+        if (!c?.tables?.[id]) return;
+        c.tables = { ...c.tables, [id]: { ...c.tables[id], ...values } };
         await this.save();
       },
       { wait: true },
@@ -877,11 +794,8 @@ export class ChannelClient extends WalletTransactions {
     const chains = new Map<string, readonly string[] | null>();
     const audited: any[] = [];
     for (const receipt of this.history) {
-      // A declined bet, or a declined match whose pot was a bet.
-      const refused = receipt.kind === 'stake' ? receipt.refused : null;
-      if (receipt.status !== 'rejected' || receipt.wouldHavePaid !== undefined) continue;
-      if (receipt.kind !== 'bet' && !refused) continue;
-      const round = refused?.round ?? receipt.round;
+      if (receipt.status !== 'rejected' || receipt.wouldHavePaid !== undefined || receipt.kind !== 'bet') continue;
+      const round = receipt.round;
       if (!round || !same(receipt.request?.channelId, c.state.channelId)) continue;
       // Nothing is asked of the casino until this wallet has seen the owner on a later epoch.
       if ((c.epochs?.[round.owner] ?? 0) <= round.epoch) continue;
@@ -895,15 +809,9 @@ export class ChannelClient extends WalletTransactions {
       const preimages = chains.get(key);
       if (!preimages) continue;
       const preimage = preimages[Number(round.index)];
-      if (!preimage || !same(keccak256(preimage), refused?.terms.roundHead ?? receipt.request.roundHead))
+      if (!preimage || !same(keccak256(preimage), receipt.request.roundHead))
         throw new Error('Retired chain does not match the rejected wager');
-      // For a match, what it would have paid is the pot it would have been played for.
-      audited.push({
-        ...receipt,
-        wouldHavePaid: refused
-          ? matchPot(refused.terms, refused.seeds, preimage).pot
-          : String(outcome(receipt.request, preimage).payout),
-      });
+      audited.push({ ...receipt, wouldHavePaid: String(outcome(receipt.request, preimage).payout) });
     }
     if (audited.length)
       await this.exclusive(

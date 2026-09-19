@@ -4,8 +4,9 @@ const methods = new Set([
   'game.receipt',
   'game.bet',
   'game.cancel',
-  'game.stake',
-  'game.match',
+  'game.buyIn',
+  'game.table',
+  'game.identify',
   'game.payment',
   'game.transfer',
   'game.requestFunds',
@@ -47,11 +48,7 @@ function withinSize(value: unknown, limit: number) {
 export function validateRequest(data: any) {
   if (!object(data) || !only(data, ['hookedin', 'id', 'method', 'params']) || data.hookedin !== true)
     throw new Error('Invalid HookedIn request.');
-  if (!(
-    (typeof data.id === 'string' && data.id.length > 0 && data.id.length <= 80) ||
-    (Number.isSafeInteger(data.id) && data.id >= 0)
-  ))
-    throw new Error('Invalid request ID.');
+  if (!Number.isSafeInteger(data.id) || data.id < 0) throw new Error('Invalid request ID.');
   if (!methods.has(data.method)) throw new Error('This wallet method is not available to games.');
   if (!object(data.params ?? {})) throw new Error('Request parameters must be an object.');
   if (!withinSize(data, 70000)) throw new Error('Game request is too large.');
@@ -64,39 +61,27 @@ export function validateRequest(data: any) {
     if (params.amount !== undefined) gameAmount(params.amount);
     if (params.reason !== undefined && (typeof params.reason !== 'string' || params.reason.length > 140))
       throw new Error('A funding reason is a string of at most 140 characters.');
-  } else if (data.method === 'game.match') {
-    if (!only(params, ['matchId']) || !/^0x[0-9a-fA-F]{64}$/.test(params.matchId)) throw new Error('Invalid match ID.');
-  } else if (data.method === 'game.stake') {
-    // The wallet recomputes the match ID from these terms and signs it into the stake.
-    const match = params.match;
-    if (!only(params, ['id', 'match'])) throw new Error('Unexpected game request field.');
+  } else if (data.method === 'game.table') {
+    if (!only(params, ['tableId']) || typeof params.tableId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.tableId))
+      throw new Error('Invalid table ID.');
+  } else if (data.method === 'game.identify') {
+    if (!only(params, ['nonce']) || typeof params.nonce !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.nonce))
+      throw new Error('Invalid nonce.');
+  } else if (data.method === 'game.buyIn') {
+    // The wallet recomputes the table ID from these terms and signs it into the buy-in.
+    const table = params.table;
+    if (!only(params, ['id', 'table', 'amount'])) throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);
+    gameAmount(params.amount);
     if (
-      !object(match) ||
-      !only(match, ['oracle', 'developer', 'expiresAt', 'nonce', 'roundHead', 'prizes', 'seats']) ||
-      ![match.oracle, match.developer].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)) ||
-      ![match.nonce, match.roundHead].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v)) ||
-      !Array.isArray(match.seats) ||
-      !match.seats.length
+      !object(table) ||
+      !only(table, ['host', 'developer', 'expiresAt', 'nonce']) ||
+      ![table.host, table.developer].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)) ||
+      typeof table.nonce !== 'string' ||
+      !/^0x[0-9a-fA-F]{64}$/.test(table.nonce)
     )
-      throw new Error('Invalid match.');
-    gameAmount(match.expiresAt);
-    // With prizes, the stakes are one bet settled as the match opens, and what it pays is the pot.
-    validatePrizes(match.prizes);
-    for (const seat of match.seats) {
-      if (
-        !object(seat) ||
-        !only(seat, ['channelId', 'stake', 'shares']) ||
-        typeof seat.channelId !== 'string' ||
-        !/^0x[0-9a-fA-F]{64}$/.test(seat.channelId) ||
-        !Array.isArray(seat.shares) ||
-        !seat.shares.length
-      )
-        throw new Error('Invalid match seat.');
-      gameAmount(seat.stake);
-      // Each outcome's share of the pot, in millionths.
-      for (const share of seat.shares) gameAmount(share, false);
-    }
+      throw new Error('Invalid table.');
+    gameAmount(table.expiresAt);
   } else {
     const fields =
       data.method === 'game.bet'
@@ -144,15 +129,16 @@ export function attachGameBridge({
   onActivity?: (type: 'request' | 'response' | 'error', data: any) => void;
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }) {
-  const seen = new Set();
-  let busy = false;
+  // Request IDs only ever rise, so none is answered twice and nothing has to be remembered.
+  let last = -1,
+    busy = false;
   const activity = (type: 'request' | 'response' | 'error', data: unknown) => {
     // Diagnostics must never interrupt validation or settlement.
     try {
       onActivity(type, data);
     } catch {}
   };
-  const reply = (id: string | number, payload: Record<string, unknown>) => {
+  const reply = (id: number, payload: Record<string, unknown>) => {
     if (isCurrent() && iframe.contentWindow) {
       const message = { hookedin: true, id, ...payload };
       iframe.contentWindow.postMessage(message, '*');
@@ -166,14 +152,12 @@ export function attachGameBridge({
     try {
       request = validateRequest(event.data);
     } catch (error: any) {
-      if (typeof event.data?.id === 'string' || Number.isSafeInteger(event.data?.id))
-        reply(event.data.id, { error: error.message });
+      if (Number.isSafeInteger(event.data?.id)) reply(event.data.id, { error: error.message });
       else activity('error', { error: error.message });
       return;
     }
-    if (seen.has(request.id)) return reply(request.id, { error: 'A request ID can only be used once.' });
-    if (seen.size >= 2500) return reply(request.id, { error: 'Reload this game to start a fresh bridge session.' });
-    seen.add(request.id);
+    if (request.id <= last) return reply(request.id, { error: 'A request ID must be larger than the last.' });
+    last = request.id;
     if (busy) return reply(request.id, { error: 'Another game request is still in progress.' });
     busy = true;
     try {

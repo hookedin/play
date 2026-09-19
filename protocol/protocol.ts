@@ -9,9 +9,10 @@ import type {
   EvidenceBundle,
   Integer,
   Json,
-  MatchTerms,
-  MatchPot,
   Prize,
+  Settlement,
+  TableSeat,
+  TableTerms,
 } from './types.ts';
 import {
   AbiCoder,
@@ -24,7 +25,7 @@ import {
   ZeroAddress,
   toUtf8Bytes,
 } from 'ethers';
-import { WORD_SPACE, MAX_BALANCE, MAX_PRIZES, uint256, describeBet } from './risk.ts';
+import { WORD_SPACE, MAX_BALANCE, MAX_PRIZES, uint256 } from './risk.ts';
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 export const plain = <T>(value: T): Json<T> => JSON.parse(json(value));
 export const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -70,19 +71,23 @@ export const OP_TYPES = {
   ),
   Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
 };
-/** A match: players stake against each other, the casino holds the pot, and the oracle they all
- * signed decides the outcome later. `shares[k]` is the part of the pot, in millionths, a seat
- * receives under outcome `k`. The pot is the stakes, or what the stakes won as one bet on `prizes`. */
-export const MATCH_TYPES = {
-  Match: fields(
-    'address oracle,address developer,uint256 expiresAt,bytes32 nonce,bytes32 roundHead,Prize[] prizes,Seat[] seats',
-  ),
-  Prize: OP_TYPES.Prize,
-  Seat: fields('bytes32 channelId,uint256 stake,uint256[] shares'),
+/** A table: players buy in against each other, the casino holds the pot, and the host they all
+ * named pays it out. A buy-in is a transfer whose counterparty is the table's ID. */
+export const TABLE_TYPES = {
+  Table: fields('address host,address developer,uint256 expiresAt,bytes32 nonce'),
 };
-export const SHARE_SCALE = 1_000_000n;
-export const RESOLUTION_TYPES = {
-  Resolution: fields('bytes32 matchId,uint256 outcome'),
+/** The host pays players out of the pot, and takes `rake` for the developer and the casino.
+ * Settlements are numbered from zero, so each applies exactly once. */
+export const SETTLEMENT_TYPES = {
+  Settlement: fields('bytes32 tableId,uint256 sequence,Payment[] payments,uint256 rake'),
+  Payment: fields('address player,uint256 amount'),
+};
+/** Most payments one settlement holds. */
+export const MAX_PAYMENTS = 32;
+/** A wallet tells a game's own server who is playing: the channel key signs the page's origin, which
+ * the wallet knows for itself, and the server's nonce. It authorizes nothing at the casino. */
+export const IDENTITY_TYPES = {
+  Identity: fields('bytes32 channelId,string origin,bytes32 nonce,uint256 expiresAt'),
 };
 export const CLOSE_TYPES = {
   Close: fields('bytes32 channelId,bytes32 stateHash'),
@@ -91,7 +96,7 @@ export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
 /** A hash chain belongs to an address: a channel's signer for its own bets, or the key of whoever
- * hosts rounds and matches. Only that key asks for its next head or settles anything against it. */
+ * hosts rounds. Only that key asks for its next head or settles anything against it. */
 export const CHAIN_ACCESS_TYPES = {
   ChainAccess: fields('address owner,uint256 expiresAt'),
 };
@@ -118,8 +123,24 @@ export function validateOpening(opening: Opening) {
   )
     throw new Error('Invalid channel opening');
 }
-/** Every seat signs this into its stake, so one signature binds the oracle, the deadline and every payout. */
-export const matchId = (d: Domain, terms: MatchTerms) => TypedDataEncoder.hash(d, MATCH_TYPES, terms);
+/** A game's server checks who is playing: the origin is its own page's, the nonce the one it issued,
+ * and the token still valid. Returns the key that signed, to be matched against the `signer` the
+ * casino reports for a seat of the server's table. */
+export function identitySigner(
+  d: Domain,
+  { message, signature }: { message: Record<string, any>; signature: string },
+  expected: { origin: string; nonce: string; now?: number },
+) {
+  if (
+    message?.origin !== expected.origin ||
+    !same(message.nonce, expected.nonce) ||
+    BigInt(message.expiresAt) * 1000n <= BigInt(expected.now ?? Date.now())
+  )
+    throw new Error('Identity is not for this game');
+  return verifyTypedData(d, IDENTITY_TYPES, message, signature);
+}
+/** Every buy-in signs this as its counterparty, so one signature binds the host, the developer and the deadline. */
+export const tableId = (d: Domain, terms: TableTerms) => TypedDataEncoder.hash(d, TABLE_TYPES, terms);
 /** Wire terms as exact integers: a stake and the prizes it can pay. */
 export const betTerms = (stake: Integer, prizes: Prize[]) => ({
   stake: BigInt(stake),
@@ -129,88 +150,49 @@ export const betTerms = (stake: Integer, prizes: Prize[]) => ({
     payout: BigInt(prize.payout),
   })),
 });
-/** The shape every match must have; the outcome one past the last is "void", which splits the pot by stake. */
-export function validateMatch(terms: MatchTerms) {
-  const seats = terms?.seats;
+export function validateTable(terms: TableTerms) {
   if (
     !terms ||
-    same(getAddress(terms.oracle), ZeroAddress) ||
+    same(getAddress(terms.host), ZeroAddress) ||
     same(getAddress(terms.developer), ZeroAddress) ||
     !/^0x[0-9a-fA-F]{64}$/.test(terms.nonce) ||
-    !/^0x[0-9a-fA-F]{64}$/.test(terms.roundHead) ||
-    BigInt(terms.expiresAt) <= 0n ||
-    !Array.isArray(terms.prizes) ||
-    !Array.isArray(seats) ||
-    !seats.length ||
-    new Set(seats.map(seat => String(seat.channelId).toLowerCase())).size !== seats.length
+    BigInt(terms.expiresAt) <= 0n
   )
-    throw new Error('Invalid match terms');
-  const outcomes = seats[0].shares?.length;
-  if (!outcomes) throw new Error('A match needs an outcome');
-  for (const seat of seats)
-    if (
-      !/^0x[0-9a-fA-F]{64}$/.test(seat.channelId) ||
-      BigInt(seat.stake) <= 0n ||
-      BigInt(seat.stake) >= MAX_BALANCE ||
-      !Array.isArray(seat.shares) ||
-      seat.shares.length !== outcomes ||
-      seat.shares.some(share => BigInt(share) < 0n)
-    )
-      throw new Error('Invalid match seat');
-  // The casino only holds the pot: no outcome may share out more than all of it.
-  for (let outcome = 0; outcome < outcomes; outcome++)
-    if (seats.reduce((sum, seat) => sum + BigInt(seat.shares[outcome]), 0n) > SHARE_SCALE)
-      throw new Error('A match cannot share out more than its pot');
-  const stakes = seats.reduce((sum, seat) => sum + BigInt(seat.stake), 0n);
-  // A pot bet names its round, exactly as a bet does; a plain pot names none.
-  if (terms.prizes.length ? same(terms.roundHead, ZeroHash) : !same(terms.roundHead, ZeroHash))
-    throw new Error('Invalid match terms');
-  if (terms.prizes.length) {
-    try {
-      describeBet(betTerms(stakes, terms.prizes));
-    } catch {
-      throw new Error('Invalid match prizes');
-    }
-    // Every outcome pays something into the pot: a match is never played for nothing.
-    let covered = 0n;
-    for (const prize of [...terms.prizes].sort((a, b) => (BigInt(a.rangeStart) < BigInt(b.rangeStart) ? -1 : 1))) {
-      if (BigInt(prize.rangeStart) > covered) break;
-      if (BigInt(prize.rangeEnd) > covered) covered = BigInt(prize.rangeEnd);
-    }
-    if (covered !== WORD_SPACE) throw new Error('Match prizes must cover every outcome');
-  }
-  return { outcomes, stakes };
+    throw new Error('Invalid table terms');
 }
-/** The pot of a match: its stakes, or what they won as one bet. The seed of that bet is every
- * seat's own seed together, so no seat, host or casino chooses it alone. */
-export function matchPot(terms: MatchTerms, seeds: string[], preimage: string): MatchPot {
-  const { stakes } = validateMatch(terms);
-  if (!Array.isArray(seeds) || seeds.length !== terms.seats.length) throw new Error('A match needs every seat');
-  if (!terms.prizes.length) {
-    if (!seeds.every(seed => same(seed, ZeroHash)) || !same(preimage, ZeroHash))
-      throw new Error('A plain pot has no round');
-    return { pot: String(stakes), seeds, preimage };
-  }
-  if (seeds.some(seed => !/^0x[0-9a-fA-F]{64}$/.test(seed) || same(seed, ZeroHash)))
-    throw new Error('Every seat of a pot bet draws a seed');
-  if (!same(keccak256(preimage), terms.roundHead)) throw new Error('Preimage does not open the match round');
-  const seed = keccak256(AbiCoder.defaultAbiCoder().encode(['bytes32[]'], [seeds])),
-    settled = outcome({ seed, prizes: terms.prizes }, preimage);
-  return { pot: String(settled.payout), seeds, preimage, potOutcome: String(settled.value) };
+/** The shape of a settlement; returns what it takes from the pot. Whether the pot holds that much,
+ * and whether every player bought in, is for whoever knows the table. */
+export function validateSettlement(settlement: Settlement) {
+  const payments = settlement?.payments;
+  if (
+    !settlement ||
+    !/^0x[0-9a-fA-F]{64}$/.test(settlement.tableId) ||
+    BigInt(settlement.sequence) < 0n ||
+    !Array.isArray(payments) ||
+    payments.length > MAX_PAYMENTS ||
+    new Set(payments.map(payment => getAddress(payment.player))).size !== payments.length ||
+    payments.some(payment => BigInt(payment.amount) <= 0n || BigInt(payment.amount) >= MAX_BALANCE) ||
+    BigInt(settlement.rake) < 0n ||
+    BigInt(settlement.rake) >= MAX_BALANCE ||
+    (!payments.length && !BigInt(settlement.rake))
+  )
+    throw new Error('Invalid settlement');
+  return payments.reduce((sum, payment) => sum + BigInt(payment.amount), BigInt(settlement.rake));
 }
-/** What each seat receives from the pot. The void outcome, one past the last, splits it by stake. */
-export function matchPayouts(terms: MatchTerms, pot: Integer, outcome: Integer): bigint[] {
-  const { outcomes, stakes } = validateMatch(terms),
-    k = BigInt(outcome);
-  if (k < 0n || k > BigInt(outcomes)) throw new Error('Unknown match outcome');
-  return terms.seats.map(seat =>
-    k === BigInt(outcomes)
-      ? (BigInt(pot) * BigInt(seat.stake)) / stakes
-      : (BigInt(pot) * BigInt(seat.shares[Number(k)])) / SHARE_SCALE,
-  );
+/** What a table nobody settled returns at its deadline: the pot, shared among the players by the
+ * part of their buy-ins the host never paid back. The rounding dust stays in the bankroll. */
+export function closingPayments(seats: TableSeat[], pot: Integer) {
+  const owed = seats.map(seat => {
+      const net = BigInt(seat.bought) - BigInt(seat.paid);
+      return net > 0n ? net : 0n;
+    }),
+    total = owed.reduce((sum, net) => sum + net, 0n);
+  return seats
+    .map((seat, i) => ({ player: seat.player, amount: total ? (BigInt(pot) * owed[i]) / total : 0n }))
+    .filter(payment => payment.amount > 0n);
 }
 /** The bankroll fund. Investing is a transfer whose counterparty is this ID, and divesting a credit
- * from it, exactly as a stake and a payout name their match. An investor trusts the casino
+ * from it, exactly as a buy-in and a payout name their table. An investor trusts the casino
  * completely: a share is its promise of a part of the bankroll, not protected principal. */
 export const FUND_ID = id('HOOKEDIN/BANKROLL');
 /** The casino signs a statement for every change to a holding. `shares` is what the holder has
@@ -353,8 +335,8 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
     amount = uint256(BigInt(op.amount));
   const wager = kind === 1,
     credit = kind === 5,
-    // A transfer and its credit name the other side: another channel, or the match the money is
-    // staked into and paid out of.
+    // A transfer and its credit name the other side: another channel, or the table the money is
+    // bought into and paid out of.
     linked = kind === 4 || credit;
   if (![1, 2, 4, 5].includes(kind)) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A bet names its
@@ -377,8 +359,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
         same(op.developer, ZeroAddress) ||
         !same(keccak256(preimage), op.roundHead)
       : op.prizes.length !== 0 ||
-        // A transfer into a match carries its seat's seed when the match settles its pot as a bet.
-        (kind !== 4 && !same(op.seed, ZeroHash)) ||
+        !same(op.seed, ZeroHash) ||
         !same(op.roundHead, ZeroHash) ||
         !same(op.developer, ZeroAddress) ||
         !same(preimage, ZeroHash)) ||

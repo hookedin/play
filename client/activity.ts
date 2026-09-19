@@ -148,30 +148,27 @@ export function receiptSummary(
       title:
         receipt.kind === 'transfer'
           ? 'Transfer cancelled'
-          : receipt.kind === 'stake'
-            ? 'Stake withdrawn'
+          : receipt.kind === 'buyin'
+            ? 'Buy-in declined'
             : receipt.kind === 'invest'
               ? 'Investment declined'
               : 'Bet rejected',
       status:
         receipt.kind === 'transfer'
           ? 'No payment made'
-          : receipt.kind === 'stake'
-            ? 'No match entered'
+          : receipt.kind === 'buyin'
+            ? 'Nothing put on the table'
             : receipt.kind === 'invest'
               ? 'No shares bought'
               : 'No wager placed',
       tone: 'neutral',
       amount: '0 ETH',
       amountLabel: 'Balance change',
-      description:
-        receipt.kind === 'stake' && receipt.wouldHavePaid !== undefined
-          ? `Your balance is unchanged. With the chain since published, this match would have been played for ${formatEther(receipt.wouldHavePaid)} ETH.`
-          : ['transfer', 'stake', 'invest'].includes(receipt.kind)
-            ? 'Your balance is unchanged.'
-            : receipt.wouldHavePaid === undefined
-              ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
-              : `Your balance is unchanged. With the chain since published, this wager would have paid ${formatEther(receipt.wouldHavePaid)} ETH for its ${formatEther(receipt.request?.amount ?? 0)} ETH stake.`,
+      description: ['transfer', 'buyin', 'invest'].includes(receipt.kind)
+        ? 'Your balance is unchanged.'
+        : receipt.wouldHavePaid === undefined
+          ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
+          : `Your balance is unchanged. With the chain since published, this wager would have paid ${formatEther(receipt.wouldHavePaid)} ETH for its ${formatEther(receipt.request?.amount ?? 0)} ETH stake.`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -203,8 +200,8 @@ export function receiptSummary(
             transfer: 'Payment sent',
             receive: 'Payment received',
             payment: 'Game payment',
-            stake: 'Match entered',
-            payout: 'Match payout',
+            buyin: 'Bought into a table',
+            payout: 'Table payout',
             invest: 'Invested in the bankroll',
             redeem: 'Shares redeemed',
             divest: 'Bankroll payout',
@@ -222,7 +219,7 @@ export function receiptSummary(
           ? 'Invested'
           : receipt.kind === 'redeem'
             ? 'Owed to you'
-            : receipt.kind === 'stake'
+            : receipt.kind === 'buyin'
               ? 'Held by the casino'
               : ['transfer', 'payment'].includes(receipt.kind)
                 ? 'Sent'
@@ -244,19 +241,16 @@ export function receiptSummary(
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
-  if (receipt.kind === 'stake')
-    description = `${
-      receipt.pot !== undefined && receipt.pot !== receipt.stakes
-        ? `The stakes of ${formatEther(receipt.stakes)} ETH were settled as one bet and this match plays for ${formatEther(receipt.pot)} ETH. `
-        : ''
-    }The casino holds the pot until the match's referee decides it, or its deadline splits it. Balance ${formatEther(receipt.balance)} ETH`;
+  if (receipt.kind === 'buyin')
+    description = `The casino holds this money until the table's host pays it out, or the table's deadline returns what is left. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'invest')
     description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'redeem')
     description = `Sold ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. Your wallet collects the money into your open channel.`;
   if (receipt.kind === 'divest')
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ETH`;
-  if (receipt.kind === 'payout') description = `Paid from a decided match. Balance ${formatEther(receipt.balance)} ETH`;
+  if (receipt.kind === 'payout')
+    description = `Paid out of a table by its host. Balance ${formatEther(receipt.balance)} ETH`;
   const notice =
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or use the saved transaction details to retry from your funding wallet.'

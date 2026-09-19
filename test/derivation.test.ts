@@ -54,24 +54,17 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     operationId: id('outgoing digest'),
   });
   await agree(b, receive.evidence);
-  // A match is the other side of a transfer too: a stake is a transfer that names the match, and its
-  // payout the credit that names it. Such a transfer may carry its seat's seed, for a match whose pot
-  // is a bet; nothing else of a bet, and a credit carries none.
-  const match = id('a match'),
-    staked = await step(f, a, 4, 30n, { counterparty: match });
-  await agree(a, staked.evidence);
-  const paidOut = await step(f, a, 5, 55n, { counterparty: match });
+  // A table is the other side of a transfer too: a buy-in is a transfer that names the table, and its
+  // payout the credit that names it. Neither carries anything of a bet.
+  const table = id('a table'),
+    boughtIn = await step(f, a, 4, 30n, { counterparty: table });
+  await agree(a, boughtIn.evidence);
+  const paidOut = await step(f, a, 5, 55n, { counterparty: table });
   await agree(a, paidOut.evidence);
-  await agree(a, (await step(f, a, 4, 5n, { counterparty: match, seed: id('entropy') })).evidence);
-  await disagreeNever(
-    await craft(a, { kind: 4, amount: 30n, counterparty: match, roundHead: id('a head') }),
-    /Invalid transfer/,
-  );
-  await disagreeNever(
-    await craft(a, { kind: 5, amount: 30n, counterparty: match, seed: id('entropy') }),
-    /Invalid transfer/,
-  );
-  await disagreeNever(await craft(a, { kind: 5, amount: 0n, counterparty: match }), /Invalid transfer/);
+  for (const kind of [4, 5])
+    for (const stray of [{ roundHead: id('a head') }, { seed: id('entropy') }])
+      await disagreeNever(await craft(a, { kind, amount: 30n, counterparty: table, ...stray }), /Invalid transfer/);
+  await disagreeNever(await craft(a, { kind: 5, amount: 0n, counterparty: table }), /Invalid transfer/);
   // Every field a kind does not use must be zero; both sides reject the same encodings.
   await disagreeNever(await craft(a, { kind: 2, amount: 10n, developer: f.owner.address }), /Invalid payment/);
   await disagreeNever(await craft(a, { kind: 2, amount: 10n }, id('not zero')), /Invalid payment/);
@@ -134,9 +127,8 @@ test('contract derive and deriveState agree on every operation kind and invalid 
   await disagreeNever(await craft(a, { kind: 2, amount: 10n, counterparty: b.state.channelId }), /Invalid payment/);
   await disagreeNever(await craft(a, { kind: 2, amount: 5000n }), /Invalid payment/);
   await disagreeNever(await craft(a, { kind: 3, amount: 1n }), /Unknown operation/);
-  // Kinds 6 and 7 once named match stakes and payouts; they are transfers now.
   for (const kind of [6, 7, 8])
-    await disagreeNever(await craft(a, { kind, amount: 1n, counterparty: match }), /Unknown operation/);
+    await disagreeNever(await craft(a, { kind, amount: 1n, counterparty: table }), /Unknown operation/);
   // A checkpoint-only proof must carry the canonical empty step.
   const padded = checkpointEvidence(a.state, a.evidence.playerSignature, a.evidence.casinoSignature);
   padded.step.preimage = id('stray preimage');

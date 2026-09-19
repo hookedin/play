@@ -321,7 +321,12 @@ function renderFundDialog() {
   $('fund-total').textContent = `${formatEther(total)} ETH, your playing balance`;
   // Practice is offered before the game holds real money, not in the middle of real play.
   $('fund-practice').classList.toggle('hidden', limit > 0n);
-  slider.value = String(Math.max(stops.findLastIndex(stop => stop <= amount), 0));
+  slider.value = String(
+    Math.max(
+      stops.findLastIndex(stop => stop <= amount),
+      0,
+    ),
+  );
   $('fund-help').textContent = !valid
     ? amount > total
       ? `More than your playing balance of ${formatEther(total)} ETH.`
@@ -427,16 +432,16 @@ const openHostedDialog = () =>
     decline: 'Keep my own randomness',
     log: 'Shared-round randomness',
   });
-/** May this oracle decide the game's matches, with the casino holding the stakes meanwhile? */
-const openOracleDialog = (oracle: string) =>
+/** May this host pay out the game's tables, with the casino holding the money meanwhile? */
+const openHostDialog = (host: string) =>
   openConsentDialog({
-    eyebrow: 'MATCH AGAINST PLAYERS',
-    title: `Let ${active?.manifest.name} decide your matches?`,
-    reason: `You and your opponent each stake into a match. The casino holds the pot, and the game's referee, ${oracle}, decides who is paid. A game may have the stakes settled as one bet when the match opens, so the pot can be smaller or many times larger than the stakes; your wallet checks it.`,
-    note: 'A stake in an open match is a promise by the casino: it leaves your playing balance at once and is not protected by your deposit until it is paid back. The referee can decide wrongly, but can only award the stakes to the players as the match terms say, and your wallet checks every payout against those terms and the referee\u2019s signature. A match nobody decides returns the stakes at its deadline. This choice lasts until you leave the game.',
-    allow: 'Allow this referee',
+    eyebrow: 'PLAYING AGAINST PLAYERS',
+    title: `Let ${active?.manifest.name} run your table?`,
+    reason: `You and the other players put money on a table. The casino holds it, and the game's host, ${host}, says who leaves with what.`,
+    note: 'Money on a table is a promise by the casino: it leaves your playing balance at once and is not protected by your deposit until it is paid back. The host decides how the table\u2019s money is shared among its players and can decide wrongly, but it can never pay out more than the players put in, and your wallet checks every payout against the host\u2019s signature. What a host never pays out returns at the table\u2019s deadline to the players still owed their money. This choice lasts until you leave the game.',
+    allow: 'Allow this host',
     decline: 'Not now',
-    log: 'Match referee',
+    log: 'Table host',
   });
 function renderWallet() {
   renderFund();
@@ -447,7 +452,7 @@ function renderWallet() {
   $('casino-balance').textContent = eth(state.balance, networkDefaults.precision);
   $('in-play').classList.toggle('hidden', !BigInt(state.inPlay || 0));
   $('in-play').textContent =
-    `Plus ${eth(state.inPlay || '0', networkDefaults.precision)} ETH staked in undecided matches, held by the casino.`;
+    `Plus ${eth(state.inPlay || '0', networkDefaults.precision)} ETH on open tables, held by the casino.`;
   $('native-balance').textContent = eth(state.nativeBalance, networkDefaults.precision);
   $('wallet-address').textContent = wallet.address;
   $('wallet-mode').textContent =
@@ -515,11 +520,9 @@ function renderWallet() {
       ? 'Your channel registration needs recovery. The opening and channel key are saved.'
       : wallet.pending?.kind === 'transfer'
         ? 'Your transfer is waiting for the recipient wallet. The signed request is saved; retry it, cancel it, or close the channel.'
-        : wallet.pending?.kind === 'stake'
-          ? 'Your stake is waiting for the game to open the match with your opponent. Retry looks for it; withdrawing it leaves your balance unchanged.'
-          : wallet.pending?.hosted
-            ? 'Your bet is waiting for the table host to play the round. Retry looks for its result; withdrawing it leaves your balance unchanged.'
-            : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
+        : wallet.pending?.hosted
+          ? 'Your bet is waiting for the table host to play the round. Retry looks for its result; withdrawing it leaves your balance unchanged.'
+          : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
   const cancellable = wallet.pending?.kind === 'transfer' || Boolean(wallet.pending?.hosted);
   $<HTMLButtonElement>('cancel-transfer').classList.toggle('hidden', !cancellable);
@@ -879,7 +882,9 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     onRequest: async (method, params) => {
       if (method === 'wallet.info') return wallet.gameInfo();
       if (method === 'game.receipt') return wallet.gameReceipt(params.id);
-      if (method === 'game.match') return wallet.matchStatus(params.matchId);
+      if (method === 'game.table') return wallet.tableStatus(params.tableId);
+      // Saying who is playing signs nothing the casino accepts, so it never waits for the wallet.
+      if (method === 'game.identify') return wallet.gameIdentify(params);
       if (uiBusy || wallet.busy) throw new Error('The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
         const requested = params.amount === undefined ? undefined : BigInt(params.amount);
@@ -904,14 +909,14 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
         return wallet.gameBet(params);
       }
       if (method === 'game.cancel') return wallet.gameCancel(params);
-      if (method === 'game.stake') {
-        if (!wallet.game?.oracles?.some(oracle => oracle.toLowerCase() === params.match.oracle.toLowerCase())) {
-          if (!(await openOracleDialog(params.match.oracle)))
-            throw new Error('You did not allow this referee; no stake was placed.');
+      if (method === 'game.buyIn') {
+        if (!wallet.game?.hosts?.some(host => host.toLowerCase() === params.table.host.toLowerCase())) {
+          if (!(await openHostDialog(params.table.host)))
+            throw new Error('You did not allow this host; nothing was put on the table.');
           if (!isCurrent()) throw new Error('The game was closed.');
-          wallet.allowOracle(params.match.oracle);
+          wallet.allowHost(params.table.host);
         }
-        return wallet.gameStake(params);
+        return wallet.gameBuyIn(params);
       }
       if (method === 'game.payment') return wallet.gamePayment(params);
       return wallet.gameTransfer(params);
@@ -1177,7 +1182,7 @@ $<HTMLButtonElement>('divest').addEventListener('click', () =>
     if (!shares) throw new Error('That is less than one share.');
     const receipt = await wallet.redeem(shares);
     toast(`Sold ${formatEther(shares)} shares for ${formatEther(receipt.amount)} ETH. Collecting it now.`);
-    await wallet.collectMatchPayouts();
+    await wallet.collectPayouts();
     await refreshFund();
   }),
 );

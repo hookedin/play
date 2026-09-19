@@ -17,8 +17,8 @@ export interface GameSession {
   practiceReceipts?: Map<string, Record<string, unknown>>;
   /** The player allowed this open game to bet on rounds whose seed its host draws. Like the limit, it lasts only while the game stays open. */
   hostedRounds?: boolean;
-  /** Oracles the player allowed to decide this open game's matches. */
-  oracles?: string[];
+  /** Hosts the player allowed to pay out this open game's tables. */
+  hosts?: string[];
 }
 export interface GameRequest {
   /** The game's own idempotency key: an exact retry returns the saved receipt. */
@@ -30,10 +30,11 @@ export interface GameRequest {
   /** A round another channel owns. The wallet signs the bet and returns it for that owner to submit. */
   round?: { owner: string; epoch: number; index: number; roundHead: string; seed: string };
 }
-/** A match against other players: the casino holds every stake until the oracle in the terms decides. */
-export interface GameStake {
+/** Money put on a table shared with other players: the casino holds it until the host in the terms pays it out. */
+export interface GameBuyIn {
   id: string;
-  match: import('./types.ts').MatchTerms;
+  table: import('./types.ts').TableTerms;
+  amount: string;
 }
 /** What the wallet pushes to the game: its spending limit and whether an operation awaits recovery. */
 export interface GameLimit {

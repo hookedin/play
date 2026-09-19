@@ -26,8 +26,8 @@ export interface WalletChannel {
   round?: { owner: string; epoch: number; index: number; length: number; roundHead: string };
   /** The latest chain epoch this wallet has seen each round owner use: a rejected bet is audited once its epoch is behind. */
   epochs?: Record<string, number>;
-  /** Matches this channel staked into, by match ID: the terms signed, this wallet's seat, and how it ended. */
-  matches?: Record<string, any>;
+  /** Tables this channel bought into, by table ID: the terms signed, what went in and what was collected. */
+  tables?: Record<string, any>;
   pending?: any;
   closeAuthorization?: any;
   closing?: boolean;
@@ -84,8 +84,6 @@ const networks: Record<string, { id: bigint; name: string; stake: string }> = {
  * configuration, durable state, locking, observation and the casino API transport.
  */
 export class CasinoWallet extends GameSessions {
-  /** When each undecided match was last asked about; in memory only. */
-  matchesAsked?: Map<string, number>;
   declare casinoURL: string;
   declare network: string;
   declare expectedChainId: bigint;
@@ -288,7 +286,7 @@ export class CasinoWallet extends GameSessions {
       if (!this.busy)
         void this.refresh()
           .then(() => this.receiveTransfers({ gamePayoutsOnly: true }))
-          .then(() => this.collectMatchPayouts())
+          .then(() => this.collectPayouts())
           .then(() => this.auditRejections())
           .catch(() => {});
     }, 4000);
@@ -442,11 +440,14 @@ export class CasinoWallet extends GameSessions {
       contract: this.config?.contractAddress,
       mode: this.mode,
       recoveryOnly: Boolean(this.recoveryOnly),
-      // Stakes the casino is holding for matches that are not yet decided.
+      // What this channel put into tables that are still open, less what it has collected from them.
       inPlay: String(
-        Object.values<any>(c?.matches || {})
-          .filter(match => match.outcome === undefined)
-          .reduce((sum, match) => sum + BigInt(match.terms.seats[match.seat].stake), 0n),
+        Object.values<any>(c?.tables || {})
+          .filter(table => BigInt(table.terms.expiresAt) * 1000n > BigInt(Date.now()))
+          .reduce((sum, table) => {
+            const net = BigInt(table.bought) - BigInt(table.collected);
+            return net > 0n ? sum + net : sum;
+          }, 0n),
       ),
       // Bankroll shares held by this account; what they are worth is the casino's quote, asked for separately.
       fund: { shares: this.fund.shares, sequence: this.fund.sequence, alert: this.fund.alert ?? null },

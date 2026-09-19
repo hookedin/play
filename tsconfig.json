@@ -17,7 +17,6 @@
     "client/**/*.ts",
     "scripts/**/*.ts",
     "testing/**/*.ts",
-    "reference/**/*.ts",
     "test/**/*.ts",
     "types/**/*.d.ts"
   ]

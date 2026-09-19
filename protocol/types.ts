@@ -125,42 +125,44 @@ export interface RoundPosition {
   length: number;
   roundHead: string;
 }
-/** One player's place in a match: what they stake, and the share of the pot, in millionths, they
- * receive under each outcome. */
-export interface MatchSeat {
-  channelId: string;
-  stake: Integer;
-  shares: Integer[];
-}
-/** Terms every player signs into their stake: who decides, until when, and who gets what share of
- * the pot. With no prizes the pot is the stakes. With prizes the stakes are one bet, settled when the
- * match opens against `roundHead`, the next round of its host's chain, and the pot is what it paid. */
-export interface MatchTerms {
-  oracle: string;
+/** A table: players buy in against each other, the casino holds the pot, and the host they named
+ * says who is paid. Anyone may buy in until it expires; the host signs who leaves with what. */
+export interface TableTerms {
+  host: string;
   developer: string;
   expiresAt: Integer;
   nonce: string;
-  roundHead: string;
-  prizes: Prize[];
-  seats: MatchSeat[];
 }
-/** How a match's pot was settled: every seat's seed and the preimage that opened the round head. */
-export interface MatchPot {
-  pot: string;
-  seeds: string[];
-  preimage: string;
-  /** The 64-bit outcome of the pot bet; absent when the pot is simply the stakes. */
-  potOutcome?: string;
-  /** Where the pot bet was settled; absent when the pot is simply the stakes. */
-  round?: Pick<RoundPosition, 'owner' | 'epoch' | 'index'>;
+export interface Payment {
+  player: string;
+  amount: Integer;
 }
-/** The casino's record of a match. The pot sits in its escrow until the oracle resolves it or it expires. */
-export interface MatchRow extends MatchPot {
+/** The host pays players out of the pot and takes the rake. Settlements are numbered from zero and
+ * each applies once. */
+export interface Settlement {
+  tableId: string;
+  sequence: Integer;
+  payments: Payment[];
+  rake: Integer;
+}
+/** One player at a table: what they put into the pot and what the host has paid them out of it. */
+export interface TableSeat {
+  player: string;
+  /** The channel key that signed the player's latest buy-in: what a host checks an `Identity` against. */
+  signer: string;
+  bought: string;
+  paid: string;
+}
+/** The casino's record of a table. The pot sits in its escrow until the host pays it out; what is
+ * left at the deadline returns to the players who are still owed their buy-in. */
+export interface TableRow {
   id: string;
-  terms: MatchTerms;
-  status: 'open' | 'resolved' | 'void';
-  outcome?: string;
-  signature?: string;
+  terms: TableTerms;
+  status: 'open' | 'closed';
+  pot: string;
+  /** The next settlement the host may sign. */
+  sequence: number;
+  seats: TableSeat[];
 }
 /** The bankroll fund: every share in issue, and how many of them are the house's own capital. */
 export interface FundState {
