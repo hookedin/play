@@ -342,7 +342,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     developer = process.env.HOOKEDIN_DEVELOPER;
   if (!developer) throw new Error("Set HOOKEDIN_DEVELOPER to the address that earns the game's commission");
   const service = await createOracleService({ casinoURL, key, developer });
-  service.server.listen(port, '127.0.0.1', () =>
-    console.log(`Match oracle ${service.oracle} listening on http://127.0.0.1:${port}`),
+  // Behind a TLS proxy in another container the oracle listens on every interface; alone it stays local.
+  const host = process.env.HOOKEDIN_ORACLE_HOST ?? '127.0.0.1';
+  service.server.listen(port, host, () =>
+    console.log(`Match oracle ${service.oracle} listening on http://${host}:${port}`),
   );
 }
