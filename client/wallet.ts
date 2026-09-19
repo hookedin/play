@@ -496,22 +496,26 @@ export class CasinoWallet extends GameSessions {
     return mapBounded(keys, async key => {
       const value = await this.observer.contractRead(this.reader, 'channels', [key], block);
       const onchain = channelRecord(value);
-      const claim =
-        Number(value.status) === 3
-          ? picked(await this.observer.contractRead(this.reader, 'claims', [key], block), [
-              'beneficiary',
-              'stateHash',
-              'amount',
-              'paid',
-              'protectedRemaining',
-              'winningsRemaining',
-              'finalizedAt',
-            ])
-          : null;
-      if (claim)
-        claim.allocatedWinnings = String(
-          await this.observer.contractRead(this.reader, 'allocatedWinnings', [key], block),
-        );
+      let claim = null;
+      if (Number(value.status) === 3) {
+        // Two reads of one block, asked together.
+        const [terms, allocated] = await Promise.all([
+          this.observer.contractRead(this.reader, 'claims', [key], block),
+          this.observer.contractRead(this.reader, 'allocatedWinnings', [key], block),
+        ]);
+        claim = {
+          ...picked(terms, [
+            'beneficiary',
+            'stateHash',
+            'amount',
+            'paid',
+            'protectedRemaining',
+            'winningsRemaining',
+            'finalizedAt',
+          ]),
+          allocatedWinnings: String(allocated),
+        };
+      }
       return [key, onchain, claim];
     });
   }
@@ -524,8 +528,8 @@ export class CasinoWallet extends GameSessions {
   }
   async refreshLocked({ channelId }: { channelId?: string | null } = {}) {
     this.requireDurableState();
-    await this.assertNetwork();
-    const observation = await this.observer.observe();
+    // Both must pass before anything is read; together their requests share a round trip.
+    const [, observation] = await Promise.all([this.assertNetwork(), this.observer.observe()]);
     const [native, active] = await Promise.all([
       this.observer.balance(this.address, observation.block),
       this.observer.contractRead(this.reader, 'activeChannel', [this.address], observation.block),

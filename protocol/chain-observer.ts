@@ -84,9 +84,9 @@ export class ChainObserver {
     const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
     const tips = await Promise.all(
       providers.map(async provider => {
-        if (BigInt(await provider.send('eth_chainId', [])) !== this.chainId)
-          throw new Error('Observation RPC is on another chain');
-        const tip = await provider.getBlock('latest');
+        // Asked together, the two travel as one batched request.
+        const [chain, tip] = await Promise.all([provider.send('eth_chainId', []), provider.getBlock('latest')]);
+        if (BigInt(chain) !== this.chainId) throw new Error('Observation RPC is on another chain');
         if (!tip || !Number.isSafeInteger(tip.number) || !tip.hash || !Number.isSafeInteger(tip.timestamp))
           throw new Error('Invalid chain head');
         const age = this.now() - tip.timestamp * 1000;
@@ -98,7 +98,12 @@ export class ChainObserver {
     if (Math.max(...tips.map(t => t.number)) - Math.min(...tips.map(t => t.number)) > 4)
       throw new Error('Independent RPC heads disagree');
     const height = Math.max(0, Math.min(...tips.map(t => t.number)) - this.finality + 1);
-    const blocks = await Promise.all(providers.map(p => p.getBlock(height)));
+    // The previous observation's height is needed whenever the chain advanced; read it with the block.
+    const advanced = !this.last || height > this.last.number;
+    const [blocks, ancestors] = await Promise.all([
+      Promise.all(providers.map(p => p.getBlock(height))),
+      this.last && advanced ? Promise.all(providers.map(p => p.getBlock(this.last!.number))) : null,
+    ]);
     const block = blocks[0];
     if (
       !block ||
@@ -112,14 +117,12 @@ export class ChainObserver {
       throw new Error('Confirmed block timestamp is stale');
     if (this.last && (height < this.last.number || (height === this.last.number && block.hash !== this.last.hash)))
       throw new Error('Observed chain regressed or reorganized; wait for a newer corroborated block');
-    const advanced = !this.last || height > this.last.number;
     if (!this.local && !advanced && this.now() - this.lastProgress > this.maxStallMs)
       throw new Error('Confirmed chain has stopped advancing');
     let reorg = null;
-    if (this.last && advanced) {
+    if (this.last && ancestors) {
       // A replacement fork can already be taller than our previous observation.
       // Compare the old height, rather than inferring ancestry from height alone.
-      const ancestors = await Promise.all(providers.map(p => p.getBlock(this.last!.number)));
       const ancestor = ancestors[0];
       if (
         !ancestor ||

@@ -35,14 +35,16 @@ export async function verifyDeployment({
     throw new Error('Casino deployment differs from the pinned identity');
   const observation = await observer.observe();
   const contract = new Contract(address, artifact.abi, provider);
-  const values: Record<string, string> = {};
-  for (const { name } of artifact.immutables)
-    values[name] = await observer.contractRead(contract, name, [], observation.block);
+  // The immutables and the code are independent reads of one block: asked together, they travel as one batch.
+  const [code, ...read] = await Promise.all([
+    observer.corroborate('contract bytecode', p =>
+      p.send('eth_getCode', [address, { blockHash: observation.block.hash, requireCanonical: true }]),
+    ),
+    ...artifact.immutables.map(({ name }) => observer.contractRead(contract, name, [], observation.block)),
+  ]);
+  const values: Record<string, string> = Object.fromEntries(artifact.immutables.map(({ name }, i) => [name, read[i]]));
   if (expected && !same(expected.operator, values.owner))
     throw new Error('Deployment operator identity differs from trusted manifest');
-  const code = await observer.corroborate('contract bytecode', p =>
-    p.send('eth_getCode', [address, { blockHash: observation.block.hash, requireCanonical: true }]),
-  );
   let runtime = artifact.runtime.slice(2);
   for (const { name, locations } of artifact.immutables)
     for (const { start, length } of locations) {
