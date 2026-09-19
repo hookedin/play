@@ -1,0 +1,41 @@
+{
+  "name": "@hookedin/play",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "HookedIn player wallet, settlement contract and shared protocol",
+  "repository": "github:hookedin/play",
+  "engines": {
+    "node": ">=24.4"
+  },
+  "scripts": {
+    "build": "npm run compile && node scripts/build.ts",
+    "dev": "npm run build && node scripts/static.ts",
+    "compile": "node scripts/compile.ts",
+    "release:artifact": "node scripts/compile.ts --update-artifact",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && npm run typecheck && node scripts/vectors.ts --check && node --test test/*.test.ts",
+    "test:browser": "npm run build && node scripts/browser-smoke.ts",
+    "vectors": "node scripts/vectors.ts",
+    "demo": "node scripts/demo.ts",
+    "recover": "node scripts/verify-evidence.ts",
+    "watchtower": "node scripts/watchtower.ts",
+    "audit:package": "node scripts/audit-package.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "ethers": "6.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.5",
+    "esbuild": "0.28.2",
+    "prettier": "3.9.8",
+    "solc": "0.8.37",
+    "typescript": "7.0.2"
+  },
+  "overrides": {
+    "tmp": "0.2.7"
+  }
+}

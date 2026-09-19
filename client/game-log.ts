@@ -1,0 +1,202 @@
+import { formatEther } from 'ethers';
+import { activityJSON, createActivityEntry, filterActivity, returnToPlayer } from './activity.ts';
+import { describeBet } from '../protocol/risk.ts';
+
+/** The live developer log for one embedded game. Session-only; the wallet's receipts are the durable record. */
+export type LogKind = 'request' | 'response' | 'error' | 'event' | 'wallet' | 'client';
+export interface LogEntry {
+  seq: number;
+  kind: LogKind;
+  title: string;
+  description?: string;
+  timestamp: string;
+  /** Milliseconds since the previous entry. */
+  elapsed: number;
+  /** Milliseconds between a bridge request and this reply. */
+  latency?: number;
+  payload?: unknown;
+}
+const LIMIT = 500;
+const PAYLOAD_LIMIT = 70000;
+const eth = (wei: unknown) => {
+  try {
+    return `${formatEther(BigInt(wei as string))} ETH`;
+  } catch {
+    return String(wei);
+  }
+};
+/** The whole bet at a glance: how many prizes, the most they can pay together, and the exact return. */
+const betSummary = (params: any) => {
+  try {
+    const stake = BigInt(params.stake),
+      table = describeBet({
+        stake,
+        prizes: params.prizes.map((prize: any) => ({
+          rangeStart: BigInt(prize.rangeStart),
+          rangeEnd: BigInt(prize.rangeEnd),
+          payout: BigInt(prize.payout),
+        })),
+      });
+    return `${params.prizes.length} prize${params.prizes.length === 1 ? '' : 's'} · pays up to ${eth(table.maxPayout)} · ${returnToPlayer(stake, table.expectedPayout)}${params.round ? ' · shared round' : ''}`;
+  } catch {
+    return 'unreadable prizes';
+  }
+};
+const quote = (text: unknown) => (typeof text === 'string' && text ? ` · “${text.slice(0, 140)}”` : '');
+
+/** One line a developer can read without opening the payload. */
+export function describeRequest(method: string, params: any = {}) {
+  switch (method) {
+    case 'game.bet':
+      return `stake ${eth(params.stake)} · ${betSummary(params)} · id ${params.id}`;
+    case 'game.payment':
+    case 'game.transfer':
+      return `amount ${eth(params.amount)} · id ${params.id}`;
+    case 'game.receipt':
+      return `id ${params.id}`;
+    case 'game.requestFunds':
+      return `${params.amount === undefined ? 'no suggested amount' : `suggests ${eth(params.amount)}`}${quote(params.reason)}`;
+    default:
+      return '';
+  }
+}
+export function describeResult(method: string, result: any) {
+  if (!result || typeof result !== 'object') return '';
+  const limit = (state: any) => `balance ${eth(state.balance)}${state.pending ? ' · pending operation' : ''}`;
+  switch (method) {
+    case 'wallet.info':
+      return `playing ${eth(result.balance)} · unallocated ${eth(result.availableBalance)} · bankroll ${eth(result.bankroll)} · channel ${String(result.channelStatus) === '1' ? 'open' : 'not open'}`;
+    case 'game.receipt':
+      return result.status === 'rejected'
+        ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
+        : `${result.kind} ${result.status}${result.payout === undefined ? '' : ` · paid ${eth(result.payout)}`} · ${result.operationId}`;
+    case 'game.requestFunds':
+      return `${result.funded ? `authorized ${eth(result.amount)}` : 'declined'} · ${limit(result)}`;
+    case 'game.bet':
+      return result.status === 'rejected'
+        ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
+        : result.status === 'pending'
+          ? `signed for the round's host · ${result.operationId}`
+          : `paid ${eth(result.payout)} · balance ${eth(result.balance)} · ${result.operationId}`;
+    case 'game.payment':
+    case 'game.transfer':
+      return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.operationId ?? ''}`;
+    default:
+      return '';
+  }
+}
+
+export interface GameLogElements {
+  list: HTMLElement;
+  search: HTMLInputElement;
+  empty: HTMLElement;
+  count: HTMLElement;
+  filters: Iterable<HTMLInputElement>;
+}
+export function createGameLog(elements: GameLogElements) {
+  const entries: LogEntry[] = [];
+  const inflight = new Map<string | number, { method: string; at: number }>();
+  let seq = 0,
+    last = 0,
+    filter: string = 'all';
+  const kinds: Record<string, LogKind[]> = {
+    all: ['request', 'response', 'error', 'event', 'wallet', 'client'],
+    bridge: ['request', 'response', 'error', 'event'],
+    wallet: ['wallet', 'client'],
+    errors: ['error'],
+  };
+  const apply = () => {
+    for (const row of elements.list.children)
+      (row as HTMLElement).classList.toggle(
+        'filtered',
+        !kinds[filter]!.includes((row as HTMLElement).dataset.kind as LogKind),
+      );
+    filterActivity(elements.list, elements.search.value, elements.empty, elements.count);
+  };
+  const badge: Record<LogKind, string> = {
+    request: 'Game → wallet',
+    response: 'Wallet → game',
+    error: 'Error',
+    event: 'Event',
+    wallet: 'Wallet',
+    client: 'Client',
+  };
+  function log(
+    kind: LogKind,
+    title: string,
+    options: { description?: string; payload?: unknown; latency?: number } = {},
+  ) {
+    const now = Date.now();
+    const entry: LogEntry = {
+      seq: ++seq,
+      kind,
+      title: title.slice(0, 240),
+      description: options.description?.slice(0, 400) || undefined,
+      timestamp: new Date(now).toISOString(),
+      elapsed: last ? now - last : 0,
+      latency: options.latency,
+      payload: options.payload,
+    };
+    last = now;
+    entries.unshift(entry);
+    if (entries.length > LIMIT) entries.pop();
+    const row = createActivityEntry({
+      title: `#${entry.seq} ${entry.title}`,
+      description: entry.description,
+      timestamp: entry.timestamp,
+      status: badge[kind],
+      tone: kind === 'error' ? 'negative' : kind === 'event' ? 'warning' : kind === 'response' ? 'positive' : 'neutral',
+      compact: true,
+      meta:
+        (entry.latency === undefined ? '' : `${entry.latency} ms round trip · `) +
+        (entry.seq === 1 ? 'first event' : `+${entry.elapsed} ms`),
+      payload: options.payload === undefined ? undefined : activityJSON(options.payload, PAYLOAD_LIMIT),
+    });
+    row.dataset.kind = kind;
+    elements.list.prepend(row);
+    if (elements.list.childElementCount > LIMIT) elements.list.lastElementChild!.remove();
+    apply();
+    return entry;
+  }
+  /** Bridge traffic as the bridge reports it: raw envelopes in, paired summaries out. */
+  function bridge(type: 'request' | 'response' | 'error', message: any) {
+    const id = typeof message?.id === 'string' || typeof message?.id === 'number' ? message.id : undefined;
+    if (type === 'request') {
+      const method = typeof message?.method === 'string' ? message.method.slice(0, 80) : 'invalid request';
+      if (id !== undefined && typeof message?.method === 'string') inflight.set(id, { method, at: Date.now() });
+      return log('request', method, { description: describeRequest(method, message?.params), payload: message });
+    }
+    const started = id === undefined ? undefined : inflight.get(id);
+    if (id !== undefined) inflight.delete(id);
+    const latency = started && Date.now() - started.at;
+    const method = started?.method ?? 'unknown method';
+    if (type === 'error')
+      return log('error', `${method} failed`, { description: String(message?.error ?? ''), payload: message, latency });
+    return log('response', method, { description: describeResult(method, message?.result), payload: message, latency });
+  }
+  for (const input of elements.filters)
+    input.addEventListener('change', () => {
+      if (input.checked) {
+        filter = input.value;
+        apply();
+      }
+    });
+  elements.search.addEventListener('input', apply);
+  return {
+    log,
+    bridge,
+    entries,
+    clear() {
+      entries.length = 0;
+      inflight.clear();
+      seq = 0;
+      last = 0;
+      elements.list.replaceChildren();
+      apply();
+    },
+    /** Newest first, matching the display; payloads are complete objects, not previews. */
+    export() {
+      return activityJSON({ exportedAt: new Date().toISOString(), entries });
+    },
+  };
+}

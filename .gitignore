@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+.npm-cache/
+*.log
+.DS_Store
+.private/
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.pem
+*.key
+*.tgz

@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self' http: https:; frame-src http: https:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>HookedIn — Independent game wallet</title>
+    <link rel="icon" type="image/svg+xml" href="/brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/main.js"></script>
+  </head>
+  <body>
+    <div class="workspace">
+      <header class="topbar">
+        <a class="brand" href="/" data-page="library" aria-label="HookedIn home"
+          ><span class="brand-lockup" aria-hidden="true"
+            ><img class="brand-mark" src="/brand/hookedin-mark.svg" width="26" height="36" alt="" /><span
+              class="brand-letter"
+              >HookedIn</span
+            ></span
+          ></a
+        >
+        <nav class="topnav" aria-label="Main navigation">
+          <a class="nav-link active" href="/" data-page="library">
+            Games <span id="library-count" class="nav-count">0</span>
+          </a>
+          <a class="nav-link" href="/wallet" data-page="wallet">My wallet</a>
+          <a class="nav-link" href="/activity" data-page="activity">
+            Activity <span id="activity-count" class="nav-count">0</span>
+          </a>
+        </nav>
+        <div class="topbar-context">
+          <span class="live-dot"></span><span id="network-name">Sepolia</span
+          ><span id="asset-pill" class="test-pill">SEPOLIA ETH</span>
+        </div>
+        <div class="topbar-wallet">
+          <button id="top-balance" class="balance-button" data-page="wallet">
+            <span class="eth-symbol">◆</span><span class="header-balance-label">Playing</span
+            ><span id="header-balance">— ETH</span><span class="muted">⌄</span></button
+          ><button id="open-deposit" class="button primary compact" data-page="wallet" data-receive>
+            Deposit ETH <span>↓</span>
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <div id="connection-banner" class="banner" role="status">Connecting to the Sepolia casino…</div>
+        <div id="challenge-banner" class="banner warning hidden" role="alert">
+          <span id="challenge-summary"></span
+          ><button id="challenge-now" class="button small">Challenge stale close</button>
+        </div>
+        <div id="pending-banner" class="banner warning hidden">
+          <span id="pending-summary"
+            >Your exact request is saved. Retry it without changing its terms or randomness.</span
+          ><button id="recover-wallet" class="button small">Retry same request</button
+          ><button id="speed-up-transaction" class="button small hidden">Speed up transaction</button
+          ><button id="cancel-transfer" class="button small hidden">Cancel transfer</button
+          ><button id="export-evidence" class="button small">Export channel evidence</button
+          ><button id="start-close" class="button small">Start unilateral close</button>
+        </div>
+
+        <section id="page-library" class="page">
+          <div class="library-heading">
+            <div>
+              <div class="eyebrow">THE OPEN GAME PLAYGROUND</div>
+              <h1>Your wallet.<br /><span>Every game.</span></h1>
+              <p class="intro">
+                Choose a game. Add money. Play your way.<br />Bets settle as signed balances instantly. Your wallet
+                verifies each result.
+              </p>
+            </div>
+            <div class="hero-art" aria-hidden="true">
+              <div class="orbit orbit-one"></div>
+              <div class="orbit orbit-two"></div>
+              <div class="hero-die"><i></i><i></i><i></i><i></i><i></i></div>
+              <span class="spark spark-one">✦</span><span class="spark spark-two">+</span>
+              <div class="hero-tag"><span class="live-dot"></span> VERIFIED BY YOU</div>
+            </div>
+          </div>
+          <div class="section-heading">
+            <h2>Pick your next game <span id="library-heading-count" class="subtle-count">0</span></h2>
+            <span class="section-note">Independent games. One wallet.</span>
+          </div>
+          <div id="game-library" class="game-grid"></div>
+          <div class="custom-game-row">
+            <div class="custom-symbol">⌘</div>
+            <div>
+              <h3>Built something different?</h3>
+              <p>Load any game manifest. The same wallet permissions apply.</p>
+            </div>
+            <button id="open-custom" class="button secondary">Add a custom game <span>+</span></button>
+          </div>
+          <form id="custom-form" class="custom-form hidden">
+            <label for="manifest-url">Game manifest URL</label>
+            <div class="input-row">
+              <input
+                id="manifest-url"
+                type="url"
+                placeholder="https://your-game.example/manifest.json"
+                required
+              /><button class="button primary" type="submit">Load game</button>
+            </div>
+            <p>Manifests declare the game entry URL and developer fee recipient.</p>
+          </form>
+          <p class="trust-note">
+            The casino controls its bankroll and whether it returns a signed result. Winnings are not guaranteed. Check
+            your wallet regularly: challenge any stale closure before its 24-hour deadline or the older balance can
+            become final. Keep current recovery evidence.
+          </p>
+          <div class="library-footer">
+            <span><span class="tiny-shield">◇</span> Sandboxed games</span
+            ><span><span class="tiny-shield">✓</span> Locally verified outcomes</span
+            ><span><span class="tiny-shield">↗</span> Onchain settlement</span
+            ><a href="http://127.0.0.1:4183" data-casino-link target="_blank" rel="noopener noreferrer"
+              >View casino health ↗</a
+            >
+          </div>
+        </section>
+
+        <section id="page-play" class="page hidden">
+          <div class="play-heading">
+            <div>
+              <button id="back-library" class="back-link">← Game library</button>
+              <h1 id="active-game-name">Game</h1>
+              <p id="active-game-description" class="muted"></p>
+              <p class="game-link-row">
+                <a id="game-link" href="/" class="game-link">/games/…</a
+                ><button id="copy-game-link" class="text-button" type="button">Copy link</button>
+              </p>
+            </div>
+            <div class="sandbox-pill"><span>◇</span> ISOLATED GAME</div>
+          </div>
+          <div class="game-viewport">
+            <div class="frame-chrome">
+              <span class="live-dot"></span><span id="game-host">Game iframe</span
+              ><span class="frame-developer"
+                >Developer <code id="developer-address"></code> · earns half of each bet’s fee</span
+              ><span class="frame-lock">Sandbox active</span>
+            </div>
+            <div id="frame-slot"></div>
+          </div>
+          <section class="game-activity" aria-labelledby="game-activity-title">
+            <div class="game-activity-heading">
+              <div>
+                <h2 id="game-activity-title">
+                  Developer log <span id="game-activity-count" class="subtle-count">0</span>
+                </h2>
+                <p>
+                  Every bridge request and reply with round-trip time, wallet progress and balance pushes · latest 500 ·
+                  newest first · this session only
+                </p>
+              </div>
+              <div class="game-activity-actions">
+                <button id="export-game-activity" class="button secondary small" type="button">Export JSON</button
+                ><button id="clear-game-activity" class="button secondary small" type="button">Clear</button>
+              </div>
+            </div>
+            <div class="activity-toolbar">
+              <label class="sr-only" for="game-activity-search">Search game activity</label
+              ><input
+                id="game-activity-search"
+                type="search"
+                placeholder="Search methods, amounts, operation IDs or payloads…"
+                autocomplete="off"
+              />
+              <div class="log-filters" role="radiogroup" aria-label="Show">
+                <label><input type="radio" name="game-log-filter" value="all" checked /><span>All</span></label
+                ><label><input type="radio" name="game-log-filter" value="bridge" /><span>Bridge</span></label
+                ><label><input type="radio" name="game-log-filter" value="wallet" /><span>Wallet</span></label
+                ><label><input type="radio" name="game-log-filter" value="errors" /><span>Errors</span></label>
+              </div>
+            </div>
+            <div
+              id="game-activity-list"
+              class="game-activity-list"
+              role="region"
+              aria-label="Game activity events"
+              tabindex="0"
+            ></div>
+            <p id="game-activity-empty" class="activity-empty hidden"></p>
+          </section>
+        </section>
+
+        <section id="page-wallet" class="page hidden">
+          <div class="eyebrow">YOURS TO CONTROL</div>
+          <h1>My wallet<span class="heading-dot">.</span></h1>
+          <p class="intro wallet-intro">Receive ETH at your wallet address, then choose how much to use for games.</p>
+          <div class="funding-balances">
+            <div class="wallet-balance-card wallet-cash-card">
+              <div class="eyebrow">WALLET FUNDS</div>
+              <div class="large-amount"><span id="native-balance">—</span><small>ETH</small></div>
+              <p>ETH received at your wallet address</p>
+            </div>
+            <div class="wallet-balance-card">
+              <div class="eyebrow">PLAYING BALANCE</div>
+              <div class="large-amount"><span id="casino-balance">—</span><small>ETH</small></div>
+              <p>Total balance, including money in games</p>
+              <p id="in-play" class="hidden"></p>
+            </div>
+          </div>
+          <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
+          <div class="funding-steps">
+            <section class="surface receive-card" aria-labelledby="receive-title">
+              <div class="funding-heading">
+                <span class="step-number">1</span>
+                <div>
+                  <h2 id="receive-title" tabindex="-1">Receive ETH</h2>
+                  <p>Deposit into your wallet</p>
+                </div>
+              </div>
+              <p id="receive-instructions">
+                Send Sepolia test ETH from another wallet or a faucet to the address below.
+              </p>
+              <div class="receive-network">
+                <span id="receive-network">Sepolia · 11155111</span><span id="asset-name">Sepolia ETH</span>
+              </div>
+              <p id="receive-network-note" class="network-note">
+                Select Sepolia (11155111) in the sending wallet or service. ETH sent on another network won’t appear in
+                this balance.
+              </p>
+              <label id="receive-address-label">Your deposit address</label>
+              <div class="deposit-address-box">
+                <code id="wallet-address" aria-labelledby="receive-address-label" dir="ltr">Connecting…</code
+                ><button id="copy-address" class="button primary small" disabled>Copy address</button>
+              </div>
+              <div class="receive-progress">
+                <span class="live-dot"></span>
+                <p id="receive-status" role="status">Connecting to your wallet…</p>
+              </div>
+              <div class="receive-refresh">
+                <span id="receive-check">Your balance updates automatically while this page is open.</span
+                ><button id="check-deposit" class="text-button" disabled>Check now ↻</button>
+              </div>
+              <div id="demo-funding" class="demo-funding hidden">
+                <p>Testing locally? Add demo ETH to your wallet and playing balance.</p>
+                <button id="setup-wallet" class="button secondary small hidden" disabled>Set up demo wallet ↗</button>
+              </div>
+            </section>
+            <section class="surface play-funding-card" aria-labelledby="play-funding-title">
+              <div class="funding-heading">
+                <span class="step-number">2</span>
+                <div>
+                  <h2 id="play-funding-title">Open a funded channel</h2>
+                  <p>Deposit and register in one transaction</p>
+                </div>
+              </div>
+              <p>
+                Open once and play across games and visits. Check your wallet regularly and challenge any stale closure
+                within 24 hours of its start. Keep current recovery evidence. Close and reopen to add funds.
+              </p>
+              <div class="funding-amount-label">
+                <label for="transfer-amount">Amount to add</label
+                ><button
+                  id="max-deposit"
+                  class="text-button"
+                  type="button"
+                  aria-label="Use maximum deposit amount"
+                  disabled
+                >
+                  Max
+                </button>
+              </div>
+              <div class="amount-input">
+                <input
+                  id="transfer-amount"
+                  type="text"
+                  inputmode="decimal"
+                  value="0.00001"
+                  aria-describedby="deposit-help gas-reserve-note"
+                /><span>ETH</span>
+              </div>
+              <p id="deposit-help" class="funding-help">Receive ETH in step 1 to get started.</p>
+              <button id="deposit" class="button primary full" disabled>Open a funded channel ↗</button>
+              <p id="gas-reserve-note" class="funding-fee">
+                At least 0.001 ETH stays in your wallet for future network fees. Max also sets aside this deposit’s fee.
+              </p>
+              <details class="withdraw-details">
+                <summary>Close channel</summary>
+                <p>
+                  Your signed balance becomes a claim. Then collect available principal and winnings below in a separate
+                  transaction. Unpaid winnings remain claimable.
+                </p>
+                <button id="withdraw" class="button secondary full" disabled>Close channel ↙</button>
+              </details>
+            </section>
+          </div>
+          <section class="surface wallet-settings fund-card" aria-labelledby="fund-card-title">
+            <div class="eyebrow">OWN A PART OF THE HOUSE</div>
+            <h2 id="fund-card-title">Invest in the bankroll</h2>
+            <p>
+              Move money from your playing balance into the bankroll the casino bets with. You receive shares: when
+              players lose, every share is worth more, and when they win, less. Sell shares at any time for their
+              current worth.
+            </p>
+            <p class="fund-warning">
+              This rests entirely on trusting the casino. Shares are its signed promise, not protected money: no
+              contract holds them, the casino alone states what they are worth, and the bankroll can lose. Your wallet
+              keeps the casino's signed statement of how many shares you hold.
+            </p>
+            <dl class="fund-figures">
+              <div>
+                <dt>Your shares are worth</dt>
+                <dd><strong id="fund-value">—</strong> ETH</dd>
+              </div>
+              <div>
+                <dt>Share price</dt>
+                <dd id="fund-price">—</dd>
+              </div>
+              <div>
+                <dt>Bankroll</dt>
+                <dd><span id="fund-equity">—</span> ETH</dd>
+              </div>
+              <div>
+                <dt>The house's own part</dt>
+                <dd id="fund-house">—</dd>
+              </div>
+            </dl>
+            <p id="fund-note" class="wallet-caption"></p>
+            <div class="fund-forms">
+              <div>
+                <label for="invest-amount">Invest</label>
+                <div class="amount-input">
+                  <input id="invest-amount" type="text" inputmode="decimal" value="0.01" /><span>ETH</span>
+                </div>
+                <button id="invest" class="button secondary full" disabled>Buy shares ↗</button>
+              </div>
+              <div>
+                <div class="funding-amount-label">
+                  <label for="divest-amount">Sell shares worth</label
+                  ><button id="divest-all" class="text-button" type="button" disabled>All</button>
+                </div>
+                <div class="amount-input">
+                  <input id="divest-amount" type="text" inputmode="decimal" value="" /><span>ETH</span>
+                </div>
+                <button id="divest" class="button secondary full" disabled>Sell shares ↙</button>
+              </div>
+            </div>
+          </section>
+          <section class="surface wallet-settings">
+            <h2>Channel and withdrawal claims</h2>
+            <p id="channel-status">No open channel</p>
+            <p>
+              Original protected deposit: <strong id="principal-balance">0 ETH</strong>. Gambling losses reduce the
+              amount returned. Winnings are signed balances awaiting cash-out from the shared house bankroll.
+            </p>
+            <p id="channel-observation"></p>
+            <p id="challenge-deadline">
+              Check your wallet regularly. Challenges must be mined before the displayed 24-hour deadline.
+            </p>
+            <div class="identity-actions">
+              <button id="channel-export" class="button secondary small">Export recovery bundle</button
+              ><button id="channel-start-close" class="button secondary small">Start unilateral close</button
+              ><button id="channel-challenge" class="button secondary small">Challenge stale balance</button
+              ><button id="channel-finalize" class="button secondary small">Finalize withdrawal claim</button>
+            </div>
+            <label for="channel-import">Import recovery bundle</label
+            ><input id="channel-import" type="file" accept="application/json" />
+            <div id="claim-list"></div>
+          </section>
+          <section class="surface wallet-settings">
+            <div class="eyebrow" id="wallet-mode">BROWSER WALLET · SEPOLIA</div>
+            <h2>Wallet settings</h2>
+            <p id="wallet-caption" class="wallet-caption">
+              This Sepolia test wallet key is stored only in this browser.
+            </p>
+            <div class="identity-actions">
+              <button id="connect-browser" class="button secondary small">Connect browser wallet ↗</button
+              ><button id="export-key" class="text-button">Show browser wallet private key</button>
+            </div>
+            <textarea
+              id="exported-key"
+              class="key-field hidden"
+              readonly
+              aria-label="Browser wallet private key"
+            ></textarea
+            ><label for="backup-password">Encrypted wallet backup passphrase</label
+            ><input
+              id="backup-password"
+              type="password"
+              minlength="12"
+              autocomplete="new-password"
+              placeholder="At least 12 characters"
+            />
+            <div class="identity-actions">
+              <button id="backup-wallet" class="button secondary small">Back up selected account</button>
+            </div>
+            <label for="restore-backup">Restore encrypted backup</label
+            ><input id="restore-backup" type="file" accept="application/json" />
+            <p class="settings-note">
+              Keep this backup and its passphrase separately. Recovery bundles contain signed evidence; encrypted
+              backups also retain channel keys and pending operations.
+            </p>
+            <label for="saved-wallets">Saved browser wallets</label>
+            <div class="input-row">
+              <select id="saved-wallets" aria-label="Saved browser wallets"></select
+              ><button id="select-saved-wallet" class="button secondary">Select</button>
+            </div>
+            <p class="settings-note">
+              Saved funding keys remain available when you switch accounts. Each backup contains only the selected
+              account’s funding key, channel keys, signed evidence and pending operations. Select and back up every
+              funded account separately. The gas reserve is a convenience floor, not a guaranteed challenge budget.
+            </p>
+            <label for="import-key">Import a private key</label>
+            <div class="input-row">
+              <input id="import-key" type="password" placeholder="0x…" autocomplete="off" /><button
+                id="import-wallet"
+                class="button secondary"
+              >
+                Import
+              </button>
+            </div>
+            <p class="settings-note">
+              Game balances belong to a specific wallet, casino and game. Changing wallets closes the current game.
+            </p>
+          </section>
+          <section class="surface endpoint-settings">
+            <div>
+              <h2>Connected services</h2>
+              <p>Connect this wallet to an independently operated casino and game library.</p>
+            </div>
+            <div class="connected-chain">Connected chain <strong id="chain-id">—</strong></div>
+            <label for="network-mode">Required network</label
+            ><select id="network-mode">
+              <option value="sepolia">Sepolia · 11155111</option>
+              <option value="local">Anvil test chain · 31337 (explicit opt-in)</option>
+            </select>
+            <div class="endpoint-inputs">
+              <div>
+                <label for="casino-url">Casino API URL</label
+                ><input id="casino-url" type="url" placeholder="http://127.0.0.1:4183" />
+              </div>
+              <div>
+                <label for="games-url">Game library base URL</label
+                ><input id="games-url" type="url" placeholder="http://127.0.0.1:4185" />
+              </div>
+            </div>
+            <button id="connect-casino" class="button secondary">Connect services ↗</button>
+          </section>
+        </section>
+
+        <section id="page-activity" class="page hidden">
+          <div class="activity-heading">
+            <div>
+              <div class="eyebrow">YOUR WALLET ACTIVITY</div>
+              <h1>Your activity<span class="heading-dot">.</span></h1>
+              <p class="intro">Inspect signed game results, funding, and withdrawal claims.</p>
+            </div>
+            <button id="refresh-wallet" class="button secondary">Refresh ↻</button>
+          </div>
+          <p id="history-status" class="history-status" role="status"></p>
+          <div class="activity-toolbar">
+            <label class="sr-only" for="activity-search">Search wallet activity</label
+            ><input
+              id="activity-search"
+              type="search"
+              placeholder="Search events, amounts, operation IDs or transaction hashes…"
+              autocomplete="off"
+            /><span class="activity-list-note"
+              ><span id="activity-visible-count">0</span> events · newest first<br />Latest 100 saved receipts</span
+            >
+          </div>
+          <div id="activity-list" class="activity-list"></div>
+          <p id="activity-empty" class="activity-empty hidden"></p>
+        </section>
+        <div id="operation-status" class="operation-status hidden" role="status">
+          <span class="status-spinner"></span><span id="operation-text"></span>
+        </div>
+      </main>
+      <footer class="app-footer">
+        <span>HookedIn is an experimental reference MVP. Test ETH only.</span
+        ><span>Games run in isolation. Your wallet stays in control.</span
+        ><a href="http://127.0.0.1:4183" data-casino-link target="_blank" rel="noopener noreferrer">Open the casino ↗</a
+        ><span>HookedIn / v1</span>
+      </footer>
+    </div>
+    <div id="toast" class="toast hidden" role="alert"></div>
+    <dialog id="fund-dialog" class="fund-dialog" aria-labelledby="fund-title">
+      <form id="fund-form">
+        <div class="eyebrow">AUTHORIZE SPENDING</div>
+        <h2 id="fund-title">Add money to this game</h2>
+        <p id="fund-reason" class="fund-reason"></p>
+        <p id="fund-channel-note" class="fund-channel-note"></p>
+        <div class="fund-channel-actions">
+          <button class="button secondary" type="button" data-fund-cancel>Keep looking</button
+          ><button id="fund-open-wallet" class="button primary" type="button">Open a channel in My wallet</button>
+        </div>
+        <div class="funding-amount-label fund-only">
+          <label for="fund-amount">Amount the game may risk</label
+          ><span id="fund-suggested" class="fund-suggested hidden"></span
+          ><button id="fund-max" class="text-button" type="button">Max</button>
+        </div>
+        <div class="amount-input fund-only">
+          <input id="fund-amount" inputmode="decimal" autocomplete="off" aria-describedby="fund-help" /><span>ETH</span>
+        </div>
+        <p id="fund-help" class="funding-help fund-only"></p>
+        <div class="fund-actions fund-only">
+          <button id="fund-cancel" class="button secondary" type="button">Not now</button
+          ><button id="fund-confirm" class="button primary" type="submit">Authorize</button>
+        </div>
+        <p class="security-note fund-only">
+          This amount lasts only while the game stays open: leaving it or closing the tab returns whatever is left to
+          your wallet. The game can lose all of it, including winnings, on wagers and payments to its developer.
+        </p>
+      </form>
+    </dialog>
+    <dialog id="hosted-dialog" class="fund-dialog" aria-labelledby="hosted-title">
+      <form method="dialog">
+        <div id="hosted-eyebrow" class="eyebrow">SHARED ROUND</div>
+        <h2 id="hosted-title">Join this game's shared rounds?</h2>
+        <p id="hosted-reason" class="fund-reason"></p>
+        <p id="hosted-note" class="security-note"></p>
+        <div class="fund-actions">
+          <button id="hosted-decline" class="button secondary" type="button">Keep my own randomness</button
+          ><button id="hosted-allow" class="button primary" type="button">Allow shared rounds</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

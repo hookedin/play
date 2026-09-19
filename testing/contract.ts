@@ -1,0 +1,181 @@
+/** Contract test harness: a throwaway Anvil chain, a deployment, and hand-signed channel evidence. No casino service. */
+import net from 'node:net';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { ContractFactory, JsonRpcProvider, HDNodeWallet, id, keccak256, Wallet, ZeroHash } from 'ethers';
+import {
+  domain,
+  channelId,
+  ACCESS_TYPES,
+  STATE_TYPES,
+  OP_TYPES,
+  CLOSE_TYPES,
+  hashState,
+  initialState,
+  operation,
+  deriveState,
+  checkpointEvidence,
+} from '../protocol/protocol.ts';
+import { assessRound } from '../protocol/risk.ts';
+import { generateHashChain } from '../protocol/hash-chain.ts';
+import { loadArtifact } from '../protocol/deployment.ts';
+export async function anvil(chainId = 31337) {
+  const probe = net.createServer();
+  probe.listen(0, '127.0.0.1');
+  await once(probe, 'listening');
+  const port = (probe.address()! as any).port;
+  await new Promise(r => probe.close(r));
+  const child = spawn(
+    process.env.ANVIL_BIN || 'anvil',
+    ['--port', String(port), '--chain-id', String(chainId), '--silent'],
+    { stdio: ['ignore', 'ignore', 'pipe'] },
+  );
+  let error;
+  child.on('error', e => (error = e));
+  const provider = new JsonRpcProvider('http://127.0.0.1:' + port, undefined, {
+    cacheTimeout: -1,
+    batchStallTime: 0,
+  });
+  provider.pollingInterval = 10;
+  for (let i = 0; ; i++) {
+    if (error) throw error;
+    try {
+      await provider.send('eth_chainId', []);
+      break;
+    } catch {
+      if (i > 100) throw new Error('Anvil unavailable');
+      await new Promise(r => setTimeout(r, 30));
+    }
+  }
+  const wallets = Array.from({ length: 10 }, (_, i) =>
+    HDNodeWallet.fromPhrase(
+      'test test test test test test test test test test test junk',
+      undefined,
+      "m/44'/60'/0'/0/" + i,
+    ).connect(provider),
+  );
+  return {
+    chainId,
+    provider,
+    wallets,
+    url: 'http://127.0.0.1:' + port,
+    async close() {
+      provider.destroy();
+      child.kill();
+      await once(child, 'exit').catch(() => {});
+    },
+  };
+}
+export async function deployment(env: any) {
+  const artifact = loadArtifact();
+  const contract: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, env.wallets[0]).deploy();
+  await contract.waitForDeployment();
+  return {
+    contract,
+    d: domain(env.chainId, await contract.getAddress()),
+    owner: env.wallets[0],
+  };
+}
+let count = 0;
+export function openingFor(player: string, signer: string, deposit: any) {
+  return { channelId: channelId(player, signer, deposit), player, signer, deposit: String(deposit) };
+}
+export async function accessFor(d: any, opening: any, signer: any) {
+  const message = { channelId: opening.channelId, expiresAt: Math.floor(Date.now() / 1000) + 120 };
+  return { message, signature: await signer.signTypedData(d, ACCESS_TYPES, message) };
+}
+/** One prize: `payout` when the round's outcome falls below `threshold`. */
+export const below = (threshold: any, payout: any) => [{ rangeStart: 0, rangeEnd: threshold, payout }];
+/** The simplest bet, a stake that wins `netWin` below a threshold, priced as the round of one it is. */
+export function assessBet({ bankroll, stake, netWin, winThreshold }: Record<string, bigint>) {
+  const prizes = [{ rangeStart: 0n, rangeEnd: winThreshold, payout: stake + netWin }],
+    risk = assessRound({ bankroll, bets: [{ stake, prizes }] });
+  return {
+    ...risk,
+    stake,
+    netWin,
+    winThreshold,
+    prizes,
+    developerFee: risk.totalFee / 2n,
+    casinoFee: risk.totalFee / 2n,
+  };
+}
+export async function open(f: any, player: any, deposit = 1000n, overrides: any = {}) {
+  const chain = generateHashChain(id('chain ' + ++count), 10000);
+  const used = Number((await f.contract.channels(channelId(player.address, player.address, deposit))).status);
+  const signer = used ? Wallet.createRandom() : player;
+  const opening = openingFor(player.address, overrides.signer || signer.address, deposit);
+  await (await f.contract.connect(player).openChannel(opening.signer, { value: deposit })).wait();
+  const state = initialState(opening);
+  return {
+    opening,
+    state,
+    chain,
+    player,
+    key: overrides.signer ? undefined : signer.privateKey,
+    evidence: checkpointEvidence(state),
+  };
+}
+export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) {
+  const signer = ch.key ? new Wallet(ch.key) : ch.player;
+  // A bet names the head of its round; each one opens the next preimage of the channel's chain.
+  // `preimage` settles the bet on another channel's round instead.
+  const { preimage: round, ...terms } = extra as any;
+  const preimage = kind !== 1 ? ZeroHash : (round ?? ch.chain.preimages[(ch.index = (ch.index ?? -1) + 1)]);
+  // A bet signs its developer; every other kind leaves the field zero.
+  const values = {
+    kind,
+    amount,
+    operationId: id('op ' + ++count),
+    ...(kind === 1 ? { developer: f.owner.address, roundHead: keccak256(preimage) } : {}),
+    ...terms,
+  };
+  const op = operation(f.d, ch.state, values);
+  const next = deriveState(f.d, ch.state, op, preimage);
+  const evidence = {
+    ...ch.evidence,
+    step: {
+      operation: op,
+      authorization: await signer.signTypedData(f.d, OP_TYPES, op),
+      preimage,
+      casinoSignature: await f.owner.signTypedData(f.d, STATE_TYPES, next),
+    },
+  };
+  return { state: next, evidence };
+}
+export async function closeCoop(f: any, ch: any, evidence = ch.evidence) {
+  const state = Number(evidence.step.operation.kind)
+    ? deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.preimage)
+    : evidence.base;
+  const message = {
+    channelId: state.channelId,
+    stateHash: hashState(f.d, state),
+  };
+  return (
+    await f.contract.cooperativeClose(
+      evidence,
+      await ch.player.signTypedData(f.d, CLOSE_TYPES, message),
+      await f.owner.signTypedData(f.d, CLOSE_TYPES, message),
+    )
+  ).wait();
+}
+
+// Joint checkpoints exercise settlement balances without a privileged credit operation.
+export async function signedIncrease(f: any, ch: any, amount: any) {
+  const state = {
+    ...ch.state,
+    sequence: String(BigInt(ch.state.sequence) + 1n),
+    previousStateHash: hashState(f.d, ch.state),
+    transitionHash: id('checkpoint:' + ++count),
+    balance: String(BigInt(ch.state.balance) + amount),
+  };
+  const signer = ch.key ? new Wallet(ch.key) : ch.player;
+  return {
+    state,
+    evidence: checkpointEvidence(
+      state,
+      await signer.signTypedData(f.d, STATE_TYPES, state),
+      await f.owner.signTypedData(f.d, STATE_TYPES, state),
+    ),
+  };
+}
