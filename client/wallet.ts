@@ -457,7 +457,7 @@ export class CasinoWallet extends GameSessions {
   }
   /** Run `fn` holding this channel's lock, after loading a newer revision saved by another tab
    * (`changed`). Without `wait`, a lock held elsewhere runs `fn` with `held` false. */
-  async withChannelLock<T>(wait: boolean, fn: (held: boolean, changed: boolean) => Promise<T>) {
+  async withChannelLock<T>(wait: boolean | number, fn: (held: boolean, changed: boolean) => Promise<T>) {
     return withLock(`hookedin:channel:${this.storageKey}`, wait, async held => {
       if (!held) return fn(false, false);
       const saved = await this.storage.get(this.storageKey);
@@ -671,7 +671,8 @@ export class CasinoWallet extends GameSessions {
       // busy is already set, so no new local refresh can enter while we wait.
       await this.refreshing?.catch(() => {});
       this.requireDurableState();
-      return await this.withChannelLock(wait, async (held, changed) => {
+      // Every open tab observes the chain under this lock for a moment; an action waits that out instead of failing.
+      return await this.withChannelLock(wait || 5000, async (held, changed) => {
         if (!held) throw new Error('Another tab is using this channel');
         if (changed && !wait) throw new Error('Wallet changed in another tab. Recover before continuing');
         return fn();

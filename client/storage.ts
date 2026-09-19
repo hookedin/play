@@ -6,12 +6,26 @@ export interface Store {
   update<T = any>(key: string, change: (value: T | undefined) => T): Promise<T>;
 }
 /** Serialize browser tabs with a Web Lock. Node instances run directly; atomic storage updates
- * serialize them. Without `wait`, a lock held by another tab runs `fn` with `held` false. */
-export function withLock<T>(name: string, wait: boolean, fn: (held: boolean) => Promise<T>): Promise<T> {
+ * serialize them. Without `wait`, a lock held by another tab runs `fn` with `held` false; a number
+ * waits that many milliseconds for it first, which outlasts another tab's brief observation. */
+export function withLock<T>(name: string, wait: boolean | number, fn: (held: boolean) => Promise<T>): Promise<T> {
   const locks = globalThis.navigator?.locks;
-  if (locks) return locks.request(name, { ifAvailable: !wait }, lock => fn(Boolean(lock)));
-  if (typeof window !== 'undefined') throw new Error('Secure browser Web Locks are required');
-  return fn(true);
+  if (!locks) {
+    if (typeof window !== 'undefined') throw new Error('Secure browser Web Locks are required');
+    return fn(true);
+  }
+  if (typeof wait !== 'number') return locks.request(name, { ifAvailable: !wait }, lock => fn(Boolean(lock)));
+  let granted = false;
+  return locks
+    .request(name, { signal: AbortSignal.timeout(wait) }, () => {
+      granted = true;
+      return fn(true);
+    })
+    .catch(error => {
+      // Only the expired wait is the other tab's doing; an error from `fn` is its own.
+      if (granted) throw error;
+      return fn(false);
+    });
 }
 /** Browser records commit before signatures or results leave the trusted wallet. */
 export class BrowserStore {
