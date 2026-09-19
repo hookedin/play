@@ -1,0 +1,8 @@
+// Where `wrangler deploy` publishes dist/: a Cloudflare Worker that only serves static assets (the successor to Pages).
+// Wallet routes such as /wallet and /games/dice are client-side, so an unknown path serves the page.
+{
+  "name": "hookedin-play",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "dist", "not_found_handling": "single-page-application" },
+  "routes": [{ "pattern": "play.hookedin.com", "custom_domain": true }],
+}

@@ -1,0 +1,37 @@
+# Push to main = release: test everything (contract included), build, and publish dist/ to Cloudflare.
+# Settings (repository → Settings → Secrets and variables → Actions):
+#   secret   CLOUDFLARE_API_TOKEN    a Cloudflare API token made from the "Edit Cloudflare Workers" template
+#   variable CLOUDFLARE_ACCOUNT_ID   the Cloudflare account ID
+# Without the token the workflow still tests and builds; it just does not publish.
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      HOOKEDIN_CLIENT_CONFIG: config/production.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # The contract tests run against a local Anvil chain.
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Publish to Cloudflare
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy

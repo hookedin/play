@@ -95,18 +95,13 @@ The recovery CLI supports `inspect`, `start`, `challenge`, `finalize` and `claim
 - The casino service (bet server, channel store, signing history, admission, dispute defence) is private. It pins this repository as a git submodule, and its integration tests run the wallet from this repository against the real server.
 - The website at <https://hookedin.com> is private.
 
-## Deploy on Cloudflare Pages
+## Deploy
 
-The wallet is a static site.
+The wallet is a static site. Pushing to `main` releases it: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs the whole test suite, builds with `HOOKEDIN_CLIENT_CONFIG=config/production.json`, and publishes `dist/` to Cloudflare with `wrangler deploy`, as the static-assets Worker described in [wrangler.jsonc](wrangler.jsonc) (the successor to Cloudflare Pages). The workflow needs the repository secret `CLOUDFLARE_API_TOKEN` (from Cloudflare's **Edit Cloudflare Workers** template) and the variable `CLOUDFLARE_ACCOUNT_ID`; without the token it still tests and builds.
 
-| Setting                | Value                                           |
-| ---------------------- | ----------------------------------------------- |
-| Build command          | `npm run build`                                 |
-| Build output directory | `dist`                                          |
-| Environment variable   | `HOOKEDIN_CLIENT_CONFIG=config/production.json` |
-| Node version           | 24.4 or later (`NODE_VERSION`)                  |
+To publish by hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy`.
 
-Client-side routes (`/wallet`, `/activity`, `/games/<id>`) rely on Pages' automatic single-page fallback, which applies only while the output has no `404.html`; do not add one. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers.
+Client-side routes (`/wallet`, `/activity`, `/games/<id>`) rely on the single-page fallback set in `wrangler.jsonc`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
 
 The operator commits `config/production.json`. It is published as `config.js`, so it is part of the trusted wallet release and must contain nothing secret:
 

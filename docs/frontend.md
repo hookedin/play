@@ -61,11 +61,11 @@ Recovery transactions can spend the reserved gas amount; deposits still preserve
 | `config.js`               | `export default { network, casino, games, deployment? }`: this deployment's settings                                                         |
 | `index.html`, `style.css` | Copied from `client/`                                                                                                                        |
 | `brand/`, `catalog.json`  | The mark and the list of games                                                                                                               |
-| `_headers`                | The response headers for Cloudflare Pages, from [client/\_headers](../client/_headers)                                                       |
+| `_headers`                | The response headers Cloudflare applies, from [client/\_headers](../client/_headers)                                                         |
 
 `main.js` imports exactly `/config.js` and `/vendor/ethers.js`; `test/static.test.ts` checks that, the ethers hash and the headers. `config.js` is the JSON file named by the `HOOKEDIN_CLIENT_CONFIG` environment variable at build time, or the defaults in [client/config.ts](../client/config.ts) without it. `network` is `sepolia` or `local`, `casino` is the casino API's base URL, `games` is the base URL that serves `catalog.json`, and `deployment` is the pinned manifest above. Settings saved in the wallet override `network`, `casino` and `games` in that browser.
 
-`npm run dev` builds and serves `dist/` at `http://127.0.0.1:4184` (`PORT` overrides) through [scripts/static.ts](../scripts/static.ts), which imitates the production host: it applies `_headers`, answers every extensionless route with the page, and refuses dotfiles and anything outside `dist/`. On Cloudflare Pages the build command is `npm run build` and the output directory is `dist`; the single-page fallback is automatic as long as no `404.html` exists. The headers set `script-src 'self'` and `frame-ancestors 'none'`; any other host must send the same ones.
+`npm run dev` builds and serves `dist/` at `http://127.0.0.1:4184` (`PORT` overrides) through [scripts/static.ts](../scripts/static.ts), which imitates the production host: it applies `_headers`, answers every extensionless route with the page, and refuses dotfiles and anything outside `dist/`. Production is a Cloudflare static-assets Worker ([wrangler.jsonc](../wrangler.jsonc)): `npm run build`, then `wrangler deploy` publishes `dist/` with the single-page fallback turned on. The headers set `script-src 'self'` and `frame-ancestors 'none'`; any other host must send the same ones.
 
 ## Casino authority and manual challenges
 
