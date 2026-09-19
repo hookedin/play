@@ -2033,27 +2033,57 @@ html:has(dialog[open]) {
   border-radius: 0 8px 8px 0;
   color: #cdd3e2;
 }
-.fund-dialog[data-mode='channel'] .fund-only,
-.fund-dialog:not([data-mode='channel']) .fund-channel-note,
-.fund-dialog:not([data-mode='channel']) .fund-channel-actions {
+.fund-dialog:not([data-mode='channel']) .mode-channel,
+.fund-dialog:not([data-mode='fund']) .mode-fund,
+.fund-dialog:not([data-mode='practice']) .mode-practice {
   display: none;
 }
-.fund-channel-note {
+.fund-note {
   font-size: 12px;
   line-height: 1.8;
   color: #9ba7bd;
   margin-top: 16px;
 }
-.fund-channel-actions {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 10px;
-  margin-top: 22px;
+/* The whole track is the playing balance; the filled part is what the game may risk. */
+.fund-slider {
+  width: 100%;
+  margin-top: 16px;
+  accent-color: var(--purple);
 }
-.fund-suggested {
-  margin-left: auto;
+.fund-scale {
+  display: flex;
+  justify-content: space-between;
   font-size: 10px;
-  color: #a1d7b4;
+  color: #9ba7bd;
+  font-variant-numeric: tabular-nums;
+}
+.fund-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.fund-presets button {
+  padding: 5px 10px;
+  border: 1px solid #3b3752;
+  border-radius: 999px;
+  background: none;
+  color: #cdd3e2;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.fund-presets button:hover {
+  border-color: var(--purple);
+}
+.fund-practice {
+  display: block;
+  margin: 16px auto 0;
+  font-size: 11px;
+}
+.balance-button[data-practice] {
+  border-color: #d9a441;
+  color: #f0c976;
 }
 .fund-dialog .amount-input input {
   font-size: 18px;

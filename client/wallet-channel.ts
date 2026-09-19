@@ -91,7 +91,8 @@ export class ChannelClient extends WalletTransactions {
   }
   /** The signed balance minus what this tab's open game may still risk; never below zero. */
   availableBalance(this: CasinoWallet) {
-    const available = BigInt(this.current?.state.balance || 0) - BigInt(this.game?.balance || 0);
+    const limit = this.game && !this.game.practice ? BigInt(this.game.balance) : 0n,
+      available = BigInt(this.current?.state.balance || 0) - limit;
     return available < 0n ? 0n : available;
   }
   async freeBankroll(this: CasinoWallet) {
@@ -386,7 +387,7 @@ export class ChannelClient extends WalletTransactions {
     const game = c.pending?.game as GameIntent | undefined;
     // The open game's limit follows its verified result. A result recovered after a reload, or
     // for a game since closed, changes only the channel balance: the limit was already released.
-    if (game && this.game?.key === game.key) {
+    if (game && this.game?.key === game.key && !this.game.practice) {
       const limit = BigInt(this.game.balance) + BigInt(next.balance) - BigInt(c.state.balance);
       this.game.balance = String(limit < 0n ? 0n : limit);
     }

@@ -36,7 +36,7 @@ test('bridge replies summarize outcomes without exposing more than the reply its
   );
   assert.equal(
     describeResult('game.requestFunds', { funded: true, amount: '10', balance: '10', pending: false }),
-    'authorized 0.00000000000000001 ETH · balance 0.00000000000000001 ETH',
+    'limit set to 0.00000000000000001 ETH · balance 0.00000000000000001 ETH',
   );
   assert.equal(
     describeResult('game.receipt', { kind: 'bet', status: 'signed', payout: '0', operationId: 'op-2' }),

@@ -11,6 +11,10 @@ export interface GameSession {
   identity: GameIdentity;
   /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
+  /** The game plays with practice money: the wallet draws every outcome itself and no channel is touched. */
+  practice?: boolean;
+  /** Practice results by the game's operation ID, so an exact retry returns the same one. */
+  practiceReceipts?: Map<string, Record<string, unknown>>;
   /** The player allowed this open game to bet on rounds whose seed its host draws. Like the limit, it lasts only while the game stays open. */
   hostedRounds?: boolean;
   /** Oracles the player allowed to decide this open game's matches. */
@@ -35,4 +39,6 @@ export interface GameStake {
 export interface GameLimit {
   balance: string;
   pending: boolean;
+  /** The balance is practice money: same bets and odds, nothing real won or lost. */
+  practice: boolean;
 }

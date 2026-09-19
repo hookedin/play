@@ -39,7 +39,7 @@
         </div>
         <div class="topbar-wallet">
           <button id="top-balance" class="balance-button" data-page="wallet">
-            <span class="eth-symbol">◆</span><span class="header-balance-label">Playing</span
+            <span class="eth-symbol">◆</span><span id="header-balance-label" class="header-balance-label">Playing</span
             ><span id="header-balance">— ETH</span><span class="muted">⌄</span></button
           ><button id="open-deposit" class="button primary compact" data-page="wallet" data-receive>
             Deposit ETH <span>↓</span>
@@ -460,32 +460,44 @@
     <div id="toast" class="toast hidden" role="alert"></div>
     <dialog id="fund-dialog" class="fund-dialog" aria-labelledby="fund-title">
       <form id="fund-form">
-        <div class="eyebrow">AUTHORIZE SPENDING</div>
-        <h2 id="fund-title">Add money to this game</h2>
+        <div id="fund-eyebrow" class="eyebrow">SPENDING LIMIT</div>
+        <h2 id="fund-title">How much may this game play with?</h2>
         <p id="fund-reason" class="fund-reason"></p>
-        <p id="fund-channel-note" class="fund-channel-note"></p>
-        <div class="fund-channel-actions">
-          <button class="button secondary" type="button" data-fund-cancel>Keep looking</button
-          ><button id="fund-open-wallet" class="button primary" type="button">Open a channel in My wallet</button>
+        <p id="fund-channel-note" class="fund-note mode-channel"></p>
+        <div class="fund-actions mode-channel">
+          <button id="fund-open-wallet" class="button secondary" type="button">Set up my wallet</button
+          ><button class="button primary" type="button" data-fund-practice autofocus>Play with practice money</button>
         </div>
-        <div class="funding-amount-label fund-only">
-          <label for="fund-amount">Amount the game may risk</label
-          ><span id="fund-suggested" class="fund-suggested hidden"></span
-          ><button id="fund-max" class="text-button" type="button">Max</button>
+        <div class="funding-amount-label mode-fund">
+          <label for="fund-amount">This game may play with up to</label>
         </div>
-        <div class="amount-input fund-only">
+        <div class="amount-input mode-fund">
           <input id="fund-amount" inputmode="decimal" autocomplete="off" aria-describedby="fund-help" /><span>ETH</span>
         </div>
-        <p id="fund-help" class="funding-help fund-only"></p>
-        <div class="fund-actions fund-only">
-          <button id="fund-cancel" class="button secondary" type="button">Not now</button
-          ><button id="fund-confirm" class="button primary" type="submit">Authorize</button>
+        <input id="fund-slider" class="fund-slider mode-fund" type="range" min="0" step="1" aria-label="Spending limit" />
+        <div class="fund-scale mode-fund"><span>0</span><span id="fund-total"></span></div>
+        <div id="fund-presets" class="fund-presets mode-fund"></div>
+        <p id="fund-help" class="funding-help mode-fund"></p>
+        <div class="fund-actions mode-fund">
+          <button class="button secondary" type="button" data-fund-cancel>Not now</button
+          ><button id="fund-confirm" class="button primary" type="submit">Allow</button>
         </div>
-        <p id="fund-game" class="security-note fund-only"></p>
-        <p class="security-note fund-only">
-          This amount lasts only while the game stays open: leaving it or closing the tab returns whatever is left to
-          your wallet. The game can lose all of it, including winnings, on wagers and payments to its developer.
+        <p id="fund-game" class="security-note mode-fund"></p>
+        <p class="security-note mode-fund">
+          The money stays in your wallet. The game can lose all of it, including winnings, on wagers and payments to its
+          developer. Leaving the game or closing the tab takes back whatever is left.
         </p>
+        <button id="fund-practice" class="text-button fund-practice mode-fund" type="button" data-fund-practice>
+          Or try it with practice money
+        </button>
+        <p class="fund-note mode-practice">
+          This game is playing with practice money: the same bets at the same odds, drawn by your wallet, with nothing
+          real won or lost. Practice money is topped up whenever the game asks and disappears when you leave.
+        </p>
+        <div class="fund-actions mode-practice">
+          <button class="button secondary" type="button" data-fund-cancel>Keep practicing</button
+          ><button id="fund-real" class="button primary" type="button">Play for real</button>
+        </div>
       </form>
     </dialog>
     <dialog id="hosted-dialog" class="fund-dialog" aria-labelledby="hosted-title">

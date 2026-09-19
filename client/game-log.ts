@@ -65,13 +65,13 @@ export function describeResult(method: string, result: any) {
   const limit = (state: any) => `balance ${eth(state.balance)}${state.pending ? ' · pending operation' : ''}`;
   switch (method) {
     case 'wallet.info':
-      return `playing ${eth(result.balance)} · unallocated ${eth(result.availableBalance)} · bankroll ${eth(result.bankroll)} · channel ${String(result.channelStatus) === '1' ? 'open' : 'not open'}`;
+      return `${result.practice ? 'practice money · ' : ''}playing ${eth(result.balance)} · unallocated ${eth(result.availableBalance)} · bankroll ${eth(result.bankroll)} · channel ${String(result.channelStatus) === '1' ? 'open' : 'not open'}`;
     case 'game.receipt':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
         : `${result.kind} ${result.status}${result.payout === undefined ? '' : ` · paid ${eth(result.payout)}`} · ${result.operationId}`;
     case 'game.requestFunds':
-      return `${result.funded ? `authorized ${eth(result.amount)}` : 'declined'} · ${limit(result)}`;
+      return `${result.funded ? `limit set to ${eth(result.amount)}` : 'unchanged'} · ${limit(result)}`;
     case 'game.bet':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
