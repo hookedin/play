@@ -1,6 +1,6 @@
 {
   "network": "sepolia",
-  "casino": "https://casino.35-222-98-84.sslip.io",
+  "casino": "https://casino.hookedin.com",
   "games": "https://play.hookedin.com",
   "deployment": {
     "chainId": "11155111",
