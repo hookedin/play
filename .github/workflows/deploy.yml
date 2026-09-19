@@ -34,4 +34,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          # The action's default is wrangler 3, which cannot publish an assets-only Worker.
+          wranglerVersion: '4'
           command: deploy
