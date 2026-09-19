@@ -263,6 +263,24 @@ h3 {
   font-size: 11px;
   color: #b5a8e5;
 }
+.claim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #2a2e3d;
+}
+.claim-row p {
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #a9afbd;
+}
+.claim-row input {
+  flex: 1 1 260px;
+}
 .heading-dot {
   color: var(--purple);
 }
@@ -632,7 +650,8 @@ main {
   border: 0;
   display: block;
   width: 100%;
-  height: clamp(680px, calc(100vh - 230px), 960px);
+  /* Tall enough that the listed games fit without a second scrollbar inside the page's own. */
+  height: clamp(920px, calc(100vh - 230px), 1100px);
   background: #10151e;
 }
 .amount-input {
@@ -854,6 +873,8 @@ main {
   color: #d2d7e2;
   z-index: 10;
   box-shadow: 0 15px 40px #0006;
+  /* A notice may overlap a game's controls; it must never take their clicks. */
+  pointer-events: none;
 }
 .toast.error {
   border-color: #705151;
@@ -923,9 +944,6 @@ main {
   .play-heading h1 {
     font-size: 34px;
   }
-  .game-viewport iframe {
-    height: 710px;
-  }
   .wallet-overview {
     grid-template-columns: 1fr;
   }
@@ -991,9 +1009,6 @@ main {
   }
   .library-footer a {
     margin-left: 0;
-  }
-  .game-viewport iframe {
-    height: 660px;
   }
   .wallet-actions-grid {
     grid-template-columns: 1fr;
@@ -1144,9 +1159,6 @@ main {
     padding: 8px;
     margin-top: 37px;
     white-space: nowrap;
-  }
-  .game-viewport iframe {
-    height: 700px;
   }
   .wallet-overview {
     gap: 15px;
@@ -2064,6 +2076,10 @@ main {
 .game-link-row .text-button {
   font-size: 11px;
   white-space: nowrap;
+}
+/* The page behind an open dialog stays put. */
+html:has(dialog[open]) {
+  overflow: hidden;
 }
 .fund-dialog {
   width: min(440px, calc(100vw - 32px));

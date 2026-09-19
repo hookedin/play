@@ -542,6 +542,8 @@ function renderActivity() {
   filterActivity(list, $<HTMLInputElement>('activity-search').value, $('activity-empty'), $('activity-visible-count'));
 }
 let claimLimit = 20;
+let claimsShown = '';
+const claimRecipients = new Map<string, string>();
 function renderClaims() {
   const state = wallet.publicState;
   $('principal-balance').textContent = `${formatEther(state.protectedDeposit || '0')} ETH`;
@@ -563,16 +565,31 @@ function renderClaims() {
   $<HTMLButtonElement>('channel-finalize').disabled =
     Number(state.channelStatus) !== 2 || Date.now() / 1000 < Number(state.deadline) || uiBusy || wallet.busy;
   const list = $('claim-list');
-  list.replaceChildren();
   const claims = [...(state.claims || [])].sort(
     (a, b) => Number(BigInt(b.amount) > BigInt(b.paid)) - Number(BigInt(a.amount) > BigInt(a.paid)),
   );
-  for (const claim of claims.slice(0, claimLimit)) {
+  // The wallet re-renders on every observation. Rebuild the rows only when they differ, so a recipient
+  // address being typed keeps its text and focus.
+  const describe = (claim: any) =>
+    `${short(claim.channelId)} · Due ${formatEther(claim.amount)} ETH · Received ${formatEther(claim.paid)} ETH · Unpaid ${formatEther(BigInt(claim.amount) - BigInt(claim.paid))} ETH` +
+    ` · Protected principal ${formatEther(claim.protectedRemaining)} ETH · Unpaid winnings ${formatEther(claim.winningsRemaining)} ETH · Winnings allocated ${formatEther(claim.allocatedWinnings || '0')} ETH` +
+    (claim.observedAt ? ` · Checked ${new Date(claim.observedAt).toLocaleTimeString()}` : '');
+  const visible = claims.slice(0, claimLimit);
+  const shown = JSON.stringify([
+    visible.map(describe).map(t => t.replace(/ · Checked .*$/, '')),
+    claims.length,
+    wallet.busy || uiBusy,
+  ]);
+  if (shown === claimsShown) {
+    list.querySelectorAll('.claim-row > p').forEach((text, i) => (text.textContent = describe(visible[i])));
+    return;
+  }
+  claimsShown = shown;
+  list.replaceChildren();
+  for (const claim of visible) {
     const row = document.createElement('div'),
       text = document.createElement('p');
-    text.textContent = `${short(claim.channelId)} · Due ${formatEther(claim.amount)} ETH · Received ${formatEther(claim.paid)} ETH · Unpaid ${formatEther(BigInt(claim.amount) - BigInt(claim.paid))} ETH`;
-    text.textContent += ` · Protected principal ${formatEther(claim.protectedRemaining)} ETH · Unpaid winnings ${formatEther(claim.winningsRemaining)} ETH · Winnings allocated ${formatEther(claim.allocatedWinnings || '0')} ETH`;
-    if (claim.observedAt) text.textContent += ` · Checked ${new Date(claim.observedAt).toLocaleTimeString()}`;
+    text.textContent = describe(claim);
     const collect = document.createElement('button');
     collect.className = 'button secondary small';
     collect.textContent = 'Collect available funds';
@@ -586,6 +603,8 @@ function renderClaims() {
     const destination = document.createElement('input');
     destination.placeholder = 'Optional recipient address';
     destination.setAttribute('aria-label', 'Claim recipient address');
+    destination.value = claimRecipients.get(claim.channelId) ?? '';
+    destination.addEventListener('input', () => claimRecipients.set(claim.channelId, destination.value));
     const redirect = document.createElement('button');
     redirect.className = 'text-button';
     redirect.textContent = 'Collect to another address';
@@ -602,6 +621,7 @@ function renderClaims() {
     evidence.addEventListener('click', () =>
       task(async () => downloadEvidence(await wallet.exportEvidence(claim.channelId))),
     );
+    row.className = 'claim-row';
     row.append(text, collect, destination, redirect, evidence);
     list.append(row);
   }
