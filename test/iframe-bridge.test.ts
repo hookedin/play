@@ -34,7 +34,13 @@ function harness(
   const errors: any[] = [];
   const activity: any[] = [];
   const child = { postMessage: (message: any, destination: any) => replies.push({ message, destination }) };
-  const iframe = { contentWindow: child };
+  // The frame tells the bridge when it has loaded a page afresh.
+  let loaded = () => {};
+  const iframe = {
+    contentWindow: child,
+    addEventListener: (_: string, listener: () => void) => (loaded = listener),
+    removeEventListener: () => {},
+  };
   let current = true;
   const detach = attachGameBridge({
     iframe: iframe as any,
@@ -58,6 +64,7 @@ function harness(
     activity,
     iframe,
     child,
+    reload: () => loaded(),
     detach,
     setCurrent: (value: any) => {
       current = value;
@@ -167,6 +174,24 @@ test('bridge executes only a request ID larger than the last, whatever action it
     });
   }
   assert.deepEqual(bridge.calls, [{ method: 'game.bet', params }]);
+  bridge.detach();
+});
+
+test('a page the frame loads afresh counts from the start and never hears an answer meant for the page before it', async () => {
+  const pending = deferred();
+  // Only the bet stays open; everything else is answered at once.
+  const bridge = harness(method => (method === 'game.bet' ? pending.promise : { cash: '200' }));
+  await bridge.send(request(1));
+  // The wallet reloads the game, for instance to play with practice money, while a request is still open.
+  const open = bridge.send(request(7, 'game.bet', params));
+  bridge.reload();
+  await bridge.send(request(1));
+  assert.deepEqual(bridge.replies.at(-1).message, { hookedin: true, id: 1, result: { cash: '200' } });
+  (pending.resolve! as any)({ cash: '100' });
+  await open;
+  assert.equal(bridge.replies.filter(reply => reply.message.id === 7).length, 0, "the old page's answer is dropped");
+  await bridge.send(request(2));
+  assert.deepEqual(bridge.replies.at(-1).message.result, { cash: '200' }, 'and did not leave the new page waiting');
   bridge.detach();
 });
 
@@ -366,18 +391,12 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A bet on a shared round names the owner's round as well.
-  const round = {
-    owner: '0x' + '11'.repeat(20),
-    epoch: 1,
-    index: 4,
-    roundHead: '0x' + '22'.repeat(32),
-    seed: '0x' + '33'.repeat(32),
-  };
+  // A bet on a shared round names the round its host opened, and the host's seed.
+  const round = { id: '0x' + '22'.repeat(32), seed: '0x' + '33'.repeat(32) };
   const shared = (overrides: any) => request(1, 'game.bet', { ...params, round, ...overrides });
-  assert.equal(validateRequest(shared({})).params.round.index, 4);
+  assert.equal(validateRequest(shared({})).params.round.id, round.id);
   assert.throws(() => validateRequest(shared({ round: { ...round, seed: '0x12' } })), /Invalid round/);
-  assert.throws(() => validateRequest(shared({ round: { ...round, index: -1 } })), /Invalid round/);
+  assert.throws(() => validateRequest(shared({ round: { ...round, id: '0x12' } })), /Invalid round/);
   assert.throws(() => validateRequest(shared({ round: { ...round, host: 'x' } })), /Invalid round/);
   assert.equal(validateRequest(request(1, 'game.cancel', { id: 'hand-1' })).params.id, 'hand-1');
   assert.throws(() => validateRequest(request(1, 'game.cancel', { id: 'hand-1', stake: '1' })), /Unexpected/);

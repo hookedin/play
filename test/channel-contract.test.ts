@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { id, Wallet } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBet } from '../testing/contract.ts';
 import { hashState, checkpointEvidence, STATE_TYPES } from '../protocol/protocol.ts';
-import { WORD_SPACE } from '../protocol/risk.ts';
+import { OUTCOME_SPACE } from '../protocol/risk.ts';
 test('shared-pool contract protects principal, retains debts and verifies channel evidence', async t => {
   const env = await anvil();
   t.after(() => env.close());
@@ -47,7 +47,7 @@ test('shared-pool contract protects principal, retains debts and verifies channe
     bankroll: 1000000n,
     stake: 100n,
     netWin: 100n,
-    winThreshold: (WORD_SPACE * 49n) / 100n,
+    winThreshold: (OUTCOME_SPACE * 49n) / 100n,
   });
   const bet = await step(f, cc, 1, 100n, {
     prizes: q.prizes,

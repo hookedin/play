@@ -1,7 +1,8 @@
 export const UINT256_MAX = (1n << 256n) - 1n;
 /** Deposits and signed balances stay below 2^128 wei so aggregate claims cannot overflow. */
 export const MAX_BALANCE = 1n << 128n;
-export const WORD_SPACE = 1n << 64n;
+/** A round's outcome is a uniform integer below this. */
+export const OUTCOME_SPACE = 1n << 64n;
 
 export function uint256(value: unknown, name = 'value', positive = false) {
   if (typeof value !== 'bigint' || value < (positive ? 1n : 0n) || value > UINT256_MAX) {
@@ -11,7 +12,7 @@ export function uint256(value: unknown, name = 'value', positive = false) {
 }
 
 /** One round holds a bounded table: the exact-integer admission cost grows with its distinct outcomes. */
-export const MAX_ROUND_BETS = 32;
+export const MAX_ROUND_BETS = 256;
 export const MAX_PRIZES = 64;
 export const MAX_ROUND_CELLS = 128;
 /** A bet pays `payout` when its round's 64-bit outcome falls in [rangeStart, rangeEnd). */
@@ -34,7 +35,7 @@ function checkTerms({ stake, prizes }: BetTerms) {
     uint256(prize.rangeStart, 'rangeStart');
     uint256(prize.rangeEnd, 'rangeEnd', true);
     uint256(prize.payout, 'payout', true);
-    if (prize.rangeStart >= prize.rangeEnd || prize.rangeEnd > WORD_SPACE)
+    if (prize.rangeStart >= prize.rangeEnd || prize.rangeEnd > OUTCOME_SPACE)
       throw new RangeError('a prize range must lie within [0, 2^64)');
   }
 }
@@ -42,7 +43,7 @@ function checkTerms({ stake, prizes }: BetTerms) {
 function cells(bets: readonly BetTerms[]) {
   const steps = new Map<bigint, bigint>([
     [0n, 0n],
-    [WORD_SPACE, 0n],
+    [OUTCOME_SPACE, 0n],
   ]);
   for (const bet of bets)
     for (const { rangeStart, rangeEnd, payout } of bet.prizes) {

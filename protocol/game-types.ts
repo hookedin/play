@@ -27,8 +27,8 @@ export interface GameRequest {
   stake: string;
   /** Each prize pays `payout` when the round's 64-bit outcome falls in [rangeStart, rangeEnd); overlapping prizes add. */
   prizes: { rangeStart: string; rangeEnd: string; payout: string }[];
-  /** A round another channel owns. The wallet signs the bet and returns it for that owner to submit. */
-  round?: { owner: string; epoch: number; index: number; roundHead: string; seed: string };
+  /** A round a game's host opened. The wallet joins it with this bet, and the host closes it. */
+  round?: import('./types.ts').Round;
 }
 /** Money put on a table shared with other players: the casino holds it until the host in the terms pays it out. */
 export interface GameBuyIn {

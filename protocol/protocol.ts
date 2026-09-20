@@ -25,7 +25,7 @@ import {
   ZeroAddress,
   toUtf8Bytes,
 } from 'ethers';
-import { WORD_SPACE, MAX_BALANCE, MAX_PRIZES, uint256 } from './risk.ts';
+import { OUTCOME_SPACE, MAX_BALANCE, MAX_PRIZES, uint256 } from './risk.ts';
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 export const plain = <T>(value: T): Json<T> => JSON.parse(json(value));
 export const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -67,7 +67,7 @@ export const STATE_TYPES = {
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seed,bytes32 roundHead,bytes32 operationId,address developer,bytes32 counterparty',
+    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seed,bytes32 round,bytes32 operationId,address developer,bytes32 counterparty',
   ),
   Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
 };
@@ -95,12 +95,12 @@ export const CLOSE_TYPES = {
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
-/** A hash chain belongs to an address: a channel's signer for its own bets, or the key of whoever
- * hosts rounds. Only that key asks for its next head or settles anything against it. */
-export const CHAIN_ACCESS_TYPES = {
-  ChainAccess: fields('address owner,uint256 expiresAt'),
+/** A round belongs to the key that asked for it, its host: a channel's signer for its own bets, or
+ * the key of a game's server. Only that key opens or closes it. */
+export const HOST_ACCESS_TYPES = {
+  HostAccess: fields('address host,uint256 expiresAt'),
 };
-/** The `authorization` header carrying a signed `Access` or `ChainAccess` message. */
+/** The `authorization` header carrying a signed `Access` or `HostAccess` message. */
 export const authorization = (message: unknown, signature: string) =>
   'HookedIn ' + btoa(json({ message, signature })).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 export const domain = (chainId: Integer, casino: string) => ({
@@ -293,20 +293,22 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     amount: 0,
     prizes: [],
     seed: ZeroHash,
-    roundHead: ZeroHash,
+    round: ZeroHash,
     operationId: ZeroHash,
     developer: ZeroAddress,
     counterparty: ZeroHash,
     ...values,
   });
 }
-/** Every bet on one round head and seed sees the same 64-bit outcome, whichever channel signed it.
+/** A round is named by the hash of its secret. */
+export const roundId = (secret: string) => keccak256(secret);
+/** Every bet on one round and seed sees the same 64-bit outcome, whichever channel signed it.
  * The stake is paid to enter; every prize whose range holds the outcome pays, so overlapping prizes add. */
-export function outcome(op: Pick<Operation, 'seed' | 'prizes'>, preimage: string) {
+export function outcome(op: Pick<Operation, 'seed' | 'prizes'>, secret: string) {
   const randomHash = keccak256(
-    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), op.seed, preimage]),
+    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), op.seed, secret]),
   );
-  const value = BigInt(randomHash) & (WORD_SPACE - 1n);
+  const value = BigInt(randomHash) & (OUTCOME_SPACE - 1n);
   const payout = op.prizes.reduce(
     (sum, prize) =>
       value >= BigInt(prize.rangeStart) && value < BigInt(prize.rangeEnd) ? sum + BigInt(prize.payout) : sum,
@@ -314,7 +316,7 @@ export function outcome(op: Pick<Operation, 'seed' | 'prizes'>, preimage: string
   );
   return { randomHash, value, payout };
 }
-export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage = ZeroHash) {
+export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash) {
   if (
     !same(base.channelId, op.channelId) ||
     !same(hashState(d, base), op.previousStateHash) ||
@@ -327,7 +329,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
     sequence: String(op.sequence),
     previousStateHash: hashState(d, base),
     transitionHash: keccak256(
-      AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [hashOperation(d, op), preimage]),
+      AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [hashOperation(d, op), secret]),
     ),
   };
   const kind = Number(op.kind),
@@ -340,7 +342,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
     linked = kind === 4 || credit;
   if (![1, 2, 4, 5].includes(kind)) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A bet names its
-  // round: the preimage must open the signed round head, whichever channel owns that chain.
+  // round, the hash of a secret the casino fixed before the seed was drawn; only that secret settles it.
   if (
     !Array.isArray(op.prizes) ||
     (wager
@@ -350,20 +352,19 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
           prize =>
             BigInt(prize.rangeStart) < 0n ||
             BigInt(prize.rangeStart) >= BigInt(prize.rangeEnd) ||
-            BigInt(prize.rangeEnd) > WORD_SPACE ||
+            BigInt(prize.rangeEnd) > OUTCOME_SPACE ||
             BigInt(prize.payout) <= 0n ||
             BigInt(prize.payout) >= MAX_BALANCE,
         ) ||
         same(op.seed, ZeroHash) ||
-        same(op.roundHead, ZeroHash) ||
+        same(op.round, ZeroHash) ||
         same(op.developer, ZeroAddress) ||
-        !same(keccak256(preimage), op.roundHead)
+        !same(roundId(secret), op.round)
       : op.prizes.length !== 0 ||
-        // The deployed contract lets a transfer carry a seed, so this does too; nothing signs one.
-        (kind !== 4 && !same(op.seed, ZeroHash)) ||
-        !same(op.roundHead, ZeroHash) ||
+        !same(op.seed, ZeroHash) ||
+        !same(op.round, ZeroHash) ||
         !same(op.developer, ZeroAddress) ||
-        !same(preimage, ZeroHash)) ||
+        !same(secret, ZeroHash)) ||
     amount === 0n ||
     amount >= MAX_BALANCE ||
     (linked
@@ -377,7 +378,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, preimage
       throw new Error(
         wager ? 'Invalid bet commitment or balance' : kind === 4 ? 'Insufficient transfer balance' : 'Invalid payment',
       );
-    next.balance = String(balance - amount + (wager ? outcome(op, preimage).payout : 0n));
+    next.balance = String(balance - amount + (wager ? outcome(op, secret).payout : 0n));
   }
   if (BigInt(next.balance) >= MAX_BALANCE) throw new Error('Balance exceeds the protocol maximum');
   return next;
@@ -401,7 +402,7 @@ export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation):
 }
 export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner: string, casinoSigner: string) {
   assertSignature(d, OP_TYPES, step.operation, step.authorization, playerSigner);
-  const next = deriveState(d, base, step.operation, step.preimage);
+  const next = deriveState(d, base, step.operation, step.secret);
   assertSignature(d, STATE_TYPES, next, step.casinoSignature, casinoSigner);
   return next;
 }
@@ -414,19 +415,19 @@ export const emptyStep = (): Step => ({
     amount: 0,
     prizes: [],
     seed: ZeroHash,
-    roundHead: ZeroHash,
+    round: ZeroHash,
     operationId: ZeroHash,
     developer: ZeroAddress,
     counterparty: ZeroHash,
   },
   authorization: '0x',
-  preimage: ZeroHash,
+  secret: ZeroHash,
   casinoSignature: '0x',
 });
 export const isEmptyStep = (d: Domain, step: Step) =>
   step.authorization === '0x' &&
   step.casinoSignature === '0x' &&
-  same(step.preimage, ZeroHash) &&
+  same(step.secret, ZeroHash) &&
   same(hashOperation(d, step.operation), hashOperation(d, emptyStep().operation));
 export function checkpointEvidence(state: Checkpoint, playerSignature = '0x', casinoSignature = '0x'): Evidence {
   return { base: state, playerSignature, casinoSignature, step: emptyStep() };

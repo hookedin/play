@@ -168,7 +168,7 @@ export function receiptSummary(
         ? 'Your balance is unchanged.'
         : receipt.wouldHavePaid === undefined
           ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
-          : `Your balance is unchanged. With the chain since published, this wager would have paid ${formatEther(receipt.wouldHavePaid)} ETH for its ${formatEther(receipt.request?.amount ?? 0)} ETH stake.`,
+          : `Your balance is unchanged. The casino has since revealed the round: this wager would have paid ${formatEther(receipt.wouldHavePaid)} ETH for its ${formatEther(receipt.request?.amount ?? 0)} ETH stake.`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);

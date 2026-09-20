@@ -1,11 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ContractFactory, Wallet, id, keccak256, ZeroHash } from 'ethers';
+import { ContractFactory, Wallet, id, ZeroHash } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBet } from '../testing/contract.ts';
 import { initialState, checkpointEvidence, channelId, STATE_TYPES, hashState } from '../protocol/protocol.ts';
-import { WORD_SPACE } from '../protocol/risk.ts';
-import { generateHashChain } from '../protocol/hash-chain.ts';
+import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import release from '../client/contract-artifact.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
@@ -13,7 +12,7 @@ import { ChainObserver } from '../protocol/chain-observer.ts';
 async function channel(f: any, player: any, deposit = 100n) {
   const ch = await open(f, player, deposit);
   const genesis = ch.evidence;
-  const state = { ...ch.state, sequence: '1', epoch: '1', head: ch.chain.root, length: '10000' };
+  const state = { ...ch.state, sequence: '1' };
   const evidence = checkpointEvidence(
     state,
     await new Wallet(ch.key).signTypedData(f.d, STATE_TYPES, state),
@@ -111,7 +110,12 @@ for (const initialSeed of [1, 17, 913, 9127, 65537, 741231, 123456789, 429496729
             await transition(f, ch, 2, BigInt(1 + random(Number(ch.state.balance))));
           else if (choice === 1 && BigInt(ch.state.balance) > 0n) {
             const amount = BigInt(ch.state.balance) < 10n ? 1n : 10n;
-            const q = assessBet({ bankroll: 1000000n, stake: amount, netWin: amount, winThreshold: WORD_SPACE / 4n });
+            const q = assessBet({
+              bankroll: 1000000n,
+              stake: amount,
+              netWin: amount,
+              winThreshold: OUTCOME_SPACE / 4n,
+            });
             await transition(f, ch, 1, amount, {
               prizes: q.prizes,
               seed: id('seed:' + initialSeed + ':' + i),
@@ -222,24 +226,25 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     await f.owner.signTypedData(f.d, STATE_TYPES, base),
   );
   // Exercise full-width wager terms.
-  const { operation, OP_TYPES, deriveState } = await import('../protocol/protocol.ts');
-  const q = assessBet({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, winThreshold: WORD_SPACE / 4n });
+  const { operation, OP_TYPES, deriveState, roundId } = await import('../protocol/protocol.ts');
+  const secret = id('wide secret');
+  const q = assessBet({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, winThreshold: OUTCOME_SPACE / 4n });
   const op = operation(f.d, base, {
     kind: 1,
     amount: q.stake,
     prizes: q.prizes,
     seed: id('wide entropy'),
-    roundHead: keccak256(ch.chain.preimages[0]),
+    round: roundId(secret),
     operationId: id('wide operation'),
     developer: f.owner.address,
   });
-  const next = deriveState(f.d, base, op, ch.chain.preimages[0]);
+  const next = deriveState(f.d, base, op, secret);
   const evidence = {
     ...ch.evidence,
     step: {
       operation: op,
       authorization: await new Wallet(ch.key).signTypedData(f.d, OP_TYPES, op),
-      preimage: ch.chain.preimages[0],
+      secret,
       casinoSignature: await f.owner.signTypedData(f.d, STATE_TYPES, next),
     },
   };

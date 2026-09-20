@@ -1,6 +1,6 @@
-import type { Integer, Checkpoint, Operation, Prize, TableTerms, Settlement } from '../protocol/types.ts';
+import type { Integer, Checkpoint, Operation, Prize, Round, TableTerms, Settlement } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
-import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id, keccak256 } from 'ethers';
+import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id } from 'ethers';
 import {
   canonicalJSON,
   plain,
@@ -14,6 +14,7 @@ import {
   rejectionCheckpoint,
   operation,
   outcome,
+  roundId,
   tableId,
   validateTable,
   validateSettlement,
@@ -30,42 +31,23 @@ import {
   checkpointEvidence,
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
-import { generateHashChain } from '../protocol/hash-chain.ts';
 import { gameAmount } from './game-account.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
-/** Receipt suffix for a bet withdrawn because its remembered round head had passed. */
-const STALE = ':stale-head';
-const isOwnRound = (c: { round?: { roundHead: string } }, op: Operation) =>
-  Boolean(c.round) && same(c.round!.roundHead, op.roundHead);
-const noteEpoch = (c: { epochs?: Record<string, number> }, { owner, epoch }: { owner: string; epoch: number }) => {
-  if ((c.epochs?.[owner] ?? 0) < epoch) c.epochs = { ...c.epochs, [owner]: epoch };
-};
-function hostedRound(round: HostedRound): HostedRound {
-  const { owner, epoch, index, roundHead, seed } = round;
-  if (
-    !/^0x[0-9a-fA-F]{40}$/.test(owner) ||
-    ![roundHead, seed].every(value => /^0x[0-9a-fA-F]{64}$/.test(value)) ||
-    [roundHead, seed].some(value => same(value, ZeroHash)) ||
-    ![epoch, index].every(value => Number.isSafeInteger(value) && value >= 0)
-  )
-    throw new Error('Invalid round');
-  return { owner: owner.toLowerCase(), epoch, index, roundHead, seed };
-}
-/** A round on someone else's chain: its owner, the address of the table's host, announces the head
- * and seed, collects every player's signed bet and submits them together, so all share one outcome. */
-export interface HostedRound {
-  owner: string;
-  epoch: number;
-  index: number;
-  roundHead: string;
-  seed: string;
+/** Receipt suffix for a bet withdrawn because the round this wallet remembered is no longer its next one. */
+const STALE = ':stale-round';
+const bytes32 = (value: unknown) =>
+  typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value) && !same(value, ZeroHash);
+function validRound({ id, seed }: Round): Round {
+  if (!bytes32(id) || !bytes32(seed)) throw new Error('Invalid round');
+  return { id, seed };
 }
 /** The stake is paid to enter; every prize whose range holds the round's outcome pays. */
 export interface BetInput {
   stake: Integer;
   prizes: Prize[];
-  round?: HostedRound;
+  /** A round a game's host opened, with the host's seed. Without one, the bet is on this channel's own round. */
+  round?: Round;
 }
 
 /** The off-chain channel protocol: exact signed requests, verified results, rejections,
@@ -211,7 +193,7 @@ export class ChannelClient extends WalletTransactions {
         canonicalJSON(plain(operation.prizes)) !== canonicalJSON(plain(intent.prizes)) ||
         !same(operation.developer, intent.developer) ||
         (input.source && !same(operation.counterparty, input.source)) ||
-        (input.round && (!same(operation.roundHead, input.round.roundHead) || !same(operation.seed, input.round.seed)))
+        (input.round && (!same(operation.round, input.round.id) || !same(operation.seed, input.round.seed)))
       )
         throw new Error('Operation ID is bound to a different intent (terms or developer)');
     };
@@ -247,26 +229,23 @@ export class ChannelClient extends WalletTransactions {
         } catch {
           throw new Error('Invalid wager terms');
         }
-      // The round head is fixed before this wallet draws its seed, so only one preimage can settle
-      // the bet. A hosted round's owner supplies both; its seed is the owner's, not this wallet's.
-      const round: HostedRound | null =
-        kind !== 'bet' ? null : input.round ? hostedRound(input.round) : await this.ownRound();
-      if (round) noteEpoch(this.current!, round);
+      // The round is fixed before this wallet draws its seed, so only one secret can settle the
+      // bet. A hosted round comes with its host's seed, not this wallet's.
+      const round: Round | null = kind !== 'bet' ? null : input.round ? validRound(input.round) : await this.ownRound();
       const request = operation(this.domain, this.current!.state, {
         kind: intent.kind,
         counterparty,
         amount: intent.amount,
         prizes: intent.prizes,
         seed: round?.seed ?? ZeroHash,
-        roundHead: round?.roundHead ?? ZeroHash,
-        // A bet signed again after its remembered round head proved stale needs a new signed ID.
-        operationId: id((await this.getReceipt(operationId + STALE)) ? operationId + ':fresh-head' : operationId),
+        round: round?.id ?? ZeroHash,
+        // A bet signed again after its remembered round proved stale needs a new signed ID.
+        operationId: id((await this.getReceipt(operationId + STALE)) ? operationId + ':fresh-round' : operationId),
         developer: intent.developer,
       });
       this.pending = {
         ...(game ? { game } : {}),
-        ...(round ? { round: { owner: round.owner, epoch: round.epoch, index: round.index } } : {}),
-        // A hosted bet is handed to its round's owner to submit, not sent by this wallet.
+        // A hosted bet waits at the casino until its round's host closes the round.
         ...(input.round ? { hosted: true } : {}),
         // A buy-in travels with the terms of its table, which the casino may never have seen.
         ...(input.terms ? { table: { id: input.source, terms: input.terms } } : {}),
@@ -294,11 +273,11 @@ export class ChannelClient extends WalletTransactions {
         try {
           return await this.resume();
         } catch (error: any) {
-          // The head this wallet remembered for its own next round has passed (a restored backup, a
-          // channel that also hosts, a casino that lost the chain). The signed bet is withdrawn with a
-          // verified rejection, kept under its own receipt, and the same bet is signed once more.
-          if (retried || kind !== 'bet' || this.pending?.hosted || error.message !== 'Round head is not current')
-            throw error;
+          // The round this wallet remembered as its next is not (a restored backup, a casino that
+          // lost it). The signed bet is withdrawn with a verified rejection, kept under its own
+          // receipt, and the same bet is signed once more on the round the casino names now.
+          if (retried || kind !== 'bet' || this.pending?.hosted || error.code !== 'round-not-open') throw error;
+          this.current!.round = undefined;
           const withdrawn = await this.withdrawPending(operationId + STALE);
           if (withdrawn.status !== 'rejected') return withdrawn;
         }
@@ -329,19 +308,14 @@ export class ChannelClient extends WalletTransactions {
       acknowledgment,
       ...(pending.table ? { table: pending.table.terms } : {}),
     };
-    // Only its owner can settle a hosted round. Hand the signed bet over, then look for the result.
-    if (pending.hosted) {
-      const found = await this.api(
-        `/api/channels/${c.state.channelId}/operations/${pending.request.operationId}`,
-      ).catch(error => {
-        if (error.message !== 'Operation has no recorded result') throw error;
-      });
-      if (!found) return { status: 'pending', verified: false, operationId: pending.operationId, entry: plain(entry) };
-      return this.accept(found, pending.operationId, pending.kind, pending.developer);
-    }
     this.onProgress('Confirming the signed result…');
     const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
-    if (response.status === 'pending' && pending.kind === 'transfer')
+    // A transfer waits for its recipient, and a bet on a hosted round for the host to close it:
+    // sending the same request again finds the result.
+    if (
+      (response.status === 'pending' && pending.kind === 'transfer') ||
+      (response.status === 'seated' && pending.hosted)
+    )
       return { status: 'pending', verified: false, operationId: pending.operationId };
     return this.accept(response, pending.operationId, pending.kind, pending.developer);
   }
@@ -381,12 +355,13 @@ export class ChannelClient extends WalletTransactions {
       const limit = BigInt(this.game.balance) + BigInt(next.balance) - BigInt(c.state.balance);
       this.game.balance = String(limit < 0n ? 0n : limit);
     }
-    // This channel's own settled bet revealed the head of its next round; anything else about its
-    // chain (a rejection, a hosted bet, the last position of an epoch) is asked of the casino again.
-    if (Number(op.kind) === 1) {
-      const own = isOwnRound(c, op) && !rejected && c.round!.index + 1 < c.round!.length;
-      c.round = own ? { ...c.round!, index: c.round!.index + 1, roundHead: step.preimage } : undefined;
-    }
+    // A reply to a bet on this channel's own round names its next one. It needs no signature: this
+    // wallet draws its seed only after it has the round.
+    if (Number(op.kind) === 1 && same(op.round, c.round))
+      c.round = bytes32(response.nextRound) ? response.nextRound : undefined;
+    // A declined round is revealed at once, so what the bet would have paid is known now.
+    const declined =
+      rejected && Number(op.kind) === 1 && bytes32(response.secret) && same(roundId(response.secret), op.round);
     c.state = next;
     c.casinoSignature = rejected ? response.casinoSignature : step.casinoSignature;
     c.playerSignature = await this.channelSigner().signTypedData(this.domain, STATE_TYPES, next);
@@ -394,7 +369,7 @@ export class ChannelClient extends WalletTransactions {
       ? { ...response, evidence: checkpointEvidence(next, c.playerSignature, c.casinoSignature) }
       : { ...response, evidence: { ...response.evidence, step } };
     const isBet = !rejected && Number(op.kind) === 1,
-      settled = isBet ? outcome(step.operation, step.preimage) : null,
+      settled = isBet ? outcome(step.operation, step.secret) : null,
       // What the player signed, exactly: the most the bet could pay and its return out of 2^64 stakes.
       table =
         Number(op.kind) === 1
@@ -422,6 +397,7 @@ export class ChannelClient extends WalletTransactions {
       ...(game ? { game: { key: game.key, id: game.id } } : {}),
       status: rejected ? 'rejected' : 'signed',
       ...(rejected ? { request: op, reason: response.reason } : {}),
+      ...(declined ? { wouldHavePaid: outcome(op, response.secret).payout } : {}),
       verified: true,
       proof: c.lastResponse!.evidence,
       // The round's 64-bit outcome, and what the prizes holding it paid in total.
@@ -433,7 +409,6 @@ export class ChannelClient extends WalletTransactions {
       amount: rejected ? '0' : op.amount,
       counterparty: op.counterparty,
       ...(c.pending?.recipient ? { recipient: c.pending.recipient } : {}),
-      ...(c.pending?.round ? { round: c.pending.round } : {}),
       // The seed of a hosted round was the host's, not this wallet's.
       ...(c.pending?.hosted && kind === 'bet' ? { hosted: true } : {}),
       ...(bought ? { tableId: bought.id } : {}),
@@ -768,50 +743,41 @@ export class ChannelClient extends WalletTransactions {
       { wait: true },
     );
   }
-  /** The head of this channel's next round. It needs no signature: the wallet draws its seed only
-   * after knowing it, and only the head's one preimage can settle a bet that names it. Each settled
-   * bet reveals the next head, so an ordinary bet stays a single request. A channel that hosts
-   * rounds asks afresh: the bets it settles for others move its chain without passing through here. */
-  async ownRound(this: CasinoWallet, fresh = false) {
+  /** This channel's next round, with a fresh seed. The casino names the round first and needs no
+   * signature for it: the wallet draws its seed only afterwards, and only the round's one secret
+   * can settle a bet that names it. Each reply to a bet names the next round, so an ordinary bet
+   * stays a single request. */
+  async ownRound(this: CasinoWallet) {
     const c = this.current!;
-    if (fresh || !c.round) {
-      // The chain belongs to this channel's key, the same key that signs its bets.
-      const self = this.channelSigner().address.toLowerCase(),
-        { owner, epoch, index, length, roundHead } = await this.api(`/api/chains/${self}/round`, {});
-      if (!same(owner, self) || !Number.isSafeInteger(length) || index >= length)
-        throw new Error('Casino returned an invalid round');
-      hostedRound({ owner, epoch, index, roundHead, seed: roundHead });
-      c.round = { owner, epoch, index, length, roundHead };
-      noteEpoch(c, c.round);
+    if (!c.round) {
+      const { id } = await this.api(`/api/channels/${c.state.channelId}/round`, {});
+      c.round = validRound({ id, seed: id }).id;
     }
-    return hostedRound({ ...c.round, seed: random() });
+    return validRound({ id: c.round, seed: random() });
   }
-  /** Rejected wagers become verifiable once their chain epoch is retired: the casino
-   * publishes the seed, and the wallet records what each declined bet would have paid. */
+  /** A declined bet on this channel's own round comes back with the round's secret. A seat a hosted
+   * round declined, or one the player withdrew, learns it once that round is revealed; the wallet
+   * then records what the bet would have paid. */
   async auditRejections(this: CasinoWallet) {
     const c = this.current;
     if (!c?.key || this.recoveryOnly) return [];
-    const chains = new Map<string, readonly string[] | null>();
     const audited: any[] = [];
     for (const receipt of this.history) {
-      if (receipt.status !== 'rejected' || receipt.wouldHavePaid !== undefined || receipt.kind !== 'bet') continue;
-      const round = receipt.round;
-      if (!round || !same(receipt.request?.channelId, c.state.channelId)) continue;
-      // Nothing is asked of the casino until this wallet has seen the owner on a later epoch.
-      if ((c.epochs?.[round.owner] ?? 0) <= round.epoch) continue;
-      const key = `${round.owner}/${round.epoch}`;
-      if (!chains.has(key)) {
-        const chain = await this.api(`/api/chains/${key}`).catch(() => null);
-        if (chain && (!Number.isSafeInteger(chain.length) || chain.length > 1000000))
-          throw new Error('Invalid retired chain');
-        chains.set(key, chain ? generateHashChain(chain.seed, chain.length).preimages : null);
-      }
-      const preimages = chains.get(key);
-      if (!preimages) continue;
-      const preimage = preimages[Number(round.index)];
-      if (!preimage || !same(keccak256(preimage), receipt.request.roundHead))
-        throw new Error('Retired chain does not match the rejected wager');
-      audited.push({ ...receipt, wouldHavePaid: String(outcome(receipt.request, preimage).payout) });
+      if (receipt.status !== 'rejected' || receipt.kind !== 'bet' || receipt.wouldHavePaid !== undefined) continue;
+      if (receipt.unaudited || !same(receipt.request?.channelId, c.state.channelId)) continue;
+      const round = await this.api(`/api/rounds/${receipt.request.round}`).catch(error => {
+        // A round the casino does not know will never be revealed.
+        if (error.status === 404) return null;
+        throw error;
+      });
+      if (round && !round.secret) continue;
+      if (round && !same(roundId(round.secret), receipt.request.round))
+        throw new Error('The revealed secret does not match the rejected wager');
+      audited.push(
+        round
+          ? { ...receipt, wouldHavePaid: String(outcome(receipt.request, round.secret).payout) }
+          : { ...receipt, unaudited: true },
+      );
     }
     if (audited.length)
       await this.exclusive(

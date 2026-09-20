@@ -96,16 +96,13 @@ export function validateRequest(data: any) {
     if (data.method === 'game.bet') {
       if (!Array.isArray(params.prizes) || !params.prizes.length) throw new Error('A bet holds 1 to 64 prizes.');
       validatePrizes(params.prizes);
-      // A shared round: its owner's head and seed. The wallet signs the bet; the owner submits it.
+      // A shared round its host opened: the wallet joins it with this bet, and the host closes it.
       const round = params.round;
       if (
         round !== undefined &&
         (!object(round) ||
-          !only(round, ['owner', 'epoch', 'index', 'roundHead', 'seed']) ||
-          typeof round.owner !== 'string' ||
-          !/^0x[0-9a-fA-F]{40}$/.test(round.owner) ||
-          ![round.roundHead, round.seed].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v)) ||
-          ![round.epoch, round.index].every(v => Number.isSafeInteger(v) && v >= 0))
+          !only(round, ['id', 'seed']) ||
+          ![round.id, round.seed].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v)))
       )
         throw new Error('Invalid round.');
     }
@@ -122,16 +119,25 @@ export function attachGameBridge({
   onActivity = () => {},
   target = window,
 }: {
-  iframe: Pick<HTMLIFrameElement, 'contentWindow'>;
+  iframe: Pick<HTMLIFrameElement, 'contentWindow'> &
+    Partial<Pick<HTMLIFrameElement, 'addEventListener' | 'removeEventListener'>>;
   isCurrent: () => boolean;
   onRequest: (method: string, params: any) => Promise<unknown>;
   onError?: (message: string) => void;
   onActivity?: (type: 'request' | 'response' | 'error', data: any) => void;
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }) {
-  // Request IDs only ever rise, so none is answered twice and nothing has to be remembered.
+  // Request IDs only ever rise, so none is answered twice and nothing has to be remembered. A page
+  // the frame loads afresh counts from the start, and is never sent an answer meant for the page before it.
   let last = -1,
+    busy = false,
+    page = 0;
+  const loaded = () => {
+    page++;
+    last = -1;
     busy = false;
+  };
+  iframe.addEventListener?.('load', loaded);
   const activity = (type: 'request' | 'response' | 'error', data: unknown) => {
     // Diagnostics must never interrupt validation or settlement.
     try {
@@ -160,17 +166,21 @@ export function attachGameBridge({
     last = request.id;
     if (busy) return reply(request.id, { error: 'Another game request is still in progress.' });
     busy = true;
+    const asked = page;
     try {
       const result = await onRequest(request.method, request.params);
-      reply(request.id, { result });
+      if (asked === page) reply(request.id, { result });
     } catch (error: any) {
       const message = error.shortMessage || error.message || 'The wallet could not complete this request.';
-      reply(request.id, { error: message });
+      if (asked === page) reply(request.id, { error: message });
       onError(message);
     } finally {
-      busy = false;
+      if (asked === page) busy = false;
     }
   };
   target.addEventListener('message', listener);
-  return () => target.removeEventListener('message', listener);
+  return () => {
+    target.removeEventListener('message', listener);
+    iframe.removeEventListener?.('load', loaded);
+  };
 }

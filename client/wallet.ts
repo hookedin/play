@@ -22,10 +22,8 @@ export interface WalletChannel {
   claim?: any;
   observedAt?: number;
   lastResponse?: { evidence: Evidence } | null;
-  /** The head of this channel's next own round, learned from the casino or from the last revealed preimage. */
-  round?: { owner: string; epoch: number; index: number; length: number; roundHead: string };
-  /** The latest chain epoch this wallet has seen each round owner use: a rejected bet is audited once its epoch is behind. */
-  epochs?: Record<string, number>;
+  /** This channel's next own round, named by the casino's reply to the last bet or asked for. */
+  round?: string;
   /** Tables this channel bought into, by table ID: the terms signed, what went in and what was collected. */
   tables?: Record<string, any>;
   pending?: any;
@@ -49,7 +47,6 @@ import {
   MAX_JSON_BYTES,
   STATE_TYPES,
   ACCESS_TYPES,
-  CHAIN_ACCESS_TYPES,
   authorization,
   initialState,
   hashState,
@@ -716,15 +713,6 @@ export class CasinoWallet extends GameSessions {
         await this.channelSigner(channel).signTypedData(this.domain, ACCESS_TYPES, message),
       );
     }
-    // The channel's key owns the hash chain its own bets settle on, and that of any round it hosts.
-    const signer = channel?.key ? this.channelSigner(channel) : null;
-    if (signer && path.startsWith(`/api/chains/${signer.address.toLowerCase()}/`) && body !== undefined) {
-      const message = { owner: signer.address, expiresAt: Math.floor(Date.now() / 1000) + 60 };
-      headers.authorization = authorization(
-        message,
-        await signer.signTypedData(this.domain, CHAIN_ACCESS_TYPES, message),
-      );
-    }
     const response = await fetch(this.casinoURL + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers,
@@ -753,7 +741,11 @@ export class CasinoWallet extends GameSessions {
     }
     const value = JSON.parse(new TextDecoder().decode(buffer));
     // The status tells a considered refusal from a reply that never arrived.
-    if (!response.ok) throw Object.assign(new Error(value.error || 'Casino unavailable'), { status: response.status });
+    if (!response.ok)
+      throw Object.assign(new Error(value.error || 'Casino unavailable'), {
+        status: response.status,
+        code: value.code,
+      });
     return value;
   }
   async connectInjected() {

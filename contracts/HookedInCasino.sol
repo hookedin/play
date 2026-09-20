@@ -4,7 +4,8 @@ pragma solidity ^0.8.28;
 /// @notice One trusted casino owner signs balances and controls the shared bankroll.
 /// Players must challenge stale closures within 24 hours to protect their latest balance.
 contract HookedInCasino {
-    uint256 public constant PROBABILITY_SCALE = 1 << 64;
+    // A round's outcome is a uniform integer below this.
+    uint256 public constant OUTCOME_SPACE = 1 << 64;
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
     // Every deposit and signed balance is below 2^128 wei, so no realistic number of
     // finalized claims can overflow the uint256 aggregate debt and block finalization.
@@ -18,15 +19,13 @@ contract HookedInCasino {
     uint256 private constant KIND_PAYMENT = 2;
     uint256 private constant KIND_TRANSFER = 4;
     uint256 private constant KIND_RECEIVE = 5;
-    // A match stake leaves the channel for the casino's escrow; its payout returns whatever the
-    // match's oracle awarded. The casino attests both, as it attests a transfer's matching debit.
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
     bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 constant STATE_TYPEHASH = keccak256(
         "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance)"
     );
     bytes32 constant OP_TYPEHASH = keccak256(
-        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seed,bytes32 roundHead,bytes32 operationId,address developer,bytes32 counterparty)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
+        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seed,bytes32 round,bytes32 operationId,address developer,bytes32 counterparty)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
     );
     bytes32 constant PRIZE_TYPEHASH = keccak256("Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)");
     uint256 public constant MAX_PRIZES = 64;
@@ -68,7 +67,7 @@ contract HookedInCasino {
         uint256 amount;
         Prize[] prizes;
         bytes32 seed;
-        bytes32 roundHead;
+        bytes32 round;
         bytes32 operationId;
         address developer;
         bytes32 counterparty;
@@ -77,7 +76,7 @@ contract HookedInCasino {
     struct Step {
         Operation operation;
         bytes authorization;
-        bytes32 preimage;
+        bytes32 secret;
         bytes casinoSignature;
     }
 
@@ -176,7 +175,7 @@ contract HookedInCasino {
         return keccak256(
             abi.encode(
                 OP_TYPEHASH, v.channelId, v.previousStateHash, v.sequence, v.kind, v.amount,
-                keccak256(abi.encodePacked(prizes)), v.seed, v.roundHead, v.operationId, v.developer, v.counterparty
+                keccak256(abi.encodePacked(prizes)), v.seed, v.round, v.operationId, v.developer, v.counterparty
             )
         );
     }
@@ -275,20 +274,19 @@ contract HookedInCasino {
         next = base;
         next.sequence = op.sequence;
         next.previousStateHash = baseHash;
-        next.transitionHash = keccak256(abi.encode(operationHash, step.preimage));
+        next.transitionHash = keccak256(abi.encode(operationHash, step.secret));
         bool wager = op.kind == KIND_BET;
         bool credit = op.kind == KIND_RECEIVE;
-        // A transfer and its credit name the other side: another channel, or a match.
+        // A transfer and its credit name the other side: another channel, a table or the bankroll fund.
         bool linked = credit || op.kind == KIND_TRANSFER;
-        // A bet names its round: the preimage must open the signed round head, whichever
-        // channel owns that chain. Every bet on one round and seed shares one outcome.
-        // A transfer into a match may carry its seat's seed, for a pot that is settled as a bet.
+        // A bet names its round, the hash of a secret the casino fixed before the seed was drawn.
+        // Only that secret settles it, and every bet on one round and seed shares one outcome.
         if (
             (wager ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seed == bytes32(0)
-                    || op.roundHead == bytes32(0) || op.developer == address(0)
-                    || keccak256(abi.encodePacked(step.preimage)) != op.roundHead
-                : op.prizes.length != 0 || (op.seed != bytes32(0) && op.kind != KIND_TRANSFER) || op.roundHead != bytes32(0)
-                    || op.developer != address(0) || step.preimage != bytes32(0))
+                    || op.round == bytes32(0) || op.developer == address(0)
+                    || keccak256(abi.encodePacked(step.secret)) != op.round
+                : op.prizes.length != 0 || op.seed != bytes32(0) || op.round != bytes32(0)
+                    || op.developer != address(0) || step.secret != bytes32(0))
                 || op.amount == 0 || op.amount >= MAX_BALANCE
                 || (linked ? op.counterparty == bytes32(0) || op.counterparty == base.channelId : op.counterparty != bytes32(0))
         ) revert InvalidTerms();
@@ -300,11 +298,11 @@ contract HookedInCasino {
             if (op.amount > base.balance) revert InvalidTerms();
             next.balance -= op.amount;
             if (wager) {
-                uint256 outcome = uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, op.seed, step.preimage))));
+                uint256 outcome = uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, op.seed, step.secret))));
                 for (uint256 i = 0; i < op.prizes.length; i++) {
                     Prize calldata prize = op.prizes[i];
                     if (
-                        prize.rangeStart >= prize.rangeEnd || prize.rangeEnd > PROBABILITY_SCALE || prize.payout == 0
+                        prize.rangeStart >= prize.rangeEnd || prize.rangeEnd > OUTCOME_SPACE || prize.payout == 0
                             || prize.payout >= MAX_BALANCE
                     ) revert InvalidTerms();
                     if (outcome >= prize.rangeStart && outcome < prize.rangeEnd) next.balance += prize.payout;
@@ -331,7 +329,7 @@ contract HookedInCasino {
             // A checkpoint-only proof carries the canonical empty step: one meaning, one encoding.
             Step calldata step = evidence.step;
             if (
-                step.authorization.length != 0 || step.casinoSignature.length != 0 || step.preimage != bytes32(0)
+                step.authorization.length != 0 || step.casinoSignature.length != 0 || step.secret != bytes32(0)
                     || _operationStruct(step.operation) != EMPTY_OPERATION
             ) revert InvalidTerms();
             result = evidence.base;

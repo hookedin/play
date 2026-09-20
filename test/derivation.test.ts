@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { id, keccak256, ZeroAddress, ZeroHash, Wallet } from 'ethers';
+import { id, ZeroAddress, ZeroHash, Wallet } from 'ethers';
 import { anvil, deployment, open, step, below } from '../testing/contract.ts';
-import { deriveState, hashState, checkpointEvidence, operation, STATE_TYPES, OP_TYPES } from '../protocol/protocol.ts';
+import {
+  deriveState,
+  hashState,
+  checkpointEvidence,
+  operation,
+  roundId,
+  STATE_TYPES,
+  OP_TYPES,
+} from '../protocol/protocol.ts';
 
 /** The contract and the TypeScript derivation are hand-mirrored; feed both the same
  * evidence for every kind and every invalid branch and require identical verdicts. */
@@ -13,7 +21,7 @@ test('contract derive and deriveState agree on every operation kind and invalid 
   const a = await open(f, env.wallets[1], 1000n),
     b = await open(f, env.wallets[2], 1000n);
   const agree = async (ch: any, evidence: any) => {
-    const local = deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.preimage);
+    const local = deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret);
     const onchain = await f.contract.derive(evidence.base, evidence.step);
     assert.equal(hashState(f.d, onchain.toObject()), hashState(f.d, local));
     assert.equal((await f.contract.supported(evidence)).balance, BigInt(local.balance));
@@ -25,20 +33,20 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     );
   };
   // Build evidence without deriving locally, so invalid encodings reach both verifiers.
-  const craft = async (ch: any, values: any, preimage = ZeroHash) => {
+  const craft = async (ch: any, values: any, secret = ZeroHash) => {
     const op = operation(f.d, ch.state, { operationId: id('craft ' + Math.random()), ...values });
     return {
       ...ch.evidence,
       step: {
         operation: op,
         authorization: await new Wallet(ch.key).signTypedData(f.d, OP_TYPES, op),
-        preimage,
+        secret,
         casinoSignature: ch.evidence.casinoSignature,
       },
     };
   };
   const disagreeNever = async (evidence: any, reason: RegExp) => {
-    assert.throws(() => deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.preimage), reason);
+    assert.throws(() => deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret), reason);
     await assert.rejects(f.contract.derive(evidence.base, evidence.step));
     await assert.rejects(f.contract.supported(evidence));
   };
@@ -63,34 +71,36 @@ test('contract derive and deriveState agree on every operation kind and invalid 
   await agree(a, paidOut.evidence);
   for (const kind of [4, 5])
     await disagreeNever(
-      await craft(a, { kind, amount: 30n, counterparty: table, roundHead: id('a head') }),
+      await craft(a, { kind, amount: 30n, counterparty: table, round: id('a round') }),
       /Invalid transfer/,
     );
   await disagreeNever(
     await craft(a, { kind: 5, amount: 30n, counterparty: table, seed: id('entropy') }),
     /Invalid transfer/,
   );
-  // The contract and this code accept the same encodings, a seeded transfer among them.
-  await agree(a, (await step(f, a, 4, 5n, { counterparty: table, seed: id('entropy') })).evidence);
+  await disagreeNever(
+    await craft(a, { kind: 4, amount: 5n, counterparty: table, seed: id('entropy') }),
+    /Invalid transfer/,
+  );
   await disagreeNever(await craft(a, { kind: 5, amount: 0n, counterparty: table }), /Invalid transfer/);
   // Every field a kind does not use must be zero; both sides reject the same encodings.
   await disagreeNever(await craft(a, { kind: 2, amount: 10n, developer: f.owner.address }), /Invalid payment/);
   await disagreeNever(await craft(a, { kind: 2, amount: 10n }, id('not zero')), /Invalid payment/);
-  // A bet opens exactly the round head it signed, whoever owns that chain, and every prize is well formed.
-  const preimage = a.chain.preimages[1],
+  // Only the secret of the round a bet signed settles it, and every prize is well formed.
+  const secret = id('a secret'),
     prize = { rangeStart: 0n, rangeEnd: 1n << 62n, payout: 150n },
     wager = { kind: 1, amount: 100n, prizes: [prize], seed: id('s'), developer: f.owner.address };
-  const round = { ...wager, roundHead: keccak256(preimage) };
-  await disagreeNever(await craft(a, { ...wager, roundHead: id('another round') }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, round, a.chain.preimages[2]), /Invalid bet/);
+  const round = { ...wager, round: roundId(secret) };
+  await disagreeNever(await craft(a, { ...wager, round: id('another round') }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, round, id('another secret')), /Invalid bet/);
   for (const bad of [{ rangeStart: 1n << 62n }, { rangeEnd: (1n << 64n) + 1n }, { payout: 0n }, { payout: 1n << 128n }])
-    await disagreeNever(await craft(a, { ...round, prizes: [prize, { ...prize, ...bad }] }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, prizes: [] }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, prizes: Array(65).fill(prize) }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, seed: ZeroHash }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, developer: ZeroAddress }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, amount: 5000n }, preimage), /Invalid bet/);
-  await disagreeNever(await craft(a, { kind: 2, amount: 10n, roundHead: id('stray round') }), /Invalid payment/);
+    await disagreeNever(await craft(a, { ...round, prizes: [prize, { ...prize, ...bad }] }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, prizes: [] }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, prizes: Array(65).fill(prize) }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, seed: ZeroHash }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, developer: ZeroAddress }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, amount: 5000n }, secret), /Invalid bet/);
+  await disagreeNever(await craft(a, { kind: 2, amount: 10n, round: id('stray round') }), /Invalid payment/);
   await disagreeNever(await craft(a, { kind: 2, amount: 10n, prizes: [prize] }), /Invalid payment/);
   // The stake is paid to enter and every prize holding the outcome pays: a full table of 64 overlapping
   // prizes, a prize over the whole outcome space and a prize below the stake all agree on-chain.
@@ -113,8 +123,7 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     'the stake left, and every prize over the whole space came back',
   );
   // Two channels betting complementary ranges on one round and seed: exactly one of them is paid.
-  const shared = id('a preimage of some third channel'),
-    seat = { seed: id('shared seed'), preimage: shared };
+  const seat = { seed: id('shared seed'), secret: id('the secret of a shared round') };
   const low = await step(f, a, 1, 100n, { ...seat, prizes: [{ rangeStart: 0n, rangeEnd: 1n << 63n, payout: 150n }] }),
     high = await step(f, b, 1, 100n, {
       ...seat,
@@ -129,7 +138,7 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     assert.equal(
       (await f.contract.supported(bet.evidence)).balance,
       BigInt(bet.state.balance),
-      'one preimage settles both',
+      'one secret settles both',
     );
   await disagreeNever(await craft(a, { kind: 4, amount: 20n, counterparty: a.state.channelId }), /Invalid transfer/);
   await disagreeNever(await craft(a, { kind: 2, amount: 10n, counterparty: b.state.channelId }), /Invalid payment/);
@@ -139,7 +148,7 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     await disagreeNever(await craft(a, { kind, amount: 1n, counterparty: table }), /Unknown operation/);
   // A checkpoint-only proof must carry the canonical empty step.
   const padded = checkpointEvidence(a.state, a.evidence.playerSignature, a.evidence.casinoSignature);
-  padded.step.preimage = id('stray preimage');
+  padded.step.secret = id('stray secret');
   await assert.rejects(f.contract.supported(padded));
   assert.ok((await f.contract.supported(a.evidence)).balance === BigInt(a.state.balance));
   assert.equal(padded.step.operation.seed, ZeroHash);

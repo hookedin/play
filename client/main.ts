@@ -521,7 +521,7 @@ function renderWallet() {
       : wallet.pending?.kind === 'transfer'
         ? 'Your transfer is waiting for the recipient wallet. The signed request is saved; retry it, cancel it, or close the channel.'
         : wallet.pending?.hosted
-          ? 'Your bet is waiting for the table host to play the round. Retry looks for its result; withdrawing it leaves your balance unchanged.'
+          ? "Your bet is waiting for the game's host to close the round. Retry looks for its result; withdrawing it leaves your balance unchanged."
           : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
   const cancellable = wallet.pending?.kind === 'transfer' || Boolean(wallet.pending?.hosted);
@@ -900,7 +900,8 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
       }
       if (!channelOpen() && !wallet.game?.practice) throw new Error('Add money to this game to play.');
       if (method === 'game.bet') {
-        if (params.round && !wallet.game?.hostedRounds) {
+        // Practice money has no shared rounds: the bet is refused below, so there is nothing to consent to.
+        if (params.round && !wallet.game?.hostedRounds && !wallet.game?.practice) {
           if (!(await openHostedDialog()))
             throw new Error("You kept this wallet's own randomness; the shared round was not joined.");
           if (!isCurrent()) throw new Error('The game was closed.');

@@ -1,5 +1,5 @@
 import { buildVectors } from './vectors.ts';
-import { hashChainLink } from '../protocol/hash-chain.ts';
+import { roundId } from '../protocol/protocol.ts';
 
 const v = buildVectors(),
   { bankroll, bets, risk } = v.cases[1],
@@ -11,8 +11,8 @@ console.log(
 );
 console.log(`Total commission ${decimal(risk.totalFee)}, split equally between the developer and the casino.`);
 console.log(`Maximum bankroll loss ${decimal(risk.liability)}.`);
-console.log(`Published chain root: ${v.chain.root}`);
-console.log(`First opening verifies: ${hashChainLink(v.chain.preimages[0]) === v.chain.root}`);
+console.log(`The bet names round ${v.request.round}`);
+console.log(`Its revealed secret verifies: ${roundId(v.secrets[0]) === v.request.round}`);
 console.log(
   `Deterministic fixture outcome ${v.outcome.value} pays ${decimal(v.outcome.payout)} on the overlapping-chips bet. Production client and server seeds must be private random bytes.`,
 );

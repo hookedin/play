@@ -41,7 +41,8 @@ export interface Operation {
   amount: Integer;
   prizes: Prize[];
   seed: string;
-  roundHead: string;
+  /** A bet's round: the hash of the secret that settles it. */
+  round: string;
   operationId: string;
   developer: string;
   counterparty: string;
@@ -49,7 +50,8 @@ export interface Operation {
 export interface Step {
   operation: Operation;
   authorization: string;
-  preimage: string;
+  /** A bet's step reveals its round's secret. */
+  secret: string;
   casinoSignature: string;
 }
 export interface Evidence {
@@ -115,15 +117,32 @@ export interface RoundBet {
   signature: string;
   acknowledgment?: { stateHash: string; signature: string };
 }
-/** The next unopened position of an owner's private chain. Every bet settled against it shares its preimage. */
-export interface RoundPosition {
-  /** The address the chain belongs to. */
-  owner: string;
-  epoch: number;
-  index: number;
-  /** Positions in this epoch's chain; the next head after the last one comes from a new epoch. */
-  length: number;
-  roundHead: string;
+/** What a bet names: a round and the seed every bet on it shares. */
+export interface Round {
+  id: string;
+  seed: string;
+}
+/** A round at the casino. Its host asked for it and got its ID, the hash of a secret the casino
+ * keeps. The host opens it with a seed, players' wallets join it with their bets, and the host
+ * closes it: the casino reveals the secret and settles every seat on the one outcome. A round that
+ * is declined or left open too long is revealed too, and settles nobody. */
+export interface RoundStatus {
+  id: string;
+  host: string;
+  status: 'created' | 'open' | 'revealed';
+  seed: string | null;
+  /** Unix milliseconds after which the casino reveals an open round by itself and rejects its seats. */
+  expiresAt: number | null;
+  seats: RoundSeat[];
+  secret: string | null;
+  bankroll: string;
+}
+export interface RoundSeat {
+  channelId: string;
+  player: string;
+  operationId: string;
+  stake: Integer;
+  prizes: Prize[];
 }
 /** A table: players buy in against each other, the casino holds the pot, and the host they named
  * says who is paid. Anyone may buy in until it expires; the host signs who leaves with what. */

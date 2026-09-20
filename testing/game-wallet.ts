@@ -1,13 +1,13 @@
-import { Wallet, id, keccak256 } from 'ethers';
+import { Wallet, ZeroHash, hexlify, randomBytes } from 'ethers';
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
-import { generateHashChain } from '../protocol/hash-chain.ts';
 import {
   domain,
   initialState,
   channelId,
   STATE_TYPES,
   deriveState,
+  roundId,
   plain,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
@@ -16,8 +16,7 @@ export async function gameWallet(storage = new MemoryStore()) {
     player = Wallet.createRandom(),
     key = Wallet.createRandom();
   const casino = Wallet.createRandom().address,
-    d = domain(31337, casino),
-    chain = generateHashChain(id('game-test-chain'), 1000);
+    d = domain(31337, casino);
   const message = {
     channelId: channelId(player.address, key.address, 1000000n),
     player: player.address,
@@ -30,8 +29,18 @@ export async function gameWallet(storage = new MemoryStore()) {
     casinoSignature = await owner.signTypedData(d, STATE_TYPES, state);
   const bankroll = '1000000000000';
   const responses = new Map();
-  let settlements = 0,
-    index = 0;
+  let settlements = 0;
+  // The stub casino's rounds: each is the hash of its secret. The channel's own round settles with
+  // its bet; a hosted round holds its seats until `closeRound`.
+  const secrets = new Map<string, string>(),
+    hosted = new Map<string, { seed: string; seats: { request: any; signature: string }[] }>();
+  let own = '';
+  const createRound = () => {
+    const secret = hexlify(randomBytes(32)),
+      round = roundId(secret);
+    secrets.set(round, secret);
+    return round;
+  };
   const make = () => {
     const wallet = new CasinoWallet({ network: 'local', storage });
     Object.assign(wallet, {
@@ -62,20 +71,23 @@ export async function gameWallet(storage = new MemoryStore()) {
     };
     wallet.api = async (path, body) => {
       if (path === '/api/metrics') return { bankroll };
-      if (path.endsWith('/round'))
-        return {
-          owner: path.split('/')[3],
-          epoch: 1,
-          index,
-          length: 1000,
-          roundHead: keccak256(chain.preimages[index]),
-        };
+      if (path.endsWith('/round')) return { id: (own ||= createRound()) };
       if (!path.endsWith('/operations')) return {};
       const { request, signature } = body as any;
       if (responses.has(request.operationId)) return responses.get(request.operationId);
+      const seats = hosted.get(request.round);
+      if (seats) {
+        if (request.seed !== seats.seed) throw new Error('Every bet in a round shares its seed');
+        if (!seats.seats.some(seat => seat.request.operationId === request.operationId))
+          seats.seats.push({ request, signature });
+        return { status: 'seated', operationId: request.operationId };
+      }
+      return settle(request, signature);
+    };
+    const settle = async (request: any, signature: string) => {
       const base = wallet.current!,
-        preimage = Number(request.kind) === 1 ? chain.preimages[index] : '0x' + '0'.repeat(64);
-      const next = deriveState(d, base.state, request, preimage);
+        secret = Number(request.kind) === 1 ? secrets.get(request.round)! : ZeroHash;
+      const next = deriveState(d, base.state, request, secret);
       const signed = await owner.signTypedData(d, STATE_TYPES, next);
       const response = plain({
         state: next,
@@ -86,19 +98,24 @@ export async function gameWallet(storage = new MemoryStore()) {
           step: {
             operation: request,
             authorization: signature,
-            preimage,
+            secret,
             casinoSignature: signed,
           },
         },
         bankroll,
+        ...(request.round === own ? { nextRound: (own = createRound()) } : {}),
       });
       responses.set(request.operationId, response);
-      if (Number(request.kind) === 1) index++;
       settlements++;
       return response;
     };
+    closers.add(async (round: string) => {
+      for (const seat of hosted.get(round)?.seats ?? []) await settle(seat.request, seat.signature);
+      hosted.delete(round);
+    });
     return wallet;
   };
+  const closers = new Set<(round: string) => Promise<void>>();
   const wallet = make();
   await wallet.save();
   return {
@@ -107,6 +124,15 @@ export async function gameWallet(storage = new MemoryStore()) {
     owner,
     player,
     settlements: () => settlements,
+    /** What a game's host does at the casino: open a round with its seed, and close it. */
+    openRound(seed = hexlify(randomBytes(32))) {
+      const id = createRound();
+      hosted.set(id, { seed, seats: [] });
+      return { id, seed };
+    },
+    async closeRound(round: string) {
+      for (const close of closers) await close(round);
+    },
     identity: (name = 'test') => ({
       name,
       manifestURL: `https://${name}.example/manifest.json`,

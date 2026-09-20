@@ -1,22 +1,19 @@
 import fs from 'node:fs';
-import { domain, operation, hashOperation, initialState, outcome } from '../protocol/protocol.ts';
+import { id } from 'ethers';
+import { domain, operation, hashOperation, initialState, outcome, roundId } from '../protocol/protocol.ts';
 import { fileURLToPath } from 'node:url';
-import { assessRound, WORD_SPACE } from '../protocol/risk.ts';
-import { generateHashChain, hashChainLink } from '../protocol/hash-chain.ts';
+import { assessRound, OUTCOME_SPACE } from '../protocol/risk.ts';
 
 export function buildVectors() {
-  const seed = `0x${'31'.repeat(32)}`,
-    clientSeed = `0x${'72'.repeat(32)}`;
-  const chain = generateHashChain(seed, 4);
+  const clientSeed = `0x${'72'.repeat(32)}`;
+  // The secrets of four rounds; each round is named by the hash of its secret.
+  const secrets = [1, 2, 3, 4].map(n => id(`HOOKEDIN/VECTOR/SECRET/${n}`));
   const identity = {
     chainId: 31337n,
     casino: '0x1111111111111111111111111111111111111111',
     player: '0x2222222222222222222222222222222222222222',
-    chainKey: `0x${'53'.repeat(32)}`,
-    epoch: 1n,
-    index: 0n,
   };
-  const Q = WORD_SPACE,
+  const Q = OUTCOME_SPACE,
     priced = (
       bankroll: bigint,
       bets: { stake: bigint; prizes: { rangeStart: bigint; rangeEnd: bigint; payout: bigint }[] }[],
@@ -57,7 +54,7 @@ export function buildVectors() {
     amount: chips.stake,
     prizes: chips.prizes,
     seed: clientSeed,
-    roundHead: hashChainLink(chain.preimages[0]),
+    round: roundId(secrets[0]),
     operationId: `0x${'82'.repeat(32)}`,
     developer: identity.player,
   });
@@ -66,12 +63,12 @@ export function buildVectors() {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     cases,
     rounds,
-    chain,
+    secrets,
     identity,
     state,
     request,
     requestHash,
-    outcome: outcome(request, chain.preimages[0]),
+    outcome: outcome(request, secrets[0]),
   };
 }
 
@@ -81,7 +78,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.argv.includes('--check')) {
     if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== canonical)
       throw new Error('Atomic wager vectors differ; run npm run vectors for an intentional update');
-    console.log('Round pricing, hash-chain and outcome vectors verified.');
+    console.log('Round pricing and outcome vectors verified.');
   } else {
     fs.mkdirSync(new URL('../vectors/', import.meta.url), { recursive: true });
     fs.writeFileSync(file, canonical);

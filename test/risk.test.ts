@@ -4,7 +4,7 @@ import { AbiCoder, id, keccak256 } from 'ethers';
 import { domain, hashOperation, outcome } from '../protocol/protocol.ts';
 import { buildVectors } from '../scripts/vectors.ts';
 import {
-  WORD_SPACE,
+  OUTCOME_SPACE,
   UINT256_MAX,
   assessRound,
   describeBet,
@@ -12,11 +12,9 @@ import {
   MAX_PRIZES,
   MAX_ROUND_CELLS,
 } from '../protocol/risk.ts';
-import { hashChainLink, generateHashChain } from '../protocol/hash-chain.ts';
 
 const zero32 = `0x${'00'.repeat(32)}`;
-const seed = `0x${'ab'.repeat(32)}`;
-const houseSeed = `0x${'cd'.repeat(32)}`;
+const secret0 = `0x${'cd'.repeat(32)}`;
 const casino = '0x0000000000000000000000000000000000000001';
 const player = '0x0000000000000000000000000000000000000002';
 const units = 1_000_000n;
@@ -45,7 +43,7 @@ const assessBet = ({
 };
 /** The largest integer threshold whose edge is at least `edgeBps`. */
 const thresholdForEdge = ({ stake, netWin, edgeBps }: Record<'stake' | 'netWin' | 'edgeBps', bigint>) =>
-  (WORD_SPACE * stake * (10_000n - edgeBps)) / (10_000n * (stake + netWin));
+  (OUTCOME_SPACE * stake * (10_000n - edgeBps)) / (10_000n * (stake + netWin));
 const riskAtEdge = (edgeBps: any, input = terms) =>
   assessBet({ ...input, winThreshold: thresholdForEdge({ ...input, edgeBps: edgeBps as bigint }) });
 const safe = (
@@ -54,7 +52,7 @@ const safe = (
 ) =>
   fee < q.stake &&
   q.netWin + fee < q.bankroll &&
-  (q.bankroll - q.netWin - fee) * (q.stake - fee) * WORD_SPACE >= q.bankroll * q.winThreshold * q.grossPayout;
+  (q.bankroll - q.netWin - fee) * (q.stake - fee) * OUTCOME_SPACE >= q.bankroll * q.winThreshold * q.grossPayout;
 
 test('a bet exactly at the stated Kelly edge pays no material commission', () => {
   const q = riskAtEdge(100n);
@@ -87,15 +85,15 @@ test('paying developers never relies on the expected profit as collateral', () =
 
 test('a self-referring player receives only their funded half of commission', () => {
   const q = riskAtEdge(200n);
-  const expectedPlayerLossNumerator = q.stake * WORD_SPACE - q.winThreshold * q.grossPayout;
-  assert.ok(expectedPlayerLossNumerator > q.developerFee * WORD_SPACE);
+  const expectedPlayerLossNumerator = q.stake * OUTCOME_SPACE - q.winThreshold * q.grossPayout;
+  assert.ok(expectedPlayerLossNumerator > q.developerFee * OUTCOME_SPACE);
 });
 
 test('the integer search matches exhaustive fee enumeration on small bankrolls', () => {
   for (let bankroll = 3n; bankroll <= 12n; bankroll += 1n) {
     for (let stake = 1n; stake <= 8n; stake += 1n) {
       for (let netWin = 1n; netWin < bankroll; netWin += 1n) {
-        for (const winThreshold of [1n, WORD_SPACE / 8n, WORD_SPACE / 2n, WORD_SPACE - 1n]) {
+        for (const winThreshold of [1n, OUTCOME_SPACE / 8n, OUTCOME_SPACE / 2n, OUTCOME_SPACE - 1n]) {
           const input = { bankroll, stake, netWin, winThreshold, grossPayout: stake + netWin };
           const fees = [];
           for (let fee = 0n; fee < stake && fee + netWin < bankroll; fee += 1n) {
@@ -139,7 +137,7 @@ test('large intermediate products stay exact near uint256 limits', () => {
 });
 
 test('invalid odds, unbacked bets, excessive fees, and uint256 overflow are rejected', () => {
-  const good = { ...terms, winThreshold: WORD_SPACE / 2n };
+  const good = { ...terms, winThreshold: OUTCOME_SPACE / 2n };
   for (const field of ['bankroll', 'stake']) {
     for (const value of [0n, -1n, UINT256_MAX + 1n, 100]) assert.throws(() => assessBet({ ...good, [field]: value }));
   }
@@ -151,7 +149,7 @@ test('invalid odds, unbacked bets, excessive fees, and uint256 overflow are reje
       }),
     );
   // A prize that always pays more than the stake can never be admitted; one past the outcome space is malformed.
-  for (const winThreshold of [0n, WORD_SPACE, WORD_SPACE + 1n, 0.5])
+  for (const winThreshold of [0n, OUTCOME_SPACE, OUTCOME_SPACE + 1n, 0.5])
     assert.throws(() => assessBet({ ...good, winThreshold: winThreshold as bigint }));
   assert.throws(() => assessBet({ ...good, netWin: terms.bankroll }), /available bankroll/);
   assert.throws(() => riskAtEdge(99n), /Kelly/);
@@ -160,20 +158,6 @@ test('invalid odds, unbacked bets, excessive fees, and uint256 overflow are reje
     () => assessBet({ bankroll: UINT256_MAX, stake: 2n, netWin: 1n, winThreshold: 1n }),
     /bankroll after player loss/,
   );
-});
-
-test('hash-chain preimages open exactly in the published order', () => {
-  const chain = generateHashChain(seed, 5);
-  let head = chain.root;
-  for (const preimage of chain.preimages) {
-    assert.equal(hashChainLink(preimage), head);
-    head = preimage;
-  }
-  assert.equal(chain.preimages.at(-1), seed);
-  assert.deepEqual(generateHashChain(seed, 1), { root: hashChainLink(seed), preimages: [seed] });
-  assert.throws(() => generateHashChain(seed, 0), /length/);
-  assert.throws(() => generateHashChain(seed, 1.5), /length/);
-  assert.throws(() => hashChainLink('0x1234'), /bytes32/);
 });
 
 test('signed operation binds every field and deployment domain', () => {
@@ -186,7 +170,7 @@ test('signed operation binds every field and deployment domain', () => {
       field === 'developer'
         ? casino
         : typeof value === 'string' && value.startsWith('0x')
-          ? houseSeed
+          ? secret0
           : String(BigInt(value as string) + 1n);
     assert.notEqual(hashOperation(d, { ...v.request, [field]: changed }), digest, field);
   }
@@ -205,44 +189,44 @@ test('signed operation binds every field and deployment domain', () => {
 });
 test('outcome depends only on the round: every prize holding it pays, and overlapping prizes add', () => {
   const v = buildVectors(),
-    result = outcome(v.request, houseSeed);
+    result = outcome(v.request, secret0);
   const expected = keccak256(
     AbiCoder.defaultAbiCoder().encode(
       ['bytes32', 'bytes32', 'bytes32'],
-      [id('HOOKEDIN/OUTCOME'), v.request.seed, houseSeed],
+      [id('HOOKEDIN/OUTCOME'), v.request.seed, secret0],
     ),
   );
-  const value = BigInt(expected) & (WORD_SPACE - 1n);
+  const value = BigInt(expected) & (OUTCOME_SPACE - 1n);
   assert.equal(result.randomHash, expected);
   assert.equal(result.value, value);
   // Another channel's bet on the same round and seed sees the same outcome; another seed does not.
   const seat = { ...v.request, operationId: id('other'), channelId: id('seat') };
-  assert.equal(outcome(seat, houseSeed).value, value);
-  assert.notEqual(outcome({ ...v.request, seed: id('other') }, houseSeed).randomHash, expected);
-  const paid = (prizes: any[], preimage: string) => outcome({ seed: v.request.seed, prizes }, preimage).payout;
-  for (const preimage of v.chain.preimages) {
-    const u = outcome(v.request, preimage).value,
-      half = WORD_SPACE / 2n;
+  assert.equal(outcome(seat, secret0).value, value);
+  assert.notEqual(outcome({ ...v.request, seed: id('other') }, secret0).randomHash, expected);
+  const paid = (prizes: any[], secret: string) => outcome({ seed: v.request.seed, prizes }, secret).payout;
+  for (const secret of v.secrets) {
+    const u = outcome(v.request, secret).value,
+      half = OUTCOME_SPACE / 2n;
     // Complementary ranges split every outcome between them: exactly one pays.
     const low = { rangeStart: 0n, rangeEnd: half, payout: 5n },
-      high = { rangeStart: half, rangeEnd: WORD_SPACE, payout: 7n };
-    assert.equal(paid([low, high], preimage), u < half ? 5n : 7n);
+      high = { rangeStart: half, rangeEnd: OUTCOME_SPACE, payout: 7n };
+    assert.equal(paid([low, high], secret), u < half ? 5n : 7n);
     // Overlapping prizes all pay: a prize over everything adds to whichever half was hit.
     assert.equal(
-      paid([low, high, { rangeStart: 0n, rangeEnd: WORD_SPACE, payout: 100n }], preimage),
+      paid([low, high, { rangeStart: 0n, rangeEnd: OUTCOME_SPACE, payout: 100n }], secret),
       (u < half ? 5n : 7n) + 100n,
     );
     // The boundaries are exact: [u, u+1) holds the outcome, its neighbours do not.
-    assert.equal(paid([{ rangeStart: u, rangeEnd: u + 1n, payout: 9n }], preimage), 9n);
-    if (u > 0n) assert.equal(paid([{ rangeStart: 0n, rangeEnd: u, payout: 9n }], preimage), 0n);
-    if (u + 1n < WORD_SPACE)
-      assert.equal(paid([{ rangeStart: u + 1n, rangeEnd: WORD_SPACE, payout: 9n }], preimage), 0n);
+    assert.equal(paid([{ rangeStart: u, rangeEnd: u + 1n, payout: 9n }], secret), 9n);
+    if (u > 0n) assert.equal(paid([{ rangeStart: 0n, rangeEnd: u, payout: 9n }], secret), 0n);
+    if (u + 1n < OUTCOME_SPACE)
+      assert.equal(paid([{ rangeStart: u + 1n, rangeEnd: OUTCOME_SPACE, payout: 9n }], secret), 0n);
   }
 });
 
 test('round admission prices the shared outcome: stacked bets divide capacity, opposite bets hedge', t => {
   const bankroll = 10n ** 18n,
-    pocket = WORD_SPACE / 37n;
+    pocket = OUTCOME_SPACE / 37n;
   const seat = (rangeStart: bigint, rangeEnd: bigint, stake = 10n ** 16n) => ({
     stake,
     prizes: [{ rangeStart, rangeEnd, payout: 2n * stake }],
@@ -273,21 +257,21 @@ test('round admission prices the shared outcome: stacked bets divide capacity, o
   const uneven = assessRound({ bankroll, bets: [red, seat(pocket * 18n, pocket * 36n, 3n * 10n ** 15n)] });
   assert.ok(uneven.fees.every(fee => fee % 2n === 0n) && uneven.totalFee <= uneven.maxFee);
   assert.ok(uneven.fees[0] > uneven.fees[1]);
-  assert.throws(() => assessRound({ bankroll, bets: [] }), /1 to 32/);
-  assert.throws(() => assessRound({ bankroll, bets: Array(MAX_ROUND_BETS + 1).fill(red) }), /1 to 32/);
+  assert.throws(() => assessRound({ bankroll, bets: [] }), /1 to 256/);
+  assert.throws(() => assessRound({ bankroll, bets: Array(MAX_ROUND_BETS + 1).fill(red) }), /1 to 256/);
   assert.throws(() => assessRound({ bankroll, bets: [{ stake: 1n, prizes: [] }] }), /1 to 64 prizes/);
   assert.throws(
     () => assessRound({ bankroll, bets: [{ stake: 1n, prizes: Array(MAX_PRIZES + 1).fill(red.prizes[0]) }] }),
     /1 to 64 prizes/,
   );
   assert.throws(() => assessRound({ bankroll, bets: [seat(5n, 5n)] }), /within \[0, 2\^64\)/);
-  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, WORD_SPACE + 1n)] }), /within \[0, 2\^64\)/);
+  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, OUTCOME_SPACE + 1n)] }), /within \[0, 2\^64\)/);
   assert.throws(() => assessRound({ bankroll, bets: [seat(0n, 1n, bankroll)] }), /less than the available bankroll/);
   // A bet that cannot lose is not a bet the bankroll takes; covering the wheel at the house's odds is.
-  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, WORD_SPACE)] }), /Kelly limit/);
+  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, OUTCOME_SPACE)] }), /Kelly limit/);
   const everything = {
     stake: 37n * 10n ** 15n,
-    prizes: [{ rangeStart: 0n, rangeEnd: WORD_SPACE, payout: 36n * 10n ** 15n }],
+    prizes: [{ rangeStart: 0n, rangeEnd: OUTCOME_SPACE, payout: 36n * 10n ** 15n }],
   };
   assert.equal(
     assessRound({ bankroll, bets: [everything] }).liability,
@@ -302,7 +286,7 @@ test('round admission prices the shared outcome: stacked bets divide capacity, o
 });
 
 test('a paytable is one bet: partial losses, overlapping chips and the exact return a player signs', t => {
-  const Q = WORD_SPACE,
+  const Q = OUTCOME_SPACE,
     stake = 10n ** 15n;
   // Plinko, eight rows: binomial widths are exact in 2^64, and most buckets pay back less than the stake.
   const tenths = [260n, 40n, 12n, 3n, 4n, 3n, 12n, 40n, 260n],
@@ -402,9 +386,9 @@ test('wallet pricing: 240 boundary-oriented risks match an independent integer-r
     return x;
   };
   function oracle(b: bigint, s: bigint, w: bigint, p: bigint) {
-    if (!b || !s || !w || !p || p >= WORD_SPACE || w >= b || s + w > max) return null;
+    if (!b || !s || !w || !p || p >= OUTCOME_SPACE || w >= b || s + w > max) return null;
     const a = b - w,
-      required = (b * p * (s + w) + WORD_SPACE - 1n) / WORD_SPACE;
+      required = (b * p * (s + w) + OUTCOME_SPACE - 1n) / OUTCOME_SPACE;
     if (a * s < required) return null;
     let fee = (a + s - sqrt((a - s) ** 2n + 4n * required)) / 2n;
     while (fee >= a || fee >= s || (a - fee) * (s - fee) < required) fee--;
@@ -420,7 +404,9 @@ test('wallet pricing: 240 boundary-oriented risks match an independent integer-r
     const b = random('b') > max ? max : random('b');
     const s = random('s') / 2n + 1n,
       w = random('w') / 4n + 1n;
-    const p = [1n, WORD_SPACE / 16n, WORD_SPACE / 4n, WORD_SPACE / 2n, WORD_SPACE - 1n][Math.floor(i / 6) % 5];
+    const p = [1n, OUTCOME_SPACE / 16n, OUTCOME_SPACE / 4n, OUTCOME_SPACE / 2n, OUTCOME_SPACE - 1n][
+      Math.floor(i / 6) % 5
+    ];
     const expected = oracle(b, s, w, p);
     if (expected === null) {
       assert.throws(() => assessBet({ bankroll: b, stake: s, netWin: w, winThreshold: p }));
