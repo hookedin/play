@@ -9,7 +9,6 @@ export interface JournalEntry {
   createdAt: number;
   updatedAt: number;
   attempts: { hash: string; raw: string }[];
-  payout?: any;
   receipt?: Pick<TransactionReceipt, 'hash' | 'blockHash' | 'blockNumber' | 'status'> | null;
 }
 export interface JournalState {
@@ -182,7 +181,6 @@ export class TransactionJournal {
   async submit(
     action: string,
     request: TransactionRequest | null,
-    metadata: { payout?: any } = {},
   ): Promise<JournalEntry | { status: 'idle'; hash?: undefined }> {
     await this.identity();
     // Validate before reconciliation can consume the saved intent. A retry may
@@ -214,7 +212,6 @@ export class TransactionJournal {
         throw new Error('Recovery transaction exceeds configured gas budget');
       const raw = await this.signer.signTransaction(populated);
       pending = this.state.pending = {
-        ...metadata,
         action,
         raw,
         hash: keccak256(raw),

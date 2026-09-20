@@ -40,7 +40,8 @@ export interface Operation {
   /** A bet's stake, paid to enter; otherwise the amount paid, transferred or received. */
   amount: Integer;
   prizes: Prize[];
-  seed: string;
+  /** A bet's seed, named by its hash. */
+  seedHash: string;
   /** A bet's round: the hash of the secret that settles it. */
   round: string;
   operationId: string;
@@ -50,7 +51,8 @@ export interface Operation {
 export interface Step {
   operation: Operation;
   authorization: string;
-  /** A bet's step reveals its round's secret. */
+  /** A bet's step reveals its seed and its round's secret. */
+  seed: string;
   secret: string;
   casinoSignature: string;
 }
@@ -61,6 +63,8 @@ export interface Evidence {
   step: Step;
 }
 export interface EvidenceBundle {
+  /** Evidence of a test channel proves a balance of test coins to its holder; it settles nowhere. */
+  asset?: 'test';
   chainId: Integer;
   casino: string;
   operator: string;
@@ -98,7 +102,7 @@ export interface OnchainClaim {
 }
 /** A signed casino response: an executed step, or a joint rejection checkpoint above the request. */
 export interface OperationResponse {
-  status?: 'rejected';
+  status: 'signed' | 'rejected';
   reason?: string;
   request?: Operation;
   state: Checkpoint;
@@ -111,25 +115,32 @@ export interface OperationResponse {
   /** An investment's response carries the casino's signed statement of the holding. */
   statement?: SignedStatement;
 }
-/** One seat in a round: the player's signed bet and their countersignature of the previous response. */
+/** One seat in a round: the player's signed bet and their countersignature of the previous response.
+ * A bet on the channel's own round brings its `seed`; in a hosted round the host reveals it at the close. */
 export interface RoundBet {
   request: Operation;
   signature: string;
   acknowledgment?: { stateHash: string; signature: string };
+  seed?: string;
 }
-/** What a bet names: a round and the seed every bet on it shares. */
+/** What a bet names: a round and the hash of the seed every bet on it shares. */
 export interface Round {
   id: string;
-  seed: string;
+  seedHash: string;
 }
 /** A round at the casino. Its host asked for it and got its ID, the hash of a secret the casino
- * keeps. The host opens it with a seed, players' wallets join it with their bets, and the host
- * closes it: the casino reveals the secret and settles every seat on the one outcome. A round that
- * is declined or left open too long is revealed too, and settles nobody. */
+ * keeps. The host opens it with the hash of a seed, players' wallets join it with their bets, and
+ * the host closes it with the seed: the casino reveals the secret and settles every seat on the one
+ * outcome. Until then nobody knows that outcome. A round that is declined or left open too long is
+ * revealed too, and settles nobody. */
 export interface RoundStatus {
   id: string;
   host: string;
+  /** What every seat of the round bets with. */
+  asset: 'eth' | 'test';
   status: 'created' | 'open' | 'revealed';
+  seedHash: string | null;
+  /** The seed its host closed the round with. */
   seed: string | null;
   /** Unix milliseconds after which the casino reveals an open round by itself and rejects its seats. */
   expiresAt: number | null;
@@ -167,8 +178,6 @@ export interface Settlement {
 /** One player at a table: what they put into the pot and what the host has paid them out of it. */
 export interface TableSeat {
   player: string;
-  /** The channel key that signed the player's latest buy-in: what a host checks an `Identity` against. */
-  signer: string;
   bought: string;
   paid: string;
 }
@@ -177,6 +186,8 @@ export interface TableSeat {
 export interface TableRow {
   id: string;
   terms: TableTerms;
+  /** What the table is played with: what its first buy-in brought. */
+  asset: 'eth' | 'test';
   status: 'open' | 'closed';
   pot: string;
   /** The next settlement the host may sign. */
@@ -210,6 +221,8 @@ export interface TransferOffer {
 /** The service projection of one channel. Everything financial here is replayable from the signing log. */
 export interface ChannelRow {
   opening: Opening;
+  /** Test coins; an ETH channel leaves it out. */
+  asset?: 'test';
   state: Checkpoint;
   playerSignature: string;
   casinoSignature: string;
@@ -221,18 +234,4 @@ export interface ChannelRow {
   closing: boolean;
   lastResponse?: OperationResponse | null;
   transfer?: TransferOffer;
-}
-export interface PayoutRow {
-  id: string;
-  developer: string;
-  amount: string;
-  status: 'pending' | 'paid' | 'failed';
-  raw?: string;
-  hash?: string;
-  attempts?: { hash: string; raw?: string }[];
-  previousAttempts?: { hash: string; raw?: string }[];
-  createdAt?: number;
-  updatedAt?: number;
-  receiptBlock?: number;
-  receiptBlockHash?: string;
 }

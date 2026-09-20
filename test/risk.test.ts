@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AbiCoder, id, keccak256 } from 'ethers';
-import { domain, hashOperation, outcome } from '../protocol/protocol.ts';
+import { domain, hashOperation, outcome, seedHash } from '../protocol/protocol.ts';
 import { buildVectors } from '../scripts/vectors.ts';
 import {
   OUTCOME_SPACE,
@@ -189,23 +189,20 @@ test('signed operation binds every field and deployment domain', () => {
 });
 test('outcome depends only on the round: every prize holding it pays, and overlapping prizes add', () => {
   const v = buildVectors(),
-    result = outcome(v.request, secret0);
+    result = outcome(v.request.prizes, v.seed, secret0);
   const expected = keccak256(
-    AbiCoder.defaultAbiCoder().encode(
-      ['bytes32', 'bytes32', 'bytes32'],
-      [id('HOOKEDIN/OUTCOME'), v.request.seed, secret0],
-    ),
+    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), v.seed, secret0]),
   );
   const value = BigInt(expected) & (OUTCOME_SPACE - 1n);
   assert.equal(result.randomHash, expected);
   assert.equal(result.value, value);
   // Another channel's bet on the same round and seed sees the same outcome; another seed does not.
-  const seat = { ...v.request, operationId: id('other'), channelId: id('seat') };
-  assert.equal(outcome(seat, secret0).value, value);
-  assert.notEqual(outcome({ ...v.request, seed: id('other') }, secret0).randomHash, expected);
-  const paid = (prizes: any[], secret: string) => outcome({ seed: v.request.seed, prizes }, secret).payout;
+  assert.equal(outcome([], v.seed, secret0).value, value);
+  assert.notEqual(outcome(v.request.prizes, id('other'), secret0).randomHash, expected);
+  assert.equal(seedHash(v.seed), v.request.seedHash, 'the bet names its seed by its hash');
+  const paid = (prizes: any[], secret: string) => outcome(prizes, v.seed, secret).payout;
   for (const secret of v.secrets) {
-    const u = outcome(v.request, secret).value,
+    const u = outcome(v.request.prizes, v.seed, secret).value,
       half = OUTCOME_SPACE / 2n;
     // Complementary ranges split every outcome between them: exactly one pays.
     const low = { rangeStart: 0n, rangeEnd: half, payout: 5n },

@@ -1,6 +1,6 @@
 # HookedIn play
 
-HookedIn runs casino games through signed off-chain player channels and a shared casino bankroll. Opening a channel deposits ETH and authorizes a local channel key in one transaction. After that, bets, game payments and switching games need no blockchain transactions: the wallet signs each bet, the casino signs the result, and the wallet verifies it and keeps the evidence. The channel settles on-chain when it closes. HookedIn v1 is a prototype on the Sepolia testnet. Mainnet is unsupported.
+HookedIn runs casino games through signed off-chain player channels and a shared casino bankroll. Opening a channel deposits ETH and authorizes a local channel key in one transaction. After that, bets, game payments and switching games need no blockchain transactions: the wallet signs each bet, the casino signs the result, and the wallet verifies it and keeps the evidence. The channel settles on-chain when it closes. Every wallet also has a channel of the casino's test coins, which needs no deposit and never reaches the chain. HookedIn v1 is a prototype on the Sepolia testnet. Mainnet is unsupported.
 
 This repository is the wallet served at <https://play.hookedin.com>, the settlement contract, and the protocol code the wallet and the casino share.
 
@@ -17,13 +17,14 @@ The casino service is private, and a player does not need to see it or trust its
 
 ## Trust model
 
-Read this before depositing anything, including test ETH you care about.
+Read this before depositing anything you care about.
 
 - **One casino operator controls signing and the bankroll.** The deployer of the contract is its immutable owner and only settlement signer. It can create signed winnings claims for accounts it controls; the house bankroll is trusted to that owner, not protected from it.
 - **Principal is protected; winnings are not.** While a channel is open its deposit is fully protected by the contract. At closure the contract protects `min(deposit, accepted balance)`: losses reduce what is returned. Anything above the deposit is winnings, an unsecured claim on the shared bankroll. Finalization records unpaid winnings permanently and pays them in FIFO order as cash arrives, but neither replenishment nor a payout deadline is guaranteed. Pool ETH visible on-chain does not prove that all private signed balances are covered. This is a [deliberate capital-efficiency choice](architecture.md#money-and-authority).
+- **Test coins are not money.** A test channel is opened at the casino alone: no deposit, nothing on-chain, nothing to close, challenge or collect. A wallet that has deposited nothing plays with them, and the faucet fills its channel with the casino's own coins.
 - **You must watch your channel.** Either side can start a unilateral close, and the casino could propose an older signed state. Anyone holding newer evidence can challenge within a fixed 24-hour window; challenges never extend it. If you miss it, an older, lower balance becomes final. Opening the wallet does not send a challenge: you press the button and get the transaction mined in time, or you run a [watchtower](#recover-without-the-casino). The casino's own watcher does not protect you from the casino.
 - **The casino can withhold completion.** It can decline a wager, go offline, or never answer, without a protocol penalty. A rejection is a signed checkpoint that leaves balance and entropy unchanged, and an unanswered wager settles at the latest completed state. Verified results do not prove that every requested wager was completed without bias. A declined round is revealed with its rejection, and the wallet records at once what the wager would have paid, so selective rejection is visible on the receipt, not prevented.
-- **Hosted rounds trust the host and the casino not to collude.** When a game's host collects several players' bets on one outcome, the host chooses the seed. Neither host nor casino can choose the outcome alone; together they could. The wallet asks before a game may place hosted bets and marks those receipts.
+- **Hosted rounds trust the host and the casino not to collude.** When a game's host collects several players' bets on one outcome, the host chooses the seed and keeps it until it closes the round, so nobody knows the outcome while bets are taken. Neither host nor casino can choose the outcome alone; together they could. The wallet asks before a game may place hosted bets and marks those receipts.
 - **Money on a table and fund shares are the casino's promise.** Money you put on a table against other players has left your protected balance and is held in escrow by the casino; the host you chose shares the pot among the players who bought in and can never pay out more than came in. The bankroll fund is a trust arrangement: shares are signed statements, the casino alone states the price, and it could take the money. The design gives proof of what you hold, not protection.
 - **Games are not certified.** The wallet verifies each signed bet as a whole prize table. It does not check a game's advertised rules, how steps combine into a whole game, or the assets a game serves.
 - **No third-party audit has taken place.** The tests establish software behaviour only. Contracts, signed messages, APIs and storage formats may change without migration; prototype deployments and data are disposable.
@@ -72,7 +73,7 @@ Other commands: `npm run typecheck`, `npm run vectors` (regenerate the vectors),
 
 3. **Package the sources.** After `npm run build`, `npm run audit:package` copies the sources, lockfile, compiler input and output into a fresh directory under `build/releases/` with a manifest of SHA-256 hashes. The hashes are provenance, not proof of review.
 
-`npm run release:artifact` replaces the pinned artifact. It is for maintainers, after reviewing a contract change.
+`npm run release:artifact` writes the pinned artifact afresh. It is for maintainers, after reviewing a contract change.
 
 ## Recover without the casino
 
@@ -90,7 +91,7 @@ The recovery CLI supports `inspect`, `start`, `challenge`, `finalize` and `claim
 
 - [hookedin/game-sdk](https://github.com/hookedin/game-sdk): the wallet bridge, round helper and exact step pricing for game developers, with the [SDK guide](https://github.com/hookedin/game-sdk/blob/main/docs/game-sdk.md). It depends on this repository for the risk rule and the test wallet.
 - [hookedin/game-template](https://github.com/hookedin/game-template): a starting point for a new game.
-- The listed games, each its own site at `https://<id>-game.hookedin.com`: [samson](https://github.com/hookedin/game-samson), [plinko](https://github.com/hookedin/game-plinko), [dice](https://github.com/hookedin/game-dice), [blackjack](https://github.com/hookedin/game-blackjack), [mines](https://github.com/hookedin/game-mines), [rps](https://github.com/hookedin/game-rps) and [poker](https://github.com/hookedin/poker). Rock paper scissors and poker are played between players at [tables](docs/protocol.md#tables): each ships its page and its host server as one Cloudflare Worker.
+- The listed games, each its own site at `https://<id>-game.hookedin.com`: [samson](https://github.com/hookedin/game-samson), [plinko](https://github.com/hookedin/game-plinko), [dice](https://github.com/hookedin/game-dice), [blackjack](https://github.com/hookedin/game-blackjack), [mines](https://github.com/hookedin/game-mines), [roulette](https://github.com/hookedin/game-roulette), [rps](https://github.com/hookedin/game-rps) and [poker](https://github.com/hookedin/poker). Rock paper scissors and poker are played between players at [tables](docs/protocol.md#tables), and roulette plays many players against the house on one [hosted round](docs/protocol.md#rounds); those three ship their page and their own server as one Cloudflare Worker. The rest are static pages.
 - The casino service (bet server, channel store, signing history, admission, dispute defence) is private. It pins this repository as a git submodule, and its integration tests run the wallet from this repository against the real server.
 - The website at <https://hookedin.com> is private.
 

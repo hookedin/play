@@ -2,6 +2,7 @@ import type { TransactionReceipt, TransactionResponse, TransactionRequest } from
 import type { Integer, Opening } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
+import type { AssetId } from '../protocol/protocol.ts';
 import { Wallet, formatEther, parseEther, getAddress, keccak256, Transaction } from 'ethers';
 import {
   plain,
@@ -239,7 +240,9 @@ export class WalletTransactions {
       return tx.hash;
     });
   }
-  async verifyRegisteredOpening(this: CasinoWallet, opening: Opening) {
+  async verifyRegisteredOpening(this: CasinoWallet, opening: Opening, asset: AssetId = 'eth') {
+    // A test channel is the casino's word and nothing else: there is no chain to read it from.
+    if (asset === 'test') return validateOpening(opening, 'test');
     validateOpening(opening);
     const observation = await this.observer.observe();
     const value = await this.observer.contractRead(this.reader, 'channels', [opening.channelId], observation.block);
@@ -264,7 +267,9 @@ export class WalletTransactions {
     this.lastChainCheck = Date.now();
     await this.save();
     if (this.recoveryOnly) return;
-    const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening });
+    const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening }, c);
+    // Money of its own: from here on this account plays with its ETH.
+    this.play('eth');
     this.updateBankroll(reply.bankroll);
   }
   async setupDemo(this: CasinoWallet) {
@@ -477,7 +482,7 @@ export class WalletTransactions {
   async withdraw(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
       if (!this.current) throw new Error('No active channel');
-      if (this.pending) throw new Error('Recover the pending operation or start unilateral closure');
+      if (this.current.pending) throw new Error('Recover the pending operation or start unilateral closure');
       await this.assertNetwork();
       const c = this.current,
         evidence = this.evidence(),
@@ -490,7 +495,7 @@ export class WalletTransactions {
       const signature = await this.signer.signTypedData(this.domain, CLOSE_TYPES, message);
       c.closeSignature = signature;
       await this.save();
-      const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature });
+      const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature }, c);
       assertSignature(this.domain, CLOSE_TYPES, message, casino.signature, this.operator);
       const tx = await this.sendTransaction('cooperativeClose', [evidence, signature, casino.signature]);
       c.closeTx = tx.hash;

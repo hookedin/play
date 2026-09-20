@@ -23,6 +23,7 @@ class FakeEventTarget {
 }
 
 const deferred = <T = void>() => Promise.withResolvers<T>();
+const ORIGIN = 'https://game.example';
 
 function harness(
   onRequest: (...args: any[]) => any = async () => ({ cash: '100' }),
@@ -44,6 +45,7 @@ function harness(
   let current = true;
   const detach = attachGameBridge({
     iframe: iframe as any,
+    origin: ORIGIN,
     target,
     isCurrent: () => current,
     onRequest: async (method, params) => {
@@ -69,11 +71,11 @@ function harness(
     setCurrent: (value: any) => {
       current = value;
     },
-    send: (data: any, source = child) => target.dispatch({ data, source, origin: 'null' }),
+    send: (data: any, source = child, origin = ORIGIN) => target.dispatch({ data, source, origin }),
   };
 }
 
-test('bridge accepts opaque-origin requests only from the bound iframe window', async () => {
+test('bridge accepts requests only from the bound iframe window at the game origin, and answers only that origin', async () => {
   const bridge = harness();
   await bridge.send(request(1), {
     postMessage() {
@@ -84,9 +86,16 @@ test('bridge accepts opaque-origin requests only from the bound iframe window', 
   assert.equal(bridge.replies.length, 0);
   assert.equal(bridge.activity.length, 0, 'Other windows cannot write to the game log');
 
+  // The frame navigated away from the game: whatever page it shows now is not the game the player opened.
+  await bridge.send(request(1), bridge.child, 'https://elsewhere.example');
+  assert.equal(bridge.calls.length, 0);
+  assert.equal(bridge.replies.length, 0);
+
   await bridge.send(request(2));
   assert.deepEqual(bridge.calls, [{ method: 'wallet.info', params: {} }]);
-  assert.deepEqual(bridge.replies, [{ message: { hookedin: true, id: 2, result: { cash: '100' } }, destination: '*' }]);
+  assert.deepEqual(bridge.replies, [
+    { message: { hookedin: true, id: 2, result: { cash: '100' } }, destination: ORIGIN },
+  ]);
   bridge.detach();
 });
 
@@ -114,25 +123,23 @@ test('bridge rejects stale game requests and suppresses results completed after 
 });
 
 test('activity includes requests, successful results and every rejection path', async () => {
-  const pending = deferred<unknown>();
-  const bridge = harness(() => pending.promise);
-  const operation = bridge.send(request(1));
-  await bridge.send(request(2));
-  pending.resolve({ cash: '75' });
-  await operation;
+  const bridge = harness(() => ({ cash: '75' }));
+  await bridge.send(request(1));
   await bridge.send(request(1));
   await bridge.send(request(3, 'wallet.sign'));
   await bridge.send(null);
   assert.deepEqual(
     bridge.activity.map(entry => entry.type),
-    ['request', 'request', 'error', 'response', 'request', 'error', 'request', 'error', 'request', 'error'],
+    ['request', 'response', 'request', 'error', 'request', 'error', 'request', 'error'],
   );
   assert.deepEqual(bridge.activity[0].data, request(1));
-  assert.match(bridge.activity[2].data.error, /still in progress/);
-  assert.deepEqual(bridge.activity[3].data, { hookedin: true, id: 1, result: { cash: '75' } });
-  assert.match(bridge.activity[5].data.error, /larger than the last/);
-  assert.match(bridge.activity[7].data.error, /not available/);
-  assert.match(bridge.activity[9].data.error, /Invalid HookedIn request/);
+  assert.deepEqual(bridge.activity[1].data, { hookedin: true, id: 1, result: { cash: '75' } });
+  assert.deepEqual(bridge.activity[3].data.error, {
+    code: 'invalid-request',
+    message: 'A request ID must be larger than the last.',
+  });
+  assert.equal(bridge.activity[5].data.error.code, 'unknown-method');
+  assert.match(bridge.activity[7].data.error, /Invalid HookedIn request/);
   bridge.detach();
 });
 
@@ -152,7 +159,7 @@ test('diagnostic failures cannot interrupt request execution, error replies or l
   );
   await bridge.send(request(1));
   await bridge.send(request(2));
-  assert.equal(bridge.replies[0].message.error, 'Settlement failed');
+  assert.deepEqual(bridge.replies[0].message.error, { code: 'failed', message: 'Settlement failed' });
   assert.deepEqual(bridge.replies[1].message.result, { cash: '100' });
   assert.equal(bridge.calls.length, 2);
   assert.deepEqual(
@@ -170,7 +177,7 @@ test('bridge executes only a request ID larger than the last, whatever action it
     assert.deepEqual(bridge.replies.at(-1).message, {
       hookedin: true,
       id,
-      error: 'A request ID must be larger than the last.',
+      error: { code: 'invalid-request', message: 'A request ID must be larger than the last.' },
     });
   }
   assert.deepEqual(bridge.calls, [{ method: 'game.bet', params }]);
@@ -182,7 +189,7 @@ test('a page the frame loads afresh counts from the start and never hears an ans
   // Only the bet stays open; everything else is answered at once.
   const bridge = harness(method => (method === 'game.bet' ? pending.promise : { cash: '200' }));
   await bridge.send(request(1));
-  // The wallet reloads the game, for instance to play with practice money, while a request is still open.
+  // The wallet reloads the game, for instance to play with another asset, while a request is still open.
   const open = bridge.send(request(7, 'game.bet', params));
   bridge.reload();
   await bridge.send(request(1));
@@ -195,31 +202,52 @@ test('a page the frame loads afresh counts from the start and never hears an ans
   bridge.detach();
 });
 
-test('bridge serializes operations and does not execute a queued or replayed concurrent bet', async () => {
+test('operations take their turn in the order asked, while questions are answered at once', async () => {
   const pending = deferred();
   let first = true;
-  const bridge = harness(() => {
-    if (first) {
+  const bridge = harness(method => {
+    if (method === 'game.bet' && first) {
       first = false;
       return pending.promise;
     }
     return { cash: '200' };
   });
   const operation = bridge.send(request(1, 'game.bet', params));
-  await bridge.send(request(2, 'game.bet', params));
-  assert.equal(bridge.calls.length, 1);
-  assert.equal(bridge.replies[0].message.id, 2);
-  assert.match(bridge.replies[0].message.error, /still in progress/);
+  const queued = bridge.send(request(2, 'game.bet', { ...params, id: 'op-2' }));
+  await Promise.resolve();
+  assert.equal(bridge.calls.length, 1, 'the second bet waits for the first');
+  // A question never waits behind a bet or the player's dialog.
+  await bridge.send(request(3, 'game.receipt', { id: 'op-1' }));
+  assert.deepEqual(bridge.replies.at(-1).message, { hookedin: true, id: 3, result: { cash: '200' } });
+  assert.equal(bridge.calls.length, 2);
 
   (pending.resolve! as any)({ cash: '100' });
-  await operation;
+  await Promise.all([operation, queued]);
+  assert.deepEqual(
+    bridge.replies.map(reply => reply.message.id),
+    [3, 1, 2],
+  );
+  assert.deepEqual(
+    bridge.calls.map(call => call.params.id),
+    ['op-1', 'op-1', 'op-2'],
+  );
   await bridge.send(request(2, 'game.bet', params));
-  assert.equal(bridge.calls.length, 1, 'Rejected concurrent IDs cannot later be replayed');
-  assert.match(bridge.replies.at(-1).message.error, /larger than the last/);
+  assert.equal(bridge.replies.at(-1).message.error.code, 'invalid-request', 'an answered ID cannot be replayed');
+  bridge.detach();
+});
 
-  await bridge.send(request(3, 'game.bet', params));
-  assert.equal(bridge.calls.length, 2, 'The bridge accepts a fresh request after settlement');
-  assert.deepEqual(bridge.replies.at(-1).message.result, { cash: '200' });
+test('a game cannot pile up more operations than the wallet will hold', async () => {
+  const pending = deferred();
+  const bridge = harness(() => pending.promise);
+  const open = Array.from({ length: 33 }, (_, i) => bridge.send(request(i + 1, 'game.bet', params)));
+  assert.deepEqual(
+    bridge.replies.map(reply => [reply.message.id, reply.message.error.code]),
+    [[33, 'busy']],
+    'the thirty-third is refused while thirty-two wait',
+  );
+  (pending.resolve! as any)({ cash: '1' });
+  await Promise.all(open);
+  assert.equal(bridge.calls.length, 32);
   bridge.detach();
 });
 
@@ -233,7 +261,7 @@ test('bridge reports operation failure and releases the operation lock', async (
     return null;
   });
   await bridge.send(request(1));
-  assert.equal(bridge.replies[0].message.error, 'Approval rejected');
+  assert.deepEqual(bridge.replies[0].message.error, { code: 'failed', message: 'Approval rejected' });
   assert.deepEqual(bridge.errors, ['Approval rejected']);
   await bridge.send(request(2));
   assert.equal(bridge.replies[1].message.result, null);
@@ -288,11 +316,13 @@ test('validation rejects developer and wallet-field injection before dispatch', 
     const message = bet({ [field]: 'attacker-controlled' });
     assert.throws(() => validateRequest(message), /Unexpected game request field/);
     await bridge.send(message);
-    assert.match(bridge.replies.at(-1).message.error, /Unexpected game request field/);
+    assert.match(bridge.replies.at(-1).message.error.message, /Unexpected game request field/);
+    assert.equal(bridge.replies.at(-1).message.error.code, 'invalid-request');
   }
   assert.equal(bridge.calls.length, 0);
   assert.throws(() => validateRequest({ ...request(), developer: 'attacker' }), /Invalid HookedIn request/);
   assert.throws(() => validateRequest(request(1, 'wallet.info', { privateKey: true })), /takes no parameters/);
+  assert.throws(() => validateRequest(request(1, 'wallet.hello', { privateKey: true })), /takes no parameters/);
   assert.throws(
     () => validateRequest(bet({ options: { chanceBps: 4950, developer: 'attacker' } })),
     /Unexpected game request field/,
@@ -306,7 +336,7 @@ test('oversized requests never reach wallet logic', async () => {
   const bridge = harness();
   await bridge.send(message);
   assert.equal(bridge.calls.length, 0);
-  assert.match(bridge.replies[0].message.error, /too large/);
+  assert.match(bridge.replies[0].message.error.message, /too large/);
   bridge.detach();
 });
 
@@ -391,11 +421,12 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A bet on a shared round names the round its host opened, and the host's seed.
-  const round = { id: '0x' + '22'.repeat(32), seed: '0x' + '33'.repeat(32) };
+  // A bet on a shared round names the round its host opened, and the hash of the host's seed.
+  const round = { id: '0x' + '22'.repeat(32), seedHash: '0x' + '33'.repeat(32) };
   const shared = (overrides: any) => request(1, 'game.bet', { ...params, round, ...overrides });
   assert.equal(validateRequest(shared({})).params.round.id, round.id);
-  assert.throws(() => validateRequest(shared({ round: { ...round, seed: '0x12' } })), /Invalid round/);
+  assert.throws(() => validateRequest(shared({ round: { ...round, seedHash: '0x12' } })), /Invalid round/);
+  assert.throws(() => validateRequest(shared({ round: { id: round.id, seed: round.seedHash } })), /Invalid round/);
   assert.throws(() => validateRequest(shared({ round: { ...round, id: '0x12' } })), /Invalid round/);
   assert.throws(() => validateRequest(shared({ round: { ...round, host: 'x' } })), /Invalid round/);
   assert.equal(validateRequest(request(1, 'game.cancel', { id: 'hand-1' })).params.id, 'hand-1');

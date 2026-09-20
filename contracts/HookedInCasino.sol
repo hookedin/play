@@ -17,15 +17,15 @@ contract HookedInCasino {
     uint256 private constant KIND_NONE = 0;
     uint256 private constant KIND_BET = 1;
     uint256 private constant KIND_PAYMENT = 2;
-    uint256 private constant KIND_TRANSFER = 4;
-    uint256 private constant KIND_RECEIVE = 5;
+    uint256 private constant KIND_TRANSFER = 3;
+    uint256 private constant KIND_RECEIVE = 4;
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
     bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 constant STATE_TYPEHASH = keccak256(
         "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance)"
     );
     bytes32 constant OP_TYPEHASH = keccak256(
-        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seed,bytes32 round,bytes32 operationId,address developer,bytes32 counterparty)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
+        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seedHash,bytes32 round,bytes32 operationId,address developer,bytes32 counterparty)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
     );
     bytes32 constant PRIZE_TYPEHASH = keccak256("Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)");
     uint256 public constant MAX_PRIZES = 64;
@@ -66,7 +66,7 @@ contract HookedInCasino {
         uint256 kind;
         uint256 amount;
         Prize[] prizes;
-        bytes32 seed;
+        bytes32 seedHash;
         bytes32 round;
         bytes32 operationId;
         address developer;
@@ -76,6 +76,7 @@ contract HookedInCasino {
     struct Step {
         Operation operation;
         bytes authorization;
+        bytes32 seed;
         bytes32 secret;
         bytes casinoSignature;
     }
@@ -175,7 +176,7 @@ contract HookedInCasino {
         return keccak256(
             abi.encode(
                 OP_TYPEHASH, v.channelId, v.previousStateHash, v.sequence, v.kind, v.amount,
-                keccak256(abi.encodePacked(prizes)), v.seed, v.round, v.operationId, v.developer, v.counterparty
+                keccak256(abi.encodePacked(prizes)), v.seedHash, v.round, v.operationId, v.developer, v.counterparty
             )
         );
     }
@@ -235,7 +236,7 @@ contract HookedInCasino {
         return cash > unpaidWinnings ? cash - unpaidWinnings : 0;
     }
 
-    // Stable IDs also prevent a retried developer cash payout from paying twice.
+    // A single-use ID prevents a retried withdrawal from paying twice.
     function withdrawHouse(bytes32 withdrawalId, address payable recipient, uint256 amount)
         external
         onlyOwner
@@ -279,14 +280,16 @@ contract HookedInCasino {
         bool credit = op.kind == KIND_RECEIVE;
         // A transfer and its credit name the other side: another channel, a table or the bankroll fund.
         bool linked = credit || op.kind == KIND_TRANSFER;
-        // A bet names its round, the hash of a secret the casino fixed before the seed was drawn.
-        // Only that secret settles it, and every bet on one round and seed shares one outcome.
+        // A bet names two hashes: its round, the hash of a secret the casino fixed first, and the hash
+        // of a seed. Only that secret and that seed settle it, and every bet on one round and seed
+        // shares one outcome. Whoever holds one of the two cannot know the outcome before both are out.
         if (
-            (wager ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seed == bytes32(0)
+            (wager ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seedHash == bytes32(0)
                     || op.round == bytes32(0) || op.developer == address(0)
                     || keccak256(abi.encodePacked(step.secret)) != op.round
-                : op.prizes.length != 0 || op.seed != bytes32(0) || op.round != bytes32(0)
-                    || op.developer != address(0) || step.secret != bytes32(0))
+                    || keccak256(abi.encodePacked(step.seed)) != op.seedHash
+                : op.prizes.length != 0 || op.seedHash != bytes32(0) || op.round != bytes32(0)
+                    || op.developer != address(0) || step.secret != bytes32(0) || step.seed != bytes32(0))
                 || op.amount == 0 || op.amount >= MAX_BALANCE
                 || (linked ? op.counterparty == bytes32(0) || op.counterparty == base.channelId : op.counterparty != bytes32(0))
         ) revert InvalidTerms();
@@ -298,7 +301,7 @@ contract HookedInCasino {
             if (op.amount > base.balance) revert InvalidTerms();
             next.balance -= op.amount;
             if (wager) {
-                uint256 outcome = uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, op.seed, step.secret))));
+                uint256 outcome = uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, step.seed, step.secret))));
                 for (uint256 i = 0; i < op.prizes.length; i++) {
                     Prize calldata prize = op.prizes[i];
                     if (
@@ -330,6 +333,7 @@ contract HookedInCasino {
             Step calldata step = evidence.step;
             if (
                 step.authorization.length != 0 || step.casinoSignature.length != 0 || step.secret != bytes32(0)
+                    || step.seed != bytes32(0)
                     || _operationStruct(step.operation) != EMPTY_OPERATION
             ) revert InvalidTerms();
             result = evidence.base;

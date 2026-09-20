@@ -226,24 +226,26 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     await f.owner.signTypedData(f.d, STATE_TYPES, base),
   );
   // Exercise full-width wager terms.
-  const { operation, OP_TYPES, deriveState, roundId } = await import('../protocol/protocol.ts');
-  const secret = id('wide secret');
+  const { operation, OP_TYPES, deriveState, roundId, seedHash } = await import('../protocol/protocol.ts');
+  const secret = id('wide secret'),
+    seed = id('wide entropy');
   const q = assessBet({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, winThreshold: OUTCOME_SPACE / 4n });
   const op = operation(f.d, base, {
     kind: 1,
     amount: q.stake,
     prizes: q.prizes,
-    seed: id('wide entropy'),
+    seedHash: seedHash(seed),
     round: roundId(secret),
     operationId: id('wide operation'),
     developer: f.owner.address,
   });
-  const next = deriveState(f.d, base, op, secret);
+  const next = deriveState(f.d, base, op, secret, seed);
   const evidence = {
     ...ch.evidence,
     step: {
       operation: op,
       authorization: await new Wallet(ch.key).signTypedData(f.d, OP_TYPES, op),
+      seed,
       secret,
       casinoSignature: await f.owner.signTypedData(f.d, STATE_TYPES, next),
     },

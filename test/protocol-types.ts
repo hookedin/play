@@ -31,9 +31,9 @@ void checkStorage;
 
 function checkSelectedChannel(wallet: CasinoWallet) {
   // @ts-expect-error An initialized wallet need not have an open channel.
-  const unchecked: WalletChannel = wallet.current;
+  const unchecked: WalletChannel = wallet.channel;
   wallet.ready();
-  const ready: WalletChannel = wallet.current;
+  const ready: WalletChannel = wallet.channel;
   return { unchecked, ready };
 }
 void checkSelectedChannel;

@@ -45,7 +45,8 @@ test('durable wallet state survives reload and refuses signing after persistence
   wallet.storageKey = 'wallet:test';
   wallet.render = (() => {}) as any;
   wallet.currentId = 'channel';
-  wallet.channels.channel = {} as any;
+  // A funded account: it plays on its on-chain channel.
+  wallet.channels.channel = { key: 'unused', onchain: { status: '1' } } as any;
   wallet.pending = { request: { operationId: 'saved' }, signature: 'signed' };
   await wallet.save();
   const next = new CasinoWallet({ network: 'local', storage });

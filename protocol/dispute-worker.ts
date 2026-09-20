@@ -107,7 +107,7 @@ export class DisputeWorker {
       });
       if (jobs.length && beforeChallenge) await beforeChallenge();
       const pending = this.outbox.state.pending;
-      if (pending && (!pending.payout || jobs.length)) {
+      if (pending) {
         await this.outbox.submit(pending.action, null);
       } else if (!pending && jobs.length) {
         const { bundle, state } = jobs[0];

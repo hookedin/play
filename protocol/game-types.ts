@@ -9,12 +9,10 @@ export interface GameIdentity {
 export interface GameSession {
   key: string;
   identity: GameIdentity;
+  /** What the limit below is in. A game opened before the wallet has one starts with neither. */
+  asset?: 'eth' | 'test';
   /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
-  /** The game plays with practice money: the wallet draws every outcome itself and no channel is touched. */
-  practice?: boolean;
-  /** Practice results by the game's operation ID, so an exact retry returns the same one. */
-  practiceReceipts?: Map<string, Record<string, unknown>>;
   /** The player allowed this open game to bet on rounds whose seed its host draws. Like the limit, it lasts only while the game stays open. */
   hostedRounds?: boolean;
   /** Hosts the player allowed to pay out this open game's tables. */
@@ -40,6 +38,4 @@ export interface GameBuyIn {
 export interface GameLimit {
   balance: string;
   pending: boolean;
-  /** The balance is practice money: same bets and odds, nothing real won or lost. */
-  practice: boolean;
 }

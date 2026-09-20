@@ -15,6 +15,7 @@ import {
   operation,
   deriveState,
   roundId,
+  seedHash,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
 import { assessRound } from '../protocol/risk.ts';
@@ -118,23 +119,25 @@ export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) 
   const signer = ch.key ? new Wallet(ch.key) : ch.player;
   // A bet names its round, the hash of a secret. `secret` settles it on a round shared with
   // another channel; otherwise every bet gets a round of its own.
-  const { secret: shared, ...terms } = extra as any;
-  const secret = kind !== 1 ? ZeroHash : (shared ?? id('secret ' + ++count));
+  const { secret: shared, seed: given, ...terms } = extra as any;
+  const secret = kind !== 1 ? ZeroHash : (shared ?? id('secret ' + ++count)),
+    seed = kind !== 1 ? ZeroHash : (given ?? id('seed ' + count));
   // A bet signs its developer; every other kind leaves the field zero.
   const values = {
     kind,
     amount,
     operationId: id('op ' + ++count),
-    ...(kind === 1 ? { developer: f.owner.address, round: roundId(secret) } : {}),
+    ...(kind === 1 ? { developer: f.owner.address, round: roundId(secret), seedHash: seedHash(seed) } : {}),
     ...terms,
   };
   const op = operation(f.d, ch.state, values);
-  const next = deriveState(f.d, ch.state, op, secret);
+  const next = deriveState(f.d, ch.state, op, secret, seed);
   const evidence = {
     ...ch.evidence,
     step: {
       operation: op,
       authorization: await signer.signTypedData(f.d, OP_TYPES, op),
+      seed,
       secret,
       casinoSignature: await f.owner.signTypedData(f.d, STATE_TYPES, next),
     },
@@ -143,7 +146,7 @@ export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) 
 }
 export async function closeCoop(f: any, ch: any, evidence = ch.evidence) {
   const state = Number(evidence.step.operation.kind)
-    ? deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret)
+    ? deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret, evidence.step.seed)
     : evidence.base;
   const message = {
     channelId: state.channelId,

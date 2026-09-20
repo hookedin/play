@@ -1,9 +1,10 @@
 import type { GameIdentity, GameLimit, GameRequest, GameSession, GameBuyIn } from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
-import { getAddress, parseEther } from 'ethers';
+import { getAddress } from 'ethers';
 import { same } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
 import { gameKey, gameAmount, gameOperationKey } from './game-account.ts';
+import { METHODS, gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
 /** What a game learns about an operation: the outcome, never the signed evidence. */
@@ -23,11 +24,6 @@ export const gameReceipt = (receipt: any) =>
       }
     : null;
 
-/** What a practice game starts with, and is topped back up to. */
-const PRACTICE_MONEY = parseEther('1');
-/** The bankroll a practice game prices against when the casino has reported none. */
-const PRACTICE_BANKROLL = parseEther('1000');
-
 /**
  * The open game's spending limit. It lives only in this tab's memory: the wallet persists no game
  * state, and leaving the game or closing the tab releases the limit back to the channel balance.
@@ -37,7 +33,12 @@ export class GameSessions extends ChannelClient {
   game: GameSession | null = null;
   openGame(this: CasinoWallet, identity: GameIdentity) {
     const key = gameKey(identity);
-    this.game = { key, identity: { ...identity, developer: getAddress(identity.developer) }, balance: '0' };
+    this.game = {
+      key,
+      identity: { ...identity, developer: getAddress(identity.developer) },
+      asset: this.playing,
+      balance: '0',
+    };
     this.render();
     return key;
   }
@@ -46,38 +47,41 @@ export class GameSessions extends ChannelClient {
     this.render();
   }
   requireGame(this: CasinoWallet) {
-    if (!this.game) throw new Error('No game is open');
+    if (!this.game) throw gameError('game-closed', 'No game is open');
     return this.game;
   }
   gameLimit(this: CasinoWallet): GameLimit {
     const game = this.requireGame();
     return {
       balance: game.balance,
-      pending: !game.practice && this.pending?.game?.key === game.key,
-      practice: game.practice === true,
+      pending: this.pending?.game?.key === game.key,
     };
   }
-  /** What the open game learns about the wallet. A practice game sees its practice money as an open channel. */
-  gameInfo(this: CasinoWallet): Record<string, unknown> {
-    const game = this.requireGame();
-    if (!game.practice) return { ...this.publicState, practice: false };
+  /** What a game page learns when it loads: what this wallet offers, and the asset it plays with:
+   * the network's ETH, or the casino's test coins. Amounts on the bridge are whole numbers of the
+   * asset's smallest unit. */
+  gameHello(this: CasinoWallet) {
+    this.requireGame();
+    return { methods: METHODS, asset: this.asset, chainId: String(this.expectedChainId) };
+  }
+  /** Everything the open game learns about the player: who they are, and what to price bets against.
+   * The rest of the wallet, its balances included, is none of a game's business. */
+  gameInfo(this: CasinoWallet) {
+    this.requireGame();
     return {
-      ...this.publicState,
-      practice: true,
-      balance: game.balance,
-      availableBalance: '0',
-      channelId: 'practice',
-      channelStatus: '1',
-      bankroll: BigInt(this.reportedBankroll) > 0n ? this.reportedBankroll : String(PRACTICE_BANKROLL),
+      address: this.address,
+      channelId: this.channelId ?? null,
+      chainId: String(this.expectedChainId),
+      bankroll: String(this.reportedBankroll),
+      recommendedStake: this.playing === 'test' ? String(10n ** 18n) : this.recommendedStake,
     };
   }
   gameOperationId(this: CasinoWallet, id: string) {
     gameOperationKey(id);
-    return `game:${this.currentId}:${this.requireGame().key}:${id}`;
+    return `game:${this.channelId}:${this.requireGame().key}:${id}`;
   }
   async gameReceipt(this: CasinoWallet, id: string) {
-    const game = this.requireGame();
-    if (game.practice) return game.practiceReceipts!.get(id) ?? null;
+    this.requireGame();
     return gameReceipt(await this.getReceipt(this.gameOperationId(id)));
   }
   /** The only grant of spending authority: how much of the signed balance the open game may risk. */
@@ -86,42 +90,11 @@ export class GameSessions extends ChannelClient {
     return this.exclusive(async () => {
       this.ready();
       const game = this.requireGame();
-      if (game.practice) throw new Error('This game is playing with practice money');
       if (this.pending) throw new Error('Recover the pending operation before changing the limit');
       if (n > (await this.balance())) throw new Error('The limit exceeds your playing balance');
       game.balance = String(n);
       this.render();
     });
-  }
-  /**
-   * Practice money exists only in this tab's memory. The wallet draws every outcome itself, uniformly
-   * over the same 64-bit space, and pays the same prizes, so the odds are those of real play.
-   */
-  setPractice(this: CasinoWallet, practice: boolean) {
-    const game = this.requireGame();
-    if (this.pending?.game?.key === game.key) throw new Error('Recover the pending operation first');
-    game.practice = practice;
-    game.balance = practice ? String(PRACTICE_MONEY) : '0';
-    game.practiceReceipts = new Map();
-    this.render();
-  }
-  /** Top a practice game back up to its starting money, or to what its next step needs. */
-  refillPractice(this: CasinoWallet, amount = 0n) {
-    const game = this.requireGame(),
-      target = BigInt(game.balance) + amount;
-    game.balance = String(target > PRACTICE_MONEY ? target : PRACTICE_MONEY);
-    this.render();
-  }
-  practiceStep(this: CasinoWallet, id: string, kind: string, debit: bigint, settle: () => Record<string, unknown>) {
-    const game = this.requireGame(),
-      saved = game.practiceReceipts!.get(id);
-    if (saved) return saved;
-    if (debit > BigInt(game.balance)) throw new Error('Bet exceeds the game balance');
-    const receipt = { id, kind, status: 'practice', verified: true, practice: true, operationId: id, ...settle() };
-    game.balance = String(BigInt(game.balance) - debit + BigInt((receipt as any).payout ?? 0));
-    game.practiceReceipts!.set(id, receipt);
-    this.render();
-    return receipt;
   }
   /** The player accepts that this game's host, not this wallet, draws the seed of its shared rounds. */
   allowHostedRounds(this: CasinoWallet) {
@@ -132,7 +105,7 @@ export class GameSessions extends ChannelClient {
     // In the wallet's own rounds neither side can choose the outcome. In a hosted round the host and
     // the casino together could, so a game never moves a player onto one without the player's consent.
     if (request.round && !game.hostedRounds)
-      throw new Error("Allow this game to use its host's randomness before betting on a shared round");
+      throw gameError('declined', "Allow this game to use its host's randomness before betting on a shared round");
     const terms = {
       stake: gameAmount(request.stake),
       prizes: request.prizes.map(prize => ({
@@ -142,18 +115,6 @@ export class GameSessions extends ChannelClient {
       })),
       ...(request.round ? { round: request.round } : {}),
     };
-    if (game.practice) {
-      if (request.round) throw new Error('Shared rounds are not available with practice money');
-      describeBet(terms);
-      return this.practiceStep(request.id, 'bet', terms.stake, () => {
-        const outcome = new DataView(crypto.getRandomValues(new Uint8Array(8)).buffer).getBigUint64(0);
-        const payout = terms.prizes.reduce(
-          (sum, prize) => (outcome >= prize.rangeStart && outcome < prize.rangeEnd ? sum + prize.payout : sum),
-          0n,
-        );
-        return { outcome: String(outcome), payout: String(payout) };
-      });
-    }
     return this.executeBet(terms, game.identity.developer, this.gameOperationId(request.id), {
       key: game.key,
       id: request.id,
@@ -166,12 +127,11 @@ export class GameSessions extends ChannelClient {
   }
   async gameBuyIn(this: CasinoWallet, request: GameBuyIn) {
     const game = this.requireGame();
-    if (game.practice) throw new Error('Tables shared with other players are not available with practice money');
     if (!same(request.table?.developer, game.identity.developer))
       throw new Error('Table developer differs from the selected game');
     // Who pays a table out, and that the casino holds the money meanwhile, is the player's choice.
     if (!game.hosts?.some(host => same(host, request.table.host)))
-      throw new Error("Allow this host to pay out the game's tables before buying in");
+      throw gameError('declined', "Allow this host to pay out the game's tables before buying in");
     return gameReceipt(
       await this.buyIn(request.table, gameAmount(request.amount), this.gameOperationId(request.id), {
         key: game.key,
@@ -182,19 +142,17 @@ export class GameSessions extends ChannelClient {
   /** Tell the open game's server who is playing; the origin is the game page's own, as this wallet loaded it. */
   async gameIdentify(this: CasinoWallet, request: { nonce: string }) {
     const game = this.requireGame();
-    if (game.practice) throw new Error('A practice game has no player to identify');
     return this.identify(new URL(game.identity.entryURL).origin, request.nonce);
   }
   /** Withdraw this game's hosted bet, or learn its result if the round's owner settled it first. */
   async gameCancel(this: CasinoWallet, request: { id: string }) {
     const game = this.requireGame();
     if (this.pending?.game?.key !== game.key || this.pending.game.id !== request.id)
-      throw new Error('No pending operation with this ID');
+      throw gameError('not-pending', 'No pending operation with this ID');
     return this.cancelPending();
   }
   async gamePayment(this: CasinoWallet, request: { id: string; amount: string }) {
     const game = this.requireGame();
-    if (game.practice) return this.practiceStep(request.id, 'payment', gameAmount(request.amount), () => ({}));
     return this.payBankroll(
       gameAmount(request.amount),
       this.gameOperationId(request.id),
@@ -204,7 +162,6 @@ export class GameSessions extends ChannelClient {
   }
   async gameTransfer(this: CasinoWallet, request: { id: string; amount: string }) {
     const game = this.requireGame();
-    if (game.practice) throw new Error('Transfers are not available with practice money');
     return this.transfer(
       gameAmount(request.amount),
       game.identity.developer,

@@ -143,6 +143,8 @@ const HOSTED = 'Shared round: the game host drew the randomness.';
 export function receiptSummary(
   receipt: any,
 ): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
+  // A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH.
+  const unit = receipt.asset === 'test' ? 'TEST' : 'ETH';
   if (receipt.status === 'rejected')
     return {
       title:
@@ -162,13 +164,13 @@ export function receiptSummary(
               ? 'No shares bought'
               : 'No wager placed',
       tone: 'neutral',
-      amount: '0 ETH',
+      amount: `0 ${unit}`,
       amountLabel: 'Balance change',
       description: ['transfer', 'buyin', 'invest'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
         : receipt.wouldHavePaid === undefined
           ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
-          : `Your balance is unchanged. The casino has since revealed the round: this wager would have paid ${formatEther(receipt.wouldHavePaid)} ETH for its ${formatEther(receipt.request?.amount ?? 0)} ETH stake.`,
+          : `Your balance is unchanged. The casino has since revealed the round: this wager would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} for its ${formatEther(receipt.request?.amount ?? 0)} ${unit} stake.`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -205,15 +207,17 @@ export function receiptSummary(
             invest: 'Invested in the bankroll',
             redeem: 'Shares redeemed',
             divest: 'Bankroll payout',
+            earnings: 'Developer earnings',
+            faucet: 'Test coins claimed',
             transaction: 'Transaction',
           } as Record<string, string>
         )[receipt.kind] || receipt.kind;
-  let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ETH`;
+  let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ${unit}`;
   let amountLabel = !settled
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
       ? 'Deposited'
-      : ['withdrawal', 'receive', 'payout', 'divest'].includes(receipt.kind)
+      : ['withdrawal', 'receive', 'payout', 'divest', 'earnings', 'faucet'].includes(receipt.kind)
         ? 'Received'
         : receipt.kind === 'invest'
           ? 'Invested'
@@ -223,34 +227,38 @@ export function receiptSummary(
               ? 'Held by the casino'
               : ['transfer', 'payment'].includes(receipt.kind)
                 ? 'Sent'
-                : 'ETH received';
+                : `${unit} received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (receipt.kind === 'bet') {
-    amount = settled ? `${net < 0n ? '−' : '+'}${formatEther(net < 0n ? -net : net)} ETH` : '—';
+    amount = settled ? `${net < 0n ? '−' : '+'}${formatEther(net < 0n ? -net : net)} ${unit}` : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
     if (settled) tone = net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral';
-    description = `Stake ${formatEther(receipt.stake)} ETH · Paid ${formatEther(receipt.payout ?? 0)} ETH${
+    description = `Stake ${formatEther(receipt.stake)} ${unit} · Paid ${formatEther(receipt.payout ?? 0)} ${unit}${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${formatEther(receipt.maxPayout)} ETH · ${returnToPlayer(receipt.stake, receipt.expectedPayout)}`
-    } · Balance ${formatEther(receipt.balance)} ETH${receipt.hosted ? ' · ' + HOSTED : ''}`;
+        : ` of up to ${formatEther(receipt.maxPayout)} ${unit} · ${returnToPlayer(receipt.stake, receipt.expectedPayout)}`
+    } · Balance ${formatEther(receipt.balance)} ${unit}${receipt.hosted ? ' · ' + HOSTED : ''}`;
   } else if (
     settled &&
-    ['receive', 'withdrawal', 'payout', 'divest'].includes(receipt.kind) &&
+    ['receive', 'withdrawal', 'payout', 'divest', 'earnings', 'faucet'].includes(receipt.kind) &&
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
   if (receipt.kind === 'buyin')
-    description = `The casino holds this money until the table's host pays it out, or the table's deadline returns what is left. Balance ${formatEther(receipt.balance)} ETH`;
+    description = `The casino holds this money until the table's host pays it out, or the table's deadline returns what is left. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'invest')
-    description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ETH`;
+    description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'redeem')
     description = `Sold ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. Your wallet collects the money into your open channel.`;
   if (receipt.kind === 'divest')
-    description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ETH`;
+    description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
+  if (receipt.kind === 'faucet')
+    description = `The casino's faucet paid this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
+  if (receipt.kind === 'earnings')
+    description = `Commission your games earned, collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'payout')
-    description = `Paid out of a table by its host. Balance ${formatEther(receipt.balance)} ETH`;
+    description = `Paid out of a table by its host. Balance ${formatEther(receipt.balance)} ${unit}`;
   const notice =
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or use the saved transaction details to retry from your funding wallet.'

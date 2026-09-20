@@ -18,9 +18,12 @@ export interface LogEntry {
 }
 const LIMIT = 500;
 const PAYLOAD_LIMIT = 70000;
+/** The asset the log's amounts are in: whatever the wallet plays with while this game is open. */
+let symbol = 'ETH';
+export const logAsset = (value: string) => (symbol = value);
 const eth = (wei: unknown) => {
   try {
-    return `${formatEther(BigInt(wei as string))} ETH`;
+    return `${formatEther(BigInt(wei as string))} ${symbol}`;
   } catch {
     return String(wei);
   }
@@ -64,8 +67,10 @@ export function describeResult(method: string, result: any) {
   if (!result || typeof result !== 'object') return '';
   const limit = (state: any) => `balance ${eth(state.balance)}${state.pending ? ' · pending operation' : ''}`;
   switch (method) {
+    case 'wallet.hello':
+      return `${result.methods?.length ?? 0} methods · ${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
     case 'wallet.info':
-      return `${result.practice ? 'practice money · ' : ''}playing ${eth(result.balance)} · unallocated ${eth(result.availableBalance)} · bankroll ${eth(result.bankroll)} · channel ${String(result.channelStatus) === '1' ? 'open' : 'not open'}`;
+      return `bankroll ${eth(result.bankroll)} · channel ${result.channelId ? 'open' : 'not open'}`;
     case 'game.receipt':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
@@ -171,7 +176,13 @@ export function createGameLog(elements: GameLogElements) {
     const latency = started && Date.now() - started.at;
     const method = started?.method ?? 'unknown method';
     if (type === 'error')
-      return log('error', `${method} failed`, { description: String(message?.error ?? ''), payload: message, latency });
+      return log('error', `${method} failed`, {
+        description: message?.error?.code
+          ? `${message.error.code}: ${message.error.message}`
+          : String(message?.error ?? ''),
+        payload: message,
+        latency,
+      });
     return log('response', method, { description: describeResult(method, message?.result), payload: message, latency });
   }
   for (const input of elements.filters)

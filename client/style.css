@@ -2034,8 +2034,7 @@ html:has(dialog[open]) {
   color: #cdd3e2;
 }
 .fund-dialog:not([data-mode='channel']) .mode-channel,
-.fund-dialog:not([data-mode='fund']) .mode-fund,
-.fund-dialog:not([data-mode='practice']) .mode-practice {
+.fund-dialog:not([data-mode='fund']) .mode-fund {
   display: none;
 }
 .fund-note {
@@ -2076,12 +2075,12 @@ html:has(dialog[open]) {
 .fund-presets button:hover {
   border-color: var(--purple);
 }
-.fund-practice {
+.fund-aside {
   display: block;
   margin: 16px auto 0;
   font-size: 11px;
 }
-.balance-button[data-practice] {
+.balance-button[data-test] {
   border-color: #d9a441;
   color: #f0c976;
 }
