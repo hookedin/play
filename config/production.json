@@ -4,7 +4,7 @@
   "games": "https://play.hookedin.com",
   "deployment": {
     "chainId": "11155111",
-    "contractAddress": "0xA3FD45642aFB4A7510ba90D13c93634be98A8092",
+    "contractAddress": "0x812e26B72cd6C42601C3F0A05a54715f6c12C522",
     "operator": "0x92e3dd06E0f87756B02a7c178C46a8f8498fd9A3",
     "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
     "witnessRpcUrl": "https://sepolia.gateway.tenderly.co"
