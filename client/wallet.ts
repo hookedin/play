@@ -27,8 +27,6 @@ export interface WalletChannel {
   lastResponse?: { evidence: Evidence } | null;
   /** This channel's next own round, named by the casino's reply to the last bet or asked for. */
   round?: string;
-  /** Tables this channel bought into, by table ID: the terms signed, what went in and what was collected. */
-  tables?: Record<string, any>;
   pending?: any;
   closeAuthorization?: any;
   closing?: boolean;
@@ -482,15 +480,6 @@ export class CasinoWallet extends GameSessions {
       contract: this.config?.contractAddress,
       mode: this.mode,
       recoveryOnly: Boolean(this.recoveryOnly),
-      // What this channel put into tables that are still open, less what it has collected from them.
-      inPlay: String(
-        Object.values<any>(c?.tables || {})
-          .filter(table => BigInt(table.terms.expiresAt) * 1000n > BigInt(Date.now()))
-          .reduce((sum, table) => {
-            const net = BigInt(table.bought) - BigInt(table.collected);
-            return net > 0n ? sum + net : sum;
-          }, 0n),
-      ),
       // Bankroll shares held by this account; what they are worth is the casino's quote, asked for separately.
       fund: { shares: this.fund.shares, sequence: this.fund.sequence, alert: this.fund.alert ?? null },
       // What games play with in this tab, and the test coins every account has.

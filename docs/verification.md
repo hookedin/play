@@ -8,7 +8,7 @@ npm test
 
 `npm test` compiles the contract and checks it against the committed artifact, bundles the wallet into `dist/`, type-checks all TypeScript source and tests, checks the committed vectors, and runs the suites in [test/](../test/). `npm run typecheck` runs just the TypeScript checks, including the compile-time API tests in `test/protocol-types.ts`. Vectors check deterministic pricing and outcomes; `npm run vectors` regenerates [vectors/bets.json](../vectors/bets.json). Chain-writing tests use disposable Anvil deployments started by [testing/contract.ts](../testing/contract.ts), which also signs evidence by hand so the contract is tested without any casino service.
 
-This repository tests what it contains: the contract, the shared protocol, the wallet and the player-side tools. The casino service is private and has its own suite; its integration tests run the wallet from this repository against the real server, covering direct opening and activation, rejected bets and lost replies, hosted rounds, tables, the bankroll fund, transfers, stale restores and dispute defence end to end.
+This repository tests what it contains: the contract, the shared protocol, the wallet and the player-side tools. The casino service is private and has its own suite; its integration tests run the wallet from this repository against the real server, covering direct opening and activation, rejected bets and lost replies, hosted rounds, the bankroll fund, transfers, stale restores and dispute defence end to end.
 
 ## Coverage
 

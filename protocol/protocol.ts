@@ -10,9 +10,6 @@ import type {
   Integer,
   Json,
   Prize,
-  Settlement,
-  TableSeat,
-  TableTerms,
 } from './types.ts';
 import {
   AbiCoder,
@@ -70,25 +67,6 @@ export const OP_TYPES = {
     'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seedHash,bytes32 round,bytes32 operationId,address developer,bytes32 counterparty',
   ),
   Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
-};
-/** A table: players buy in against each other, the casino holds the pot, and the host they all
- * named pays it out. A buy-in is a transfer whose counterparty is the table's ID. */
-export const TABLE_TYPES = {
-  Table: fields('address host,address developer,uint256 expiresAt,bytes32 nonce'),
-};
-/** The host pays players out of the pot, and takes `rake` for the developer and the casino.
- * Settlements are numbered from zero, so each applies exactly once. */
-export const SETTLEMENT_TYPES = {
-  Settlement: fields('bytes32 tableId,uint256 sequence,Payment[] payments,uint256 rake'),
-  Payment: fields('address player,uint256 amount'),
-};
-/** Most payments one settlement holds. */
-export const MAX_PAYMENTS = 32;
-/** A wallet tells a game's own server who is playing: the channel key signs the player's address,
- * the page's origin, which the wallet knows for itself, and the server's nonce. It authorizes
- * nothing at the casino, which says by `GET /api/signers/:key` whose key that is. */
-export const IDENTITY_TYPES = {
-  Identity: fields('address player,bytes32 channelId,string origin,bytes32 nonce,uint256 expiresAt'),
 };
 export const CLOSE_TYPES = {
   Close: fields('bytes32 channelId,bytes32 stateHash'),
@@ -162,24 +140,6 @@ export function validateOpening(opening: Opening, asset: AssetId = 'eth') {
   )
     throw new Error('Invalid channel opening');
 }
-/** A game's server checks who is playing: the origin is its own page's, the nonce the one it issued,
- * and the token still valid. Returns the key that signed, to be matched against the key the casino
- * reports for the token's `player`. */
-export function identitySigner(
-  d: Domain,
-  { message, signature }: { message: Record<string, any>; signature: string },
-  expected: { origin: string; nonce: string; now?: number },
-) {
-  if (
-    message?.origin !== expected.origin ||
-    !same(message.nonce, expected.nonce) ||
-    BigInt(message.expiresAt) * 1000n <= BigInt(expected.now ?? Date.now())
-  )
-    throw new Error('Identity is not for this game');
-  return verifyTypedData(d, IDENTITY_TYPES, message, signature);
-}
-/** Every buy-in signs this as its counterparty, so one signature binds the host, the developer and the deadline. */
-export const tableId = (d: Domain, terms: TableTerms) => TypedDataEncoder.hash(d, TABLE_TYPES, terms);
 /** Wire terms as exact integers: a stake and the prizes it can pay. */
 export const betTerms = (stake: Integer, prizes: Prize[]) => ({
   stake: BigInt(stake),
@@ -189,50 +149,9 @@ export const betTerms = (stake: Integer, prizes: Prize[]) => ({
     payout: BigInt(prize.payout),
   })),
 });
-export function validateTable(terms: TableTerms) {
-  if (
-    !terms ||
-    same(getAddress(terms.host), ZeroAddress) ||
-    same(getAddress(terms.developer), ZeroAddress) ||
-    !/^0x[0-9a-fA-F]{64}$/.test(terms.nonce) ||
-    BigInt(terms.expiresAt) <= 0n
-  )
-    throw new Error('Invalid table terms');
-}
-/** The shape of a settlement; returns what it takes from the pot. Whether the pot holds that much,
- * and whether every player bought in, is for whoever knows the table. */
-export function validateSettlement(settlement: Settlement) {
-  const payments = settlement?.payments;
-  if (
-    !settlement ||
-    !/^0x[0-9a-fA-F]{64}$/.test(settlement.tableId) ||
-    BigInt(settlement.sequence) < 0n ||
-    !Array.isArray(payments) ||
-    payments.length > MAX_PAYMENTS ||
-    new Set(payments.map(payment => getAddress(payment.player))).size !== payments.length ||
-    payments.some(payment => BigInt(payment.amount) <= 0n || BigInt(payment.amount) >= MAX_BALANCE) ||
-    BigInt(settlement.rake) < 0n ||
-    BigInt(settlement.rake) >= MAX_BALANCE ||
-    (!payments.length && !BigInt(settlement.rake))
-  )
-    throw new Error('Invalid settlement');
-  return payments.reduce((sum, payment) => sum + BigInt(payment.amount), BigInt(settlement.rake));
-}
-/** What a table nobody settled returns at its deadline: the pot, shared among the players by the
- * part of their buy-ins the host never paid back. The rounding dust stays in the bankroll. */
-export function closingPayments(seats: TableSeat[], pot: Integer) {
-  const owed = seats.map(seat => {
-      const net = BigInt(seat.bought) - BigInt(seat.paid);
-      return net > 0n ? net : 0n;
-    }),
-    total = owed.reduce((sum, net) => sum + net, 0n);
-  return seats
-    .map((seat, i) => ({ player: seat.player, amount: total ? (BigInt(pot) * owed[i]) / total : 0n }))
-    .filter(payment => payment.amount > 0n);
-}
 /** The bankroll fund. Investing is a transfer whose counterparty is this ID, and divesting a credit
- * from it, exactly as a buy-in and a payout name their table. An investor trusts the casino
- * completely: a share is its promise of a part of the bankroll, not protected principal. */
+ * from it. An investor trusts the casino completely: a share is its promise of a part of the
+ * bankroll, not protected principal. */
 export const FUND_ID = id('HOOKEDIN/BANKROLL');
 /** The casino signs a statement for every change to a holding. `shares` is what the holder has
  * afterwards. `equity` and `totalShares` are the fund just before the change, which fix the price
@@ -519,19 +438,7 @@ export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
 /** One value for the whole signed protocol: the hash of every typed structure. A wallet or a host
  * that was built against other structures learns so from `GET /api/config` before it signs anything. */
 export const PROTOCOL = id(
-  [
-    STATE_TYPES,
-    OP_TYPES,
-    TABLE_TYPES,
-    SETTLEMENT_TYPES,
-    IDENTITY_TYPES,
-    CLOSE_TYPES,
-    ACCESS_TYPES,
-    HOST_ACCESS_TYPES,
-    SHARE_TYPES,
-    FUND_TYPES,
-    REDEEM_TYPES,
-  ]
+  [STATE_TYPES, OP_TYPES, CLOSE_TYPES, ACCESS_TYPES, HOST_ACCESS_TYPES, SHARE_TYPES, FUND_TYPES, REDEEM_TYPES]
     .map(types => TypedDataEncoder.from(types).encodeType(Object.keys(types)[0]))
     .join(''),
 );

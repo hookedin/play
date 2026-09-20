@@ -15,8 +15,6 @@ export interface GameSession {
   balance: string;
   /** The player allowed this open game to bet on rounds whose seed its host draws. Like the limit, it lasts only while the game stays open. */
   hostedRounds?: boolean;
-  /** Hosts the player allowed to pay out this open game's tables. */
-  hosts?: string[];
 }
 export interface GameRequest {
   /** The game's own idempotency key: an exact retry returns the saved receipt. */
@@ -27,12 +25,6 @@ export interface GameRequest {
   prizes: { rangeStart: string; rangeEnd: string; payout: string }[];
   /** A round a game's host opened. The wallet joins it with this bet, and the host closes it. */
   round?: import('./types.ts').Round;
-}
-/** Money put on a table shared with other players: the casino holds it until the host in the terms pays it out. */
-export interface GameBuyIn {
-  id: string;
-  table: import('./types.ts').TableTerms;
-  amount: string;
 }
 /** What the wallet pushes to the game: its spending limit and whether an operation awaits recovery. */
 export interface GameLimit {

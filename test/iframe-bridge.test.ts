@@ -369,25 +369,9 @@ test('funding requests carry only a suggested amount and a short reason', () => 
     assert.throws(() => fund({ [field]: '1' }), /Unexpected game request field/);
 });
 
-test('table requests carry exact table terms, a table ID or a nonce, and nothing else', () => {
-  const word = '0x' + '22'.repeat(32),
-    table = { host: '0x' + '11'.repeat(20), developer: '0x' + '33'.repeat(20), expiresAt: '1900000000', nonce: word };
-  const buyIn = (overrides: any = {}) =>
-    validateRequest(request(1, 'game.buyIn', { id: 'seat-1', table, amount: '50', ...overrides }));
-  assert.deepEqual(buyIn().params.table, table);
-  for (const bad of [{ host: '0x12' }, { developer: 7 }, { nonce: '0x12' }, { seats: [] }])
-    assert.throws(() => buyIn({ table: { ...table, ...bad } }), /Invalid table/);
-  assert.throws(() => buyIn({ table: [table] }), /Invalid table/);
-  assert.throws(() => buyIn({ table: { ...table, expiresAt: 1900000000 } }), /wei/);
-  assert.throws(() => buyIn({ amount: '0' }), /range/);
-  assert.throws(() => buyIn({ id: 'no spaces' }), /operation ID/);
-  assert.throws(() => buyIn({ tableId: word }), /Unexpected game request field/);
-  assert.equal(validateRequest(request(1, 'game.table', { tableId: word })).params.tableId, word);
-  for (const params of [{}, { tableId: '0x12' }, { tableId: word, id: 'seat-1' }])
-    assert.throws(() => validateRequest(request(1, 'game.table', params)), /Invalid table ID/);
-  assert.equal(validateRequest(request(1, 'game.identify', { nonce: word })).params.nonce, word);
-  for (const params of [{}, { nonce: 7 }, { nonce: word, origin: 'https://attacker.example' }])
-    assert.throws(() => validateRequest(request(1, 'game.identify', params)), /Invalid nonce/);
+test('a wallet offers games only the methods it lists', () => {
+  for (const method of ['game.buyIn', 'game.table', 'game.identify', 'wallet.keys'])
+    assert.throws(() => validateRequest(request(1, method, {})), /not available to games/);
 });
 
 test('validation accepts only plain parameter records and bounded exact terms', () => {

@@ -1,4 +1,4 @@
-import type { Integer, Checkpoint, Operation, Prize, Round, TableTerms, Settlement } from '../protocol/types.ts';
+import type { Integer, Checkpoint, Operation, Prize, Round } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id } from 'ethers';
@@ -19,9 +19,6 @@ import {
   outcome,
   roundId,
   seedHash,
-  tableId,
-  validateTable,
-  validateSettlement,
   verifyShareStatement,
   sharesFor,
   valueOf,
@@ -36,8 +33,6 @@ import {
   initialState,
   FUND_TYPES,
   REDEEM_TYPES,
-  SETTLEMENT_TYPES,
-  IDENTITY_TYPES,
   verifyStep,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
@@ -253,7 +248,6 @@ export class ChannelClient extends WalletTransactions {
   ) {
     this.requireDurableState();
     const intent = {
-      // A buy-in is a transfer into a table and a payout the credit out of it.
       // An investment is a transfer into the bankroll fund, and redeemed money the credit out of it.
       kind:
         (
@@ -261,9 +255,7 @@ export class ChannelClient extends WalletTransactions {
             bet: KIND.bet,
             payment: KIND.payment,
             transfer: KIND.transfer,
-            buyin: KIND.transfer,
             invest: KIND.transfer,
-            payout: KIND.receive,
             divest: KIND.receive,
             earnings: KIND.receive,
             faucet: KIND.receive,
@@ -303,13 +295,13 @@ export class ChannelClient extends WalletTransactions {
       return cached;
     }
     const sign = async () => {
-      // A payout is a credit: it spends nothing.
-      const debit = ['payout', 'divest', 'earnings', 'faucet'].includes(kind) ? 0n : intent.amount;
+      // A credit collects what is owed: it spends nothing.
+      const debit = ['divest', 'earnings', 'faucet'].includes(kind) ? 0n : intent.amount;
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
         if (debit > BigInt(this.game.balance)) throw gameError('insufficient-funds', 'Bet exceeds the game balance');
       } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
-      // A buy-in or payout names its table, as a transfer names the other channel.
+      // An investment and a redemption name the fund, as a transfer names the other channel.
       let counterparty = input.source ?? ZeroHash;
       if (kind === 'transfer') {
         const opening = await this.api(`/api/channels/${this.channelId}/recipient`, { player: input.recipient });
@@ -350,8 +342,6 @@ export class ChannelClient extends WalletTransactions {
         // A hosted bet waits at the casino until its round's host closes the round.
         ...(input.round ? { hosted: true } : {}),
         ...(seed ? { seed } : {}),
-        // A buy-in travels with the terms of its table, which the casino may never have seen.
-        ...(input.terms ? { table: { id: input.source, terms: input.terms } } : {}),
         kind,
         operationId,
         request,
@@ -411,7 +401,6 @@ export class ChannelClient extends WalletTransactions {
       signature: pending.signature,
       acknowledgment,
       ...(pending.seed ? { seed: pending.seed } : {}),
-      ...(pending.table ? { table: pending.table.terms } : {}),
     };
     this.onProgress('Confirming the signed result…');
     const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
@@ -446,8 +435,7 @@ export class ChannelClient extends WalletTransactions {
       // The casino declined the saved operation with a signed unchanged-balance checkpoint above
       // it. The wallet countersigns only now, so the casino never holds a player-signed
       // checkpoint that could supersede a completed result.
-      if (!c.pending?.request || !['bet', 'transfer', 'buyin', 'invest'].includes(kind))
-        throw new Error('Unexpected rejection');
+      if (!c.pending?.request || !['bet', 'transfer', 'invest'].includes(kind)) throw new Error('Unexpected rejection');
       next = rejectionCheckpoint(this.domain, c.state, c.pending.request);
       assertSignature(this.domain, STATE_TYPES, next, response.casinoSignature, this.operator);
     } else next = verifyStep(this.domain, c.state, step, new Wallet(c.key!).address, this.operator);
@@ -498,7 +486,6 @@ export class ChannelClient extends WalletTransactions {
     } catch {
       /* Invalid optional accounting cannot discard signed settlement or break receipt display. */
     }
-    const bought = kind === 'buyin' ? c.pending?.table : null;
     // An investment comes back with the casino's signed statement of the holding it bought.
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null;
     const receipt = plain({
@@ -525,31 +512,12 @@ export class ChannelClient extends WalletTransactions {
       ...(c.pending?.recipient ? { recipient: c.pending.recipient } : {}),
       // The seed of a hosted round was the host's, not this wallet's.
       ...(c.pending?.hosted && kind === 'bet' ? { hosted: true } : {}),
-      ...(bought ? { tableId: bought.id } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
       developer,
       commission,
       balance: next.balance,
       createdAt: new Date().toISOString(),
     });
-    // A table bought into is a financial record: the casino holds the money until the host these
-    // terms name pays it out. It travels in backups.
-    if (bought && !rejected) {
-      const table = c.tables?.[bought.id] ?? { terms: bought.terms, bought: '0', collected: '0' };
-      c.tables = {
-        ...c.tables,
-        [bought.id]: { ...table, ...(game ? { game } : {}), bought: String(BigInt(table.bought) + BigInt(op.amount)) },
-      };
-    }
-    const paid = kind === 'payout' && !rejected && c.tables?.[String(op.counterparty).toLowerCase()];
-    if (paid)
-      c.tables = {
-        ...c.tables,
-        [String(op.counterparty).toLowerCase()]: {
-          ...paid,
-          collected: String(BigInt(paid.collected) + BigInt(op.amount)),
-        },
-      };
     c.pending = null;
     await this.save(receipt, {
       channels: { ...this.channels, [c.state.channelId]: c },
@@ -593,76 +561,6 @@ export class ChannelClient extends WalletTransactions {
     // A bet settled before the withdrawal arrived is simply that bet's result.
     const id = receiptId && response.status === 'rejected' ? receiptId : pending.operationId;
     return this.accept(response, id, pending.kind, pending.developer);
-  }
-  /** Buy into a table: the amount leaves this channel for a pot the casino holds, and the host named
-   * in the terms says who is paid out of it. The channel is free again at once. */
-  async buyIn(this: CasinoWallet, terms: TableTerms, amount: Integer, operationId: string, game?: GameIntent) {
-    validateTable(terms);
-    if (BigInt(terms.expiresAt) * 1000n <= BigInt(Date.now())) throw new Error('This table has closed');
-    return this.perform(
-      'buyin',
-      { amount, source: tableId(this.domain, terms).toLowerCase(), terms: plain(terms) },
-      null,
-      operationId,
-      game,
-    );
-  }
-  /** What the wallet knows of a table it bought into: what it put in and what it has collected. */
-  tableStatus(this: CasinoWallet, id: string): Record<string, any> {
-    const table = this.channel?.tables?.[id.toLowerCase()];
-    return table
-      ? {
-          tableId: id,
-          bought: table.bought,
-          collected: table.collected,
-          ...(table.alert ? { alert: table.alert } : {}),
-        }
-      : { tableId: id, bought: '0', collected: '0' };
-  }
-  /** A payout from a table is believed with the signature of the host its terms name over a
-   * settlement paying this player exactly that amount, or, unsigned, once the table's deadline has
-   * passed and the casino returns what was left of the pot. */
-  verifyPayout(
-    this: CasinoWallet,
-    payout: {
-      source: string;
-      amount: Integer;
-      terms: TableTerms;
-      settlement?: { message: Settlement; signature: string } | null;
-    },
-  ) {
-    validateTable(payout.terms);
-    if (!same(tableId(this.domain, payout.terms), payout.source)) throw new Error('Payout names another table');
-    if (!payout.settlement) {
-      if (BigInt(payout.terms.expiresAt) * 1000n > BigInt(Date.now()))
-        throw new Error('Payout is not signed by the host of its table');
-      return;
-    }
-    const { message, signature } = payout.settlement;
-    validateSettlement(message);
-    assertSignature(this.domain, SETTLEMENT_TYPES, message, signature, payout.terms.host);
-    const mine = message.payments.find(payment => same(payment.player, this.channel!.opening.player));
-    if (!same(message.tableId, payout.source) || !mine || BigInt(mine.amount) !== BigInt(payout.amount))
-      throw new Error(`The casino offers ${payout.amount} wei where the host awarded ${mine?.amount ?? 0}`);
-  }
-  /** Tell the open game's own server who is playing. The wallet states the page's origin itself, so
-   * a token taken by one game is useless at another's server. It authorizes nothing at the casino. */
-  async identify(this: CasinoWallet, origin: string, nonce: string) {
-    if (!this.channel?.key) throw new Error('Open a channel first');
-    if (!/^0x[0-9a-fA-F]{64}$/.test(nonce)) throw new Error('Invalid nonce');
-    const message = {
-      player: this.channel!.opening.player,
-      channelId: this.channelId,
-      origin,
-      nonce,
-      expiresAt: String(Math.floor(Date.now() / 1000) + 300),
-    };
-    return {
-      message,
-      signature: await this.channelSigner().signTypedData(this.domain, IDENTITY_TYPES, message),
-      player: this.channel!.opening.player,
-      signer: this.channelSigner().address,
-    };
   }
   // --- The bankroll fund -------------------------------------------------------------------
 
@@ -730,7 +628,7 @@ export class ChannelClient extends WalletTransactions {
   }
   /** Turn shares back into money. The signed request is saved before it is sent, so a lost reply is
    * asked for again; the casino's statement says what the shares fetched, and that money is then
-   * collected into the open channel like a table's payout. */
+   * collected into the open channel. */
   async redeem(this: CasinoWallet, shares: Integer) {
     return this.exclusive(async () => {
       this.ready();
@@ -796,9 +694,8 @@ export class ChannelClient extends WalletTransactions {
     });
   }
 
-  /** Collect what tables, the fund and the games this player develops owe them. A table's payout is
-   * checked against the host's signed settlement and the fund's against this wallet's own share
-   * statement before the wallet signs the credit; commission is simply collected. */
+  /** Collect what the fund and the games this player develops owe them. A redemption is checked
+   * against this wallet's own share statement before it signs the credit; commission is simply collected. */
   async collectPayouts(this: CasinoWallet) {
     if (
       this.busy ||
@@ -840,41 +737,9 @@ export class ChannelClient extends WalletTransactions {
         await this.exclusive(() => this.save(undefined, { fund: { ...this.fund, owed: owed.toSpliced(at, 1) } }), {
           wait: true,
         });
-        continue;
       }
-      const id = String(payout.source).toLowerCase();
-      // A table pays the channel that bought into it: its money never arrives as another asset.
-      if (!this.channel.tables?.[id]) continue;
-      try {
-        this.verifyPayout(payout);
-      } catch (error: any) {
-        // A payout nobody entitled signed is recorded for the player; the wallet signs nothing for it.
-        await this.noteTable(id, { alert: error.message });
-        continue;
-      }
-      const saved = this.channel.tables?.[id];
-      collected.push(
-        await this.perform(
-          'payout',
-          { amount: payout.amount, source: id },
-          null,
-          `payout:${id}:${payout.index}`,
-          saved?.game && this.game?.key === saved.game.key ? saved.game : undefined,
-        ),
-      );
     }
     return collected;
-  }
-  async noteTable(this: CasinoWallet, id: string, values: Record<string, unknown>) {
-    await this.exclusive(
-      async () => {
-        const c = this.channel;
-        if (!c?.tables?.[id]) return;
-        c.tables = { ...c.tables, [id]: { ...c.tables[id], ...values } };
-        await this.save();
-      },
-      { wait: true },
-    );
   }
   /** This channel's next round. The casino names the round first and needs no signature for it: the
    * wallet draws its seed only afterwards, and only the round's one secret can settle a bet that

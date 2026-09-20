@@ -150,23 +150,19 @@ export function receiptSummary(
       title:
         receipt.kind === 'transfer'
           ? 'Transfer cancelled'
-          : receipt.kind === 'buyin'
-            ? 'Buy-in declined'
-            : receipt.kind === 'invest'
-              ? 'Investment declined'
-              : 'Bet rejected',
+          : receipt.kind === 'invest'
+            ? 'Investment declined'
+            : 'Bet rejected',
       status:
         receipt.kind === 'transfer'
           ? 'No payment made'
-          : receipt.kind === 'buyin'
-            ? 'Nothing put on the table'
-            : receipt.kind === 'invest'
-              ? 'No shares bought'
-              : 'No wager placed',
+          : receipt.kind === 'invest'
+            ? 'No shares bought'
+            : 'No wager placed',
       tone: 'neutral',
       amount: `0 ${unit}`,
       amountLabel: 'Balance change',
-      description: ['transfer', 'buyin', 'invest'].includes(receipt.kind)
+      description: ['transfer', 'invest'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
         : receipt.wouldHavePaid === undefined
           ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
@@ -202,8 +198,6 @@ export function receiptSummary(
             transfer: 'Payment sent',
             receive: 'Payment received',
             payment: 'Game payment',
-            buyin: 'Bought into a table',
-            payout: 'Table payout',
             invest: 'Invested in the bankroll',
             redeem: 'Shares redeemed',
             divest: 'Bankroll payout',
@@ -217,17 +211,15 @@ export function receiptSummary(
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
       ? 'Deposited'
-      : ['withdrawal', 'receive', 'payout', 'divest', 'earnings', 'faucet'].includes(receipt.kind)
+      : ['withdrawal', 'receive', 'divest', 'earnings', 'faucet'].includes(receipt.kind)
         ? 'Received'
         : receipt.kind === 'invest'
           ? 'Invested'
           : receipt.kind === 'redeem'
             ? 'Owed to you'
-            : receipt.kind === 'buyin'
-              ? 'Held by the casino'
-              : ['transfer', 'payment'].includes(receipt.kind)
-                ? 'Sent'
-                : `${unit} received`;
+            : ['transfer', 'payment'].includes(receipt.kind)
+              ? 'Sent'
+              : `${unit} received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (receipt.kind === 'bet') {
@@ -241,12 +233,10 @@ export function receiptSummary(
     } · Balance ${formatEther(receipt.balance)} ${unit}${receipt.hosted ? ' · ' + HOSTED : ''}`;
   } else if (
     settled &&
-    ['receive', 'withdrawal', 'payout', 'divest', 'earnings', 'faucet'].includes(receipt.kind) &&
+    ['receive', 'withdrawal', 'divest', 'earnings', 'faucet'].includes(receipt.kind) &&
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
-  if (receipt.kind === 'buyin')
-    description = `The casino holds this money until the table's host pays it out, or the table's deadline returns what is left. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'invest')
     description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'redeem')
@@ -257,8 +247,6 @@ export function receiptSummary(
     description = `The casino's faucet paid this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'earnings')
     description = `Commission your games earned, collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
-  if (receipt.kind === 'payout')
-    description = `Paid out of a table by its host. Balance ${formatEther(receipt.balance)} ${unit}`;
   const notice =
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or use the saved transaction details to retry from your funding wallet.'

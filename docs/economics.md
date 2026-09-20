@@ -99,7 +99,7 @@ At a consistent confirmed block, reported bankroll is:
 
     max(0, pool cash - active signed player balances - finalized unpaid claims - accrued unpaid developer commissions - in-flight worst-case reservations - escrow)
 
-Escrow is every [table](protocol.md#tables)'s pot plus every payout awarded but not yet collected. A pot has left its players' signed balances, but it is held for players, not won by the house: a buy-in leaves the bankroll unchanged, and a settlement adds only the casino's half of its rake. A table's rounding dust at its deadline joins the bankroll.
+Escrow is every payout awarded but not yet collected: money that has left the bankroll for a player who has not signed for it yet.
 
 The casino keeps one set of these books per asset; ETH and test coins never add up. Test coins have no chain: their pool cash is ten million test coins plus every coin the faucet has minted, and a claim credits the channel the same amount, so the test bankroll is unchanged by it.
 

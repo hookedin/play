@@ -6,16 +6,13 @@ export const METHODS = [
   'game.receipt',
   'game.bet',
   'game.cancel',
-  'game.buyIn',
-  'game.table',
-  'game.identify',
   'game.payment',
   'game.transfer',
   'game.requestFunds',
 ];
 const methods = new Set(METHODS);
 /** Questions the wallet answers at once. Everything else signs or asks the player, and waits its turn. */
-const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'game.receipt', 'game.table', 'game.identify']);
+const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'game.receipt']);
 /** Requests a game may have waiting for their turn. */
 const MAX_QUEUE = 32;
 /** An error a game can act on: `code` is stable, the message is for people. */
@@ -81,27 +78,6 @@ function validate(data: any) {
     if (params.amount !== undefined) gameAmount(params.amount);
     if (params.reason !== undefined && (typeof params.reason !== 'string' || params.reason.length > 140))
       throw new Error('A funding reason is a string of at most 140 characters.');
-  } else if (data.method === 'game.table') {
-    if (!only(params, ['tableId']) || typeof params.tableId !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.tableId))
-      throw new Error('Invalid table ID.');
-  } else if (data.method === 'game.identify') {
-    if (!only(params, ['nonce']) || typeof params.nonce !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.nonce))
-      throw new Error('Invalid nonce.');
-  } else if (data.method === 'game.buyIn') {
-    // The wallet recomputes the table ID from these terms and signs it into the buy-in.
-    const table = params.table;
-    if (!only(params, ['id', 'table', 'amount'])) throw new Error('Unexpected game request field.');
-    gameOperationKey(params.id);
-    gameAmount(params.amount);
-    if (
-      !object(table) ||
-      !only(table, ['host', 'developer', 'expiresAt', 'nonce']) ||
-      ![table.host, table.developer].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)) ||
-      typeof table.nonce !== 'string' ||
-      !/^0x[0-9a-fA-F]{64}$/.test(table.nonce)
-    )
-      throw new Error('Invalid table.');
-    gameAmount(table.expiresAt);
   } else {
     const fields =
       data.method === 'game.bet'

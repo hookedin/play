@@ -440,17 +440,6 @@ const openHostedDialog = () =>
     decline: 'Keep my own randomness',
     log: 'Shared-round randomness',
   });
-/** May this host pay out the game's tables, with the casino holding the money meanwhile? */
-const openHostDialog = (host: string) =>
-  openConsentDialog({
-    eyebrow: 'PLAYING AGAINST PLAYERS',
-    title: `Let ${active?.manifest.name} run your table?`,
-    reason: `You and the other players put money on a table. The casino holds it, and the game's host, ${host}, says who leaves with what.`,
-    note: 'Money on a table is a promise by the casino: it leaves your playing balance at once and is not protected by your deposit until it is paid back. The host decides how the table\u2019s money is shared among its players and can decide wrongly, but it can never pay out more than the players put in, and your wallet checks every payout against the host\u2019s signature. What a host never pays out returns at the table\u2019s deadline to the players still owed their money. This choice lasts until you leave the game.',
-    allow: 'Allow this host',
-    decline: 'Not now',
-    log: 'Table host',
-  });
 function renderWallet() {
   renderFund();
   if (!wallet.address) return;
@@ -458,9 +447,6 @@ function renderWallet() {
   if (active?.channelId && active.channelId !== wallet.currentId) abandonGame();
   renderHeaderBalance();
   $('casino-balance').textContent = eth(state.balance, networkDefaults.precision);
-  $('in-play').classList.toggle('hidden', !BigInt(state.inPlay || 0));
-  $('in-play').textContent =
-    `Plus ${eth(state.inPlay || '0', networkDefaults.precision)} ETH on open tables, held by the casino.`;
   // Test coins: every wallet has them. The faucet pays once they run low.
   const testBalance = BigInt(state.testBalance || 0);
   $('test-balance').textContent = eth(state.testBalance || '0', 2);
@@ -914,9 +900,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
       if (method === 'wallet.hello') return wallet.gameHello();
       if (method === 'wallet.info') return wallet.gameInfo();
       if (method === 'game.receipt') return wallet.gameReceipt(params.id);
-      if (method === 'game.table') return wallet.tableStatus(params.tableId);
-      // Saying who is playing signs nothing the casino accepts, so it never waits for the wallet.
-      if (method === 'game.identify') return wallet.gameIdentify(params);
       if (uiBusy || wallet.busy) throw gameError('busy', 'The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
         const requested = params.amount === undefined ? undefined : BigInt(params.amount);
@@ -936,15 +919,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
         return wallet.gameBet(params);
       }
       if (method === 'game.cancel') return wallet.gameCancel(params);
-      if (method === 'game.buyIn') {
-        if (!wallet.game?.hosts?.some(host => host.toLowerCase() === params.table.host.toLowerCase())) {
-          if (!(await openHostDialog(params.table.host)))
-            throw gameError('declined', 'You did not allow this host; nothing was put on the table.');
-          if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
-          wallet.allowHost(params.table.host);
-        }
-        return wallet.gameBuyIn(params);
-      }
       if (method === 'game.payment') return wallet.gamePayment(params);
       return wallet.gameTransfer(params);
     },

@@ -1,7 +1,6 @@
-import type { GameIdentity, GameLimit, GameRequest, GameSession, GameBuyIn } from '../protocol/game-types.ts';
+import type { GameIdentity, GameLimit, GameRequest, GameSession } from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { getAddress } from 'ethers';
-import { same } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
 import { gameKey, gameAmount, gameOperationKey } from './game-account.ts';
 import { METHODS, gameError } from './bridge.ts';
@@ -19,7 +18,6 @@ export const gameReceipt = (receipt: any) =>
         outcome: receipt.outcome,
         payout: receipt.payout,
         operationId: receipt.operationId,
-        ...(receipt.tableId === undefined ? {} : { tableId: receipt.tableId, amount: receipt.amount }),
         ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
       }
     : null;
@@ -119,30 +117,6 @@ export class GameSessions extends ChannelClient {
       key: game.key,
       id: request.id,
     });
-  }
-  /** The player accepts that this host pays out the open game's tables, with the casino holding the money. */
-  allowHost(this: CasinoWallet, host: string) {
-    const game = this.requireGame();
-    game.hosts = [...new Set([...(game.hosts || []), getAddress(host)])];
-  }
-  async gameBuyIn(this: CasinoWallet, request: GameBuyIn) {
-    const game = this.requireGame();
-    if (!same(request.table?.developer, game.identity.developer))
-      throw new Error('Table developer differs from the selected game');
-    // Who pays a table out, and that the casino holds the money meanwhile, is the player's choice.
-    if (!game.hosts?.some(host => same(host, request.table.host)))
-      throw gameError('declined', "Allow this host to pay out the game's tables before buying in");
-    return gameReceipt(
-      await this.buyIn(request.table, gameAmount(request.amount), this.gameOperationId(request.id), {
-        key: game.key,
-        id: request.id,
-      }),
-    );
-  }
-  /** Tell the open game's server who is playing; the origin is the game page's own, as this wallet loaded it. */
-  async gameIdentify(this: CasinoWallet, request: { nonce: string }) {
-    const game = this.requireGame();
-    return this.identify(new URL(game.identity.entryURL).origin, request.nonce);
   }
   /** Withdraw this game's hosted bet, or learn its result if the round's owner settled it first. */
   async gameCancel(this: CasinoWallet, request: { id: string }) {

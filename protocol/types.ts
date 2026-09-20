@@ -155,45 +155,6 @@ export interface RoundSeat {
   stake: Integer;
   prizes: Prize[];
 }
-/** A table: players buy in against each other, the casino holds the pot, and the host they named
- * says who is paid. Anyone may buy in until it expires; the host signs who leaves with what. */
-export interface TableTerms {
-  host: string;
-  developer: string;
-  expiresAt: Integer;
-  nonce: string;
-}
-export interface Payment {
-  player: string;
-  amount: Integer;
-}
-/** The host pays players out of the pot and takes the rake. Settlements are numbered from zero and
- * each applies once. */
-export interface Settlement {
-  tableId: string;
-  sequence: Integer;
-  payments: Payment[];
-  rake: Integer;
-}
-/** One player at a table: what they put into the pot and what the host has paid them out of it. */
-export interface TableSeat {
-  player: string;
-  bought: string;
-  paid: string;
-}
-/** The casino's record of a table. The pot sits in its escrow until the host pays it out; what is
- * left at the deadline returns to the players who are still owed their buy-in. */
-export interface TableRow {
-  id: string;
-  terms: TableTerms;
-  /** What the table is played with: what its first buy-in brought. */
-  asset: 'eth' | 'test';
-  status: 'open' | 'closed';
-  pot: string;
-  /** The next settlement the host may sign. */
-  sequence: number;
-  seats: TableSeat[];
-}
 /** The bankroll fund: every share in issue, and how many of them are the house's own capital. */
 export interface FundState {
   /** Fund changes applied so far; each signing-history fund record carries the next number. */
