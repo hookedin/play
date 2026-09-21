@@ -11,6 +11,7 @@ import {
   seedHash,
   plain,
   checkpointEvidence,
+  rejectionCheckpoint,
 } from '../protocol/protocol.ts';
 export async function gameWallet(storage = new MemoryStore()) {
   const owner = Wallet.createRandom(),
@@ -74,7 +75,17 @@ export async function gameWallet(storage = new MemoryStore()) {
       if (path === '/api/metrics') return { bankroll };
       if (path.endsWith('/round')) return { id: (own ||= createRound()) };
       if (!path.endsWith('/operations')) return {};
-      const { request, signature, seed } = body as any;
+      const { request, signature, seed, withdraw, place } = body as any;
+      // Changing the chips on a seat: the bet in the round is declined and the new one takes its place.
+      if (place) {
+        const settled = responses.get(withdraw.request.operationId);
+        if (settled) return { withdrawn: settled };
+        const open = hosted.get(withdraw.request.round);
+        if (open) open.seats = open.seats.filter(s => s.request.operationId !== withdraw.request.operationId);
+        const withdrawn = await decline(withdraw.request);
+        open?.seats.push({ request: place.request, signature: place.signature });
+        return { withdrawn, placed: { status: 'seated', operationId: place.request.operationId } };
+      }
       if (responses.has(request.operationId)) return responses.get(request.operationId);
       const seats = hosted.get(request.round);
       if (seats) {
@@ -84,6 +95,25 @@ export async function gameWallet(storage = new MemoryStore()) {
         return { status: 'seated', operationId: request.operationId };
       }
       return settle(request, signature, seed ?? ZeroHash);
+    };
+    /** The casino declines a bet with a signed checkpoint above it: the balance is unchanged. */
+    const decline = async (request: any) => {
+      const base = wallet.current!,
+        state = rejectionCheckpoint(d, base.state, request);
+      const response = plain({
+        status: 'rejected',
+        reason: 'Bet withdrawn by the player',
+        request,
+        operationId: request.operationId,
+        state,
+        casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
+        developer: null,
+        commission: '0',
+        evidence: checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
+        bankroll,
+      });
+      responses.set(request.operationId, response);
+      return response;
     };
     const settle = async (request: any, signature: string, seed: string) => {
       const base = wallet.current!,

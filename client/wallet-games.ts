@@ -82,14 +82,15 @@ export class GameSessions extends ChannelClient {
     this.requireGame();
     return gameReceipt(await this.getReceipt(this.gameOperationId(id)));
   }
-  /** The only grant of spending authority: how much of the signed balance the open game may risk. */
+  /** The only grant of spending authority: how much of the signed balance the open game may risk.
+   * The limit lives in this tab's memory and signs nothing, so it can be set while an operation is
+   * pending; what that operation has already committed is simply not the player's to allocate. */
   async setGameLimit(this: CasinoWallet, amount: string) {
     const n = gameAmount(amount, false);
     return this.exclusive(async () => {
       this.ready();
       const game = this.requireGame();
-      if (this.pending) throw new Error('Recover the pending operation before changing the limit');
-      if (n > (await this.balance())) throw new Error('The limit exceeds your playing balance');
+      if (n > this.playableBalance()) throw new Error('The limit exceeds your playing balance');
       game.balance = String(n);
       this.render();
     });

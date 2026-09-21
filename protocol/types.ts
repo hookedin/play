@@ -142,7 +142,8 @@ export interface RoundStatus {
   seedHash: string | null;
   /** The seed its host closed the round with. */
   seed: string | null;
-  /** Unix milliseconds after which the casino reveals an open round by itself and rejects its seats. */
+  /** Unix milliseconds after which the casino reveals an open round by itself and rejects its seats.
+   * It is the host's betting window once somebody is seated, and much longer while the round is empty. */
   expiresAt: number | null;
   seats: RoundSeat[];
   secret: string | null;

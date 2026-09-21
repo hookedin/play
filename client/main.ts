@@ -309,7 +309,7 @@ function renderFundDialog() {
   $('fund-title').textContent = channelOpen() ? `How much may ${name} play with?` : `${name} needs money to play`;
   if (dialog.dataset.mode !== 'fund') return;
   $('fund-asset').textContent = units();
-  const total = BigInt(wallet.channel!.state.balance),
+  const total = wallet.playableBalance(),
     limit = BigInt(wallet.game?.balance || '0'),
     stops = limitStops(total),
     slider = $<HTMLInputElement>('fund-slider');
@@ -339,8 +339,7 @@ function renderFundDialog() {
     : `${formatEther(total - amount)} ${units()} stays in your wallet.` +
       (limit > 0n ? ` The game has ${formatEther(limit)} ${units()} now.` : '');
   $('fund-help').classList.toggle('check-failed', !valid);
-  $<HTMLButtonElement>('fund-confirm').disabled =
-    !valid || amount === limit || uiBusy || wallet.busy || Boolean(wallet.pending);
+  $<HTMLButtonElement>('fund-confirm').disabled = !valid || amount === limit || uiBusy || wallet.busy;
   $('fund-confirm').textContent =
     valid && amount === 0n && limit > 0n
       ? 'Take it all back'
@@ -364,7 +363,7 @@ function openFundDialog({ amount, reason, asked = false }: { amount?: bigint; re
       ? 'Your channel is not open for play yet. Play with test coins meanwhile, or check the channel in My wallet.'
       : 'Your test coins are not ready: the casino could not be reached. Try again in a moment, or set up your wallet to play with ETH.';
   if (channelOpen()) {
-    const total = BigInt(wallet.channel!.state.balance),
+    const total = wallet.playableBalance(),
       test = wallet.playing === 'test',
       limit = BigInt(wallet.game?.balance || '0'),
       requested = amount && amount > 0n ? limit + amount : 0n,
@@ -903,7 +902,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
       if (uiBusy || wallet.busy) throw gameError('busy', 'The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
         const requested = params.amount === undefined ? undefined : BigInt(params.amount);
-        if (wallet.pending) throw gameError('pending-operation', 'Recover the pending operation before adding money.');
         const amount = await openFundDialog({ amount: requested, reason: params.reason, asked: true });
         if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
         return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
