@@ -21,7 +21,7 @@ import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
 import { json, verifyEvidence, FAUCET_BELOW } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
-import { activityJSON, createActivityEntry, filterActivity, receiptSummary } from './activity.ts';
+import { activityJSON, createActivityEntry, filterActivity, receiptSummary, receiptUnit } from './activity.ts';
 import { createGameLog, logAsset } from './game-log.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import type { LogKind } from './game-log.ts';
@@ -207,10 +207,11 @@ function renderFund() {
     f && BigInt(f.totalShares) > 0n
       ? `${(Number((BigInt(f.equity) * 1000000n) / BigInt(f.totalShares)) / 1000000).toFixed(6)} ETH a share`
       : '1.000000 ETH a share';
-  $('fund-house').textContent =
-    f && BigInt(f.totalShares) > 0n
+  $('fund-house').textContent = !f
+    ? '—'
+    : BigInt(f.totalShares) > 0n
       ? `${(Number((BigInt(f.houseShares) * 10000n) / BigInt(f.totalShares)) / 100).toFixed(2)}%`
-      : '—';
+      : '100.00%';
   $('fund-note').textContent = wallet.fund?.alert
     ? `Your wallet refused a share statement: ${wallet.fund.alert}`
     : f && BigInt(f.overdrawn) > 0n
@@ -236,15 +237,22 @@ function navigate(page: string, push = true, path = pagePaths[page]) {
 }
 /** Every page has a URL: `/`, `/wallet`, `/activity`, `/@<alias>` or `/~<uname>` for a player,
  * the same and `/<game>` for a game they publish, and `/games/custom?manifest=<url>`. */
-function parseRoute(url: URL): string | GameRoute | { profile: string } {
+function parseRoute(url: URL): string | GameRoute | { profile: string } | { unknown: string } {
   const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(url.pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (url.pathname === '/games/custom') return { manifest: url.searchParams.get('manifest') || '' };
-  return Object.entries(pagePaths).find(([, path]) => path === url.pathname)?.[0] || 'library';
+  const page = Object.entries(pagePaths).find(([, path]) => path === url.pathname)?.[0];
+  if (page) return page;
+  return url.pathname === '/' ? 'library' : { unknown: url.pathname };
 }
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
   if (typeof target === 'string') return navigate(target, push);
+  if ('unknown' in target) {
+    navigate('library', false, '/');
+    history.replaceState(null, '', '/');
+    return void toast(`Nothing lives at ${target.unknown}. A player is @alias or ~uname.`, true);
+  }
   if ('profile' in target) return void openProfile(target.profile, push);
   if (active && active.path === gamePath(target)) return showPage('play');
   const opened = await task(async () => {
@@ -274,7 +282,7 @@ function renderHeaderBalance() {
   const state = wallet.publicState,
     test = wallet.playing === 'test';
   $('top-balance').toggleAttribute('data-test', test);
-  $('header-balance-label').textContent = test ? 'Test coins' : active ? 'In wallet' : 'Playing';
+  $('header-balance-label').textContent = active ? 'In wallet' : 'Playing';
   $('header-balance').textContent =
     `${eth(active ? state.playAvailable : state.playBalance, test ? 2 : networkDefaults.precision)} ${units()}`;
 }
@@ -385,8 +393,9 @@ function openFundDialog({ amount, reason, asked = false }: { amount?: bigint; re
       requested = amount && amount > 0n ? limit + amount : 0n,
       // Ten test coins is a fair first limit; ETH follows the network's default.
       remembered = BigInt(localStorage.getItem(limitSetting()) || (test ? 10n ** 19n : networkDefaults.total)),
-      // The player's own visit shows the limit as it is; a game's request suggests enough for it.
-      suggested = !asked && limit > 0n ? limit : remembered > requested ? remembered : requested,
+      // The player's own visit shows the limit as it is, or what they last chose; a game's request
+      // suggests exactly what it asked for, never more.
+      suggested = asked && requested ? requested : limit > 0n ? limit : remembered,
       choose = (value: bigint) => formatEther(value > total ? total : value);
     $<HTMLInputElement>('fund-amount').value = choose(suggested);
     const presets: [string, bigint][] = [
@@ -450,7 +459,7 @@ const openHostedDialog = () =>
     title: `Join ${active?.manifest.name}'s shared rounds?`,
     reason:
       "Everyone at the table bets on one result, so its randomness comes from the game's host instead of your wallet.",
-    note: 'In your own bets neither you nor the casino can choose the result. Here the host and the casino could choose it together; neither can alone. Your wallet still verifies every result and marks these bets in your activity. This choice lasts until you leave the game.',
+    note: 'In your own bets neither you nor the casino can choose the result. Here the host and the casino could choose it together; neither can alone. Your wallet still verifies every result and marks these bets in your activity. Allowing this lasts until you leave the game; refusing asks again on your next bet.',
     allow: 'Allow shared rounds',
     decline: 'Keep my own randomness',
     log: 'Shared-round randomness',
@@ -468,19 +477,30 @@ function renderWallet() {
   $('test-balance').textContent = eth(state.testBalance || '0', 2);
   $<HTMLButtonElement>('test-faucet').disabled =
     uiBusy || wallet.busy || wallet.playing !== 'test' || testBalance >= FAUCET_BELOW;
+  // A disabled control is the hardest kind to act on, so each one says what it is waiting for.
+  $('test-faucet').title =
+    wallet.playing !== 'test'
+      ? 'Play with test coins to claim more.'
+      : testBalance >= FAUCET_BELOW
+        ? `The faucet pays once you are under ${eth(String(FAUCET_BELOW), 2)} test coins.`
+        : '';
   $('test-switch').textContent = wallet.playing === 'test' ? 'Play with my ETH' : 'Play with test coins';
   $<HTMLButtonElement>('test-switch').disabled =
     uiBusy || wallet.busy || Boolean(active) || (wallet.playing === 'test' && !ethOpen());
+  $('test-switch').title = active
+    ? 'Leave the open game to change what you play with.'
+    : wallet.playing === 'test' && !ethOpen()
+      ? 'Open a funded ETH channel to play with ETH.'
+      : '';
   const earnings = state.developerEarnings,
-    earningsUnit = wallet.playing === 'test' ? 'TEST' : 'ETH',
-    earningsPlaces = wallet.playing === 'test' ? 2 : networkDefaults.precision;
+    earningsUnit = wallet.playing === 'test' ? 'TEST' : 'ETH';
   // The tally is the one for what this tab plays with, and it is collected into that channel.
   for (const id of ['developer-earnings', 'test-earnings']) {
     const shown = (id === 'test-earnings') === (wallet.playing === 'test');
     $(id).classList.toggle('hidden', !shown || !BigInt(earnings?.earned || 0));
     $(id).textContent =
       shown && earnings
-        ? `Your games have earned ${eth(earnings.earned, earningsPlaces)} ${earningsUnit} in commission; ${eth(earnings.collected, earningsPlaces)} ${earningsUnit} of it is collected into this balance.`
+        ? `Your games have earned ${formatEther(earnings.earned)} ${earningsUnit} in commission; ${formatEther(earnings.collected)} ${earningsUnit} of it is collected into this balance.`
         : '';
   }
   $('native-balance').textContent = eth(state.nativeBalance, networkDefaults.precision);
@@ -513,7 +533,7 @@ function renderWallet() {
   const receiveStatus = !ready
     ? 'Connecting to your wallet…'
     : nativeBalance > 0n
-      ? `${formatEther(nativeBalance)} ETH in your wallet.${aboveReserve ? ' Continue with step 2.' : ' Add more ETH to cover the gas reserve and a deposit.'}`
+      ? `${eth(nativeBalance, networkDefaults.precision)} ETH in your wallet.${aboveReserve ? ' Continue with step 2.' : ' Add more ETH to cover the gas reserve and a deposit.'}`
       : 'Waiting for ETH at this address.';
   if ($('receive-status').textContent !== receiveStatus) $('receive-status').textContent = receiveStatus;
   $('receive-check').textContent = observed
@@ -524,15 +544,20 @@ function renderWallet() {
     nativeBalance === 0n
       ? 'Receive ETH in step 1 to get started.'
       : !aboveReserve
-        ? `Your ${formatEther(nativeBalance)} ETH is reserved for gas. Add ETH to fund your playing balance.`
+        ? `Your ${eth(nativeBalance, networkDefaults.precision)} ETH is reserved for gas. Add ETH to fund your playing balance.`
         : depositTooLarge
-          ? `Choose a smaller amount or select Max to keep ${formatEther(wallet.gasReserve)} ETH plus the deposit fee.`
+          ? `Choose a smaller amount or select Max to keep ${eth(wallet.gasReserve, networkDefaults.precision)} ETH plus the deposit fee.`
           : maxDepositEstimate
-            ? `Maximum to add: ${formatEther(maxDepositEstimate.amount)} ETH. Deposit fee: up to ${formatEther(maxDepositEstimate.maxFee)} ETH.`
-            : `In your wallet: ${formatEther(nativeBalance)} ETH. Max calculates what you can add after the gas reserve and fee.`;
+            ? `Maximum to add: ${eth(maxDepositEstimate.amount, networkDefaults.precision)} ETH. Deposit fee: up to ${eth(maxDepositEstimate.maxFee, networkDefaults.precision)} ETH.`
+            : `In your wallet: ${eth(nativeBalance, networkDefaults.precision)} ETH. Max calculates what you can add after the gas reserve and fee.`;
+  // A seat in a shared round is the normal way to wait for a spin, and the open game already shows it
+  // with its own "take my bet back". Offering unilateral close over the table, and shifting the
+  // layout under the player's next click, would make every ordinary round look like an emergency.
+  const seatedInOpenGame =
+    Boolean(wallet.pending?.hosted) && Boolean(active) && wallet.pending!.game?.key === wallet.game?.key;
   $('pending-banner').classList.toggle(
     'hidden',
-    !(wallet.pending || wallet.needsOpening || wallet.transactionIntent) || busy,
+    !(wallet.pending || wallet.needsOpening || wallet.transactionIntent) || busy || seatedInOpenGame,
   );
   const challengeExpired = Date.now() / 1000 >= Number(state.deadline);
   $('challenge-banner').classList.toggle('hidden', !state.needsChallenge);
@@ -632,14 +657,15 @@ function renderActivity() {
     if (!previous || previous.querySelector('.activity-payload')?.textContent !== payload) {
       const operation = receipt.proof?.step?.operation;
       const channelId = operation?.channelId || receipt.proof?.base?.channelId;
-      const gameName = wallet.game && receipt.game?.key === wallet.game.key ? wallet.game.identity.name : undefined;
+      const gameName = receipt.game?.name;
       const presentation = receiptSummary(receipt);
       const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
       if (channelId) facts.push(['Channel', channelId]);
       if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
       if (receipt.game?.revision !== undefined) facts.push(['Game revision', String(receipt.game.revision)]);
       if (receipt.developer) facts.push(['Developer', receipt.developer]);
-      if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
+      if (receipt.commission !== undefined)
+        facts.push(['Commission', `${formatEther(receipt.commission)} ${receiptUnit(receipt)}`]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
       if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
       item = createActivityEntry({
@@ -664,7 +690,9 @@ let claimsShown = '';
 const claimRecipients = new Map<string, string>();
 function renderClaims() {
   const state = wallet.publicState;
-  $('principal-balance').textContent = `${formatEther(state.protectedDeposit || '0')} ETH`;
+  const openChannel = Boolean(state.channelId);
+  $('principal-balance').textContent = `${eth(state.protectedDeposit || '0', networkDefaults.precision)} ETH`;
+  for (const id of ['channel-deposit-note', 'channel-observation']) $(id).classList.toggle('hidden', !openChannel);
   $('channel-status').textContent = state.channelId
     ? `Channel ${short(state.channelId)} · ${Number(state.channelStatus) === 2 ? 'Closing' : Number(state.channelStatus) === 1 ? 'Open' : 'Opening'}`
     : wallet.missingChannel
@@ -672,9 +700,11 @@ function renderClaims() {
       : 'No open channel';
   $('challenge-deadline').textContent = Number(state.deadline)
     ? `Challenge deadline: ${new Date(Number(state.deadline) * 1000).toLocaleString()}`
-    : 'Check this wallet regularly while your channel is open. A stale closure must be challenged on-chain within 24 hours of starting. Keep current recovery evidence.';
+    : openChannel
+      ? 'Check this wallet regularly while your channel is open. A stale closure must be challenged on-chain within 24 hours of starting. Keep current recovery evidence.'
+      : 'Claims below hold what a closed channel is owed. Collect them whenever you like; unpaid winnings stay claimable.';
   $('channel-observation').textContent =
-    `Last verified: ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'unavailable — refresh before acting'} · Saved sequence ${state.savedSequence || '0'} · Proposed sequence ${state.closingSequence || '0'} · Balance at risk ${formatEther(state.balanceAtRisk || '0')} ETH${state.challengePending ? ' · Challenge transaction pending' : ''}`;
+    `Last verified: ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'unavailable — refresh before acting'} · Saved sequence ${state.savedSequence || '0'} · Proposed sequence ${state.closingSequence || '0'} · Balance at risk ${eth(state.balanceAtRisk || '0', networkDefaults.precision)} ETH${state.challengePending ? ' · Challenge transaction pending' : ''}`;
   $<HTMLButtonElement>('channel-export').disabled = !wallet.current || uiBusy || wallet.busy;
   $<HTMLButtonElement>('channel-start-close').disabled =
     !wallet.current || Number(state.channelStatus) !== 1 || uiBusy || wallet.busy;
@@ -689,8 +719,8 @@ function renderClaims() {
   // The wallet re-renders on every observation. Rebuild the rows only when they differ, so a recipient
   // address being typed keeps its text and focus.
   const describe = (claim: any) =>
-    `${short(claim.channelId)} · Due ${formatEther(claim.amount)} ETH · Received ${formatEther(claim.paid)} ETH · Unpaid ${formatEther(BigInt(claim.amount) - BigInt(claim.paid))} ETH` +
-    ` · Protected principal ${formatEther(claim.protectedRemaining)} ETH · Unpaid winnings ${formatEther(claim.winningsRemaining)} ETH · Winnings allocated ${formatEther(claim.allocatedWinnings || '0')} ETH` +
+    `${short(claim.channelId)} · Due ${eth(claim.amount, networkDefaults.precision)} ETH · Received ${eth(claim.paid, networkDefaults.precision)} ETH · Unpaid ${eth(BigInt(claim.amount) - BigInt(claim.paid), networkDefaults.precision)} ETH` +
+    ` · Protected principal ${eth(claim.protectedRemaining, networkDefaults.precision)} ETH · Unpaid winnings ${eth(claim.winningsRemaining, networkDefaults.precision)} ETH · Winnings allocated ${eth(claim.allocatedWinnings || '0', networkDefaults.precision)} ETH` +
     (claim.observedAt ? ` · Checked ${new Date(claim.observedAt).toLocaleTimeString()}` : '');
   const visible = claims.slice(0, claimLimit);
   const shown = JSON.stringify([
@@ -714,8 +744,10 @@ function renderClaims() {
     collect.disabled = wallet.busy || uiBusy || BigInt(claim.amount) === BigInt(claim.paid);
     collect.addEventListener('click', () =>
       task(async () => {
+        const collected = BigInt(claim.amount) - BigInt(claim.paid);
         await wallet.claim(claim.channelId);
         renderClaims();
+        toast(`Collected ${eth(collected, networkDefaults.precision)} ETH to your wallet address.`);
       }),
     );
     const destination = document.createElement('input');
@@ -729,8 +761,11 @@ function renderClaims() {
     redirect.disabled = collect.disabled;
     redirect.addEventListener('click', () =>
       task(async () => {
-        await wallet.claim(claim.channelId, destination.value.trim());
+        const recipient = destination.value.trim();
+        const collected = BigInt(claim.amount) - BigInt(claim.paid);
+        await wallet.claim(claim.channelId, recipient);
         renderClaims();
+        toast(`Collected ${eth(collected, networkDefaults.precision)} ETH to ${short(recipient)}.`);
       }),
     );
     const evidence = document.createElement('button');
@@ -788,8 +823,21 @@ async function refreshActivity() {
   }
 }
 
+/** Files a player picks are read here, so a damaged one says so instead of showing a parser's error. */
+async function readJSONFile(file: File, what: string) {
+  try {
+    return JSON.parse(await file.text());
+  } catch {
+    throw new Error(`That file is not a ${what}. Pick the JSON file this wallet wrote.`);
+  }
+}
 function safeURL(value: string, base: string | undefined = undefined) {
-  const url = new URL(value, base);
+  let url;
+  try {
+    url = new URL(value, base);
+  } catch {
+    throw new Error('Enter the full URL of the game manifest, starting with https://.');
+  }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('Games must use an HTTP or HTTPS URL without credentials.');
   return url;
@@ -824,22 +872,37 @@ async function readManifest(response: Response) {
       text += decoder.decode(value, { stream: true });
     }
     text += decoder.decode();
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('That URL does not answer with a game manifest. It must serve the manifest JSON itself.');
+    }
   } finally {
     reader.releaseLock();
   }
 }
 
-async function loadGame(url: string, gameRoute: GameRoute, push = true) {
+/**
+ * Fetch a manifest and check everything the wallet needs before it will frame the game. Opening a
+ * game and publishing one ask the same question, so a game published from this wallet is one this
+ * wallet could open.
+ */
+async function fetchGame(url: string) {
   const manifestURL = safeURL(url);
   // The game keeps its own origin, so it may persist its round state at its host. A same-origin frame
   // could remove its own sandbox and read the wallet's storage, so the wallet's origin is never framed.
   if (manifestURL.origin === location.origin) throw new Error('Games cannot be served from the wallet’s own origin.');
-  const response = await fetch(manifestURL, {
-    credentials: 'omit',
-    cache: 'no-store',
-    signal: AbortSignal.timeout(12_000),
-  });
+  let response;
+  try {
+    response = await fetch(manifestURL, {
+      credentials: 'omit',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch {
+    // A host that is down, a name that does not resolve, and a missing CORS header all land here.
+    throw new Error(`${manifestURL.host} did not answer. Check the URL, that the host is up, and its CORS headers.`);
+  }
   if (!response.ok) throw new Error('The game manifest could not be loaded. Check its URL and CORS headers.');
   const manifest = await readManifest(response);
   if (
@@ -851,11 +914,21 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     typeof manifest.developer !== 'string'
   )
     throw new Error('A game manifest needs a name, entry URL, and developer address.');
-  const developer = getAddress(manifest.developer);
+  let developer;
+  try {
+    developer = getAddress(manifest.developer);
+  } catch {
+    throw new Error(`The manifest's developer, ${String(manifest.developer).slice(0, 60)}, is not an address.`);
+  }
   if (developer === ZeroAddress) throw new Error('The developer fee recipient cannot be the zero address.');
   const entry = safeURL(manifest.entry, response.url);
   if (entry.origin === location.origin || new URL(response.url).origin === location.origin)
     throw new Error('Games cannot be served from the wallet’s own origin.');
+  return { manifestURL, manifest, developer, entry };
+}
+
+async function loadGame(url: string, gameRoute: GameRoute, push = true) {
+  const { manifestURL, manifest, developer, entry } = await fetchGame(url);
   closeGame();
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -932,7 +1005,10 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
       if (method === 'game.bet') {
         if (params.round && !wallet.game?.hostedRounds) {
           if (!(await openHostedDialog()))
-            throw gameError('declined', "You kept this wallet's own randomness; the shared round was not joined.");
+            throw gameError(
+              'declined',
+              "You kept this wallet's own randomness, so no bet was placed. This game only runs shared rounds: bet again and allow them to play.",
+            );
           if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
           wallet.allowHostedRounds();
         }
@@ -945,7 +1021,11 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     onError: message => toast(message, true),
   });
   frame.src = entry.href;
-  $('frame-slot').replaceChildren(frame);
+  const loading = document.createElement('p');
+  loading.className = 'game-loading';
+  loading.textContent = `Loading ${manifest.name}…`;
+  frame.addEventListener('load', () => loading.remove(), { once: true });
+  $('frame-slot').replaceChildren(loading, frame);
   showPage('play');
   if (push && location.pathname + location.search !== path) history.pushState(null, '', path);
   renderGameAccount();
@@ -1018,6 +1098,7 @@ async function openProfile(name: string, push = true) {
   $('profile-stats').replaceChildren();
   const games = $('profile-games');
   games.textContent = 'Loading…';
+  $('profile-games-heading').classList.remove('hidden');
   navigate('profile', push, profilePath(name));
   try {
     const profile = await wallet.api(`/api/players/${name}`);
@@ -1049,6 +1130,8 @@ async function openProfile(name: string, push = true) {
   } catch (error: any) {
     $('profile-since').textContent = error.code === 'not-found' ? 'Nobody goes by that name.' : error.message;
     games.replaceChildren();
+    // Nobody is here, so neither is anything of theirs.
+    $('profile-games-heading').classList.add('hidden');
   }
 }
 /** The library is reloaded whenever what this account publishes changes. */
@@ -1085,11 +1168,13 @@ function renderProfile() {
       remove.className = 'text-button';
       remove.type = 'button';
       remove.textContent = 'Remove';
-      remove.disabled = uiBusy || !funded;
+      remove.title = `Take ${name}/${game.name} out of the library`;
+      remove.disabled = uiBusy;
       remove.addEventListener('click', () =>
         task(async () => {
           await wallet.publishGame(game.name, null);
           await loadLibrary();
+          toast(`${name}/${game.name} is no longer published.`);
         }),
       );
       row.append(label, remove);
@@ -1127,7 +1212,7 @@ $<HTMLFormElement>('custom-form').addEventListener('submit', event => {
 $<HTMLButtonElement>('setup-wallet').addEventListener('click', () =>
   task(async () => {
     await wallet.setupDemo();
-    toast('1 test ETH deposited. Choose a game to play.');
+    toast('Demo ETH added and a channel opened. Choose a game to play.');
   }),
 );
 $<HTMLFormElement>('fund-form').addEventListener('submit', event => {
@@ -1140,7 +1225,7 @@ $<HTMLFormElement>('fund-form').addEventListener('submit', event => {
     await wallet.setGameLimit(String(amount));
     localStorage.setItem(limitSetting(), String(amount));
     logGameActivity('Spending limit set; the game may risk it until you leave', wallet.game);
-    toast(`${active.manifest.name} may play with up to ${formatEther(amount)} ETH.`);
+    toast(`${active.manifest.name} may play with up to ${formatEther(amount)} ${units()}.`);
     $<HTMLDialogElement>('fund-dialog').close(String(amount));
   });
 });
@@ -1193,7 +1278,12 @@ $<HTMLButtonElement>('test-faucet').addEventListener('click', () =>
 );
 // Outside a game there is nothing to restart: the choice is what the next game plays with.
 $<HTMLButtonElement>('test-switch').addEventListener('click', () =>
-  task(() => wallet.setPlaying(wallet.playing === 'test' ? 'eth' : 'test')),
+  task(async () => {
+    const next = wallet.playing === 'test' ? 'eth' : 'test';
+    await wallet.setPlaying(next);
+    // Real money and play money look alike on this page; say which one is now in play.
+    toast(next === 'test' ? 'Now playing with test coins. Nothing real is won or lost.' : 'Now playing with your ETH.');
+  }),
 );
 $<HTMLButtonElement>('fund-faucet').addEventListener('click', () =>
   task(async () => {
@@ -1347,7 +1437,7 @@ $<HTMLInputElement>('channel-import').addEventListener('change', event => {
   if (file)
     void task(async () => {
       closeGame();
-      await wallet.importEvidence(JSON.parse(await file.text()));
+      await wallet.importEvidence(await readJSONFile(file, 'recovery bundle'));
       toast('Recovery evidence verified and imported.');
     });
 });
@@ -1378,9 +1468,15 @@ $<HTMLButtonElement>('connect-browser').addEventListener('click', () =>
 $<HTMLButtonElement>('export-key').addEventListener('click', () =>
   task(async () => {
     const field = $<HTMLTextAreaElement>('exported-key');
-    field.classList.toggle('hidden');
-    field.value = field.classList.contains('hidden') ? '' : wallet.exportKey();
-    $<HTMLButtonElement>('export-key').textContent = field.classList.contains('hidden')
+    const hiding = !field.classList.contains('hidden');
+    if (
+      !hiding &&
+      !confirm('Show this wallet’s private key? Anyone who sees it can take everything this wallet holds.')
+    )
+      return;
+    field.classList.toggle('hidden', hiding);
+    field.value = hiding ? '' : wallet.exportKey();
+    $<HTMLButtonElement>('export-key').textContent = hiding
       ? 'Show browser wallet private key'
       : 'Hide browser wallet private key';
   }),
@@ -1418,7 +1514,9 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
       url = $<HTMLInputElement>('game-url-input');
     const published = name.value.trim();
     if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-    await wallet.publishGame(published, safeURL(url.value.trim()).href);
+    // Anyone who opens this card has to be able to play it, so it is loaded before it is published.
+    const { manifestURL } = await fetchGame(url.value.trim());
+    await wallet.publishGame(published, manifestURL.href);
     name.value = url.value = '';
     await loadLibrary();
     toast(`Published at ${showName(wallet)}/${published}.`);
@@ -1489,7 +1587,7 @@ try {
   await route();
 } catch (error: any) {
   $('connection-banner').textContent =
-    `${error.shortMessage || error.message} Check Connected services in My wallet, then reload this client.`;
+    `${error.shortMessage || error.message} Reload this client; if it persists, check Connected services in My wallet.`;
   $('connection-banner').classList.add('warning');
   for (const id of ['setup-wallet', 'deposit', 'withdraw', 'connect-browser', 'import-wallet'])
     $<HTMLButtonElement>(id).disabled = true;
@@ -1513,7 +1611,7 @@ $<HTMLInputElement>('restore-backup').addEventListener('change', () =>
     const file = $<HTMLInputElement>('restore-backup').files?.[0];
     if (!file) return;
     if (file.size > 24 * 1024 * 1024) throw new Error('Backup exceeds 24 MiB');
-    await wallet.restoreBackup(JSON.parse(await file.text()), $<HTMLInputElement>('backup-password').value);
+    await wallet.restoreBackup(await readJSONFile(file, 'wallet backup'), $<HTMLInputElement>('backup-password').value);
     $<HTMLInputElement>('backup-password').value = '';
     $<HTMLInputElement>('restore-backup').value = '';
     toast('Backup restored. Check the channel status and recover any pending operation.');

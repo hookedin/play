@@ -140,11 +140,12 @@ export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
 }
 /** A hosted round's seed was its host's: the one bet whose fairness also rests on the host. */
 const HOSTED = 'Shared round: the game host drew the randomness.';
+/** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
+export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
 export function receiptSummary(
   receipt: any,
 ): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
-  // A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH.
-  const unit = receipt.asset === 'test' ? 'TEST' : 'ETH';
+  const unit = receiptUnit(receipt);
   if (receipt.status === 'rejected')
     return {
       title:
@@ -219,7 +220,9 @@ export function receiptSummary(
             ? 'Owed to you'
             : ['transfer', 'payment'].includes(receipt.kind)
               ? 'Sent'
-              : `${unit} received`;
+              : receipt.kind === 'closure'
+                ? 'Claim recorded'
+                : `${unit} received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (receipt.kind === 'bet') {
@@ -243,6 +246,10 @@ export function receiptSummary(
     description = `Sold ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. Your wallet collects the money into your open channel.`;
   if (receipt.kind === 'divest')
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
+  if (receipt.kind === 'payment')
+    description = `An extra wager this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
+  if (receipt.kind === 'transfer')
+    description = `Paid to this game's developer. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'faucet')
     description = `The casino's faucet paid this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'earnings')

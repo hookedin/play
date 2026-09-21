@@ -935,7 +935,7 @@ main {
   .hero-art {
     width: 220px;
     transform: scale(0.77);
-    margin-right: -20px;
+    margin-right: 0;
   }
   .section-note {
     display: none;
@@ -1041,7 +1041,7 @@ main {
   }
   .hero-art {
     position: absolute;
-    right: -27px;
+    right: 0;
     top: 13px;
     width: 147px;
     height: 158px;
@@ -2231,4 +2231,25 @@ html:has(dialog[open]) {
 }
 .fund-forms .button {
   margin-top: 10px;
+}
+
+/* Two separate actions, not one sentence: keep them visibly apart. */
+.text-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+/* Until the framed game paints, the viewport is blank; say which game is on its way. */
+.game-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  margin: 0;
+  color: var(--muted);
+  pointer-events: none;
+}
+.game-viewport {
+  position: relative;
 }

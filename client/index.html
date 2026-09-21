@@ -40,7 +40,7 @@
         <div class="topbar-wallet">
           <button id="top-balance" class="balance-button" data-page="wallet">
             <span class="eth-symbol">◆</span><span id="header-balance-label" class="header-balance-label">Playing</span
-            ><span id="header-balance">— ETH</span><span class="muted">⌄</span></button
+            ><span id="header-balance">— ETH</span></button
           ><button id="open-deposit" class="button primary compact" data-page="wallet" data-receive>
             Deposit ETH <span>↓</span>
           </button>
@@ -168,7 +168,9 @@
         <section id="page-wallet" class="page hidden">
           <div class="eyebrow">YOURS TO CONTROL</div>
           <h1>My wallet<span class="heading-dot">.</span></h1>
-          <p class="intro wallet-intro">Receive ETH at your wallet address, then choose how much to use for games.</p>
+          <p class="intro wallet-intro">
+            Every wallet starts with test coins and can play at once. Receive ETH here to play with real money.
+          </p>
           <div class="funding-balances">
             <div class="wallet-balance-card wallet-cash-card">
               <div class="eyebrow">WALLET FUNDS</div>
@@ -176,9 +178,9 @@
               <p>ETH received at your wallet address</p>
             </div>
             <div class="wallet-balance-card">
-              <div class="eyebrow">PLAYING BALANCE</div>
+              <div class="eyebrow">ETH BALANCE</div>
               <div class="large-amount"><span id="casino-balance">—</span><small>ETH</small></div>
-              <p>Total balance, including money in games</p>
+              <p>Your signed channel balance, including money in games</p>
               <p id="developer-earnings" class="hidden"></p>
             </div>
             <div class="wallet-balance-card">
@@ -188,7 +190,7 @@
                 The casino's play money: the same games at the same odds, nothing real won or lost. Every wallet has
                 some, funded or not.
               </p>
-              <p>
+              <p class="text-button-row">
                 <button id="test-faucet" class="text-button" type="button">Claim 100 test coins</button>
                 <button id="test-switch" class="text-button" type="button"></button>
               </p>
@@ -202,8 +204,8 @@
             </h2>
             <p id="wallet-uname" class="game-handle"></p>
             <p>
-              The only thing games, shared rounds and the public tables ever learn about you. Everything else — your
-              address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
+              The only thing games, shared rounds and the public player list ever learn about you. Everything else —
+              your address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
               <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
               a shorter name you are shown by instead. Both always find you.
             </p>
@@ -374,7 +376,7 @@
           <section class="surface wallet-settings">
             <h2>Channel and withdrawal claims</h2>
             <p id="channel-status">No open channel</p>
-            <p>
+            <p id="channel-deposit-note">
               Original protected deposit: <strong id="principal-balance">0 ETH</strong>. Gambling losses reduce the
               amount returned. Winnings are signed balances awaiting cash-out from the shared house bankroll.
             </p>
@@ -401,6 +403,10 @@
             <div class="identity-actions">
               <button id="connect-browser" class="button secondary small">Connect browser wallet ↗</button
               ><button id="export-key" class="text-button">Show browser wallet private key</button>
+              <p class="settings-note">
+                Anyone who sees this key can take everything this wallet holds. Show it only somewhere private, and
+                never paste it into a site, a message or a support request.
+              </p>
             </div>
             <textarea
               id="exported-key"
@@ -475,7 +481,7 @@
           <p id="profile-uname" class="game-handle"></p>
           <p id="profile-since" class="intro"></p>
           <div id="profile-stats" class="funding-balances"></div>
-          <div class="section-heading">
+          <div id="profile-games-heading" class="section-heading">
             <h2>Games published under this player</h2>
             <span class="section-note">Anyone may play them with their own wallet.</span>
           </div>

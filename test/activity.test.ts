@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activityJSON, receiptSummary } from '../client/activity.ts';
+import { activityJSON, receiptSummary, receiptUnit } from '../client/activity.ts';
 
 test('bet summaries show the payout against the stake and retain exact wei amounts', () => {
   const receipt = {
@@ -44,9 +44,12 @@ test('closures and actual collections remain distinct from off-chain transfers',
   assert.equal(closure.amount, '0.0 ETH');
   assert.match(closure.notice!, /Collect available funds separately/);
   assert.equal(receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }).amountLabel, 'Received');
-  const transfer = receiptSummary({ kind: 'transfer', amount: '123', status: 'signed' });
+  const transfer = receiptSummary({ kind: 'transfer', amount: '123', status: 'signed', balance: '456' });
   assert.equal(transfer.amountLabel, 'Sent');
   assert.equal(transfer.status, 'Signed off-chain');
+  assert.match(transfer.description!, /Paid to this game's developer\. Balance 0\.000000000000000456 ETH/);
+  const payment = receiptSummary({ kind: 'payment', amount: '123', status: 'signed', balance: '456' });
+  assert.match(payment.description!, /extra wager this game charged/);
 });
 
 test('diagnostic JSON handles bigint, malformed payloads and explicit preview truncation', () => {
@@ -57,4 +60,23 @@ test('diagnostic JSON handles bigint, malformed payloads and explicit preview tr
   const long = { data: 'x'.repeat(100) };
   assert.match(activityJSON(long, 30), /truncated at 30 characters/);
   assert.deepEqual(JSON.parse(activityJSON(long)), long, 'Saved receipt JSON is never truncated by default');
+});
+
+test('a receipt is read in the asset of the channel that signed it', () => {
+  assert.equal(receiptUnit({ asset: 'test' }), 'TEST');
+  assert.equal(receiptUnit({ asset: 'eth' }), 'ETH');
+  // On-chain rows carry no asset and are always ETH.
+  assert.equal(receiptUnit({}), 'ETH');
+  const bet = {
+    kind: 'bet',
+    status: 'signed',
+    asset: 'test',
+    stake: '2000000000000000000',
+    payout: '0',
+    maxPayout: '19800000000000000000',
+    expectedPayout: String(((1n << 64n) * 2000000000000000000n * 99n) / 100n),
+    balance: '114800000000000000000',
+  };
+  assert.equal(receiptSummary(bet).amount, '−2.0 TEST');
+  assert.match(receiptSummary(bet).description!, /Stake 2.0 TEST · Paid 0.0 TEST/);
 });

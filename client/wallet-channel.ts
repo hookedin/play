@@ -589,7 +589,7 @@ export class ChannelClient extends WalletTransactions {
       // What this receipt is in: the channel that signed it holds one asset.
       ...(this.playing === 'test' ? { asset: 'test' } : {}),
       operationId,
-      ...(game ? { game: { key: game.key, id: game.id } } : {}),
+      ...(game ? { game: { key: game.key, id: game.id, name: game.name } } : {}),
       status: rejected ? 'rejected' : 'signed',
       ...(rejected ? { request: op, reason: response.reason } : {}),
       // The seed of a declined bet stays with its receipt until its round is revealed.

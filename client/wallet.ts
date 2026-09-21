@@ -37,6 +37,8 @@ export interface WalletChannel {
 export interface GameIntent {
   key: string;
   id: string;
+  /** The game's own name, so a receipt still says where the money went long after the game is closed. */
+  name: string;
 }
 import { BrowserProvider, Contract, Wallet, getAddress, ZeroHash } from 'ethers';
 import {
@@ -416,8 +418,12 @@ export class CasinoWallet extends GameSessions {
   async save(receipt: any = undefined, changes: Record<string, any> = {}) {
     this.requireDurableState();
     const revision = this.revision + 1;
+    // Newest first by the clock, not by when a receipt was last written: a rejected operation is
+    // rewritten when its round reveals, and would otherwise jump above the bet that replaced it.
     const history = receipt
-      ? [receipt, ...this.history.filter(r => r.operationId !== receipt.operationId)].slice(0, 100)
+      ? [receipt, ...this.history.filter(r => r.operationId !== receipt.operationId)]
+          .sort((a, b) => Date.parse(b.createdAt ?? '') - Date.parse(a.createdAt ?? ''))
+          .slice(0, 100)
       : this.history;
     let record;
     try {
@@ -477,10 +483,20 @@ export class CasinoWallet extends GameSessions {
     this.render();
     return this.profile;
   }
-  /** Publish a game under this account, or, with no URL, take it out of the profile. */
+  /**
+   * Publish a game under this account, or, with no URL, take it out of the profile. Publishing claims
+   * a public name and asks for a funded channel; taking your own game down only has to be you, so a
+   * developer who has closed their channel can still withdraw a game that turned out to be broken.
+   */
   async publishGame(this: CasinoWallet, name: string, url: string | null) {
-    const c = this.current;
-    if (!c?.key || Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
+    // Publishing speaks from the open channel. Taking a game down speaks from any ETH channel this
+    // account still holds a key for, including one already closed, because a broken game has to come
+    // down whether or not its developer still has money at stake.
+    const c = url
+      ? this.current
+      : (this.current ?? Object.values(this.channels).find(row => row.key && row.state.channelId !== this.testId));
+    if (!c?.key) throw new Error('This account has no channel to publish from');
+    if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
     this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }, c);
     this.render();
     return this.profile;
@@ -1034,6 +1050,9 @@ export class CasinoWallet extends GameSessions {
     await this.exclusive(async () => {
       if (this.pending || this.transactionIntent)
         throw new Error('Recover the saved operation before importing another checkpoint');
+      // A file that is JSON but not a bundle is answered here, before the protocol reads its parts.
+      if (!bundle?.chainId || !bundle.casino || !bundle.operator || !bundle.opening || !bundle.evidence)
+        throw new Error('That file is not a recovery bundle: it names no deployment, channel or evidence.');
       const checked = verifyEvidence(bundle);
       if (
         String(bundle.chainId) !== String(this.expectedChainId) ||

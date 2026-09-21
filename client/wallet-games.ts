@@ -118,6 +118,7 @@ export class GameSessions extends ChannelClient {
     return this.executeBet(terms, game.identity.developer, this.gameOperationId(request.id), {
       key: game.key,
       id: request.id,
+      name: game.identity.name,
     });
   }
   /** Withdraw this game's hosted bet, or learn its result if the round's owner settled it first. */
@@ -132,7 +133,7 @@ export class GameSessions extends ChannelClient {
     return this.payBankroll(
       gameAmount(request.amount),
       this.gameOperationId(request.id),
-      { key: game.key, id: request.id },
+      { key: game.key, id: request.id, name: game.identity.name },
       game.identity.developer,
     );
   }
@@ -142,7 +143,7 @@ export class GameSessions extends ChannelClient {
       gameAmount(request.amount),
       game.identity.developer,
       this.gameOperationId(request.id),
-      { key: game.key, id: request.id },
+      { key: game.key, id: request.id, name: game.identity.name },
       game.identity.developer,
     );
   }

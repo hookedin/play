@@ -32,12 +32,28 @@ export class BrowserStore {
   declare db: IDBDatabase | undefined;
 
   async ready() {
+    // A blocked open fires neither success nor error, so it is answered here: every wallet read and
+    // write waits on this one promise, and a silent wait looks exactly like a casino that is down.
     if (!this.db)
       this.db = await new Promise<IDBDatabase>((resolve, reject) => {
         const r = indexedDB.open('hookedin-wallet-v1');
+        const stuck = setTimeout(
+          () =>
+            reject(
+              new Error(
+                'This browser is not letting the wallet open its storage. Close other HookedIn tabs and reload.',
+              ),
+            ),
+          5000,
+        );
+        const settle = (finish: () => void) => {
+          clearTimeout(stuck);
+          finish();
+        };
         r.onupgradeneeded = () => r.result.createObjectStore('records');
-        r.onsuccess = () => resolve(r.result);
-        r.onerror = () => reject(r.error);
+        r.onsuccess = () => settle(() => resolve(r.result));
+        r.onerror = () => settle(() => reject(r.error));
+        r.onblocked = () => settle(() => reject(new Error('Another tab has this wallet open. Close it and reload.')));
       });
     return this.db;
   }
