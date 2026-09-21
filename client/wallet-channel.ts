@@ -117,6 +117,7 @@ export class ChannelClient extends WalletTransactions {
       { opening: test.opening, asset: 'test', owner },
       test,
     );
+    this.noteNames(reply);
     if (this.playing === 'test') this.updateBankroll(reply.bankroll);
   }
   /** A new test channel is filled at once, so a guest can play straight away. */
@@ -886,6 +887,7 @@ export class ChannelClient extends WalletTransactions {
     const c = this.channel;
     if (!c?.key) return;
     const reply = await this.api(`/api/channels/${c.state.channelId}`);
+    this.noteNames(reply);
     if (same(hashState(this.domain, c.state), hashState(this.domain, reply.state))) {
       this.updateBankroll(reply.bankroll);
       return;

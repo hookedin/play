@@ -42,7 +42,7 @@ Read this before depositing anything you care about.
 | [testing/](testing/)                   | `contract.ts`: Anvil, a deployment and hand-signed evidence. `game-wallet.ts`: a real wallet wired to an in-memory casino stub, used by game developers' tests             |
 | [test/](test/)                         | Contract behaviour, agreement between the TypeScript and contract derivations, the recovery CLI, wallet, iframe bridge, risk and vectors, journal, static build            |
 | [vectors/bets.json](vectors/bets.json) | Committed vectors for pricing and outcomes                                                                                                                                 |
-| [catalog.json](catalog.json)           | The listed games, as absolute manifest URLs                                                                                                                                |
+| [catalog.json](catalog.json)           | The games `@hookedin` publishes, by name: the library a deployment ships with                                                                                              |
 | [docs/](docs/)                         | [Protocol](docs/protocol.md), [economics](docs/economics.md), [wallet](docs/frontend.md), [recovery](docs/request-evidence.md), [verification](docs/verification.md)       |
 | [brand/](brand/)                       | The HookedIn mark                                                                                                                                                          |
 
@@ -57,7 +57,7 @@ npm run dev      # build, then serve dist/ at http://127.0.0.1:4184
 npm test         # build, type-check, check the vectors, run the test suite (needs anvil)
 ```
 
-`npm run dev` serves the wallet only. Without `HOOKEDIN_CLIENT_CONFIG` the build ships the defaults in [client/config.ts](client/config.ts), which expect a casino service at `http://127.0.0.1:4183` and a game catalog at `http://127.0.0.1:4185`; settings saved in the wallet override them. Playing needs a casino service. When none answers, or it advertises another chain, contract or owner, a wallet whose configuration pins a `deployment` starts in recovery mode: evidence import and export, unilateral close, challenge and claims work, play does not. A wallet with no pinned deployment and no casino cannot start. `PORT` moves the static server.
+`npm run dev` serves the wallet only. Without `HOOKEDIN_CLIENT_CONFIG` the build ships the defaults in [client/config.ts](client/config.ts), which expect a casino service at `http://127.0.0.1:4183`; settings saved in the wallet override them. The game library comes from the casino: it is what `@hookedin` publishes. Playing needs a casino service. When none answers, or it advertises another chain, contract or owner, a wallet whose configuration pins a `deployment` starts in recovery mode: evidence import and export, unilateral close, challenge and claims work, play does not. A wallet with no pinned deployment and no casino cannot start. `PORT` moves the static server.
 
 Other commands: `npm run typecheck`, `npm run vectors` (regenerate the vectors), `npm run demo` (print a worked pricing example; sends no transactions), `npm run test:browser` (serve the in-browser storage checks described in [verification](docs/verification.md#browser-checks)), `npm run format`.
 
@@ -101,7 +101,7 @@ The wallet is a static site. Pushing to `main` releases it: [.github/workflows/d
 
 To publish by hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy`.
 
-Client-side routes (`/wallet`, `/activity`, `/games/<id>`) rely on the single-page fallback set in `wrangler.jsonc`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
+Client-side routes (`/wallet`, `/activity`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
 
 The operator commits `config/production.json`. It is published as `config.js`, so it is part of the trusted wallet release and must contain nothing secret:
 
@@ -122,7 +122,7 @@ The operator commits `config/production.json`. It is published as `config.js`, s
 
 The committed [config/production.json](config/production.json) pins the current Sepolia deployment.
 
-`games` is the base URL that serves `catalog.json`; the build copies [catalog.json](catalog.json) into `dist/`, so the wallet's own origin works. `deployment` pins the chain, contract and owner independently of whatever the casino API reports, and lets a fresh browser start in recovery mode while the casino is unreachable. An optional `runtimeHash` additionally pins the keccak-256 hash of the deployed code.
+`deployment` pins the chain, contract and owner independently of whatever the casino API reports, and lets a fresh browser start in recovery mode while the casino is unreachable. An optional `runtimeHash` additionally pins the keccak-256 hash of the deployed code.
 
 ## Contributing
 

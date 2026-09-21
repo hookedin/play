@@ -62,13 +62,14 @@ export class GameSessions extends ChannelClient {
     this.requireGame();
     return { methods: METHODS, asset: this.asset, chainId: String(this.expectedChainId) };
   }
-  /** Everything the open game learns about the player: who they are, and what to price bets against.
-   * The rest of the wallet, its balances included, is none of a game's business. */
+  /** Everything the open game learns about the player: the uname that is theirs for good, the alias
+   * they are shown by if they took one, and what to price bets against. Their address, their channel
+   * and their balances are none of a game's business. */
   gameInfo(this: CasinoWallet) {
     this.requireGame();
     return {
-      address: this.address,
-      channelId: this.channelId ?? null,
+      uname: this.uname,
+      alias: this.alias,
       chainId: String(this.expectedChainId),
       bankroll: String(this.reportedBankroll),
       recommendedStake: this.playing === 'test' ? String(10n ** 18n) : this.recommendedStake,

@@ -39,7 +39,6 @@ const ethers = fileURLToPath(new URL('../dist/ethers.min.js', import.meta.resolv
 fs.copyFileSync(ethers, path.join(dist, 'vendor/ethers.js'));
 for (const file of ['index.html', 'style.css']) fs.copyFileSync(path.join(root, 'client', file), path.join(dist, file));
 fs.cpSync(path.join(root, 'brand'), path.join(dist, 'brand'), { recursive: true, filter: f => !f.endsWith('.md') });
-fs.copyFileSync(path.join(root, 'catalog.json'), path.join(dist, 'catalog.json'));
 fs.copyFileSync(path.join(root, 'client/_headers'), path.join(dist, '_headers'));
 
 // HOOKEDIN_CLIENT_CONFIG names a JSON file with this deployment's settings; without it the defaults ship.

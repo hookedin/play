@@ -195,6 +195,44 @@
               <p id="test-earnings" class="hidden"></p>
             </div>
           </div>
+          <section class="surface profile-card" aria-labelledby="profile-card-title">
+            <div class="eyebrow">YOUR NAME HERE</div>
+            <h2 id="profile-card-title">
+              <a id="wallet-name-link" href="/"><span id="wallet-name">—</span></a>
+            </h2>
+            <p id="wallet-uname" class="game-handle"></p>
+            <p>
+              The only thing games, shared rounds and the public tables ever learn about you. Everything else — your
+              address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
+              <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
+              a shorter name you are shown by instead. Both always find you.
+            </p>
+            <label for="alias-input">Take an alias</label>
+            <div class="input-row">
+              <input
+                id="alias-input"
+                type="text"
+                maxlength="20"
+                pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
+                autocomplete="off"
+                placeholder="Choose an alias"
+              /><button id="pick-alias" class="button secondary" type="button">Save alias</button>
+            </div>
+            <p id="alias-note" class="settings-note"></p>
+            <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
+            <label for="game-name-input"
+              >Games you publish <span id="profile-game-count" class="subtle-count">0/100</span></label
+            >
+            <div class="input-row">
+              <input id="game-name-input" type="text" maxlength="32" autocomplete="off" placeholder="game-name" /><input
+                id="game-url-input"
+                type="url"
+                autocomplete="off"
+                placeholder="https://your-game.example/manifest.json"
+              /><button id="publish-game" class="button secondary" type="button">Publish</button>
+            </div>
+            <div id="my-games"></div>
+          </section>
           <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
           <div class="funding-steps">
             <section class="surface receive-card" aria-labelledby="receive-title">
@@ -413,7 +451,7 @@
           <section class="surface endpoint-settings">
             <div>
               <h2>Connected services</h2>
-              <p>Connect this wallet to an independently operated casino and game library.</p>
+              <p>Connect this wallet to an independently operated casino.</p>
             </div>
             <div class="connected-chain">Connected chain <strong id="chain-id">—</strong></div>
             <label for="network-mode">Required network</label
@@ -426,13 +464,22 @@
                 <label for="casino-url">Casino API URL</label
                 ><input id="casino-url" type="url" placeholder="http://127.0.0.1:4183" />
               </div>
-              <div>
-                <label for="games-url">Game library base URL</label
-                ><input id="games-url" type="url" placeholder="http://127.0.0.1:4185" />
-              </div>
             </div>
             <button id="connect-casino" class="button secondary">Connect services ↗</button>
           </section>
+        </section>
+
+        <section id="page-profile" class="page hidden">
+          <div class="eyebrow">A PLAYER HERE</div>
+          <h1 id="profile-name"></h1>
+          <p id="profile-uname" class="game-handle"></p>
+          <p id="profile-since" class="intro"></p>
+          <div id="profile-stats" class="funding-balances"></div>
+          <div class="section-heading">
+            <h2>Games published under this player</h2>
+            <span class="section-note">Anyone may play them with their own wallet.</span>
+          </div>
+          <div id="profile-games" class="game-grid"></div>
         </section>
 
         <section id="page-activity" class="page hidden">

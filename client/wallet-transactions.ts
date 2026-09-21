@@ -268,6 +268,7 @@ export class WalletTransactions {
     await this.save();
     if (this.recoveryOnly) return;
     const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening }, c);
+    this.noteNames(reply);
     // Money of its own: from here on this account plays with its ETH.
     this.play('eth');
     this.updateBankroll(reply.bankroll);

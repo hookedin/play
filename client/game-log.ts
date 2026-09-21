@@ -70,7 +70,7 @@ export function describeResult(method: string, result: any) {
     case 'wallet.hello':
       return `${result.methods?.length ?? 0} methods · ${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
     case 'wallet.info':
-      return `bankroll ${eth(result.bankroll)} · channel ${result.channelId ? 'open' : 'not open'}`;
+      return `${result.alias ? '@' + result.alias : '~' + (result.uname ?? 'unknown')} · bankroll ${eth(result.bankroll)}`;
     case 'game.receipt':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`

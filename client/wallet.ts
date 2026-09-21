@@ -141,6 +141,19 @@ export class CasinoWallet extends GameSessions {
   declare detailsRefreshing: Promise<Record<string, any>> | null;
   declare monitorCursor: number;
   declare detailsObservedAt: number;
+  /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
+  declare uname: string | null;
+  /** The alias it is shown by instead, written `@alias`; null until it takes one. */
+  declare alias: string | null;
+  /** The public profile those names carry: when the casino first knew it, what it has played, and
+   * the games it publishes. Read from the public route, like anybody else's. */
+  declare profile: {
+    uname: string;
+    alias: string | null;
+    since: number;
+    stats: any;
+    games: { name: string; url: string }[];
+  } | null;
   reportedBankroll = '0';
   declare actionDone: Promise<void> | undefined;
   declare game: GameSession | null;
@@ -166,6 +179,9 @@ export class CasinoWallet extends GameSessions {
       storage,
       trustedDeployment,
       publicState: {},
+      uname: null,
+      alias: null,
+      profile: null,
       fund: { sequence: 0, shares: '0', statement: null },
       developerEarnings: null,
       testId: null,
@@ -430,6 +446,45 @@ export class CasinoWallet extends GameSessions {
     }
     this.render();
   }
+  /** Every channel reply carries both names its player answers to. */
+  noteNames(this: CasinoWallet, reply: { uname?: unknown; alias?: unknown }) {
+    if (typeof reply?.uname !== 'string') return;
+    const alias = typeof reply.alias === 'string' ? reply.alias : null;
+    if (reply.uname === this.uname && alias === this.alias) return;
+    this.uname = reply.uname;
+    this.alias = alias;
+    this.profile = null;
+    void this.refreshProfile().catch(() => {});
+  }
+  /** This account's public record, read from the route everyone reads it from. */
+  async refreshProfile(this: CasinoWallet) {
+    if (!this.uname) return null;
+    const profile = await this.api(`/api/players/~${this.uname}`);
+    if (profile?.uname === this.uname) {
+      this.profile = profile;
+      this.alias = profile.alias;
+      this.render();
+    }
+    return this.profile;
+  }
+  /** Take the alias this account is shown by, or give it up. Only from a funded channel. */
+  async pickAlias(this: CasinoWallet, alias: string | null) {
+    const c = this.current;
+    if (!c?.key || Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel before taking an alias');
+    this.profile = await this.api(`/api/channels/${c.state.channelId}/alias`, { alias: alias?.trim() ?? null }, c);
+    this.uname = this.profile!.uname;
+    this.alias = this.profile!.alias;
+    this.render();
+    return this.profile;
+  }
+  /** Publish a game under this account, or, with no URL, take it out of the profile. */
+  async publishGame(this: CasinoWallet, name: string, url: string | null) {
+    const c = this.current;
+    if (!c?.key || Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
+    this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }, c);
+    this.render();
+    return this.profile;
+  }
   render() {
     // A spending limit belongs to the asset it was granted in: if what this tab plays with has
     // changed under it, the game's money goes back to the channel it came from.
@@ -441,6 +496,9 @@ export class CasinoWallet extends GameSessions {
     const c = this.current;
     this.publicState = {
       address: this.address,
+      uname: this.uname,
+      alias: this.alias,
+      profile: this.profile,
       balance: c && Number(c.onchain?.status) === 1 ? c.state.balance : '0',
       availableBalance:
         c && Number(c.onchain?.status) === 1
@@ -682,6 +740,15 @@ export class CasinoWallet extends GameSessions {
           }
         })(),
         (async () => {
+          if (this.recoveryOnly || !this.uname) return;
+          try {
+            await this.refreshProfile();
+            report('profile');
+          } catch (error) {
+            report('profile', error);
+          }
+        })(),
+        (async () => {
           if (this.recoveryOnly) return;
           try {
             const metrics = await this.api('/api/metrics'),
@@ -916,7 +983,9 @@ export class CasinoWallet extends GameSessions {
       }
       if (this.pending?.request) return this.resume();
       if (this.current)
-        await this.api(`/api/channels/${this.currentId}/activate`, { opening: this.current.opening }, this.current);
+        this.noteNames(
+          await this.api(`/api/channels/${this.currentId}/activate`, { opening: this.current.opening }, this.current),
+        );
       await this.reconcile();
     });
     // A verified stored result is recoverable even while new play is paused.

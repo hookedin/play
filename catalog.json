@@ -1,8 +1,8 @@
-[
-  "https://samson-game.hookedin.com/manifest.json",
-  "https://plinko-game.hookedin.com/manifest.json",
-  "https://dice-game.hookedin.com/manifest.json",
-  "https://blackjack-game.hookedin.com/manifest.json",
-  "https://mines-game.hookedin.com/manifest.json",
-  "https://roulette-game.hookedin.com/manifest.json"
-]
+{
+  "samson": "https://samson-game.hookedin.com/manifest.json",
+  "plinko": "https://plinko-game.hookedin.com/manifest.json",
+  "dice": "https://dice-game.hookedin.com/manifest.json",
+  "blackjack": "https://blackjack-game.hookedin.com/manifest.json",
+  "mines": "https://mines-game.hookedin.com/manifest.json",
+  "roulette": "https://roulette-game.hookedin.com/manifest.json"
+}

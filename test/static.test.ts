@@ -43,7 +43,6 @@ test('the built wallet is one module plus the untouched ethers release and its c
     sha(new Uint8Array(await (await fetch(base + '/vendor/ethers.js')).arrayBuffer())),
     sha(fs.readFileSync(new URL('../dist/ethers.min.js', import.meta.resolve('ethers')))),
   );
-  assert.equal((await fetch(base + '/catalog.json')).status, 200);
 });
 
 test('wallet routes resolve to the client page without exposing other files', async t => {

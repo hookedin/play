@@ -13,8 +13,9 @@ interface ActiveGame {
   /** The last balance pushed into the iframe, so unchanged renders stay quiet; empty until the entry has loaded. */
   pushed: string | null;
 }
-/** A catalog game is linkable by its manifest `id`; any other manifest is linkable by URL. */
-type GameRoute = { id: string } | { manifest: string };
+/** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
+ * the name it has in their profile. Any other manifest is linkable by its URL alone. */
+type GameRoute = { owner: string; name: string } | { manifest: string };
 import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
@@ -55,7 +56,6 @@ function configuredEndpoint(name: string, fallback: string) {
   }
 }
 const casinoURL = configuredEndpoint('casino', config.casino);
-const gamesURL = configuredEndpoint('games', config.games);
 let active: ActiveGame | null = null,
   generation = 0,
   uiBusy = false,
@@ -64,8 +64,11 @@ let active: ActiveGame | null = null,
 let maxDepositEstimate: Awaited<ReturnType<CasinoWallet['maxDeposit']>> | null = null;
 let historyBusy = false,
   historyError: any = null;
-const catalogGames = new Map<string, { manifestURL: string; manifest: any }>();
-const GAME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
+const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
+/** The casino's own profile: the games it ships with are published there. */
+const HOUSE = 'hookedin';
+/** How many games one profile holds. */
+const MAX_GAMES = 100;
 // A developer's diagnostic: the game page shows it below the game only when the wallet was opened with ?log.
 $('game-activity').classList.toggle('hidden', !new URLSearchParams(location.search).has('log'));
 const gameLog = createGameLog({
@@ -156,7 +159,14 @@ function abandonGame() {
 
 const pagePaths: Record<string, string> = { library: '/', wallet: '/wallet', activity: '/activity' };
 const gamePath = (route: GameRoute) =>
-  'id' in route ? `/games/${route.id}` : `/games/custom?manifest=${encodeURIComponent(route.manifest)}`;
+  'manifest' in route
+    ? `/games/custom?manifest=${encodeURIComponent(route.manifest)}`
+    : `/${route.owner}/${route.name}`;
+/** How a player is written: an alias wears `@`, a uname wears `~`. */
+const showName = (names: { uname?: string | null; alias?: string | null } | null) =>
+  names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
+/** A player's page: everything the casino says about them, as anyone sees it. */
+const profilePath = (name: string) => `/${name}`;
 /** Show a section; the URL is the caller's responsibility. */
 function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -166,7 +176,9 @@ function showPage(page: string) {
   document.title =
     page === 'play' && active
       ? `${active.manifest.name} — HookedIn`
-      : `HookedIn — ${page === 'library' ? 'Games' : page}`;
+      : page === 'profile'
+        ? `${$('profile-name').textContent} — HookedIn`
+        : `HookedIn — ${page === 'library' ? 'Games' : page}`;
   if (page === 'activity') {
     renderActivity();
     void refreshActivity();
@@ -213,28 +225,32 @@ function renderFund() {
   $<HTMLButtonElement>('invest').disabled = uiBusy || !open || !f;
   for (const id of ['divest', 'divest-all']) $<HTMLButtonElement>(id).disabled = uiBusy || !open || !f || !shares;
 }
-function navigate(page: string, push = true) {
+function navigate(page: string, push = true, path = pagePaths[page]) {
   if (wallet.busy && active && wallet.pending?.game?.key === active.key) {
     if (!push) history.pushState(null, '', active.path);
     return toast('Wait for the current wager to finish before leaving the game.', true);
   }
   showPage(page);
   closeGame();
-  if (push && location.pathname !== pagePaths[page]) history.pushState(null, '', pagePaths[page]);
+  if (push && location.pathname !== path) history.pushState(null, '', path);
 }
-/** Every page has a URL: `/`, `/wallet`, `/activity`, `/games/<id>` and `/games/custom?manifest=<url>`. */
-function parseRoute(url: URL): string | GameRoute {
-  const game = /^\/games\/([a-z0-9][a-z0-9-]{0,31})$/.exec(url.pathname);
-  if (game) return game[1] === 'custom' ? { manifest: url.searchParams.get('manifest') || '' } : { id: game[1]! };
+/** Every page has a URL: `/`, `/wallet`, `/activity`, `/@<alias>` or `/~<uname>` for a player,
+ * the same and `/<game>` for a game they publish, and `/games/custom?manifest=<url>`. */
+function parseRoute(url: URL): string | GameRoute | { profile: string } {
+  const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(url.pathname);
+  if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
+  if (url.pathname === '/games/custom') return { manifest: url.searchParams.get('manifest') || '' };
   return Object.entries(pagePaths).find(([, path]) => path === url.pathname)?.[0] || 'library';
 }
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
   if (typeof target === 'string') return navigate(target, push);
+  if ('profile' in target) return void openProfile(target.profile, push);
   if (active && active.path === gamePath(target)) return showPage('play');
-  const manifestURL = 'id' in target ? catalogGames.get(target.id)?.manifestURL : target.manifest;
   const opened = await task(async () => {
-    if (!manifestURL) throw new Error('This game is not in the connected game library.');
+    const manifestURL =
+      'manifest' in target ? target.manifest : (await wallet.api(`/api/players/${target.owner}/${target.name}`)).url;
+    if (!manifestURL) throw new Error('This game is not published at that name.');
     await loadGame(manifestURL, target, push);
     return true;
   });
@@ -441,6 +457,7 @@ const openHostedDialog = () =>
   });
 function renderWallet() {
   renderFund();
+  renderProfile();
   if (!wallet.address) return;
   const state = wallet.publicState;
   if (active?.channelId && active.channelId !== wallet.currentId) abandonGame();
@@ -565,9 +582,14 @@ function renderWallet() {
   const accounts = $<HTMLSelectElement>('saved-wallets');
   if (accounts) {
     const addresses = wallet.savedFundingAddresses || [];
+    const account = wallet.mode === 'demo' ? wallet.address : '';
     if (JSON.stringify([...accounts.options].map(o => o.value)) !== JSON.stringify(addresses))
       accounts.replaceChildren(...addresses.map(address => new Option(address, address)));
-    accounts.value = wallet.mode === 'demo' ? wallet.address : '';
+    // The list follows the account in use, but an account the player has picked and not yet
+    // selected is theirs: a background observation re-renders every few seconds, and setting the
+    // value every time took their choice back before they could act on it.
+    if (shownAccount !== account || !addresses.includes(accounts.value)) accounts.value = account;
+    shownAccount = account;
     accounts.disabled = busy;
     $<HTMLButtonElement>('select-saved-wallet').disabled = busy || !addresses.length;
   }
@@ -940,60 +962,141 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-page]'))
       $('receive-title').scrollIntoView({ block: 'center' });
     }
   });
+/** One card for a published game, read from its manifest. */
+async function gameCard(route: GameRoute, url: string) {
+  const manifest = await readManifest(
+    await fetch(safeURL(url), { credentials: 'omit', signal: AbortSignal.timeout(12000) }),
+  );
+  const card = document.createElement('a'),
+    title = document.createElement('h3'),
+    description = document.createElement('p'),
+    link = document.createElement('span');
+  card.className = 'game-card catalog-card';
+  card.href = gamePath(route);
+  title.textContent = String(manifest.name).slice(0, 80);
+  description.textContent = String(manifest.description || 'Independent game').slice(0, 220);
+  link.className = 'catalog-link';
+  link.textContent = 'manifest' in route ? new URL(url).host : `${route.owner}/${route.name}`;
+  card.append(title, description, link);
+  card.addEventListener('click', event => {
+    event.preventDefault();
+    task(() => loadGame(url, route));
+  });
+  return card;
+}
+/** How many of a profile's games a page will fetch the manifest of. The rest stay reachable by
+ * their own URL: a profile holds a hundred games, all of them addresses its owner chose. */
+const SHOWN_GAMES = 32;
+/** Every game a profile publishes, as cards. A manifest that cannot be read is left out. */
+async function profileCards(owner: string, games: { name: string; url: string }[]) {
+  const cards = await Promise.all(
+    games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url).catch(() => null)),
+  );
+  return cards.filter(card => card !== null);
+}
+/** The library is what `@hookedin` publishes, and whatever this account publishes itself. */
 async function loadLibrary() {
   const list = $('game-library');
   try {
-    const catalogURL = `${gamesURL}/catalog.json`;
-    const catalog = await readManifest(
-      await fetch(catalogURL, { credentials: 'omit', signal: AbortSignal.timeout(12000) }),
-    );
-    if (!Array.isArray(catalog) || catalog.length > 32 || catalog.some(url => typeof url !== 'string'))
-      throw new Error('Invalid game catalog');
-    const entries = await Promise.all(
-      catalog.map(async url => {
-        const manifestURL = safeURL(url, catalogURL).href;
-        const response = await fetch(manifestURL, { credentials: 'omit', signal: AbortSignal.timeout(12000) });
-        if (!response.ok) throw new Error('Game catalog unavailable');
-        return { manifestURL, manifest: await readManifest(response) };
-      }),
-    );
-    $('library-count').textContent = $('library-heading-count').textContent = String(entries.length);
-    catalogGames.clear();
-    list.replaceChildren(
-      ...entries.map(({ manifestURL, manifest }) => {
-        // A catalog game is linkable by its manifest id; a manifest without one is only reachable by URL.
-        const id =
-          typeof manifest.id === 'string' &&
-          GAME_ID.test(manifest.id) &&
-          !catalogGames.has(manifest.id) &&
-          manifest.id !== 'custom'
-            ? manifest.id
-            : null;
-        if (id) catalogGames.set(id, { manifestURL, manifest });
-        const gameRoute: GameRoute = id ? { id } : { manifest: manifestURL };
-        const card = document.createElement('a'),
-          title = document.createElement('h3'),
-          description = document.createElement('p'),
-          link = document.createElement('span');
-        card.className = 'game-card catalog-card';
-        card.href = gamePath(gameRoute);
-        title.textContent = String(manifest.name).slice(0, 80);
-        description.textContent = String(manifest.description || 'Independent game').slice(0, 220);
-        link.className = 'catalog-link';
-        link.textContent = id ? `/games/${id}` : new URL(manifestURL).host;
-        card.append(title, description, link);
-        card.addEventListener('click', event => {
-          event.preventDefault();
-          task(() => loadGame(manifestURL, gameRoute));
-        });
-        return card;
-      }),
-    );
+    const house = await wallet.api(`/api/players/@${HOUSE}`);
+    const mine = wallet.alias === HOUSE ? [] : (wallet.profile?.games ?? []);
+    const cards = [
+      ...(await profileCards('@' + HOUSE, house.games)),
+      ...(await profileCards(showName(wallet.profile), mine)),
+    ];
+    $('library-count').textContent = $('library-heading-count').textContent = String(cards.length);
+    list.replaceChildren(...cards);
   } catch {
     list.textContent = 'Game catalog unavailable. You can load a custom manifest below.';
   }
 }
-const libraryLoaded = loadLibrary();
+/** Anybody's page: their names, what they have played, and the games they publish. */
+async function openProfile(name: string, push = true) {
+  $('profile-name').textContent = name;
+  $('profile-uname').textContent = '';
+  $('profile-since').textContent = '';
+  $('profile-stats').replaceChildren();
+  const games = $('profile-games');
+  games.textContent = 'Loading…';
+  navigate('profile', push, profilePath(name));
+  try {
+    const profile = await wallet.api(`/api/players/${name}`);
+    $('profile-name').textContent = showName(profile);
+    // An alias is what they are called; the uname is who they are, and is shown beside it.
+    $('profile-uname').textContent = profile.alias ? '~' + profile.uname : '';
+    document.title = `${showName(profile)} — HookedIn`;
+    $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
+    $('profile-stats').replaceChildren(
+      ...(['eth', 'test'] as const).map(asset => {
+        const card = document.createElement('div'),
+          label = document.createElement('div'),
+          amount = document.createElement('div'),
+          note = document.createElement('p');
+        const stats = profile.stats[asset];
+        card.className = 'wallet-balance-card';
+        label.className = 'eyebrow';
+        label.textContent = asset === 'eth' ? 'ETH PLAYS' : 'TEST COIN PLAYS';
+        amount.className = 'large-amount';
+        amount.textContent = String(stats.plays);
+        note.textContent = `Staked ${eth(stats.staked, 4)} · won ${eth(stats.won, 4)}`;
+        card.append(label, amount, note);
+        return card;
+      }),
+    );
+    const cards = await profileCards(showName(profile), profile.games);
+    if (cards.length) games.replaceChildren(...cards);
+    else games.textContent = `${showName(profile)} publishes no games.`;
+  } catch (error: any) {
+    $('profile-since').textContent = error.code === 'not-found' ? 'Nobody goes by that name.' : error.message;
+    games.replaceChildren();
+  }
+}
+/** The library is reloaded whenever what this account publishes changes. */
+let libraryKey = '';
+/** The account the saved-wallets list was last set to, so a render only moves it when that changes. */
+let shownAccount: string | null = null;
+/** The account's own profile: the names it answers to, and the games it publishes. */
+function renderProfile() {
+  const name = wallet.uname ? showName(wallet) : null,
+    funded = ethOpen() && !wallet.recoveryOnly;
+  $('wallet-name').textContent = name ?? '—';
+  $<HTMLAnchorElement>('wallet-name-link').href = name ? profilePath(name) : '/';
+  // The uname is always there; when an alias covers it up, it is shown underneath.
+  $('wallet-uname').textContent = wallet.alias ? '~' + wallet.uname : '';
+  for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !funded;
+  $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !funded;
+  $('clear-alias').classList.toggle('hidden', !wallet.alias);
+  $('alias-note').textContent = !funded
+    ? 'Open a funded ETH channel to take an alias or publish games.'
+    : 'An alias is unique, and two aliases that read alike are the same alias. Your uname stays whatever you are called.';
+  const games = wallet.profile?.games ?? [];
+  $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
+  const key = json([name, games]);
+  if (libraryKey && libraryKey !== key) void loadLibrary();
+  libraryKey = key;
+  $('my-games').replaceChildren(
+    ...games.map(game => {
+      const row = document.createElement('div'),
+        label = document.createElement('span'),
+        remove = document.createElement('button');
+      row.className = 'input-row';
+      label.className = 'game-handle';
+      label.textContent = `${name}/${game.name} — ${game.url}`;
+      remove.className = 'text-button';
+      remove.type = 'button';
+      remove.textContent = 'Remove';
+      remove.disabled = uiBusy || !funded;
+      remove.addEventListener('click', () =>
+        task(async () => {
+          await wallet.publishGame(game.name, null);
+          await loadLibrary();
+        }),
+      );
+      row.append(label, remove);
+      return row;
+    }),
+  );
+}
 window.addEventListener('popstate', () => void route(false));
 $<HTMLButtonElement>('clear-game-activity').addEventListener('click', () => gameLog.clear());
 $<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
@@ -1301,23 +1404,50 @@ $<HTMLButtonElement>('select-saved-wallet').addEventListener('click', () =>
     toast('Saved browser wallet selected.');
   }),
 );
+$<HTMLButtonElement>('pick-alias').addEventListener('click', () =>
+  task(async () => {
+    const input = $<HTMLInputElement>('alias-input');
+    await wallet.pickAlias(input.value);
+    input.value = '';
+    toast(`You are @${wallet.alias}.`);
+  }),
+);
+$<HTMLButtonElement>('publish-game').addEventListener('click', () =>
+  task(async () => {
+    const name = $<HTMLInputElement>('game-name-input'),
+      url = $<HTMLInputElement>('game-url-input');
+    const published = name.value.trim();
+    if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
+    await wallet.publishGame(published, safeURL(url.value.trim()).href);
+    name.value = url.value = '';
+    await loadLibrary();
+    toast(`Published at ${showName(wallet)}/${published}.`);
+  }),
+);
+$<HTMLButtonElement>('clear-alias').addEventListener('click', () =>
+  task(async () => {
+    await wallet.pickAlias(null);
+    toast(`You are ~${wallet.uname}.`);
+  }),
+);
+$<HTMLAnchorElement>('wallet-name-link').addEventListener('click', event => {
+  event.preventDefault();
+  if (wallet.uname) void openProfile(showName(wallet));
+});
 $<HTMLButtonElement>('refresh-wallet').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('wallet-history').addEventListener('click', () => navigate('activity'));
 $<HTMLButtonElement>('connect-casino').addEventListener('click', () =>
   task(async () => {
     if (wallet.pending) throw new Error('Recover the pending operation before switching services.');
-    const nextCasino = endpoint($<HTMLInputElement>('casino-url').value.trim()),
-      nextGames = endpoint($<HTMLInputElement>('games-url').value.trim());
+    const nextCasino = endpoint($<HTMLInputElement>('casino-url').value.trim());
     const nextNetwork = $<HTMLSelectElement>('network-mode').value === 'local' ? 'local' : 'sepolia';
     closeGame();
     localStorage.setItem(`hookedin:v1:${nextNetwork}:casino-url`, nextCasino);
-    localStorage.setItem(`hookedin:v1:${nextNetwork}:games-url`, nextGames);
     localStorage.setItem(networkSetting, nextNetwork);
     location.assign('/');
   }),
 );
 $<HTMLInputElement>('casino-url').value = casinoURL;
-$<HTMLInputElement>('games-url').value = gamesURL;
 $<HTMLSelectElement>('network-mode').value = network;
 const asset = `${wallet.networkName} ETH`;
 $('network-name').textContent = wallet.networkName;
@@ -1355,7 +1485,7 @@ try {
   void refreshActivity();
   if (wallet.pending || wallet.needsOpening)
     toast('A saved operation needs recovery. Use Recover operation to finish safely.');
-  await libraryLoaded;
+  await loadLibrary();
   await route();
 } catch (error: any) {
   $('connection-banner').textContent =

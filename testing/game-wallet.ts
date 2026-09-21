@@ -43,11 +43,16 @@ export async function gameWallet(storage = new MemoryStore()) {
     secrets.set(round, secret);
     return round;
   };
+  // A casino derives a player's uname from their address with a key of its own; a stub only has to
+  // give each wallet one of the right shape, so a game keys its storage by a real name.
+  const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
   const make = () => {
     const wallet = new CasinoWallet({ network: 'local', storage });
     Object.assign(wallet, {
       storageKey: 'game-wallet',
       address: player.address,
+      uname,
+      alias: null,
       signer: player,
       mode: 'demo',
       operator: owner.address,

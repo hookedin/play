@@ -42,8 +42,8 @@ test('bridge replies summarize outcomes without exposing more than the reply its
     describeResult('game.receipt', { kind: 'bet', status: 'signed', payout: '0', operationId: 'op-2' }),
     'bet signed · paid 0.0 ETH · op-2',
   );
-  assert.match(describeResult('wallet.info', { bankroll: '2', channelId: '0x' + '1'.repeat(64) }), /channel open/);
-  assert.match(describeResult('wallet.info', { bankroll: '2', channelId: null }), /channel not open/);
+  assert.match(describeResult('wallet.info', { bankroll: '2', uname: 'k3m9', alias: 'Bob' }), /@Bob/);
+  assert.match(describeResult('wallet.info', { bankroll: '2', uname: 'k3m9', alias: null }), /~k3m9/);
   assert.equal(
     describeResult('wallet.hello', { methods: ['wallet.hello', 'game.bet'], asset: { symbol: 'ETH', decimals: 18 } }),
     '2 methods · ETH with 18 decimals',

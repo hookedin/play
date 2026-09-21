@@ -1,7 +1,6 @@
 {
   "network": "sepolia",
   "casino": "https://casino.hookedin.com",
-  "games": "https://play.hookedin.com",
   "deployment": {
     "chainId": "11155111",
     "contractAddress": "0x9bFCF1cEaf05d402F88400A2eb2F34b0Ff1CD281",

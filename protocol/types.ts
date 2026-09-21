@@ -150,8 +150,10 @@ export interface RoundStatus {
   bankroll: string;
 }
 export interface RoundSeat {
-  channelId: string;
-  player: string;
+  /** The names the seat's player answers to, `~uname` and `@alias`: a round is public, and nothing
+   * else of them is. */
+  uname: string;
+  alias: string | null;
   operationId: string;
   stake: Integer;
   prizes: Prize[];

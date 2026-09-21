@@ -1601,6 +1601,32 @@ main {
   cursor: not-allowed;
 }
 
+.profile-card {
+  margin-bottom: 24px;
+}
+.profile-card h2 {
+  margin: 4px 0 8px;
+  font-size: 26px;
+}
+.profile-card h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+.profile-card h2 a:hover {
+  text-decoration: underline;
+}
+.profile-card .input-row + .input-row {
+  margin-top: 8px;
+}
+.game-handle {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 2.4;
+  color: #8997ad;
+}
 .wallet-history-link {
   display: block;
   margin: -8px 0 24px;
