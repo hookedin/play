@@ -70,6 +70,28 @@ export function describeBet(bet: BetTerms) {
   };
 }
 
+/** A return is measured in millionths of the stake: a percentage with four decimals, so 98.5% is
+ * 985000. It is what a bet is expected to pay back, and a game may state the least it will ever be. */
+export const RETURN_SCALE = 1_000_000n;
+/** The millionths a manifest's `return` percentage stands for. Throws on anything else. */
+export function statedReturn(percent: unknown): bigint {
+  if (typeof percent !== 'number' || !Number.isFinite(percent) || percent <= 0 || percent > 100)
+    throw new RangeError('A stated return is a percentage above 0 and at most 100');
+  if (!/^\d{1,3}(\.\d{1,4})?$/.test(String(percent)))
+    throw new RangeError('A stated return has at most four decimal places');
+  return BigInt(Math.round(percent * 10000));
+}
+/** A return in millionths of the stake, rounded to the nearest. Prize ranges are whole outcomes, so
+ * a table's width truncates by a few parts in 2^64; rounding to the grid a return is stated on keeps
+ * a game that states what its table pays from failing by that much. */
+export const returnParts = (stake: bigint, expectedPayout: bigint) => {
+  const unit = uint256(stake, 'stake', true) * OUTCOME_SPACE;
+  return (uint256(expectedPayout, 'expectedPayout') * RETURN_SCALE + unit / 2n) / unit;
+};
+/** Does this bet pay back at least the return the game stated? */
+export const meetsReturn = (bet: BetTerms, stated: bigint) =>
+  returnParts(bet.stake, describeBet(bet).expectedPayout) >= stated;
+
 /**
  * Every bet in a round rides one 64-bit outcome, so the round is a single wager for the bankroll.
  * The prize ranges cut [0, 2^64) into cells; in a cell of width w the bankroll's cash flow is

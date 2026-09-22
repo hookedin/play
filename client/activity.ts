@@ -1,5 +1,6 @@
 import { formatEther } from 'ethers';
 import { plain } from '../protocol/protocol.ts';
+import { returnParts } from '../protocol/risk.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
 interface ActivityEntry {
@@ -135,7 +136,7 @@ export function filterActivity(list: HTMLElement, query: string, empty: HTMLElem
 
 /** The exact return of a signed bet, from its expected payout out of 2^64 stakes, to a hundredth of a basis point. */
 export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
-  const parts = (BigInt(expectedPayout as string) * 1000000n) / (BigInt(stake as string) << 64n);
+  const parts = returnParts(BigInt(stake as string), BigInt(expectedPayout as string));
   return `RTP ${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
 }
 /** A hosted round's seed was its host's: the one bet whose fairness also rests on the host. */

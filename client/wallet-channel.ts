@@ -36,7 +36,7 @@ import {
   verifyStep,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
-import { describeBet } from '../protocol/risk.ts';
+import { describeBet, meetsReturn, statedReturn } from '../protocol/risk.ts';
 import { gameAmount } from './game-account.ts';
 import { gameError } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
@@ -285,6 +285,9 @@ export class ChannelClient extends WalletTransactions {
           : [],
       // Only a bet signs its developer; the local attribution of payments stays in the receipt.
       developer: kind === 'bet' ? developer || ZeroAddress : ZeroAddress,
+      // A bet and a payment are always the open game's, so which game that is has one source of
+      // truth: the session this wallet has open. Nothing else names a game.
+      game: ['bet', 'payment'].includes(kind) ? this.requireGame().key : ZeroHash,
     };
     if (!intent.kind) throw new Error('Unknown wallet operation');
     const matches = (operation: Operation) => {
@@ -292,6 +295,7 @@ export class ChannelClient extends WalletTransactions {
         (['kind', 'amount'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
         canonicalJSON(plain(operation.prizes)) !== canonicalJSON(plain(intent.prizes)) ||
         !same(operation.developer, intent.developer) ||
+        !same(operation.game, intent.game) ||
         (input.source && !same(operation.counterparty, input.source)) ||
         (input.round && (!same(operation.round, input.round.id) || !same(operation.seedHash, input.round.seedHash)))
       )
@@ -307,19 +311,33 @@ export class ChannelClient extends WalletTransactions {
         throw gameError('id-conflict', 'Operation ID is bound to a different game');
       return cached;
     }
-    /** What every operation this wallet signs must satisfy: it fits the money the player allowed,
-     * and a bet's terms are a prize table the casino's own rule can read. */
+    /** What every operation this wallet signs must satisfy: it fits the money the player allowed, a
+     * bet's terms are a prize table the casino's own rule can read, and a game that states a return
+     * keeps it. */
     const allowed = (debit: bigint) => {
+      const stated = game ? this.game?.identity.return : undefined;
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
         if (debit > BigInt(this.game.balance)) throw gameError('insufficient-funds', 'Bet exceeds the game balance');
+        // Money that pays nothing back returns nothing, so a game holding itself to a return cannot ask for it.
+        if (stated !== undefined && ['payment', 'transfer'].includes(kind))
+          throw gameError(
+            'below-return',
+            `${this.game!.identity.name} states that it pays back at least ${stated}%, so it cannot charge for nothing`,
+          );
       } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
       if (kind !== 'bet') return;
+      const terms = { stake: intent.amount, prizes: intent.prizes };
       try {
-        describeBet({ stake: intent.amount, prizes: intent.prizes });
+        describeBet(terms);
       } catch {
         throw new Error('Invalid wager terms');
       }
+      if (stated !== undefined && !meetsReturn(terms, statedReturn(stated)))
+        throw gameError(
+          'below-return',
+          `This bet pays back less than the ${stated}% ${this.game!.identity.name} states it pays`,
+        );
     };
     /** The same seat in the same round with other chips on it: the player changed their bet. */
     const rechipped = (op: Operation) =>
@@ -330,6 +348,7 @@ export class ChannelClient extends WalletTransactions {
       same(op.round, input.round.id) &&
       same(op.seedHash, input.round.seedHash) &&
       same(op.developer, intent.developer) &&
+      same(op.game, intent.game) &&
       (BigInt(op.amount) !== intent.amount || canonicalJSON(plain(op.prizes)) !== canonicalJSON(plain(intent.prizes)));
     /** Change the chips on a seat its round has not closed. The casino declines the seated bet with
      * a checkpoint this wallet computes itself, so the new bet is signed against it here and both
@@ -347,6 +366,7 @@ export class ChannelClient extends WalletTransactions {
         seedHash: input.round.seedHash,
         round: input.round.id,
         operationId: id(`${operationId}:replace:${count}`),
+        game: intent.game,
         developer: intent.developer,
       });
       pending.replaced = count;
@@ -392,6 +412,7 @@ export class ChannelClient extends WalletTransactions {
         round: round?.id ?? ZeroHash,
         // A bet signed again after its remembered round proved stale needs a new signed ID.
         operationId: id((await this.getReceipt(operationId + STALE)) ? operationId + ':fresh-round' : operationId),
+        game: intent.game,
         developer: intent.developer,
       });
       this.pending = {

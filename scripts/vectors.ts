@@ -56,6 +56,7 @@ export function buildVectors() {
     seedHash: seedHash(clientSeed),
     round: roundId(secrets[0]),
     operationId: `0x${'82'.repeat(32)}`,
+    game: id('https://roulette-game.example/manifest.json'),
     developer: identity.player,
   });
   const requestHash = hashOperation(d, request);

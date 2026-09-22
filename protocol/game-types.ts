@@ -1,9 +1,16 @@
-/** What the wallet knows about a game: its identity and, for this tab only, a spending limit. */
+/** What the wallet knows about a game: its identity, what its manifest declares, and, for this tab
+ * only, a spending limit. */
 export interface GameIdentity {
   manifestURL: string;
   entryURL: string;
   developer: string;
   name: string;
+  /** The least this game's every bet pays back, as a percentage the wallet holds it to. A game that
+   * states one can ask for nothing that pays nothing back. */
+  return?: number;
+  /** This game bets on rounds its own host opens, so its host draws their seed. The player allows it
+   * before the game is framed, or the game is not opened. */
+  rounds?: boolean;
 }
 /** The open game in this tab. Never persisted: closing the tab or leaving the game releases the limit. */
 export interface GameSession {
@@ -13,8 +20,6 @@ export interface GameSession {
   asset?: 'eth' | 'test';
   /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
-  /** The player allowed this open game to bet on rounds whose seed its host draws. Like the limit, it lasts only while the game stays open. */
-  hostedRounds?: boolean;
 }
 export interface GameRequest {
   /** The game's own idempotency key: an exact retry returns the saved receipt. */

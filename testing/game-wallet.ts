@@ -13,6 +13,7 @@ import {
   checkpointEvidence,
   rejectionCheckpoint,
 } from '../protocol/protocol.ts';
+import type { GameIdentity } from '../protocol/game-types.ts';
 export async function gameWallet(storage = new MemoryStore()) {
   const owner = Wallet.createRandom(),
     player = Wallet.createRandom(),
@@ -172,11 +173,14 @@ export async function gameWallet(storage = new MemoryStore()) {
     async closeRound(round: string) {
       for (const close of closers) await close(round);
     },
-    identity: (name = 'test') => ({
+    /** A game as its manifest describes it. `declared` is what that manifest says about itself: the
+     * return the wallet holds it to, whether it bets on rounds its own host opens, the assets it plays. */
+    identity: (name = 'test', declared: Partial<GameIdentity> = {}) => ({
       name,
       manifestURL: `https://${name}.example/manifest.json`,
       entryURL: `https://${name}.example/`,
       developer: owner.address,
+      ...declared,
     }),
     async reload() {
       const restored = make();

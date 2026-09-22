@@ -122,11 +122,13 @@ export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) 
   const { secret: shared, seed: given, ...terms } = extra as any;
   const secret = kind !== 1 ? ZeroHash : (shared ?? id('secret ' + ++count)),
     seed = kind !== 1 ? ZeroHash : (given ?? id('seed ' + count));
-  // A bet signs its developer; every other kind leaves the field zero.
+  // A bet signs its developer; every other kind leaves the field zero. A bet and a payment name
+  // the game that asked for them.
   const values = {
     kind,
     amount,
     operationId: id('op ' + ++count),
+    ...([1, 2].includes(kind) ? { game: id('https://game.example/manifest.json') } : {}),
     ...(kind === 1 ? { developer: f.owner.address, round: roundId(secret), seedHash: seedHash(seed) } : {}),
     ...terms,
   };

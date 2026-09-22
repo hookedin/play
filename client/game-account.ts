@@ -1,12 +1,15 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
 import { getAddress, id, ZeroAddress } from 'ethers';
 
+/** A game's name, in one value: the hash of the manifest URL its publisher published. Its page, its
+ * entry and its rules may change; the game does not, so a receipt and a pending operation survive a
+ * deploy. Every bet and payment signs it, and the casino tallies each game's commission under it. */
 export function gameKey(identity: GameIdentity) {
   const developer = getAddress(identity.developer);
   if (developer === ZeroAddress) throw new Error('A developer fee recipient is required');
   for (const url of [identity.manifestURL, identity.entryURL])
     if (!['http:', 'https:'].includes(new URL(url).protocol)) throw new Error('Game URLs must use HTTP(S)');
-  return id(JSON.stringify([identity.manifestURL, identity.entryURL, developer.toLowerCase()]));
+  return id(identity.manifestURL);
 }
 export function gameAmount(value: unknown, positive = true) {
   if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,77})$/.test(value)) throw new Error('Use decimal wei amounts');

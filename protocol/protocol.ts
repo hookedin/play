@@ -64,7 +64,7 @@ export const STATE_TYPES = {
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seedHash,bytes32 round,bytes32 operationId,address developer,bytes32 counterparty',
+    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seedHash,bytes32 round,bytes32 operationId,bytes32 game,address developer,bytes32 counterparty',
   ),
   Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
 };
@@ -253,6 +253,7 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     seedHash: ZeroHash,
     round: ZeroHash,
     operationId: ZeroHash,
+    game: ZeroHash,
     developer: ZeroAddress,
     counterparty: ZeroHash,
     ...values,
@@ -302,7 +303,10 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     credit = kind === KIND.receive,
     // A transfer and its credit name the other side: another channel, or the table the money is
     // bought into and paid out of.
-    linked = kind === KIND.transfer || credit;
+    linked = kind === KIND.transfer || credit,
+    // A bet and a payment are what a game debits with no counterparty of its own, so each names the
+    // game that asked for it. A transfer names its recipient and a credit is the player's own.
+    byGame = wager || kind === KIND.payment;
   if (![KIND.bet, KIND.payment, KIND.transfer, KIND.receive].includes(kind as 1)) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
@@ -334,7 +338,8 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     amount >= MAX_BALANCE ||
     (linked
       ? same(op.counterparty, ZeroHash) || same(op.counterparty, base.channelId)
-      : !same(op.counterparty, ZeroHash))
+      : !same(op.counterparty, ZeroHash)) ||
+    (byGame ? same(op.game, ZeroHash) : !same(op.game, ZeroHash))
   )
     throw new Error(wager ? 'Invalid bet commitment or balance' : linked ? 'Invalid transfer' : 'Invalid payment');
   if (credit) next.balance = String(balance + amount);
@@ -386,6 +391,7 @@ export const emptyStep = (): Step => ({
     seedHash: ZeroHash,
     round: ZeroHash,
     operationId: ZeroHash,
+    game: ZeroHash,
     developer: ZeroAddress,
     counterparty: ZeroHash,
   },

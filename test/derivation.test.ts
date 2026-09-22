@@ -89,15 +89,33 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     /Invalid transfer/,
   );
   await disagreeNever(await craft(a, { kind: 4, amount: 0n, counterparty: fund }), /Invalid transfer/);
+  // A bet and a payment name the game that asked for them; a transfer and a credit never do.
+  const GAME = id('https://game.example/manifest.json');
+  await disagreeNever(await craft(a, { kind: 2, amount: 10n }), /Invalid payment/);
+  for (const kind of [3, 4])
+    await disagreeNever(await craft(a, { kind, amount: 30n, counterparty: fund, game: GAME }), /Invalid transfer/);
   // Every field a kind does not use must be zero; both sides reject the same encodings.
-  await disagreeNever(await craft(a, { kind: 2, amount: 10n, developer: f.owner.address }), /Invalid payment/);
-  await disagreeNever(await craft(a, { kind: 2, amount: 10n }, id('not zero')), /Invalid payment/);
-  await disagreeNever(await craft(a, { kind: 2, amount: 10n }, ZeroHash, id('not zero')), /Invalid payment/);
+  await disagreeNever(
+    await craft(a, { kind: 2, amount: 10n, game: GAME, developer: f.owner.address }),
+    /Invalid payment/,
+  );
+  await disagreeNever(await craft(a, { kind: 2, amount: 10n, game: GAME }, id('not zero')), /Invalid payment/);
+  await disagreeNever(
+    await craft(a, { kind: 2, amount: 10n, game: GAME }, ZeroHash, id('not zero')),
+    /Invalid payment/,
+  );
   // Only the secret of the round a bet signed, and the seed it named, settle it; every prize is well formed.
   const secret = id('a secret'),
     seed = id('s'),
     prize = { rangeStart: 0n, rangeEnd: 1n << 62n, payout: 150n },
-    wager = { kind: 1, amount: 100n, prizes: [prize], seedHash: seedHash(seed), developer: f.owner.address };
+    wager = {
+      kind: 1,
+      amount: 100n,
+      prizes: [prize],
+      seedHash: seedHash(seed),
+      game: GAME,
+      developer: f.owner.address,
+    };
   const round = { ...wager, round: roundId(secret) };
   await disagreeNever(await craft(a, { ...wager, round: id('another round') }, secret, seed), /Invalid bet/);
   await disagreeNever(await craft(a, round, id('another secret'), seed), /Invalid bet/);
@@ -112,9 +130,13 @@ test('contract derive and deriveState agree on every operation kind and invalid 
   await disagreeNever(await craft(a, { ...round, prizes: Array(65).fill(prize) }, secret, seed), /Invalid bet/);
   await disagreeNever(await craft(a, { ...round, seedHash: ZeroHash }, secret, ZeroHash), /Invalid bet/);
   await disagreeNever(await craft(a, { ...round, developer: ZeroAddress }, secret, seed), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, game: ZeroHash }, secret, seed), /Invalid bet/);
   await disagreeNever(await craft(a, { ...round, amount: 5000n }, secret, seed), /Invalid bet/);
-  await disagreeNever(await craft(a, { kind: 2, amount: 10n, round: id('stray round') }), /Invalid payment/);
-  await disagreeNever(await craft(a, { kind: 2, amount: 10n, prizes: [prize] }), /Invalid payment/);
+  await disagreeNever(
+    await craft(a, { kind: 2, amount: 10n, game: GAME, round: id('stray round') }),
+    /Invalid payment/,
+  );
+  await disagreeNever(await craft(a, { kind: 2, amount: 10n, game: GAME, prizes: [prize] }), /Invalid payment/);
   // The stake is paid to enter and every prize holding the outcome pays: a full table of 64 overlapping
   // prizes, a prize over the whole outcome space and a prize below the stake all agree on-chain.
   const everything = { rangeStart: 0n, rangeEnd: 1n << 64n, payout: 3n };

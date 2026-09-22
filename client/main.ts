@@ -20,6 +20,7 @@ import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
 import { json, verifyEvidence, FAUCET_BELOW } from '../protocol/protocol.ts';
+import { statedReturn } from '../protocol/risk.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { activityJSON, createActivityEntry, filterActivity, receiptSummary, receiptUnit } from './activity.ts';
 import { createGameLog, logAsset } from './game-log.ts';
@@ -423,7 +424,7 @@ function openFundDialog({ amount, reason, asked = false }: { amount?: bigint; re
     fundRequest = { resolve };
   });
 }
-/** A decision only the player makes, once per open game: the wallet explains what changes and waits. */
+/** A decision only the player makes, before the wallet opens the game: it explains what changes and waits. */
 function openConsentDialog(text: {
   eyebrow: string;
   title: string;
@@ -433,7 +434,6 @@ function openConsentDialog(text: {
   decline: string;
   log: string;
 }) {
-  if (!active) return Promise.resolve(false);
   const dialog = $<HTMLDialogElement>('hosted-dialog');
   for (const part of ['eyebrow', 'title', 'reason', 'note', 'allow', 'decline'] as const)
     $('hosted-' + part).textContent = text[part];
@@ -445,22 +445,23 @@ function openConsentDialog(text: {
       () => {
         const allowed = dialog.returnValue === 'allow';
         dialog.returnValue = '';
-        if (active) logGameActivity(`${text.log} ${allowed ? 'allowed until you leave' : 'declined'}`);
+        logGameActivity(`${text.log} ${allowed ? 'allowed' : 'declined'}`);
         resolve(allowed);
       },
       { once: true },
     ),
   );
 }
-/** May this game's host draw the randomness of shared rounds? */
-const openHostedDialog = () =>
+/** A game whose manifest declares shared rounds asks this before it is opened: its host, not this
+ * wallet, draws the seed of every round it runs. */
+const openHostedDialog = (name: string) =>
   openConsentDialog({
     eyebrow: 'SHARED ROUND',
-    title: `Join ${active?.manifest.name}'s shared rounds?`,
+    title: `Open ${name}, where everyone shares one result?`,
     reason:
       "Everyone at the table bets on one result, so its randomness comes from the game's host instead of your wallet.",
-    note: 'In your own bets neither you nor the casino can choose the result. Here the host and the casino could choose it together; neither can alone. Your wallet still verifies every result and marks these bets in your activity. Allowing this lasts until you leave the game; refusing asks again on your next bet.',
-    allow: 'Allow shared rounds',
+    note: 'In your own bets neither you nor the casino can choose the result. Here the host and the casino could choose it together; neither can alone. Your wallet still verifies every result and marks these bets in your activity. Refusing leaves the game closed; every other game plays with your own randomness.',
+    allow: 'Open the game',
     decline: 'Keep my own randomness',
     log: 'Shared-round randomness',
   });
@@ -921,6 +922,15 @@ async function fetchGame(url: string) {
     throw new Error(`The manifest's developer, ${String(manifest.developer).slice(0, 60)}, is not an address.`);
   }
   if (developer === ZeroAddress) throw new Error('The developer fee recipient cannot be the zero address.');
+  // What the game says about itself, and what the wallet will hold it to.
+  if (manifest.return !== undefined)
+    try {
+      statedReturn(manifest.return);
+    } catch (error: any) {
+      throw new Error(`The manifest's stated return is not usable: ${error.message}.`);
+    }
+  if (manifest.rounds !== undefined && typeof manifest.rounds !== 'boolean')
+    throw new Error("A manifest's rounds is true when the game bets on rounds its own host opens.");
   const entry = safeURL(manifest.entry, response.url);
   if (entry.origin === location.origin || new URL(response.url).origin === location.origin)
     throw new Error('Games cannot be served from the wallet’s own origin.');
@@ -929,6 +939,9 @@ async function fetchGame(url: string) {
 
 async function loadGame(url: string, gameRoute: GameRoute, push = true) {
   const { manifestURL, manifest, developer, entry } = await fetchGame(url);
+  // The one decision the player takes before a game is framed: its host's randomness, or none of it.
+  if (manifest.rounds && !(await openHostedDialog(String(manifest.name))))
+    throw new Error(`${manifest.name} runs shared rounds, so it stays closed while you keep your own randomness.`);
   closeGame();
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -944,6 +957,8 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     entryURL: entry.href,
     developer,
     name: manifest.name,
+    ...(manifest.return === undefined ? {} : { return: manifest.return as number }),
+    ...(manifest.rounds ? { rounds: true } : {}),
   };
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
   const isCurrent = () =>
@@ -1002,18 +1017,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
         return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
       }
       if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
-      if (method === 'game.bet') {
-        if (params.round && !wallet.game?.hostedRounds) {
-          if (!(await openHostedDialog()))
-            throw gameError(
-              'declined',
-              "You kept this wallet's own randomness, so no bet was placed. This game only runs shared rounds: bet again and allow them to play.",
-            );
-          if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
-          wallet.allowHostedRounds();
-        }
-        return wallet.gameBet(params);
-      }
+      if (method === 'game.bet') return wallet.gameBet(params);
       if (method === 'game.cancel') return wallet.gameCancel(params);
       if (method === 'game.payment') return wallet.gamePayment(params);
       return wallet.gameTransfer(params);
@@ -1058,6 +1062,17 @@ async function gameCard(route: GameRoute, url: string) {
   link.className = 'catalog-link';
   link.textContent = 'manifest' in route ? new URL(url).host : `${route.owner}/${route.name}`;
   card.append(title, description, link);
+  // What this game states it pays back, which the wallet holds every one of its bets to.
+  let stated: number | null = null;
+  try {
+    statedReturn(manifest.return);
+    stated = manifest.return as number;
+  } catch {}
+  const returns = document.createElement('span');
+  returns.className = 'catalog-return';
+  returns.textContent = stated === null ? 'No stated return' : `Pays back at least ${stated}%`;
+  returns.dataset.stated = String(stated !== null);
+  card.append(returns);
   card.addEventListener('click', event => {
     event.preventDefault();
     task(() => loadGame(url, route));

@@ -2023,6 +2023,18 @@ main {
     monospace;
   color: #8f86ad;
 }
+/* What a game states it pays back. The wallet holds every bet of a game that states one to it. */
+.catalog-return {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6de3a4;
+}
+.catalog-return[data-stated='false'] {
+  color: #8a8fa0;
+}
 /* The page behind an open dialog stays put. */
 html:has(dialog[open]) {
   overflow: hidden;

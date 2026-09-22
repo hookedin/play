@@ -1,7 +1,7 @@
 import type { GameIdentity, GameLimit, GameRequest, GameSession } from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { getAddress } from 'ethers';
-import { describeBet } from '../protocol/risk.ts';
+import { MAX_PRIZES, MAX_ROUND_BETS, OUTCOME_SPACE } from '../protocol/risk.ts';
 import { gameKey, gameAmount, gameOperationKey } from './game-account.ts';
 import { METHODS, gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
@@ -60,7 +60,13 @@ export class GameSessions extends ChannelClient {
    * asset's smallest unit. */
   gameHello(this: CasinoWallet) {
     this.requireGame();
-    return { methods: METHODS, asset: this.asset, chainId: String(this.expectedChainId) };
+    return {
+      methods: METHODS,
+      asset: this.asset,
+      chainId: String(this.expectedChainId),
+      // Every bound a game has to respect, so none of them is a number compiled into the game.
+      limits: { prizes: MAX_PRIZES, outcomeSpace: String(OUTCOME_SPACE), seats: MAX_ROUND_BETS },
+    };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
    * they are shown by if they took one, and what to price bets against. Their address, their channel
@@ -96,16 +102,13 @@ export class GameSessions extends ChannelClient {
       this.render();
     });
   }
-  /** The player accepts that this game's host, not this wallet, draws the seed of its shared rounds. */
-  allowHostedRounds(this: CasinoWallet) {
-    this.requireGame().hostedRounds = true;
-  }
   async gameBet(this: CasinoWallet, request: GameRequest) {
     const game = this.requireGame();
     // In the wallet's own rounds neither side can choose the outcome. In a hosted round the host and
-    // the casino together could, so a game never moves a player onto one without the player's consent.
-    if (request.round && !game.hostedRounds)
-      throw gameError('declined', "Allow this game to use its host's randomness before betting on a shared round");
+    // the casino together could, so only a game whose manifest declares them may bet on one, and the
+    // player allowed them before this game was framed.
+    if (request.round && game.identity.rounds !== true)
+      throw gameError('rounds-undeclared', 'This game did not declare that it bets on rounds its own host opens');
     const terms = {
       stake: gameAmount(request.stake),
       prizes: request.prizes.map(prize => ({

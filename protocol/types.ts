@@ -45,6 +45,8 @@ export interface Operation {
   /** A bet's round: the hash of the secret that settles it. */
   round: string;
   operationId: string;
+  /** The game that asked for a bet or a payment, named by the hash of its manifest URL. */
+  game: string;
   developer: string;
   counterparty: string;
 }

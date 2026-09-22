@@ -237,6 +237,7 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     seedHash: seedHash(seed),
     round: roundId(secret),
     operationId: id('wide operation'),
+    game: id('https://wide-game.example/manifest.json'),
     developer: f.owner.address,
   });
   const next = deriveState(f.d, base, op, secret, seed);
