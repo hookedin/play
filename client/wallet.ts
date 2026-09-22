@@ -157,6 +157,8 @@ export class CasinoWallet extends GameSessions {
     games: { name: string; url: string }[];
   } | null;
   reportedBankroll = '0';
+  /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */
+  tokens = new Map<string, { expiresAt: number; header: string }>();
   declare actionDone: Promise<void> | undefined;
   declare game: GameSession | null;
   constructor({
@@ -830,14 +832,21 @@ export class CasinoWallet extends GameSessions {
     if (path !== '/api/config') this.requireService();
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (path.startsWith('/api/channels/') && channel?.key) {
-      const message = {
-        channelId: channel.state.channelId,
-        expiresAt: Math.floor(Date.now() / 1000) + 60,
-      };
-      headers.authorization = authorization(
-        message,
-        await this.channelSigner(channel).signTypedData(this.domain, ACCESS_TYPES, message),
-      );
+      const now = Math.floor(Date.now() / 1000);
+      let token = this.tokens.get(channel.state.channelId);
+      // A token is signed for a minute and used while it has twenty seconds left, room for a slow request.
+      if (!token || token.expiresAt - now < 20) {
+        const message = { channelId: channel.state.channelId, expiresAt: now + 60 };
+        token = {
+          expiresAt: message.expiresAt,
+          header: authorization(
+            message,
+            await this.channelSigner(channel).signTypedData(this.domain, ACCESS_TYPES, message),
+          ),
+        };
+        this.tokens.set(channel.state.channelId, token);
+      }
+      headers.authorization = token.header;
     }
     const response = await fetch(this.casinoURL + path, {
       method: body === undefined ? 'GET' : 'POST',

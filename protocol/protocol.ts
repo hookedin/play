@@ -373,11 +373,16 @@ export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation):
     transitionHash: hashOperation(d, op),
   };
 }
-export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner: string, casinoSigner: string) {
-  assertSignature(d, OP_TYPES, step.operation, step.authorization, playerSigner);
+/** The checkpoint a step establishes, with the casino's signature over it checked. The player's
+ * authorization is left to the caller: `verifyStep` checks it, and a wallet that signed it compares it. */
+export function settleStep(d: Domain, base: Checkpoint, step: Step, casinoSigner: string) {
   const next = deriveState(d, base, step.operation, step.secret, step.seed);
   assertSignature(d, STATE_TYPES, next, step.casinoSignature, casinoSigner);
   return next;
+}
+export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner: string, casinoSigner: string) {
+  assertSignature(d, OP_TYPES, step.operation, step.authorization, playerSigner);
+  return settleStep(d, base, step, casinoSigner);
 }
 export const emptyStep = (): Step => ({
   operation: {

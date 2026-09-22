@@ -334,8 +334,9 @@ for (const boundary of ['request', 'settlement'])
     w.openGame(f.identity());
     await w.setGameLimit('100');
     let commits = 0;
+    // The signed request is saved once, and the settlement is the save after it.
     f.storage.beforeCommit = () => {
-      if (++commits === (boundary === 'request' ? 1 : 3)) throw new Error('disk failed');
+      if (++commits === (boundary === 'request' ? 1 : 2)) throw new Error('disk failed');
     };
     await assert.rejects(w.gameBet(terms()), /disk failed/);
     await assert.rejects(w.setGameLimit('10'), /storage needs recovery/);

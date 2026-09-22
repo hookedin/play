@@ -33,7 +33,7 @@ import {
   initialState,
   FUND_TYPES,
   REDEEM_TYPES,
-  verifyStep,
+  settleStep,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
@@ -274,6 +274,7 @@ export class ChannelClient extends WalletTransactions {
         game: intent.game,
         developer: intent.developer,
       });
+      // Signed, then saved once: nothing leaves this wallet until the signed request is durable.
       this.pending = {
         ...(game ? { game } : {}),
         // A hosted bet waits at the casino until its round's host closes the round.
@@ -283,7 +284,7 @@ export class ChannelClient extends WalletTransactions {
         operationId,
         request,
         developer,
-        signature: null,
+        signature: await this.channelSigner().signTypedData(this.domain, OP_TYPES, request),
       };
       await this.save();
     };
@@ -307,10 +308,6 @@ export class ChannelClient extends WalletTransactions {
     const pending = this.pending,
       c = this.channel!;
     if (!pending?.request) throw new Error('No signed operation to recover');
-    if (!pending.signature) {
-      pending.signature = await this.channelSigner().signTypedData(this.domain, OP_TYPES, pending.request);
-      await this.save();
-    }
     const acknowledgment =
       c.playerSignature && c.playerSignature !== '0x'
         ? {
@@ -357,7 +354,13 @@ export class ChannelClient extends WalletTransactions {
       if (!c.pending?.request || !['bet', 'invest'].includes(kind)) throw new Error('Unexpected rejection');
       next = rejectionCheckpoint(this.domain, c.state, c.pending.request);
       assertSignature(this.domain, STATE_TYPES, next, response.casinoSignature, this.operator);
-    } else next = verifyStep(this.domain, c.state, step, new Wallet(c.key!).address, this.operator);
+    } else {
+      // The operation is the one this wallet signed, and its authorization goes into this wallet's
+      // evidence: it must be the very signature this wallet made, which needs no recovering.
+      if (!c.pending?.signature || !same(step.authorization, c.pending.signature))
+        throw new Error('Casino returned a different authorization');
+      next = settleStep(this.domain, c.state, step, this.operator);
+    }
     if (!same(hashState(this.domain, next), hashState(this.domain, response.state)))
       throw new Error('Result state differs from evidence');
     const game = c.pending?.game as GameIntent | undefined;
@@ -459,10 +462,6 @@ export class ChannelClient extends WalletTransactions {
       const pending = this.pending,
         c = this.channel!;
       // The operation travels with its signature: the casino may never have seen it.
-      if (!pending.signature) {
-        pending.signature = await this.channelSigner().signTypedData(this.domain, OP_TYPES, pending.request);
-        await this.save();
-      }
       const response = await this.api(`/api/channels/${this.channelId}/cancel`, {
         request: pending.request,
         signature: pending.signature,
