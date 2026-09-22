@@ -110,7 +110,7 @@ const LAST_CALL_MS = 3000;
     render();
   }
   /** The chips cannot move while a request is in flight or the wheel is turning. A bet that is in
-   * the round is not in the way: changing the chips takes it back and places the new one at once. */
+   * the round is not in the way: changing the chips takes it back and places a new one. */
   const locked = () => working || spinning;
   /** The chips on the layout are exactly the bet the wallet is holding. */
   const unchanged = () =>
@@ -223,6 +223,14 @@ const LAST_CALL_MS = 3000;
     const terms = bet(chips),
       round = table?.round;
     if (!round) throw new Error('The wheel is not ready. Try again in a moment.');
+    // Other chips are another bet: the one in the round is taken back first. If the wheel got there
+    // first, that bet has played, and its result is what the player sees.
+    if (saved) {
+      const taken = await HookedIn.cancel(saved.id);
+      if (taken.status !== 'rejected') return settle(taken);
+      saved = null;
+      persist();
+    }
     const limit = BigInt((await HookedIn.balance()).balance);
     if (BigInt(terms.stake) > limit) {
       const funding = await HookedIn.requestFunds({ amount: BigInt(terms.stake) - limit });
@@ -230,9 +238,7 @@ const LAST_CALL_MS = 3000;
       if (BigInt(funding.balance) < BigInt(terms.stake)) throw new Error('Add enough money to cover your chips.');
     }
     saved = {
-      // Changing the chips keeps the bet's name: the wallet takes the seat back and places the new
-      // bet on the same round in one request, so the table never loses the place.
-      id: saved && saved.round.id === round.id ? saved.id : crypto.randomUUID(),
+      id: crypto.randomUUID(),
       ...terms,
       round,
       chips: Object.fromEntries(Object.entries(chips).map(([id, amount]) => [id, String(amount)])),

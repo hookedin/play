@@ -68,7 +68,7 @@
             >Your exact request is saved. Retry it without changing its terms or randomness.</span
           ><button id="recover-wallet" class="button small">Retry same request</button
           ><button id="speed-up-transaction" class="button small hidden">Speed up transaction</button
-          ><button id="cancel-transfer" class="button small hidden">Cancel transfer</button
+          ><button id="withdraw-bet" class="button small hidden">Withdraw bet</button
           ><button id="export-evidence" class="button small">Export channel evidence</button
           ><button id="start-close" class="button small">Start unilateral close</button>
         </div>
@@ -257,7 +257,7 @@
                 within 24 hours of its start. Keep current recovery evidence. Close and reopen to add funds.
               </p>
               <div class="funding-amount-label">
-                <label for="transfer-amount">Amount to add</label
+                <label for="deposit-amount">Amount to add</label
                 ><button
                   id="max-deposit"
                   class="text-button"
@@ -270,7 +270,7 @@
               </div>
               <div class="amount-input">
                 <input
-                  id="transfer-amount"
+                  id="deposit-amount"
                   type="text"
                   inputmode="decimal"
                   value="0.00001"

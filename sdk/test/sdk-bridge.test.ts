@@ -77,23 +77,18 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     assert.equal((await funding).funded, false);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
     const round = { id: '0x' + '4'.repeat(64), seedHash: '0x' + '5'.repeat(64) };
-    const calls = [
-      HookedIn.payment('pay', '5'),
-      HookedIn.transfer('tip', '6'),
-      HookedIn.bet({ id: 'seat', stake: '5', prizes: [], round }),
-    ];
+    const calls = [HookedIn.payment('pay', '5'), HookedIn.bet({ id: 'seat', stake: '5', prizes: [], round })];
     assert.deepEqual(
-      posted.slice(-3).map(({ method, params }) => ({ method, params })),
+      posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
         { method: 'game.payment', params: { id: 'pay', amount: '5' } },
-        { method: 'game.transfer', params: { id: 'tip', amount: '6' } },
         { method: 'game.bet', params: { id: 'seat', stake: '5', prizes: [], round } },
       ],
     );
-    for (const { id } of posted.slice(-3)) deliver(parent, { hookedin: true, id, result: id });
+    for (const { id } of posted.slice(-2)) deliver(parent, { hookedin: true, id, result: id });
     assert.deepEqual(
       await Promise.all(calls),
-      posted.slice(-3).map(message => message.id),
+      posted.slice(-2).map(message => message.id),
     );
     const ids = posted.map(message => message.id);
     assert.ok(ids.every((id, i) => Number.isSafeInteger(id) && id > (ids[i - 1] ?? 0)));

@@ -95,13 +95,12 @@ if (receipt.status === 'signed' && receipt.verified) {
 | `bet({ id, stake, prizes, round? })`                      | One atomic bet; with a `round`, the signed entry for that round's host                                                       |
 | `cancel(id)`                                              | Withdraw a hosted bet its host has not played                                                                                |
 | `payment(id, amount)`                                     | A deterministic payment to the bankroll                                                                                      |
-| `transfer(id, amount)`                                    | Pay the developer named in the manifest                                                                                      |
 | `storageScope(info)`                                      | A storage key unique to this page, chain, player and asset, on the player's uname                                            |
 | `initializeGame({ stakeInput, assetLabels })`             | Read-only startup: `wallet.hello`, `wallet.info`, the first balance, asset labels and the recommended stake                  |
 | `hello()`, `info()`                                       | The wallet's methods and asset `{id, symbol, decimals}`; the player's `{uname, alias, chainId, bankroll, recommendedStake}`  |
 | `parseAmount`, `formatAmount`, `exactAmount`, `stepStake` | Amounts in the wallet's asset, whatever its decimals, and a 1-2-5 stake ladder for an input field                            |
 
-The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.payment`, `game.transfer`, `game.receipt`, `game.cancel` and `game.requestFunds`. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and shared rounds.
+The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.payment`, `game.receipt`, `game.cancel` and `game.requestFunds`. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and shared rounds.
 
 `mountBank(element, { round? })` renders the balance strip the reference games show: the money the wallet lets the game risk in this tab, live, with an **Add funds** button. With the game's `RoundClient` it leaves out the cash inside an unfinished round. It shows the asset's symbol and marks test coins. `createSynth()` makes short tones without audio files.
 

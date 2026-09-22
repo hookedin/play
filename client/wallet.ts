@@ -312,7 +312,6 @@ export class CasinoWallet extends GameSessions {
     this.timer = setInterval(() => {
       if (!this.busy)
         void this.refresh()
-          .then(() => this.receiveTransfers({ gamePayoutsOnly: true }))
           .then(() => this.collectPayouts())
           .then(() => this.auditRejections())
           .catch(() => {});

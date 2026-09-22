@@ -223,9 +223,6 @@ export const HookedIn = (() => {
   const cancel = (id: string): Promise<GameReceipt> => call('game.cancel', { id });
   /** A deterministic payment to the bankroll. */
   const payment = (id: string, amount: string): Promise<GameReceipt> => call('game.payment', { id, amount });
-  /** Pay the developer named in this game's manifest. */
-  const transfer = (id: string, amount: string): Promise<GameReceipt | PendingReceipt> =>
-    call('game.transfer', { id, amount });
   /** Scope game storage to this page, player and asset: games sharing a host, accounts sharing a
    * browser, and the same player's ETH and test-coin play must not see each other's state. It keys
    * on the player's uname, so taking or giving up an alias does not lose what they had. */
@@ -282,7 +279,6 @@ export const HookedIn = (() => {
     bet,
     cancel,
     payment,
-    transfer,
     storageScope,
     /** How a player is written: an alias wears `@`, a uname wears `~`. */
     showName,

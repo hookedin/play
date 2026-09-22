@@ -155,17 +155,4 @@ export class GameSessions extends ChannelClient {
       ),
     );
   }
-  async gameTransfer(this: CasinoWallet, request: { id: string; amount: string }) {
-    const game = this.requireGame();
-    return gameReceipt(
-      request.id,
-      await this.transfer(
-        gameAmount(request.amount),
-        game.identity.developer,
-        this.gameOperationId(request.id),
-        { key: game.key, id: request.id, name: game.identity.name },
-        game.identity.developer,
-      ),
-    );
-  }
 }

@@ -39,17 +39,18 @@ test('reorged, reverted, replaced and unknown receipts never advertise a confirm
   }
 });
 
-test('closures and actual collections remain distinct from off-chain transfers', () => {
+test('closures and actual collections remain distinct from off-chain payments', () => {
   const closure = receiptSummary({ kind: 'closure', amount: '0', status: 'confirmed' });
   assert.equal(closure.amount, '0.0 ETH');
   assert.match(closure.notice!, /Collect available funds separately/);
   assert.equal(receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }).amountLabel, 'Received');
-  const transfer = receiptSummary({ kind: 'transfer', amount: '123', status: 'signed', balance: '456' });
-  assert.equal(transfer.amountLabel, 'Sent');
-  assert.equal(transfer.status, 'Signed off-chain');
-  assert.match(transfer.description!, /Paid to this game's developer\. Balance 0\.000000000000000456 ETH/);
   const payment = receiptSummary({ kind: 'payment', amount: '123', status: 'signed', balance: '456' });
-  assert.match(payment.description!, /extra wager this game charged/);
+  assert.equal(payment.amountLabel, 'Sent');
+  assert.equal(payment.status, 'Signed off-chain');
+  assert.match(
+    payment.description!,
+    /extra wager this game charged, paid into the casino's bankroll\. Balance 0\.000000000000000456 ETH/,
+  );
 });
 
 test('diagnostic JSON handles bigint, malformed payloads and explicit preview truncation', () => {

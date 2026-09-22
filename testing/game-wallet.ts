@@ -82,14 +82,7 @@ export async function gameWallet(storage = new MemoryStore()) {
       if (path.endsWith('/round')) return { id: (own ||= createRound()) };
       if (path.endsWith('/cancel')) return takeBack((body as any).request);
       if (!path.endsWith('/operations')) return {};
-      const { request, signature, seed, withdraw, place } = body as any;
-      // Changing the chips on a seat: the bet in the round is declined and the new one takes its place.
-      if (place) {
-        const withdrawn = await takeBack(withdraw.request);
-        if (withdrawn.status !== 'rejected') return { withdrawn };
-        hosted.get(withdraw.request.round)?.seats.push({ request: place.request, signature: place.signature });
-        return { withdrawn, placed: { status: 'seated', operationId: place.request.operationId } };
-      }
+      const { request, signature, seed } = body as any;
       if (responses.has(request.operationId)) return responses.get(request.operationId);
       const seats = hosted.get(request.round);
       if (seats) {
@@ -170,6 +163,8 @@ export async function gameWallet(storage = new MemoryStore()) {
     owner,
     player,
     settlements: () => settlements,
+    /** A round's secret, which only the casino knows until it reveals the round. */
+    secretOf: (round: string) => secrets.get(round)!,
     /** What a game's host does at the casino: open a round with the hash of its seed, and close it with the seed. */
     openRound(seed = hexlify(randomBytes(32))) {
       const id = createRound();
@@ -179,8 +174,8 @@ export async function gameWallet(storage = new MemoryStore()) {
     async closeRound(round: string) {
       for (const close of closers) await close(round);
     },
-    /** A game as its manifest describes it. `declared` is what that manifest says about itself: the
-     * return the wallet holds it to, whether it bets on rounds its own host opens, the assets it plays. */
+    /** A game as its manifest describes it. `declared` is what that manifest says about itself, such
+     * as whether it bets on rounds its own host opens. */
     identity: (name = 'test', declared: Partial<GameIdentity> = {}) => ({
       name,
       manifestURL: `https://${name}.example/manifest.json`,

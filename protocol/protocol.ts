@@ -161,12 +161,12 @@ export const SHARE_TYPES = {
     'address holder,uint256 sequence,uint256 shares,uint256 amount,uint256 equity,uint256 totalShares,bytes32 cause',
   ),
 };
-/** A holder converts shares back into money. `sequence` is the statement it will produce, so a
- * redemption can be used once. */
 /** The public state of the fund, signed when asked for: a quote the casino can be held to. */
 export const FUND_TYPES = {
   Fund: fields('uint256 sequence,uint256 totalShares,uint256 houseShares,uint256 equity,uint256 overdrawn,uint256 at'),
 };
+/** A holder converts shares back into money. `sequence` is the statement it will produce, so a
+ * redemption can be used once. */
 export const REDEEM_TYPES = {
   Redeem: fields('address holder,uint256 shares,uint256 sequence'),
 };
@@ -301,11 +301,10 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     amount = uint256(BigInt(op.amount));
   const wager = kind === KIND.bet,
     credit = kind === KIND.receive,
-    // A transfer and its credit name the other side: another channel, or the table the money is
-    // bought into and paid out of.
+    // An investment and a payout name the other side: the fund, or what pays the credit out.
     linked = kind === KIND.transfer || credit,
     // A bet and a payment are what a game debits with no counterparty of its own, so each names the
-    // game that asked for it. A transfer names its recipient and a credit is the player's own.
+    // game that asked for it. An investment names the fund, and a credit is the player's own.
     byGame = wager || kind === KIND.payment;
   if (![KIND.bet, KIND.payment, KIND.transfer, KIND.receive].includes(kind as 1)) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A bet names its
@@ -357,7 +356,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
   if (BigInt(next.balance) >= MAX_BALANCE) throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
-/** A joint checkpoint above an authorized bet or transfer supersedes it without consuming entropy or money. */
+/** A joint checkpoint above an authorized bet or investment supersedes it without consuming entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
     ![KIND.bet, KIND.transfer].includes(Number(op.kind) as 1) ||
@@ -366,7 +365,7 @@ export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation):
     BigInt(op.sequence) !== BigInt(base.sequence) + 1n ||
     same(op.operationId, ZeroHash)
   )
-    throw new Error('Rejection must identify the next bet or transfer');
+    throw new Error('Rejection must identify the next bet or investment');
   return {
     ...base,
     sequence: String(uint256(BigInt(op.sequence) + 1n)),
@@ -438,8 +437,8 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   };
 }
 /** A developer's commission. It accrues to the developer's address, the developer's own channel shows
- * what that address has earned and collected, and it is collected like a table's payout: a credit
- * whose counterparty is this ID, signed by the key of that channel. */
+ * what that address has earned and collected, and it is collected like redeemed shares: a credit whose
+ * counterparty is this ID, signed by the key of that channel. */
 export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
 /** One value for the whole signed protocol: the hash of every typed structure. A wallet or a host
  * that was built against other structures learns so from `GET /api/config` before it signs anything. */

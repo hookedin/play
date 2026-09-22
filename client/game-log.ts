@@ -53,7 +53,6 @@ export function describeRequest(method: string, params: any = {}) {
     case 'game.bet':
       return `stake ${eth(params.stake)} · ${betSummary(params)} · id ${params.id}`;
     case 'game.payment':
-    case 'game.transfer':
       return `amount ${eth(params.amount)} · id ${params.id}`;
     case 'game.receipt':
       return `id ${params.id}`;
@@ -84,7 +83,6 @@ export function describeResult(method: string, result: any) {
           ? `signed for the round's host · ${result.id}`
           : `paid ${eth(result.payout)} · ${result.id}`;
     case 'game.payment':
-    case 'game.transfer':
       return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.id}`;
     default:
       return '';

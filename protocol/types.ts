@@ -107,6 +107,10 @@ export interface OperationResponse {
   status: 'signed' | 'rejected';
   reason?: string;
   request?: Operation;
+  /** A declined bet's round, revealed with the rejection. */
+  secret?: string;
+  /** A declined bet names a round the casino has no open record of, so there is no secret to reveal. */
+  lost?: true;
   state: Checkpoint;
   casinoSignature: string;
   evidence: Evidence;
@@ -156,7 +160,6 @@ export interface RoundSeat {
    * else of them is. */
   uname: string;
   alias: string | null;
-  operationId: string;
   stake: Integer;
   prizes: Prize[];
 }
@@ -180,10 +183,6 @@ export interface FundHolder {
   sequence: number;
   statement: SignedStatement;
 }
-export interface TransferOffer {
-  request: Operation;
-  signature: string;
-}
 /** The service projection of one channel. Everything financial here is replayable from the signing log. */
 export interface ChannelRow {
   opening: Opening;
@@ -199,5 +198,4 @@ export interface ChannelRow {
   observedBlock?: number;
   closing: boolean;
   lastResponse?: OperationResponse | null;
-  transfer?: TransferOffer;
 }

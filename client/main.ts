@@ -56,8 +56,8 @@ const networkSetting = `hookedin:v1:${config.network}:selected-network`;
 const network = localStorage.getItem(networkSetting) || config.network;
 const networkDefaults =
   network === 'local'
-    ? { precision: 4, total: '100000000000000000', transfer: '0.1' }
-    : { precision: 6, total: '100000000000000', transfer: '0.00001' };
+    ? { precision: 4, total: '100000000000000000', deposit: '0.1' }
+    : { precision: 6, total: '100000000000000', deposit: '0.00001' };
 function configuredEndpoint(name: string, fallback: string) {
   try {
     return endpoint(localStorage.getItem(`hookedin:v1:${network}:${name}-url`) || fallback);
@@ -570,7 +570,7 @@ function renderWallet() {
     maxDepositEstimate = null;
   let depositAmount = 0n;
   try {
-    depositAmount = parseEther($<HTMLInputElement>('transfer-amount').value.trim());
+    depositAmount = parseEther($<HTMLInputElement>('deposit-amount').value.trim());
   } catch {}
   const aboveReserve = nativeBalance > wallet.gasReserve;
   const depositTooLarge = depositAmount > 0n && depositAmount >= nativeBalance - wallet.gasReserve;
@@ -623,17 +623,13 @@ function renderWallet() {
       : 'The wallet did not return a transaction hash. Recover checks its result, then requests approval to resend the same action with the same nonce.'
     : wallet.needsOpening
       ? 'Your channel registration needs recovery. The opening and channel key are saved.'
-      : wallet.pending?.kind === 'transfer'
-        ? 'Your transfer is waiting for the recipient wallet. The signed request is saved; retry it, cancel it, or close the channel.'
-        : wallet.pending?.hosted
-          ? "Your bet is waiting for the game's host to close the round. Retry looks for its result; withdrawing it leaves your balance unchanged."
-          : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
+      : wallet.pending?.hosted
+        ? "Your bet is waiting for the game's host to close the round. Retry looks for its result; withdrawing it leaves your balance unchanged."
+        : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
-  const cancellable = wallet.pending?.kind === 'transfer' || Boolean(wallet.pending?.hosted);
-  $<HTMLButtonElement>('cancel-transfer').classList.toggle('hidden', !cancellable);
-  $<HTMLButtonElement>('cancel-transfer').textContent =
-    wallet.pending?.kind === 'stake' ? 'Withdraw stake' : wallet.pending?.hosted ? 'Withdraw bet' : 'Cancel transfer';
-  $<HTMLButtonElement>('cancel-transfer').disabled = busy || !cancellable;
+  const cancellable = Boolean(wallet.pending?.hosted);
+  $<HTMLButtonElement>('withdraw-bet').classList.toggle('hidden', !cancellable);
+  $<HTMLButtonElement>('withdraw-bet').disabled = busy || !cancellable;
   $<HTMLButtonElement>('speed-up-transaction').disabled = busy || !wallet.transactionIntent;
   $<HTMLButtonElement>('export-evidence').disabled = busy || !wallet.current;
   $<HTMLButtonElement>('start-close').disabled = busy || !wallet.current || Number(state.channelStatus) !== 1;
@@ -650,7 +646,7 @@ function renderWallet() {
     depositAmount <= 0n;
   $<HTMLButtonElement>('max-deposit').disabled =
     busy || !ready || !observed || Boolean(wallet.pending) || Boolean(wallet.current) || !aboveReserve;
-  $<HTMLInputElement>('transfer-amount').disabled = busy;
+  $<HTMLInputElement>('deposit-amount').disabled = busy;
   $<HTMLButtonElement>('withdraw').disabled =
     busy || !ready || Boolean(wallet.pending) || !wallet.current || Number(state.channelStatus) !== 1;
   if (wallet.recoveryOnly) $<HTMLButtonElement>('withdraw').disabled = true;
@@ -1062,8 +1058,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
       if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
       if (method === 'game.bet') return wallet.gameBet(params);
       if (method === 'game.cancel') return wallet.gameCancel(params);
-      if (method === 'game.payment') return wallet.gamePayment(params);
-      return wallet.gameTransfer(params);
+      return wallet.gamePayment(params);
     },
     onError: message => toast(message, true),
   });
@@ -1486,7 +1481,7 @@ async function openGameRecord(key: string, push = true) {
       stake: BigInt(bet.stake),
       payout: BigInt(bet.payout),
       expected: BigInt(bet.expected),
-      operation: bet.operation,
+      index: Number(bet.index),
     }));
     $('gamebets-totals').replaceChildren(
       ...totalCards(
@@ -1684,12 +1679,12 @@ $<HTMLButtonElement>('recover-wallet').addEventListener('click', () =>
     await wallet.recover();
     toast(
       wallet.pending
-        ? 'Transfer is still waiting for its recipient.'
+        ? "The bet is still waiting for the game's host to close its round."
         : 'Saved wallet operation recovered. Reopen its game to continue the session.',
     );
   }),
 );
-$<HTMLButtonElement>('cancel-transfer').addEventListener('click', () =>
+$<HTMLButtonElement>('withdraw-bet').addEventListener('click', () =>
   task(async () => {
     const receipt = await wallet.cancelPending();
     toast(
@@ -1707,7 +1702,7 @@ $<HTMLButtonElement>('speed-up-transaction').addEventListener('click', () =>
 );
 $<HTMLButtonElement>('deposit').addEventListener('click', () =>
   task(async () => {
-    const amount = parseEther($<HTMLInputElement>('transfer-amount').value.trim());
+    const amount = parseEther($<HTMLInputElement>('deposit-amount').value.trim());
     await wallet.deposit(amount);
     maxDepositEstimate = null;
     toast('Channel opened. Bets now run off-chain.');
@@ -1718,7 +1713,7 @@ $<HTMLButtonElement>('max-deposit').addEventListener('click', () =>
     $<HTMLButtonElement>('max-deposit').textContent = 'Calculating…';
     try {
       maxDepositEstimate = await wallet.maxDeposit();
-      $<HTMLInputElement>('transfer-amount').value = formatEther(maxDepositEstimate.amount);
+      $<HTMLInputElement>('deposit-amount').value = formatEther(maxDepositEstimate.amount);
       if (maxDepositEstimate.amount === 0n)
         throw new Error('Add ETH to cover the gas reserve and deposit fee before funding play.');
     } finally {
@@ -1726,7 +1721,7 @@ $<HTMLButtonElement>('max-deposit').addEventListener('click', () =>
     }
   }),
 );
-$<HTMLInputElement>('transfer-amount').addEventListener('input', () => {
+$<HTMLInputElement>('deposit-amount').addEventListener('input', () => {
   maxDepositEstimate = null;
   renderWallet();
 });
@@ -1915,7 +1910,7 @@ $('receive-instructions').textContent =
   `Send ${asset} from another wallet or a faucet to the address below. You can copy it into the sender’s destination field.`;
 $('receive-network-note').textContent =
   `Select ${wallet.networkName} (chain ${wallet.expectedChainId}) in the sending wallet or service. ETH sent on another network won’t appear in this balance.`;
-$<HTMLInputElement>('transfer-amount').value = networkDefaults.transfer;
+$<HTMLInputElement>('deposit-amount').value = networkDefaults.deposit;
 
 $('gas-reserve-note').textContent =
   `At least ${formatEther(wallet.gasReserve)} ETH stays in your wallet for future network fees. Max also sets aside this deposit’s fee.`;

@@ -31,7 +31,7 @@ export interface GameRequest {
 /** What a game learns about an operation, under its own `id`: how it ended, never the signed evidence. */
 export interface GameReceipt {
   id: string;
-  kind: 'bet' | 'payment' | 'transfer';
+  kind: 'bet' | 'payment';
   /** `signed`: settled. `rejected`: a verified rejection; the balance is unchanged. */
   status: 'signed' | 'rejected';
   verified: boolean;
@@ -43,8 +43,7 @@ export interface GameReceipt {
   payout?: string;
   reason?: string;
 }
-/** A bet seated in a shared round its host has not closed, or a transfer its recipient has not
- * accepted. Sending the same request again finds the result. */
+/** A bet seated in a shared round its host has not closed. Sending the same request again finds the result. */
 export interface PendingReceipt {
   id: string;
   status: 'pending';

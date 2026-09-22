@@ -2,7 +2,6 @@ import type { TransactionReceipt, TransactionResponse, TransactionRequest } from
 import type { Integer, Opening } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
-import type { AssetId } from '../protocol/protocol.ts';
 import { Wallet, formatEther, parseEther, getAddress, keccak256, Transaction } from 'ethers';
 import {
   plain,
@@ -240,9 +239,7 @@ export class WalletTransactions {
       return tx.hash;
     });
   }
-  async verifyRegisteredOpening(this: CasinoWallet, opening: Opening, asset: AssetId = 'eth') {
-    // A test channel is the casino's word and nothing else: there is no chain to read it from.
-    if (asset === 'test') return validateOpening(opening, 'test');
+  async verifyRegisteredOpening(this: CasinoWallet, opening: Opening) {
     validateOpening(opening);
     const observation = await this.observer.observe();
     const value = await this.observer.contractRead(this.reader, 'channels', [opening.channelId], observation.block);

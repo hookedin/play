@@ -149,26 +149,21 @@ export function receiptSummary(
   const unit = receiptUnit(receipt);
   if (receipt.status === 'rejected')
     return {
-      title:
-        receipt.kind === 'transfer'
-          ? 'Transfer cancelled'
-          : receipt.kind === 'invest'
-            ? 'Investment declined'
-            : 'Bet rejected',
-      status:
-        receipt.kind === 'transfer'
-          ? 'No payment made'
-          : receipt.kind === 'invest'
-            ? 'No shares bought'
-            : 'No wager placed',
-      tone: 'neutral',
+      title: receipt.kind === 'invest' ? 'Investment declined' : 'Bet rejected',
+      status: receipt.kind === 'invest' ? 'No shares bought' : 'No wager placed',
+      tone: receipt.lost || receipt.unaudited ? 'warning' : 'neutral',
       amount: `0 ${unit}`,
       amountLabel: 'Balance change',
-      description: ['transfer', 'invest'].includes(receipt.kind)
-        ? 'Your balance is unchanged.'
-        : receipt.wouldHavePaid === undefined
-          ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
-          : `Your balance is unchanged. The casino has since revealed the round: this wager would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} for its ${formatEther(receipt.request?.amount ?? 0)} ${unit} stake.`,
+      description:
+        receipt.kind === 'invest'
+          ? 'Your balance is unchanged.'
+          : receipt.lost
+            ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this wager would have paid cannot be checked.'
+            : receipt.unaudited
+              ? `Your balance is unchanged. The round was never closed, so this wager never had an outcome anybody could check. ${HOSTED}`
+              : receipt.wouldHavePaid === undefined
+                ? `Your balance is unchanged. You can place another bet.${receipt.hosted ? ' ' + HOSTED : ''}`
+                : `Your balance is unchanged. The casino revealed the round: this wager would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} for its ${formatEther(receipt.request?.amount ?? 0)} ${unit} stake.`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -197,8 +192,6 @@ export function receiptSummary(
             withdrawal: 'Claim collected',
             closure: 'Channel closed',
             dispute: 'Channel dispute',
-            transfer: 'Payment sent',
-            receive: 'Payment received',
             payment: 'Game payment',
             invest: 'Invested in the bankroll',
             redeem: 'Shares redeemed',
@@ -213,13 +206,13 @@ export function receiptSummary(
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
       ? 'Deposited'
-      : ['withdrawal', 'receive', 'divest', 'earnings', 'faucet'].includes(receipt.kind)
+      : ['withdrawal', 'divest', 'earnings', 'faucet'].includes(receipt.kind)
         ? 'Received'
         : receipt.kind === 'invest'
           ? 'Invested'
           : receipt.kind === 'redeem'
             ? 'Owed to you'
-            : ['transfer', 'payment'].includes(receipt.kind)
+            : receipt.kind === 'payment'
               ? 'Sent'
               : receipt.kind === 'closure'
                 ? 'Claim recorded'
@@ -237,7 +230,7 @@ export function receiptSummary(
     } · Balance ${formatEther(receipt.balance)} ${unit}${receipt.hosted ? ' · ' + HOSTED : ''}`;
   } else if (
     settled &&
-    ['receive', 'withdrawal', 'divest', 'earnings', 'faucet'].includes(receipt.kind) &&
+    ['withdrawal', 'divest', 'earnings', 'faucet'].includes(receipt.kind) &&
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
@@ -249,8 +242,6 @@ export function receiptSummary(
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'payment')
     description = `An extra wager this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
-  if (receipt.kind === 'transfer')
-    description = `Paid to this game's developer. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'faucet')
     description = `The casino's faucet paid this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'earnings')

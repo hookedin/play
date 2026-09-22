@@ -7,7 +7,6 @@ export const METHODS = [
   'game.bet',
   'game.cancel',
   'game.payment',
-  'game.transfer',
   'game.requestFunds',
 ];
 const methods = new Set(METHODS);
@@ -77,12 +76,7 @@ function validate(data: any) {
     if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
   } else {
-    const fields =
-      data.method === 'game.bet'
-        ? ['stake']
-        : ['game.payment', 'game.transfer'].includes(data.method)
-          ? ['amount']
-          : [];
+    const fields = data.method === 'game.bet' ? ['stake'] : data.method === 'game.payment' ? ['amount'] : [];
     if (!only(params, ['id', ...fields, ...(data.method === 'game.bet' ? ['prizes', 'round'] : [])]))
       throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);

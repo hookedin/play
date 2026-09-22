@@ -1,6 +1,6 @@
 # HookedIn game SDK
 
-A game owns its rules, presentation, state and persistence. The wallet owns the signed channel balance, its keys and settlement. The wallet accepts atomic bets (a stake and the prizes it can pay), deterministic payments and transfers to the developer; it never executes game rules and it stores nothing for a game.
+A game owns its rules, presentation, state and persistence. The wallet owns the signed channel balance, its keys and settlement. The wallet accepts atomic bets (a stake and the prizes it can pay) and deterministic payments; it never executes game rules and it stores nothing for a game.
 
 ## Loading a game
 
@@ -32,7 +32,7 @@ Publish your game yourself: in the wallet, open **My wallet** and, under your na
 
 ## Game balances
 
-A game's balance is a spending limit for the open tab: the money the wallet lets the game risk, including its winnings. It is never persisted. Leaving the game, navigating to another wallet page, reloading or closing the tab releases the limit back to the channel balance; the money was never anywhere else. Every wager or payment must fit the limit. Verified profits raise it; losses and payments lower it. Games cannot change the limit or choose their fee recipient. Their own wagers, payments and transfers are the only signatures a game can obtain.
+A game's balance is a spending limit for the open tab: the money the wallet lets the game risk, including its winnings. It is never persisted. Leaving the game, navigating to another wallet page, reloading or closing the tab releases the limit back to the channel balance; the money was never anywhere else. Every wager or payment must fit the limit. Verified profits raise it; losses and payments lower it. Games cannot change the limit or choose their fee recipient. Their own wagers and payments are the only signatures a game can obtain.
 
 The wallet pushes a `game.balance` event into the iframe as soon as it has loaded and whenever the limit or pending state changes, so there is nothing to poll; `HookedIn.balance()` resolves to the latest push. A game asks for money with `game.requestFunds`. The wallet then shows its own dialog, where the player sets the game's spending limit or declines, and replies with whether they set it (`funded`), the limit they chose (`amount`) and the resulting balance. The game's suggested `amount` is how much more than it has now; it is shown to the player and does not bind the wallet. Every word in that dialog is the wallet's own: a game passes it no text. The player can also raise or lower the limit from the wallet's top bar at any time, including while one of your operations is pending: the limit is the tab's own reservation and signs nothing, so it runs up to the signed balance less what that operation has already committed. The game learns of every change through `game.balance`. Only the player's confirmation in that dialog grants spending authority; the wallet page shows no funding control of its own, so a game that needs money must ask. Without an open channel, `game.balance` reports a zero balance, financial methods fail, and `game.requestFunds` replies `funded: false` after the wallet has offered the player its channel setup; a game should render normally and simply ask again later.
 
@@ -59,13 +59,11 @@ Replies carry the same `id` and either `result` or `error: {code, message}`. Bot
 | `game.receipt`      | `{id}`                       | The receipt of a previous operation by its game ID, or `null`                        |
 | `game.bet`          | `{id, stake, prizes}`        | Verified result or rejection receipt                                                 |
 | `game.bet` (hosted) | `{id, stake, prizes, round}` | `{status: 'pending'}` while the host keeps the round open, then the receipt          |
-| `game.bet` (change) | same `id`, other terms       | Replaces a seat in an open round: pending again, and the round keeps the place       |
 | `game.cancel`       | `{id}`                       | Give up a seat in an open round: a rejection receipt, or the bet's result            |
 | `game.payment`      | `{id, amount}`               | Verified signed receipt                                                              |
-| `game.transfer`     | `{id, amount}`               | Pending status or verified transfer receipt                                          |
 | `game.requestFunds` | `{amount?}`                  | `{funded, amount, balance, pending}` after the player's decision                     |
 
-`HookedIn` has a typed method for each: `receipt`, `bet`, `cancel`, `payment`, `transfer` and `requestFunds`; `HookedIn.call(method, params)` sends any of them.
+`HookedIn` has a typed method for each: `receipt`, `bet`, `cancel`, `payment` and `requestFunds`; `HookedIn.call(method, params)` sends any of them.
 
 Every reply about an operation is one receipt, whichever method asked: `{id, kind, status, verified}` under your own `id`, a bet's `stake` and `prizes` as they played, a settled bet's `outcome` and `payout`, and a rejection's `reason`. One still waiting is `{id, status: 'pending', verified: false}`. The signed evidence, the player's channel and its balance stay in the wallet.
 
@@ -114,7 +112,7 @@ const host = await createHost({ casinoURL, key });
 // game's betting time: it runs from the round's first seat, and it is how long a player's money waits.
 const { round, seed } = await host.round('eth', 20_000);
 // ...give `round` to the pages, keep `seed` with your game state and show it to nobody; each wallet joins by itself...
-const seats = await host.seats(round.id); // who is in: {seats: [{player, stake, prizes, ...}], bankroll, ...}
+const seats = await host.seats(round.id); // who is in: {seats: [{uname, alias, stake, prizes}], bankroll, ...}
 const closed = await host.close(round.id, seed); // only now does the seed leave you: the casino reveals its secret and settles every seat
 const outcome = roundOutcome(seed, closed.secret); // the 64-bit value every seat's prizes were read against
 const testRound = await host.round('test', 20_000); // the same again for the wallets playing with test coins
@@ -126,9 +124,7 @@ Equal ranges pay together, disjoint ranges never both pay, nested ranges pay in 
 
 **Ask for the betting time your game takes, and no more.** `host.round(asset?, window?)` names it in milliseconds, within `host.window` (`{min, max}`, which the casino publishes and `createHost` reads from it), and the casino counts it from the round's **first seat**. That time is exactly how long a player's money waits on you: a seated bet holds their channel, so nothing else of theirs can be signed until you close the round. Leave room for the close itself — the alarm, the request, a retry — because a round whose window runs out is revealed by the casino and every seat declined. A round nobody has joined holds nothing and waits ten minutes for its first player, and gets that wait back if its last one leaves, so an empty table can sit open.
 
-**A player can change their chips.** Calling `HookedIn.bet` again with the same `id` and different terms, while the round is open, takes the seated bet back and places the new one in a single request; the reply is `{status: 'pending'}` again and the round never loses the place. The withdrawn bet keeps a receipt of its own, so the `id` still names the bet that is in the round. A change that arrives after the host closed the round finds the seat already played: the reply is that bet's receipt, and its `stake` and `prizes` are the chips it had, not the ones last asked for, so show the result from the receipt. Changing the `round` instead fails with `id-conflict`: a seat is never moved to another round.
-
-`HookedIn.cancel(id)` gives up a seat the host has not closed; the balance is unchanged and the next bet can proceed. If the round was closed first, the same call returns that verified result. A bet that reaches the casino as the round closes is refused; the wallet still holds the signed bet, so call `cancel` to take it back.
+`HookedIn.cancel(id)` gives up a seat the host has not closed; the balance is unchanged and the next bet can proceed. If the round was closed first, the same call returns that verified result. To change a player's chips, cancel the seat and place the new chips as a new bet under a new `id`; the same `id` with other terms fails with `id-conflict`. A bet that reaches the casino as the round closes is refused; the wallet still holds the signed bet, so call `cancel` to take it back.
 
 In a hosted round the seed is the host's, and the host keeps it until it closes the round: the casino, which knows the round's secret, sees only the seed's hash while it admits seats, so nobody knows the outcome while bets are taken. Lose the seed and the round cannot be closed: the casino declines every seat once the betting window runs out. The player still trusts that the host and the casino do not collude. A game therefore declares `rounds` in its manifest, and the wallet asks the player before it frames it at all: refusing leaves the game closed instead of stranding them inside one they cannot play, the choice is never persisted, and every hosted bet is marked in the player's activity. A round is bet on in one asset: the first argument of `host.round` is ETH unless you name another, and a bet from a wallet playing something else is refused with `wrong-asset`, so run a round for each asset your game takes. [Roulette](../../games/roulette/) is the reference: one wheel per asset, each for the whole table, as one Worker. See [rounds](../../docs/protocol.md#rounds).
 
@@ -138,7 +134,9 @@ In a hosted round the seed is the host's, and the host keeps it until it closes 
 
 ## State and recovery
 
-Keep round state at your own origin, keyed by the game page, the player's `uname` from `wallet.info` (`HookedIn.info()`) and the asset in play: games that share a host would otherwise read each other's rounds, accounts that share a browser would read each other's state, and ETH play would read the state of test-coin play. `HookedIn.storageScope(info)` builds such a key. Key by `uname`, which is theirs for good, never by `alias`, which is whatever they are called today. `HookedIn.showName(info)` writes either of them the way they are written everywhere: `@Bob`, or `~uname` without an alias. Choose and save your action and its operation `id` before requesting settlement. After a crash or reload, read your saved pending operation and call `game.receipt` with its `id`: a receipt means the wallet settled it and the outcome applies exactly once; `null` with a pushed `pending` of true means the wallet still holds the signed request, and the player recovers it from the wallet's banner; `null` otherwise means nothing was signed and the same request can be sent again.
+Keep round state at your own origin, keyed by the game page, the player's `uname` from `wallet.info` (`HookedIn.info()`) and the asset in play: games that share a host would otherwise read each other's rounds, accounts that share a browser would read each other's state, and ETH play would read the state of test-coin play. `HookedIn.storageScope(info)` builds such a key. Key by `uname`, which is theirs for good, never by `alias`, which is whatever they are called today. `HookedIn.showName(info)` writes either of them the way they are written everywhere: `@Bob`, or `~uname` without an alias. Choose and save your action and its operation `id` before requesting settlement. After a crash or reload, read your saved pending operation and call `game.receipt` with its `id`: a receipt means the wallet settled it and the outcome applies exactly once; `null` with a pushed `pending` of true means the wallet still holds the signed request, and the player recovers it from the wallet's banner; `null` otherwise means nothing was signed on the channel the player has now.
+
+An `id` belongs to the channel it was signed on. Once the player has opened a new channel, `game.receipt` finds nothing for an `id` the one before settled: its result is in the player's wallet history, not in reach of the game. Sending the request again then places a second bet. So save an `id` only for as long as its request is in flight, and when a reload finds one with no receipt and nothing pending, ask the player before sending it again rather than doing it silently.
 
 A receipt with `status: "rejected"` and `verified: true` proves cancellation through a jointly signed higher-sequence checkpoint. It has no outcome, balance change or commission. Offer the same bet again under a fresh `id`; the old `id` keeps returning the rejection. A timeout or generic error proves no cancellation: retry the exact pending request with the same `id`.
 
@@ -172,21 +170,3 @@ The SDK itself adds `no-wallet` (the page is not inside a wallet) and `timeout` 
 ## Developer earnings
 
 Half of each bet's commission is owed to your manifest's `developer` address. The casino keeps a running tally of what that address has earned and collected, in each asset, and puts it in that address's own channel. Every developer's totals are public (`GET /api/status`); the channel and its payouts are not. To see it, open an ordinary HookedIn wallet from that address: its wallet page shows the tally, and the wallet collects what is due by itself, so the money becomes part of that channel's signed balance. Nobody at the casino has to approve or send anything. See [developer earnings](../../docs/protocol.md#developer-earnings).
-
-## Developer payments
-
-`game.transfer` pays only the developer address in the game's manifest. The iframe cannot choose another recipient or exceed the limit. The developer needs an open ordinary HookedIn channel and must accept incoming payments. Transferred funds are the developer's: what they buy, and any refund, is up to the developer.
-
-```js
-const payment = await HookedIn.call('game.transfer', { id: 'entry-42', amount: '1000000000000' });
-// payment.status === 'pending' means the recipient has not accepted yet.
-// Deliver what was paid for only after obtaining a receipt with verified === true.
-```
-
-The browser wallet polls for transfer completion and accepts payments from the developer of the game open in that tab while its channel is idle. It does not automatically accept unrelated senders, since accepting an offer reserves the channel position until resolution. After a pending response, watch the pushed `pending` flag or retry the exact original `id` and amount. Do not create another payment under a new `id`. Leaving the game keeps the pending transfer in the wallet until it resolves or the player cancels it; it cannot recall a completed payment.
-
-Developer software using `CasinoWallet` calls `receiveTransfers()` to accept one incoming payment and `transfer(amount, playerAddress, stableOperationId)` to pay a player from its unallocated balance. Keep the developer's keys and durable wallet storage in its trusted backend. Its receipt's `counterparty` identifies the sending channel; an incoming operation's ID equals the outgoing operation digest, allowing correlation without exposing the other account's balance. The iframe never learns a player's address: `wallet.info` gives it their names, and `POST /api/channels/:id/recipient` with `{name}` — `~uname` or `@alias` — resolves either of them to the channel to pay.
-
-Payouts enter the player's unallocated wallet balance. They do not raise the open game's limit; only the player can authorize spending again. Transfers charge no automatic casino/developer commission. A developer can retain part of what it collected when calculating payouts.
-
-Both parties must use open channels and coordinate readiness: one pending operation per channel means a busy/offline recipient cannot accept, and opposing pending transfers stall until one sender cancels. The player cancels an unaccepted transfer from the wallet, which returns a verified rejection receipt; there is no cancellation based on time or an HTTP error. These are off-chain signed balances under the existing casino liquidity and manual challenge rules, not protected transfers of deposited ETH.

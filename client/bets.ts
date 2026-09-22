@@ -24,7 +24,10 @@ export interface BetRow {
   expected: bigint;
   /** The most the bet could pay, when the reader knows it. */
   maxPayout?: bigint | null;
+  /** This wallet's own name for the bet. A public row has none: it is known by `index` instead. */
   operation?: string;
+  /** A public row's number in the casino's record of every bet. */
+  index?: number;
   /** The seed came from the game's host, not this wallet. */
   hosted?: boolean;
   /** This wallet's own receipt, whole: the prizes, the preimages and the signatures it kept. A
@@ -153,10 +156,11 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
     figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
     figure('Return of this bet', percent(returnParts(row.stake, row.expected)), 'bet-return'),
   );
-  // The operation ID identifies the bet everywhere else, and is long: it is searched, not shown.
-  if (row.operation) {
-    item.dataset.search = row.operation.toLowerCase();
-    item.title = onOpen ? `Open this bet in full · operation ${row.operation}` : `Operation ${row.operation}`;
+  // This wallet's own operation ID is long: it is searched, not shown. A public row is its number in the game's record.
+  const named = row.operation ? `operation ${row.operation}` : row.index === undefined ? null : `bet #${row.index}`;
+  if (named) {
+    item.dataset.search = named.toLowerCase();
+    item.title = onOpen ? `Open this bet in full · ${named}` : named[0].toUpperCase() + named.slice(1);
   }
   return item;
 }
@@ -419,7 +423,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
 }
 
 /** Search across the rendered rows, as the activity list does: the text is what the player reads,
- * plus the operation ID each row carries. */
+ * plus the operation ID or number each row carries. */
 export function filterBets(list: HTMLElement, query: string, empty: HTMLElement, count: HTMLElement, none: string) {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let visible = 0;
@@ -431,5 +435,7 @@ export function filterBets(list: HTMLElement, query: string, empty: HTMLElement,
   }
   count.textContent = terms.length ? `${visible} / ${list.childElementCount}` : String(visible);
   empty.classList.toggle('hidden', visible !== 0);
-  empty.textContent = terms.length ? 'No bet matches that. Try a game, an amount or an operation ID.' : none;
+  empty.textContent = terms.length
+    ? 'No bet matches that. Try a game, an amount, a bet number or an operation ID.'
+    : none;
 }
