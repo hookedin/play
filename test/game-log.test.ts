@@ -18,10 +18,7 @@ test('bridge requests summarize their financial terms in one line', () => {
   assert.match(bet, /id round-7/);
   assert.equal(describeRequest('game.receipt', { id: 'round-7' }), 'id round-7');
   assert.equal(describeRequest('game.requestFunds', {}), 'no suggested amount');
-  assert.equal(
-    describeRequest('game.requestFunds', { amount: '5', reason: 'Double' }),
-    'suggests 0.000000000000000005 ETH · “Double”',
-  );
+  assert.equal(describeRequest('game.requestFunds', { amount: '5' }), 'suggests 0.000000000000000005 ETH');
   assert.equal(describeRequest('wallet.info', {}), '');
 });
 

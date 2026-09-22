@@ -33,11 +33,21 @@
             Activity <span id="activity-count" class="nav-count">0</span>
           </a>
         </nav>
-        <div class="topbar-context">
-          <span class="live-dot"></span><span id="network-name">Sepolia</span
-          ><span id="asset-pill" class="test-pill">SEPOLIA ETH</span>
-        </div>
+        <div class="topbar-context"><span class="live-dot"></span><span id="network-name">Sepolia</span></div>
         <div class="topbar-wallet">
+          <div class="money-pill">
+            <a
+              id="balance-link"
+              class="balance-link"
+              href="/wallet"
+              data-page="wallet"
+              title="Your playing balance. Open my wallet."
+              ><span id="balance-amount">—</span></a
+            >
+            <div id="asset-switch" class="asset-switch" role="group" aria-label="What you play with">
+              <button type="button" data-play="eth">ETH</button><button type="button" data-play="test">TEST</button>
+            </div>
+          </div>
           <button id="game-funds" class="button secondary compact hidden" type="button">Take money back</button
           ><a id="account-link" class="account-link" href="/account" data-page="account"
             ><span class="account-mark" aria-hidden="true">◈</span
@@ -192,7 +202,6 @@
               </p>
               <p class="text-button-row">
                 <button id="test-faucet" class="text-button" type="button">Claim 100 test coins</button>
-                <button id="test-switch" class="text-button" type="button"></button>
               </p>
               <p id="test-earnings" class="hidden"></p>
             </div>
@@ -674,7 +683,6 @@
         <div id="fund-eyebrow" class="eyebrow">YOU ARE AUTHORIZING</div>
         <h2 id="fund-title">How much may this game play with?</h2>
         <p id="fund-who" class="fund-who mode-fund"></p>
-        <p id="fund-reason" class="fund-reason"></p>
         <p id="fund-channel-note" class="fund-note mode-channel"></p>
         <div class="fund-actions mode-channel">
           <button id="fund-open-wallet" class="button secondary" type="button">Set up my wallet</button
@@ -707,7 +715,6 @@
           aria-label="Spending limit"
         />
         <div class="fund-scale mode-fund"><span>0</span><span id="fund-total"></span></div>
-        <div id="fund-presets" class="fund-presets mode-fund"></div>
         <p id="fund-help" class="funding-help mode-fund"></p>
         <div class="fund-actions mode-fund">
           <button class="button secondary" type="button" data-fund-cancel>Not now</button

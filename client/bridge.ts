@@ -73,11 +73,9 @@ function validate(data: any) {
   if (data.method === 'wallet.hello' || data.method === 'wallet.info') {
     if (Object.keys(params).length) throw new Error('This method takes no parameters.');
   } else if (data.method === 'game.requestFunds') {
-    // The wallet's modal decides; the game only suggests an amount and says why.
-    if (!only(params, ['amount', 'reason'])) throw new Error('Unexpected game request field.');
+    // The wallet's modal decides, and every word in it is the wallet's: a game suggests an amount.
+    if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
-    if (params.reason !== undefined && (typeof params.reason !== 'string' || params.reason.length > 140))
-      throw new Error('A funding reason is a string of at most 140 characters.');
   } else {
     const fields =
       data.method === 'game.bet'

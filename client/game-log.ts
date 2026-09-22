@@ -58,7 +58,7 @@ export function describeRequest(method: string, params: any = {}) {
     case 'game.receipt':
       return `id ${params.id}`;
     case 'game.requestFunds':
-      return `${params.amount === undefined ? 'no suggested amount' : `suggests ${eth(params.amount)}`}${quote(params.reason)}`;
+      return params.amount === undefined ? 'no suggested amount' : `suggests ${eth(params.amount)}`;
     default:
       return '';
   }

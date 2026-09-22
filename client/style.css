@@ -187,13 +187,57 @@ h3 {
   flex-shrink: 0;
   box-shadow: 0 0 9px #a9efc219;
 }
-.test-pill {
-  border: 1px solid #373645;
-  padding: 4px 6px;
-  font-size: 7px;
-  letter-spacing: 1px;
+/* The top bar's money: the balance this tab plays with, and the choice of what that is. */
+.money-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #2b3140;
+  background: #151a24;
+  border-radius: 7px;
+  padding: 5px 6px 5px 12px;
+}
+.balance-link {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.balance-link:hover {
+  color: #c6b6ff;
+}
+.asset-switch {
+  display: flex;
+  gap: 2px;
+  background: #0e131c;
+  border-radius: 5px;
+  padding: 2px;
+}
+.asset-switch button {
+  border: 0;
+  background: none;
   border-radius: 4px;
-  color: #9590a5;
+  padding: 4px 7px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: #737d8e;
+}
+.asset-switch button:hover:not(:disabled) {
+  color: #c3c9d6;
+}
+.asset-switch button[aria-pressed='true'] {
+  background: #29223e;
+  color: #c6b6ff;
+}
+/* Play money looks different from money. */
+.asset-switch button[data-play='test'][aria-pressed='true'] {
+  background: #3a2c11;
+  color: #f0c976;
+}
+.asset-switch button:disabled {
+  opacity: 0.45;
 }
 .button {
   border: 1px solid transparent;
@@ -860,9 +904,6 @@ main {
   .topbar-context {
     font-size: 10px;
   }
-  .topbar-context .test-pill {
-    display: none;
-  }
   main {
     padding: 34px 27px;
   }
@@ -983,8 +1024,12 @@ main {
     gap: 7px;
     font-size: 8px;
   }
+  /* The money, the game's button and the account each keep their whole name: the row wraps instead. */
   .topbar-wallet {
     gap: 7px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 8px;
   }
   .button.compact {
     font-size: 8px;
@@ -1550,7 +1595,7 @@ main {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin: 21px 0 9px;
+  margin: 18px 0 8px;
 }
 .funding-amount-label label {
   margin: 0;
@@ -1998,8 +2043,8 @@ html:has(dialog[open]) {
   overflow: hidden;
 }
 .fund-dialog {
-  width: min(440px, calc(100vw - 32px));
-  padding: 28px 26px;
+  width: min(430px, calc(100vw - 32px));
+  padding: 22px 22px;
   border: 1px solid #3b3752;
   border-radius: 14px;
   background: #151a26;
@@ -2016,7 +2061,7 @@ html:has(dialog[open]) {
   margin-bottom: 12px;
 }
 .fund-dialog h2 {
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: -0.6px;
 }
 .fund-reason {
@@ -2035,14 +2080,14 @@ html:has(dialog[open]) {
 }
 .fund-note {
   font-size: 12px;
-  line-height: 1.8;
+  line-height: 1.7;
   color: #9ba7bd;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 /* The whole track is the playing balance; the filled part is what the game may risk. */
 .fund-slider {
   width: 100%;
-  margin-top: 16px;
+  margin-top: 12px;
   accent-color: var(--purple);
 }
 .fund-scale {
@@ -2052,28 +2097,9 @@ html:has(dialog[open]) {
   color: #9ba7bd;
   font-variant-numeric: tabular-nums;
 }
-.fund-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-.fund-presets button {
-  padding: 5px 10px;
-  border: 1px solid #3b3752;
-  border-radius: 999px;
-  background: none;
-  color: #cdd3e2;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-.fund-presets button:hover {
-  border-color: var(--purple);
-}
 .fund-aside {
   display: block;
-  margin: 16px auto 0;
+  margin: 12px auto 0;
   font-size: 11px;
 }
 .fund-dialog .amount-input input {
@@ -2087,7 +2113,7 @@ html:has(dialog[open]) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 .fund-dialog .security-note {
   margin-top: 18px;
@@ -2258,11 +2284,6 @@ html:has(dialog[open]) {
 #game-funds[data-holding] {
   border-color: #6a4f5c;
   color: #f0b9c3;
-}
-/* Play money looks different from money. */
-.test-pill[data-test] {
-  border-color: #d9a441;
-  color: #f0c976;
 }
 /* A uname is 24 characters of one word, so the headings that carry one break inside it rather than
    pushing the page sideways. */
@@ -2511,8 +2532,8 @@ html:has(dialog[open]) {
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
-  margin-top: 18px;
-  padding: 14px 16px;
+  margin-top: 14px;
+  padding: 11px 14px;
   border: 1px solid #333a4d;
   background: #0e121b;
   border-radius: 9px;
@@ -2544,10 +2565,10 @@ html:has(dialog[open]) {
   color: #e0c56a;
 }
 .fund-terms {
-  margin: 18px 0 0;
+  margin: 14px 0 0;
   padding-left: 17px;
   font-size: 10px;
-  line-height: 1.85;
+  line-height: 1.75;
   color: #8a8fa0;
 }
 .fund-terms li + li {

@@ -357,15 +357,14 @@ test('a message relayed by a frame nested inside the game iframe is ignored', as
   bridge.detach();
 });
 
-test('funding requests carry only a suggested amount and a short reason', () => {
+test('a funding request carries a suggested amount and nothing else', () => {
   const fund = (params: any) => validateRequest(request(1, 'game.requestFunds', params));
   assert.deepEqual(fund({}).params, {});
-  assert.equal(fund({ amount: '5', reason: 'Double down' }).params.amount, '5');
+  assert.equal(fund({ amount: '5' }).params.amount, '5');
   assert.throws(() => fund({ amount: '0' }), /range/);
   assert.throws(() => fund({ amount: 5 }), /wei/);
-  assert.throws(() => fund({ reason: 'x'.repeat(141) }), /140/);
-  assert.throws(() => fund({ reason: ['x'] }), /140/);
-  for (const field of ['developer', 'approved', 'autoApprove', 'revision', 'data'])
+  // Every word in the wallet's authorization is the wallet's own.
+  for (const field of ['reason', 'developer', 'approved', 'autoApprove', 'revision', 'data'])
     assert.throws(() => fund({ [field]: '1' }), /Unexpected game request field/);
 });
 
