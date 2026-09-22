@@ -1,0 +1,575 @@
+:root {
+  --gold: #f2c45a;
+  --gold-deep: #a9741c;
+  --ember: #ff8a3c;
+  --night: #0b1114;
+  --accent: #f2c45a;
+}
+main {
+  max-width: 980px;
+  padding: 14px 24px 16px;
+}
+.game-head {
+  margin-bottom: 10px;
+}
+.head-tools {
+  display: flex;
+  gap: 8px;
+}
+.bank {
+  margin: 0 0 10px;
+  padding: 9px 14px;
+}
+
+/* The cabinet */
+.cabinet {
+  position: relative;
+  border-radius: 20px;
+  padding: 12px 14px 14px;
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(242, 196, 90, 0.16), transparent 60%),
+    linear-gradient(180deg, #1a2326, #0f1618 70%);
+  border: 1px solid rgba(242, 196, 90, 0.28);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 0.6s;
+}
+body[data-mode='bonus'] .cabinet {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(255, 138, 60, 0.32), transparent 62%),
+    linear-gradient(180deg, #2a1a10, #140d0a 70%);
+  border-color: rgba(255, 138, 60, 0.55);
+}
+.marquee {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 18px;
+  padding: 0 6px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.marquee-side:last-child {
+  color: #ffd9b0;
+  font-variant-numeric: tabular-nums;
+}
+.reel-frame {
+  position: relative;
+  /* Keep the whole cabinet inside the wallet's frame: the window is never taller than half of it. */
+  width: min(100%, calc(44vh * 2.03 + 30px));
+  margin: 0 auto;
+  border-radius: 14px;
+  padding: 7px;
+  background: linear-gradient(180deg, #f7d680, #a9741c 48%, #f0c25a 52%, #7c5210);
+  box-shadow:
+    0 0 0 1px #3d2a08,
+    0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.reels {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #06090a;
+}
+.reel {
+  position: relative;
+  aspect-ratio: 1 / 2.46;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 16%, transparent 84%, rgba(0, 0, 0, 0.55)),
+    linear-gradient(180deg, #16211f, #0e1716);
+}
+body[data-mode='bonus'] .reel {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 16%, transparent 84%, rgba(0, 0, 0, 0.55)),
+    linear-gradient(180deg, #2b1a12, #170e0a);
+}
+.reel-band {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: calc(100% * 5 / 3);
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  will-change: transform;
+}
+.reel.blur .reel-band {
+  filter: blur(2.2px);
+}
+.reel.suspense {
+  box-shadow: inset 0 0 0 2px var(--ember);
+  animation: suspense 0.5s ease-in-out infinite alternate;
+}
+@keyframes suspense {
+  to {
+    box-shadow:
+      inset 0 0 0 2px var(--gold),
+      inset 0 0 38px rgba(255, 138, 60, 0.55);
+  }
+}
+.cell {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+.art {
+  width: 86%;
+  height: 92%;
+  background: center / contain no-repeat;
+  transition:
+    opacity 0.2s,
+    filter 0.2s;
+}
+[data-symbol='L'] .art {
+  background-image: url('./symbols/lion.svg');
+}
+[data-symbol='P'] .art {
+  background-image: url('./symbols/pillars.svg');
+}
+[data-symbol='S'] .art {
+  background-image: url('./symbols/shears.svg');
+}
+[data-symbol='T'] .art {
+  background-image: url('./symbols/torch.svg');
+}
+[data-symbol='A'] .art {
+  background-image: url('./symbols/a.svg');
+}
+[data-symbol='K'] .art {
+  background-image: url('./symbols/k.svg');
+}
+[data-symbol='Q'] .art {
+  background-image: url('./symbols/q.svg');
+}
+[data-symbol='J'] .art {
+  background-image: url('./symbols/j.svg');
+}
+[data-symbol='H'] .art {
+  background-image: url('./symbols/honey.svg');
+}
+[data-symbol='W'] .art,
+[data-symbol='2'] .art,
+[data-symbol='3'] .art {
+  background-image: url('./symbols/wild.svg');
+}
+[data-symbol='A'] .art,
+[data-symbol='K'] .art,
+[data-symbol='Q'] .art,
+[data-symbol='J'] .art {
+  width: 70%;
+  height: 78%;
+}
+/* Multiplier wilds carry their factor as a badge. */
+[data-symbol='2']:after,
+[data-symbol='3']:after {
+  position: absolute;
+  top: 6%;
+  right: 7%;
+  min-width: 34%;
+  padding: 3% 5%;
+  border-radius: 999px;
+  border: 2px solid #fff3c2;
+  background: linear-gradient(180deg, #ff9a3c, #c2330f);
+  color: #fff;
+  font-size: clamp(11px, 2.1vw, 20px);
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+[data-symbol='2']:after {
+  content: '×2';
+}
+[data-symbol='3']:after {
+  content: '×3';
+}
+.cell.dim .art {
+  opacity: 0.28;
+  filter: saturate(0.4);
+}
+.cell.win {
+  z-index: 1;
+}
+.cell.win:before,
+.cell.scatter-hit:before {
+  content: '';
+  position: absolute;
+  inset: 5%;
+  border-radius: 12px;
+  border: 2px solid var(--gold);
+  background: radial-gradient(circle, rgba(242, 196, 90, 0.28), transparent 70%);
+  box-shadow: 0 0 22px rgba(242, 196, 90, 0.55);
+  animation: glow 0.7s ease-in-out infinite alternate;
+}
+.cell.win .art,
+.cell.scatter-hit .art {
+  animation: pop 0.7s ease-in-out infinite alternate;
+}
+@keyframes glow {
+  from {
+    opacity: 0.55;
+  }
+}
+@keyframes pop {
+  to {
+    transform: scale(1.1);
+  }
+}
+.win-line {
+  position: absolute;
+  left: 50%;
+  /* Straddles the frame's lower edge, clear of the bottom row. */
+  bottom: -14px;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 196, 90, 0.7);
+  background: rgba(8, 12, 13, 0.88);
+  color: #ffe9b0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 5;
+}
+.coins {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 4;
+}
+.overlay {
+  position: absolute;
+  inset: 7px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  background: radial-gradient(circle, rgba(10, 8, 2, 0.72), rgba(6, 9, 10, 0.9));
+  z-index: 3;
+  text-align: center;
+}
+.overlay.hidden,
+.win-line.hidden {
+  display: none;
+}
+.big-title {
+  font-size: clamp(30px, 7vw, 64px);
+  font-weight: 900;
+  letter-spacing: 2px;
+  background: linear-gradient(180deg, #fff6c8, #f2c45a 45%, #b9791a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 #4a2c05) drop-shadow(0 0 24px rgba(242, 196, 90, 0.5));
+  animation: slam 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.big-amount {
+  font-size: clamp(26px, 5.5vw, 50px);
+  font-weight: 800;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes slam {
+  from {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.feature-card {
+  width: min(440px, 88%);
+  padding: 24px 26px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 170, 80, 0.6);
+  background: linear-gradient(180deg, #2c1b10, #150e0a);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  animation: slam 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+.feature-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+.feature-title {
+  margin: 6px 0 10px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #ffe2a8;
+}
+.feature-text {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #e6d6c4;
+}
+.feature-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.feature-actions button {
+  height: 44px;
+  padding: 0 18px;
+}
+.feature-actions .hidden {
+  display: none;
+}
+
+/* The console */
+.console {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.3fr) minmax(130px, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+}
+.console-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+}
+.meter-value {
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(242, 196, 90, 0.3);
+  background: #0a0f10;
+  font-variant-numeric: tabular-nums;
+}
+.meter-value strong {
+  font-size: 18px;
+  line-height: 1.1;
+  color: var(--gold);
+}
+.meter-value span {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.side-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-self: end;
+}
+.side-buttons #buy {
+  grid-column: 1 / -1;
+  color: #ffd9b0;
+  border-color: rgba(255, 138, 60, 0.45);
+}
+.spin {
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  color: #231703;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  background: radial-gradient(circle at 35% 28%, #fff1b8, #f2c45a 45%, #b9791a);
+  box-shadow:
+    0 0 0 4px #2b1d06,
+    0 0 0 6px rgba(242, 196, 90, 0.55),
+    0 10px 24px rgba(0, 0, 0, 0.5);
+  transition:
+    transform 0.08s,
+    filter 0.2s;
+}
+.spin:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.spin:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.spin[data-phase='spinning'],
+.spin[data-phase='presenting'] {
+  background: radial-gradient(circle at 35% 28%, #ffd0b0, #ff8a3c 45%, #a8410f);
+}
+.status {
+  margin-top: 12px;
+}
+.foot {
+  margin-top: 12px;
+}
+
+/* Paytable */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(4, 7, 8, 0.78);
+  overflow: auto;
+}
+.sheet.hidden {
+  display: none;
+}
+.sheet-card {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 20px 22px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(242, 196, 90, 0.35);
+  background: #131b1d;
+}
+.sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.sheet-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.pay-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.pay-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #0e1517;
+}
+.cell.mini {
+  width: 58px;
+  height: 58px;
+  flex: none;
+}
+.pay-values {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: #cfd8d4;
+  font-variant-numeric: tabular-nums;
+}
+.pay-values strong {
+  font-size: 12px;
+  color: #fff;
+}
+.pay-notes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+.pay-note {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #0e1517;
+}
+.pay-note p,
+.pay-rules {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cfd8d4;
+}
+.pay-rules {
+  margin-top: 14px;
+  padding-left: 18px;
+}
+.facts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 16px;
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.facts dt {
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  main {
+    padding: 14px 12px;
+  }
+  .console {
+    grid-template-columns: 1fr auto;
+  }
+  .bet {
+    grid-column: 1;
+  }
+  .spin {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: 84px;
+    height: 84px;
+  }
+  .side-buttons {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .side-buttons #buy {
+    grid-column: auto;
+  }
+  .pay-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .pay-notes {
+    grid-template-columns: 1fr;
+  }
+  .edition {
+    display: none;
+  }
+  .tool {
+    padding: 0 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cell.win .art,
+  .cell.scatter-hit .art,
+  .cell.win:before,
+  .reel.suspense,
+  .big-title,
+  .feature-card {
+    animation: none;
+  }
+  .reel.blur .reel-band {
+    filter: none;
+  }
+}

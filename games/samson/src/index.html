@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Samson's Gold</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="game-head">
+        <div>
+          <div class="eyebrow">HOOKEDIN ORIGINALS / 04</div>
+          <div class="game-title">
+            <h1>Samson's Gold</h1>
+            <span class="edition">243 WAYS</span>
+          </div>
+        </div>
+        <div class="head-tools">
+          <button class="tool" id="info" type="button" aria-haspopup="dialog">Paytable</button>
+          <button class="tool" id="mute" type="button" aria-pressed="false">Sound on</button>
+        </div>
+      </header>
+      <div id="bank" class="bank" data-state="connecting"></div>
+      <section class="cabinet" aria-label="Slot reels">
+        <div class="marquee">
+          <span class="marquee-side" id="mode-label">Out of the strong, something sweet</span>
+          <span class="marquee-side" id="feature-label"></span>
+        </div>
+        <div class="reel-frame">
+          <div class="reels" id="reels" aria-hidden="true"></div>
+          <div class="win-line hidden" id="win-line"></div>
+          <canvas class="coins" id="coins" aria-hidden="true"></canvas>
+          <div class="overlay hidden" id="big-win" aria-hidden="true">
+            <div class="big-title" id="big-title">BIG WIN</div>
+            <div class="big-amount" id="big-amount">0×</div>
+          </div>
+          <div class="overlay hidden" id="feature" role="dialog" aria-modal="true" aria-labelledby="feature-title">
+            <div class="feature-card">
+              <div class="feature-eyebrow" id="feature-eyebrow">Three honeycombs</div>
+              <div class="feature-title" id="feature-title">Honey Bonus</div>
+              <p class="feature-text" id="feature-text"></p>
+              <div class="feature-actions">
+                <button class="primary" id="feature-play" type="button">Play bonus ↗</button>
+                <button class="secondary" id="feature-skip" type="button">Keep the prize</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="console">
+          <div class="bet">
+            <label class="console-label" for="stake">Bet</label>
+            <div class="bet-row">
+              <button class="step" id="bet-down" type="button" aria-label="Lower bet">−</button>
+              <div class="input-wrap">
+                <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Bet in ETH" />
+                <span data-asset>ETH</span>
+              </div>
+              <button class="step" id="bet-up" type="button" aria-label="Raise bet">+</button>
+            </div>
+          </div>
+          <div class="meter">
+            <div class="console-label">Win</div>
+            <div class="meter-value"><strong id="win-multiple">—</strong><span id="win-amount"></span></div>
+          </div>
+          <div class="side-buttons">
+            <button class="tool" id="turbo" type="button" aria-pressed="false">Turbo</button>
+            <button class="tool" id="auto" type="button">Auto</button>
+            <button class="tool" id="buy" type="button">Buy bonus</button>
+          </div>
+          <button class="spin" id="spin" type="button" disabled><span id="spin-label">Connecting…</span></button>
+        </div>
+      </section>
+      <div class="status" id="status" role="status" aria-live="polite">
+        Your wallet settles every spin as one verified wager.
+      </div>
+      <footer class="foot">
+        <div class="foot-note">
+          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        </div>
+        <details class="rules">
+          <summary>How it works</summary>
+          <p>
+            Every spin is one wager whose prize table is counted exactly from the reel strips shown in the paytable:
+            nothing is simulated or rounded. After the wallet verifies the result, the reels stop on a position drawn
+            uniformly from exactly those that pay it, so reels and money together behave like the physical strips.
+          </p>
+          <p>
+            Only the best win on the screen is paid, and no win is smaller than your bet. Bonus spins are prepaid: the
+            triggering spin pays their cost in cash, which you may keep instead. The casino can decline a wager it
+            cannot back; your balance is then unchanged and the same spin is offered again.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <div class="sheet hidden" id="paytable" role="dialog" aria-modal="true" aria-labelledby="paytable-title">
+      <div class="sheet-card">
+        <header class="sheet-head">
+          <h2 id="paytable-title">Paytable</h2>
+          <button class="tool" id="paytable-close" type="button">Close</button>
+        </header>
+        <div class="pay-grid" id="pay-grid"></div>
+        <div class="pay-notes">
+          <div class="pay-note">
+            <div class="cell mini" data-symbol="W"><div class="art"></div></div>
+            <p>
+              <strong>Jawbone wild</strong> lands on reels 2, 3 and 4 and stands in for every symbol except the
+              honeycomb. On the bonus reels it carries ×2 (reels 2 and 4) or ×3 (reel 3); multipliers in a win multiply
+              each other, up to ×12.
+            </p>
+          </div>
+          <div class="pay-note">
+            <div class="cell mini" data-symbol="H"><div class="art"></div></div>
+            <p>
+              <strong>Honeycomb</strong> lands on reels 1, 3 and 5. All three pay <span id="bonus-prize"></span> your
+              bet in cash on top of any win, and offer to spend it on <span id="bonus-count"></span> bonus spins on the
+              multiplier reels, one bet each. More honeycombs during the bonus add more spins the same way.
+            </p>
+          </div>
+        </div>
+        <ul class="pay-rules">
+          <li>Wins pay for 3, 4 or 5 matching symbols on adjacent reels from the left, in any rows.</li>
+          <li>Pay = symbol pay × ways × wild multipliers, in bets. Ways multiply the matching symbols on each reel.</li>
+          <li>Only the best win on the screen is paid. Every win is at least your bet.</li>
+        </ul>
+        <dl class="facts" id="facts"></dl>
+      </div>
+    </div>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

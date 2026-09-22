@@ -1,0 +1,103 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+test('the game SDK greets the wallet, accepts only parent-window replies, delivers balance pushes and numbers its requests upwards', async () => {
+  const posted: any[] = [],
+    listeners: ((event: any) => void)[] = [];
+  const parent = { postMessage: (message: any) => posted.push(message) };
+  (globalThis as any).window = { parent, addEventListener: (_: string, fn: any) => listeners.push(fn) };
+  try {
+    const { HookedIn, HookedInError } = await import('../src/sdk.ts');
+    const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
+    // The page greets the wallet as it loads. No balance reaches the game until the wallet answers,
+    // but an amount can be read and written meanwhile: every asset counts in units of 10^-18.
+    assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
+    assert.equal(HookedIn.formatAmount('1500000000000000000'), '1.5');
+    assert.equal(HookedIn.parseAmount('1.5'), '1500000000000000000');
+    const early: any[] = [];
+    const stopEarly = HookedIn.onBalance(balance => early.push(balance));
+    deliver(parent, { hookedin: true, event: 'game.balance', balance: '3', pending: false });
+    assert.deepEqual(early, []);
+    const hello = {
+      methods: ['wallet.hello'],
+      asset: { id: 'test', symbol: 'USDX', decimals: 6 },
+      chainId: '31337',
+    };
+    deliver(parent, { hookedin: true, id: 1, result: hello });
+    assert.deepEqual(await HookedIn.hello(), hello);
+    assert.deepEqual(early, [{ balance: '3', pending: false }], 'the held balance follows the greeting');
+    stopEarly();
+    // Once the wallet has said what it plays with, amounts follow that asset's own decimals.
+    assert.equal(HookedIn.parseAmount('1.5'), '1500000');
+    assert.equal(HookedIn.formatAmount('1500000'), '1.5');
+    assert.equal(HookedIn.formatAmount('1', 2), '<0.01');
+    assert.throws(() => HookedIn.parseAmount('0.0000001'), /6 decimal places/);
+    // A refusal carries a code the game can act on.
+    const refused = HookedIn.call('game.bet');
+    deliver(parent, {
+      hookedin: true,
+      id: posted.at(-1).id,
+      error: { code: 'insufficient-funds', message: 'Bet exceeds the game balance' },
+    });
+    await assert.rejects(
+      refused,
+      (error: any) =>
+        error instanceof HookedInError && error.code === 'insufficient-funds' && /exceeds/.test(error.message),
+    );
+    const reply = HookedIn.info();
+    const { id, method } = posted.at(-1);
+    assert.equal(method, 'wallet.info');
+    for (const [source, result] of [
+      [{}, 'forged'],
+      [parent, 'real'],
+    ] as const)
+      listeners.forEach(listener => listener({ source, data: { hookedin: true, id, result } }));
+    assert.equal(await reply, 'real');
+    const balances: any[] = [];
+    const stop = HookedIn.onBalance(balance => balances.push(balance));
+    deliver({}, { hookedin: true, event: 'game.balance', balance: '7', enabled: true, pending: false });
+    deliver(parent, { hookedin: true, event: 'game.balance', balance: '7', pending: false, stray: true });
+    deliver(parent, { hookedin: true, event: 'game.balance', balance: '0', pending: 'yes' });
+    assert.deepEqual(balances, [
+      { balance: '7', pending: false },
+      { balance: '0', pending: false },
+    ]);
+    stop();
+    deliver(parent, { hookedin: true, event: 'game.balance', balance: '9', enabled: true, pending: false });
+    assert.equal(balances.length, 2);
+    const funding = HookedIn.requestFunds({ amount: 12n });
+    const sent = posted.at(-1);
+    assert.equal(sent.method, 'game.requestFunds');
+    assert.deepEqual(sent.params, { amount: '12' });
+    deliver(parent, {
+      hookedin: true,
+      id: sent.id,
+      result: { funded: false, amount: null, balance: '7', enabled: true },
+    });
+    assert.equal((await funding).funded, false);
+    // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
+    const round = { id: '0x' + '4'.repeat(64), seedHash: '0x' + '5'.repeat(64) };
+    const calls = [
+      HookedIn.payment('pay', '5'),
+      HookedIn.transfer('tip', '6'),
+      HookedIn.bet({ id: 'seat', stake: '5', prizes: [], round }),
+    ];
+    assert.deepEqual(
+      posted.slice(-3).map(({ method, params }) => ({ method, params })),
+      [
+        { method: 'game.payment', params: { id: 'pay', amount: '5' } },
+        { method: 'game.transfer', params: { id: 'tip', amount: '6' } },
+        { method: 'game.bet', params: { id: 'seat', stake: '5', prizes: [], round } },
+      ],
+    );
+    for (const { id } of posted.slice(-3)) deliver(parent, { hookedin: true, id, result: id });
+    assert.deepEqual(
+      await Promise.all(calls),
+      posted.slice(-3).map(message => message.id),
+    );
+    const ids = posted.map(message => message.id);
+    assert.ok(ids.every((id, i) => Number.isSafeInteger(id) && id > (ids[i - 1] ?? 0)));
+  } finally {
+    delete (globalThis as any).window;
+  }
+});

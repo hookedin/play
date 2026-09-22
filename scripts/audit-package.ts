@@ -20,13 +20,26 @@ if (fs.existsSync(target) && fs.readdirSync(target).length)
   throw new Error('Use a fresh release directory; previous packages are immutable');
 fs.mkdirSync(target, { recursive: true });
 const files = [];
-const roots = ['contracts', 'protocol', 'client', 'scripts', 'testing', 'test', 'types', 'docs', 'vectors'];
+const roots = [
+  'contracts',
+  'protocol',
+  'client',
+  'scripts',
+  'testing',
+  'test',
+  'types',
+  'docs',
+  'vectors',
+  'brand',
+  'sdk',
+  'games',
+];
 function walk(dir: string) {
   for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
     if (item.name.startsWith('.') || ['node_modules', 'dist'].includes(item.name)) continue;
     const file = path.join(dir, item.name);
     if (item.isDirectory()) walk(file);
-    else if (item.isFile() && /\.(ts|sol|md|json|html|css)$/.test(file)) files.push(file);
+    else if (item.isFile() && /(\.(ts|js|sol|md|json|jsonc|html|css|svg)|\/_headers)$/.test(file)) files.push(file);
   }
 }
 for (const root of roots) walk(root);
@@ -64,7 +77,7 @@ const manifest = {
   validationNotice:
     'Reports retain their own dates and scope. Packaging hashes are provenance, not proof of independent review or infrastructure readiness.',
   sourceFiles: Object.fromEntries(files.sort().map(file => [file, hash(fs.readFileSync(file))])),
-  verification: ['npm run build', 'npm test', 'node scripts/browser-smoke.ts'],
+  verification: ['npm run build', 'npm test'],
   verificationReports: Object.fromEntries(reports.map(file => [file, hash(fs.readFileSync(path.join('build', file)))])),
   architecture: 'architecture.md',
   excludes:

@@ -13,3 +13,4 @@ dist/
 *.key
 *.tgz
 .wrangler/
+.dev.vars

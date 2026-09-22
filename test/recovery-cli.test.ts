@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { Wallet } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step } from '../testing/contract.ts';
 import { json } from '../protocol/protocol.ts';
@@ -24,7 +25,9 @@ test('independent CLI closes, challenges, finalizes and collects without casino 
   fs.cpSync('protocol', path.join(recoveryRoot, 'protocol'), { recursive: true });
   fs.copyFileSync('client/contract-artifact.ts', path.join(recoveryRoot, 'client/contract-artifact.ts'));
   fs.copyFileSync('scripts/verify-evidence.ts', path.join(recoveryRoot, 'scripts/verify-evidence.ts'));
-  fs.symlinkSync(path.resolve('node_modules'), path.join(recoveryRoot, 'node_modules'));
+  // The node_modules that provides ethers: this checkout's own, or its parent's when play is a submodule.
+  const modules = fileURLToPath(import.meta.resolve('ethers')).replace(/(.*[\\/]node_modules)[\\/].*/, '$1');
+  fs.symlinkSync(modules, path.join(recoveryRoot, 'node_modules'));
   const evidenceFile = path.join(dir, 'evidence.json'),
     walletFile = path.join(dir, 'wallet.json'),
     journal = path.join(dir, 'journal.json');

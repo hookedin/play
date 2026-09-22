@@ -46,7 +46,7 @@ Only the wallet's spending-limit dialog grants spending authority. A game can as
 
 The top bar carries the money on every page: the balance of the channel this tab plays with, which opens **My wallet**, and beside it the choice of what that balance is — **ETH** or **TEST**. Amounts there are truncated, never rounded, so they are a prefix of the digits shown for the same money elsewhere. An open game takes the balance's place: a player reading one figure inside the game and another above it cannot tell which money a bet is about to spend, and the figure above was never the game's to spend. What stands there instead is the authority itself — **Take money back** while the game holds money, **Give this game money** while it holds none — and both open the same dialog, the second at nothing so the amount coming back is confirmed before it moves. The asset stays named throughout, because test coins must never be mistaken for money; while a game holds money the choice is fixed until it gives it back.
 
-Only one game per wallet can hold a limit at a time across tabs; a second tab is refused at the funding dialog. The wallet pushes the game's limit and pending state into the iframe whenever they change. The game can risk that limit, including winnings. A result recovered after a reload changes the channel balance only. Games cannot add money or alter their fee recipient. The wallet does not certify advertised rules or whole-game outcomes. See the [game SDK](https://github.com/hookedin/game-sdk/blob/main/docs/game-sdk.md).
+Only one game per wallet can hold a limit at a time across tabs; a second tab is refused at the funding dialog. The wallet pushes the game's limit and pending state into the iframe whenever they change. The game can risk that limit, including winnings. A result recovered after a reload changes the channel balance only. Games cannot add money or alter their fee recipient. The wallet does not certify advertised rules or whole-game outcomes. See the [game SDK](../sdk/docs/game-sdk.md).
 
 ### Test coins
 
@@ -78,6 +78,8 @@ Recovery transactions can spend the reserved gas amount; deposits still preserve
 | `_headers`                | The response headers Cloudflare applies, from [client/\_headers](../client/_headers)                                                         |
 
 `main.js` imports exactly `/config.js` and `/vendor/ethers.js`; `test/static.test.ts` checks that, the ethers hash and the headers. `config.js` is the JSON file named by the `HOOKEDIN_CLIENT_CONFIG` environment variable at build time, or the defaults in [client/config.ts](../client/config.ts) without it. `network` is `sepolia` or `local`, `casino` is the casino API's base URL, and `deployment` is the pinned manifest above. Settings saved in the wallet override `network` and `casino` in that browser.
+
+`npm run build` then builds each game in [games/](../games/) into that game's own `dist/`, a separate site.
 
 `npm run dev` builds and serves `dist/` at `http://127.0.0.1:4184` (`PORT` overrides) through [scripts/static.ts](../scripts/static.ts), which imitates the production host: it applies `_headers`, answers every extensionless route with the page, and refuses dotfiles and anything outside `dist/`. Production is a Cloudflare static-assets Worker ([wrangler.jsonc](../wrangler.jsonc)): `npm run build`, then `wrangler deploy` publishes `dist/` with the single-page fallback turned on. The headers set `script-src 'self'` and `frame-ancestors 'none'`; any other host must send the same ones.
 

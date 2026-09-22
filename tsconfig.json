@@ -18,6 +18,9 @@
     "scripts/**/*.ts",
     "testing/**/*.ts",
     "test/**/*.ts",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "sdk/**/*.ts",
+    "games/*/src/**/*.ts",
+    "games/*/test/**/*.ts"
   ]
 }

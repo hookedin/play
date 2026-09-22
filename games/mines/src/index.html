@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Mines</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="game-head">
+        <div>
+          <div class="eyebrow">HOOKEDIN ORIGINALS / 02</div>
+          <div class="game-title">
+            <h1>Mines</h1>
+            <span class="edition">FIVE TILES</span>
+          </div>
+        </div>
+        <div class="head-note"><span class="live-dot"></span>Know when to walk away.</div>
+      </header>
+      <div id="bank" class="bank" data-state="connecting"></div>
+      <section class="stage" aria-label="Mines board">
+        <div class="stage-meta">FIND YOUR NEXT GEM</div>
+        <div class="stage-badge">01 mine / 05 tiles</div>
+        <div class="board-wrap">
+          <div class="board" id="board">
+            <button class="tile" data-tile="0" aria-label="Reveal tile 1" disabled>
+              <span class="tile-art">✦</span><span class="tile-number">01</span></button
+            ><button class="tile" data-tile="1" aria-label="Reveal tile 2" disabled>
+              <span class="tile-art">✦</span><span class="tile-number">02</span></button
+            ><button class="tile" data-tile="2" aria-label="Reveal tile 3" disabled>
+              <span class="tile-art">✦</span><span class="tile-number">03</span></button
+            ><button class="tile" data-tile="3" aria-label="Reveal tile 4" disabled>
+              <span class="tile-art">✦</span><span class="tile-number">04</span></button
+            ><button class="tile" data-tile="4" aria-label="Reveal tile 5" disabled>
+              <span class="tile-art">✦</span><span class="tile-number">05</span>
+            </button>
+          </div>
+          <div class="board-caption" id="board-caption">Every tile is a new decision.</div>
+          <div class="ladder">
+            <div class="step" id="step-1"><span>01 GEM</span><strong>1.20×</strong></div>
+            <div class="step" id="step-2"><span>02 GEMS</span><strong>1.56×</strong></div>
+            <div class="step" id="step-3"><span>03 GEMS</span><strong>2.28×</strong></div>
+          </div>
+        </div>
+      </section>
+      <section class="controls" aria-label="Bet controls">
+        <div class="field">
+          <label for="stake">Stake</label>
+          <div class="input-wrap">
+            <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Stake in ETH" /><span
+              data-asset
+              >ETH</span
+            >
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label" id="cash-label">Continuation value</div>
+          <div class="readout"><strong id="cash">—</strong><span data-asset>ETH</span></div>
+        </div>
+        <button class="primary" id="play" type="button">Start exploring ↗</button>
+      </section>
+      <div class="status" id="status" role="status" aria-live="polite">
+        Start a round, then choose a tile. Cash out after any safe pick.
+      </div>
+      <footer class="foot">
+        <div class="foot-note">
+          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        </div>
+        <details class="rules">
+          <summary>How to play</summary>
+          <p>
+            Start with five tiles and one mine. Each reveal samples a new safe/mine outcome using the exact remaining
+            probabilities: 4/5, 3/4, then 2/3 chance of a gem. Tile positions are your visual choices; no hidden board
+            is pre-generated.
+          </p>
+          <p>
+            Cash out after one, two, or three gems for nominal returns of 1.20×, 1.56×, or 2.28× stake. A mine ends the
+            round at zero nominal payout. The amount paid out reflects exact continuation pricing and fees; it can
+            differ from the nominal return. The displayed continuation value is not a cash-out quote.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

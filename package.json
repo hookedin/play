@@ -4,21 +4,32 @@
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "HookedIn player wallet, settlement contract and shared protocol",
+  "description": "HookedIn player wallet, settlement contract, shared protocol, game SDK and the house's games",
   "repository": "github:hookedin/play",
   "engines": {
     "node": ">=24.4"
   },
+  "exports": {
+    "./sdk": "./sdk/src/index.ts",
+    "./sdk/engine": "./sdk/src/engine/index.ts",
+    "./sdk/*": "./sdk/src/*.ts",
+    "./*": "./*"
+  },
+  "bin": {
+    "hookedin-game": "sdk/bin/hookedin-game.js"
+  },
   "scripts": {
-    "build": "npm run compile && node scripts/build.ts",
+    "build": "npm run compile && node scripts/build.ts && node sdk/bin/hookedin-game.js build games/*",
     "dev": "npm run build && node scripts/static.ts",
     "compile": "node scripts/compile.ts",
     "release:artifact": "node scripts/compile.ts --update-artifact",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && npm run typecheck && node scripts/vectors.ts --check && node --test test/*.test.ts",
-    "test:browser": "npm run build && node scripts/browser-smoke.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p games/roulette/server/tsconfig.json --noEmit",
+    "test": "npm run build && npm run typecheck && node scripts/vectors.ts --check && node sdk/scripts/blackjack-funding.ts --check && node --test --test-timeout=180000 test/*.test.ts sdk/test/*.test.ts games/*/test/*.test.ts games/*/server/*.test.ts",
     "vectors": "node scripts/vectors.ts",
+    "generate:blackjack": "node sdk/scripts/blackjack-funding.ts",
     "demo": "node scripts/demo.ts",
+    "demo:blackjack": "node sdk/scripts/demos/blackjack.ts",
+    "demo:mines": "node sdk/scripts/demos/mines.ts",
     "recover": "node scripts/verify-evidence.ts",
     "watchtower": "node scripts/watchtower.ts",
     "audit:package": "node scripts/audit-package.ts",
@@ -26,14 +37,17 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "esbuild": "0.28.2",
     "ethers": "6.17.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260919.1",
     "@types/node": "24.13.5",
-    "esbuild": "0.28.2",
+    "playwright-core": "1.63.0",
     "prettier": "3.9.8",
     "solc": "0.8.37",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "wrangler": "4.135.0"
   },
   "overrides": {
     "tmp": "0.2.7"

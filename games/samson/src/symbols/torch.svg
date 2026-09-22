@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#2fe08a" stop-opacity="0.55"/><stop offset="0.6" stop-color="#2fe08a" stop-opacity="0.18"/><stop offset="1" stop-color="#2fe08a" stop-opacity="0"/></radialGradient><linearGradient id="flame" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd23a"/><stop offset="0.55" stop-color="#ff7a1a"/><stop offset="1" stop-color="#d4300c"/></linearGradient><linearGradient id="flameInner" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3a0"/><stop offset="1" stop-color="#ffab2a"/></linearGradient><linearGradient id="bowl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0a63c"/><stop offset="1" stop-color="#8a5a14"/></linearGradient><linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5a2c"/><stop offset="1" stop-color="#4a2c10"/></linearGradient></defs>
+
+<circle cx="80" cy="72" r="78" fill="url(#glow)"/>
+<g filter="url(#shadow)">
+<path d="M80 8 C102 34 116 50 110 72 C106 90 94 98 80 98 C66 98 54 90 50 72 C45 52 62 44 66 26 C72 34 74 40 74 46 C80 36 82 22 80 8Z" fill="url(#flame)"/>
+<path d="M82 36 C96 54 102 62 98 76 C95 88 88 94 80 94 C72 94 64 88 62 78 C60 66 70 62 72 52 C76 58 78 62 78 66 C82 58 84 48 82 36Z" fill="url(#flameInner)"/>
+<path d="M81 62 C88 72 90 78 88 84 C86 90 83 92 80 92 C77 92 73 90 72 84 C71 78 76 76 77 70 C79 72 80 74 80 76 C82 72 82 68 81 62Z" fill="#fffbe0"/>
+<path d="M54 94 L106 94 L98 112 L62 112Z" fill="url(#bowl)" stroke="#5b3a10" stroke-width="1.5" stroke-linejoin="round"/>
+<rect x="58" y="108" width="44" height="7" rx="3" fill="#f0c45a" stroke="#5b3a10" stroke-width="1.2"/>
+<path d="M68 115 L92 115 L86 152 C84 156 76 156 74 152Z" fill="url(#wood)" stroke="#3a220c" stroke-width="1.5" stroke-linejoin="round"/>
+<path d="M70 126 L90 126 M72 138 L88 138" stroke="#f0c45a" stroke-width="3"/>
+</g>
+</svg>

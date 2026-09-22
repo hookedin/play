@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Blackjack</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="game-head">
+        <div>
+          <div class="eyebrow">HOOKEDIN ORIGINALS / 03</div>
+          <div class="game-title">
+            <h1>Blackjack</h1>
+            <span class="edition">3:2 / S17</span>
+          </div>
+        </div>
+        <div class="head-note"><span class="live-dot"></span>A seat at the table.</div>
+      </header>
+      <div id="bank" class="bank" data-state="connecting"></div>
+      <section class="stage table" aria-label="Blackjack table">
+        <div class="stage-meta">DEALER STANDS ON ALL 17</div>
+        <div class="stage-badge">Natural pays 3:2</div>
+        <div class="table-ring"></div>
+        <div class="table-layout">
+          <div class="dealer-area">
+            <div class="hand-caption">DEALER · <span id="dealer-total">—</span></div>
+            <div class="cards" id="dealer-cards"></div>
+          </div>
+          <div class="table-wordmark" aria-hidden="true">HookedIn</div>
+          <div class="hands" id="hands"></div>
+          <div id="insurance-note"></div>
+        </div>
+        <div class="table-outcome hidden" id="outcome" aria-live="polite"></div>
+      </section>
+      <section class="controls" aria-label="Bet controls">
+        <div class="field">
+          <label for="stake">Initial bet</label>
+          <div class="input-wrap">
+            <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Stake in ETH" /><span
+              data-asset
+              >ETH</span
+            >
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label" id="cash-label">Total wager</div>
+          <div class="readout"><strong id="cash">—</strong><span data-asset>ETH</span></div>
+        </div>
+        <div class="action-buttons">
+          <button class="primary" id="deal" type="button">Deal me in ↗</button
+          ><button class="primary hidden" id="hit" type="button">Hit +</button
+          ><button class="secondary hidden" id="stand" type="button">Stand</button
+          ><button class="secondary hidden" id="double" type="button">Double</button
+          ><button class="secondary hidden" id="split" type="button">Split</button
+          ><button class="primary hidden" id="insurance" type="button">Insurance</button
+          ><button class="secondary hidden" id="decline-insurance" type="button">No insurance</button>
+        </div>
+      </section>
+      <div class="status" id="status" role="status" aria-live="polite">Connecting your wallet…</div>
+      <footer class="foot">
+        <div class="foot-note">
+          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        </div>
+        <details class="rules">
+          <summary>Table rules</summary>
+          <p>
+            Unlimited decks. Dealer stands on soft 17 and checks for blackjack before you play. A natural blackjack pays
+            3:2; two naturals push. Ordinary wins pay 1:1 and ties return the bet.
+          </p>
+          <p>
+            Double on any first two cards, including after a split, and receive exactly one more card. Split an initial
+            equal-value pair once into two hands with an additional equal bet. No re-splitting. Split aces receive one
+            card each; a split 21 is not a natural blackjack. Both hands play against the same dealer.
+          </p>
+          <p>
+            Insurance is offered when the dealer shows an Ace. It costs half the initial bet and pays 2:1 if the dealer
+            has blackjack. There is no surrender. Doubles, splits and insurance require enough additional money in the
+            game balance.
+          </p>
+          <p>
+            With optimal play through a completed hand, the calculated house edge is 0.5703880123% per initial bet
+            (99.4296119877% return on that basis), rounding to 0.57%. Commissions do not reduce the displayed payouts.
+            Stake must be an even number of wei. Stopping through the wallet mid-hand is outside these completed-hand
+            figures.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

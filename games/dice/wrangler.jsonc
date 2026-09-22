@@ -1,0 +1,9 @@
+// Where `wrangler deploy` publishes dist/: a Cloudflare Worker that only serves static assets (the successor to Pages).
+// For a copy of this game, change `name`, and replace or remove `routes` (without it the game is served at
+// <name>.<you>.workers.dev). Run wrangler from this folder.
+{
+  "name": "hookedin-dice-game",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "dist" },
+  "routes": [{ "pattern": "dice-game.hookedin.com", "custom_domain": true }],
+}

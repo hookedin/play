@@ -15,9 +15,10 @@ A useful report says which component and revision is affected, what an attacker 
 - The settlement contract, [contracts/HookedInCasino.sol](contracts/HookedInCasino.sol): loss or freezing of protected principal, bypassing the challenge window, replay of evidence, incorrect winnings allocation, unauthorized withdrawals.
 - The wallet, [client/](client/): key exposure, accepting a result, rejection, payout or share statement it should refuse, losing or downgrading saved evidence, escaping the game iframe boundary, signing something other than what is shown.
 - The shared protocol and player-side tools, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, recovery CLI or watchtower failing to settle or challenge with valid evidence.
-- The build: anything that makes the published `dist/` differ from what these sources produce.
+- The game SDK and the house's games, [sdk/](sdk/) and [games/](games/): step pricing that disagrees with the risk rule, a game losing its saved round, a host revealing its seed before its round closes.
+- The build: anything that makes the published `dist/`, or a game's, differ from what these sources produce.
 
-The casino service, the website and the individual games are separate codebases. Report an issue in a public game or the SDK to its own repository under <https://github.com/hookedin>. If you find a problem in the running casino service, report it here privately as well.
+The casino service, the website and the games other developers publish are separate codebases. If you find a problem in the running casino service, report it here privately as well.
 
 ## Not vulnerabilities
 

@@ -1,14 +1,14 @@
 # Verification
 
-Use Node 24.4+ and Foundry's `anvil` on `PATH` (or name the binary with `ANVIL_BIN`). Install dependencies with `npm ci` before running:
+Use Node 24.4+, Foundry's `anvil` on `PATH` (or name the binary with `ANVIL_BIN`) and an installed Google Chrome. Install dependencies with `npm ci` before running:
 
 ```sh
 npm test
 ```
 
-`npm test` compiles the contract and checks it against the committed artifact, bundles the wallet into `dist/`, type-checks all TypeScript source and tests, checks the committed vectors, and runs the suites in [test/](../test/). `npm run typecheck` runs just the TypeScript checks, including the compile-time API tests in `test/protocol-types.ts`. Vectors check deterministic pricing and outcomes; `npm run vectors` regenerates [vectors/bets.json](../vectors/bets.json). Chain-writing tests use disposable Anvil deployments started by [testing/contract.ts](../testing/contract.ts), which also signs evidence by hand so the contract is tested without any casino service.
+`npm test` compiles the contract and checks it against the committed artifact, bundles the wallet into `dist/`, builds every game, type-checks all TypeScript source and tests, checks the committed vectors and the blackjack funding table, and runs the suites in [test/](../test/), [sdk/test/](../sdk/test/), each game's `games/<id>/test/` and roulette's host in [games/roulette/server/](../games/roulette/server/). `npm run typecheck` runs just the TypeScript checks, including the compile-time API tests in `test/protocol-types.ts`. Vectors check deterministic pricing and outcomes; `npm run vectors` regenerates [vectors/bets.json](../vectors/bets.json). Chain-writing tests use disposable Anvil deployments started by [testing/contract.ts](../testing/contract.ts), which also signs evidence by hand so the contract is tested without any casino service.
 
-This repository tests what it contains: the contract, the shared protocol, the wallet and the player-side tools. The casino service is private and has its own suite; its integration tests run the wallet from this repository against the real server, covering direct opening and activation, rejected bets and lost replies, hosted rounds, the bankroll fund, transfers, stale restores and dispute defence end to end.
+This repository tests what it contains: the contract, the shared protocol, the wallet, the player-side tools, the game SDK and the games. The casino service is private and has its own suite; its integration tests run the wallet from this repository against the real server, covering direct opening and activation, rejected bets and lost replies, hosted rounds, the bankroll fund, transfers, stale restores and dispute defence end to end.
 
 ## Coverage
 
@@ -26,15 +26,15 @@ current pinned artifact; there are no compatibility artifacts or migration tests
 - Game boundary (`iframe-bridge`, `game-log`): the bridge accepts requests only from the bound iframe window, requires request IDs to rise, serializes operations, bounds the envelope structurally, rejects developer and wallet-field injection, and exposes no signing or key methods.
 - Static build (`static`): the built wallet is one module plus the untouched ethers release and its configuration, every route carries `frame-ancestors 'none'`, client-side routes resolve to the page, and no other file is exposed.
 
-Game rules, step pricing and game-side round storage are tested in the [game SDK](https://github.com/hookedin/game-sdk) and in each game's repository, against [testing/game-wallet.ts](../testing/game-wallet.ts): a real wallet from this repository wired to an in-memory casino stub.
+Game rules, step pricing and game-side round storage are tested in [sdk/test/](../sdk/test/) and each game's `games/<id>/test/`, against [testing/game-wallet.ts](../testing/game-wallet.ts): a real wallet from this repository wired to an in-memory casino stub.
 
 ## Browser checks
 
-Run `npm run test:browser`, open `http://127.0.0.1:14187/__test` in a browser, and inspect its JSON result (`PORT` moves it). The harness checks real IndexedDB and Web Locks, atomic commits, the persistence-failure latch, encrypted backups, restore downgrade rejection, export of the latest durable record, and synthetic historical wallet channels.
+`test/browser.test.ts`, part of `npm test`, runs the wallet's storage in the installed Google Chrome, headless, through playwright-core. It checks real IndexedDB and Web Locks, atomic commits, the persistence-failure latch, encrypted backups, restore downgrade rejection, export of the latest durable record, and synthetic historical wallet channels.
 
 Games are framed with `allow-scripts allow-same-origin` everywhere; the wallet refuses manifests and entries on its own origin and its host sends `frame-ancestors 'none'`.
 
-For the funding-account startup race, open two actual tabs on that origin within 90 seconds: `/__test-funding?run=UNIQUE_ID&role=a` and `/__test-funding?run=UNIQUE_ID&role=b`. Use a fresh run ID. Both must report one retained funding account, the same selected address, 40 atomic updates and `passed: true`. The records and keys are separate from product wallet data.
+For the funding-account startup race the test opens two tabs on one origin with a fresh run ID. Both must report one retained funding account, the same selected address, 40 atomic updates and `passed: true`. The records and keys are separate from product wallet data.
 
 The browser storage harness uses synthetic checkpoints. On-chain withdrawal is covered separately on Anvil. These checks do not automate a third-party wallet extension's approval popup.
 

@@ -1,4 +1,4 @@
-// Open this harness in two actual tabs with a shared run ID and roles a/b.
+// test/browser.test.ts opens this harness in two tabs of one browser, with a shared run ID and roles a/b.
 import { BrowserStore } from '../client/storage.ts';
 import { fundingAccounts, readFundingAccounts } from '../client/funding-accounts.ts';
 const output = document.getElementById('result');

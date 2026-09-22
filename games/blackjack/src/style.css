@@ -1,0 +1,186 @@
+:root {
+  --accent: #edca9c;
+  --panel: #24201d;
+  --line: rgba(234, 210, 172, 0.13);
+  --muted: #a69887;
+  background: #191715;
+  --dark: #191715;
+}
+.primary {
+  color: #342718;
+}
+.table {
+  min-height: 410px;
+  background: radial-gradient(ellipse at center, #26493b, #18372b 80%);
+  border-color: #8c9c6c30;
+}
+.table-ring {
+  position: absolute;
+  inset: 37px 22px 25px;
+  border: 1px solid #c7c89220;
+  border-radius: 30%;
+  pointer-events: none;
+}
+.table-layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 52px 20px 62px;
+  gap: 16px;
+}
+.table .stage-meta,
+.table .stage-badge {
+  color: #b4bf9d;
+}
+.hand-caption {
+  text-align: center;
+  color: #c9d4bd;
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  margin-bottom: 12px;
+}
+.cards {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.card {
+  width: 54px;
+  height: 76px;
+  background: #eee9d9;
+  border-radius: 6px;
+  color: #272e22;
+  box-shadow: 0 4px 9px #0003;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  border: 1px solid #d6d2bd;
+  flex-shrink: 0;
+}
+.card > span:first-child {
+  font:
+    700 25px Georgia,
+    serif;
+}
+.card .suit {
+  font-size: 19px;
+}
+.card.red {
+  color: #a33235;
+}
+.card-back {
+  background: repeating-linear-gradient(45deg, #783e39, #783e39 3px, #713a35 3px, #713a35 5px);
+  color: #e8c8a5;
+  border: 3px solid #e4d7bc;
+  font:
+    14px Georgia,
+    serif;
+}
+.table-wordmark {
+  font:
+    24px Georgia,
+    serif;
+  letter-spacing: 4px;
+  color: #bac898;
+  opacity: 0.35;
+}
+.hands {
+  display: flex;
+  gap: 18px;
+  width: 100%;
+  justify-content: center;
+}
+.player-hand {
+  padding: 12px;
+  flex: 1;
+  max-width: 420px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+.player-hand.active {
+  border-color: #edca9c88;
+  background: #ffffff08;
+}
+.hand-kind {
+  text-align: center;
+  color: #b4c1a6;
+  font-size: 10px;
+  margin-top: 10px;
+}
+.table-outcome {
+  position: absolute;
+  bottom: 19px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #143023ee;
+  color: #eee2bc;
+  padding: 9px 16px;
+  border-radius: 20px;
+  font-size: 11px;
+  border: 1px solid #bdbe8533;
+  text-align: center;
+  width: max-content;
+  max-width: 90%;
+}
+#insurance-note {
+  color: #edca9c;
+  font-size: 11px;
+  min-height: 12px;
+}
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  grid-column: 1/-1;
+}
+.action-buttons button {
+  flex: 1;
+  padding: 0 14px;
+  white-space: nowrap;
+  min-width: 100px;
+}
+.controls {
+  grid-template-columns: 1fr 1fr;
+}
+.busy .card {
+  opacity: 0.8;
+}
+@media (max-width: 600px) {
+  .table-layout {
+    padding: 54px 10px 62px;
+  }
+  .hands {
+    gap: 4px;
+  }
+  .player-hand {
+    padding: 8px 3px;
+  }
+  .card {
+    width: 43px;
+    height: 63px;
+  }
+  .card > span:first-child {
+    font-size: 23px;
+  }
+  .cards {
+    gap: 4px;
+  }
+  .hand-caption {
+    font-size: 9px;
+    letter-spacing: 0.5px;
+  }
+  .table .stage-meta {
+    font-size: 7px;
+  }
+  .stage-badge {
+    font-size: 8px;
+  }
+  .table-ring {
+    inset: 40px 8px 24px;
+  }
+}

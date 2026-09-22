@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Plinko</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="game-head">
+        <div>
+          <div class="eyebrow">HOOKEDIN ORIGINALS / 05</div>
+          <div class="game-title">
+            <h1>Plinko</h1>
+            <span class="edition">EVERY BOARD, EVERY DROP</span>
+          </div>
+        </div>
+        <button class="tool" id="mute" type="button" aria-pressed="false">Sound on</button>
+      </header>
+      <div id="bank" class="bank" data-state="connecting"></div>
+      <div class="table">
+        <section class="stage board" aria-label="Plinko board">
+          <canvas id="board" aria-hidden="true"></canvas>
+          <div class="ticker" id="ticker" aria-hidden="true"></div>
+          <div class="flash hidden" id="flash" aria-hidden="true"></div>
+        </section>
+        <section class="panel" aria-label="Drop controls">
+          <div class="field">
+            <label for="stake">Bet per ball</label>
+            <div class="bet-row">
+              <button class="step" id="bet-down" type="button" aria-label="Lower bet">−</button>
+              <div class="input-wrap">
+                <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Bet in ETH" />
+                <span data-asset>ETH</span>
+              </div>
+              <button class="step" id="bet-up" type="button" aria-label="Raise bet">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">Risk</div>
+            <div class="segments" id="risk" role="radiogroup" aria-label="Risk"></div>
+          </div>
+          <div class="field">
+            <div class="field-label">Rows</div>
+            <div class="segments" id="rows" role="radiogroup" aria-label="Rows"></div>
+          </div>
+          <div class="toggles">
+            <button class="tool" id="fast" type="button" aria-pressed="false">Fast</button>
+            <button class="tool" id="auto" type="button" aria-pressed="false">Auto</button>
+          </div>
+          <button class="primary drop" id="drop" type="button" disabled>Connecting wallet…</button>
+          <dl class="stats">
+            <div>
+              <dt>Balls</dt>
+              <dd id="stat-drops">0</dd>
+            </div>
+            <div>
+              <dt>Best</dt>
+              <dd id="stat-best">—</dd>
+            </div>
+            <div>
+              <dt>Net</dt>
+              <dd id="stat-net">0</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+      <div class="status" id="status" role="status" aria-live="polite">
+        Every ball is one verified wager. Tap drop as fast as you like.
+      </div>
+      <footer class="foot">
+        <div class="foot-note">
+          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        </div>
+        <details class="rules">
+          <summary>How it works</summary>
+          <p>
+            Each peg sends the ball left or right with equal chance, so a bucket's probability is its number of paths
+            divided by 2<sup>rows</sup>, and its multiplier is what landing there pays. The white marks under the
+            buckets show where that many balls should have landed; the bars show where yours did. Your wallet works out
+            exactly what each drop is worth before it signs it, and your bet history keeps that figure.
+          </p>
+          <p>
+            A drop is one bet your wallet signs whole: the stake, and a prize for every bucket, each as wide as its
+            share of the paths. The casino's verified outcome names one of the 2<sup>rows</sup> equally likely paths, so
+            the ball you watch and the money you are paid are the same fact. A bet the casino declines can simply be
+            dropped again.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

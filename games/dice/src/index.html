@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Dice</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="game-head">
+        <div>
+          <div class="eyebrow">HOOKEDIN ORIGINALS / 01</div>
+          <div class="game-title">
+            <h1>Dice</h1>
+            <span class="edition">CLASSIC</span>
+          </div>
+        </div>
+        <div class="head-note"><span class="live-dot"></span>One roll. Your odds.</div>
+      </header>
+      <div id="bank" class="bank" data-state="connecting"></div>
+      <section class="stage" aria-label="Dice result">
+        <div class="stage-meta">FORTUNE FAVORS THE ROLL</div>
+        <div class="stage-badge">SET YOUR OWN ODDS</div>
+        <div class="dice-scene">
+          <div class="orbit orbit-one"></div>
+          <div class="orbit orbit-two"></div>
+          <div class="die" id="die"><span></span><span></span><span></span><span></span><span></span></div>
+          <div class="result-label" id="result-label">Make your move.</div>
+          <div class="result-value" id="result-value">A little chance. A lot of possibility.</div>
+        </div>
+      </section>
+      <div class="odds-controls">
+        <div class="odds-line">
+          <label for="chance">Win chance</label><strong id="chance-label">49.50<span>%</span></strong>
+        </div>
+        <input type="range" id="chance" min="1000" max="9000" step="50" value="4950" />
+        <div class="range-labels"><span>10% · HIGH REWARD</span><span>90% · HIGH CHANCE</span></div>
+      </div>
+      <section class="controls" aria-label="Bet controls">
+        <div class="field">
+          <label for="stake">Stake</label>
+          <div class="input-wrap">
+            <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Stake in ETH" /><span
+              data-asset
+              >ETH</span
+            >
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">Win return</div>
+          <div class="readout"><strong id="multiplier">2.00</strong><span>× stake</span></div>
+        </div>
+        <button class="primary" id="play" type="button">Roll dice ↗</button>
+      </section>
+      <div class="status" id="status" role="status" aria-live="polite">
+        Your wallet handles each bet and verifies the casino reveal.
+      </div>
+      <footer class="foot">
+        <div class="foot-note">
+          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        </div>
+        <details class="rules">
+          <summary>How to play</summary>
+          <p>
+            Choose a win chance and stake, then roll. Each roll can win or lose. The win return shown is what the roll
+            pays for each unit staked if it lands, and it falls as your win chance rises. The roll shown is the
+            wallet-verified outcome read on a 0–100 scale: you win when it falls under your win chance. Your wallet
+            works out exactly what each roll is worth before it signs it, and your bet history keeps that figure.
+          </p>
+          <p>
+            The game prepares each wager and the wallet verifies its settlement. The round value can differ from the
+            shown payout due to continuation pricing and fees. The wallet identifies the connected network and asset.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

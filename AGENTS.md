@@ -1,21 +1,34 @@
-# Project design constraint
+# HookedIn: rules for every repository
 
-Absolute simplicity is always a priority. Unneeded complexity must never creep in.
+## 1. Simplicity is the most important rule
 
-This is a pure prototype, called v1. There are no backward compatibility or
-migration requirements. Freely change contracts, signed structures, APIs, storage
-schemas and game formats when doing so simplifies or improves the current design.
-Delete obsolete fields and paths instead of reserving them or adding compatibility
-layers. Existing prototype deployments and data are disposable; a version label
-is not a compatibility promise. Optimize the current contract while preserving
-the explicitly advertised guarantees and accepted trust assumptions.
+Always favor the simplest thing that is correct. Do not over-engineer anything. The code, the configuration, the
+workflows and the documents should be as maintainable and elegant as feasible: the fewest parts, the fewest words, no
+speculative abstraction, no option nobody asked for. When two designs work, take the one with less in it. Added
+complexity needs a concrete requirement, and an explanation of why nothing simpler meets it.
 
-Use the smallest correct change that meets the current requirement. Reuse existing
-state, validation and recovery paths. Do not add speculative abstractions, duplicate
-sources of truth, extra authorities, services or configuration without a concrete
-need. Remove obsolete paths when replacing them.
+## 2. This is pre-release. Compatibility does not exist
 
-Keep the guarantees we advertise correct and testable. Preserve explicitly accepted
-trust assumptions and manual responsibilities; do not expand the protocol merely to
-offer stronger guarantees. Explain any necessary added complexity and why a simpler
-approach cannot meet the requirement. See [architecture.md](architecture.md).
+Nothing here has been released, so there is nothing to stay compatible with. Ever.
+
+- Never worry about backward compatibility: no shims, no migrations, no fallbacks, no reserved fields, no deprecation
+  paths. Change contracts, signed structures, APIs, schemas, storage and formats freely.
+- Never bump version numbers, and never cut version tags. Everything stays at the version it has. Repositories depend
+  on each other's `main`; a push to `main` is the release.
+- Never reference old things: no "previously", "formerly", "legacy", "v1 did", "no longer" or "replaces X" in code,
+  comments, documents or commit messages. Describe what is, not what was. Delete old code; do not keep it, comment it
+  out or point at it.
+- Deployments and their data are disposable. A fresh deployment is always an acceptable answer.
+
+## 3. Clean up immediately
+
+Any opportunity to clean something up is taken at once, in the same change: dead code, a stale document, a duplicated
+path, a name that lies, a needless option, a file nothing uses. Do it even when it means redeploying, breaking
+something that depended on the mess, or touching several repositories. Leaving it for later is the wrong call.
+
+## This repository
+
+The wallet, the settlement contract, the shared protocol, the game SDK and the house's games. Keep the guarantees we
+advertise correct and testable. Preserve explicitly accepted trust assumptions and manual responsibilities; do not
+expand the protocol merely to offer stronger guarantees. Reuse existing state, validation and recovery paths. See
+[architecture.md](architecture.md).

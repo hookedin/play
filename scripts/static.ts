@@ -27,11 +27,12 @@ async function readHeaders(dir: string) {
 /**
  * Serve a built directory the way the static host does: its files, its `_headers`, and the page for any
  * extensionless route. `config`, when given, replaces config.js so a launcher can point the wallet at its casino.
+ * `build`, when given, builds the directory again before every page load, so a change shows on reload.
  */
-export function createStaticServer(dir: string, config?: unknown) {
-  const ready = readHeaders(dir);
+export function createStaticServer(dir: string, config?: unknown, build?: () => Promise<unknown>) {
+  let built: Promise<unknown> = Promise.resolve();
   return http.createServer(async (req, res) => {
-    const headers = await ready;
+    let headers = await readHeaders(dir);
     if (req.method === 'OPTIONS') return void res.writeHead(204, headers).end();
     if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, headers).end();
     try {
@@ -41,6 +42,16 @@ export function createStaticServer(dir: string, config?: unknown) {
         pathname.split('/').some(p => p === '..' || p.startsWith('.') || p.startsWith('_'))
       )
         throw new Error('Invalid path');
+      if (build) {
+        // One build at a time: a page starts one, and everything requested meanwhile waits for it.
+        if (!path.extname(pathname) || pathname.endsWith('.html')) built = built.catch(() => {}).then(build);
+        const failure = await built.then(
+          () => null,
+          (error: Error) => error,
+        );
+        if (failure) return void res.writeHead(500, { 'Content-Type': 'text/plain' }).end(failure.message);
+        headers = await readHeaders(dir);
+      }
       let data: Buffer | string, type: string;
       if (pathname === '/config.js' && config) {
         data = `export default ${JSON.stringify(config)};`;

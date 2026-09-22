@@ -1,0 +1,7 @@
+{
+  "id": "mines",
+  "name": "Mines",
+  "description": "Five tiles. One mine. Find up to three gems and choose when to cash out.",
+  "entry": "./index.html",
+  "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
+}

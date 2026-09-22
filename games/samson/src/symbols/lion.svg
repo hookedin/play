@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff5a3c" stop-opacity="0.55"/><stop offset="0.6" stop-color="#ff5a3c" stop-opacity="0.18"/><stop offset="1" stop-color="#ff5a3c" stop-opacity="0"/></radialGradient><linearGradient id="maneOuter" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb53a"/><stop offset="1" stop-color="#b8500f"/></linearGradient><linearGradient id="maneInner" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd36b"/><stop offset="1" stop-color="#e0801c"/></linearGradient><linearGradient id="face" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffdc7a"/><stop offset="1" stop-color="#e89a2a"/></linearGradient></defs>
+
+<circle cx="80" cy="80" r="78" fill="url(#glow)"/>
+<g filter="url(#shadow)">
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(0 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(30 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(60 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(90 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(120 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(150 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(180 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(210 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(240 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(270 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(300 80 82)"/>
+<ellipse cx="80" cy="26" rx="15" ry="26" fill="url(#maneOuter)" transform="rotate(330 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(15 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(45 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(75 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(105 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(135 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(165 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(195 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(225 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(255 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(285 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(315 80 82)"/>
+<ellipse cx="80" cy="36" rx="11" ry="20" fill="url(#maneInner)" transform="rotate(345 80 82)"/>
+<circle cx="50" cy="50" r="12" fill="#c77a1c"/><circle cx="50" cy="50" r="6.5" fill="#7a3d10"/>
+<circle cx="110" cy="50" r="12" fill="#c77a1c"/><circle cx="110" cy="50" r="6.5" fill="#7a3d10"/>
+<path d="M80 40 C106 40 118 58 116 82 C114 108 98 126 80 131 C62 126 46 108 44 82 C42 58 54 40 80 40Z" fill="url(#face)" stroke="#8a4a10" stroke-width="2"/>
+<ellipse cx="80" cy="108" rx="22" ry="17" fill="#fff0c9"/>
+<path d="M54 68 L72 73" stroke="#6b3410" stroke-width="4" stroke-linecap="round"/><path d="M106 68 L88 73" stroke="#6b3410" stroke-width="4" stroke-linecap="round"/>
+<ellipse cx="65" cy="80" rx="7" ry="5.5" fill="#3a1c08"/><ellipse cx="95" cy="80" rx="7" ry="5.5" fill="#3a1c08"/>
+<circle cx="67" cy="78.5" r="2" fill="#fff"/><circle cx="97" cy="78.5" r="2" fill="#fff"/>
+<path d="M70 96 L90 96 L80 108Z" fill="#4a230b" stroke="#4a230b" stroke-width="4" stroke-linejoin="round"/>
+<path d="M80 108 L80 115 M80 115 C75 122 66 120 64 113 M80 115 C85 122 94 120 96 113" fill="none" stroke="#4a230b" stroke-width="3" stroke-linecap="round"/>
+<circle cx="66" cy="106" r="1.6" fill="#a8702c"/><circle cx="71" cy="111" r="1.6" fill="#a8702c"/><circle cx="94" cy="106" r="1.6" fill="#a8702c"/><circle cx="89" cy="111" r="1.6" fill="#a8702c"/>
+</g>
+</svg>

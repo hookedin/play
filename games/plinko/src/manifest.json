@@ -1,0 +1,7 @@
+{
+  "id": "plinko",
+  "name": "Plinko",
+  "description": "Drop the ball through 8, 12 or 16 rows of pegs. Three risk levels, up to 1000×.",
+  "entry": "./index.html",
+  "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
+}

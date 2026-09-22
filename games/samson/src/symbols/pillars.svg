@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#3f7dff" stop-opacity="0.55"/><stop offset="0.6" stop-color="#3f7dff" stop-opacity="0.18"/><stop offset="1" stop-color="#3f7dff" stop-opacity="0"/></radialGradient><linearGradient id="cap" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6f0df"/><stop offset="1" stop-color="#b9b097"/></linearGradient><linearGradient id="shaft" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b5ac94"/><stop offset="0.35" stop-color="#f4eedc"/><stop offset="1" stop-color="#a39a82"/></linearGradient></defs>
+
+<circle cx="80" cy="80" r="78" fill="url(#glow)"/>
+<g filter="url(#shadow)">
+<path d="M38 22 L84 14 L88 30 L42 38Z" fill="url(#cap)" stroke="#8d846c" stroke-width="1.5"/>
+<path d="M94 16 L126 26 L121 40 L90 31Z" fill="#d9d2c0" stroke="#8d846c" stroke-width="1.5"/>
+<g transform="rotate(-9 50 130)">
+<rect x="28" y="38" width="44" height="10" rx="2" fill="url(#cap)"/>
+<rect x="32" y="48" width="36" height="7" rx="2" fill="#cfc7b4"/>
+<rect x="36" y="55" width="28" height="66" fill="url(#shaft)"/>
+<rect x="41" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/><rect x="46.5" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/><rect x="52" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/><rect x="57.5" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/>
+<rect x="32" y="121" width="36" height="7" rx="2" fill="#cfc7b4"/>
+<rect x="27" y="128" width="46" height="10" rx="2" fill="url(#cap)"/>
+</g>
+<g transform="rotate(9 110 130)">
+<rect x="88" y="38" width="44" height="10" rx="2" fill="url(#cap)"/>
+<rect x="92" y="48" width="36" height="7" rx="2" fill="#cfc7b4"/>
+<rect x="96" y="55" width="28" height="66" fill="url(#shaft)"/>
+<rect x="101" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/><rect x="106.5" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/><rect x="112" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/><rect x="117.5" y="57" width="2.2" height="62" rx="1" fill="#9d957f" opacity="0.7"/>
+<rect x="92" y="121" width="36" height="7" rx="2" fill="#cfc7b4"/>
+<rect x="87" y="128" width="46" height="10" rx="2" fill="url(#cap)"/>
+</g>
+<path d="M46 70 L54 80 L48 90 L56 102" fill="none" stroke="#5d5644" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M114 64 L107 76 L113 84 L106 96" fill="none" stroke="#5d5644" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M74 138 l8 -9 l9 9Z" fill="#bdb49d"/><path d="M70 50 l6 -5 l5 7 l-7 3Z" fill="#d9d2c0"/><path d="M84 62 l5 -3 l3 6Z" fill="#bdb49d"/>
+</g>
+</svg>

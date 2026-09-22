@@ -1,0 +1,199 @@
+:root {
+  --hot: #ff5d73;
+}
+main {
+  max-width: 1040px;
+  padding: 14px 24px 16px;
+}
+.game-head {
+  margin-bottom: 10px;
+}
+.bank {
+  margin: 0 0 10px;
+  padding: 9px 14px;
+}
+.table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 270px;
+  gap: 12px;
+  align-items: stretch;
+}
+.stage.board {
+  margin: 0;
+  min-height: 0;
+  /* The whole table stays inside the wallet's frame. */
+  height: min(66vh, 560px);
+  display: block;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(197, 239, 145, 0.1), transparent 55%),
+    linear-gradient(180deg, #141c1d, #0d1314);
+}
+#board {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ticker {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  pointer-events: none;
+}
+.chip {
+  min-width: 52px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #10160f;
+  background: #7f8f8a;
+  animation: chip 0.25s ease-out;
+}
+.chip[data-tier='warm'] {
+  background: var(--accent);
+}
+.chip[data-tier='hot'] {
+  background: var(--hot);
+  color: #fff;
+}
+.chip:nth-child(n + 6) {
+  opacity: 0.55;
+}
+@keyframes chip {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+.flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 85%, rgba(255, 226, 122, 0.55), transparent 60%);
+  animation: flash 0.9s ease-out forwards;
+}
+.flash.hidden {
+  display: none;
+}
+@keyframes flash {
+  to {
+    opacity: 0;
+  }
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+}
+.segments {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--dark);
+  border: 1px solid var(--line);
+}
+.segment {
+  height: 36px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.segment:hover:not(:disabled) {
+  color: #fff;
+}
+.segment[aria-checked='true'] {
+  background: #2a3531;
+  color: var(--accent);
+  opacity: 1;
+}
+.toggles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.drop {
+  width: 100%;
+  min-height: 58px;
+  font-size: 15px;
+}
+.drop:active:not(:disabled) {
+  transform: translateY(2px);
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: auto 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.stats dt {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.stats dd {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stats dd[data-sign='up'] {
+  color: var(--accent);
+}
+.stats dd[data-sign='down'] {
+  color: #ff9b8f;
+}
+.status {
+  margin-top: 12px;
+}
+.foot {
+  margin-top: 12px;
+}
+@media (max-width: 760px) {
+  main {
+    padding: 14px 12px;
+  }
+  .table {
+    grid-template-columns: 1fr;
+  }
+  .stage.board {
+    height: min(58vh, 430px);
+  }
+  .edition {
+    display: none;
+  }
+  /* The drop button comes first under the board, where the thumb is. */
+  .panel {
+    padding: 12px;
+  }
+  .drop {
+    order: -1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .flash {
+    animation: none;
+  }
+}
