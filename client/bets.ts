@@ -1,5 +1,7 @@
 import { formatEther } from 'ethers';
-import { returnParts } from '../protocol/risk.ts';
+import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
+import { outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
+import { activityJSON } from './activity.ts';
 
 /**
  * One settled bet, however it was read: from this wallet's own receipt, or from a game's public
@@ -25,6 +27,9 @@ export interface BetRow {
   operation?: string;
   /** The seed came from the game's host, not this wallet. */
   hosted?: boolean;
+  /** This wallet's own receipt, whole: the prizes, the preimages and the signatures it kept. A
+   * public row has none, because the casino's list is only what anyone may read. */
+  receipt?: any;
 }
 
 export const unitOf = (asset: string) => (asset === 'test' ? 'TEST' : 'ETH');
@@ -70,6 +75,12 @@ const element = (tag: string, className: string, text?: string) => {
 };
 const signed = (value: bigint, unit: string) =>
   `${value < 0n ? '−' : '+'}${formatEther(value < 0n ? -value : value)} ${unit}`;
+/** One figure under its label, as a bet's row and a bet in full both show it. */
+const figure = (label: string, value: string, className = '') => {
+  const cell = element('div', `bet-figure ${className}`.trim());
+  cell.append(element('span', 'bet-figure-value', value), element('span', 'bet-figure-label', label));
+  return cell;
+};
 
 /** One card per asset: how much went in, how much came back, and both returns side by side. */
 export function totalCards(byAsset: Map<string, BetTotals>) {
@@ -103,21 +114,19 @@ export function totalCards(byAsset: Map<string, BetTotals>) {
     });
 }
 
-/** One row per bet. `who` is shown on a public list and left out of a player's own. */
-export function betRowElement(row: BetRow, onGame?: (row: BetRow) => void) {
+/** One row per bet. `who` is shown on a public list and left out of a player's own. A row that can
+ * be opened is a button: only this wallet's own receipt holds the prizes and preimages to show. */
+export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const unit = unitOf(row.asset),
     net = row.payout - row.stake,
-    item = element('div', `bet-row tone-${net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral'}`);
+    tone = `bet-row tone-${net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral'}`,
+    item = element(onOpen ? 'button' : 'div', tone);
+  if (onOpen) {
+    (item as HTMLButtonElement).type = 'button';
+    item.addEventListener('click', () => onOpen(row));
+  }
   const name = element('div', 'bet-game');
-  if (onGame && row.key) {
-    const link = document.createElement('button');
-    link.type = 'button';
-    link.className = 'bet-game-link';
-    link.textContent = row.game;
-    link.title = `Every bet anyone has placed in ${row.game}`;
-    link.addEventListener('click', () => onGame(row));
-    name.append(link);
-  } else name.append(element('span', 'bet-game-name', row.game));
+  name.append(element('span', 'bet-game-name', row.game));
   if (row.who) name.append(element('span', 'bet-who', row.who));
   if (row.hosted) name.append(element('span', 'bet-tag', 'shared round'));
   const date = new Date(row.at),
@@ -133,11 +142,6 @@ export function betRowElement(row: BetRow, onGame?: (row: BetRow) => void) {
   } else time.textContent = '—';
   name.append(time);
   item.append(name);
-  const figure = (label: string, value: string, className = '') => {
-    const cell = element('div', `bet-figure ${className}`.trim());
-    cell.append(element('span', 'bet-figure-value', value), element('span', 'bet-figure-label', label));
-    return cell;
-  };
   item.append(
     figure('Staked', `${formatEther(row.stake)} ${unit}`),
     figure(
@@ -152,9 +156,266 @@ export function betRowElement(row: BetRow, onGame?: (row: BetRow) => void) {
   // The operation ID identifies the bet everywhere else, and is long: it is searched, not shown.
   if (row.operation) {
     item.dataset.search = row.operation.toLowerCase();
-    item.title = `Operation ${row.operation}`;
+    item.title = onOpen ? `Open this bet in full · operation ${row.operation}` : `Operation ${row.operation}`;
   }
   return item;
+}
+
+// --- One bet, in full -------------------------------------------------------------------------
+
+/** Where a point or a stretch of the outcome space sits, as a percentage for laying out a bar. */
+const across = (value: bigint) => Number((value * 1_000_000n) / OUTCOME_SPACE) / 10_000;
+/** The share of the space a stretch of outcomes covers, as a percentage with four decimals. */
+const chance = (width: bigint) => percent((width * 1_000_000n) / OUTCOME_SPACE);
+
+const detailSection = (title: string, note?: string) => {
+  const box = element('section', 'bet-detail-section');
+  box.append(element('h3', '', title));
+  if (note) box.append(element('p', 'bet-detail-note', note));
+  return box;
+};
+const hex = (value: unknown) => element('code', 'bet-detail-hex', value === undefined ? '—' : String(value));
+/** A value beside a tick: the wallet has just worked it out again from the preimages it kept. */
+const rederived = (value: unknown, matches: boolean, why: string) => {
+  const line = element('div', 'bet-detail-derived');
+  line.title = why;
+  line.append(hex(value), element('span', `bet-detail-check ${matches ? 'ok' : 'bad'}`, matches ? '✓' : '✗'));
+  return line;
+};
+const factList = (rows: readonly (readonly [string, string | Node] | null | false | undefined)[]) => {
+  const list = element('dl', 'bet-detail-facts');
+  for (const entry of rows) {
+    if (!entry) continue;
+    const term = document.createElement('dt'),
+      detail = document.createElement('dd');
+    term.textContent = entry[0];
+    detail.append(entry[1]);
+    list.append(term, detail);
+  }
+  return list;
+};
+
+/**
+ * One of this wallet's own bets, whole: the prize table it rode drawn across the outcome space,
+ * where its round landed in that space, and the seed and secret that drew it. Every derived figure
+ * is worked out here from the receipt's own preimages, so it is checked in front of the player
+ * rather than repeated back from what the casino said.
+ */
+export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
+  const unit = unitOf(row.asset),
+    net = row.payout - row.stake,
+    receipt = row.receipt ?? {},
+    step = receipt.proof?.step,
+    op = step?.operation,
+    prizes: { start: bigint; end: bigint; payout: bigint }[] = (Array.isArray(op?.prizes) ? op.prizes : []).map(
+      (prize: any) => ({
+        start: BigInt(prize.rangeStart),
+        end: BigInt(prize.rangeEnd),
+        payout: BigInt(prize.payout),
+      }),
+    ),
+    // Both preimages are here, so the round is drawn again from nothing but them.
+    drawn = op && step ? outcome(op.prizes, step.seed, step.secret) : null,
+    landed = drawn ? drawn.value : null,
+    body = document.createDocumentFragment();
+
+  const when = new Date(row.at);
+  body.append(
+    element(
+      'p',
+      'bet-detail-when',
+      `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Returned'} ${signed(net, unit)}` +
+        (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`) +
+        (row.hosted ? ' · the seed was this round’s host’s, not your wallet’s' : ''),
+    ),
+  );
+  const figures = element('div', 'bet-detail-figures');
+  figures.append(
+    figure('Staked', `${formatEther(row.stake)} ${unit}`),
+    figure('Paid', `${formatEther(row.payout)} ${unit}`),
+    figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
+    figure('Return of this bet', percent(returnParts(row.stake, row.expected)), 'bet-return'),
+  );
+  body.append(figures);
+
+  if (!prizes.length || landed === null) {
+    body.append(
+      element(
+        'p',
+        'bet-detail-note',
+        'This receipt keeps no prize table, so there is nothing to draw: only the amounts above are known.',
+      ),
+    );
+  } else {
+    const won = prizes.filter(prize => landed >= prize.start && landed < prize.end);
+    // Every prize gets its own lane, so prizes that overlap are seen to overlap.
+    const where = detailSection('Where the round landed');
+    const space = element('div', 'bet-space'),
+      lanes = element('div', 'bet-space-lanes');
+    for (const prize of prizes) {
+      const hit = landed >= prize.start && landed < prize.end,
+        lane = element('div', `bet-space-lane${hit ? ' hit' : ''}`),
+        band = element('div', 'bet-space-band');
+      band.style.left = `${across(prize.start)}%`;
+      band.style.width = `${across(prize.end - prize.start)}%`;
+      band.title = `Pays ${formatEther(prize.payout)} ${unit} on ${chance(prize.end - prize.start)} of outcomes`;
+      lane.append(band);
+      lanes.append(lane);
+    }
+    const mark = element('div', 'bet-space-mark');
+    mark.style.left = `${across(landed)}%`;
+    mark.title = `The outcome, ${landed}`;
+    lanes.append(mark);
+    space.append(lanes);
+    const scale = element('div', 'bet-space-scale');
+    scale.append(element('span', '', '0'), element('span', '', '2⁶⁴'));
+    space.append(scale);
+    where.append(space);
+    where.append(
+      element(
+        'p',
+        'bet-detail-note',
+        `The round drew ${landed}, ${across(landed).toFixed(3)}% of the way across the space. ` +
+          (won.length
+            ? `${won.length} of ${prizes.length} prize${prizes.length === 1 ? '' : 's'} held it, so the bet paid ${formatEther(row.payout)} ${unit}.`
+            : `No prize held it, so the bet paid nothing of the ${formatEther(row.maxPayout ?? 0n)} ${unit} it could have.`),
+      ),
+    );
+    body.append(where);
+
+    const table = detailSection(
+      'The prize table you signed',
+      'A prize pays when the outcome falls in its range, the end never included. Prizes may overlap, and every one that holds the outcome pays.',
+    );
+    const grid = element('div', 'bet-prizes');
+    for (const head of ['Prize', 'Pays', 'Chance', 'Outcomes it holds', ''])
+      grid.append(element('span', 'bet-prizes-head', head));
+    prizes.forEach((prize, index) => {
+      const hit = landed >= prize.start && landed < prize.end;
+      grid.append(
+        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, `#${index + 1}`),
+        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, `${formatEther(prize.payout)} ${unit}`),
+        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, chance(prize.end - prize.start)),
+        element('span', `bet-prizes-cell range${hit ? ' hit' : ''}`, `${prize.start} … ${prize.end}`),
+        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, hit ? 'held it' : ''),
+      );
+    });
+    table.append(grid);
+    table.append(
+      element(
+        'p',
+        'bet-detail-note',
+        `Together they were worth ${percent(returnParts(row.stake, row.expected))} of the stake, and could have paid ` +
+          `at most ${formatEther(row.maxPayout ?? 0n)} ${unit}.`,
+      ),
+    );
+    body.append(table);
+  }
+
+  if (step && op) {
+    const draw = detailSection(
+      'How the outcome was drawn',
+      'The casino fixed the round by publishing the hash of its secret, and your bet named the hash of its seed. ' +
+        'Neither side could see the outcome while choosing, and neither can change it afterwards.',
+    );
+    draw.append(
+      factList([
+        [row.hosted ? 'The host’s seed' : 'Your seed', hex(step.seed)],
+        [
+          'Hashes to the seed hash your bet named',
+          rederived(
+            op.seedHash,
+            same(seedHash(step.seed), op.seedHash),
+            'keccak256 of the seed above, against the hash inside the operation you signed',
+          ),
+        ],
+        ['The casino’s secret', hex(step.secret)],
+        [
+          'Hashes to the round your bet was on',
+          rederived(
+            op.round,
+            same(roundId(step.secret), op.round),
+            'keccak256 of the secret above, against the round your bet named before the secret was out',
+          ),
+        ],
+        [
+          'Both hashed together',
+          rederived(
+            drawn!.randomHash,
+            receipt.randomHash === undefined || same(drawn!.randomHash, receipt.randomHash),
+            'keccak256 of the tag HOOKEDIN/OUTCOME, the seed and the secret',
+          ),
+        ],
+        [
+          'Its lowest 64 bits are the outcome',
+          rederived(
+            `${drawn!.value} · 0x${drawn!.value.toString(16)}`,
+            receipt.payout === undefined || drawn!.payout === BigInt(receipt.payout),
+            'The outcome the prizes were read against, and the payout it produced',
+          ),
+        ],
+      ]),
+    );
+    body.append(draw);
+
+    const record = detailSection(
+      'The record you both signed',
+      'Your wallet keeps this whether or not the casino does. It proves this bet’s place in your channel.',
+    );
+    record.append(
+      factList([
+        ['Operation', hex(receipt.operationId)],
+        ['Channel', hex(op.channelId)],
+        ['Sequence', String(op.sequence)],
+        ['Game, by the hash of its manifest URL', hex(op.game)],
+        ['Developer', hex(op.developer)],
+        ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
+        ['Balance after it settled', `${formatEther(receipt.balance ?? 0)} ${unit}`],
+        receipt.commission && BigInt(receipt.commission) > 0n
+          ? ['The game’s commission', `${formatEther(receipt.commission)} ${unit}`]
+          : null,
+        ['The state it moved from', hex(op.previousStateHash)],
+        ['Your signature on it', hex(step.authorization)],
+        ['The casino’s signature on it', hex(step.casinoSignature)],
+      ]),
+    );
+    const raw = document.createElement('details');
+    raw.className = 'bet-detail-raw';
+    const label = document.createElement('summary');
+    label.textContent = 'The whole receipt, as JSON';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'text-button';
+    copy.textContent = 'Copy JSON';
+    const text = activityJSON(receipt);
+    const said = element('span', 'activity-copy-status');
+    said.setAttribute('role', 'status');
+    copy.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        said.textContent = 'Copied';
+      } catch {
+        said.textContent = 'Copy unavailable. Select the text below.';
+      }
+    });
+    const bar = element('div', 'activity-payload-heading');
+    bar.append(said, copy);
+    const payload = element('pre', 'activity-payload', text);
+    payload.tabIndex = 0;
+    raw.append(label, bar, payload);
+    record.append(raw);
+    body.append(record);
+  }
+
+  if (onGame && row.key) {
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'button secondary small bet-detail-more';
+    link.textContent = 'Every bet in this game ↗';
+    link.addEventListener('click', () => onGame(row));
+    body.append(link);
+  }
+  return body;
 }
 
 /** Search across the rendered rows, as the activity list does: the text is what the player reads,

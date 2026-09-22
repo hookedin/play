@@ -439,12 +439,12 @@
               <p class="intro">
                 Each bet with the return its own prize table gave it, worked out by your wallet before it signed. No
                 game states what it pays back, because nothing stops a game wagering your money over and over; this is
-                measured from the bets that really happened.
+                measured from the bets that really happened. Open a bet for the prize table it rode, where its outcome
+                landed, and the seed and the secret that drew it.
               </p>
             </div>
             <button id="refresh-bets" class="button secondary">Refresh ↻</button>
           </div>
-          <div id="bet-totals" class="funding-balances"></div>
           <div class="activity-toolbar">
             <label class="sr-only" for="bet-search">Search your bets</label
             ><input
@@ -751,6 +751,16 @@
           ><button id="hosted-allow" class="button primary" type="button">Allow shared rounds</button>
         </div>
       </form>
+    </dialog>
+    <dialog id="bet-dialog" class="bet-dialog" aria-labelledby="bet-detail-title">
+      <div class="bet-detail-bar">
+        <div>
+          <div class="eyebrow">ONE BET, IN FULL</div>
+          <h2 id="bet-detail-title">This bet</h2>
+        </div>
+        <button id="bet-detail-close" class="button secondary small" type="button">Close</button>
+      </div>
+      <div id="bet-detail" class="bet-detail"></div>
     </dialog>
   </body>
 </html>

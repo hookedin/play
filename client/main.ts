@@ -23,7 +23,16 @@ import { json, verifyEvidence, FAUCET_BELOW } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { activityJSON, createActivityEntry, filterActivity, receiptSummary, receiptUnit } from './activity.ts';
 import type { BetRow } from './bets.ts';
-import { betRowElement, filterBets, percent, measuredReturn, totalCards, totalsByAsset, unitOf } from './bets.ts';
+import {
+  betDetail,
+  betRowElement,
+  filterBets,
+  percent,
+  measuredReturn,
+  totalCards,
+  totalsByAsset,
+  unitOf,
+} from './bets.ts';
 import { createGameLog, logAsset } from './game-log.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import type { LogKind } from './game-log.ts';
@@ -1307,12 +1316,26 @@ function ownBets(): BetRow[] {
       maxPayout: receipt.maxPayout === undefined ? null : BigInt(receipt.maxPayout),
       operation: receipt.operationId,
       hosted: receipt.hosted === true,
+      receipt,
     }));
 }
 /** Open a game's public record. From a bet, the key is all that is needed. */
 const showGameRecord = (row: { key?: string | null }) => {
   if (row.key) void openGameRecord(row.key);
 };
+/** One bet in full: the prize table it rode, where its round landed, and the preimages that drew
+ * it. Everything shown comes out of the receipt this wallet kept. */
+function showBet(row: BetRow) {
+  $('bet-detail-title').textContent = row.game;
+  $('bet-detail').replaceChildren(
+    betDetail(row, opened => {
+      $<HTMLDialogElement>('bet-dialog').close();
+      showGameRecord(opened);
+    }),
+  );
+  $('bet-dialog').scrollTop = 0;
+  $<HTMLDialogElement>('bet-dialog').showModal();
+}
 /** A list is rebuilt only when what it shows has changed. The wallet renders on every poll, and a
  * row replaced under the player's cursor takes their click with it. */
 const betSignature = (rows: readonly BetRow[], extra = '') =>
@@ -1325,8 +1348,7 @@ function renderBets() {
   const signature = betSignature(rows);
   if (signature === shownBets) return;
   shownBets = signature;
-  $('bet-totals').replaceChildren(...totalCards(totalsByAsset(rows)));
-  $('bet-list').replaceChildren(...rows.map(row => betRowElement(row, showGameRecord)));
+  $('bet-list').replaceChildren(...rows.map(row => betRowElement(row, showBet)));
   filterBets(
     $('bet-list'),
     $<HTMLInputElement>('bet-search').value,
@@ -1576,6 +1598,7 @@ $<HTMLButtonElement>('hosted-allow').addEventListener('click', () =>
   $<HTMLDialogElement>('hosted-dialog').close('allow'),
 );
 $<HTMLButtonElement>('hosted-decline').addEventListener('click', () => $<HTMLDialogElement>('hosted-dialog').close(''));
+$<HTMLButtonElement>('bet-detail-close').addEventListener('click', () => $<HTMLDialogElement>('bet-dialog').close());
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-fund-cancel]'))
   button.addEventListener('click', () => $<HTMLDialogElement>('fund-dialog').close(''));
 $<HTMLButtonElement>('fund-open-wallet').addEventListener('click', () => {

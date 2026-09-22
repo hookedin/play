@@ -2425,11 +2425,18 @@ html:has(dialog[open]) {
   grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));
   align-items: center;
   gap: 12px;
+  width: 100%;
+  text-align: left;
   border: 1px solid var(--line);
   border-left: 2px solid #343a4a;
   background: var(--panel);
   border-radius: 9px;
   padding: 14px 18px;
+}
+/* Only your own bets open: their receipt is the one that holds the prizes and the preimages. */
+button.bet-row:hover {
+  border-color: #3b3752;
+  background: #171d29;
 }
 .bet-row.tone-positive {
   border-left-color: #6de3a4;
@@ -2444,21 +2451,10 @@ html:has(dialog[open]) {
   gap: 4px 10px;
   min-width: 0;
 }
-.bet-game-name,
-.bet-game-link {
+.bet-game-name {
   font-size: 13px;
   font-weight: 550;
   flex-basis: 100%;
-}
-.bet-game-link {
-  border: 0;
-  background: none;
-  padding: 0;
-  text-align: left;
-  color: #c6b6ff;
-}
-.bet-game-link:hover {
-  text-decoration: underline;
 }
 .bet-who,
 .bet-time {
@@ -2508,6 +2504,218 @@ html:has(dialog[open]) {
 .bet-figure.negative .bet-figure-value,
 .bet-net.negative {
   color: #e2748c;
+}
+/* One bet in full. Wide, because a prize range is a twenty-digit number. */
+.bet-dialog {
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  padding: 20px 22px 24px;
+  border: 1px solid #3b3752;
+  border-radius: 14px;
+  background: #151a26;
+  color: #edf0f5;
+  box-shadow: 0 30px 80px #000a;
+  overflow: auto;
+}
+.bet-dialog::backdrop {
+  background: #05070ccc;
+  backdrop-filter: blur(3px);
+}
+.bet-detail-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: -20px;
+  z-index: 1;
+  padding: 4px 0 14px;
+  background: #151a26;
+}
+.bet-detail-bar .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+}
+.bet-detail-bar h2 {
+  font-size: 22px;
+  letter-spacing: -0.6px;
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+}
+.bet-detail-bar .button {
+  flex: none;
+}
+.bet-detail-when {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+.bet-detail-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+}
+.bet-detail-section {
+  margin-top: 24px;
+}
+.bet-detail-section h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.bet-detail-note {
+  font-size: 11px;
+  line-height: 1.7;
+  color: #9ba7bd;
+  margin: 6px 0 0;
+}
+.bet-detail-hex {
+  font:
+    10px/1.7 ui-monospace,
+    SFMono-Regular,
+    monospace;
+  color: #cdd3e2;
+  overflow-wrap: anywhere;
+}
+.bet-detail-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
+  gap: 0 16px;
+  margin: 12px 0 0;
+  font-size: 11px;
+}
+.bet-detail-facts dt,
+.bet-detail-facts dd {
+  min-width: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.bet-detail-facts dt {
+  color: #7d8494;
+}
+.bet-detail-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+/* A figure the wallet has just worked out again from the preimages this receipt kept. */
+.bet-detail-derived {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.bet-detail-check {
+  flex: none;
+  font-size: 11px;
+}
+.bet-detail-check.ok {
+  color: #6de3a4;
+}
+.bet-detail-check.bad {
+  color: #e2748c;
+}
+/* The whole 64-bit outcome space, once: one lane per prize, so prizes that overlap show it. */
+.bet-space {
+  margin-top: 14px;
+}
+.bet-space-lanes {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0e121b;
+}
+.bet-space-lane {
+  position: relative;
+  height: 12px;
+  border-radius: 3px;
+  background: #171d29;
+}
+.bet-space-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  border-radius: 3px;
+  background: #4a4470;
+}
+.bet-space-lane.hit .bet-space-band {
+  background: var(--purple);
+}
+/* Where the round landed: one line across every lane. */
+.bet-space-mark {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--mint);
+}
+.bet-space-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10px;
+  color: #7d8494;
+}
+.bet-prizes {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  gap: 0 14px;
+  margin-top: 12px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.bet-prizes-head {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7d8494;
+  padding-bottom: 6px;
+}
+.bet-prizes-cell {
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  color: #9ba7bd;
+}
+.bet-prizes-cell.hit {
+  color: var(--mint);
+}
+.bet-prizes-cell.range {
+  font:
+    10px/1.7 ui-monospace,
+    SFMono-Regular,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.bet-detail-raw {
+  margin-top: 18px;
+}
+.bet-detail-raw summary {
+  font-size: 11px;
+  color: #b5a8e5;
+}
+.bet-detail-raw .activity-payload-heading {
+  padding: 10px 0 0;
+  border-top: 0;
+}
+.bet-detail-raw .activity-payload {
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  max-height: 300px;
+}
+.bet-detail-more {
+  margin-top: 24px;
 }
 /* A game card's way into that game's public record; the card itself opens the game. */
 .catalog-record {
@@ -2584,6 +2792,9 @@ html:has(dialog[open]) {
   }
 }
 @media (max-width: 620px) {
+  .bet-detail-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   #account-heading,
   #profile-name {
     font-size: 28px;
