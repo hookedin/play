@@ -83,22 +83,21 @@ export async function gameWallet(storage = new MemoryStore()) {
       if (path.endsWith('/cancel')) return takeBack((body as any).request);
       if (!path.endsWith('/operations')) return {};
       const { request, signature, seed } = body as any;
-      if (responses.has(request.operationId)) return responses.get(request.operationId);
+      if (responses.has(request.memo)) return responses.get(request.memo);
       const seats = hosted.get(request.round);
       if (seats) {
         if (request.seedHash !== seedHash(seats.seed)) throw new Error('Every bet in a round shares its seed');
-        if (!seats.seats.some(seat => seat.request.operationId === request.operationId))
-          seats.seats.push({ request, signature });
-        return { status: 'seated', operationId: request.operationId };
+        if (!seats.seats.some(seat => seat.request.memo === request.memo)) seats.seats.push({ request, signature });
+        return { status: 'seated', operationId: request.memo };
       }
       return settle(request, signature, seed ?? ZeroHash);
     };
     /** A seat taken back from its round is declined, unless the round's host closed it first. */
     const takeBack = async (request: any) => {
-      const settled = responses.get(request.operationId);
+      const settled = responses.get(request.memo);
       if (settled) return settled;
       const open = hosted.get(request.round);
-      if (open) open.seats = open.seats.filter(s => s.request.operationId !== request.operationId);
+      if (open) open.seats = open.seats.filter(s => s.request.memo !== request.memo);
       return decline(request);
     };
     /** The casino declines a bet with a signed checkpoint above it: the balance is unchanged. */
@@ -109,15 +108,14 @@ export async function gameWallet(storage = new MemoryStore()) {
         status: 'rejected',
         reason: 'Bet withdrawn by the player',
         request,
-        operationId: request.operationId,
+        operationId: request.memo,
         state,
         casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
-        developer: null,
         commission: '0',
         evidence: checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
         bankroll,
       });
-      responses.set(request.operationId, response);
+      responses.set(request.memo, response);
       return response;
     };
     const settle = async (request: any, signature: string, seed: string) => {
@@ -129,7 +127,6 @@ export async function gameWallet(storage = new MemoryStore()) {
         status: 'signed',
         state: next,
         casinoSignature: signed,
-        developer: request.developer,
         evidence: {
           ...checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
           step: {
@@ -143,7 +140,7 @@ export async function gameWallet(storage = new MemoryStore()) {
         bankroll,
         ...(request.round === own ? { nextRound: (own = createRound()) } : {}),
       });
-      responses.set(request.operationId, response);
+      responses.set(request.memo, response);
       settlements++;
       return response;
     };

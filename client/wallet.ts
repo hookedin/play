@@ -154,7 +154,7 @@ export class CasinoWallet extends GameSessions {
     alias: string | null;
     since: number;
     stats: any;
-    games: { name: string; url: string }[];
+    games: { name: string; url: string; key: string }[];
   } | null;
   reportedBankroll = '0';
   /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */

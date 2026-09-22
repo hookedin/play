@@ -1,6 +1,15 @@
 import fs from 'node:fs';
-import { id } from 'ethers';
-import { domain, operation, hashOperation, initialState, outcome, roundId, seedHash } from '../protocol/protocol.ts';
+import { getAddress, id } from 'ethers';
+import {
+  domain,
+  operation,
+  hashOperation,
+  initialState,
+  memo,
+  outcome,
+  roundId,
+  seedHash,
+} from '../protocol/protocol.ts';
 import { fileURLToPath } from 'node:url';
 import { assessRound, OUTCOME_SPACE } from '../protocol/risk.ts';
 
@@ -55,9 +64,10 @@ export function buildVectors() {
     prizes: chips.prizes,
     seedHash: seedHash(clientSeed),
     round: roundId(secrets[0]),
-    operationId: `0x${'82'.repeat(32)}`,
-    game: id('https://roulette-game.example/manifest.json'),
-    developer: identity.player,
+    memo: memo({
+      id: `0x${'82'.repeat(32)}`,
+      game: { developer: getAddress(identity.player), name: 'roulette' },
+    }),
   });
   const requestHash = hashOperation(d, request);
   return {

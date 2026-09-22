@@ -750,7 +750,7 @@ test('a rejected game action survives a lost reply and reload without resampling
   assert.equal(result.terminal, true);
   assert.equal(result.events.length, 1);
   for (const field of ['amount', 'prizes']) assert.deepEqual(attempts[1][field], attempts[0][field]);
-  assert.notEqual(attempts[1].operationId, attempts[0].operationId);
+  assert.notEqual(attempts[1].memo, attempts[0].memo);
   assert.equal(attempts[0].sequence, '1');
   assert.equal(attempts[1].sequence, '3');
 });

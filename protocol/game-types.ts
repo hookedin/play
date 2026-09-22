@@ -4,6 +4,10 @@ export interface GameIdentity {
   manifestURL: string;
   entryURL: string;
   developer: string;
+  /** The name its developer published it under. A game loaded straight from its manifest has none, and
+   * goes by its manifest URL instead. */
+  slug?: string;
+  /** What the game calls itself. */
   name: string;
   /** This game bets on rounds its own host opens, so its host draws their seed. The player allows it
    * before the game is framed, or the game is not opened. */

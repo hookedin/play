@@ -2,10 +2,12 @@ import type { Integer, Checkpoint, Operation, Prize, Round } from '../protocol/t
 import type { AssetId } from '../protocol/protocol.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id } from 'ethers';
+import type { Details } from '../protocol/types.ts';
 import {
   canonicalJSON,
   plain,
   same,
+  memo,
   KIND,
   STATE_TYPES,
   OP_TYPES,
@@ -37,7 +39,7 @@ import {
   checkpointEvidence,
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
-import { gameAmount } from './game-account.ts';
+import { gameAmount, gameName } from './game-account.ts';
 import { gameError } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
@@ -130,7 +132,6 @@ export class ChannelClient extends WalletTransactions {
     return this.perform(
       'faucet',
       { amount: FAUCET_AMOUNT, source: FAUCET_ID },
-      null,
       `faucet:${this.channel!.state.sequence}`,
     );
   }
@@ -160,44 +161,30 @@ export class ChannelClient extends WalletTransactions {
       this.reportedBankroll = String(gameAmount(value, false));
     } catch {}
   }
-  async executeBet(
-    this: CasinoWallet,
-    input: BetInput,
-    developer: string,
-    operationId: string = crypto.randomUUID(),
-    game?: GameIntent,
-  ) {
-    return this.perform('bet', input, getAddress(developer), operationId, game);
+  async executeBet(this: CasinoWallet, input: BetInput, operationId: string = crypto.randomUUID(), game?: GameIntent) {
+    return this.perform('bet', input, operationId, game);
   }
   async payBankroll(
     this: CasinoWallet,
     amount: Integer,
     operationId: string = crypto.randomUUID(),
     game: GameIntent | undefined = undefined,
-    developer: string | null = null,
   ) {
-    return this.perform('payment', { amount }, developer, operationId, game);
+    return this.perform('payment', { amount }, operationId, game);
   }
-  async perform(
-    this: CasinoWallet,
-    kind: string,
-    input: any,
-    developer: string | null,
-    operationId: string,
-    game?: GameIntent,
-  ) {
+  async perform(this: CasinoWallet, kind: string, input: any, operationId: string, game?: GameIntent) {
     this.requireDurableState();
     const intent = {
-      // An investment is a transfer into the bankroll fund, and redeemed money the credit out of it.
+      // A payment and an investment are debits, and a payout collected is a credit.
       kind:
         (
           {
             bet: KIND.bet,
-            payment: KIND.payment,
-            invest: KIND.transfer,
-            divest: KIND.receive,
-            earnings: KIND.receive,
-            faucet: KIND.receive,
+            payment: KIND.debit,
+            invest: KIND.debit,
+            divest: KIND.credit,
+            earnings: KIND.credit,
+            faucet: KIND.credit,
           } as Record<string, number>
         )[kind] || 0,
       amount: BigInt(kind === 'bet' ? input.stake : input.amount),
@@ -209,28 +196,29 @@ export class ChannelClient extends WalletTransactions {
               payout: BigInt(prize.payout),
             }))
           : [],
-      // Only a bet signs its developer; the local attribution of payments stays in the receipt.
-      developer: kind === 'bet' ? developer || ZeroAddress : ZeroAddress,
-      // A bet and a payment are always the open game's, so which game that is has one source of
-      // truth: the session this wallet has open. Nothing else names a game.
-      game: ['bet', 'payment'].includes(kind) ? this.requireGame().key : ZeroHash,
     };
     if (!intent.kind) throw new Error('Unknown wallet operation');
-    const matches = (operation: Operation) => {
+    // What the operation means, signed as its memo. A bet and a payment are always the open game's, so
+    // which game that is has one source of truth: the session this wallet has open. An investment and a
+    // payout name what they pay into or collect from.
+    const details: Details = plain({
+      id: id(operationId),
+      ...(['bet', 'payment'].includes(kind) ? { game: gameName(this.requireGame().identity) } : {}),
+      ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
+    });
+    const matches = (operation: Operation, signed: Details) => {
       if (
         (['kind', 'amount'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
         canonicalJSON(plain(operation.prizes)) !== canonicalJSON(plain(intent.prizes)) ||
-        !same(operation.developer, intent.developer) ||
-        !same(operation.game, intent.game) ||
-        (input.source && !same(operation.counterparty, input.source)) ||
+        canonicalJSON(signed) !== canonicalJSON(details) ||
         (input.round && (!same(operation.round, input.round.id) || !same(operation.seedHash, input.round.seedHash)))
       )
-        throw gameError('id-conflict', 'Operation ID is bound to a different intent (terms or developer)');
+        throw gameError('id-conflict', 'Operation ID is bound to a different intent (terms or game)');
     };
     const cached = await this.getReceipt(operationId);
     this.requireDurableState();
     if (cached) {
-      matches(cached.request || cached.proof.step.operation);
+      matches(cached.request || cached.proof.step.operation, cached.details);
       if (game && (cached.game?.key !== game.key || cached.game?.id !== game.id))
         throw gameError('id-conflict', 'Operation ID is bound to a different game');
       return cached;
@@ -264,15 +252,11 @@ export class ChannelClient extends WalletTransactions {
               : validRound({ id: await this.ownRound(), seedHash: seedHash(seed!) });
       const request = operation(this.domain, this.channel!.state, {
         kind: intent.kind,
-        // An investment and a redemption name the fund.
-        counterparty: input.source ?? ZeroHash,
         amount: intent.amount,
         prizes: intent.prizes,
-        seedHash: round?.seedHash ?? ZeroHash,
         round: round?.id ?? ZeroHash,
-        operationId: id(operationId),
-        game: intent.game,
-        developer: intent.developer,
+        seedHash: round?.seedHash ?? ZeroHash,
+        memo: memo(details),
       });
       // Signed, then saved once: nothing leaves this wallet until the signed request is durable.
       this.pending = {
@@ -283,7 +267,7 @@ export class ChannelClient extends WalletTransactions {
         kind,
         operationId,
         request,
-        developer,
+        details,
         signature: await this.channelSigner().signTypedData(this.domain, OP_TYPES, request),
       };
       await this.save();
@@ -294,7 +278,7 @@ export class ChannelClient extends WalletTransactions {
       else {
         if (this.pending.operationId !== operationId)
           throw gameError('pending-operation', 'Recover the previous operation');
-        matches(this.pending.request);
+        matches(this.pending.request, this.pending.details);
         if (game && canonicalJSON(this.pending.game) !== canonicalJSON(game))
           throw gameError('id-conflict', 'Pending game request differs');
       }
@@ -317,6 +301,7 @@ export class ChannelClient extends WalletTransactions {
         : undefined;
     const entry = {
       request: pending.request,
+      details: pending.details,
       signature: pending.signature,
       acknowledgment,
       ...(pending.seed ? { seed: pending.seed } : {}),
@@ -326,10 +311,10 @@ export class ChannelClient extends WalletTransactions {
     // A bet on a hosted round waits for the host to close it: sending the same request again finds the result.
     if (response.status === 'seated' && pending.hosted)
       return { status: 'pending', verified: false, operationId: pending.operationId };
-    return this.accept(response, pending.operationId, pending.kind, pending.developer);
+    return this.accept(response, pending.operationId, pending.kind);
   }
   /** Verify a signed result, record it and advance the channel. */
-  async accept(this: CasinoWallet, response: any, operationId: string, kind: string, developer: string | null) {
+  async accept(this: CasinoWallet, response: any, operationId: string, kind: string) {
     const c = structuredClone(this.channel!),
       rejected = response.status === 'rejected',
       step = response.evidence.step,
@@ -341,11 +326,8 @@ export class ChannelClient extends WalletTransactions {
       throw new Error('Casino returned a different operation');
     if (!rejected && !same(hashState(this.domain, response.evidence.base), hashState(this.domain, c.state)))
       throw new Error('Response does not follow the saved checkpoint');
-    if (
-      Number(op.kind) === KIND.bet &&
-      (!developer || !same(op.developer, developer) || (!rejected && !same(response.developer, developer)))
-    )
-      throw new Error('Developer attribution differs from the selected game');
+    // What the operation meant is what this wallet signed as its memo, and the operation is the one it signed.
+    const details: Details = c.pending!.details;
     let next: Checkpoint;
     if (rejected) {
       // The casino declined the saved operation with a signed unchanged-balance checkpoint above
@@ -431,11 +413,11 @@ export class ChannelClient extends WalletTransactions {
       stake: op.amount,
       ...(table ? { maxPayout: table.maxPayout, expectedPayout: table.expectedPayout } : {}),
       amount: rejected ? '0' : op.amount,
-      counterparty: op.counterparty,
+      details,
       // The seed of a hosted round was the host's, not this wallet's.
       ...(c.pending?.hosted && kind === 'bet' ? { hosted: true } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
-      developer,
+      ...(details.game ? { developer: details.game.developer } : {}),
       commission,
       balance: next.balance,
       createdAt: new Date().toISOString(),
@@ -464,6 +446,7 @@ export class ChannelClient extends WalletTransactions {
       // The operation travels with its signature: the casino may never have seen it.
       const response = await this.api(`/api/channels/${this.channelId}/cancel`, {
         request: pending.request,
+        details: pending.details,
         signature: pending.signature,
         acknowledgment:
           c.playerSignature && c.playerSignature !== '0x'
@@ -471,7 +454,7 @@ export class ChannelClient extends WalletTransactions {
             : undefined,
       });
       // A bet settled before the withdrawal arrived is simply that bet's result.
-      return this.accept(response, pending.operationId, pending.kind, pending.developer);
+      return this.accept(response, pending.operationId, pending.kind);
     });
   }
   // --- The bankroll fund -------------------------------------------------------------------
@@ -480,7 +463,7 @@ export class ChannelClient extends WalletTransactions {
    * price. The money becomes the casino's to bet with. A share is the casino's promise of a part of
    * the bankroll, not protected principal: the wallet can prove what it holds, never what it is worth. */
   async invest(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
-    return this.perform('invest', { amount, source: FUND_ID }, null, operationId);
+    return this.perform('invest', { amount, source: FUND_ID }, operationId);
   }
   /** The statement for an investment this wallet just made. It is believed as far as it can be
    * checked: the casino's signature, this exact transfer, and the shares its stated price implies.
@@ -519,7 +502,7 @@ export class ChannelClient extends WalletTransactions {
         },
       };
     } catch (error: any) {
-      return { minted: '0', fund: { ...this.fund, alert: `Investment ${op.operationId}: ${error.message}` } };
+      return { minted: '0', fund: { ...this.fund, alert: `Investment ${op.memo}: ${error.message}` } };
     }
   }
   /** The fund as the casino states it, signed, with what this account's shares come to at that price. */
@@ -632,7 +615,6 @@ export class ChannelClient extends WalletTransactions {
             await this.perform(
               'earnings',
               { amount: payout.amount, source: DEVELOPER_ID },
-              null,
               `earnings:${this.playing}:${payout.collected}`,
             ),
           );
@@ -644,7 +626,7 @@ export class ChannelClient extends WalletTransactions {
           at = owed.indexOf(String(payout.amount));
         if (at < 0) continue;
         collected.push(
-          await this.perform('divest', { amount: payout.amount, source: FUND_ID }, null, `divest:${payout.index}`),
+          await this.perform('divest', { amount: payout.amount, source: FUND_ID }, `divest:${payout.index}`),
         );
         await this.exclusive(() => this.save(undefined, { fund: { ...this.fund, owed: owed.toSpliced(at, 1) } }), {
           wait: true,
@@ -709,6 +691,6 @@ export class ChannelClient extends WalletTransactions {
     }
     if (!reply.lastResponse) throw new Error('Casino checkpoint differs; import recovery evidence');
     if (!this.pending) throw new Error('Unknown pending operation; use saved recovery evidence');
-    await this.accept(reply.lastResponse, this.pending.operationId, this.pending.kind, this.pending.developer);
+    await this.accept(reply.lastResponse, this.pending.operationId, this.pending.kind);
   }
 }

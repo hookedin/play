@@ -129,7 +129,7 @@ export class GameSessions extends ChannelClient {
     };
     return gameReceipt(
       request.id,
-      await this.executeBet(terms, game.identity.developer, this.gameOperationId(request.id), {
+      await this.executeBet(terms, this.gameOperationId(request.id), {
         key: game.key,
         id: request.id,
         name: game.identity.name,
@@ -147,12 +147,11 @@ export class GameSessions extends ChannelClient {
     const game = this.requireGame();
     return gameReceipt(
       request.id,
-      await this.payBankroll(
-        gameAmount(request.amount),
-        this.gameOperationId(request.id),
-        { key: game.key, id: request.id, name: game.identity.name },
-        game.identity.developer,
-      ),
+      await this.payBankroll(gameAmount(request.amount), this.gameOperationId(request.id), {
+        key: game.key,
+        id: request.id,
+        name: game.identity.name,
+      }),
     );
   }
 }

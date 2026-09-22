@@ -32,23 +32,37 @@ export interface Prize {
   rangeEnd: Integer;
   payout: Integer;
 }
+/** A game's name: its developer, who earns half of every bet's commission, and the name it goes by, the
+ * one its developer published it under or, for a game loaded straight from its manifest, that manifest's URL. */
+export interface GameName {
+  developer: string;
+  name: string;
+}
+/** What an operation means to the wallet and the casino, beside what the contract settles. The operation
+ * signs only its hash, `memo`; the request carries it whole, and both sides keep it with the evidence. */
+export interface Details {
+  /** The wallet's name for the operation, as a hash: an exact retry is the same operation. */
+  id: string;
+  /** The game that asked for a bet or a payment. */
+  game?: GameName;
+  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's earnings or the
+   * faucet. A game's payment pays the bankroll and names nothing. */
+  counterparty?: string;
+}
 export interface Operation {
   channelId: string;
   previousStateHash: string;
   sequence: Integer;
   kind: Integer;
-  /** A bet's stake, paid to enter; otherwise the amount paid, transferred or received. */
+  /** A bet's stake, paid to enter; otherwise the amount debited or credited. */
   amount: Integer;
   prizes: Prize[];
-  /** A bet's seed, named by its hash. */
-  seedHash: string;
   /** A bet's round: the hash of the secret that settles it. */
   round: string;
-  operationId: string;
-  /** The game that asked for a bet or a payment, named by the hash of its manifest URL. */
-  game: string;
-  developer: string;
-  counterparty: string;
+  /** A bet's seed, named by its hash. */
+  seedHash: string;
+  /** The hash of the operation's details: what it means to the wallet and the casino. */
+  memo: string;
 }
 export interface Step {
   operation: Operation;
@@ -67,6 +81,8 @@ export interface Evidence {
 export interface EvidenceBundle {
   /** Evidence of a test channel proves a balance of test coins to its holder; it settles nowhere. */
   asset?: 'test';
+  /** What the step's operation means, whose hash it signed as its memo. */
+  details?: Details;
   chainId: Integer;
   casino: string;
   operator: string;
@@ -107,6 +123,8 @@ export interface OperationResponse {
   status: 'signed' | 'rejected';
   reason?: string;
   request?: Operation;
+  /** What the operation means, whose hash it signed as its memo. */
+  details: Details;
   /** A declined bet's round, revealed with the rejection. */
   secret?: string;
   /** A declined bet names a round the casino has no open record of, so there is no secret to reveal. */
@@ -115,16 +133,17 @@ export interface OperationResponse {
   casinoSignature: string;
   evidence: Evidence;
   operationId: string;
-  developer: string | null;
   commission: string;
   bankroll?: string;
   /** An investment's response carries the casino's signed statement of the holding. */
   statement?: SignedStatement;
 }
-/** One seat in a round: the player's signed bet and their countersignature of the previous response.
- * A bet on the channel's own round brings its `seed`; in a hosted round the host reveals it at the close. */
+/** One seat in a round: the player's signed bet, what it means, and their countersignature of the
+ * previous response. A bet on the channel's own round brings its `seed`; in a hosted round the host
+ * reveals it at the close. */
 export interface RoundBet {
   request: Operation;
+  details: Details;
   signature: string;
   acknowledgment?: { stateHash: string; signature: string };
   seed?: string;

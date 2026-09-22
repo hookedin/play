@@ -103,7 +103,7 @@ Backups contain no game state. They have a 16 MiB limit and depend on browser st
 
 A failed commit blocks further actions until durable restoration. The wallet displays the last verified observation, saved/proposed sequence, challenge deadline, pending challenge, protected remaining principal and allocated winnings. The gas reserve is a floor, not a guaranteed challenge budget.
 
-Execution retries must repeat the original kind, amount, every prize and the developer. Both cached and pending operations reject changed terms. A game names its operations with its own IDs, which the wallet scopes by channel and game, so a game can look up an outcome after a reload with `game.receipt`. Use `wallet.getReceipt(operationId)` to retrieve a saved receipt without executing. A persistence failure blocks further wallet actions, including actions waiting on a refresh; reload from durable storage before continuing.
+Execution retries must repeat the original kind, amount, every prize and the game. Both cached and pending operations reject changed terms. A game names its operations with its own IDs, which the wallet scopes by channel and game, so a game can look up an outcome after a reload with `game.receipt`. Use `wallet.getReceipt(operationId)` to retrieve a saved receipt without executing. A persistence failure blocks further wallet actions, including actions waiting on a refresh; reload from durable storage before continuing.
 
 ## Bets, and what they paid back
 
@@ -115,7 +115,7 @@ of bets the second figure is luck and the first is the table, which is why both 
 
 `/games` groups the same bets by game, most staked first, with favourites above them; a favourite is a
 note in this browser's localStorage and is never signed nor sent anywhere. Each game links to its public
-record, `/games/<key>`, where `key` is the hash of the game's manifest URL: every bet anyone has placed in
+record, `/games/<key>`, where `key` is the game's key, its developer and the name it goes by: every bet anyone has placed in
 it, read from `GET /api/games/<key>` at the casino, each naming the player's uname and no address or
 channel. A game can therefore be judged on what it has actually paid, by anyone, without trusting
 anything it says about itself.

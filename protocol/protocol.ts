@@ -1,5 +1,7 @@
 import type { TypedDataField } from 'ethers';
 import type {
+  Details,
+  GameName,
   Domain,
   Opening,
   Checkpoint,
@@ -64,7 +66,7 @@ export const STATE_TYPES = {
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seedHash,bytes32 round,bytes32 operationId,bytes32 game,address developer,bytes32 counterparty',
+    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 round,bytes32 seedHash,bytes32 memo',
   ),
   Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
 };
@@ -103,8 +105,8 @@ export const ASSETS = {
 const COIN = 10n ** 18n;
 /** The test-coin bankroll the casino starts with. */
 export const TEST_BANKROLL = 10_000_000n * COIN;
-/** The faucet pays this much to a test channel that holds less than `FAUCET_BELOW`: a credit whose
- * counterparty is `FAUCET_ID`, signed by the channel's key like any other payout. */
+/** The faucet pays this much to a test channel that holds less than `FAUCET_BELOW`: a credit that names
+ * `FAUCET_ID`, signed by the channel's key like any other payout. */
 export const FAUCET_ID = id('HOOKEDIN/FAUCET');
 export const FAUCET_AMOUNT = 100n * COIN;
 export const FAUCET_BELOW = 10n * COIN;
@@ -149,13 +151,13 @@ export const betTerms = (stake: Integer, prizes: Prize[]) => ({
     payout: BigInt(prize.payout),
   })),
 });
-/** The bankroll fund. Investing is a transfer whose counterparty is this ID, and divesting a credit
+/** The bankroll fund. Investing is a debit that names it as its counterparty, and divesting a credit
  * from it. An investor trusts the casino completely: a share is its promise of a part of the
  * bankroll, not protected principal. */
 export const FUND_ID = id('HOOKEDIN/BANKROLL');
 /** The casino signs a statement for every change to a holding. `shares` is what the holder has
  * afterwards. `equity` and `totalShares` are the fund just before the change, which fix the price
- * `amount` was converted at. `cause` is the hash of the holder's own signed transfer or `Redeem`. */
+ * `amount` was converted at. `cause` is the hash of the holder's own signed investment or `Redeem`. */
 export const SHARE_TYPES = {
   ShareStatement: fields(
     'address holder,uint256 sequence,uint256 shares,uint256 amount,uint256 equity,uint256 totalShares,bytes32 cause',
@@ -250,14 +252,49 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     kind: 0,
     amount: 0,
     prizes: [],
-    seedHash: ZeroHash,
     round: ZeroHash,
-    operationId: ZeroHash,
-    game: ZeroHash,
-    developer: ZeroAddress,
-    counterparty: ZeroHash,
+    seedHash: ZeroHash,
+    memo: ZeroHash,
     ...values,
   });
+}
+/** A game's key: the one value its bets, its commission and its public record are kept under. It does not
+ * depend on where the game is served, so a game that moves hosts keeps its history. */
+export const gameKey = ({ developer, name }: GameName) =>
+  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [developer, name]));
+export const memo = (details: Details) => hashJSON(details);
+const bytes32Pattern = /^0x[0-9a-f]{64}$/;
+/** The one shape details have for each kind: a bet names its game; a debit its game (a payment) or the fund
+ * (an investment); a credit what it collects from. Every field is in one form, so one meaning has one memo. */
+export function checkDetails(kind: number, details: Details) {
+  const game = details?.game,
+    keys = details && typeof details === 'object' ? Object.keys(details) : [];
+  const named =
+    game !== undefined &&
+    game !== null &&
+    typeof game === 'object' &&
+    Object.keys(game).length === 2 &&
+    typeof game.developer === 'string' &&
+    /^0x[0-9a-fA-F]{40}$/.test(game.developer) &&
+    getAddress(game.developer) === game.developer &&
+    game.developer !== ZeroAddress &&
+    typeof game.name === 'string' &&
+    game.name.length > 0 &&
+    game.name.length <= 2048;
+  const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
+  if (
+    !keys.every(key => ['id', 'game', 'counterparty'].includes(key)) ||
+    typeof details.id !== 'string' ||
+    !bytes32Pattern.test(details.id) ||
+    (game !== undefined && !named) ||
+    (details.counterparty !== undefined && !counterparty) ||
+    !(kind === KIND.bet
+      ? named && !counterparty
+      : kind === KIND.debit
+        ? named !== counterparty
+        : kind === KIND.credit && counterparty && !named)
+  )
+    throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
 /** A round is named by the hash of its secret. */
 export const roundId = (secret: string) => keccak256(secret);
@@ -278,14 +315,13 @@ export function outcome(prizes: readonly Prize[], seed: string, secret: string) 
   );
   return { randomHash, value, payout };
 }
-/** What an operation does. Every signed operation names one of these. */
-export const KIND = { none: 0, bet: 1, payment: 2, transfer: 3, receive: 4 } as const;
+/** What an operation does to the balance. Every signed operation names one of these. */
+export const KIND = { none: 0, bet: 1, debit: 2, credit: 3 } as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
   if (
     !same(base.channelId, op.channelId) ||
     !same(hashState(d, base), op.previousStateHash) ||
-    BigInt(op.sequence) !== BigInt(base.sequence) + 1n ||
-    same(op.operationId, ZeroHash)
+    BigInt(op.sequence) !== BigInt(base.sequence) + 1n
   )
     throw new Error('Operation is not next in this channel');
   const next = {
@@ -300,13 +336,8 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     balance = uint256(BigInt(base.balance)),
     amount = uint256(BigInt(op.amount));
   const wager = kind === KIND.bet,
-    credit = kind === KIND.receive,
-    // An investment and a payout name the other side: the fund, or what pays the credit out.
-    linked = kind === KIND.transfer || credit,
-    // A bet and a payment are what a game debits with no counterparty of its own, so each names the
-    // game that asked for it. An investment names the fund, and a credit is the player's own.
-    byGame = wager || kind === KIND.payment;
-  if (![KIND.bet, KIND.payment, KIND.transfer, KIND.receive].includes(kind as 1)) throw new Error('Unknown operation');
+    credit = kind === KIND.credit;
+  if (![KIND.bet, KIND.debit, KIND.credit].includes(kind as 1)) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
   if (
@@ -324,48 +355,34 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
         ) ||
         same(op.seedHash, ZeroHash) ||
         same(op.round, ZeroHash) ||
-        same(op.developer, ZeroAddress) ||
         !same(roundId(secret), op.round) ||
         !same(seedHash(seed), op.seedHash)
       : op.prizes.length !== 0 ||
         !same(op.seedHash, ZeroHash) ||
         !same(op.round, ZeroHash) ||
-        !same(op.developer, ZeroAddress) ||
         !same(secret, ZeroHash) ||
         !same(seed, ZeroHash)) ||
     amount === 0n ||
-    amount >= MAX_BALANCE ||
-    (linked
-      ? same(op.counterparty, ZeroHash) || same(op.counterparty, base.channelId)
-      : !same(op.counterparty, ZeroHash)) ||
-    (byGame ? same(op.game, ZeroHash) : !same(op.game, ZeroHash))
+    amount >= MAX_BALANCE
   )
-    throw new Error(wager ? 'Invalid bet commitment or balance' : linked ? 'Invalid transfer' : 'Invalid payment');
+    throw new Error(wager ? 'Invalid bet commitment or balance' : credit ? 'Invalid credit' : 'Invalid debit');
   if (credit) next.balance = String(balance + amount);
   else {
-    if (amount > balance)
-      throw new Error(
-        wager
-          ? 'Invalid bet commitment or balance'
-          : kind === KIND.transfer
-            ? 'Insufficient transfer balance'
-            : 'Invalid payment',
-      );
+    if (amount > balance) throw new Error(wager ? 'Invalid bet commitment or balance' : 'Insufficient balance');
     next.balance = String(balance - amount + (wager ? outcome(op.prizes, seed, secret).payout : 0n));
   }
   if (BigInt(next.balance) >= MAX_BALANCE) throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
-/** A joint checkpoint above an authorized bet or investment supersedes it without consuming entropy or money. */
+/** A joint checkpoint above an authorized bet or debit supersedes it without consuming entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
-    ![KIND.bet, KIND.transfer].includes(Number(op.kind) as 1) ||
+    ![KIND.bet, KIND.debit].includes(Number(op.kind) as 1) ||
     !same(op.channelId, base.channelId) ||
     !same(op.previousStateHash, hashState(d, base)) ||
-    BigInt(op.sequence) !== BigInt(base.sequence) + 1n ||
-    same(op.operationId, ZeroHash)
+    BigInt(op.sequence) !== BigInt(base.sequence) + 1n
   )
-    throw new Error('Rejection must identify the next bet or investment');
+    throw new Error('Rejection must identify the next bet or debit');
   return {
     ...base,
     sequence: String(uint256(BigInt(op.sequence) + 1n)),
@@ -392,12 +409,9 @@ export const emptyStep = (): Step => ({
     kind: 0,
     amount: 0,
     prizes: [],
-    seedHash: ZeroHash,
     round: ZeroHash,
-    operationId: ZeroHash,
-    game: ZeroHash,
-    developer: ZeroAddress,
-    counterparty: ZeroHash,
+    seedHash: ZeroHash,
+    memo: ZeroHash,
   },
   authorization: '0x',
   seed: ZeroHash,
@@ -433,6 +447,9 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   const state = Number(evidence.step.operation.kind)
     ? verifyStep(d, evidence.base, evidence.step, opening.signer, operator)
     : evidence.base;
+  // The details beside a step say what it meant, and are only as good as the memo it signed.
+  if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))
+    throw new Error('Details differ from the operation they describe');
   return {
     state,
     signaturesValid: true,
@@ -442,8 +459,8 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   };
 }
 /** A developer's commission. It accrues to the developer's address, the developer's own channel shows
- * what that address has earned and collected, and it is collected like redeemed shares: a credit whose
- * counterparty is this ID, signed by the key of that channel. */
+ * what that address has earned and collected, and it is collected like redeemed shares: a credit that
+ * names this as its counterparty, signed by the key of that channel. */
 export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
 /** One value for the whole signed protocol: the hash of every typed structure. A wallet or a host
  * that was built against other structures learns so from `GET /api/config` before it signs anything. */

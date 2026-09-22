@@ -16,23 +16,21 @@ contract HookedInCasino {
     uint8 private constant STATUS_FINALIZED = 3;
     uint256 private constant KIND_NONE = 0;
     uint256 private constant KIND_BET = 1;
-    uint256 private constant KIND_PAYMENT = 2;
-    uint256 private constant KIND_TRANSFER = 3;
-    uint256 private constant KIND_RECEIVE = 4;
+    uint256 private constant KIND_DEBIT = 2;
+    uint256 private constant KIND_CREDIT = 3;
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
     bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 constant STATE_TYPEHASH = keccak256(
         "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance)"
     );
     bytes32 constant OP_TYPEHASH = keccak256(
-        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 seedHash,bytes32 round,bytes32 operationId,bytes32 game,address developer,bytes32 counterparty)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
+        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 round,bytes32 seedHash,bytes32 memo)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
     );
     bytes32 constant PRIZE_TYPEHASH = keccak256("Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)");
     uint256 public constant MAX_PRIZES = 64;
     // The struct hash of the all-zero operation: the one encoding of "no step".
-    bytes32 constant EMPTY_OPERATION = keccak256(
-        abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, keccak256(""), bytes32(0), bytes32(0), bytes32(0), bytes32(0), address(0), bytes32(0))
-    );
+    bytes32 constant EMPTY_OPERATION =
+        keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, keccak256(""), bytes32(0), bytes32(0), bytes32(0)));
     bytes32 constant CLOSE_TYPEHASH = keccak256("Close(bytes32 channelId,bytes32 stateHash)");
     // The same authority signs settlement evidence and withdraws house funds.
     // It can create winnings claims; no separate key can make those promises safe.
@@ -59,6 +57,9 @@ contract HookedInCasino {
         uint256 payout;
     }
 
+    /// The contract settles money: a bet, a debit or a credit. What an operation means to the wallet and
+    /// the casino (its name, its game, what it pays into or collects from) is the hash `memo`, which the
+    /// contract does not read.
     struct Operation {
         bytes32 channelId;
         bytes32 previousStateHash;
@@ -66,13 +67,9 @@ contract HookedInCasino {
         uint256 kind;
         uint256 amount;
         Prize[] prizes;
-        bytes32 seedHash;
         bytes32 round;
-        bytes32 operationId;
-        // The game that asked for a bet or a payment, named by the hash of its manifest URL.
-        bytes32 game;
-        address developer;
-        bytes32 counterparty;
+        bytes32 seedHash;
+        bytes32 memo;
     }
 
     struct Step {
@@ -178,8 +175,7 @@ contract HookedInCasino {
         return keccak256(
             abi.encode(
                 OP_TYPEHASH, v.channelId, v.previousStateHash, v.sequence, v.kind, v.amount,
-                keccak256(abi.encodePacked(prizes)), v.seedHash, v.round, v.operationId, v.game, v.developer,
-                v.counterparty
+                keccak256(abi.encodePacked(prizes)), v.round, v.seedHash, v.memo
             )
         );
     }
@@ -266,10 +262,9 @@ contract HookedInCasino {
         returns (Checkpoint memory next)
     {
         Operation calldata op = step.operation;
-        if (
-            op.channelId != base.channelId || op.previousStateHash != baseHash
-                || op.sequence != base.sequence + 1 || op.operationId == bytes32(0)
-        ) revert InvalidState();
+        if (op.channelId != base.channelId || op.previousStateHash != baseHash || op.sequence != base.sequence + 1) {
+            revert InvalidState();
+        }
         address expected = channels[base.channelId].signer;
         bytes32 operationHash = hashOperation(op);
         if (expected == address(0) || _signer(operationHash, step.authorization) != expected) {
@@ -280,30 +275,23 @@ contract HookedInCasino {
         next.previousStateHash = baseHash;
         next.transitionHash = keccak256(abi.encode(operationHash, step.secret));
         bool wager = op.kind == KIND_BET;
-        bool credit = op.kind == KIND_RECEIVE;
-        // A transfer and its credit name the other side: another channel, a table or the bankroll fund.
-        bool linked = credit || op.kind == KIND_TRANSFER;
-        // A bet and a payment are what a game debits with no counterparty of its own, so each names
-        // the game that asked for it. A transfer names its recipient and a credit is the player's own.
-        bool byGame = wager || op.kind == KIND_PAYMENT;
         // A bet names two hashes: its round, the hash of a secret the casino fixed first, and the hash
         // of a seed. Only that secret and that seed settle it, and every bet on one round and seed
         // shares one outcome. Whoever holds one of the two cannot know the outcome before both are out.
+        // Every field a debit or a credit does not use must be zero.
         if (
             (wager ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seedHash == bytes32(0)
-                    || op.round == bytes32(0) || op.developer == address(0)
+                    || op.round == bytes32(0)
                     || keccak256(abi.encodePacked(step.secret)) != op.round
                     || keccak256(abi.encodePacked(step.seed)) != op.seedHash
                 : op.prizes.length != 0 || op.seedHash != bytes32(0) || op.round != bytes32(0)
-                    || op.developer != address(0) || step.secret != bytes32(0) || step.seed != bytes32(0))
+                    || step.secret != bytes32(0) || step.seed != bytes32(0))
                 || op.amount == 0 || op.amount >= MAX_BALANCE
-                || (linked ? op.counterparty == bytes32(0) || op.counterparty == base.channelId : op.counterparty != bytes32(0))
-                || (byGame ? op.game == bytes32(0) : op.game != bytes32(0))
         ) revert InvalidTerms();
-        if (credit) {
-            // The casino attests the matching debit. Principal and liquidity do not move.
+        if (op.kind == KIND_CREDIT) {
+            // The casino attests what the credit collects. Principal and liquidity do not move.
             next.balance += op.amount;
-        } else if (wager || linked || op.kind == KIND_PAYMENT) {
+        } else if (wager || op.kind == KIND_DEBIT) {
             // The stake is paid to enter; every prize whose range holds the outcome pays out.
             if (op.amount > base.balance) revert InvalidTerms();
             next.balance -= op.amount;

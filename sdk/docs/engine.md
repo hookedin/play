@@ -76,7 +76,7 @@ Every step is checked at the planning floor, and again at the supplied runtime b
 
 Each settled state contains player cash in the reference accounting. In the live wallet this is a signed channel balance: stopping retains it, while ETH withdrawal requires channel closure and sufficient liquidity for winnings. Stopping changes the play policy and does not cancel a still-valid signed request. Neither the library nor an off-chain request guarantees future game capacity.
 
-The abstract runtime can represent cash-reducing payment steps. In a game page a payment step is the bridge's `game.payment`: the wallet signs a kind-2 channel operation and verifies the casino's resulting checkpoint before the game advances. This reduces the player's signed balance and increases the casino's accounting bankroll without an on-chain transaction or commission. The pure engine performs no settlement itself.
+The abstract runtime can represent cash-reducing payment steps. In a game page a payment step is the bridge's `game.payment`: the wallet signs a channel debit and verifies the casino's resulting checkpoint before the game advances. This reduces the player's signed balance and increases the casino's accounting bankroll without an on-chain transaction or commission. The pure engine performs no settlement itself.
 
 ## Blackjack rules
 

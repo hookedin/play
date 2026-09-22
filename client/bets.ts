@@ -371,8 +371,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Operation', hex(receipt.operationId)],
         ['Channel', hex(op.channelId)],
         ['Sequence', String(op.sequence)],
-        ['Game, by the hash of its manifest URL', hex(op.game)],
-        ['Developer', hex(op.developer)],
+        ['Game', receipt.details?.game?.name ?? '—'],
+        ['Developer', hex(receipt.details?.game?.developer)],
+        ['Memo, the hash of the details above', hex(op.memo)],
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
         ['Balance after it settled', `${formatEther(receipt.balance ?? 0)} ${unit}`],
         receipt.commission && BigInt(receipt.commission) > 0n

@@ -16,10 +16,10 @@ interface ActiveGame {
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
  * the name it has in their profile. Any other manifest is linkable by its URL alone. */
 type GameRoute = { owner: string; name: string } | { manifest: string };
-import { formatEther, getAddress, id, parseEther, ZeroAddress } from 'ethers';
+import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
-import { json, verifyEvidence, FAUCET_BELOW } from '../protocol/protocol.ts';
+import { json, verifyEvidence, gameKey, same, FAUCET_BELOW } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { activityJSON, createActivityEntry, filterActivity, receiptSummary, receiptUnit } from './activity.ts';
 import type { BetRow } from './bets.ts';
@@ -301,10 +301,12 @@ async function route(push = false) {
   if ('record' in target) return void openGameRecord(target.record, push);
   if (active && active.path === gamePath(target)) return showPage('play');
   const opened = await task(async () => {
-    const manifestURL =
-      'manifest' in target ? target.manifest : (await wallet.api(`/api/players/${target.owner}/${target.name}`)).url;
-    if (!manifestURL) throw new Error('This game is not published at that name.');
-    await loadGame(manifestURL, target, push);
+    if ('manifest' in target) await loadGame(target.manifest, target, push);
+    else {
+      const published = await wallet.api(`/api/players/${target.owner}/${target.name}`);
+      if (!published.url) throw new Error('This game is not published at that name.');
+      await loadGame(published.url, target, push, published.key);
+    }
     return true;
   });
   if (!opened) {
@@ -977,8 +979,13 @@ async function fetchGame(url: string) {
   return { manifestURL, manifest, developer, entry };
 }
 
-async function loadGame(url: string, gameRoute: GameRoute, push = true) {
+/** Open a game. A published one comes with the key its profile records: its publisher and the name they
+ * published it under. Its manifest must name that publisher as its developer, or it is not their game. */
+async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: string) {
   const { manifestURL, manifest, developer, entry } = await fetchGame(url);
+  const slug = 'manifest' in gameRoute ? undefined : gameRoute.name;
+  if (slug !== undefined && !same(gameKey({ developer, name: slug }), published))
+    throw new Error(`${manifestURL.host} serves a manifest whose developer did not publish ${gamePath(gameRoute)}.`);
   // The one decision the player takes before a game is framed: its host's randomness, or none of it.
   if (manifest.rounds && !(await openHostedDialog(String(manifest.name))))
     throw new Error(`${manifest.name} runs shared rounds, so it stays closed while you keep your own randomness.`);
@@ -996,6 +1003,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     manifestURL: manifestURL.href,
     entryURL: entry.href,
     developer,
+    ...(slug === undefined ? {} : { slug }),
     name: manifest.name,
     ...(manifest.rounds ? { rounds: true } : {}),
   };
@@ -1084,7 +1092,7 @@ $<HTMLButtonElement>('game-funds').addEventListener('click', () => {
   if (active) void openFundDialog({ take: BigInt(wallet.game?.balance || '0') > 0n });
 });
 /** One card for a published game, read from its manifest. */
-async function gameCard(route: GameRoute, url: string) {
+async function gameCard(route: GameRoute, url: string, key: string) {
   const manifest = await readManifest(
     await fetch(safeURL(url), { credentials: 'omit', signal: AbortSignal.timeout(12000) }),
   );
@@ -1101,7 +1109,7 @@ async function gameCard(route: GameRoute, url: string) {
   card.append(title, description, link);
   // A bet's receipt names its game only by this key, so remembering the card is what lets a line of
   // history be opened again, and its public record found.
-  knownGames.set(id(safeURL(url).href).toLowerCase(), { route, url, name: title.textContent });
+  knownGames.set(key.toLowerCase(), { route, url, key, name: title.textContent });
   const record = document.createElement('span');
   record.className = 'catalog-record';
   record.textContent = 'Every bet ↗';
@@ -1109,12 +1117,12 @@ async function gameCard(route: GameRoute, url: string) {
   record.addEventListener('click', event => {
     event.preventDefault();
     event.stopPropagation();
-    void openGameRecord(id(safeURL(url).href).toLowerCase());
+    void openGameRecord(key.toLowerCase());
   });
   card.append(record);
   card.addEventListener('click', event => {
     event.preventDefault();
-    task(() => loadGame(url, route));
+    task(() => loadGame(url, route, true, key));
   });
   return card;
 }
@@ -1122,9 +1130,9 @@ async function gameCard(route: GameRoute, url: string) {
  * their own URL: a profile holds a hundred games, all of them addresses its owner chose. */
 const SHOWN_GAMES = 32;
 /** Every game a profile publishes, as cards. A manifest that cannot be read is left out. */
-async function profileCards(owner: string, games: { name: string; url: string }[]) {
+async function profileCards(owner: string, games: { name: string; url: string; key: string }[]) {
   const cards = await Promise.all(
-    games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url).catch(() => null)),
+    games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url, game.key).catch(() => null)),
   );
   return cards.filter(card => card !== null);
 }
@@ -1273,10 +1281,10 @@ function renderAccount(name: string | null) {
 
 // --- What you play, and what it paid ---------------------------------------------------------
 
-/** Games this wallet can reopen, by the hash of their manifest URL: whatever the library showed.
+/** Games this wallet can reopen, by their key: whatever the library showed.
  * A bet's receipt carries only the game's key and the name it went by, so this is what turns a
  * line of history back into something to play. */
-const knownGames = new Map<string, { route: GameRoute; url: string; name: string }>();
+const knownGames = new Map<string, { route: GameRoute; url: string; key: string; name: string }>();
 const favouriteSetting = `hookedin:v1:${network}:favourite-games`;
 function favourites(): Set<string> {
   try {
@@ -1437,7 +1445,7 @@ function renderMyGames() {
         play.type = 'button';
         play.className = 'button secondary small';
         play.textContent = 'Play again ↗';
-        play.addEventListener('click', () => task(() => loadGame(known.url, known.route)));
+        play.addEventListener('click', () => task(() => loadGame(known.url, known.route, true, known.key)));
         actions.append(play);
       }
       if (entry.key) {
@@ -1469,7 +1477,7 @@ async function openGameRecord(key: string, push = true) {
   document.title = `${name} — HookedIn`;
   const play = $<HTMLButtonElement>('gamebets-play');
   play.classList.toggle('hidden', !known);
-  play.onclick = known ? () => task(() => loadGame(known.url, known.route)) : null;
+  play.onclick = known ? () => task(() => loadGame(known.url, known.route, true, known.key)) : null;
   try {
     const record = await wallet.api(`/api/games/${key}?limit=200`);
     if (location.pathname !== gameBetsPath(key)) return;
@@ -1869,8 +1877,11 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
       url = $<HTMLInputElement>('game-url-input');
     const published = name.value.trim();
     if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-    // Anyone who opens this card has to be able to play it, so it is loaded before it is published.
-    const { manifestURL } = await fetchGame(url.value.trim());
+    // Anyone who opens this card has to be able to play it, so it is loaded before it is published, and
+    // a game is its developer's: whoever publishes it is the developer its manifest names.
+    const { manifestURL, developer } = await fetchGame(url.value.trim());
+    if (!same(developer, wallet.address))
+      throw new Error(`That manifest names ${developer} as its developer. Publish it from that account.`);
     await wallet.publishGame(published, manifestURL.href);
     name.value = url.value = '';
     await loadLibrary();
