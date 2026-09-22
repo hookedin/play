@@ -2,12 +2,10 @@
 # Settings (repository → Settings → Secrets and variables → Actions):
 #   secret   CLOUDFLARE_API_TOKEN    a Cloudflare API token made from the "Edit Cloudflare Workers" template
 #   variable CLOUDFLARE_ACCOUNT_ID   the Cloudflare account ID
-# Without the token the workflow still tests and builds; it just does not publish.
+# Only main publishes: every other branch stops after the tests and the build.
+# Without the token even main stops there; it just does not publish.
 name: Deploy
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+on: [push, workflow_dispatch]
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -25,11 +23,14 @@ jobs:
           cache: npm
       # The contract tests run against a local Anvil chain.
       - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
       - run: npm ci
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
       - name: Publish to Cloudflare
-        if: env.CLOUDFLARE_API_TOKEN != ''
+        if: github.ref == 'refs/heads/main' && env.CLOUDFLARE_API_TOKEN != ''
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
