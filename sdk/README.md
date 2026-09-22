@@ -210,8 +210,8 @@ test('a round settles through the wallet', async () => {
   const bridge = {
     balance: async () => w.gameLimit(),
     call: async (method: string, params: any = {}) => {
-      if (method === 'wallet.info')
-        return { bankroll: '1000000000000', chainId: '31337', address: w.address, channelId: w.currentId };
+      if (method === 'wallet.hello') return w.gameHello();
+      if (method === 'wallet.info') return { ...w.gameInfo(), bankroll: '1000000000000' };
       if (method === 'game.receipt') return w.gameReceipt(params.id);
       return method === 'game.bet' ? w.gameBet(params) : w.gamePayment(params);
     },

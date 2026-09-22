@@ -1,4 +1,11 @@
-import type { GameIdentity, GameLimit, GameRequest, GameSession } from '../protocol/game-types.ts';
+import type {
+  GameIdentity,
+  GameLimit,
+  GameReceipt,
+  GameRequest,
+  GameSession,
+  PendingReceipt,
+} from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { getAddress } from 'ethers';
 import { MAX_PRIZES, MAX_ROUND_BETS, OUTCOME_SPACE } from '../protocol/risk.ts';
@@ -6,21 +13,22 @@ import { gameKey, gameAmount, gameOperationKey } from './game-account.ts';
 import { METHODS, gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
-/** What a game learns about an operation: the outcome, never the signed evidence. */
-export const gameReceipt = (receipt: any) =>
-  receipt
-    ? {
-        id: receipt.game?.id ?? null,
-        kind: receipt.kind,
-        status: receipt.status,
-        verified: receipt.verified,
-        // The round's 64-bit outcome and the total its prizes paid: everything a game needs to show the result.
-        outcome: receipt.outcome,
-        payout: receipt.payout,
-        operationId: receipt.operationId,
-        ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
-      }
-    : null;
+/** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
+ * channel and its balance stay out: they would name the player. */
+export const gameReceipt = (id: string, receipt: any): GameReceipt | PendingReceipt => {
+  if (receipt.status === 'pending') return { id, status: 'pending', verified: false };
+  const op = receipt.request ?? receipt.proof.step.operation;
+  return {
+    id,
+    kind: receipt.kind,
+    status: receipt.status,
+    verified: receipt.verified,
+    ...(receipt.kind === 'bet' ? { stake: op.amount, prizes: op.prizes } : {}),
+    // The round's 64-bit outcome and the total its prizes paid: everything a game needs to show the result.
+    ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome, payout: receipt.payout }),
+    ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
+  };
+};
 
 /**
  * The open game's spending limit. It lives only in this tab's memory: the wallet persists no game
@@ -87,7 +95,8 @@ export class GameSessions extends ChannelClient {
   }
   async gameReceipt(this: CasinoWallet, id: string) {
     this.requireGame();
-    return gameReceipt(await this.getReceipt(this.gameOperationId(id)));
+    const receipt = await this.getReceipt(this.gameOperationId(id));
+    return receipt ? (gameReceipt(id, receipt) as GameReceipt) : null;
   }
   /** The only grant of spending authority: how much of the signed balance the open game may risk.
    * The limit lives in this tab's memory and signs nothing, so it can be set while an operation is
@@ -118,36 +127,45 @@ export class GameSessions extends ChannelClient {
       })),
       ...(request.round ? { round: request.round } : {}),
     };
-    return this.executeBet(terms, game.identity.developer, this.gameOperationId(request.id), {
-      key: game.key,
-      id: request.id,
-      name: game.identity.name,
-    });
+    return gameReceipt(
+      request.id,
+      await this.executeBet(terms, game.identity.developer, this.gameOperationId(request.id), {
+        key: game.key,
+        id: request.id,
+        name: game.identity.name,
+      }),
+    );
   }
   /** Withdraw this game's hosted bet, or learn its result if the round's owner settled it first. */
   async gameCancel(this: CasinoWallet, request: { id: string }) {
     const game = this.requireGame();
     if (this.pending?.game?.key !== game.key || this.pending.game.id !== request.id)
       throw gameError('not-pending', 'No pending operation with this ID');
-    return this.cancelPending();
+    return gameReceipt(request.id, await this.cancelPending());
   }
   async gamePayment(this: CasinoWallet, request: { id: string; amount: string }) {
     const game = this.requireGame();
-    return this.payBankroll(
-      gameAmount(request.amount),
-      this.gameOperationId(request.id),
-      { key: game.key, id: request.id, name: game.identity.name },
-      game.identity.developer,
+    return gameReceipt(
+      request.id,
+      await this.payBankroll(
+        gameAmount(request.amount),
+        this.gameOperationId(request.id),
+        { key: game.key, id: request.id, name: game.identity.name },
+        game.identity.developer,
+      ),
     );
   }
   async gameTransfer(this: CasinoWallet, request: { id: string; amount: string }) {
     const game = this.requireGame();
-    return this.transfer(
-      gameAmount(request.amount),
-      game.identity.developer,
-      this.gameOperationId(request.id),
-      { key: game.key, id: request.id, name: game.identity.name },
-      game.identity.developer,
+    return gameReceipt(
+      request.id,
+      await this.transfer(
+        gameAmount(request.amount),
+        game.identity.developer,
+        this.gameOperationId(request.id),
+        { key: game.key, id: request.id, name: game.identity.name },
+        game.identity.developer,
+      ),
     );
   }
 }

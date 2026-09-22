@@ -74,18 +74,18 @@ export function describeResult(method: string, result: any) {
     case 'game.receipt':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
-        : `${result.kind} ${result.status}${result.payout === undefined ? '' : ` · paid ${eth(result.payout)}`} · ${result.operationId}`;
+        : `${result.kind} ${result.status}${result.payout === undefined ? '' : ` · paid ${eth(result.payout)}`} · ${result.id}`;
     case 'game.requestFunds':
       return `${result.funded ? `limit set to ${eth(result.amount)}` : 'unchanged'} · ${limit(result)}`;
     case 'game.bet':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
         : result.status === 'pending'
-          ? `signed for the round's host · ${result.operationId}`
-          : `paid ${eth(result.payout)} · balance ${eth(result.balance)} · ${result.operationId}`;
+          ? `signed for the round's host · ${result.id}`
+          : `paid ${eth(result.payout)} · ${result.id}`;
     case 'game.payment':
     case 'game.transfer':
-      return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.operationId ?? ''}`;
+      return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.id}`;
     default:
       return '';
   }

@@ -56,7 +56,7 @@ Replies carry the same `id` and either `result` or `error: {code, message}`. Bot
 | ------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
 | `wallet.hello`      | `{}`                         | `{methods, asset: {id, symbol, decimals}, chainId, limits}`: what this wallet offers |
 | `wallet.info`       | `{}`                         | `{uname, alias, chainId, bankroll, recommendedStake}`: the player's two names        |
-| `game.receipt`      | `{id}`                       | The outcome of a previous operation by its game ID, or `null`                        |
+| `game.receipt`      | `{id}`                       | The receipt of a previous operation by its game ID, or `null`                        |
 | `game.bet`          | `{id, stake, prizes}`        | Verified result or rejection receipt                                                 |
 | `game.bet` (hosted) | `{id, stake, prizes, round}` | `{status: 'pending'}` while the host keeps the round open, then the receipt          |
 | `game.bet` (change) | same `id`, other terms       | Replaces a seat in an open round: pending again, and the round keeps the place       |
@@ -66,6 +66,8 @@ Replies carry the same `id` and either `result` or `error: {code, message}`. Bot
 | `game.requestFunds` | `{amount?}`                  | `{funded, amount, balance, pending}` after the player's decision                     |
 
 `HookedIn` has a typed method for each: `receipt`, `bet`, `cancel`, `payment`, `transfer` and `requestFunds`; `HookedIn.call(method, params)` sends any of them.
+
+Every reply about an operation is one receipt, whichever method asked: `{id, kind, status, verified}` under your own `id`, a bet's `stake` and `prizes` as they played, a settled bet's `outcome` and `payout`, and a rejection's `reason`. One still waiting is `{id, status: 'pending', verified: false}`. The signed evidence, the player's channel and its balance stay in the wallet.
 
 Unsolicited messages from the wallet carry `event` instead of `id`:
 
@@ -124,7 +126,7 @@ Equal ranges pay together, disjoint ranges never both pay, nested ranges pay in 
 
 **Ask for the betting time your game takes, and no more.** `host.round(asset?, window?)` names it in milliseconds, within `host.window` (`{min, max}`, which the casino publishes and `createHost` reads from it), and the casino counts it from the round's **first seat**. That time is exactly how long a player's money waits on you: a seated bet holds their channel, so nothing else of theirs can be signed until you close the round. Leave room for the close itself — the alarm, the request, a retry — because a round whose window runs out is revealed by the casino and every seat declined. A round nobody has joined holds nothing and waits ten minutes for its first player, and gets that wait back if its last one leaves, so an empty table can sit open.
 
-**A player can change their chips.** Calling `HookedIn.bet` again with the same `id` and different terms, while the round is open, takes the seated bet back and places the new one in a single request; the reply is `{status: 'pending'}` again and the round never loses the place. The withdrawn bet keeps a receipt of its own, so the `id` still names the bet that is in the round. Changing the `round` instead fails with `id-conflict`: a seat is never moved to another round.
+**A player can change their chips.** Calling `HookedIn.bet` again with the same `id` and different terms, while the round is open, takes the seated bet back and places the new one in a single request; the reply is `{status: 'pending'}` again and the round never loses the place. The withdrawn bet keeps a receipt of its own, so the `id` still names the bet that is in the round. A change that arrives after the host closed the round finds the seat already played: the reply is that bet's receipt, and its `stake` and `prizes` are the chips it had, not the ones last asked for, so show the result from the receipt. Changing the `round` instead fails with `id-conflict`: a seat is never moved to another round.
 
 `HookedIn.cancel(id)` gives up a seat the host has not closed; the balance is unchanged and the next bet can proceed. If the round was closed first, the same call returns that verified result. A bet that reaches the casino as the round closes is refused; the wallet still holds the signed bet, so call `cancel` to take it back.
 

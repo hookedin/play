@@ -24,8 +24,8 @@ test('bridge requests summarize their financial terms in one line', () => {
 
 test('bridge replies summarize outcomes without exposing more than the reply itself', () => {
   assert.equal(
-    describeResult('game.bet', { status: 'signed', payout: '3000', balance: '2000', operationId: 'op-1' }),
-    'paid 0.000000000000003 ETH · balance 0.000000000000002 ETH · op-1',
+    describeResult('game.bet', { id: 'op-1', status: 'signed', payout: '3000' }),
+    'paid 0.000000000000003 ETH · op-1',
   );
   assert.equal(
     describeResult('game.bet', { status: 'rejected', verified: true, reason: 'Capacity' }),
@@ -36,7 +36,7 @@ test('bridge replies summarize outcomes without exposing more than the reply its
     'limit set to 0.00000000000000001 ETH · balance 0.00000000000000001 ETH',
   );
   assert.equal(
-    describeResult('game.receipt', { kind: 'bet', status: 'signed', payout: '0', operationId: 'op-2' }),
+    describeResult('game.receipt', { id: 'op-2', kind: 'bet', status: 'signed', payout: '0' }),
     'bet signed · paid 0.0 ETH · op-2',
   );
   assert.match(describeResult('wallet.info', { bankroll: '2', uname: 'k3m9', alias: 'Bob' }), /@Bob/);

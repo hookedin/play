@@ -80,16 +80,14 @@ export async function gameWallet(storage = new MemoryStore()) {
     wallet.api = async (path, body) => {
       if (path === '/api/metrics') return { bankroll };
       if (path.endsWith('/round')) return { id: (own ||= createRound()) };
+      if (path.endsWith('/cancel')) return takeBack((body as any).request);
       if (!path.endsWith('/operations')) return {};
       const { request, signature, seed, withdraw, place } = body as any;
       // Changing the chips on a seat: the bet in the round is declined and the new one takes its place.
       if (place) {
-        const settled = responses.get(withdraw.request.operationId);
-        if (settled) return { withdrawn: settled };
-        const open = hosted.get(withdraw.request.round);
-        if (open) open.seats = open.seats.filter(s => s.request.operationId !== withdraw.request.operationId);
-        const withdrawn = await decline(withdraw.request);
-        open?.seats.push({ request: place.request, signature: place.signature });
+        const withdrawn = await takeBack(withdraw.request);
+        if (withdrawn.status !== 'rejected') return { withdrawn };
+        hosted.get(withdraw.request.round)?.seats.push({ request: place.request, signature: place.signature });
         return { withdrawn, placed: { status: 'seated', operationId: place.request.operationId } };
       }
       if (responses.has(request.operationId)) return responses.get(request.operationId);
@@ -101,6 +99,14 @@ export async function gameWallet(storage = new MemoryStore()) {
         return { status: 'seated', operationId: request.operationId };
       }
       return settle(request, signature, seed ?? ZeroHash);
+    };
+    /** A seat taken back from its round is declined, unless the round's host closed it first. */
+    const takeBack = async (request: any) => {
+      const settled = responses.get(request.operationId);
+      if (settled) return settled;
+      const open = hosted.get(request.round);
+      if (open) open.seats = open.seats.filter(s => s.request.operationId !== request.operationId);
+      return decline(request);
     };
     /** The casino declines a bet with a signed checkpoint above it: the balance is unchanged. */
     const decline = async (request: any) => {

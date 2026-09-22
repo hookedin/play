@@ -26,7 +26,7 @@ current pinned artifact; there are no compatibility artifacts or migration tests
 - Game boundary (`iframe-bridge`, `game-log`): the bridge accepts requests only from the bound iframe window, requires request IDs to rise, serializes operations, bounds the envelope structurally, rejects developer and wallet-field injection, and exposes no signing or key methods.
 - Static build (`static`): the built wallet is one module plus the untouched ethers release and its configuration, every route carries `frame-ancestors 'none'`, client-side routes resolve to the page, and no other file is exposed.
 
-Game rules, step pricing and game-side round storage are tested in [sdk/test/](../sdk/test/) and each game's `games/<id>/test/`, against [testing/game-wallet.ts](../testing/game-wallet.ts): a real wallet from this repository wired to an in-memory casino stub.
+Game rules, step pricing and game-side round storage are tested in [sdk/test/](../sdk/test/) and each game's `games/<id>/test/`, against [testing/game-wallet.ts](../testing/game-wallet.ts): a real wallet from this repository wired to an in-memory casino stub. They also hold the wallet to what a game learns: every reply about an operation is the game's receipt alone, and none names the player's address or channel.
 
 ## Browser checks
 

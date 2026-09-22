@@ -176,8 +176,9 @@ const LAST_CALL_MS = 3000;
 
   // --- The bet -----------------------------------------------------------------------------
 
-  /** The ball lands, then the money shows: the receipt is already verified by the wallet. */
-  async function land(receipt: GameReceipt, stake: string) {
+  /** The ball lands, then the money shows: the receipt is already verified by the wallet, and names
+   * the chips that played, which are not the ones last asked for when a change met the spin. */
+  async function land(receipt: GameReceipt) {
     const number = pocket(BigInt(receipt.outcome!)),
       payout = BigInt(receipt.payout ?? 0);
     saved = null;
@@ -195,7 +196,7 @@ const LAST_CALL_MS = 3000;
     remember(number);
     message(
       payout
-        ? `${number} ${colour(number)}. ${HookedIn.formatAmount(payout, 9)} ${asset} back from ${HookedIn.formatAmount(stake, 9)} ${asset} of chips.`
+        ? `${number} ${colour(number)}. ${HookedIn.formatAmount(payout, 9)} ${asset} back from ${HookedIn.formatAmount(receipt.stake!, 9)} ${asset} of chips.`
         : `${number} ${colour(number)}. Nothing on it this time.`,
     );
     render();
@@ -209,14 +210,14 @@ const LAST_CALL_MS = 3000;
     else message(receipt.reason ? `${receipt.reason}. Your chips are back.` : 'Your chips are back.', true);
     render();
   }
-  async function settle(result: GameReceipt | PendingReceipt, stake: string, wanted = false) {
+  async function settle(result: GameReceipt | PendingReceipt, wanted = false) {
     if (result.status === 'pending') {
       // Tell the wheel a seat was taken, so that the clock starts now and not at its next look.
       table = await host('/table/seated', true).catch(() => table);
       message('Your bet is in. You can take it back until the wheel spins.');
       return render();
     }
-    return result.status === 'rejected' ? returned(result, wanted) : land(result, stake);
+    return result.status === 'rejected' ? returned(result, wanted) : land(result);
   }
   async function place() {
     const terms = bet(chips),
@@ -244,7 +245,7 @@ const LAST_CALL_MS = 3000;
     const { id, stake, prizes, round } = saved!;
     bank.hold(true);
     try {
-      await settle(await HookedIn.bet({ id, stake, prizes, ...(round ? { round } : {}) }), stake);
+      await settle(await HookedIn.bet({ id, stake, prizes, ...(round ? { round } : {}) }));
     } catch (error) {
       // The wallet may hold the signed bet although the round would not take it. Nothing can follow
       // it until it is taken back, and if the round took it after all, this is its result.
@@ -254,7 +255,7 @@ const LAST_CALL_MS = 3000;
         bank.hold(false);
         throw error;
       }
-      await settle(await HookedIn.cancel(id), stake);
+      await settle(await HookedIn.cancel(id));
     }
   }
   async function act(work: () => Promise<void>) {
@@ -301,7 +302,7 @@ const LAST_CALL_MS = 3000;
         chips = Object.fromEntries(Object.entries(saved.chips).map(([id, amount]) => [id, BigInt(amount)]));
         const receipt = await HookedIn.receipt(saved.id);
         // Settled while away, still seated, or never signed at all.
-        if (receipt) await settle(receipt, saved.stake);
+        if (receipt) await settle(receipt);
         else if (startup.state.pending) await act(ask);
         else {
           saved = null;
@@ -330,7 +331,7 @@ const LAST_CALL_MS = 3000;
   $('place').addEventListener('click', () =>
     act(async () => {
       // Nothing new on the layout: take the bet back. If the wheel got there first, this is its result.
-      if (saved && (unchanged() || !total())) return settle(await HookedIn.cancel(saved.id), saved.stake, true);
+      if (saved && (unchanged() || !total())) return settle(await HookedIn.cancel(saved.id), true);
       return place();
     }),
   );

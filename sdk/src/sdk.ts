@@ -5,26 +5,6 @@ export interface GameBalance {
   /** A signed operation awaits recovery in the wallet; no new wager is possible. */
   pending: boolean;
 }
-/** A game's own view of an operation the wallet settled: the outcome only, never the signed evidence. */
-export interface GameReceipt {
-  id: string | null;
-  kind: 'bet' | 'payment' | 'transfer';
-  /** `signed`: settled. `rejected`: a verified rejection; the balance is unchanged. */
-  status: 'signed' | 'rejected';
-  verified: boolean;
-  /** A settled bet: the round's 64-bit outcome, and what the prizes holding it paid in total. */
-  outcome?: string;
-  payout?: string;
-  operationId: string;
-  reason?: string;
-}
-/** A bet seated in a shared round its host has not closed, or a transfer its recipient has not
- * accepted. Sending the same request again finds the result. */
-export interface PendingReceipt {
-  status: 'pending';
-  verified: false;
-  operationId: string;
-}
 /** What the wallet plays with: the network's ETH, or `test`, the casino's test coins, which every
  * wallet has and nobody can win or lose anything real with. Amounts on the bridge are whole numbers
  * of the asset's smallest unit, as decimal strings. */
@@ -82,7 +62,9 @@ export interface WirePrize {
   payout: string;
 }
 export type { Round } from './wire.ts';
+export type { GameReceipt, PendingReceipt } from '@hookedin/play/protocol/game-types.ts';
 import type { Round } from './wire.ts';
+import type { GameReceipt, PendingReceipt } from '@hookedin/play/protocol/game-types.ts';
 import { playerScope, showName } from './wire.ts';
 export const HookedIn = (() => {
   'use strict';

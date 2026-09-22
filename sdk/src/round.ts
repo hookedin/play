@@ -303,7 +303,7 @@ export class RoundClient {
       if (receipt.verified !== true) throw new Error('A verified rejection is required');
       // Keep the same action under a fresh operation ID for the next attempt.
       this.data.pending.id = crypto.randomUUID();
-      this.data.settlement = { kind: 'rejected', operationId: receipt.operationId, reason: receipt.reason };
+      this.data.settlement = { kind: 'rejected', reason: receipt.reason };
       this.save();
       return;
     }
@@ -342,7 +342,6 @@ export class RoundClient {
       // The stretch of outcomes that led to this state: where in it the outcome fell is free,
       // verifiable entropy for showing the result (which reel stops, which of several equal cards).
       ...landed,
-      operationId: receipt.operationId ?? null,
     };
     this.save();
   }
