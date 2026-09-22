@@ -195,21 +195,6 @@ h3 {
   border-radius: 4px;
   color: #9590a5;
 }
-.balance-button {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  border: 1px solid #2b3140;
-  background: #151a24;
-  border-radius: 7px;
-  padding: 11px 12px;
-  font-size: 11px;
-  font-weight: 550;
-}
-.eth-symbol {
-  color: #bbb0d8;
-  font-size: 15px;
-}
 .button {
   border: 1px solid transparent;
   display: inline-flex;
@@ -1001,11 +986,6 @@ main {
   .topbar-wallet {
     gap: 7px;
   }
-  .balance-button {
-    font-size: 9px;
-    padding: 9px;
-    gap: 7px;
-  }
   .button.compact {
     font-size: 8px;
     padding: 10px;
@@ -1014,9 +994,6 @@ main {
   .topbar-context .live-dot {
     width: 4px;
     height: 4px;
-  }
-  .eth-symbol {
-    font-size: 11px;
   }
   main {
     padding: 29px 18px 23px;
@@ -1266,10 +1243,6 @@ main {
 }
 
 /* Wallet funding: receive ETH, then add it to the shared playing balance. */
-.header-balance-label {
-  font-size: 10px;
-  color: #9a93ae;
-}
 .funding-balances {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1521,9 +1494,6 @@ main {
   }
 }
 @media (max-width: 620px) {
-  .header-balance-label {
-    display: none;
-  }
   .funding-balances {
     gap: 10px;
     margin-bottom: 18px;
@@ -2023,18 +1993,6 @@ main {
     monospace;
   color: #8f86ad;
 }
-/* What a game states it pays back. The wallet holds every bet of a game that states one to it. */
-.catalog-return {
-  display: block;
-  margin-top: 6px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #6de3a4;
-}
-.catalog-return[data-stated='false'] {
-  color: #8a8fa0;
-}
 /* The page behind an open dialog stays put. */
 html:has(dialog[open]) {
   overflow: hidden;
@@ -2117,10 +2075,6 @@ html:has(dialog[open]) {
   display: block;
   margin: 16px auto 0;
   font-size: 11px;
-}
-.balance-button[data-test] {
-  border-color: #d9a441;
-  color: #f0c976;
 }
 .fund-dialog .amount-input input {
   font-size: 18px;
@@ -2264,4 +2218,378 @@ html:has(dialog[open]) {
 }
 .game-viewport {
   position: relative;
+}
+
+/* The top bar's account link: the name this wallet answers to, and nothing about its money. */
+.account-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #2b3140;
+  background: #151a24;
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.account-link:hover {
+  background: #1d2431;
+  border-color: #3a4152;
+}
+.account-mark {
+  color: #bbb0d8;
+  font-size: 14px;
+}
+.account-names {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+.account-uname {
+  font-size: 9px;
+  font-weight: 450;
+  color: #8a8fa0;
+}
+.account-uname:empty {
+  display: none;
+}
+#game-funds[data-holding] {
+  border-color: #6a4f5c;
+  color: #f0b9c3;
+}
+/* Play money looks different from money. */
+.test-pill[data-test] {
+  border-color: #d9a441;
+  color: #f0c976;
+}
+/* A uname is 24 characters of one word, so the headings that carry one break inside it rather than
+   pushing the page sideways. */
+#account-heading,
+#profile-name,
+#gamebets-key,
+#account-handle {
+  overflow-wrap: anywhere;
+}
+#account-handle,
+#profile-uname {
+  white-space: normal;
+}
+#gamebets-key {
+  font-size: 10px;
+}
+
+/* The account hub: one card per thing this wallet keeps apart from the others. */
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 16px;
+  margin: 28px 0;
+}
+.account-card {
+  display: block;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 22px;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+.account-card:hover {
+  border-color: #3d3660;
+  transform: translateY(-2px);
+}
+.account-card-mark {
+  display: block;
+  font-size: 19px;
+  color: #b3a0f7;
+  margin-bottom: 14px;
+}
+.account-card h2 {
+  margin-bottom: 8px;
+}
+.account-card p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.account-card-note {
+  display: block;
+  margin-top: 14px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8d86a7;
+}
+.account-card-note:empty {
+  display: none;
+}
+
+/* Games you play, counted from the bets this wallet signed. */
+.played-list {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+.played-game {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.played-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.played-star {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  color: #e0c56a;
+}
+.played-star[aria-pressed='false'] {
+  color: #5c6373;
+}
+.played-when {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+}
+.played-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+.played-asset {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  gap: 4px 18px;
+  margin: 0;
+  justify-content: start;
+}
+.played-asset dt {
+  grid-row: 2;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7d8494;
+}
+.played-asset dd {
+  grid-row: 1;
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.played-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+/* One line per bet, in your own history and in a game's public record. */
+.bet-table {
+  display: grid;
+  gap: 8px;
+}
+.bet-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid #343a4a;
+  background: var(--panel);
+  border-radius: 9px;
+  padding: 14px 18px;
+}
+.bet-row.tone-positive {
+  border-left-color: #6de3a4;
+}
+.bet-row.tone-negative {
+  border-left-color: #e2748c;
+}
+.bet-game {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+}
+.bet-game-name,
+.bet-game-link {
+  font-size: 13px;
+  font-weight: 550;
+  flex-basis: 100%;
+}
+.bet-game-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  color: #c6b6ff;
+}
+.bet-game-link:hover {
+  text-decoration: underline;
+}
+.bet-who,
+.bet-time {
+  font-size: 10px;
+  color: var(--muted);
+}
+.bet-tag {
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 1px solid #373645;
+  border-radius: 4px;
+  padding: 2px 5px;
+  color: #9590a5;
+}
+.bet-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.bet-figure-value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.bet-figure-label {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7d8494;
+}
+.bet-return .bet-figure-value {
+  color: #c6b6ff;
+}
+.bet-net {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+}
+.positive,
+.bet-figure.positive .bet-figure-value,
+.bet-net.positive {
+  color: #6de3a4;
+}
+.negative,
+.bet-figure.negative .bet-figure-value,
+.bet-net.negative {
+  color: #e2748c;
+}
+/* A game card's way into that game's public record; the card itself opens the game. */
+.catalog-record {
+  display: block;
+  margin-top: 8px;
+  font-size: 10px;
+  color: #b5a8e5;
+}
+.catalog-record:hover {
+  text-decoration: underline;
+}
+
+/* The authorization dialog: what the game holds, what it would hold, what it can never touch. */
+.fund-who {
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--muted);
+  margin-top: 10px;
+}
+.fund-change {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #333a4d;
+  background: #0e121b;
+  border-radius: 9px;
+}
+.fund-change > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fund-change strong {
+  font-size: 14px;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
+}
+.fund-change-label {
+  font-size: 8px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #7d8494;
+}
+.fund-change-arrow {
+  color: #6a7182;
+}
+.fund-change-rest {
+  margin-left: auto;
+  text-align: right;
+}
+.fund-change-up {
+  color: #e0c56a;
+}
+.fund-terms {
+  margin: 18px 0 0;
+  padding-left: 17px;
+  font-size: 10px;
+  line-height: 1.85;
+  color: #8a8fa0;
+}
+.fund-terms li + li {
+  margin-top: 5px;
+}
+
+@media (max-width: 880px) {
+  .bet-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bet-game {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 620px) {
+  #account-heading,
+  #profile-name {
+    font-size: 28px;
+    letter-spacing: -1px;
+  }
+  .account-link {
+    padding: 8px 9px;
+    font-size: 9px;
+  }
+  .account-uname {
+    display: none;
+  }
+  .account-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .played-asset {
+    grid-template-columns: repeat(3, auto);
+    gap: 10px 14px;
+  }
+  .played-asset dt,
+  .played-asset dd {
+    grid-row: auto;
+  }
+  .fund-change-rest {
+    margin-left: 0;
+    text-align: left;
+    flex-basis: 100%;
+  }
 }

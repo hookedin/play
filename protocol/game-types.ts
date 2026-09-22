@@ -5,9 +5,6 @@ export interface GameIdentity {
   entryURL: string;
   developer: string;
   name: string;
-  /** The least this game's every bet pays back, as a percentage the wallet holds it to. A game that
-   * states one can ask for nothing that pays nothing back. */
-  return?: number;
   /** This game bets on rounds its own host opens, so its host draws their seed. The player allows it
    * before the game is framed, or the game is not opened. */
   rounds?: boolean;

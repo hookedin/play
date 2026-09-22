@@ -48,7 +48,18 @@ test('the built wallet is one module plus the untouched ethers release and its c
 test('wallet routes resolve to the client page without exposing other files', async t => {
   const base = await serve(t),
     page = await (await fetch(base + '/')).text();
-  for (const route of ['/wallet', '/activity', '/games/dice', '/games/custom?manifest=https://x.example/m.json'])
+  for (const route of [
+    '/account',
+    '/wallet',
+    '/games',
+    '/bets',
+    '/bankroll',
+    '/settings',
+    '/activity',
+    '/games/dice',
+    `/games/0x${'ab'.repeat(32)}`,
+    '/games/custom?manifest=https://x.example/m.json',
+  ])
     assert.equal(await (await fetch(base + route)).text(), page, route);
   for (const route of [
     '/games/dice.js',

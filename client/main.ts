@@ -16,13 +16,14 @@ interface ActiveGame {
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
  * the name it has in their profile. Any other manifest is linkable by its URL alone. */
 type GameRoute = { owner: string; name: string } | { manifest: string };
-import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
+import { formatEther, getAddress, id, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
 import { json, verifyEvidence, FAUCET_BELOW } from '../protocol/protocol.ts';
-import { statedReturn } from '../protocol/risk.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { activityJSON, createActivityEntry, filterActivity, receiptSummary, receiptUnit } from './activity.ts';
+import type { BetRow } from './bets.ts';
+import { betRowElement, filterBets, percent, measuredReturn, totalCards, totalsByAsset, unitOf } from './bets.ts';
 import { createGameLog, logAsset } from './game-log.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import type { LogKind } from './game-log.ts';
@@ -158,7 +159,16 @@ function abandonGame() {
   }
 }
 
-const pagePaths: Record<string, string> = { library: '/', wallet: '/wallet', activity: '/activity' };
+const pagePaths: Record<string, string> = {
+  library: '/',
+  account: '/account',
+  wallet: '/wallet',
+  games: '/games',
+  bets: '/bets',
+  bankroll: '/bankroll',
+  settings: '/settings',
+  activity: '/activity',
+};
 const gamePath = (route: GameRoute) =>
   'manifest' in route
     ? `/games/custom?manifest=${encodeURIComponent(route.manifest)}`
@@ -168,6 +178,19 @@ const showName = (names: { uname?: string | null; alias?: string | null } | null
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
 /** A player's page: everything the casino says about them, as anyone sees it. */
 const profilePath = (name: string) => `/${name}`;
+/** A game's public record: every bet anyone has placed in it, under the hash of its manifest URL. */
+const gameBetsPath = (key: string) => `/games/${key.toLowerCase()}`;
+const PAGE_TITLES: Record<string, string> = {
+  library: 'Games',
+  account: 'My account',
+  wallet: 'My wallet',
+  games: 'My games',
+  bets: 'Bet history',
+  bankroll: 'Bankroll',
+  settings: 'Settings',
+  activity: 'Activity',
+  gamebets: 'Game record',
+};
 /** Show a section; the URL is the caller's responsibility. */
 function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -179,12 +202,14 @@ function showPage(page: string) {
       ? `${active.manifest.name} — HookedIn`
       : page === 'profile'
         ? `${$('profile-name').textContent} — HookedIn`
-        : `HookedIn — ${page === 'library' ? 'Games' : page}`;
+        : `HookedIn — ${PAGE_TITLES[page] ?? page}`;
   if (page === 'activity') {
     renderActivity();
     void refreshActivity();
   }
-  if (page === 'wallet') void refreshFund();
+  if (page === 'bets') renderBets();
+  if (page === 'games') renderMyGames();
+  if (page === 'wallet' || page === 'bankroll') void refreshFund();
 }
 /** The bankroll fund as the casino states it, signed, against the shares this wallet can prove it holds. */
 let fundStatus: Record<string, any> | null = null;
@@ -236,12 +261,15 @@ function navigate(page: string, push = true, path = pagePaths[page]) {
   closeGame();
   if (push && location.pathname !== path) history.pushState(null, '', path);
 }
-/** Every page has a URL: `/`, `/wallet`, `/activity`, `/@<alias>` or `/~<uname>` for a player,
- * the same and `/<game>` for a game they publish, and `/games/custom?manifest=<url>`. */
-function parseRoute(url: URL): string | GameRoute | { profile: string } | { unknown: string } {
+/** Every page has a URL: `/`, `/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`,
+ * `/activity`, `/@<alias>` or `/~<uname>` for a player, the same and `/<game>` for a game they
+ * publish, `/games/<key>` for a game's public record, and `/games/custom?manifest=<url>`. */
+function parseRoute(url: URL): string | GameRoute | { profile: string } | { record: string } | { unknown: string } {
   const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(url.pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (url.pathname === '/games/custom') return { manifest: url.searchParams.get('manifest') || '' };
+  const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname);
+  if (record) return { record: record[1]!.toLowerCase() };
   const page = Object.entries(pagePaths).find(([, path]) => path === url.pathname)?.[0];
   if (page) return page;
   return url.pathname === '/' ? 'library' : { unknown: url.pathname };
@@ -255,6 +283,7 @@ async function route(push = false) {
     return void toast(`Nothing lives at ${target.unknown}. A player is @alias or ~uname.`, true);
   }
   if ('profile' in target) return void openProfile(target.profile, push);
+  if ('record' in target) return void openGameRecord(target.record, push);
   if (active && active.path === gamePath(target)) return showPage('play');
   const opened = await task(async () => {
     const manifestURL =
@@ -275,21 +304,30 @@ const ethOpen = () => Boolean(wallet.current?.key) && Number(wallet.current!.onc
 /** Amounts of whatever this tab plays with. */
 const units = () => wallet.asset.symbol;
 /**
- * While a game is open the top bar shows the money outside it. Every result moves the game's limit
- * and the signed balance together, so this figure stands still during play: only the game's own
- * balance moves, when the game chooses to show it.
+ * The top bar names no balance. A player reading one figure in the game and another above it cannot
+ * tell which money a bet is about to spend, and the one above was never the game's to spend anyway.
+ * What sits there instead is the authority itself: while a game holds money, the way to take it
+ * back; while it holds none, the way to give it some. Both open the wallet's own dialog, which is
+ * the only place that authority is granted or withdrawn.
  */
-function renderHeaderBalance() {
-  const state = wallet.publicState,
+function renderGameFunds() {
+  const button = $<HTMLButtonElement>('game-funds'),
+    holding = Boolean(active) && BigInt(wallet.game?.balance || '0') > 0n,
     test = wallet.playing === 'test';
-  $('top-balance').toggleAttribute('data-test', test);
-  $('header-balance-label').textContent = active ? 'In wallet' : 'Playing';
-  $('header-balance').textContent =
-    `${eth(active ? state.playAvailable : state.playBalance, test ? 2 : networkDefaults.precision)} ${units()}`;
+  // The pill is the top bar's only word about money: what this wallet is playing with, never how much.
+  $('asset-pill').textContent = test ? 'TEST COINS' : `${wallet.networkName} ETH`.toUpperCase();
+  $('asset-pill').toggleAttribute('data-test', test);
+  button.classList.toggle('hidden', !active);
+  button.toggleAttribute('data-holding', holding);
+  button.textContent = holding ? 'Take money back' : 'Give this game money';
+  button.title = holding
+    ? `Take back what ${active?.manifest.name} still holds, or change what it may play with.`
+    : `Choose what ${active?.manifest.name} may play with.`;
+  button.disabled = uiBusy || wallet.busy;
 }
 /** The play page shows no wallet controls: the game displays its balance and asks for money through the dialog. */
 function renderGameAccount() {
-  renderHeaderBalance();
+  renderGameFunds();
   if (!active || !wallet.game) return;
   // A game opened before a channel adopts the first one; a game bound to a channel closes with it.
   if (active.channelId === null && wallet.currentId) active.channelId = wallet.currentId;
@@ -323,19 +361,25 @@ function limitStops(total: bigint) {
 }
 // The last limit the player chose for a game is only the next suggestion; authority comes from the dialog alone.
 const limitSetting = () => `hookedin:v1:${network}:${wallet.playing}:game-limit:${active?.key}`;
-/** The wallet's own dialog: the sole grant of spending authority, and where the player chooses ETH or test coins. */
+/** The wallet's own dialog: the sole grant of spending authority, and where the player chooses ETH
+ * or test coins. It opens saying what the game holds now, what it would hold, and what stays out of
+ * its reach, because those three numbers are the whole of what is being authorized. */
 function renderFundDialog() {
   if (!active) return;
   const dialog = $<HTMLDialogElement>('fund-dialog'),
     name = active.manifest.name;
   const test = wallet.playing === 'test';
   dialog.dataset.mode = channelOpen() ? 'fund' : 'channel';
-  $('fund-eyebrow').textContent = test ? 'SPENDING LIMIT · TEST COINS' : 'SPENDING LIMIT';
-  $('fund-title').textContent = channelOpen() ? `How much may ${name} play with?` : `${name} needs money to play`;
+  $('fund-eyebrow').textContent = test ? 'YOU ARE AUTHORIZING · TEST COINS' : 'YOU ARE AUTHORIZING';
+  const limit = BigInt(wallet.game?.balance || '0');
+  $('fund-title').textContent = !channelOpen()
+    ? `${name} needs money to play`
+    : limit > 0n
+      ? `Change what ${name} may play with`
+      : `Let ${name} play with your money?`;
   if (dialog.dataset.mode !== 'fund') return;
   $('fund-asset').textContent = units();
   const total = wallet.playableBalance(),
-    limit = BigInt(wallet.game?.balance || '0'),
     stops = limitStops(total),
     slider = $<HTMLInputElement>('fund-slider');
   let amount = -1n;
@@ -345,7 +389,13 @@ function renderFundDialog() {
   const valid = amount >= 0n && amount <= total;
   slider.max = String(stops.length - 1);
   $('fund-total').textContent = `${formatEther(total)} ${units()}, your playing balance`;
+  // What this changes, as three figures: before, after, and what the game can never touch.
+  $('fund-now').textContent = `${formatEther(limit)} ${units()}`;
+  $('fund-next').textContent = valid ? `${formatEther(amount)} ${units()}` : '—';
+  $('fund-rest').textContent = valid ? `${formatEther(total - amount)} ${units()}` : '—';
+  $('fund-next').classList.toggle('fund-change-up', valid && amount > limit);
   $('fund-test-note').classList.toggle('hidden', !test);
+  $<HTMLButtonElement>('fund-take-all').classList.toggle('hidden', limit === 0n);
   // The faucet pays a test channel that has run low.
   $('fund-faucet').classList.toggle('hidden', !test || total >= FAUCET_BELOW);
   // Changing what the game plays with is offered before the game holds money, not in the middle of play.
@@ -361,28 +411,43 @@ function renderFundDialog() {
     ? amount > total
       ? `More than your playing balance of ${formatEther(total)} ${units()}.`
       : `Enter an amount in ${units()}.`
-    : `${formatEther(total - amount)} ${units()} stays in your wallet.` +
-      (limit > 0n ? ` The game has ${formatEther(limit)} ${units()} now.` : '');
+    : amount === limit
+      ? 'This is what the game may already play with.'
+      : amount > limit
+        ? `Giving it ${formatEther(amount - limit)} ${units()} more.`
+        : `Taking back ${formatEther(limit - amount)} ${units()}.`;
   $('fund-help').classList.toggle('check-failed', !valid);
   $<HTMLButtonElement>('fund-confirm').disabled = !valid || amount === limit || uiBusy || wallet.busy;
-  $('fund-confirm').textContent =
-    valid && amount === 0n && limit > 0n
-      ? 'Take it all back'
-      : valid && amount > 0n
-        ? `Allow up to ${formatEther(amount)} ${units()}`
-        : 'Allow';
+  $('fund-confirm').textContent = !valid
+    ? 'Allow'
+    : amount === 0n && limit > 0n
+      ? `Take back ${formatEther(limit)} ${units()}`
+      : amount < limit
+        ? `Take back ${formatEther(limit - amount)} ${units()}`
+        : `Allow up to ${formatEther(amount)} ${units()}`;
 }
 let fundRequest: { resolve: (amount: bigint | null) => void } | null = null;
-/** Opened by the game's request for money, or by the player from the top bar. */
-function openFundDialog({ amount, reason, asked = false }: { amount?: bigint; reason?: string; asked?: boolean }) {
+/** Opened by the game's request for money, or by the player from the top bar. `take` is the player
+ * asking for their money back, so the dialog opens at nothing with the confirmation still to make. */
+function openFundDialog({
+  amount,
+  reason,
+  asked = false,
+  take = false,
+}: {
+  amount?: bigint;
+  reason?: string;
+  asked?: boolean;
+  take?: boolean;
+}) {
   if (!active) return Promise.resolve<bigint | null>(null);
   fundRequest?.resolve(null);
   const dialog = $<HTMLDialogElement>('fund-dialog');
   $('fund-reason').classList.toggle('hidden', !asked);
   $('fund-reason').textContent = `The game asks for money${reason ? `: “${reason.slice(0, 140)}”` : '.'}`;
   // The game page shows nothing but the game, so the dialog that grants it money says who it is.
-  $('fund-game').textContent =
-    `Served from ${new URL(active.frame.src).host}. Its developer, ${active.manifest.developer}, earns half of each bet’s fee.`;
+  $('fund-who').textContent =
+    `${active.manifest.name}, served from ${new URL(active.frame.src).host}. Its developer, ${active.manifest.developer}, earns half of each bet’s fee.`;
   $('fund-channel-note').textContent =
     wallet.playing === 'eth'
       ? 'Your channel is not open for play yet. Play with test coins meanwhile, or check the channel in My wallet.'
@@ -395,8 +460,8 @@ function openFundDialog({ amount, reason, asked = false }: { amount?: bigint; re
       // Ten test coins is a fair first limit; ETH follows the network's default.
       remembered = BigInt(localStorage.getItem(limitSetting()) || (test ? 10n ** 19n : networkDefaults.total)),
       // The player's own visit shows the limit as it is, or what they last chose; a game's request
-      // suggests exactly what it asked for, never more.
-      suggested = asked && requested ? requested : limit > 0n ? limit : remembered,
+      // suggests exactly what it asked for, never more; asking for it back suggests nothing at all.
+      suggested = take ? 0n : asked && requested ? requested : limit > 0n ? limit : remembered,
       choose = (value: bigint) => formatEther(value > total ? total : value);
     $<HTMLInputElement>('fund-amount').value = choose(suggested);
     const presets: [string, bigint][] = [
@@ -471,7 +536,7 @@ function renderWallet() {
   if (!wallet.address) return;
   const state = wallet.publicState;
   if (active?.channelId && active.channelId !== wallet.currentId) abandonGame();
-  renderHeaderBalance();
+  renderGameFunds();
   $('casino-balance').textContent = eth(state.balance, networkDefaults.precision);
   // Test coins: every wallet has them. The faucet pays once they run low.
   const testBalance = BigInt(state.testBalance || 0);
@@ -510,6 +575,9 @@ function renderWallet() {
     `${wallet.mode === 'demo' ? 'GENERATED BROWSER WALLET' : 'CONNECTED BROWSER WALLET'} · ${wallet.networkName.toUpperCase()}`;
   $('chain-id').textContent = state.chainId || wallet.config.chainId;
   $('activity-count').textContent = String(wallet.history.length);
+  $('bets-count').textContent = String(ownBets().length);
+  if (!$('page-bets').classList.contains('hidden')) renderBets();
+  if (!$('page-games').classList.contains('hidden')) renderMyGames();
   const busy = uiBusy || wallet.busy;
   const ready = state.address === wallet.address;
   const observed = Boolean(state.observedAt);
@@ -821,6 +889,8 @@ async function refreshActivity() {
   } finally {
     historyBusy = false;
     renderActivity();
+    if (!$('page-bets').classList.contains('hidden')) renderBets();
+    if (!$('page-games').classList.contains('hidden')) renderMyGames();
   }
 }
 
@@ -922,13 +992,6 @@ async function fetchGame(url: string) {
     throw new Error(`The manifest's developer, ${String(manifest.developer).slice(0, 60)}, is not an address.`);
   }
   if (developer === ZeroAddress) throw new Error('The developer fee recipient cannot be the zero address.');
-  // What the game says about itself, and what the wallet will hold it to.
-  if (manifest.return !== undefined)
-    try {
-      statedReturn(manifest.return);
-    } catch (error: any) {
-      throw new Error(`The manifest's stated return is not usable: ${error.message}.`);
-    }
   if (manifest.rounds !== undefined && typeof manifest.rounds !== 'boolean')
     throw new Error("A manifest's rounds is true when the game bets on rounds its own host opens.");
   const entry = safeURL(manifest.entry, response.url);
@@ -957,7 +1020,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
     entryURL: entry.href,
     developer,
     name: manifest.name,
-    ...(manifest.return === undefined ? {} : { return: manifest.return as number }),
     ...(manifest.rounds ? { rounds: true } : {}),
   };
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
@@ -1038,14 +1100,13 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true) {
 for (const button of document.querySelectorAll<HTMLElement>('[data-page]'))
   button.addEventListener('click', event => {
     event.preventDefault();
-    // While a game is open, the top bar's balance is where the player sees and changes its limit.
-    if (button.id === 'top-balance' && active) return void openFundDialog({});
     navigate(button.dataset.page!);
-    if (button.hasAttribute('data-receive') && !$('page-wallet').classList.contains('hidden')) {
-      $('receive-title').focus({ preventScroll: true });
-      $('receive-title').scrollIntoView({ block: 'center' });
-    }
   });
+// The open game's money: the dialog opens at nothing when the game is holding some, so the button
+// that takes it back does exactly that and still shows what it is taking back before it happens.
+$<HTMLButtonElement>('game-funds').addEventListener('click', () => {
+  if (active) void openFundDialog({ take: BigInt(wallet.game?.balance || '0') > 0n });
+});
 /** One card for a published game, read from its manifest. */
 async function gameCard(route: GameRoute, url: string) {
   const manifest = await readManifest(
@@ -1062,17 +1123,19 @@ async function gameCard(route: GameRoute, url: string) {
   link.className = 'catalog-link';
   link.textContent = 'manifest' in route ? new URL(url).host : `${route.owner}/${route.name}`;
   card.append(title, description, link);
-  // What this game states it pays back, which the wallet holds every one of its bets to.
-  let stated: number | null = null;
-  try {
-    statedReturn(manifest.return);
-    stated = manifest.return as number;
-  } catch {}
-  const returns = document.createElement('span');
-  returns.className = 'catalog-return';
-  returns.textContent = stated === null ? 'No stated return' : `Pays back at least ${stated}%`;
-  returns.dataset.stated = String(stated !== null);
-  card.append(returns);
+  // A bet's receipt names its game only by this key, so remembering the card is what lets a line of
+  // history be opened again, and its public record found.
+  knownGames.set(id(safeURL(url).href).toLowerCase(), { route, url, name: title.textContent });
+  const record = document.createElement('span');
+  record.className = 'catalog-record';
+  record.textContent = 'Every bet ↗';
+  record.title = `Every bet anyone has placed in ${title.textContent}`;
+  record.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    void openGameRecord(id(safeURL(url).href).toLowerCase());
+  });
+  card.append(record);
   card.addEventListener('click', event => {
     event.preventDefault();
     task(() => loadGame(url, route));
@@ -1159,6 +1222,7 @@ function renderProfile() {
     funded = ethOpen() && !wallet.recoveryOnly;
   $('wallet-name').textContent = name ?? '—';
   $<HTMLAnchorElement>('wallet-name-link').href = name ? profilePath(name) : '/';
+  renderAccount(name);
   // The uname is always there; when an alias covers it up, it is shown underneath.
   $('wallet-uname').textContent = wallet.alias ? '~' + wallet.uname : '';
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !funded;
@@ -1197,6 +1261,271 @@ function renderProfile() {
     }),
   );
 }
+/** The account: the name this wallet answers to, in the top bar and at the head of its own page,
+ * and one line under each card saying what is behind it. No balance is named here — that is the
+ * wallet's page, and the one place a figure is not competing with a game's own. */
+function renderAccount(name: string | null) {
+  $('account-name').textContent = name ?? 'My account';
+  $('account-uname').textContent = wallet.alias && wallet.uname ? '~' + wallet.uname : '';
+  $('account-heading').textContent = name ?? 'My account';
+  $('account-handle').textContent = name
+    ? wallet.alias
+      ? `~${wallet.uname} · the name every game and shared round knows you by`
+      : 'Take an alias below and this becomes the shorter name you are shown by.'
+    : 'Connecting to your wallet…';
+  $<HTMLAnchorElement>('account-public').href = name ? profilePath(name) : '/';
+  $('account-public').classList.toggle('hidden', !name);
+  const rows = ownBets(),
+    counted = totalsByAsset(rows),
+    unit = wallet.playing === 'test' ? 'test' : 'eth',
+    mine = counted.get(unit),
+    games = new Set(rows.map(row => row.key || row.game));
+  $('account-wallet-note').textContent = channelOpen()
+    ? `Channel open · ${eth(wallet.publicState.balance, networkDefaults.precision)} ETH signed`
+    : 'No channel open yet';
+  $('account-games-note').textContent = `${games.size} played · ${wallet.profile?.games?.length ?? 0} published`;
+  $('account-bets-note').textContent = mine
+    ? `${mine.bets} ${unitOf(unit)} bets · ${percent(measuredReturn(mine.staked, mine.expected) ?? 0n)} expected`
+    : 'No bets yet';
+  $('account-bankroll-note').textContent = BigInt(wallet.fund?.shares || 0)
+    ? `${formatEther(BigInt(wallet.fund!.shares))} shares held`
+    : 'No shares held';
+  $('account-activity-note').textContent = `${wallet.history.length} events saved`;
+  $('account-settings-note').textContent =
+    wallet.mode === 'demo' ? 'Generated browser wallet' : 'Connected browser wallet';
+}
+
+// --- What you play, and what it paid ---------------------------------------------------------
+
+/** Games this wallet can reopen, by the hash of their manifest URL: whatever the library showed.
+ * A bet's receipt carries only the game's key and the name it went by, so this is what turns a
+ * line of history back into something to play. */
+const knownGames = new Map<string, { route: GameRoute; url: string; name: string }>();
+const favouriteSetting = `hookedin:v1:${network}:favourite-games`;
+function favourites(): Set<string> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(favouriteSetting) || '[]');
+    return new Set(Array.isArray(saved) ? saved.filter((key: unknown) => typeof key === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+/** A favourite is this browser's own note about a game. It is never signed and never leaves here. */
+function toggleFavourite(key: string) {
+  const saved = favourites();
+  if (!saved.delete(key)) saved.add(key);
+  localStorage.setItem(favouriteSetting, JSON.stringify([...saved]));
+  renderMyGames();
+}
+/** Every settled bet this wallet signed. A rejected request never became a bet, so it stays in
+ * Activity; only a bet whose prize table the wallet recorded can say what it was worth. */
+function ownBets(): BetRow[] {
+  return wallet.history
+    .filter(
+      (receipt: any) => receipt.kind === 'bet' && receipt.status === 'signed' && receipt.expectedPayout !== undefined,
+    )
+    .map((receipt: any) => ({
+      at: Date.parse(receipt.createdAt),
+      game: receipt.game?.name || 'Unnamed game',
+      key: receipt.game?.key ?? null,
+      asset: receipt.asset === 'test' ? 'test' : 'eth',
+      stake: BigInt(receipt.stake),
+      payout: BigInt(receipt.payout ?? 0),
+      expected: BigInt(receipt.expectedPayout),
+      maxPayout: receipt.maxPayout === undefined ? null : BigInt(receipt.maxPayout),
+      operation: receipt.operationId,
+      hosted: receipt.hosted === true,
+    }));
+}
+/** Open a game's public record. From a bet, the key is all that is needed. */
+const showGameRecord = (row: { key?: string | null }) => {
+  if (row.key) void openGameRecord(row.key);
+};
+/** A list is rebuilt only when what it shows has changed. The wallet renders on every poll, and a
+ * row replaced under the player's cursor takes their click with it. */
+const betSignature = (rows: readonly BetRow[], extra = '') =>
+  extra + rows.map(row => `${row.operation}:${row.payout}`).join(',');
+let shownBets = '\u0000',
+  shownPlayed = '\u0000';
+function renderBets() {
+  const rows = ownBets();
+  $<HTMLButtonElement>('refresh-bets').disabled = historyBusy || !wallet.address;
+  const signature = betSignature(rows);
+  if (signature === shownBets) return;
+  shownBets = signature;
+  $('bet-totals').replaceChildren(...totalCards(totalsByAsset(rows)));
+  $('bet-list').replaceChildren(...rows.map(row => betRowElement(row, showGameRecord)));
+  filterBets(
+    $('bet-list'),
+    $<HTMLInputElement>('bet-search').value,
+    $('bet-empty'),
+    $('bet-visible-count'),
+    'No bets yet. Open a game from the library and every bet you sign is recorded here.',
+  );
+}
+/** One line per game: what this wallet staked in it, what came back, and what its bets were worth. */
+function renderMyGames() {
+  const all = ownBets(),
+    starred = favourites(),
+    played = new Map<string, { key: string | null; name: string; last: number; rows: BetRow[] }>();
+  const signature = betSignature(all, [...starred].sort().join(',') + '|' + knownGames.size + '|');
+  if (signature === shownPlayed) return;
+  shownPlayed = signature;
+  for (const row of all) {
+    const id = row.key || `name:${row.game}`,
+      entry = played.get(id) ?? { key: row.key ?? null, name: row.game, last: row.at, rows: [] };
+    entry.rows.push(row);
+    entry.last = Math.max(entry.last, row.at);
+    played.set(id, entry);
+  }
+  const staked = (rows: BetRow[]) => rows.reduce((sum, row) => sum + row.stake, 0n);
+  const list = [...played.values()].sort((a, b) => {
+    const star = Number(starred.has(b.key || '')) - Number(starred.has(a.key || ''));
+    if (star) return star;
+    const difference = staked(b.rows) - staked(a.rows);
+    return difference > 0n ? 1 : difference < 0n ? -1 : b.last - a.last;
+  });
+  $('played-count').textContent = String(list.length);
+  $('games-totals').replaceChildren(...totalCards(totalsByAsset(all)));
+  $('played-games').replaceChildren(
+    ...list.map(entry => {
+      const card = document.createElement('div');
+      card.className = 'played-game';
+      const heading = document.createElement('div');
+      heading.className = 'played-heading';
+      const star = document.createElement('button');
+      star.type = 'button';
+      star.className = 'played-star';
+      star.disabled = !entry.key;
+      star.textContent = entry.key && starred.has(entry.key) ? '★' : '☆';
+      star.title = !entry.key
+        ? 'This game has no key on its bets, so it cannot be starred.'
+        : starred.has(entry.key)
+          ? `Take ${entry.name} out of your favourites`
+          : `Keep ${entry.name} at the top`;
+      star.setAttribute('aria-pressed', String(Boolean(entry.key && starred.has(entry.key))));
+      if (entry.key) star.addEventListener('click', () => toggleFavourite(entry.key!));
+      const title = document.createElement('h3');
+      title.textContent = entry.name;
+      const when = document.createElement('span');
+      when.className = 'played-when';
+      when.textContent = `Last played ${new Date(entry.last).toLocaleDateString()}`;
+      heading.append(star, title, when);
+      card.append(heading);
+      const figures = document.createElement('div');
+      figures.className = 'played-figures';
+      for (const [asset, totals] of totalsByAsset(entry.rows)) {
+        const unit = unitOf(asset),
+          expected = measuredReturn(totals.staked, totals.expected),
+          cell = document.createElement('dl');
+        cell.className = 'played-asset';
+        for (const [label, value] of [
+          [`${unit} bets`, String(totals.bets)],
+          ['Staked', `${formatEther(totals.staked)} ${unit}`],
+          ['Paid back', `${formatEther(totals.paid)} ${unit}`],
+          [
+            'Your result',
+            `${totals.net < 0n ? '−' : '+'}${formatEther(totals.net < 0n ? -totals.net : totals.net)} ${unit}`,
+          ],
+          ['Return of your bets', expected === null ? '—' : percent(expected)],
+        ] as [string, string][]) {
+          const term = document.createElement('dt'),
+            detail = document.createElement('dd');
+          term.textContent = label;
+          detail.textContent = value;
+          if (label === 'Your result')
+            detail.className = totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : '';
+          cell.append(term, detail);
+        }
+        figures.append(cell);
+      }
+      card.append(figures);
+      const actions = document.createElement('div');
+      actions.className = 'played-actions';
+      const known = entry.key ? knownGames.get(entry.key) : undefined;
+      if (known) {
+        const play = document.createElement('button');
+        play.type = 'button';
+        play.className = 'button secondary small';
+        play.textContent = 'Play again ↗';
+        play.addEventListener('click', () => task(() => loadGame(known.url, known.route)));
+        actions.append(play);
+      }
+      if (entry.key) {
+        const record = document.createElement('button');
+        record.type = 'button';
+        record.className = 'button secondary small';
+        record.textContent = 'Every bet in this game ↗';
+        record.addEventListener('click', () => void openGameRecord(entry.key!));
+        actions.append(record);
+      }
+      card.append(actions);
+      return card;
+    }),
+  );
+  $('played-empty').classList.toggle('hidden', list.length !== 0);
+}
+/** A game's public record: every bet anyone has placed in it, straight from the casino. */
+async function openGameRecord(key: string, push = true) {
+  const known = knownGames.get(key),
+    mine = ownBets().find(row => row.key === key);
+  const name = known?.name || mine?.game || 'This game';
+  $('gamebets-name').textContent = name;
+  $('gamebets-key').textContent = key;
+  $('gamebets-list').replaceChildren();
+  $('gamebets-totals').replaceChildren();
+  $('gamebets-empty').classList.add('hidden');
+  $<HTMLInputElement>('gamebets-search').value = '';
+  navigate('gamebets', push, gameBetsPath(key));
+  document.title = `${name} — HookedIn`;
+  const play = $<HTMLButtonElement>('gamebets-play');
+  play.classList.toggle('hidden', !known);
+  play.onclick = known ? () => task(() => loadGame(known.url, known.route)) : null;
+  try {
+    const record = await wallet.api(`/api/games/${key}?limit=200`);
+    if (location.pathname !== gameBetsPath(key)) return;
+    const rows: BetRow[] = record.bets.map((bet: any) => ({
+      at: Number(bet.at),
+      game: name,
+      who: bet.alias ? '@' + bet.alias : bet.uname ? '~' + bet.uname : 'a player',
+      asset: bet.asset === 'test' ? 'test' : 'eth',
+      stake: BigInt(bet.stake),
+      payout: BigInt(bet.payout),
+      expected: BigInt(bet.expected),
+      operation: bet.operation,
+    }));
+    $('gamebets-totals').replaceChildren(
+      ...totalCards(
+        new Map(
+          Object.entries(record.totals as Record<string, any>).map(([asset, totals]) => [
+            asset,
+            {
+              bets: Number(totals.bets),
+              staked: BigInt(totals.staked || 0),
+              paid: BigInt(totals.paid || 0),
+              expected: BigInt(totals.expected || 0),
+              net: BigInt(totals.paid || 0) - BigInt(totals.staked || 0),
+            },
+          ]),
+        ),
+      ),
+    );
+    $('gamebets-list').replaceChildren(...rows.map(row => betRowElement(row)));
+    filterBets(
+      $('gamebets-list'),
+      '',
+      $('gamebets-empty'),
+      $('gamebets-visible-count'),
+      'Nobody has placed a bet in this game yet.',
+    );
+  } catch (error: any) {
+    $('gamebets-empty').classList.remove('hidden');
+    $('gamebets-empty').textContent =
+      error.code === 'not-found'
+        ? 'The casino holds no record under that name.'
+        : `The casino did not answer for this game. ${error.shortMessage || error.message}`;
+  }
+}
 window.addEventListener('popstate', () => void route(false));
 $<HTMLButtonElement>('clear-game-activity').addEventListener('click', () => gameLog.clear());
 $<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
@@ -1207,6 +1536,25 @@ $<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
+$<HTMLInputElement>('bet-search').addEventListener('input', () =>
+  filterBets(
+    $('bet-list'),
+    $<HTMLInputElement>('bet-search').value,
+    $('bet-empty'),
+    $('bet-visible-count'),
+    'No bets yet. Open a game from the library and every bet you sign is recorded here.',
+  ),
+);
+$<HTMLInputElement>('gamebets-search').addEventListener('input', () =>
+  filterBets(
+    $('gamebets-list'),
+    $<HTMLInputElement>('gamebets-search').value,
+    $('gamebets-empty'),
+    $('gamebets-visible-count'),
+    'Nobody has placed a bet in this game yet.',
+  ),
+);
+$<HTMLButtonElement>('refresh-bets').addEventListener('click', () => void refreshActivity());
 $<HTMLInputElement>('activity-search').addEventListener('input', () => {
   filterActivity(
     $('activity-list'),
@@ -1313,6 +1661,10 @@ $<HTMLInputElement>('fund-slider').addEventListener('input', () => {
   renderFundDialog();
 });
 $<HTMLInputElement>('fund-amount').addEventListener('input', renderFundDialog);
+$<HTMLButtonElement>('fund-take-all').addEventListener('click', () => {
+  $<HTMLInputElement>('fund-amount').value = '0';
+  renderFundDialog();
+});
 function downloadEvidence(report: any) {
   const url = URL.createObjectURL(new Blob([json(report)], { type: 'application/json' }));
   const link = document.createElement('a');
@@ -1564,6 +1916,7 @@ $<HTMLInputElement>('casino-url').value = casinoURL;
 $<HTMLSelectElement>('network-mode').value = network;
 const asset = `${wallet.networkName} ETH`;
 $('network-name').textContent = wallet.networkName;
+// The pill's first value, before the wallet has said what it is playing with; renderGameFunds owns it after.
 $('asset-pill').textContent = asset.toUpperCase();
 $('asset-name').textContent = asset;
 $('receive-network').textContent = `${wallet.networkName} · ${wallet.expectedChainId}`;

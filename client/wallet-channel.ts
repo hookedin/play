@@ -36,7 +36,7 @@ import {
   verifyStep,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
-import { describeBet, meetsReturn, statedReturn } from '../protocol/risk.ts';
+import { describeBet } from '../protocol/risk.ts';
 import { gameAmount } from './game-account.ts';
 import { gameError } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
@@ -311,33 +311,19 @@ export class ChannelClient extends WalletTransactions {
         throw gameError('id-conflict', 'Operation ID is bound to a different game');
       return cached;
     }
-    /** What every operation this wallet signs must satisfy: it fits the money the player allowed, a
-     * bet's terms are a prize table the casino's own rule can read, and a game that states a return
-     * keeps it. */
+    /** What every operation this wallet signs must satisfy: it fits the money the player allowed, and
+     * a bet's terms are a prize table the casino's own rule can read. */
     const allowed = (debit: bigint) => {
-      const stated = game ? this.game?.identity.return : undefined;
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
         if (debit > BigInt(this.game.balance)) throw gameError('insufficient-funds', 'Bet exceeds the game balance');
-        // Money that pays nothing back returns nothing, so a game holding itself to a return cannot ask for it.
-        if (stated !== undefined && ['payment', 'transfer'].includes(kind))
-          throw gameError(
-            'below-return',
-            `${this.game!.identity.name} states that it pays back at least ${stated}%, so it cannot charge for nothing`,
-          );
       } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
       if (kind !== 'bet') return;
-      const terms = { stake: intent.amount, prizes: intent.prizes };
       try {
-        describeBet(terms);
+        describeBet({ stake: intent.amount, prizes: intent.prizes });
       } catch {
         throw new Error('Invalid wager terms');
       }
-      if (stated !== undefined && !meetsReturn(terms, statedReturn(stated)))
-        throw gameError(
-          'below-return',
-          `This bet pays back less than the ${stated}% ${this.game!.identity.name} states it pays`,
-        );
     };
     /** The same seat in the same round with other chips on it: the player changed their bet. */
     const rechipped = (op: Operation) =>

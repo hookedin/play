@@ -28,7 +28,7 @@
           <a class="nav-link active" href="/" data-page="library">
             Games <span id="library-count" class="nav-count">0</span>
           </a>
-          <a class="nav-link" href="/wallet" data-page="wallet">My wallet</a>
+          <a class="nav-link" href="/bets" data-page="bets"> Bets <span id="bets-count" class="nav-count">0</span> </a>
           <a class="nav-link" href="/activity" data-page="activity">
             Activity <span id="activity-count" class="nav-count">0</span>
           </a>
@@ -38,12 +38,12 @@
           ><span id="asset-pill" class="test-pill">SEPOLIA ETH</span>
         </div>
         <div class="topbar-wallet">
-          <button id="top-balance" class="balance-button" data-page="wallet">
-            <span class="eth-symbol">◆</span><span id="header-balance-label" class="header-balance-label">Playing</span
-            ><span id="header-balance">— ETH</span></button
-          ><button id="open-deposit" class="button primary compact" data-page="wallet" data-receive>
-            Deposit ETH <span>↓</span>
-          </button>
+          <button id="game-funds" class="button secondary compact hidden" type="button">Take money back</button
+          ><a id="account-link" class="account-link" href="/account" data-page="account"
+            ><span class="account-mark" aria-hidden="true">◈</span
+            ><span class="account-names"
+              ><span id="account-name">My account</span><span id="account-uname" class="account-uname"></span></span
+          ></a>
         </div>
       </header>
 
@@ -197,44 +197,6 @@
               <p id="test-earnings" class="hidden"></p>
             </div>
           </div>
-          <section class="surface profile-card" aria-labelledby="profile-card-title">
-            <div class="eyebrow">YOUR NAME HERE</div>
-            <h2 id="profile-card-title">
-              <a id="wallet-name-link" href="/"><span id="wallet-name">—</span></a>
-            </h2>
-            <p id="wallet-uname" class="game-handle"></p>
-            <p>
-              The only thing games, shared rounds and the public player list ever learn about you. Everything else —
-              your address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
-              <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
-              a shorter name you are shown by instead. Both always find you.
-            </p>
-            <label for="alias-input">Take an alias</label>
-            <div class="input-row">
-              <input
-                id="alias-input"
-                type="text"
-                maxlength="20"
-                pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
-                autocomplete="off"
-                placeholder="Choose an alias"
-              /><button id="pick-alias" class="button secondary" type="button">Save alias</button>
-            </div>
-            <p id="alias-note" class="settings-note"></p>
-            <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
-            <label for="game-name-input"
-              >Games you publish <span id="profile-game-count" class="subtle-count">0/100</span></label
-            >
-            <div class="input-row">
-              <input id="game-name-input" type="text" maxlength="32" autocomplete="off" placeholder="game-name" /><input
-                id="game-url-input"
-                type="url"
-                autocomplete="off"
-                placeholder="https://your-game.example/manifest.json"
-              /><button id="publish-game" class="button secondary" type="button">Publish</button>
-            </div>
-            <div id="my-games"></div>
-          </section>
           <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
           <div class="funding-steps">
             <section class="surface receive-card" aria-labelledby="receive-title">
@@ -321,14 +283,183 @@
               </details>
             </section>
           </div>
-          <section class="surface wallet-settings fund-card" aria-labelledby="fund-card-title">
-            <div class="eyebrow">OWN A PART OF THE HOUSE</div>
-            <h2 id="fund-card-title">Invest in the bankroll</h2>
-            <p>
-              Move money from your playing balance into the bankroll the casino bets with. You receive shares: when
-              players lose, every share is worth more, and when they win, less. Sell shares at any time for their
-              current worth.
+          <section class="surface wallet-settings">
+            <h2>Channel and withdrawal claims</h2>
+            <p id="channel-status">No open channel</p>
+            <p id="channel-deposit-note">
+              Original protected deposit: <strong id="principal-balance">0 ETH</strong>. Gambling losses reduce the
+              amount returned. Winnings are signed balances awaiting cash-out from the shared house bankroll.
             </p>
+            <p id="channel-observation"></p>
+            <p id="challenge-deadline">
+              Check your wallet regularly. Challenges must be mined before the displayed 24-hour deadline.
+            </p>
+            <div class="identity-actions">
+              <button id="channel-export" class="button secondary small">Export recovery bundle</button
+              ><button id="channel-start-close" class="button secondary small">Start unilateral close</button
+              ><button id="channel-challenge" class="button secondary small">Challenge stale balance</button
+              ><button id="channel-finalize" class="button secondary small">Finalize withdrawal claim</button>
+            </div>
+            <label for="channel-import">Import recovery bundle</label
+            ><input id="channel-import" type="file" accept="application/json" />
+            <div id="claim-list"></div>
+          </section>
+        </section>
+        <section id="page-account" class="page hidden">
+          <div class="eyebrow">YOURS TO CONTROL</div>
+          <h1 id="account-heading">My account<span class="heading-dot">.</span></h1>
+          <p id="account-handle" class="game-handle"></p>
+          <p class="intro">
+            Everything this wallet holds, kept apart by what it is. Your money is in one place, what you play in
+            another, and every bet you have signed in a third.
+          </p>
+          <div class="account-grid">
+            <a class="account-card" href="/wallet" data-page="wallet">
+              <span class="account-card-mark" aria-hidden="true">◆</span>
+              <h2>My wallet</h2>
+              <p>Your balances, your deposit address, the channel your bets settle in, and your withdrawal claims.</p>
+              <span id="account-wallet-note" class="account-card-note"></span>
+            </a>
+            <a class="account-card" href="/games" data-page="games">
+              <span class="account-card-mark" aria-hidden="true">◈</span>
+              <h2>My games</h2>
+              <p>
+                Every game you have played, what each has actually paid you back, your favourites, and the games you
+                publish.
+              </p>
+              <span id="account-games-note" class="account-card-note"></span>
+            </a>
+            <a class="account-card" href="/bets" data-page="bets">
+              <span class="account-card-mark" aria-hidden="true">◇</span>
+              <h2>Bet history</h2>
+              <p>
+                Every bet you have signed, in full: its stake, what it paid, and the return measured from its own prize
+                table.
+              </p>
+              <span id="account-bets-note" class="account-card-note"></span>
+            </a>
+            <a class="account-card" href="/bankroll" data-page="bankroll">
+              <span class="account-card-mark" aria-hidden="true">◎</span>
+              <h2>Bankroll</h2>
+              <p>Put money into the bankroll the casino bets with, and sell your shares back at what they are worth.</p>
+              <span id="account-bankroll-note" class="account-card-note"></span>
+            </a>
+            <a class="account-card" href="/activity" data-page="activity">
+              <span class="account-card-mark" aria-hidden="true">≡</span>
+              <h2>Activity</h2>
+              <p>Every signed result, funding transaction and withdrawal claim, with the raw JSON behind each one.</p>
+              <span id="account-activity-note" class="account-card-note"></span>
+            </a>
+            <a class="account-card" href="/settings" data-page="settings">
+              <span class="account-card-mark" aria-hidden="true">⌘</span>
+              <h2>Settings</h2>
+              <p>Your keys, encrypted backups, saved accounts, and the casino this wallet is connected to.</p>
+              <span id="account-settings-note" class="account-card-note"></span>
+            </a>
+          </div>
+          <section class="surface profile-card" aria-labelledby="profile-card-title">
+            <div class="eyebrow">YOUR NAME HERE</div>
+            <h2 id="profile-card-title">
+              <a id="wallet-name-link" href="/"><span id="wallet-name">—</span></a>
+            </h2>
+            <p id="wallet-uname" class="game-handle"></p>
+            <p>
+              The only thing games, shared rounds and the public player list ever learn about you. Everything else —
+              your address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
+              <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
+              a shorter name you are shown by instead. Both always find you.
+            </p>
+            <label for="alias-input">Take an alias</label>
+            <div class="input-row">
+              <input
+                id="alias-input"
+                type="text"
+                maxlength="20"
+                pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
+                autocomplete="off"
+                placeholder="Choose an alias"
+              /><button id="pick-alias" class="button secondary" type="button">Save alias</button>
+            </div>
+            <p id="alias-note" class="settings-note"></p>
+            <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
+          </section>
+          <a id="account-public" class="text-button wallet-history-link" href="/">See your public profile ↗</a>
+        </section>
+        <section id="page-games" class="page hidden">
+          <div class="eyebrow">WHAT YOU PLAY</div>
+          <h1>My games<span class="heading-dot">.</span></h1>
+          <p class="intro">
+            Counted from the bets this wallet signed, so it is what you played, not what anyone claimed. A game’s return
+            here is the return of your bets in it — the money it moved through, not a promise it made.
+          </p>
+          <div id="games-totals" class="funding-balances"></div>
+          <div class="section-heading">
+            <h2>Games you play <span id="played-count" class="subtle-count">0</span></h2>
+            <span class="section-note">Most staked first, favourites above them.</span>
+          </div>
+          <div id="played-games" class="played-list"></div>
+          <p id="played-empty" class="activity-empty hidden">
+            No bets yet. Open a game from the library and the ones you play appear here.
+          </p>
+          <section class="surface wallet-settings">
+            <div class="eyebrow">PUBLISHED UNDER YOUR NAME</div>
+            <h2>Games you publish</h2>
+            <p>
+              A game you publish is reachable at your name, and anyone may play it with their own wallet. Publishing
+              needs a funded ETH channel; taking one down never does.
+            </p>
+            <label for="game-name-input"
+              >Games you publish <span id="profile-game-count" class="subtle-count">0/100</span></label
+            >
+            <div class="input-row">
+              <input id="game-name-input" type="text" maxlength="32" autocomplete="off" placeholder="game-name" /><input
+                id="game-url-input"
+                type="url"
+                autocomplete="off"
+                placeholder="https://your-game.example/manifest.json"
+              /><button id="publish-game" class="button secondary" type="button">Publish</button>
+            </div>
+            <div id="my-games"></div>
+          </section>
+        </section>
+        <section id="page-bets" class="page hidden">
+          <div class="activity-heading">
+            <div>
+              <div class="eyebrow">EVERY BET YOU SIGNED</div>
+              <h1>Bet history<span class="heading-dot">.</span></h1>
+              <p class="intro">
+                Each bet with the return its own prize table gave it, worked out by your wallet before it signed. No
+                game states what it pays back, because nothing stops a game wagering your money over and over; this is
+                measured from the bets that really happened.
+              </p>
+            </div>
+            <button id="refresh-bets" class="button secondary">Refresh ↻</button>
+          </div>
+          <div id="bet-totals" class="funding-balances"></div>
+          <div class="activity-toolbar">
+            <label class="sr-only" for="bet-search">Search your bets</label
+            ><input
+              id="bet-search"
+              type="search"
+              placeholder="Search games, amounts or operation IDs…"
+              autocomplete="off"
+            /><span class="activity-list-note"
+              ><span id="bet-visible-count">0</span> bets · newest first<br />Latest 100 saved receipts</span
+            >
+          </div>
+          <div id="bet-list" class="bet-table"></div>
+          <p id="bet-empty" class="activity-empty hidden"></p>
+        </section>
+        <section id="page-bankroll" class="page hidden">
+          <div class="eyebrow">OWN A PART OF THE HOUSE</div>
+          <h1>Bankroll<span class="heading-dot">.</span></h1>
+          <p class="intro">
+            Move money from your playing balance into the bankroll the casino bets with. You receive shares: when
+            players lose, every share is worth more, and when they win, less. Sell shares at any time for their current
+            worth.
+          </p>
+          <section class="surface wallet-settings fund-card" aria-labelledby="fund-card-title">
+            <h2 id="fund-card-title">Your shares</h2>
             <p class="fund-warning">
               This rests entirely on trusting the casino. Shares are its signed promise, not protected money: no
               contract holds them, the casino alone states what they are worth, and the bankroll can lose. Your wallet
@@ -373,27 +504,13 @@
               </div>
             </div>
           </section>
-          <section class="surface wallet-settings">
-            <h2>Channel and withdrawal claims</h2>
-            <p id="channel-status">No open channel</p>
-            <p id="channel-deposit-note">
-              Original protected deposit: <strong id="principal-balance">0 ETH</strong>. Gambling losses reduce the
-              amount returned. Winnings are signed balances awaiting cash-out from the shared house bankroll.
-            </p>
-            <p id="channel-observation"></p>
-            <p id="challenge-deadline">
-              Check your wallet regularly. Challenges must be mined before the displayed 24-hour deadline.
-            </p>
-            <div class="identity-actions">
-              <button id="channel-export" class="button secondary small">Export recovery bundle</button
-              ><button id="channel-start-close" class="button secondary small">Start unilateral close</button
-              ><button id="channel-challenge" class="button secondary small">Challenge stale balance</button
-              ><button id="channel-finalize" class="button secondary small">Finalize withdrawal claim</button>
-            </div>
-            <label for="channel-import">Import recovery bundle</label
-            ><input id="channel-import" type="file" accept="application/json" />
-            <div id="claim-list"></div>
-          </section>
+        </section>
+        <section id="page-settings" class="page hidden">
+          <div class="eyebrow">KEYS AND CONNECTIONS</div>
+          <h1>Settings<span class="heading-dot">.</span></h1>
+          <p class="intro">
+            The keys this browser holds, the backups that restore them, and the casino this wallet talks to.
+          </p>
           <section class="surface wallet-settings">
             <div class="eyebrow" id="wallet-mode">BROWSER WALLET · SEPOLIA</div>
             <h2>Wallet settings</h2>
@@ -474,6 +591,34 @@
             <button id="connect-casino" class="button secondary">Connect services ↗</button>
           </section>
         </section>
+        <section id="page-gamebets" class="page hidden">
+          <div class="activity-heading">
+            <div>
+              <div class="eyebrow">PUBLIC RECORD</div>
+              <h1 id="gamebets-name">Game</h1>
+              <p id="gamebets-key" class="game-handle"></p>
+              <p class="intro">
+                Every bet anyone has placed in this game, as the casino recorded it. The return of each one is worked
+                out from its own prize table; the figures above are those bets added up.
+              </p>
+            </div>
+            <button id="gamebets-play" class="button primary hidden">Open this game ↗</button>
+          </div>
+          <div id="gamebets-totals" class="funding-balances"></div>
+          <div class="activity-toolbar">
+            <label class="sr-only" for="gamebets-search">Search this game’s bets</label
+            ><input
+              id="gamebets-search"
+              type="search"
+              placeholder="Search players or amounts…"
+              autocomplete="off"
+            /><span class="activity-list-note"
+              ><span id="gamebets-visible-count">0</span> bets · newest first<br />Latest 200 the casino holds</span
+            >
+          </div>
+          <div id="gamebets-list" class="bet-table"></div>
+          <p id="gamebets-empty" class="activity-empty hidden"></p>
+        </section>
 
         <section id="page-profile" class="page hidden">
           <div class="eyebrow">A PLAYER HERE</div>
@@ -526,16 +671,26 @@
     <div id="toast" class="toast hidden" role="alert"></div>
     <dialog id="fund-dialog" class="fund-dialog" aria-labelledby="fund-title">
       <form id="fund-form">
-        <div id="fund-eyebrow" class="eyebrow">SPENDING LIMIT</div>
+        <div id="fund-eyebrow" class="eyebrow">YOU ARE AUTHORIZING</div>
         <h2 id="fund-title">How much may this game play with?</h2>
+        <p id="fund-who" class="fund-who mode-fund"></p>
         <p id="fund-reason" class="fund-reason"></p>
         <p id="fund-channel-note" class="fund-note mode-channel"></p>
         <div class="fund-actions mode-channel">
           <button id="fund-open-wallet" class="button secondary" type="button">Set up my wallet</button
           ><button class="button primary" type="button" data-play="test" autofocus>Play with test coins</button>
         </div>
+        <div class="fund-change mode-fund" role="group" aria-label="What this changes">
+          <div><span class="fund-change-label">It holds now</span><strong id="fund-now">—</strong></div>
+          <span class="fund-change-arrow" aria-hidden="true">→</span>
+          <div><span class="fund-change-label">It would hold</span><strong id="fund-next">—</strong></div>
+          <div class="fund-change-rest">
+            <span class="fund-change-label">Stays in your wallet</span><strong id="fund-rest">—</strong>
+          </div>
+        </div>
         <div class="funding-amount-label mode-fund">
-          <label for="fund-amount">This game may play with up to</label>
+          <label for="fund-amount">Set the limit to</label
+          ><button id="fund-take-all" class="text-button" type="button">Take it all back</button>
         </div>
         <div class="amount-input mode-fund">
           <input id="fund-amount" inputmode="decimal" autocomplete="off" aria-describedby="fund-help" /><span
@@ -558,11 +713,18 @@
           <button class="button secondary" type="button" data-fund-cancel>Not now</button
           ><button id="fund-confirm" class="button primary" type="submit">Allow</button>
         </div>
-        <p id="fund-game" class="security-note mode-fund"></p>
-        <p class="security-note mode-fund">
-          The money stays in your wallet. The game can lose all of it, including winnings, on wagers and payments to its
-          developer. Leaving the game or closing the tab takes back whatever is left.
-        </p>
+        <ul class="fund-terms mode-fund">
+          <li>The money never leaves your wallet. This sets the most the game may put at risk.</li>
+          <li>
+            It can lose all of it — including anything it wins — on wagers and on payments to its developer. It cannot
+            touch a wei more.
+          </li>
+          <li>Leaving the game, or closing the tab, takes back whatever is left. You can change this at any time.</li>
+          <li id="fund-returns">
+            No game says what it pays back. Your wallet measures the return of each bet before it signs it, and your bet
+            history shows what this game has really paid you.
+          </li>
+        </ul>
         <p id="fund-test-note" class="fund-note mode-fund">
           Test coins are the casino's play money: the same games and the same odds, against the casino's test bankroll,
           with nothing real won or lost.

@@ -101,7 +101,7 @@ The wallet is a static site. Pushing to `main` releases it: [.github/workflows/d
 
 To publish by hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy`.
 
-Client-side routes (`/wallet`, `/activity`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
+Client-side routes (`/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity`, `/games/<key>`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
 
 The operator commits `config/production.json`. It is published as `config.js`, so it is part of the trusted wallet release and must contain nothing secret:
 
