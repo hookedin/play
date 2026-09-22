@@ -57,6 +57,8 @@ test('wallet routes resolve to the client page without exposing other files', as
     '/settings',
     '/activity',
     '/games/dice',
+    '/@hookedin/dice',
+    '/%40hookedin/dice',
     `/games/0x${'ab'.repeat(32)}`,
     '/games/custom?manifest=https://x.example/m.json',
   ])

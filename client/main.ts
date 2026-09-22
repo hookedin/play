@@ -265,14 +265,20 @@ function navigate(page: string, push = true, path = pagePaths[page]) {
  * `/activity`, `/@<alias>` or `/~<uname>` for a player, the same and `/<game>` for a game they
  * publish, `/games/<key>` for a game's public record, and `/games/custom?manifest=<url>`. */
 function parseRoute(url: URL): string | GameRoute | { profile: string } | { record: string } | { unknown: string } {
-  const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(url.pathname);
+  // A player's sigil survives whatever encoded the link: `@` reaches here as `%40` from some clients,
+  // and the static host decodes the path the same way before it serves this page.
+  let pathname = url.pathname;
+  try {
+    pathname = decodeURIComponent(pathname);
+  } catch {}
+  const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
-  if (url.pathname === '/games/custom') return { manifest: url.searchParams.get('manifest') || '' };
-  const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname);
+  if (pathname === '/games/custom') return { manifest: url.searchParams.get('manifest') || '' };
+  const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
   if (record) return { record: record[1]!.toLowerCase() };
-  const page = Object.entries(pagePaths).find(([, path]) => path === url.pathname)?.[0];
+  const page = Object.entries(pagePaths).find(([, path]) => path === pathname)?.[0];
   if (page) return page;
-  return url.pathname === '/' ? 'library' : { unknown: url.pathname };
+  return pathname === '/' ? 'library' : { unknown: pathname };
 }
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
@@ -320,9 +326,11 @@ function renderGameFunds() {
   button.classList.toggle('hidden', !active);
   button.toggleAttribute('data-holding', holding);
   button.textContent = holding ? 'Take money back' : 'Give this game money';
-  button.title = holding
-    ? `Take back what ${active?.manifest.name} still holds, or change what it may play with.`
-    : `Choose what ${active?.manifest.name} may play with.`;
+  button.title = !active
+    ? ''
+    : holding
+      ? `Take back what ${active.manifest.name} still holds, or change what it may play with.`
+      : `Choose what ${active.manifest.name} may play with.`;
   button.disabled = uiBusy || wallet.busy;
 }
 /** The play page shows no wallet controls: the game displays its balance and asks for money through the dialog. */
