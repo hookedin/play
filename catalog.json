@@ -17,10 +17,12 @@
       "url": "https://mines-game.hookedin.com/manifest.json"
     },
     "roulette": {
-      "url": "https://roulette-game.hookedin.com/manifest.json"
+      "url": "https://roulette-game.hookedin.com/manifest.json",
+      "referee": "0x6c21bC850e69CCB303f6081B3bBE42Adc1290E8E"
     },
     "sports": {
-      "url": "https://sports-game.hookedin.com/manifest.json"
+      "url": "https://sports-game.hookedin.com/manifest.json",
+      "referee": "0xfc5460CbA8e448A6BEB3E2BF79b56c199d43DE63"
     }
   }
 }
