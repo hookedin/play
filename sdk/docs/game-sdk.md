@@ -64,7 +64,7 @@ Replies carry the same `id` and either `result` or `error: {code, message}`. Bot
 
 `HookedIn` has a typed method for each: `receipt`, `bet`, `enter`, `payment` and `requestFunds`; `HookedIn.call(method, params)` sends any of them.
 
-Every reply about an operation is one receipt, whichever method asked: `{id, kind, status, verified}` under your own `id`, a bet's `stake` and `prizes` as they played, a settled bet's `outcome` and `payout`, an entry's `pot`, and once its pot has ended its `payout` and, unless the pot was void, its `outcome`; and a rejection's or a void pot's `reason`. The signed evidence, the player's channel and its balance stay in the wallet.
+Every reply about an operation is one receipt, whichever method asked: `{id, kind, status, verified}` under your own `id`, a bet's `stake` and `prizes` as they played, a settled bet's `outcome` and `payout`, an entry's `pot`, and once its pot has ended its `payout` and, when the pot has an outcome, its `outcome`; and the resolved entry's `resolution` and `resolvedAt`, and a rejection's or refunded pot's `reason`. The signed evidence, the player's channel and its balance stay in the wallet.
 
 Unsolicited messages from the wallet carry `event` instead of `id`:
 

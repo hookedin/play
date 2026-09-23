@@ -189,7 +189,7 @@
             <div class="wallet-balance-card">
               <div class="eyebrow">ETH BALANCE</div>
               <div class="large-amount"><span id="casino-balance">—</span><small>ETH</small></div>
-              <p>Your signed channel balance, including money in games</p>
+              <p>Your signed channel balance, including game spending limits</p>
               <p id="developer-earnings" class="hidden"></p>
             </div>
             <div class="wallet-balance-card">
@@ -206,6 +206,12 @@
             </div>
           </div>
           <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
+          <section class="surface wallet-pots-card" aria-labelledby="pots-title">
+            <h2 id="pots-title">Game pots</h2>
+            <p id="pots-status" role="status"></p>
+            <button id="refresh-pots" class="text-button" type="button">Check results and collect payouts</button>
+            <div id="wallet-pots" class="activity-list"></div>
+          </section>
           <div class="funding-steps">
             <section class="surface receive-card" aria-labelledby="receive-title">
               <div class="funding-heading">

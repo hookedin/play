@@ -48,6 +48,9 @@ export interface GameReceipt {
   prizes?: GameRequest['prizes'];
   /** An entry's pot. */
   pot?: string;
+  /** A resolved entry's outcome or refund, after the wallet has verified and collected it. */
+  resolution?: 'outcome' | 'refund';
+  resolvedAt?: number;
   /** A settled bet: the round's 64-bit outcome, and what the prizes holding it paid in total. An entry,
    * once its pot has ended and the wallet has collected: the outcome that picked its prizes, if the pot
    * had one, and what the entry was paid. */

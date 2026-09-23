@@ -360,16 +360,16 @@ function validEntry(entry: EntryTerms) {
       /^0x[0-9a-fA-F]{130}$/.test(quote.signature))
   );
 }
-/** What each entry of a pot is owed when it ends, in entry order. A void pot returns every stake. A
+/** What each entry of a pot is owed when it ends, in entry order. A refund returns every stake. A
  * house pot's round, or a developer's pot's named outcome, picks the prizes each entry holds. A players'
  * pot pays each entry what its referee's split gives it, and the split with its rake must account for
  * every entry, within the rake the pot was opened with. The casino pays by this and the wallet checks by it. */
 export function potPayouts(
   pot: { rake?: number; outcomes?: number; entries: { stake: string; prizes?: EntryTerms['prizes'] }[] },
-  ending: { void: true } | { value: bigint } | PotResult,
+  ending: { refund: true } | { value: bigint } | PotResult,
 ): bigint[] {
   const entries = pot.entries;
-  if ('void' in ending) return entries.map(entry => BigInt(entry.stake));
+  if ('refund' in ending) return entries.map(entry => BigInt(entry.stake));
   const picked = (value: bigint) =>
     entries.map(entry =>
       (entry.prizes ?? []).reduce(

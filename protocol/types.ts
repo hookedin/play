@@ -68,7 +68,10 @@ export interface PotStatus {
   referee: string;
   bank: Bank;
   asset: 'eth' | 'test';
-  status: 'open' | 'resolved' | 'void';
+  status: 'unresolved' | 'resolved';
+  resolution?: 'outcome' | 'refund';
+  refundReason?: 'cancelled' | 'expired';
+  resolvedAt?: number;
   /** A house pot's seed hash: its referee's seed, which with the casino's secret picks the outcome. */
   seedHash?: string;
   /** A developer's pot names its outcomes 0 to `outcomes - 1`. */
@@ -77,7 +80,7 @@ export interface PotStatus {
   rake?: number;
   /** No entry after this (unix milliseconds): null for a house pot nobody has entered. */
   closesAt: number | null;
-  /** Unresolved by then (unix milliseconds), the pot is void and every entry refunded. */
+  /** Unresolved by then (unix milliseconds), the pot resolves with a refund of every entry. */
   deadline: number;
   entries: { uname: string | null; alias: string | null; stake: string; prizes?: EntryTerms['prizes'] }[];
   /** How it ended: a house pot's seed and the casino's secret, or the referee's signed result. */
@@ -85,6 +88,29 @@ export interface PotStatus {
   secret?: string;
   result?: PotResult;
   signature?: string;
+}
+/** An authenticated account's stake and result in a pot, across all its channels in one asset.
+ * A resolution includes zero payouts. Collection credits a positive payout to a channel separately. */
+export interface PlayerPot {
+  id: string;
+  game: GameName;
+  asset: 'eth' | 'test';
+  status: PotStatus['status'];
+  closesAt: number | null;
+  deadline: number;
+  stake: string;
+  payout?: string;
+  collected: boolean;
+  resolution?: PotStatus['resolution'];
+  refundReason?: PotStatus['refundReason'];
+  resolvedAt?: number;
+}
+/** Pass cursor as after for the next page. Resolved cursors can be saved and resumed on later polls.
+ * Unresolved pages describe the current set; start at the beginning on each refresh. */
+export interface PlayerPots {
+  pots: PlayerPot[];
+  cursor: string;
+  more: boolean;
 }
 /** What a referee says a pot came to: a developer's pot's outcome, or a players' pot's split of its
  * entries (each entry's payout, by index) and the rake it keeps. */

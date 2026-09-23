@@ -30,8 +30,9 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
           window: { min: 1000, max: 60000 },
         },
       });
-    if (path === '/api/pots') return Response.json({ id: pot, status: 'open', closesAt: null, entries: [] });
-    if (path.startsWith('/api/pots/')) return Response.json({ id: pot, status: 'open', closesAt: null, entries: [] });
+    if (path === '/api/pots') return Response.json({ id: pot, status: 'unresolved', closesAt: null, entries: [] });
+    if (path.startsWith('/api/pots/'))
+      return Response.json({ id: pot, status: 'unresolved', closesAt: null, entries: [] });
     return Response.json({ error: 'Unknown pot' }, { status: 404 });
   });
   const stored = new Map<string, unknown>();

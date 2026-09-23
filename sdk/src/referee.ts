@@ -33,13 +33,13 @@ export interface OpenOptions {
   /** What the pot is played with: ETH unless you say `test`. Run a pot for each asset your game takes. */
   asset?: AssetId;
   /** A house pot's betting time, counted from its first entry: how long a player's entry waits on you.
-   * Resolve the pot within it, or it is void. `window.max` unless you ask for less. */
+   * Resolve the pot within it, or it resolves with a refund. `window.max` unless you ask for less. */
   window?: number;
   /** A developer's pot names its outcomes 0 to `outcomes - 1`. */
   outcomes?: number;
   /** A players' pot takes at most this rake, in basis points of its entries. */
   rake?: number;
-  /** A developer's or players' pot: no entry after `closesAt`, and void if unresolved by `deadline`
+  /** A developer's or players' pot: no entry after `closesAt`, and refunded if unresolved by `deadline`
    * (unix milliseconds, within 30 days). */
   closesAt?: number;
   deadline?: number;

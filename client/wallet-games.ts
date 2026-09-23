@@ -32,6 +32,7 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
       : {}),
     // The outcome and what it paid: everything a game needs to show the result.
     ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome }),
+    ...(receipt.resolution ? { resolution: receipt.resolution, resolvedAt: receipt.resolvedAt } : {}),
     ...(receipt.payout === undefined ? {} : { payout: receipt.payout }),
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
   };

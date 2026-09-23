@@ -29,7 +29,7 @@ function table() {
         id = keccak256(secret),
         seed = keccak256(id);
       secrets.set(id, secret);
-      const pot = { id, status: 'open', seedHash: keccak256(seed), closesAt: null, entries: [], window } as any;
+      const pot = { id, status: 'unresolved', seedHash: keccak256(seed), closesAt: null, entries: [], window } as any;
       pots.set(id, pot);
       return { pot, seed };
     },
@@ -41,11 +41,17 @@ function table() {
       calls.push('resolve');
       if (failing) throw failing;
       assert.equal(seed, keccak256(id), 'the wheel resolves a pot with the seed it drew for it');
-      return Object.assign(pots.get(id)!, { status: 'resolved', seed, secret: secrets.get(id) });
+      return Object.assign(pots.get(id)!, {
+        status: 'resolved',
+        resolution: 'outcome',
+        resolvedAt: Date.now(),
+        seed,
+        secret: secrets.get(id),
+      });
     },
     async void(id: string) {
       calls.push('void');
-      pots.get(id)!.status = 'void';
+      Object.assign(pots.get(id)!, { status: 'resolved', resolution: 'refund', refundReason: 'cancelled' });
     },
   } as unknown as Referee;
   const deps = {
@@ -139,7 +145,7 @@ test('an empty pot is called off before the casino gives up on it, and a failed 
   t.enter(third);
   await t.wheel.entered();
   t.advance(BETTING_MS);
-  t.fail(Object.assign(new Error('The pot is past its deadline'), { code: 'pot-void' }));
+  t.fail(Object.assign(new Error('The pot is past its deadline'), { code: 'pot-expired' }));
   await t.wheel.alarm();
   t.fail(null);
   assert.equal(t.wheel.state.last!.pot, second);

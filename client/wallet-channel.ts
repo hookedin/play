@@ -2,7 +2,7 @@ import type { Integer, Checkpoint, Operation, Prize, Round } from '../protocol/t
 import type { AssetId } from '../protocol/protocol.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id } from 'ethers';
-import type { Details, PotStatus } from '../protocol/types.ts';
+import type { Details, PotStatus, PlayerPots } from '../protocol/types.ts';
 import {
   canonicalJSON,
   plain,
@@ -75,8 +75,6 @@ export interface EntryInput {
 /** The off-chain channel protocol: exact signed requests, verified results, rejections, rounds, pots,
  * banks and recovery of lost replies. */
 export class ChannelClient extends WalletTransactions {
-  /** When the observation loop last looked at each pot this account is in, in this tab's memory. */
-  potLooks = new Map<string, number>();
   /** What the channel in play holds: the network's ETH, or the casino's test coins. */
   get asset(): { id: AssetId; symbol: string; decimals: number } {
     const self = this as unknown as CasinoWallet;
@@ -451,7 +449,19 @@ export class ChannelClient extends WalletTransactions {
       ...(invested ? { fund: invested.fund } : {}),
       ...(banked ? { bank: banked } : {}),
       // An entry waits in the pot, and this wallet remembers it until the pot's end is collected.
-      ...(pot ? { pots: { ...this.pots, [pot]: [...(this.pots[pot] ?? []), operationId] } } : {}),
+      ...(pot
+        ? {
+            pots: {
+              ...this.pots,
+              [pot]: {
+                ...this.pots[pot],
+                game: details.game!,
+                asset: this.playing,
+                entries: [...(this.pots[pot]?.entries ?? []), operationId],
+              },
+            },
+          }
+        : {}),
     });
     this.updateBankroll(response.bankroll);
     void this.api(`/api/channels/${c.state.channelId}/ack`, {
@@ -470,7 +480,7 @@ export class ChannelClient extends WalletTransactions {
       // Checked before anything is signed: the pot is this game's, in what this tab plays with, and open.
       if (!same(pot.game, this.requireGame().key)) throw gameError('invalid-request', "This pot is another game's");
       if (pot.asset !== this.playing) throw gameError('wrong-asset', 'This pot is played with another asset');
-      if (pot.status !== 'open') throw gameError('pot-closed', 'The pot takes no more entries');
+      if (pot.status !== 'unresolved') throw gameError('pot-closed', 'The pot takes no more entries');
     }
     const receipt = await this.perform(
       'entry',
@@ -478,14 +488,16 @@ export class ChannelClient extends WalletTransactions {
       operationId,
       game,
     );
-    if (receipt.status === 'signed' && pot.status !== 'open') await this.collectPot(input.pot);
+    if (receipt.status === 'signed' && pot.status !== 'unresolved') await this.collectPot(input.pot);
     return (await this.getReceipt(operationId)) ?? receipt;
   }
   /** What each entry of a pot that has ended is owed, worked out here from what ended it: a house pot's
    * seed and secret, checked against its round, or its referee's signed result. Throws if either does not
    * check out, so the wallet signs nothing for a pot whose end it cannot verify. */
   potPaid(this: CasinoWallet, pot: PotStatus) {
-    if (pot.status === 'void') return { payouts: potPayouts(pot, { void: true }) };
+    if (pot.status !== 'resolved') throw new Error('The pot has not resolved');
+    if (pot.resolution === 'refund') return { payouts: potPayouts(pot, { refund: true }) };
+    if (pot.resolution !== 'outcome') throw new Error('Unknown pot resolution');
     if (pot.bank === 'house') {
       if (
         !bytes32(pot.secret) ||
@@ -513,12 +525,18 @@ export class ChannelClient extends WalletTransactions {
    * the pot's end gives it; the wallet works that out itself and signs a credit for exactly its total, which
    * raises the open game's limit if it is the game that entered. Each entry's receipt then says what it got. */
   async collectPot(this: CasinoWallet, id: string) {
-    const ids = this.pots[id];
-    if (!ids?.length) return null;
+    const tracked = this.pots[id],
+      channelId = this.channelId;
+    if (!tracked || tracked.asset !== this.playing) return null;
+    const ids = tracked.entries;
+    if (!ids.length) throw new Error('Entry proofs are missing. Restore the wallet backup that holds these entries.');
     const pot: PotStatus = await this.api(`/api/pots/${id}`);
-    if (pot.status === 'open') return null;
+    if (pot.status === 'unresolved') return null;
+    if (pot.asset !== tracked.asset || !same(pot.id, id)) throw new Error('The pot identity or asset differs');
     const { payouts, outcome: landed } = this.potPaid(pot),
-      entries = (await Promise.all(ids.map(entry => this.getReceipt(entry)))).filter(Boolean);
+      entries = await Promise.all(ids.map(entry => this.getReceipt(entry)));
+    if (entries.some(receipt => !receipt))
+      throw new Error('Entry proofs are missing. Restore the wallet backup that holds these entries.');
     let total = 0n;
     for (const receipt of entries) {
       const held = pot.entries[receipt.entry];
@@ -531,21 +549,57 @@ export class ChannelClient extends WalletTransactions {
       total += payouts[receipt.entry];
     }
     const game = entries[0]?.game;
-    if (total)
-      await this.perform(
+    await this.exclusive(
+      async () => {
+        if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
+        if (!this.pots[id]) return;
+        await this.save(undefined, {
+          pots: {
+            ...this.pots,
+            [id]: {
+              ...this.pots[id],
+              error: undefined,
+              state: {
+                id,
+                game: tracked.game,
+                asset: pot.asset,
+                status: pot.status,
+                closesAt: pot.closesAt,
+                deadline: pot.deadline,
+                stake: String(entries.reduce((sum, entry) => sum + BigInt(entry.stake), 0n)),
+                payout: String(total),
+                collected: false,
+                resolution: pot.resolution,
+                refundReason: pot.refundReason,
+                resolvedAt: pot.resolvedAt,
+              },
+            },
+          },
+        });
+      },
+      { wait: true },
+    );
+    if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
+    if (total) {
+      const credited = await this.perform(
         'payout',
         { amount: total, source: id },
         `pot:${id}`,
         game && this.game?.key === game.key ? game : undefined,
       );
+      if (credited.status !== 'signed') throw new Error('The pot payout was not credited');
+    }
     await this.exclusive(
       async () => {
+        if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
         for (const receipt of entries)
           await this.save({
             ...receipt,
             payout: String(payouts[receipt.entry]),
             ...(landed === undefined ? {} : { outcome: landed }),
-            ...(pot.status === 'void' ? { reason: 'The pot was void, and every entry refunded' } : {}),
+            resolution: pot.resolution,
+            resolvedAt: pot.resolvedAt,
+            ...(pot.resolution === 'refund' ? { reason: `Stake refunded: pot ${pot.refundReason}` } : {}),
           });
         const { [id]: _collected, ...rest } = this.pots;
         await this.save(undefined, { pots: rest });
@@ -553,6 +607,80 @@ export class ChannelClient extends WalletTransactions {
       { wait: true },
     );
     return total;
+  }
+
+  /** Refresh the account's current obligations and consume its durable resolution feed. Save each page
+   * with its cursor before attempting collection, so a failed credit cannot hide a resolved pot. */
+  async refreshPots(this: CasinoWallet) {
+    const channelId = this.channelId,
+      asset = this.playing;
+    if (!channelId) return;
+    try {
+      for (const status of ['unresolved', 'resolved'] as const) {
+        let after = status === 'resolved' ? (this.potCursors[asset] ?? '0') : '';
+        for (;;) {
+          const page: PlayerPots = await this.api(
+            `/api/channels/${channelId}/pots?status=${status}&after=${encodeURIComponent(after)}`,
+          );
+          if (
+            !Array.isArray(page.pots) ||
+            page.pots.length > 100 ||
+            typeof page.cursor !== 'string' ||
+            (page.more && page.cursor === after)
+          )
+            throw new Error('Invalid pot list');
+          if (this.channelId !== channelId) return;
+          await this.exclusive(
+            async () => {
+              if (this.channelId !== channelId) return;
+              if (status === 'resolved' && Number(page.cursor) <= Number(this.potCursors[asset] ?? '0')) return;
+              const pots = { ...this.pots };
+              for (const state of page.pots) {
+                if (state.asset !== asset || state.status !== status) throw new Error('Invalid pot list');
+                if (
+                  state.status === 'unresolved' &&
+                  (pots[state.id]?.state?.status === 'resolved' ||
+                    this.history.some(
+                      receipt =>
+                        receipt.kind === 'entry' &&
+                        receipt.details?.counterparty === state.id &&
+                        receipt.payout !== undefined,
+                    ))
+                )
+                  continue;
+                if (!pots[state.id] && state.status === 'resolved' && (state.collected || state.payout === '0'))
+                  continue;
+                pots[state.id] = {
+                  ...pots[state.id],
+                  entries: pots[state.id]?.entries ?? [],
+                  game: state.game,
+                  asset,
+                  state,
+                };
+              }
+              if (
+                canonicalJSON(pots) === canonicalJSON(this.pots) &&
+                (status === 'unresolved' || page.cursor === (this.potCursors[asset] ?? '0'))
+              )
+                return;
+              await this.save(undefined, {
+                pots,
+                ...(status === 'resolved' ? { potCursors: { ...this.potCursors, [asset]: page.cursor } } : {}),
+              });
+            },
+            { wait: true },
+          );
+          after = page.cursor;
+          if (!page.more) break;
+        }
+      }
+      this.potError = null;
+    } catch (error: any) {
+      if (this.channelId === channelId) this.potError = error.message;
+      throw error;
+    } finally {
+      this.render();
+    }
   }
 
   // --- A developer's bank ------------------------------------------------------------------------
@@ -828,15 +956,22 @@ export class ChannelClient extends WalletTransactions {
         );
       }
     }
-    // What the pots this account entered came to, each checked here before it is signed for: at once when the
-    // casino lists it as owing, and otherwise once a minute, since a pot that pays this account nothing never is.
-    const owing = new Set(due.map(payout => String(payout.source).toLowerCase()));
-    for (const pot of Object.keys(this.pots)) {
+    await this.refreshPots();
+    for (const [id, pot] of Object.entries(this.pots)) {
       if (this.channelId !== channelId || this.busy || this.pending) break;
-      if (!owing.has(pot) && Date.now() - (this.potLooks.get(pot) ?? 0) < 60_000) continue;
-      this.potLooks.set(pot, Date.now());
-      const total = await this.collectPot(pot).catch(() => null);
-      if (total) collected.push(total);
+      if (pot.asset !== this.playing || pot.state?.status !== 'resolved') continue;
+      try {
+        const total = await this.collectPot(id);
+        if (total) collected.push(total);
+      } catch (error: any) {
+        await this.exclusive(
+          async () => {
+            if (this.channelId === channelId && this.pots[id])
+              await this.save(undefined, { pots: { ...this.pots, [id]: { ...this.pots[id], error: error.message } } });
+          },
+          { wait: true },
+        );
+      }
     }
     return collected;
   }

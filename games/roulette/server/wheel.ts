@@ -129,7 +129,7 @@ export class Wheel {
       this.state.closesAt = pot.closesAt - CLOSE_MS;
       await this.deps.save(this.state);
     }
-    return pot?.status === 'open';
+    return pot?.status === 'unresolved';
   }
   /** The casino reveals the pot's secret and pays every entry; the ball lands where the outcome says. */
   private async spin() {
@@ -138,6 +138,10 @@ export class Wheel {
       seed = state.seed!;
     try {
       const ended = await this.deps.referee.resolve(pot, { seed });
+      if (ended.resolution === 'refund') {
+        this.clear();
+        return;
+      }
       state.last = {
         pot,
         seed,
@@ -147,7 +151,7 @@ export class Wheel {
       };
     } catch (error: any) {
       // A pot the casino voided pays nothing here: it refunded every entry. Anything else is tried again.
-      if (error.code !== 'pot-void' && error.status !== 404) {
+      if (error.code !== 'pot-expired' && error.status !== 404) {
         this.deps.wake(this.deps.now() + RETRY_MS);
         throw error;
       }

@@ -194,6 +194,8 @@ A developer's pot pays at your own odds, priced entry by entry with `referee.quo
 
 ## Testing against the real wallet
 
+Pots move from `unresolved` to `resolved`. Check `resolution` on the returned pot: `outcome` carries the seed/secret or signed result; `refund` returns the stakes and explains why in `refundReason` (`cancelled` or `expired`). A retry returns the recorded resolution, even if a refund won the race. Resolved entry receipts expose `resolution`, `resolvedAt`, and the collected `payout`; zero is a completed loss.
+
 Game tests do not mock the wallet. `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store, an open channel and a stub casino that derives and signs states exactly as the protocol says. A test wires a bridge object to it and hands that to `RoundClient` or to the game's own client:
 
 ```ts

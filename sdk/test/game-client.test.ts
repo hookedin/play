@@ -136,7 +136,7 @@ test('a house pot: the entry leaves the limit at once, and once the pot ends the
   assert.equal((await w.gameBet(terms('own'))).status, 'signed');
 });
 
-test("a developer's pot takes an entry only at its referee's quote, and a void pot refunds it", async () => {
+test("a developer's pot takes an entry only at its referee's quote, and a cancelled pot refunds it", async () => {
   const f = await gameWallet(),
     w = f.wallet,
     game = f.identity('odds');
@@ -153,9 +153,88 @@ test("a developer's pot takes an entry only at its referee's quote, and a void p
   assert.equal(w.gameLimit().balance, '990');
   f.voidPot(pot.id);
   const receipt = await w.gameEnter(request);
-  assert.deepEqual([receipt.payout, receipt.reason], ['10', 'The pot was void, and every entry refunded']);
+  assert.deepEqual([receipt.payout, receipt.reason], ['10', 'Stake refunded: pot cancelled']);
   assert.equal(receipt.outcome, undefined);
   assert.equal(w.gameLimit().balance, '1000');
+});
+
+test('resolution discovery skips waiting pots, records zero payouts and preserves failed collection across reload', async () => {
+  const f = await gameWallet(),
+    w = f.wallet,
+    game = f.identity('pots');
+  w.openGame(game);
+  await w.setGameLimit('1000');
+  const waiting = f.openPot(game, 'players'),
+    refunded = f.openPot(game, 'players'),
+    lost = f.openPot(game, 'developer');
+  await w.gameEnter({ id: 'waiting', pot: waiting.id, stake: '10' });
+  await w.gameEnter({ id: 'refund', pot: refunded.id, stake: '10' });
+  const prizes = [{ rangeStart: '1', rangeEnd: '2', payout: '20' }];
+  await w.gameEnter({ id: 'loss', pot: lost.id, stake: '10', prizes, quote: await f.quote(lost.id, '10', prizes) });
+  let potReads = 0;
+  const api = w.api.bind(w);
+  w.api = async (...args) => {
+    if (args[0].startsWith('/api/pots/')) potReads++;
+    return api(...args);
+  };
+  await w.collectPayouts();
+  assert.equal(potReads, 0, 'waiting pots need no individual polling');
+  const revision = w.revision;
+  await w.collectPayouts();
+  assert.equal(w.revision, revision, 'unchanged pages do not invalidate another tab');
+  f.voidPot(refunded.id);
+  await f.resolvePot(lost.id, { outcome: 0 });
+  const perform = w.perform.bind(w);
+  w.perform = async (...args) => {
+    if (args[0] === 'payout') throw new Error('Credit unavailable');
+    return perform(...args);
+  };
+  await w.collectPayouts();
+  assert.equal((await w.gameReceipt('loss'))!.payout, '0');
+  assert.equal(w.pots[lost.id], undefined);
+  assert.equal(w.pots[refunded.id]!.state!.status, 'resolved');
+  assert.equal(w.pots[refunded.id]!.state!.payout, '10');
+  assert.equal(w.pots[refunded.id]!.error, 'Credit unavailable');
+  assert.equal(await w.balance(), 999970n);
+  const restored = await f.reload(),
+    cursor = restored.potCursors.eth;
+  await restored.collectPayouts();
+  assert.equal(restored.potCursors.eth, cursor, 'retry uses saved resolutions even with an empty feed');
+  assert.deepEqual(Object.keys(restored.pots), [waiting.id]);
+  assert.equal(await restored.balance(), 999980n);
+  restored.openGame(game);
+  assert.equal((await restored.gameReceipt('refund'))!.resolution, 'refund');
+});
+
+test('encrypted backups retain every outstanding pot entry beyond recent history', async () => {
+  const f = await gameWallet(),
+    w = f.wallet,
+    game = f.identity('long-pot');
+  w.openGame(game);
+  await w.setGameLimit('1000');
+  const pot = f.openPot(game, 'players');
+  await w.gameEnter({ id: 'a', pot: pot.id, stake: '10' });
+  await w.gameEnter({ id: 'b', pot: pot.id, stake: '20' });
+  for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
+  const password = 'long pot backup passphrase',
+    backup = await w.encryptedBackup(password);
+  const contents = await decryptBackup(backup, password);
+  assert.equal(contents.record.history.length, 102);
+  assert.equal(contents.record.history.filter((receipt: any) => receipt.kind === 'entry').length, 2);
+  const restored = await f.reload();
+  restored.storage = new MemoryStore();
+  restored.channels = {};
+  restored.currentId = null;
+  restored.revision = 0;
+  restored.refresh = async () => ({});
+  await restored.restoreBackup(backup, password);
+  f.voidPot(pot.id);
+  await restored.collectPayouts();
+  assert.equal(await restored.balance(), 999899n);
+  assert.equal(restored.pots[pot.id], undefined);
+  restored.openGame(game);
+  assert.equal((await restored.gameReceipt('a'))!.payout, '10');
+  assert.equal((await restored.gameReceipt('b'))!.payout, '20');
 });
 
 test('a game learns how its operations ended and never whose they were', async () => {
@@ -176,7 +255,20 @@ test('a game learns how its operations ended and never whose they were', async (
   await reply(w.gameEnter({ id: 'seat', pot: pot.id, stake: '10' }));
   await reply(w.gamePayment({ id: 'pay', amount: '1' }));
   for (const id of ['own', 'seat', 'pay']) await reply(w.gameReceipt(id));
-  const fields = ['id', 'kind', 'status', 'verified', 'stake', 'prizes', 'pot', 'outcome', 'payout', 'reason'];
+  const fields = [
+    'id',
+    'kind',
+    'status',
+    'verified',
+    'stake',
+    'prizes',
+    'pot',
+    'outcome',
+    'payout',
+    'reason',
+    'resolution',
+    'resolvedAt',
+  ];
   for (const r of replies.filter(r => r.status))
     assert.deepEqual(
       Object.keys(r).filter(key => !fields.includes(key)),

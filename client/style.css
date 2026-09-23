@@ -1307,6 +1307,9 @@ main {
 .wallet-cash-card > p {
   color: #94ad9f;
 }
+.wallet-pots-card {
+  margin: 0 0 24px;
+}
 .funding-steps {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);

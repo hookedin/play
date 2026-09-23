@@ -1,6 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activityJSON, receiptSummary, receiptUnit } from '../client/activity.ts';
+import { activityJSON, potSummary, receiptSummary, receiptUnit } from '../client/activity.ts';
+import type { PlayerPot } from '../protocol/types.ts';
+
+test('pot presentation separates results from collection and treats a zero payout as completed', () => {
+  const pot: PlayerPot = {
+    id: 'pot',
+    game: { developer: 'developer', name: 'Table' },
+    asset: 'test',
+    status: 'unresolved',
+    closesAt: 1,
+    deadline: 2,
+    stake: '10',
+    collected: false,
+  };
+  assert.equal(potSummary(pot).status, 'Waiting for result');
+  const resolved = { ...pot, status: 'resolved' as const, resolution: 'outcome' as const, payout: '20' };
+  assert.equal(potSummary(resolved).status, 'Payout ready');
+  assert.equal(potSummary(resolved).amountLabel, 'Awaiting collection');
+  assert.equal(potSummary({ ...resolved, payout: '0' }).status, 'Resolved · no payout');
+  assert.equal(potSummary({ ...resolved, collected: true }).status, 'Payout collected');
+  assert.equal(potSummary({ ...resolved, resolution: 'refund' }).status, 'Refund ready');
+  const receipt = { kind: 'entry', status: 'signed', balance: '100', amount: '10' };
+  assert.equal(receiptSummary(receipt).status, 'Waiting for result');
+  assert.equal(receiptSummary({ ...receipt, payout: '0', resolution: 'outcome' }).status, 'Resolved · no payout');
+  assert.equal(receiptSummary({ ...receipt, payout: '10', resolution: 'refund' }).status, 'Refund collected');
+});
 
 test('bet summaries show the payout against the stake and retain exact wei amounts', () => {
   const receipt = {

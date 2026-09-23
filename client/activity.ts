@@ -1,4 +1,5 @@
 import { formatEther } from 'ethers';
+import type { PlayerPot } from '../protocol/types.ts';
 import { plain } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
 
@@ -151,6 +152,40 @@ const trust = (entry: { prizes?: unknown; quote?: unknown } | undefined) =>
       : "The game's referee signs how the pot is split: that is its word, and nothing more.";
 /** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
 export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
+/** A pot can be resolved while its payment is still waiting to enter the channel balance. */
+export function potSummary(pot: PlayerPot) {
+  const resolved = pot.status === 'resolved',
+    refund = pot.resolution === 'refund',
+    amount = resolved ? (pot.payout ?? '0') : pot.stake;
+  return {
+    title: pot.game.name,
+    status: !resolved
+      ? 'Waiting for result'
+      : pot.payout === '0'
+        ? 'Resolved · no payout'
+        : pot.collected
+          ? refund
+            ? 'Refund collected'
+            : 'Payout collected'
+          : refund
+            ? 'Refund ready'
+            : 'Payout ready',
+    amount: `${formatEther(amount)} ${receiptUnit(pot)}`,
+    amountLabel: !resolved
+      ? 'Stake in pot'
+      : pot.payout === '0'
+        ? 'Payout'
+        : pot.collected
+          ? 'Collected'
+          : 'Awaiting collection',
+    description: !resolved
+      ? `Automatic refund if unresolved by ${new Date(pot.deadline).toLocaleString()}.`
+      : refund
+        ? `Stake returned: pot ${pot.refundReason}.`
+        : 'The pot has resolved.',
+    tone: (!resolved ? 'neutral' : pot.payout === '0' ? 'neutral' : pot.collected ? 'positive' : 'warning') as Tone,
+  };
+}
 export function receiptSummary(
   receipt: any,
 ): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
@@ -177,7 +212,7 @@ export function receiptSummary(
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
-  const status =
+  let status =
     (
       {
         signed: 'Signed off-chain',
@@ -256,11 +291,20 @@ export function receiptSummary(
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'payment')
     description = `An extra wager this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
-  if (receipt.kind === 'entry')
+  if (receipt.kind === 'entry') {
+    status =
+      receipt.payout === undefined
+        ? 'Waiting for result'
+        : receipt.resolution === 'refund'
+          ? 'Refund collected'
+          : receipt.payout === '0'
+            ? 'Resolved · no payout'
+            : 'Payout collected';
     description =
       receipt.payout === undefined
         ? `In the pot until it ends. ${POT} ${trust(receipt.details?.entry)} Balance ${formatEther(receipt.balance)} ${unit}`
         : `The pot paid ${formatEther(receipt.payout)} ${unit} for this entry${receipt.reason ? ': ' + receipt.reason.toLowerCase() : ''}.`;
+  }
   if (receipt.kind === 'payout')
     description = `What a pot you entered paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'bank')

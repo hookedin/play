@@ -21,7 +21,7 @@ import {
   KIND,
 } from '../protocol/protocol.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
-import type { Bank, PotResult, PotStatus } from '../protocol/types.ts';
+import type { Bank, GameName, PotResult, PotStatus } from '../protocol/types.ts';
 
 /** A real wallet wired to an in-memory casino stub, with a stub referee for the game's pots: what a game
  * is tested against without the private casino. */
@@ -56,7 +56,9 @@ export async function gameWallet(storage = new MemoryStore()) {
   };
   // Its pots, and what each ended pot owes this player, until the wallet collects it.
   const pots = new Map<string, PotStatus & { seeds?: string }>(),
-    owed = new Map<string, bigint>();
+    owed = new Map<string, bigint>(),
+    games = new Map<string, GameName>(),
+    resolutions = new Map<string, { sequence: number; payout: string }>();
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
   const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
@@ -95,6 +97,44 @@ export async function gameWallet(storage = new MemoryStore()) {
       if (path.endsWith('/round')) return { id: (own ||= createRound()) };
       const pot = /^\/api\/pots\/(0x[0-9a-f]{64})$/.exec(path);
       if (pot) return publicPot(pot[1]!);
+      const list = new URL(path, 'https://casino.example');
+      if (list.pathname.endsWith('/pots')) {
+        const resolved = list.searchParams.get('status') === 'resolved',
+          after = list.searchParams.get('after') ?? '';
+        const limit = Number(list.searchParams.get('limit') ?? 50);
+        const cursor = (pot: PotStatus) => (resolved ? resolutions.get(pot.id)!.sequence : pot.id);
+        const all = [...pots.values()]
+          .filter(
+            pot =>
+              pot.entries.length &&
+              pot.status === (resolved ? 'resolved' : 'unresolved') &&
+              (resolved ? Number(cursor(pot)) > Number(after) : String(cursor(pot)) > after),
+          )
+          .sort((a, b) => (resolved ? Number(cursor(a)) - Number(cursor(b)) : a.id.localeCompare(b.id)));
+        const page = all.slice(0, limit);
+        return plain({
+          pots: page.map(pot => ({
+            id: pot.id,
+            game: games.get(pot.id),
+            asset: pot.asset,
+            status: pot.status,
+            closesAt: pot.closesAt,
+            deadline: pot.deadline,
+            stake: String(pot.entries.reduce((sum, entry) => sum + BigInt(entry.stake), 0n)),
+            collected: resolved && resolutions.get(pot.id)!.payout !== '0' && !owed.has(pot.id),
+            ...(resolved
+              ? {
+                  payout: resolutions.get(pot.id)!.payout,
+                  resolution: pot.resolution,
+                  refundReason: pot.refundReason,
+                  resolvedAt: pot.resolvedAt,
+                }
+              : {}),
+          })),
+          cursor: page.length ? String(cursor(page.at(-1)!)) : after || (resolved ? '0' : ''),
+          more: all.length > limit,
+        });
+      }
       if (path.endsWith('/payouts'))
         return [...owed].map(([source, amount]) => ({ source, index: 0, amount: String(amount) }));
       if (!path.endsWith('/operations')) return {};
@@ -158,7 +198,7 @@ export async function gameWallet(storage = new MemoryStore()) {
       const pot = pots.get(details.counterparty)!,
         prizes = details.entry?.prizes,
         quote = details.entry?.quote;
-      if (pot.status !== 'open') return decline(request, details, 'The pot takes no more entries');
+      if (pot.status !== 'unresolved') return decline(request, details, 'The pot takes no more entries');
       if (pot.bank === 'developer') {
         const quoted = await new Wallet(referee.privateKey).signTypedData(d, QUOTE_TYPES, {
           pot: pot.id,
@@ -182,6 +222,7 @@ export async function gameWallet(storage = new MemoryStore()) {
   const end = (pot: PotStatus, payouts: bigint[]) => {
     const total = payouts.reduce((sum, payout) => sum + payout, 0n);
     if (total) owed.set(pot.id, total);
+    resolutions.set(pot.id, { sequence: resolutions.size + 1, payout: String(total) });
   };
   const wallet = make();
   await wallet.save();
@@ -207,13 +248,14 @@ export async function gameWallet(storage = new MemoryStore()) {
         referee: referee.address.toLowerCase(),
         bank,
         asset: 'eth',
-        status: 'open',
+        status: 'unresolved',
         ...(bank === 'house' ? { seedHash: seedHash(seed) } : bank === 'developer' ? { outcomes } : { rake }),
         closesAt: null,
         deadline: Date.now() + 600_000,
         entries: [],
       };
       pots.set(id, { ...pot, seeds: seed });
+      games.set(id, { developer: game.developer, name: game.slug ?? game.manifestURL });
       return plain(pot);
     },
     /** The referee's price for an entry into a developer's pot. */
@@ -226,11 +268,17 @@ export async function gameWallet(storage = new MemoryStore()) {
       const pot = pots.get(id)!;
       if (pot.bank === 'house') {
         const secret = secrets.get(id)!;
-        Object.assign(pot, { status: 'resolved', seed: pot.seeds, secret });
+        Object.assign(pot, {
+          status: 'resolved',
+          resolution: 'outcome',
+          resolvedAt: Date.now(),
+          seed: pot.seeds,
+          secret,
+        });
         end(pot, potPayouts(pot, { value: outcome([], pot.seeds!, secret).value }));
       } else {
         const signature = await referee.signTypedData(d, RESOLUTION_TYPES, { pot: id, result: hashJSON(result) });
-        Object.assign(pot, { status: 'resolved', result, signature });
+        Object.assign(pot, { status: 'resolved', resolution: 'outcome', resolvedAt: Date.now(), result, signature });
         end(pot, potPayouts(pot, result!));
       }
       return publicPot(id);
@@ -238,8 +286,13 @@ export async function gameWallet(storage = new MemoryStore()) {
     /** The referee calls a pot off, or its deadline passes: every entry is refunded. */
     voidPot(id: string) {
       const pot = pots.get(id)!;
-      Object.assign(pot, { status: 'void' });
-      end(pot, potPayouts(pot, { void: true }));
+      Object.assign(pot, {
+        status: 'resolved',
+        resolution: 'refund',
+        refundReason: 'cancelled',
+        resolvedAt: Date.now(),
+      });
+      end(pot, potPayouts(pot, { refund: true }));
       return publicPot(id);
     },
     /** A game as its developer published it. `declared` is anything its manifest says otherwise. */

@@ -21,7 +21,14 @@ import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
 import { json, verifyEvidence, gameKey, same, FAUCET_BELOW } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
-import { activityJSON, createActivityEntry, filterActivity, receiptSummary, receiptUnit } from './activity.ts';
+import {
+  activityJSON,
+  createActivityEntry,
+  filterActivity,
+  receiptSummary,
+  potSummary,
+  receiptUnit,
+} from './activity.ts';
 import type { BetRow } from './bets.ts';
 import {
   betDetail,
@@ -627,9 +634,66 @@ function renderWallet() {
     clearTimeout(statusTimer);
     statusTimer = setTimeout(() => $('operation-status').classList.add('hidden'), 2200);
   }
+  renderPots();
   if (!$('page-activity').classList.contains('hidden')) renderActivity();
   renderClaims();
   renderGameAccount();
+}
+
+function renderPots() {
+  const list = $('wallet-pots'),
+    pots = Object.entries(wallet.pots),
+    receiptsById = new Map(wallet.history.map(receipt => [receipt.operationId, receipt]));
+  $('pots-status').textContent = wallet.potError
+    ? `Pot information is stale. ${wallet.potError}`
+    : pots.length
+      ? 'Stakes in pots and payouts awaiting collection are separate from your playing balance.'
+      : 'No pots awaiting a result or collection.';
+  $('pots-status').classList.toggle('check-failed', Boolean(wallet.potError));
+  $<HTMLButtonElement>('refresh-pots').disabled = historyBusy || wallet.busy || !wallet.channel;
+  const existing = new Map(
+    [...list.children].map(row => [(row as HTMLElement).dataset.pot, row as HTMLDetailsElement]),
+  );
+  list.replaceChildren(
+    ...pots.map(([id, tracked]) => {
+      const receipts = tracked.entries.map(id => receiptsById.get(id)).filter(Boolean);
+      const state = tracked.state ?? {
+        id,
+        game: tracked.game,
+        asset: tracked.asset,
+        status: 'unresolved' as const,
+        stake: String(receipts.reduce((sum, receipt) => sum + BigInt(receipt.stake), 0n)),
+        closesAt: null,
+        deadline: 0,
+        collected: false,
+      };
+      const presentation = potSummary(state);
+      const payload = activityJSON({ ...state, error: tracked.error }),
+        previous = existing.get(id);
+      if (
+        previous?.dataset.playing === wallet.playing &&
+        previous.querySelector('.activity-payload')?.textContent === payload
+      )
+        return previous;
+      const item = createActivityEntry({
+        ...presentation,
+        timestamp: state.resolvedAt ? new Date(state.resolvedAt).toISOString() : (receipts[0]?.createdAt ?? ''),
+        description: [
+          state.deadline ? presentation.description : 'Waiting for the casino to report this pot.',
+          tracked.error,
+          tracked.asset !== wallet.playing ? `Switch to ${receiptUnit(state)} to check and collect.` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        payload,
+        facts: [['Pot', id]],
+      });
+      item.dataset.pot = id;
+      item.dataset.playing = wallet.playing;
+      (item as HTMLDetailsElement).open = previous?.open ?? false;
+      return item;
+    }),
+  );
 }
 
 function renderActivity() {
@@ -814,10 +878,12 @@ async function refreshActivity() {
   try {
     await wallet.refresh();
     await wallet.refreshDetails();
+    await wallet.collectPayouts();
   } catch (error) {
     historyError = error;
   } finally {
     historyBusy = false;
+    renderPots();
     renderActivity();
     if (!$('page-bets').classList.contains('hidden')) renderBets();
     if (!$('page-games').classList.contains('hidden')) renderMyGames();
@@ -1466,10 +1532,10 @@ async function openGameRecord(key: string, push = true) {
       ),
     );
     // How the game's pots ended: a referee that lets the pots it would lose go void shows here.
-    const pots: { open: number; resolved: number; void: number } = record.pots;
-    if (pots.open + pots.resolved + pots.void) {
+    const pots: { unresolved: number; resolved: number; refunded: number } = record.pots;
+    if (pots.unresolved + pots.resolved) {
       $('gamebets-pots').textContent =
-        `Pots: ${pots.open} open, ${pots.resolved} resolved, ${pots.void} void. A void pot refunded every entry: its referee called it off, or did not end it by its deadline.`;
+        `Pots: ${pots.unresolved} unresolved, ${pots.resolved} resolved (${pots.refunded} refunded). A refunded pot returned every entry: its referee called it off, or did not end it by its deadline.`;
       $('gamebets-pots').classList.remove('hidden');
     }
     $('gamebets-list').replaceChildren(...rows.map(row => betRowElement(row)));
@@ -1866,6 +1932,7 @@ $<HTMLAnchorElement>('wallet-name-link').addEventListener('click', event => {
   event.preventDefault();
   if (wallet.uname) void openProfile(showName(wallet));
 });
+$<HTMLButtonElement>('refresh-pots').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('refresh-wallet').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('wallet-history').addEventListener('click', () => navigate('activity'));
 $<HTMLButtonElement>('connect-casino').addEventListener('click', () =>
