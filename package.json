@@ -23,7 +23,7 @@
     "dev": "npm run build && node scripts/static.ts",
     "compile": "node scripts/compile.ts",
     "release:artifact": "node scripts/compile.ts --update-artifact",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p games/roulette/server/tsconfig.json --noEmit && tsc -p games/sports/server/tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p games/roulette/server/tsconfig.json --noEmit",
     "test": "npm run build && npm run typecheck && node scripts/vectors.ts --check && node sdk/scripts/blackjack-funding.ts --check && node --test --test-timeout=180000 test/*.test.ts sdk/test/*.test.ts games/*/test/*.test.ts games/*/server/*.test.ts",
     "vectors": "node scripts/vectors.ts",
     "generate:blackjack": "node sdk/scripts/blackjack-funding.ts",

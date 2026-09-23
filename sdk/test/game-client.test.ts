@@ -139,7 +139,7 @@ test('a house pot: the entry leaves the limit at once, and once the pot ends the
 test("a developer's pot takes an entry only at its referee's quote, and a void pot refunds it", async () => {
   const f = await gameWallet(),
     w = f.wallet,
-    game = f.identity('sports');
+    game = f.identity('odds');
   w.openGame(game);
   await w.setGameLimit('1000');
   const pot = f.openPot(game, 'developer', { outcomes: 2 }),

@@ -22,7 +22,6 @@ The fastest way to build a game is to fork [hookedin/game-template](https://gith
 | [blackjack](../games/blackjack/)                           | A multi-step game with doubles, splits and insurance, priced by the engine         |
 | [mines](../games/mines/)                                   | Reveal-or-cash-out, the simplest multi-step graph                                  |
 | [roulette](../games/roulette/)                             | Many players against the house in one house pot, with its wheel in the same Worker |
-| [sports](../games/sports/)                                 | Fixed odds from a book that pays winners from its own bank: developer's pots       |
 | [game-template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand. The starting point for forks    |
 
 ## Install
@@ -191,7 +190,7 @@ const ended = await referee.resolve(pot.id, { seed }); // the casino reveals its
 const outcome = roundOutcome(seed, ended.secret); // what every entry's prizes were read against
 ```
 
-A developer's pot pays at your own odds, priced entry by entry with `referee.quote` and paid beyond its entries from your bank at the casino; a players' pot is split as you sign, less a capped rake. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Pots](docs/game-sdk.md#pots) explains it; [roulette](../games/roulette/) and [sports](../games/sports/) are the references.
+A developer's pot pays at your own odds, priced entry by entry with `referee.quote` and paid beyond its entries from your bank at the casino; a players' pot is split as you sign, less a capped rake. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Pots](docs/game-sdk.md#pots) explains it; [roulette](../games/roulette/) is the reference.
 
 ## Testing against the real wallet
 

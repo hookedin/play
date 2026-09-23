@@ -33,20 +33,20 @@ Read this before depositing anything you care about.
 
 ## What is here
 
-| Path                                   | Contents                                                                                                                                                                                             |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [client/](client/)                     | The wallet: channel, funding accounts, storage, backups, activity, the game iframe bridge, the pinned contract artifact, default settings and the static host's `_headers`                           |
-| [contracts/](contracts/)               | `HookedInCasino.sol` and two contracts used only by tests                                                                                                                                            |
-| [protocol/](protocol/)                 | Signed structures and hashing, types, the risk rule, chain observation, deployment verification, evidence recovery, transaction journal and dispute worker                                           |
-| [sdk/](sdk/)                           | The game SDK, `@hookedin/play/sdk`: the wallet bridge, round helper, exact step pricing, the `hookedin-game` build tool and the [guide](sdk/docs/game-sdk.md)                                        |
-| [games/](games/)                       | The house's games: [samson](games/samson/), [plinko](games/plinko/), [dice](games/dice/), [blackjack](games/blackjack/), [mines](games/mines/), [roulette](games/roulette/), [sports](games/sports/) |
-| [scripts/](scripts/)                   | Compile and build, the local static server, the recovery CLI (`verify-evidence.ts`), the watchtower, test vectors, release packaging and a pricing demo                                              |
-| [testing/](testing/)                   | `contract.ts`: Anvil, a deployment and hand-signed evidence. `game-wallet.ts`: a real wallet wired to an in-memory casino stub, used by game developers' tests                                       |
-| [test/](test/)                         | Contract behaviour, agreement between the TypeScript and contract derivations, the recovery CLI, wallet, iframe bridge, risk and vectors, journal, static build, browser storage                     |
-| [vectors/bets.json](vectors/bets.json) | Committed vectors for pricing and outcomes                                                                                                                                                           |
-| [catalog.json](catalog.json)           | The games `@hookedin` publishes, by name, with the referee of each that has pots: the library a deployment ships with                                                                                |
-| [docs/](docs/)                         | [Protocol](docs/protocol.md), [economics](docs/economics.md), [wallet](docs/frontend.md), [recovery](docs/request-evidence.md), [verification](docs/verification.md)                                 |
-| [brand/](brand/)                       | The HookedIn mark                                                                                                                                                                                    |
+| Path                                   | Contents                                                                                                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [client/](client/)                     | The wallet: channel, funding accounts, storage, backups, activity, the game iframe bridge, the pinned contract artifact, default settings and the static host's `_headers`       |
+| [contracts/](contracts/)               | `HookedInCasino.sol` and two contracts used only by tests                                                                                                                        |
+| [protocol/](protocol/)                 | Signed structures and hashing, types, the risk rule, chain observation, deployment verification, evidence recovery, transaction journal and dispute worker                       |
+| [sdk/](sdk/)                           | The game SDK, `@hookedin/play/sdk`: the wallet bridge, round helper, exact step pricing, the `hookedin-game` build tool and the [guide](sdk/docs/game-sdk.md)                    |
+| [games/](games/)                       | The house's games: [samson](games/samson/), [plinko](games/plinko/), [dice](games/dice/), [blackjack](games/blackjack/), [mines](games/mines/), [roulette](games/roulette/)      |
+| [scripts/](scripts/)                   | Compile and build, the local static server, the recovery CLI (`verify-evidence.ts`), the watchtower, test vectors, release packaging and a pricing demo                          |
+| [testing/](testing/)                   | `contract.ts`: Anvil, a deployment and hand-signed evidence. `game-wallet.ts`: a real wallet wired to an in-memory casino stub, used by game developers' tests                   |
+| [test/](test/)                         | Contract behaviour, agreement between the TypeScript and contract derivations, the recovery CLI, wallet, iframe bridge, risk and vectors, journal, static build, browser storage |
+| [vectors/bets.json](vectors/bets.json) | Committed vectors for pricing and outcomes                                                                                                                                       |
+| [catalog.json](catalog.json)           | The games `@hookedin` publishes, by name, with the referee of each that has pots: the library a deployment ships with                                                            |
+| [docs/](docs/)                         | [Protocol](docs/protocol.md), [economics](docs/economics.md), [wallet](docs/frontend.md), [recovery](docs/request-evidence.md), [verification](docs/verification.md)             |
+| [brand/](brand/)                       | The HookedIn mark                                                                                                                                                                |
 
 ## Quick start
 
@@ -101,7 +101,7 @@ The recovery CLI supports `inspect`, `start`, `challenge`, `finalize` and `claim
 
 The wallet is a static site. Pushing to `main` releases it: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs the whole test suite, builds with `HOOKEDIN_CLIENT_CONFIG=config/production.json`, and publishes `dist/` to Cloudflare with `wrangler deploy`, as the static-assets Worker described in [wrangler.jsonc](wrangler.jsonc) (the successor to Cloudflare Pages). It then publishes each game from its own folder, as the Worker its `wrangler.jsonc` describes, at `https://<id>-game.hookedin.com`. The workflow needs the repository secret `CLOUDFLARE_API_TOKEN` (from Cloudflare's **Edit Cloudflare Workers** template) and the variable `CLOUDFLARE_ACCOUNT_ID`; without the token it still tests and builds.
 
-Roulette plays many players against the house in one [house pot](docs/protocol.md#pots), and sports takes bets at its own odds in [developer's pots](docs/protocol.md#pots); each ships its page and its referee as one Cloudflare Worker. The rest are static pages. Each referee's key is a secret, set once from its folder with `npx wrangler secret put REFEREE_KEY`, and its address is the game's `referee` in [catalog.json](catalog.json); the sports book also takes `ADMIN_TOKEN`, what its operator sends to open and resolve markets.
+Roulette plays many players against the house in one [house pot](docs/protocol.md#pots), and ships its page and its referee as one Cloudflare Worker. The rest are static pages. The referee's key is a secret, set once from `games/roulette` with `npx wrangler secret put REFEREE_KEY`, and its address is roulette's `referee` in [catalog.json](catalog.json).
 
 To publish the wallet by hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy`. To publish a game: `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`.
 
