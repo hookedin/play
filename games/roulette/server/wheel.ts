@@ -96,12 +96,20 @@ export class Wheel {
   }
   /** The table's round and its open bets, as the casino has them: asked at most once a second, and always before
    * a spin. A saved round that is not the one taking bets was drawn, or passed its deadline; if
-   * it was drawn, where the ball landed is recorded before the next round is saved. */
+   * it was drawn, where the ball landed is recorded before the next round is saved. One the casino does not
+   * know, lost with its row or another deployment's, has nothing to show. */
   private async look(now: number, always: boolean) {
     if (now - this.table.at < LOOK_MS && !always) return;
     const round = await this.deps.referee.open(this.deps.asset);
     if (this.state.round !== round.id) {
-      if (this.state.round) this.record(this.state.round, await this.deps.referee.round(this.state.round));
+      const saved = this.state.round,
+        known =
+          saved &&
+          (await this.deps.referee.round(saved).catch((error: any) => {
+            if (error.status === 404) return null;
+            throw error;
+          }));
+      if (saved && known) this.record(saved, known);
       this.state.round = round.id;
       await this.deps.save(this.state);
     }

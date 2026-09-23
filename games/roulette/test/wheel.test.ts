@@ -44,6 +44,8 @@ function table() {
       return view(id());
     },
     async round(round: string) {
+      // A round the casino never named, or lost with its row, is unknown to it.
+      if (!deadlines.has(round)) throw Object.assign(new Error('Unknown round'), { status: 404 });
       return view(round);
     },
     async bets() {
@@ -190,6 +192,14 @@ test('a draw whose reply was lost is found again by the round the wheel saved, e
     [1],
     'drawn once',
   );
+});
+
+test('a wheel whose saved round the casino does not know moves on to the round taking bets', async () => {
+  const t = table();
+  const woken = new Wheel(t.deps, { last: null, round: '0x' + 'e'.repeat(64) });
+  const view = await woken.view();
+  assert.equal(view.last, null, 'a round the casino lost has no spin to show');
+  assert.equal(t.saves.at(-1)!.round, view.round, 'and the round taking bets is saved');
 });
 
 test('a wheel woken from storage carries on with the last spin it made', async () => {
