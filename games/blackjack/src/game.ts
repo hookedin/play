@@ -182,8 +182,10 @@ async function recover() {
     });
     asset = startup.asset;
     bank.update(startup.state);
-    session = await round.restore();
+    // Ready before the hand is restored: a hand this page cannot finish is let go with a word, and the
+    // player plays on.
     ready = true;
+    session = await round.restore();
     if (session) status();
     else message('Set your stake and deal.');
     if (session?.terminal && BigInt(session.balance) === 0n)

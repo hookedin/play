@@ -34,11 +34,11 @@ The graph tracks only the number of safe picks so far, because unrevealed tiles 
 
 ### Every reveal is one bet
 
-`RoundClient` from the SDK runs the round. The SDK's engine prices each state with the cash that finances its actions, working backward from the cashouts. A `reveal` becomes one bet: the stake is the state's current cash, the mine's stretch of the outcome space pays nothing, and the gem's stretch pays the cash of the next state. The casino's verified outcome decides gem or mine. `cash-out` leads to a state worth the same cash, so it places no bet at all: the money is already in the player's signed balance.
+`RoundClient` from the SDK runs the round. The SDK's engine prices each state with the cash that finances its actions, working backward from the cashouts. A `reveal` becomes one bet: the stake is the state's current cash, the mine's stretch of the outcome space pays nothing, and the gem's stretch pays the cash of the next state. The casino's verified outcome decides gem or mine. `cash-out` leads to a state worth the same cash, so it places no bet at all: the money is already in the player's signed balance. At a stake large for the bankroll, a state can hold more cash than its cash-out pays, because the next reveal needs it, and cashing out then pays the difference to the house.
 
 Each further reveal has its own house edge, which is why the return falls as you go deeper. This is deliberate. A ladder with a constant overall return would make later reveals zero-edge bets, and the casino's admission rule does not accept those at a finite bankroll. The derivation is in [sequential games built from native bets](../../sdk/docs/sequential-games.md#mines-another-n-move-graph).
 
-The page shows a **continuation value** during the round. It is the cash the current state is priced at, which can differ slightly from the nominal multiple. It is not a cash-out quote.
+The page shows a **continuation value** during the round: the cash the current state is priced at. It is already in the player's balance, and a player who stops keeps it: a [settled trade-off](../../architecture.md#settled-trade-offs).
 
 **Return.** The three fixed-stop returns in the table above are exact. They are proven in the SDK's test suite ([test/sequential-games.test.ts](../../sdk/test/sequential-games.test.ts), "Mines uses the same engine and preserves stopping-policy payouts without payments"), which evaluates each stopping policy over the compiled game with exact fractions.
 
@@ -59,7 +59,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 
 - **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet draws its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
-- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive a receipt with `verified: true`.
+- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`, with basis `outcome`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **No hidden board.** There is nothing to reveal at the end and nothing the game could have rigged in advance: each reveal is decided by its own verified outcome.
 
@@ -104,7 +104,7 @@ Your game is then playable by anyone who loads `https://your-host/manifest.json`
 
 ## Get listed
 
-Publish it yourself: in the wallet, open **My wallet** and, under your name, give the game a name and this manifest's URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
+Publish it yourself: in the wallet, open **My games** and give the game a name and this manifest's URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
 
 ## Tests
 

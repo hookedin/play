@@ -5,7 +5,7 @@ import { RoundClient } from '@hookedin/play/sdk/round';
 import { CASHOUTS, MINES, TILES, minesGraph } from '../src/rules.ts';
 import { compileGame } from '@hookedin/play/sdk/engine';
 import { admits } from '@hookedin/play/sdk/admits';
-import { betReturn } from '@hookedin/play/protocol/risk.ts';
+import { betReturn } from '@hookedin/play/sdk/admits';
 
 const memoryStore = () => {
   const map = new Map<string, string>();

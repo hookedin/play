@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Wallet } from 'ethers';
-import { PROTOCOL } from '@hookedin/play/protocol/protocol.ts';
+import { LIMITS, REFEREE_PROTOCOL } from '../../../protocol/protocol.ts';
 import { RouletteWheel } from './worker.ts';
 
 const CASINO = 'https://casino.test',
@@ -20,18 +20,13 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
       return Response.json({
         chainId: '31337',
         contractAddress: '0x' + 'c'.repeat(40),
-        protocol: PROTOCOL,
-        limits: {
-          prizes: 64,
-          outcomeSpace: String(1n << 64n),
-          bets: 256,
-          cells: 128,
-          deadline: 30 * 86_400_000,
-        },
+        refereeProtocol: REFEREE_PROTOCOL,
+        limits: LIMITS,
       });
     // The wheel opens its round: the casino names it, and the wheel commits its seed to it.
-    if (path === '/api/rounds') return Response.json({ id: ROUND });
-    if (path === `/api/rounds/${ROUND}/commit`) return Response.json({ id: ROUND, ...JSON.parse(String(init!.body)) });
+    const round = { id: ROUND, deadline: Date.now() + LIMITS.round, status: 'open' };
+    if (path === '/api/rounds') return Response.json(round);
+    if (path === `/api/rounds/${ROUND}/commit`) return Response.json({ ...round, ...JSON.parse(String(init!.body)) });
     if (path.startsWith('/api/bets?')) return Response.json([]);
     return Response.json({ error: 'Not found' }, { status: 404 });
   });
@@ -45,7 +40,7 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
   } as unknown as DurableObjectState;
   const wheel = new RouletteWheel(ctx, {
     CASINO_URL: CASINO,
-    DEVELOPER: Wallet.createRandom().address,
+    PUBLISHER: Wallet.createRandom().address,
     GAME_NAME: 'roulette',
     REFEREE_KEY: Wallet.createRandom().privateKey,
   } as never);

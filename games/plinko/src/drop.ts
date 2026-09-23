@@ -77,7 +77,7 @@ export class DropClient {
     try {
       return this.resolve(receipt);
     } catch {
-      return null; // A verified rejection: the drop stays, under a fresh id.
+      return null; // A rejection: the drop stays, under a fresh id.
     }
   }
   private async info() {
@@ -135,14 +135,13 @@ export class DropClient {
   private resolve(receipt: any): Landed {
     const drop = this.pending!;
     if (receipt.status === 'rejected') {
-      if (receipt.verified !== true) throw new Error('A verified rejection is required');
-      // The same drop is offered again under a fresh operation id.
+      // A rejection is a signed checkpoint the wallet checked: the same drop is offered again under a fresh id.
       drop.id = crypto.randomUUID();
       this.save();
       throw new Error(receipt.reason || 'The casino declined this drop. Drop again to retry the same ball.');
     }
-    if (receipt.verified !== true || !/^[0-9]+$/.test(String(receipt.outcome)))
-      throw new Error('A verified wager result is required');
+    if (receipt.status !== 'settled' || !/^[0-9]+$/.test(String(receipt.outcome)))
+      throw new Error('A settled wager result is required');
     const { rows, risk, stake } = drop,
       { bucket, turns } = landing(rows, BigInt(receipt.outcome)),
       paid = payout(BigInt(stake), multipliers(rows, risk)[bucket]!);

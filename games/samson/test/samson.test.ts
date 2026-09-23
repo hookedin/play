@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileGame } from '@hookedin/play/sdk/engine';
 import { admits } from '@hookedin/play/sdk/admits';
-import { describeBet } from '@hookedin/play/protocol/risk.ts';
-import { betReturn } from '@hookedin/play/protocol/risk.ts';
+import { describeBet } from '@hookedin/play/sdk/admits';
+import { betReturn } from '@hookedin/play/sdk/admits';
 import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import {

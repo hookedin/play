@@ -1,7 +1,15 @@
 import { gameAmount, gameOperationKey } from './game-account.ts';
 import { MAX_GROUP } from '../protocol/protocol.ts';
 /** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
-export const METHODS = ['wallet.hello', 'wallet.info', 'game.receipt', 'game.bet', 'game.payment', 'game.requestFunds'];
+export const METHODS = [
+  'wallet.hello',
+  'wallet.info',
+  'game.receipt',
+  'game.bet',
+  'game.place',
+  'game.payment',
+  'game.requestFunds',
+];
 const methods = new Set(METHODS);
 /** Questions the wallet answers at once. Everything else signs or asks the player, and waits its turn. */
 const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'game.receipt']);
@@ -69,29 +77,36 @@ function validate(data: any) {
     if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
   } else {
-    const fields = data.method === 'game.bet' ? ['stake'] : data.method === 'game.payment' ? ['amount'] : [];
-    const terms =
-      data.method === 'game.bet'
-        ? ['prizes', 'terms', 'deadline', 'group']
-        : data.method === 'game.payment'
-          ? ['group']
-          : [];
-    if (!only(params, ['id', ...fields, ...terms])) throw new Error('Unexpected game request field.');
+    const fields = {
+      'game.bet': ['id', 'stake', 'prizes', 'group'],
+      'game.place': ['id', 'stake', 'prizes', 'round', 'terms', 'deadline', 'group'],
+      'game.payment': ['id', 'amount', 'group'],
+      'game.receipt': ['id'],
+    }[data.method as string]!;
+    if (!only(params, fields)) throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);
-    for (const field of fields) gameAmount(params[field]);
+    for (const field of ['stake', 'amount']) if (fields.includes(field)) gameAmount(params[field]);
     if (
       params.group !== undefined &&
       (typeof params.group !== 'string' || !params.group.length || params.group.length > MAX_GROUP)
     )
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
-    if (data.method === 'game.bet') {
-      // A bet has prizes, which settle on a round, the player's own or a draw of its referee's, or terms its
-      // referee settles; either of those settles later, by its deadline.
-      if (params.deadline !== undefined && !Number.isSafeInteger(params.deadline))
-        throw new Error('A deadline is a time in unix milliseconds.');
-      if (params.terms === undefined) validatePrizes(params.prizes);
-      else if (!object(params.terms) || params.prizes !== undefined || params.deadline === undefined)
-        throw new Error('A bet with terms has a deadline, and no prizes.');
+    // A bet settles now on the player's own round. A placed bet settles later: drawn on the round of its
+    // referee's it names, or split by its referee by the deadline it names.
+    if (data.method === 'game.bet') validatePrizes(params.prizes);
+    if (data.method === 'game.place') {
+      if (params.terms === undefined) {
+        validatePrizes(params.prizes);
+        if (typeof params.round !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.round))
+          throw new Error('A placed bet with prizes names the round it rides.');
+        if (params.deadline !== undefined) throw new Error("A placed bet with prizes has its round's deadline.");
+      } else if (
+        !object(params.terms) ||
+        params.prizes !== undefined ||
+        params.round !== undefined ||
+        !Number.isSafeInteger(params.deadline)
+      )
+        throw new Error('A placed bet with terms has a deadline in unix milliseconds, and no prizes or round.');
     }
   }
   return { ...data, params };

@@ -49,15 +49,18 @@ const quote = (text: unknown) => (typeof text === 'string' && text ? ` · “${t
 
 /** One line a developer can read without opening the payload. */
 export function describeRequest(method: string, params: any = {}) {
+  const named = `${params.group ? ` · group ${params.group}` : ''} · id ${params.id}`;
   switch (method) {
-    case 'game.bet': {
+    case 'game.bet':
+      return `stake ${eth(params.stake)} · ${betSummary(params)}${named}`;
+    case 'game.place': {
       const settles = params.terms
-        ? `refereed · deadline ${new Date(params.deadline).toLocaleString()}`
-        : `${betSummary(params)}${params.deadline === undefined ? '' : ' · drawn by its referee'}`;
-      return `stake ${eth(params.stake)} · ${settles}${params.group ? ` · group ${params.group}` : ''} · id ${params.id}`;
+        ? `split by its referee · deadline ${new Date(params.deadline).toLocaleString()}`
+        : `${betSummary(params)} · drawn by its referee`;
+      return `stake ${eth(params.stake)} · ${settles}${named}`;
     }
     case 'game.payment':
-      return `amount ${eth(params.amount)}${params.group ? ` · group ${params.group}` : ''} · id ${params.id}`;
+      return `amount ${eth(params.amount)}${named}`;
     case 'game.receipt':
       return `id ${params.id}`;
     case 'game.requestFunds':
@@ -74,24 +77,22 @@ export function describeResult(method: string, result: any) {
       return `${result.methods?.length ?? 0} methods · ${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
     case 'wallet.info':
       return `${result.alias ? '@' + result.alias : '~' + (result.uname ?? 'unknown')} · bankroll ${eth(result.bankroll)}`;
-    case 'game.receipt':
-      return result.status === 'rejected'
-        ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
-        : `${result.kind} ${result.status}${result.payout === undefined ? '' : ` · paid ${eth(result.payout)}`} · ${result.id}`;
     case 'game.requestFunds':
       return `${result.funded ? `limit set to ${eth(result.amount)}` : 'unchanged'} · ${limit(result)}`;
+    case 'game.receipt':
     case 'game.bet':
-      return result.status === 'rejected'
-        ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
-        : result.payout === undefined
-          ? `placed, settles later · ${result.id}`
-          : `paid ${eth(result.payout)} · ${result.id}`;
+    case 'game.place':
     case 'game.payment':
-      return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.id}`;
+      return describeReceipt(result);
     default:
       return '';
   }
 }
+/** A receipt in one line: what became of the operation, what it paid, and whose word a payout rests on. */
+export const describeReceipt = (receipt: any) =>
+  `${receipt.kind} ${receipt.status}${receipt.payout === undefined ? '' : ` · paid ${eth(receipt.payout)}`}${
+    receipt.basis === 'referee' ? " · on its referee's word" : ''
+  }${quote(receipt.reason)} · ${receipt.id}`;
 
 export interface GameLogElements {
   list: HTMLElement;

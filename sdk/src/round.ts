@@ -3,7 +3,7 @@ import { compileGameAsync, getNode, loadFundedGame, prepareAction, rngFromBytes 
 import type { FundingTable, GameGraph, GamePlan } from './engine/index.ts';
 import { admits } from './admits.ts';
 import { playerScope } from './wire.ts';
-import type { GameLimit } from '@hookedin/play/protocol/game-types.ts';
+import type { GameLimit } from '../../protocol/game-types.ts';
 export interface RoundEvent {
   action: string;
   label?: string;
@@ -35,7 +35,11 @@ export interface RoundStore {
   set(key: string, value: string): void;
   remove(key: string): void;
 }
-const plain = (value: unknown) => JSON.parse(JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v)));
+const text = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
+const plain = (value: unknown) => JSON.parse(text(value));
+/** What a saved round is played under: its format, and a hash of the graph the page builds for its setup. */
+const SCHEMA = 'HOOKEDIN/ROUND/4';
+const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 const browserStore: RoundStore = {
   get: key => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
@@ -61,6 +65,8 @@ export class RoundClient {
   /** What the wallet plays with, for the sentences this helper writes to the player. */
   units = '';
   private greeting?: Promise<any>;
+  /** The graph built for each setup, and the hash of the rules it is played under, once each per page. */
+  private graphs = new Map<string, { graph: GameGraph; rules: Promise<string> }>();
   constructor(
     bridge: RoundBridge,
     graph: (setup: any) => GameGraph,
@@ -93,6 +99,21 @@ export class RoundClient {
       fraction = (units % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '');
     return `${whole}${fraction ? '.' + fraction : ''}${this.units ? ' ' + this.units : ''}`;
   }
+  /** The graph this page builds for a setup, and the rules it is played under: the graph's hash. A round saved
+   * under other rules is not one this page can finish. */
+  built(setup: any) {
+    const key = text(setup);
+    let found = this.graphs.get(key);
+    if (!found) {
+      const graph = this.graph(setup);
+      found = { graph, rules: crypto.subtle.digest('SHA-256', new TextEncoder().encode(text(graph))).then(hex) };
+      this.graphs.set(key, found);
+    }
+    return found;
+  }
+  rules(setup: any) {
+    return this.built(setup).rules;
+  }
   fundingScale(stake: bigint) {
     return this.funding && stake > 0n && stake % this.funding.initialCash === 0n
       ? stake / this.funding.initialCash
@@ -100,7 +121,7 @@ export class RoundClient {
   }
   async compile(setup: any, bankrollFloor: bigint, cashQuantum: bigint) {
     const scale = this.fundingScale(BigInt(setup.stake)),
-      graph = this.graph(setup);
+      { graph } = this.built(setup);
     if (
       this.funding &&
       scale &&
@@ -110,7 +131,7 @@ export class RoundClient {
       return loadFundedGame(graph, this.funding, scale, admits);
     return compileGameAsync(graph, { admits, bankrollFloor, cashQuantum, initialCash: BigInt(setup.stake) });
   }
-  /** The cash inside an unfinished round. It is part of the wallet's balance, and not yet the player's to count. */
+  /** The cash inside an unfinished round: part of the wallet's balance, and the player's to keep if they stop. */
   inHand() {
     const state = this.state();
     return state && !state.terminal ? BigInt(state.cash) : 0n;
@@ -133,11 +154,14 @@ export class RoundClient {
       this.plan = null;
       return null;
     }
-    if (this.data.schema !== 'HOOKEDIN/ROUND/3') {
+    // A round saved in another format, or under rules this page does not play, cannot be finished here. Every
+    // step it took settled in the wallet, so what it held is in the player's balance: it is let go, once, and
+    // the player is told.
+    if (this.data.schema !== SCHEMA || this.data.rules !== (await this.rules(this.data.setup))) {
       this.store.remove(this.storageKey);
       this.data = null;
       this.plan = null;
-      return null;
+      throw new Error('This round was started under rules this game does not play. What it held is in your balance.');
     }
     const planKey = JSON.stringify([this.data.setup, this.data.bankrollFloor, this.data.cashQuantum]);
     if (!this.plan || this.planKey !== planKey)
@@ -239,7 +263,8 @@ export class RoundClient {
     if (!this.plan) throw new Error('Missing round plan');
     if (bankroll < this.plan.conservativeBankroll) throw capacity();
     this.data = plain({
-      schema: 'HOOKEDIN/ROUND/3',
+      schema: SCHEMA,
+      rules: await this.rules(setup),
       id: crypto.randomUUID(),
       setup,
       bankrollFloor,
@@ -302,8 +327,8 @@ export class RoundClient {
   async resolve(receipt: any) {
     const ticket = this.data.pending.ticket;
     if (receipt.status === 'rejected') {
-      if (receipt.verified !== true) throw new Error('A verified rejection is required');
-      // Keep the same action under a fresh operation ID for the next attempt.
+      // A rejection is a signed checkpoint the wallet checked: the balance is unchanged. Keep the same action
+      // under a fresh operation ID for the next attempt.
       this.data.pending.id = crypto.randomUUID();
       this.data.settlement = { kind: 'rejected', reason: receipt.reason };
       this.save();
@@ -312,8 +337,8 @@ export class RoundClient {
     let label,
       landed: { rangeStart: string; rangeEnd: string } | null = null;
     if (ticket.kind === 'bet') {
-      if (receipt.verified !== true || !/^[0-9]+$/.test(String(receipt.outcome)))
-        throw new Error('A verified wager result is required');
+      if (receipt.status !== 'settled' || !/^[0-9]+$/.test(String(receipt.outcome)))
+        throw new Error('A settled wager result is required');
       // The round's outcome names the next state; the wallet's verified payout must agree with it.
       const outcome = BigInt(receipt.outcome),
         next = ticket.successors.find((s: any) => outcome >= BigInt(s.rangeStart) && outcome < BigInt(s.rangeEnd));
@@ -324,7 +349,7 @@ export class RoundClient {
       label = next.label;
       landed = { rangeStart: next.rangeStart, rangeEnd: next.rangeEnd };
     } else {
-      if (ticket.kind === 'payment' && receipt.verified !== true) throw new Error('A verified payment is required');
+      if (ticket.kind === 'payment' && receipt.status !== 'settled') throw new Error('A settled payment is required');
       this.data.nodeId = ticket.next;
       this.data.cash = ticket.cash;
       label = ticket.label;

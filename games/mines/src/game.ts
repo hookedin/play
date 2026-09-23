@@ -135,9 +135,11 @@ const round = new RoundClient(HookedIn, minesGraph);
         assetLabels: document.querySelectorAll('[data-asset]'),
       });
       bank.update(startup.state);
-      const state = await round.restore();
       asset = startup.asset;
+      // Ready before the round is restored: a round this page cannot finish is let go with a word, and
+      // the player plays on.
       ready = true;
+      const state = await round.restore();
       if (state && typeof state.nodeId === 'string' && state.nodeId.startsWith('mines:')) {
         session = state;
         // Positions have no effect on odds. After reload, arrange prior safe picks from the left.

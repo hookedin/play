@@ -4,8 +4,8 @@ import type { GameBalance } from './sdk.ts';
 import type { RoundClient } from './round.ts';
 
 /**
- * With a `round`, the figure leaves out the cash inside an unfinished round and stands still while
- * a step settles: a hand's running value is never shown as money, only what it finally pays.
+ * With a `round`, the figure leaves out the cash inside an unfinished round, which the round shows, and stands
+ * still while a step settles, so it moves once a round. That cash is the player's: they keep it if they stop.
  */
 export function mountBank(root: HTMLElement, options: { round?: RoundClient } = {}) {
   const element = <T extends HTMLElement>(tag: string, className: string, text = '') => {

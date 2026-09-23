@@ -50,11 +50,12 @@ Package entry points:
 | `@hookedin/play/sdk/round`                       | `RoundClient` ([src/round.ts](src/round.ts))                                                            |
 | `@hookedin/play/sdk/bank`                        | `mountBank` ([src/bank.ts](src/bank.ts))                                                                |
 | `@hookedin/play/sdk/synth`                       | `createSynth` ([src/synth.ts](src/synth.ts))                                                            |
-| `@hookedin/play/sdk/admits`                      | The casino's admission rule ([src/admits.ts](src/admits.ts))                                            |
+| `@hookedin/play/sdk/admits`                      | The casino's admission rule, and what the wallet measures of a bet ([src/admits.ts](src/admits.ts))     |
 | `@hookedin/play/sdk/referee`                     | `createReferee`, for a game's own server ([src/referee.ts](src/referee.ts)). Runs wherever `fetch` does |
 | `@hookedin/play/sdk/generated/blackjack-funding` | The precomputed blackjack price table                                                                   |
+| `@hookedin/play/testing/game-wallet.ts`          | The real wallet against a stub casino, for tests ([below](#testing-against-the-real-wallet))            |
 
-Any other `@hookedin/play/sdk/<module>` resolves to `src/<module>.ts`.
+Any other `@hookedin/play/sdk/<module>`, such as `wire`, resolves to `src/<module>.ts`. Nothing else in the package can be imported.
 
 ## The wallet bridge
 
@@ -79,42 +80,43 @@ const receipt = await HookedIn.bet({
   // 49.5% of the outcome space pays twice the stake: a 99% return.
   prizes: [{ rangeStart: '0', rangeEnd: String(((1n << 64n) * 495n) / 1000n), payout: String(2n * BigInt(stake)) }],
 });
-if (receipt.status === 'signed' && receipt.verified) {
+if (receipt.status === 'settled') {
   // receipt.outcome is the round's verified 64-bit value; receipt.payout is what the prizes paid.
 }
 ```
 
-| Member                                                    | What it does                                                                                                                     |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `call(method, params)`                                    | Send any bridge request. Rejects with the wallet's error message, or after 180 seconds of silence                                |
-| `limits()`                                                | Every bound this wallet holds a bet to: the prizes one holds, the outcome space, the bets one round takes, the furthest deadline |
-| `balance()`                                               | The game's latest spending limit `{ balance, pending }`, as pushed by the wallet                                                 |
-| `onBalance(listener)`                                     | Called on every `game.balance` push. Returns a function that stops listening                                                     |
-| `requestFunds({ amount? })`                               | Ask the player for money. The wallet shows its own dialog, in its own words; resolves `{ funded, amount, balance, pending }`     |
-| `receipt(id)`                                             | The outcome of an earlier operation by the game's own `id`, or `null`                                                            |
-| `bet({ id, stake, prizes, group? })`                      | One atomic bet on the player's own round                                                                                         |
-| `bet({ id, stake, prizes, deadline, group? })`            | A bet on your referee's open round, drawn against the bankroll; the same call returns what it paid once it has                   |
-| `bet({ id, stake, terms, deadline, group? })`             | A bet your referee settles by a split; the same call returns what it paid once it has                                            |
-| `payment(id, amount, group?)`                             | A deterministic payment to the bankroll                                                                                          |
-| `storageScope(info)`                                      | A storage key unique to this page, chain, player and asset, on the player's uname                                                |
-| `initializeGame({ stakeInput, assetLabels })`             | Read-only startup: `wallet.hello`, `wallet.info`, the first balance, asset labels and the recommended stake                      |
-| `hello()`, `info()`                                       | The wallet's methods and asset `{id, symbol, decimals}`; the player's `{uname, alias, chainId, bankroll, recommendedStake}`      |
-| `parseAmount`, `formatAmount`, `exactAmount`, `stepStake` | Amounts in the wallet's asset, whatever its decimals, and a 1-2-5 stake ladder for an input field                                |
+| Member                                                    | What it does                                                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `call(method, params)`                                    | Send any bridge request. Rejects with the wallet's error message, or after 180 seconds of silence                                     |
+| `limits()`                                                | Every bound a bet is held to, as the protocol sets it: the prizes one holds, the outcome space, a round's bets, the furthest deadline |
+| `balance()`                                               | The game's latest spending limit `{ balance, pending }`, as pushed by the wallet                                                      |
+| `onBalance(listener)`                                     | Called on every `game.balance` push. Returns a function that stops listening                                                          |
+| `requestFunds({ amount? })`                               | Ask the player for money. The wallet shows its own dialog, in its own words; resolves `{ funded, amount, balance, pending }`          |
+| `receipt(id)`                                             | The receipt of an earlier operation by the game's own `id`, or `null` if this wallet has none                                         |
+| `bet({ id, stake, prizes, group? })`                      | One bet on the player's own round, settled at once                                                                                    |
+| `place({ id, stake, prizes, round, group? })`             | A bet on the round of your referee's that it names, drawn against the bankroll; its receipt says `placed`                             |
+| `place({ id, stake, terms, deadline, group? })`           | A bet your referee splits by the deadline; its receipt says `placed`                                                                  |
+| `onReceipt(listener)`                                     | Called when the wallet has collected a placed bet that settled or came back. Returns a function that stops listening                  |
+| `payment(id, amount, group?)`                             | A deterministic payment to the bankroll                                                                                               |
+| `storageScope(info)`                                      | A storage key unique to this page, chain, player and asset, on the player's uname                                                     |
+| `initializeGame({ stakeInput, assetLabels })`             | Read-only startup: `wallet.hello`, `wallet.info`, the first balance, asset labels and the recommended stake                           |
+| `hello()`, `info()`                                       | The wallet's methods and asset `{id, symbol, decimals}`; the player's `{uname, alias, chainId, bankroll, recommendedStake}`           |
+| `parseAmount`, `formatAmount`, `exactAmount`, `stepStake` | Amounts in the wallet's asset, whatever its decimals, and a 1-2-5 stake ladder for an input field                                     |
 
-The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.payment`, `game.receipt` and `game.requestFunds`. A `group` labels bets and payments that belong together, the steps of one hand or the bets on one match, and the wallet shows them as one; `RoundClient` gives every step of a round its round's ID. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and bets that settle later.
+The bridge methods are `wallet.hello`, `wallet.info`, `game.receipt`, `game.bet`, `game.place`, `game.payment` and `game.requestFunds`; the wallet pushes `game.balance` and `game.receipt` events. A `group` labels bets and payments that belong together, the steps of one hand or the bets on one match, and the wallet shows them as one; `RoundClient` gives every step of a round its round's ID. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and bets that settle later.
 
-`mountBank(element, { round? })` renders the balance strip the reference games show: the money the wallet lets the game risk in this tab, live, with an **Add funds** button. With the game's `RoundClient` it leaves out the cash inside an unfinished round. It shows the asset's symbol and marks test coins. `createSynth()` makes short tones without audio files.
+`mountBank(element, { round? })` renders the balance strip the reference games show: the money the wallet lets the game risk in this tab, live, with an **Add funds** button. With the game's `RoundClient` it leaves the cash inside an unfinished round out of the figure, so that the figure moves once a round; that cash is the player's all the same. It shows the asset's symbol and marks test coins. `createSynth()` makes short tones without audio files.
 
 ## RoundClient: multi-step games
 
-`RoundClient` runs a game with several steps, such as a hand of blackjack, as one bet per step. You give it a function that builds the game's graph of public states. It prices every state with the engine, and for each action the player takes it:
+`RoundClient` runs a game with several steps, such as a hand of blackjack, as one bet per step. Each step settles on its own, so a player can walk away after any of them with the cash it left them: a [settled trade-off](../architecture.md#settled-trade-offs). You give it a function that builds the game's graph of public states for a setup, which it calls once per setup in a page. It prices every state with the engine, and for each action the player takes it:
 
 1. saves the chosen action and a fresh operation `id` in the game's own `localStorage`, before anything is signed;
 2. asks the wallet for more money through `game.requestFunds` if the step needs more than the game holds;
 3. places the step as one `game.bet` (or a `game.payment`, or nothing when no money moves);
 4. checks that the verified payout matches the successor state the outcome names, then advances.
 
-After a reload, `restore()` reads the saved round and resolves a lost reply through `game.receipt`. A verified rejection keeps the same action under a fresh `id`. `watch(listener)` reloads the round when another tab of the same game changes it.
+After a reload, `restore()` reads the saved round and resolves a lost reply through `game.receipt`. A verified rejection keeps the same action under a fresh `id`. `watch(listener)` reloads the round when another tab of the same game changes it. A saved round carries a hash of the rules it is played under, the graph the page builds for its setup. A round saved under other rules is let go once: `restore()` throws an error telling the player that what it held is in their balance, and the next `restore()` returns `null`.
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
@@ -144,7 +146,7 @@ The optional third constructor argument is a precomputed `FundingTable`. Blackja
 | [blackjack.ts](src/engine/blackjack.ts)   | The blackjack rules as a graph                                                          |
 | [mines.ts](src/engine/mines.ts)           | The Mines rules as a graph                                                              |
 
-[src/admits.ts](src/admits.ts) is the casino's own admission rule, imported from `@hookedin/play/protocol/risk.ts`. A price computed with it is a price the casino will honour.
+[src/admits.ts](src/admits.ts) is the casino's own admission rule, the code in [protocol/risk.ts](../protocol/risk.ts) that the casino runs. A price computed with it is a price the casino will honour. It also exports what the wallet measures of every bet it signs: `describeBet`, `betReturn`, `returnParts` and `RETURN_SCALE`.
 
 [src/generated/blackjack-funding.ts](src/generated/blackjack-funding.ts) is a 1 MB table of precomputed blackjack action prices. Regenerate it with `npm run generate:blackjack` after changing the blackjack rules or the pricing code. `npm test` fails when the committed table is stale.
 
@@ -181,15 +183,16 @@ src/manifest.json   { id, name, description, entry, developer }
 A game with a server has a **referee**: a key you publish with the game. Its pages place bets that settle later with their own wallets, and the referee settles them: it **draws** bets with prizes against the bankroll, many players on one outcome, and it **splits** bets with terms, whose outcome no prize table can say: a cash-out when the player chooses, a match that ends next month. `createReferee` is the server's side:
 
 ```ts
-import { createReferee } from '@hookedin/play/sdk/referee';
+import { createReferee, gameKey } from '@hookedin/play/sdk/referee';
 
-const referee = await createReferee({ casinoURL, key, game: { developer, name } });
+// The game's key: the address you publish it from, and the name you publish it under.
+const referee = await createReferee({ casinoURL, key, game: gameKey({ publisher, name }) });
 // Before anybody bets: the casino names the round and the referee commits its seed to it, so every bet on it
-// has its outcome fixed before it is placed. Players' wallets bet on the open round.
-await referee.open('eth');
-// A spin: every open bet on the round, drawn on one outcome, each admitted with those before it or refunded,
-// and every bet it took is paid. The next round opens with it.
-const { outcome, bets } = await referee.draw('eth');
+// has its outcome fixed before it is placed. It is the same round until it is drawn or its deadline passes.
+const round = await referee.open('eth');
+// Tell your pages round.id: their wallets bet on it by name, and the casino takes each bet against the bankroll
+// as it is placed. Save the id, then draw: every bet on the round rides one outcome, and each is paid.
+const { outcome, bets } = await referee.draw(round.id);
 
 // Splits: the open bets of a group, and what each pays, signed here. Your bank at the casino keeps the rest
 // of each stake or pays what the split comes to beyond it.
@@ -197,11 +200,11 @@ const open = await referee.bets('round-812');
 await referee.settle(open.map(bet => ({ bet: bet.bet, player: cashedOut(bet), casino: share(bet) })));
 ```
 
-A bet nobody settles by its deadline is refunded. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
+A drawn bet has its round's deadline, ten minutes after the casino names the round; a split bet has the one its page gives it. A bet nobody settles by its deadline is refunded. A referee holds no money of its own, but a split it signs is paid from your bank: keep its key as safe as the bank. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
 
 ## Testing against the real wallet
 
-Game tests do not mock the wallet. `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store, an open channel and a stub casino that derives and signs states exactly as the protocol says. A test wires a bridge object to it and hands that to `RoundClient` or to the game's own client:
+Game tests do not mock the wallet. `gameWallet({ bankroll?, bank? })` from `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store and an open channel, against a stub casino that derives and signs states exactly as the protocol says. The stub holds every bet to the casino's own admission rule and charges its commission, so a table the casino declines, a zero-edge one for instance, is declined in a test too; `bankroll` is what it covers bets with, and `bank` what the developer's bank holds. `f.bridge` is a game's side of the bridge, to hand to `RoundClient` or the game's own client: every request goes through the wallet bridge's validation, the player agrees to every request for funds, and `onReceipt` hears pushed receipts.
 
 ```ts
 import test from 'node:test';
@@ -209,26 +212,17 @@ import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 
 test('a round settles through the wallet', async () => {
-  const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity('my-game'));
-  await w.setGameLimit('200000');
-  const bridge = {
-    balance: async () => w.gameLimit(),
-    call: async (method: string, params: any = {}) => {
-      if (method === 'wallet.hello') return w.gameHello();
-      if (method === 'wallet.info') return { ...w.gameInfo(), bankroll: '1000000000000' };
-      if (method === 'game.receipt') return w.gameReceipt(params.id);
-      return method === 'game.bet' ? w.gameBet(params) : w.gamePayment(params);
-    },
-  };
-  const round = new RoundClient(bridge, myGraph, undefined, { store: memoryStore(), name: 'my-game' });
+  const f = await gameWallet();
+  f.wallet.openGame(f.identity('my-game'));
+  const round = new RoundClient(f.bridge, myGraph, undefined, { store: memoryStore(), name: 'my-game' });
   // myGraph builds your GameGraph; memoryStore() is a get/set/remove RoundStore over a Map.
-  // Start a round, act, then assert on w.balance().
+  // Start a round, act, then assert on f.wallet.balance().
 });
 ```
 
-[test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, verified rejections, reloads and two tabs. For a game with a referee the stub casino plays the referee's part too: `f.draw()` draws the referee's open round, `f.settle(bet, player, casino)` splits a bet with terms and `f.refund` lets its deadline pass, so a test bets with `w.gameBet` and asks again for what the bet paid.
+`f.identity(name)` is a game as its publisher published it, and `f.bridgeFor(wallet)` the bridge to another wallet, such as the one `f.reload()` starts afresh from what this one saved. For a game with a server, `f.referee` is a stub shaped like the real `Referee` (`open`, `draw`, `round`, `settle`, `bets`, `bet`), which a test hands to the server in place of the one `createReferee` makes. `f.advance(ms)` lets time pass, and bets past their deadlines come back. `f.replaceChannel()` gives the player a new channel, and `f.forget()` a wallet that has lost its receipts. `f.bankroll()` and `f.bank()` are what the stub holds, and `f.secretOf(round)` is a round's secret. [test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, rejections, reloads and bets that settle later.
+
+[testing/conformance.ts](../testing/conformance.ts) is what a game can count on from any casino, as one behaviour suite: a lost reply, a new channel, lost receipts, a bet the bankroll cannot back, a deadline refund, a referee restart and changed rules. play runs it against the stub and the casino service runs it against itself, so the stub behaves as the casino does wherever a game depends on it.
 
 The SDK's tests run with the rest of play's, from the repository root:
 

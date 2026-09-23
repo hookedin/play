@@ -13,17 +13,23 @@ export interface Asset {
   symbol: string;
   decimals: number;
 }
-/** Every bound a game has to respect, as the wallet reports them. Read them; do not assume them:
- * a deployment can change any of these and a game built against constants of its own would not know. */
+/** Every bound a bet is held to, as the wallet reports them. They are part of the protocol revision the wallet
+ * and its casino share, so read them rather than carrying copies of your own. */
 export interface WalletLimits {
   /** The most prizes one bet holds. */
   prizes: number;
   /** The size of the outcome space, as a decimal string: a prize range lies within [0, this). */
   outcomeSpace: string;
-  /** The most bets one round takes. */
+  /** The most bets one round takes, and the most distinct outcomes they may cut it into. */
   bets: number;
-  /** The furthest a bet that settles later has its deadline, in milliseconds. */
+  cells: number;
+  /** How long a referee's round takes bets, in milliseconds: not drawn by then, its bets are refunded. */
+  round: number;
+  /** The furthest a bet with terms may have its deadline, in milliseconds. */
   deadline: number;
+  /** The most a bet's terms take, as canonical JSON, and the longest group label. */
+  terms: number;
+  group: number;
 }
 /** What a wallet says when a game page loads: the methods it offers, the money it plays with, and
  * every bound it holds a bet to. */
@@ -47,8 +53,8 @@ export interface WalletInfo {
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
  * `invalid-request`, `unknown-method`, `busy`, `no-channel`, `insufficient-funds`, `pending-operation`,
- * `declined`, `id-conflict`, `game-closed` and `failed`; a refusal by the
- * casino carries the casino's code. */
+ * `id-conflict`, `id-used`, `round-closed`, `game-closed` and `failed`; a refusal by the casino carries the
+ * casino's code. */
 export class HookedInError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -63,8 +69,8 @@ export interface WirePrize {
   rangeEnd: string;
   payout: string;
 }
-export type { GameRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
-import type { GameRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
+export type { GameBet, GamePlace, GameReceipt } from '../../protocol/game-types.ts';
+import type { GameBet, GamePlace, GameReceipt } from '../../protocol/game-types.ts';
 import { playerScope, showName } from './wire.ts';
 export const HookedIn = (() => {
   'use strict';
@@ -74,6 +80,7 @@ export const HookedIn = (() => {
     { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
   >();
   const balanceListeners = new Set<(balance: GameBalance) => void>();
+  const receiptListeners = new Set<(receipt: GameReceipt) => void>();
   // The wallet pushes the balance right after the iframe loads and on every change; there is nothing to poll.
   let latest: GameBalance | null = null;
   // What the wallet said when this page loaded. Balances reach the game only after it, so whatever
@@ -89,6 +96,11 @@ export const HookedIn = (() => {
         pending: message.pending === true,
       };
       if (greeted) for (const listener of balanceListeners) listener(latest);
+      return;
+    }
+    // A placed bet has settled, or come back, and the wallet has collected it.
+    if (message.event === 'game.receipt') {
+      for (const listener of receiptListeners) listener(message.receipt);
       return;
     }
     if (typeof message.id !== 'number') return;
@@ -208,15 +220,24 @@ export const HookedIn = (() => {
     input.value = exactAmount(next);
   }
 
-  /** The wallet persists nothing for a game, so a game keeps its round state at its own origin. */
+  /** The receipt of an earlier operation by your own `id`, or `null` if this wallet has none. For a placed bet
+   * the wallet also asks the casino: once the bet has settled, the wallet collects it and `onReceipt` hears. */
   const receipt = (id: string): Promise<GameReceipt | null> => call('game.receipt', { id });
-  /** A bet: `stake` is paid to enter. With `prizes` alone it settles at once on the player's own round, and
-   * every prize whose range holds the outcome pays. With a `deadline` it settles later, by your referee: with
-   * `prizes`, it rides your referee's open round and pays what its prizes pay on the round's outcome; with `terms`,
-   * your referee signs what it pays. A bet that settles later is placed at once and final; the same call again
-   * returns what it paid once it has settled. `group` labels bets that belong together, such as the steps of
-   * one hand. */
-  const bet = (request: GameRequest): Promise<GameReceipt> => call('game.bet', { ...request });
+  /** A bet that settles at once on the player's own round: `stake` is paid to enter, and every prize whose range
+   * holds the outcome pays. `group` labels bets that belong together, such as the steps of one hand. */
+  const bet = (request: GameBet): Promise<GameReceipt> => call('game.bet', { ...request });
+  /** A bet your referee settles later, placed at once and final: with `prizes`, on the `round` of your referee's
+   * that it names, drawn against the bankroll; with `terms` and a `deadline`, split by your referee. The receipt
+   * says `placed`; once the bet has settled or come back, `onReceipt` hears. */
+  const place = (request: GamePlace): Promise<GameReceipt> => call('game.place', { ...request });
+  /** Called with the new receipt whenever one of your placed bets has settled, or come back, and the wallet has
+   * collected it. Returns a function that stops listening. */
+  const onReceipt = (listener: (receipt: GameReceipt) => void) => {
+    receiptListeners.add(listener);
+    return () => {
+      receiptListeners.delete(listener);
+    };
+  };
   /** A deterministic payment to the bankroll. */
   const payment = (id: string, amount: string, group?: string): Promise<GameReceipt> =>
     call('game.payment', { id, amount, ...(group === undefined ? {} : { group }) });
@@ -274,6 +295,8 @@ export const HookedIn = (() => {
     requestFunds,
     receipt,
     bet,
+    place,
+    onReceipt,
     payment,
     storageScope,
     /** How a player is written: an alias wears `@`, a uname wears `~`. */

@@ -17,7 +17,7 @@ import {
   simulateServerResult,
 } from '../src/engine/index.ts';
 import { admits } from '../src/admits.ts';
-import { assessRound } from '@hookedin/play/protocol/risk.ts';
+import { assessRound } from '../../protocol/risk.ts';
 import { blackjackFunding } from '../src/generated/blackjack-funding.ts';
 
 const UNIT = 10n ** 18n;

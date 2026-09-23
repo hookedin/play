@@ -79,13 +79,13 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     const deadline = 1_900_000_000_000;
     const calls = [
       HookedIn.payment('pay', '5', 'hand-1'),
-      HookedIn.bet({ id: 'seat', stake: '5', terms: { seat: 2 }, deadline }),
+      HookedIn.place({ id: 'seat', stake: '5', terms: { seat: 2 }, deadline }),
     ];
     assert.deepEqual(
       posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
         { method: 'game.payment', params: { id: 'pay', amount: '5', group: 'hand-1' } },
-        { method: 'game.bet', params: { id: 'seat', stake: '5', terms: { seat: 2 }, deadline } },
+        { method: 'game.place', params: { id: 'seat', stake: '5', terms: { seat: 2 }, deadline } },
       ],
     );
     for (const { id } of posted.slice(-2)) deliver(parent, { hookedin: true, id, result: id });
@@ -93,6 +93,13 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
       await Promise.all(calls),
       posted.slice(-2).map(message => message.id),
     );
+    // A placed bet that settled reaches the game by itself, once the wallet has collected it.
+    const heard: any[] = [];
+    const deaf = HookedIn.onReceipt(receipt => heard.push(receipt));
+    deliver(parent, { hookedin: true, event: 'game.receipt', receipt: { id: 'seat', status: 'settled' } });
+    deaf();
+    deliver(parent, { hookedin: true, event: 'game.receipt', receipt: { id: 'later', status: 'settled' } });
+    assert.deepEqual(heard, [{ id: 'seat', status: 'settled' }]);
     const ids = posted.map(message => message.id);
     assert.ok(ids.every((id, i) => Number.isSafeInteger(id) && id > (ids[i - 1] ?? 0)));
   } finally {

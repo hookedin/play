@@ -16,10 +16,12 @@ interface ActiveGame {
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
  * the name it has in their profile. Any other manifest is linkable by its URL alone. */
 type GameRoute = { owner: string; name: string } | { manifest: string };
-/** What a profile records of a game it publishes: the game's key, and the referee that settles its bets. */
-type Published = { key: string; referee?: string };
+/** What a profile records of a game it publishes: its key, the developer its bets pay commission to, and the
+ * referee that settles its bets if it has one. */
+type Published = { key: string; developer: string; referee?: string };
 import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
+import { gameReceipt } from './wallet-games.ts';
 import { withLock } from './storage.ts';
 import { json, verifyEvidence, gameKey, same, FAUCET_BELOW } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
@@ -44,7 +46,7 @@ import {
   totalsByAsset,
   unitOf,
 } from './bets.ts';
-import { createGameLog, logAsset } from './game-log.ts';
+import { createGameLog, describeReceipt, logAsset } from './game-log.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import type { LogKind } from './game-log.ts';
 import config from './config.ts';
@@ -111,6 +113,13 @@ const wallet = new CasinoWallet({
     $('operation-status').classList.remove('hidden');
     clearTimeout(statusTimer);
     if (!wallet.busy) statusTimer = setTimeout(() => $('operation-status').classList.add('hidden'), 3500);
+  },
+  // A bet that settled later reaches the game that placed it as soon as the wallet has collected it.
+  onGameReceipt: (game, receipt) => {
+    if (!active || active.key !== game.key || !active.frame.contentWindow || active.pushed === null) return;
+    const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.id, receipt) };
+    active.frame.contentWindow.postMessage(message, new URL(active.identity.entryURL).origin);
+    gameLog.log('event', 'game.receipt', { description: describeReceipt(message.receipt), payload: message });
   },
 });
 
@@ -670,7 +679,7 @@ function renderHeld() {
         deadline: 0,
         collected: false,
       };
-      const presentation = heldSummary(state);
+      const presentation = heldSummary(state, receipt?.game?.name);
       const payload = activityJSON({ ...state, error: tracked.error }),
         previous = existing.get(hash);
       if (
@@ -1002,14 +1011,16 @@ async function fetchGame(url: string) {
   return { manifestURL, manifest, developer, entry };
 }
 
-/** Open a game. A published one comes with what its profile records: its key, its publisher and the name
- * they published it under, which its manifest must name as its developer, or it is not their game; and the
- * referee they published to settle its bets. */
+/** Open a game. A published one comes with what its profile records: its key, the developer its bets pay
+ * commission to, which its manifest must name too or it is not the game its publisher published, and the referee
+ * that settles its bets. A game loaded straight from its manifest is its manifest's developer's, under its URL. */
 async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: Published) {
   const { manifestURL, manifest, developer, entry } = await fetchGame(url);
   const slug = 'manifest' in gameRoute ? undefined : gameRoute.name;
-  if (slug !== undefined && !same(gameKey({ developer, name: slug }), published?.key))
-    throw new Error(`${manifestURL.host} serves a manifest whose developer did not publish ${gamePath(gameRoute)}.`);
+  if (slug !== undefined && !same(developer, published?.developer))
+    throw new Error(
+      `${manifestURL.host} serves a manifest that names another developer than ${gamePath(gameRoute)} was published with.`,
+    );
   closeGame();
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -1023,6 +1034,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   const identity: GameIdentity = {
     manifestURL: manifestURL.href,
     entryURL: entry.href,
+    key: published?.key ?? gameKey({ publisher: developer, name: manifestURL.href }),
     developer,
     ...(slug === undefined ? {} : { slug }),
     name: manifest.name,
@@ -1087,6 +1099,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       }
       if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
       if (method === 'game.bet') return wallet.gameBet(params);
+      if (method === 'game.place') return wallet.gamePlace(params);
       return wallet.gamePayment(params);
     },
     onError: message => toast(message, true),
@@ -1152,7 +1165,7 @@ async function gameCard(route: GameRoute, url: string, published: Published) {
  * their own URL: a profile holds a hundred games, all of them addresses its owner chose. */
 const SHOWN_GAMES = 32;
 /** Every game a profile publishes, as cards. A manifest that cannot be read is left out. */
-async function profileCards(owner: string, games: { name: string; url: string; key: string }[]) {
+async function profileCards(owner: string, games: (Published & { name: string; url: string })[]) {
   const cards = await Promise.all(
     games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url, game).catch(() => null)),
   );
@@ -1924,13 +1937,11 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
       url = $<HTMLInputElement>('game-url-input');
     const published = name.value.trim();
     if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-    // Anyone who opens this card has to be able to play it, so it is loaded before it is published, and
-    // a game is its developer's: whoever publishes it is the developer its manifest names.
+    // Anyone who opens this card has to be able to play it, so it is loaded before it is published. Its bets pay
+    // commission to the developer its manifest names, and a game with a referee names its key, which the casino
+    // then holds its rounds and bets to.
     const { manifestURL, manifest, developer } = await fetchGame(url.value.trim());
-    if (!same(developer, wallet.address))
-      throw new Error(`That manifest names ${developer} as its developer. Publish it from that account.`);
-    // A game with a referee names its key, which the casino then holds its rounds and bets to.
-    await wallet.publishGame(published, manifestURL.href, manifest.referee ?? null);
+    await wallet.publishGame(published, manifestURL.href, manifest.referee ?? null, developer);
     name.value = url.value = '';
     await loadLibrary();
     toast(`Published at ${showName(wallet)}/${published}.`);

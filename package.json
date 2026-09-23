@@ -13,7 +13,7 @@
     "./sdk": "./sdk/src/index.ts",
     "./sdk/engine": "./sdk/src/engine/index.ts",
     "./sdk/*": "./sdk/src/*.ts",
-    "./*": "./*"
+    "./testing/game-wallet.ts": "./testing/game-wallet.ts"
   },
   "bin": {
     "hookedin-game": "sdk/bin/hookedin-game.js"

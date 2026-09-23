@@ -1,10 +1,11 @@
 /**
- * The server side of a game with a referee. A referee is a key its developer publishes with the game; it
- * holds no money and has no account at the casino. Players' wallets place the game's bets by themselves, and
- * the referee settles them. It draws bets with prizes against the bankroll: it opens a round, which the casino
- * names and the referee commits the seed it will draw it with to, and players' bets ride the open round, so
- * each bet's outcome is fixed before it is placed. It signs what a bet with terms pays, which the developer's
- * bank pays beyond the stake. Each wallet checks what settled its bet before it collects.
+ * The server side of a game with a referee. A referee is a key a game's publisher names with the game. It has no
+ * account at the casino and holds no money of its own, but what it signs moves money: a split it signs is paid
+ * from its developer's bank, so keep the key as safe as that bank. Players' wallets place the game's bets by
+ * themselves, and the referee settles them. It draws bets with prizes on its rounds: the casino names a round and
+ * the referee commits the seed it will draw it with, the game tells its players the round, and each bet names it,
+ * so its outcome is fixed before it is placed. It signs what a bet with terms pays. Each wallet checks what
+ * settled its bet before it collects.
  *
  * Everything here uses the casino's public API and runs wherever `fetch` does: Node, or a Cloudflare Worker.
  */
@@ -13,7 +14,6 @@ import {
   authorization,
   domain,
   gameKey,
-  outcome,
   roundId,
   same,
   seedHash,
@@ -21,11 +21,13 @@ import {
   REFEREE_ACCESS_TYPES,
   SETTLEMENT_TYPES,
   COMMIT_TYPES,
-} from '@hookedin/play/protocol/protocol.ts';
-import type { AssetId } from '@hookedin/play/protocol/protocol.ts';
-import type { GameName, PublicBet, Round } from '@hookedin/play/protocol/types.ts';
+} from '../../protocol/protocol.ts';
+import type { AssetId } from '../../protocol/protocol.ts';
+import type { PublicBet, Round } from '../../protocol/types.ts';
 
-export type { AssetId, GameName, PublicBet, Round };
+export type { AssetId, PublicBet, Round };
+/** A game's key, as its publisher and the name they published it under make it: what `createReferee` takes. */
+export { gameKey };
 /** What one bet with terms pays: `player` to its player and `casino` to the casino. Your bank keeps the rest
  * of the stake, or pays what the two come to beyond it. Give the casino about half of what the bet was
  * expected to earn you: that is the casino's policy, and nothing enforces it. */
@@ -35,27 +37,40 @@ export interface Settlement {
   casino: string | bigint;
 }
 /** A round's draw as the casino recorded it: the round, its seed and secret and their 64-bit outcome, and
- * every bet that rode it as it stands now: paid, refunded because the draw could not take it, or refunded at
- * its deadline. A round with no open bets is not drawn, and has no seed or outcome yet. */
+ * every bet that rode it as it stands now, paid or, past the round's deadline, refunded. A round with no open
+ * bets is not drawn, and has no seed or outcome yet. */
 export interface Drawn {
   round: string;
   seed?: string;
   secret?: string;
-  outcome?: bigint;
+  outcome?: string;
   bets: PublicBet[];
 }
 export interface Referee {
   address: string;
-  /** Every bound this casino holds a bet and a draw to: the most bets one round takes, the furthest deadline. */
-  limits: { prizes: number; outcomeSpace: string; bets: number; cells: number; deadline: number };
-  /** This referee's open round in an asset: named by the casino, and committed to the seed this key will draw
-   * it with. Players' wallets bet on it, so open one before players bet. */
+  /** Every bound a bet and a round are held to: the most bets one round takes, how long a round takes bets, the
+   * furthest deadline of a bet with terms. */
+  limits: {
+    prizes: number;
+    outcomeSpace: string;
+    bets: number;
+    cells: number;
+    round: number;
+    deadline: number;
+    terms: number;
+    group: number;
+  };
+  /** Your game's round in an asset that takes bets: named by the casino, with the deadline it is drawn by, and
+   * committed to the seed this key will draw it with. It is the same round until it is drawn or its deadline
+   * passes, so asking again is safe. Tell your players its `id`: their wallets bet on it by name. */
   open(asset: AssetId): Promise<Round>;
-  /** Draw the open round in an asset: every open bet on it rides one outcome against the bankroll, admitted in
-   * the order the casino took them, and each admitted bet is owed what its prizes pay; one that does not fit is
-   * refunded. The next round is then open. The seed is derived from this key, so asking again after a lost
-   * reply is the same draw. */
-  draw(asset: AssetId): Promise<Drawn>;
+  /** Draw the round named `round`: every open bet on it rides one outcome, and each is paid what its prizes pay.
+   * The casino took each against the bankroll as it was placed. The seed is derived from this key and the
+   * round, so drawing again after a lost reply is the same draw. Save the round you are drawing before you draw
+   * it: that is the round to ask again for. */
+  draw(round: string): Promise<Drawn>;
+  /** A round as anyone may read it, drawn or not. */
+  round(id: string): Promise<Round>;
   /** Settle bets with terms, each with a split signed here. The casino takes the batch whole or, if your bank
    * cannot pay it, not at all. A bet settled before answers with what settled it. */
   settle(settlements: Settlement[]): Promise<PublicBet[]>;
@@ -71,10 +86,10 @@ export async function createReferee({
   game,
 }: {
   casinoURL: string;
-  /** The referee's private key. Its address is what the game's developer publishes the game with. */
+  /** The referee's private key. Its address is what the game's publisher names as its referee. */
   key: string;
-  /** The game this referee runs: its developer and the name it is published under. */
-  game: GameName;
+  /** The key of the game this referee runs, as its publisher's profile lists it. */
+  game: string;
 }): Promise<Referee> {
   const signer = new Wallet(key),
     api = async (path: string, body?: unknown, headers: Record<string, string> = {}) => {
@@ -91,7 +106,7 @@ export async function createReferee({
       return value;
     },
     config = await api('/api/config');
-  assertProtocol(config);
+  assertProtocol(config, true);
   const d = domain(config.chainId, config.contractAddress);
   /** A request only the referee may make: signed with its key, good for a minute. */
   const asReferee = async (path: string, body: unknown) => {
@@ -103,46 +118,25 @@ export async function createReferee({
   // The seed a round is drawn with: this key's signature of the round, hashed. Nobody without the key can know
   // it before the draw, and the same round always gets the same seed.
   const seedOf = async (round: string) => keccak256(await signer.signMessage(getBytes(round)));
-  // Each asset's open round, as this referee committed it.
-  const rounds: Partial<Record<AssetId, Round>> = {};
-  const commit = async (asset: AssetId, round: string) => {
-    const hash = seedHash(await seedOf(round));
-    return (rounds[asset] = (await asReferee(`/api/rounds/${round}/commit`, {
-      seedHash: hash,
-      signature: await signer.signTypedData(d, COMMIT_TYPES, { round, seedHash: hash }),
-    })) as Round);
-  };
-  const open = async (asset: AssetId) =>
-    rounds[asset] ?? commit(asset, (await asReferee('/api/rounds', { game, asset })).id);
   return {
     address: signer.address,
     limits: config.limits,
-    open,
-    async draw(asset) {
-      const round = await open(asset);
-      let drawn;
-      try {
-        drawn = await asReferee(`/api/rounds/${round.id}/draw`, { seed: await seedOf(round.id) });
-      } catch (error: any) {
-        // A round the casino no longer knows is opened afresh.
-        if (error.status === 404) delete rounds[asset];
-        throw error;
-      }
-      if (drawn.secret !== undefined && !same(roundId(drawn.secret), round.id))
-        throw new Error("The casino revealed a secret that is not the round's");
-      if (!same(drawn.next, round.id)) {
-        delete rounds[asset];
-        // The next round opens at once, so players can bet on it; if that fails, the next `open` or `draw` does.
-        await commit(asset, drawn.next).catch(() => {});
-      }
-      return {
-        round: round.id,
-        bets: drawn.bets,
-        ...(drawn.secret === undefined
-          ? {}
-          : { seed: drawn.seed, secret: drawn.secret, outcome: outcome([], drawn.seed, drawn.secret).value }),
-      };
+    async open(asset) {
+      const round: Round = await asReferee('/api/rounds', { game, asset });
+      if (round.seedHash) return round;
+      const hash = seedHash(await seedOf(round.id));
+      return asReferee(`/api/rounds/${round.id}/commit`, {
+        seedHash: hash,
+        signature: await signer.signTypedData(d, COMMIT_TYPES, { round: round.id, seedHash: hash }),
+      });
     },
+    async draw(round) {
+      const drawn: Drawn = await asReferee(`/api/rounds/${round}/draw`, { seed: await seedOf(round) });
+      if (drawn.secret !== undefined && !same(roundId(drawn.secret), round))
+        throw new Error("The casino revealed a secret that is not the round's");
+      return drawn;
+    },
+    round: id => api(`/api/rounds/${id}`),
     async settle(settlements) {
       const signed = await Promise.all(
         settlements.map(async ({ bet, player, casino }) => {
@@ -152,8 +146,7 @@ export async function createReferee({
       );
       return asReferee('/api/bets/settle', { settlements: signed });
     },
-    bets: group =>
-      api(`/api/bets?game=${gameKey(game)}${group === undefined ? '' : `&group=${encodeURIComponent(group)}`}`),
+    bets: group => api(`/api/bets?game=${game}${group === undefined ? '' : `&group=${encodeURIComponent(group)}`}`),
     bet: hash =>
       api(`/api/bets/${hash}`).catch(error => {
         if (error.status === 404) return null;

@@ -16,7 +16,7 @@ import type { GameAction, GameNode, Rational } from '@hookedin/play/sdk/engine';
 import { loadFundedGame } from '@hookedin/play/sdk/engine';
 import { blackjackFunding } from '@hookedin/play/sdk/generated/blackjack-funding';
 import { admits } from '@hookedin/play/sdk/admits';
-import { describeBet, returnParts, RETURN_SCALE } from '@hookedin/play/protocol/risk.ts';
+import { describeBet, returnParts, RETURN_SCALE } from '@hookedin/play/sdk/admits';
 import { blackjackTable, cardHand } from '../src/view.ts';
 const ZERO = fraction(0n),
   ONE = fraction(1n),

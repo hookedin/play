@@ -68,10 +68,10 @@ The two extremes are not the only choices. A game can keep its common outcomes a
 
 ## What is given up
 
-A native prize table is a fact the player signs: the wallet computes its exact return and largest payout, the casino's outcome alone decides the result, and even the presentation can be read from the outcome. A collapsed table trades that away:
+A native prize table is a fact the player signs: the wallet computes its exact return and largest payout, the round's outcome alone decides the result, and even the presentation can be read from the outcome. A collapsed table trades that away:
 
 - **The wallet sees one branch, not the game.** It verifies that branch perfectly and knows nothing of the distribution it was drawn from. The advertised table is the game's word.
-- **The client's randomness matters.** The selection must be uniform over exact integer weights, independent of the casino's outcome and of the seed the wallet signs. A biased or replayed source changes the game. A modified client can choose its branch outright, which is why every branch must be admissible alone; it cannot harm the bankroll, only misrepresent the game to its player.
+- **The client's randomness matters.** The selection must be uniform over exact integer weights, independent of the round's outcome and of the seed the wallet signs. A biased or replayed source changes the game. A modified client can choose its branch outright, which is why every branch must be admissible alone; it cannot harm the bankroll, only misrepresent the game to its player.
 - **Never redraw.** Draw the branch once, save it before the wallet signs, and offer the same branch again after a verified rejection. Redrawing until a cheap branch is admitted, or dropping the rare expensive ones, silently changes the distribution. Declined, cancelled and withheld attempts must be kept apart from outcomes in any claim about returns.
 - **The kept amount was never debited.** When showing a gross result, the player ends with `L` or `H`; do not add `L` again.
 - **It costs more to price.** Finding selection weights and widths that are all admissible is a search over the whole table, growing roughly with the cube of its distinct payouts. Native prizes are priced by the casino's rule in one pass.

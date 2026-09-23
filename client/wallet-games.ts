@@ -1,26 +1,44 @@
-import type { GameIdentity, GameLimit, GameReceipt, GameRequest, GameSession } from '../protocol/game-types.ts';
+import type { GameBet, GameIdentity, GameLimit, GamePlace, GameReceipt, GameSession } from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { getAddress } from 'ethers';
-import { MAX_PRIZES, MAX_ROUND_BETS, OUTCOME_SPACE } from '../protocol/risk.ts';
-import { MAX_DEADLINE_MS } from '../protocol/protocol.ts';
-import { gameKey, gameAmount, gameOperationKey } from './game-account.ts';
+import { LIMITS } from '../protocol/protocol.ts';
+import { gameAmount, gameOperationKey } from './game-account.ts';
 import { METHODS, gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
 /** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
  * channel and its balance stay out: they would name the player. */
 export const gameReceipt = (id: string, receipt: any): GameReceipt => {
+  // Declined because the player carried it out on another channel: its result is there, and nothing here may
+  // look like a rejection the game would answer by placing the same bet again.
+  if (receipt.used)
+    throw gameError(
+      'id-used',
+      'This operation was carried out on another channel, and its result is not in this wallet',
+    );
   const op = receipt.request ?? receipt.proof.step.operation,
-    later = receipt.details?.bet;
+    later = receipt.details?.bet,
+    kind = receipt.kind === 'payment' ? 'payment' : 'bet',
+    // A bet that settles later is placed until the wallet has collected what settled it.
+    status =
+      receipt.status === 'rejected'
+        ? 'rejected'
+        : receipt.kind !== 'wager'
+          ? 'settled'
+          : receipt.payout === undefined
+            ? 'placed'
+            : receipt.refunded
+              ? 'refunded'
+              : 'settled';
   return {
     id,
-    // A bet that settles later is a bet to the game, whatever the wallet signed to place it.
-    kind: receipt.kind === 'wager' ? 'bet' : receipt.kind,
-    status: receipt.status,
-    verified: receipt.verified,
-    ...(['bet', 'wager'].includes(receipt.kind) ? { stake: op.amount } : {}),
+    kind,
+    status,
+    // What a settled bet's payout rests on: an outcome the wallet checked, or its referee's word.
+    ...(status === 'settled' && kind === 'bet' ? { basis: later?.terms ? 'referee' : 'outcome' } : {}),
+    ...(kind === 'bet' ? { stake: op.amount } : {}),
     ...(receipt.kind === 'bet' ? { prizes: op.prizes } : {}),
-    ...(later?.prizes ? { prizes: later.prizes } : {}),
+    ...(later?.prizes ? { prizes: later.prizes, round: later.round } : {}),
     ...(later?.terms ? { terms: later.terms } : {}),
     ...(later ? { deadline: later.deadline } : {}),
     ...(receipt.details?.group ? { group: receipt.details.group } : {}),
@@ -29,7 +47,7 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
     ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome }),
     ...(receipt.payout === undefined ? {} : { payout: receipt.payout }),
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
-  };
+  } as GameReceipt;
 };
 
 /**
@@ -40,15 +58,14 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
 export class GameSessions extends ChannelClient {
   game: GameSession | null = null;
   openGame(this: CasinoWallet, identity: GameIdentity) {
-    const key = gameKey(identity);
     this.game = {
-      key,
+      key: identity.key,
       identity: { ...identity, developer: getAddress(identity.developer) },
       asset: this.playing,
       balance: '0',
     };
     this.render();
-    return key;
+    return identity.key;
   }
   closeGame(this: CasinoWallet) {
     this.game = null;
@@ -74,13 +91,8 @@ export class GameSessions extends ChannelClient {
       methods: METHODS,
       asset: this.asset,
       chainId: String(this.expectedChainId),
-      // Every bound a game has to respect, so none of them is a number compiled into the game.
-      limits: {
-        prizes: MAX_PRIZES,
-        outcomeSpace: String(OUTCOME_SPACE),
-        bets: MAX_ROUND_BETS,
-        deadline: MAX_DEADLINE_MS,
-      },
+      // Every bound a bet is held to, as the protocol this wallet and its casino share has them.
+      limits: LIMITS,
     };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
@@ -96,14 +108,22 @@ export class GameSessions extends ChannelClient {
       recommendedStake: this.playing === 'test' ? String(10n ** 18n) : this.recommendedStake,
     };
   }
+  /** A game's name for an operation, for its player: the same in every channel they open, and apart for each
+   * asset and each game, so a retry after a new channel finds the operation instead of repeating it. */
   gameOperationId(this: CasinoWallet, id: string) {
     gameOperationKey(id);
-    return `game:${this.channelId}:${this.requireGame().key}:${id}`;
+    return `game:${this.playing}:${this.requireGame().key}:${id}`;
   }
+  /** The receipt of one of the open game's operations, answered at once. For a bet still waiting to settle,
+   * the wallet also asks the casino about it: once it has settled, the wallet collects what it paid and
+   * pushes the new receipt to the game. */
   async gameReceipt(this: CasinoWallet, id: string) {
     this.requireGame();
     const receipt = await this.getReceipt(this.gameOperationId(id));
-    return receipt ? (gameReceipt(id, receipt) as GameReceipt) : null;
+    if (!receipt) return null;
+    const answer = gameReceipt(id, receipt);
+    if (answer.status === 'placed') void this.collectBet(receipt.bet).catch(() => {});
+    return answer;
   }
   /** The only grant of spending authority: how much of the signed balance the open game may risk.
    * The limit lives in this tab's memory and signs nothing, so it can be set while an operation is
@@ -118,26 +138,52 @@ export class GameSessions extends ChannelClient {
       this.render();
     });
   }
-  /** A bet of the open game: on its own round, settled at once; or, with a deadline, settled later by the
-   * game's referee, which draws a bet with prizes against the bankroll or signs what a bet with terms pays.
-   * The same request again returns its receipt, and for a bet that settles later, what it paid once it has. */
-  async gameBet(this: CasinoWallet, request: GameRequest) {
+  /** A bet of the open game on the player's own round, settled at once. The same request again returns its
+   * receipt. */
+  async gameBet(this: CasinoWallet, request: GameBet) {
     const game = this.requireGame(),
-      intent = { key: game.key, id: request.id, name: game.identity.name },
-      operationId = this.gameOperationId(request.id),
-      stake = gameAmount(request.stake),
-      group = request.group === undefined ? {} : { group: request.group },
-      prizes = request.prizes?.map(prize => ({
+      prizes = request.prizes.map(prize => ({
         rangeStart: gameAmount(prize.rangeStart, false),
         rangeEnd: gameAmount(prize.rangeEnd),
         payout: gameAmount(prize.payout),
       }));
-    if (request.deadline === undefined)
-      return gameReceipt(request.id, await this.executeBet({ stake, prizes: prizes!, ...group }, operationId, intent));
-    const settles = prizes ? { prizes } : { terms: request.terms! };
     return gameReceipt(
       request.id,
-      await this.placeLater({ stake, deadline: request.deadline, ...settles, ...group }, operationId, intent),
+      await this.executeBet(
+        { stake: gameAmount(request.stake), prizes, ...(request.group === undefined ? {} : { group: request.group }) },
+        this.gameOperationId(request.id),
+        { key: game.key, id: request.id, name: game.identity.name },
+      ),
+    );
+  }
+  /** A bet of the open game that its referee settles later: drawn on the round it names, or split by the
+   * referee. The reply is its receipt at once; the wallet collects what it pays once it has settled, and
+   * pushes the new receipt to the game. The same request again returns the receipt as it stands. */
+  async gamePlace(this: CasinoWallet, request: GamePlace) {
+    const game = this.requireGame(),
+      group = request.group === undefined ? {} : { group: request.group },
+      settles =
+        'prizes' in request
+          ? {
+              round: request.round,
+              prizes: request.prizes.map(prize => ({
+                rangeStart: gameAmount(prize.rangeStart, false),
+                rangeEnd: gameAmount(prize.rangeEnd),
+                payout: gameAmount(prize.payout),
+              })),
+            }
+          : { terms: request.terms, deadline: request.deadline };
+    return gameReceipt(
+      request.id,
+      await this.placeLater(
+        { stake: gameAmount(request.stake), ...settles, ...group },
+        this.gameOperationId(request.id),
+        {
+          key: game.key,
+          id: request.id,
+          name: game.identity.name,
+        },
+      ),
     );
   }
   async gamePayment(this: CasinoWallet, request: { id: string; amount: string; group?: string }) {

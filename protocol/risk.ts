@@ -59,6 +59,14 @@ function cells(bets: readonly BetTerms[]) {
   }
   return [...widths].map(([payout, width]) => ({ payout, width }));
 }
+/** The most a round's bets can cost the bankroll on one outcome, before commission: what their stakes fall short
+ * of the payouts in the round's worst cell, or nothing. */
+export function worstCase(bets: readonly BetTerms[]) {
+  bets.forEach(checkTerms);
+  const totalStake = bets.reduce((sum, bet) => sum + bet.stake, 0n),
+    most = cells(bets).reduce((top, cell) => (cell.payout > top ? cell.payout : top), 0n);
+  return most > totalStake ? most - totalStake : 0n;
+}
 /** What a player is signing, exactly: the most the bet can pay and its expected payout out of 2^64. */
 export function describeBet(bet: BetTerms) {
   checkTerms(bet);

@@ -4,7 +4,8 @@ import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { DropClient } from '../src/drop.ts';
 import { RISKS, ROWS, dropBet, landing, multipliers, paths } from '../src/tables.ts';
 import { admits } from '@hookedin/play/sdk/admits';
-import { describeBet, betReturn, OUTCOME_SPACE } from '@hookedin/play/protocol/risk.ts';
+import { describeBet, betReturn } from '@hookedin/play/sdk/admits';
+import { OUTCOME_SPACE } from '@hookedin/play/sdk/engine';
 
 const memoryStore = () => {
   const map = new Map<string, string>();

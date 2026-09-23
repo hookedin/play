@@ -12,7 +12,7 @@ import {
   OUTCOME_SPACE,
 } from '../src/engine/index.ts';
 import { admits } from '../src/admits.ts';
-import { assessRound, describeBet } from '@hookedin/play/protocol/risk.ts';
+import { assessRound, describeBet } from '../../protocol/risk.ts';
 
 const ZERO = fraction(0n);
 const labeled = (cash: any, probability: any, next = `cash-${cash}`, label?: string) => ({

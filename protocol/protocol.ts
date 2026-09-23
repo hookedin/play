@@ -26,7 +26,7 @@ import {
   ZeroAddress,
   toUtf8Bytes,
 } from 'ethers';
-import { OUTCOME_SPACE, MAX_BALANCE, MAX_PRIZES, uint256 } from './risk.ts';
+import { OUTCOME_SPACE, MAX_BALANCE, MAX_PRIZES, MAX_ROUND_BETS, MAX_ROUND_CELLS, uint256 } from './risk.ts';
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 export const plain = <T>(value: T): Json<T> => JSON.parse(json(value));
 export const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -287,18 +287,41 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     ...values,
   });
 }
-/** A game's key: the one value its bets, its commission and its public record are kept under. It does not
- * depend on where the game is served, so a game that moves hosts keeps its history. */
-export const gameKey = ({ developer, name }: GameName) =>
-  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [developer, name]));
+/** A game's key: the one value its bets, its commission and its public record are kept under. It is made from
+ * its publisher and name when the game is first published and kept from then on, whoever it later pays and
+ * wherever it is served, so the game keeps its history. A game loaded straight from its manifest has the key
+ * of its manifest's developer and URL. */
+export const gameKey = ({ publisher, name }: GameName) =>
+  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [publisher, name]));
 export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
 export const MAX_GROUP = 64;
 /** The most a bet's terms take, as canonical JSON. */
 export const MAX_TERMS_BYTES = 4096;
-/** The furthest a bet that settles later has its deadline. */
+/** The furthest a bet with terms has its deadline. */
 export const MAX_DEADLINE_MS = 30 * 24 * 60 * 60 * 1000;
+/** How long a referee's round takes bets from when the casino names it: not drawn by then, its bets are refunded. */
+export const ROUND_MS = 10 * 60 * 1000;
+/** The most payouts one reply lists. A wallet collects them, and the next reply lists the rest. */
+export const MAX_PAYOUTS = 256;
+/** Every bound a bet is held to, as the wallet reports it to a game and the casino to a referee. They are part of
+ * the protocol revision, so a wallet or a referee that holds other ones stops before it signs anything. */
+export const LIMITS = {
+  /** The most prizes one bet holds. */
+  prizes: MAX_PRIZES,
+  /** The size of the space a prize range lies in, as a decimal string. */
+  outcomeSpace: String(OUTCOME_SPACE),
+  /** The most bets one round takes, and the most distinct outcomes they may cut it into. */
+  bets: MAX_ROUND_BETS,
+  cells: MAX_ROUND_CELLS,
+  /** How long a referee's round takes bets, and the furthest a bet with terms may have its deadline, in ms. */
+  round: ROUND_MS,
+  deadline: MAX_DEADLINE_MS,
+  /** The most a bet's terms take as canonical JSON, and the longest group label. */
+  terms: MAX_TERMS_BYTES,
+  group: MAX_GROUP,
+};
 /** A checksummed, nonzero address: the one form an address takes in details. */
 function address(value: unknown) {
   try {
@@ -319,10 +342,9 @@ export function checkDetails(kind: number, details: Details) {
     game !== null &&
     typeof game === 'object' &&
     Object.keys(game).length === 2 &&
-    address(game.developer) &&
-    typeof game.name === 'string' &&
-    game.name.length > 0 &&
-    game.name.length <= 2048;
+    typeof game.key === 'string' &&
+    bytes32Pattern.test(game.key) &&
+    address(game.developer);
   const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
   if (
     !keys.every(key => ['id', 'game', 'group', 'counterparty', 'bet'].includes(key)) ||
@@ -397,9 +419,10 @@ export const roundId = (secret: string) => keccak256(secret);
 export const seedHash = (seed: string) => keccak256(seed);
 /** Every bet on one round and seed sees the same 64-bit outcome, whichever channel signed it.
  * The stake is paid to enter; every prize whose range holds the outcome pays, so overlapping prizes add. */
+const OUTCOME_TAG = 'HOOKEDIN/OUTCOME';
 export function outcome(prizes: readonly Prize[], seed: string, secret: string) {
   const randomHash = keccak256(
-    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), seed, secret]),
+    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id(OUTCOME_TAG), seed, secret]),
   );
   const value = BigInt(randomHash) & (OUTCOME_SPACE - 1n);
   const payout = prizes.reduce(
@@ -556,10 +579,13 @@ export function verifyEvidence(bundle: EvidenceBundle): {
  * what that address has earned and collected, and it is collected like redeemed shares: a credit that
  * names this as its counterparty, signed by the key of that channel. */
 export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
-/** One value for the whole signed protocol: the hash of every typed structure. A wallet or a host
- * that was built against other structures learns so from `GET /api/config` before it signs anything. */
+const encoded = (all: Record<string, TypedDataField[]>[]) =>
+  all.map(types => TypedDataEncoder.from(types).encodeType(Object.keys(types)[0])).join('');
+/** One value for the whole protocol a wallet shares with the casino: every typed structure, and every rule the
+ * two apply alike, from the operation kinds and what names an outcome or a counterparty to every limit. A wallet
+ * built against another revision learns so from `GET /api/config` before it signs anything. */
 export const PROTOCOL = id(
-  [
+  encoded([
     STATE_TYPES,
     OP_TYPES,
     CLOSE_TYPES,
@@ -572,11 +598,22 @@ export const PROTOCOL = id(
     REDEEM_TYPES,
     BANK_TYPES,
     WITHDRAW_TYPES,
-  ]
-    .map(types => TypedDataEncoder.from(types).encodeType(Object.keys(types)[0]))
-    .join(''),
+  ]) +
+    canonicalJSON({
+      kinds: KIND,
+      outcome: OUTCOME_TAG,
+      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID, faucet: FAUCET_ID },
+      limits: LIMITS,
+    }),
 );
-export function assertProtocol(config: { protocol?: unknown }) {
-  if (config?.protocol !== PROTOCOL)
+/** What a referee shares with the casino, and nothing more: the three structures it signs, the outcome and the
+ * limits. A change to what only a wallet signs leaves it alone, so it does not stop every referee. */
+export const REFEREE_PROTOCOL = id(
+  encoded([REFEREE_ACCESS_TYPES, COMMIT_TYPES, SETTLEMENT_TYPES]) +
+    canonicalJSON({ outcome: OUTCOME_TAG, limits: LIMITS }),
+);
+/** A wallet checks `protocol` in the casino's `GET /api/config`, and a referee `refereeProtocol`. */
+export function assertProtocol(config: { protocol?: unknown; refereeProtocol?: unknown }, referee = false) {
+  if (referee ? config?.refereeProtocol !== REFEREE_PROTOCOL : config?.protocol !== PROTOCOL)
     throw Object.assign(new Error('The casino speaks another revision of the protocol'), { code: 'protocol-mismatch' });
 }

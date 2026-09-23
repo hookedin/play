@@ -32,11 +32,17 @@ export interface Prize {
   rangeEnd: Integer;
   payout: Integer;
 }
-/** A game's name: its developer, who earns half of every bet's commission, and the name it goes by, the
- * one its developer published it under or, for a game loaded straight from its manifest, that manifest's URL. */
+/** What a game's key is made from when it is first published: its publisher and the name they gave it, or, for
+ * a game loaded straight from its manifest, that manifest's developer and URL. */
 export interface GameName {
-  developer: string;
+  publisher: string;
   name: string;
+}
+/** The game an operation is for: its key, fixed when it was first published and kept whatever changes later,
+ * and the developer the operation pays commission to, the address its publisher named. */
+export interface GameRef {
+  key: string;
+  developer: string;
 }
 /** What an operation means to the wallet and the casino, beside what the contract settles. The operation
  * signs only its hash, `memo`; the request carries it whole, and both sides keep it with the evidence. */
@@ -44,7 +50,7 @@ export interface Details {
   /** The wallet's name for the operation, as a hash: an exact retry is the same operation. */
   id: string;
   /** The game that asked for a bet or a payment. */
-  game?: GameName;
+  game?: GameRef;
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
   /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a bet that
@@ -55,15 +61,15 @@ export interface Details {
 }
 /** Prizes on the wire: decimal strings. */
 export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string }[];
-/** A bet its game's referee settles by its deadline, or its stake comes back. With `prizes`, it names the
- * referee's open round and the hash of the seed the referee committed to it, so its outcome is fixed before it
- * is placed; the referee draws the round against the bankroll, and the bet pays what its prizes pay on the
- * round's outcome. With `terms`, the referee signs what it pays, and the developer's bank pays what that comes
- * to beyond the stake. */
+/** A bet its game's referee settles by its deadline, or its stake comes back. With `prizes`, it names one of
+ * its referee's open rounds and the hash of the seed the referee committed to it, so its outcome is fixed before
+ * it is placed; the casino admits it against the bankroll as it takes it, the referee draws the round, and the
+ * bet pays what its prizes pay on the round's outcome. With `terms`, the referee signs what it pays, and the
+ * developer's bank pays what that comes to beyond the stake. */
 export type LaterBet = {
   /** The key the game's developer published to settle its bets. */
   referee: string;
-  /** Unix milliseconds. Unsettled by then, the stake is refunded. */
+  /** Unix milliseconds. Unsettled by then, the stake is refunded. A bet with prizes has its round's deadline. */
   deadline: number;
 } & ({ round: string; seedHash: string; prizes: WirePrizes } | { terms: Record<string, unknown> });
 /** What drew a round: the referee's seed and the casino's secret, which hash to the seed hash and the round
@@ -97,7 +103,7 @@ export interface PublicBet {
   settlement?: { player: string; casino: string; signature: string };
   /** What it paid the player, once settled. */
   payout?: string;
-  /** Its stake came back: its deadline passed first, or, with a `draw`, the casino could not take it in its round. */
+  /** Its stake came back: nobody settled it by its deadline. */
   refunded?: true;
   settledAt?: number;
 }
@@ -105,7 +111,7 @@ export interface PublicBet {
  * what it paid has been collected into a channel. */
 export interface PlayerBet {
   bet: string;
-  game: GameName;
+  game: GameRef;
   group?: string;
   asset: 'eth' | 'test';
   status: 'open' | 'settled';
@@ -203,6 +209,8 @@ export interface OperationResponse {
   secret?: string;
   /** A declined bet names a round the casino has no open record of, so there is no secret to reveal. */
   lost?: true;
+  /** A game's operation declined because its player already carried it out on another channel. */
+  used?: true;
   state: Checkpoint;
   casinoSignature: string;
   evidence: Evidence;
@@ -222,12 +230,25 @@ export interface Submission {
   acknowledgment?: { stateHash: string; signature: string };
   seed?: string;
 }
-/** A referee's open round: the casino's round, the hash of the seed the referee will draw it with, and the
- * referee's `Commit(round, seedHash)` over the two. A bet to be drawn names the round and the seed hash. */
+/** A referee's round, as anyone may read it. The casino names it for one game in one asset and fixes its
+ * deadline; the referee commits the seed it will draw it with, `seedHash`, with its `Commit(round, seedHash)`.
+ * A bet to be drawn names the round, the seed hash and the deadline. Drawn, it shows what drew it. */
 export interface Round {
   id: string;
-  seedHash: string;
-  signature: string;
+  /** The key of the game it is for. */
+  game: string;
+  referee: string;
+  asset: 'eth' | 'test';
+  /** Unix milliseconds. Not drawn by then, every bet on it is refunded. */
+  deadline: number;
+  /** `open` takes bets; `drawn` has settled them; `expired` passed its deadline undrawn. */
+  status: 'open' | 'drawn' | 'expired';
+  seedHash?: string;
+  signature?: string;
+  seed?: string;
+  secret?: string;
+  /** The 64-bit outcome of the seed and the secret, once drawn. */
+  outcome?: string;
 }
 /** The bankroll fund: every share in issue, and how many of them are the house's own capital. */
 export interface FundState {

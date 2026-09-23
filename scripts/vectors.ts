@@ -9,6 +9,7 @@ import {
   outcome,
   roundId,
   seedHash,
+  gameKey,
 } from '../protocol/protocol.ts';
 import { fileURLToPath } from 'node:url';
 import { assessRound, OUTCOME_SPACE } from '../protocol/risk.ts';
@@ -66,7 +67,10 @@ export function buildVectors() {
     round: roundId(secrets[0]),
     memo: memo({
       id: `0x${'82'.repeat(32)}`,
-      game: { developer: getAddress(identity.player), name: 'roulette' },
+      game: {
+        key: gameKey({ publisher: getAddress(identity.player), name: 'roulette' }),
+        developer: getAddress(identity.player),
+      },
     }),
   });
   const requestHash = hashOperation(d, request);

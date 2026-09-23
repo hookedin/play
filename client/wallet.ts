@@ -1,7 +1,7 @@
 /// <reference path="../types/browser.d.ts" />
 import type { JsonRpcProvider, Signer } from 'ethers';
 import type { Store } from './storage.ts';
-import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerBet, GameName } from '../protocol/types.ts';
+import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerBet, GameRef } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
@@ -10,6 +10,8 @@ export interface WalletOptions {
   network?: string;
   onChange?: (wallet: CasinoWallet) => void;
   onProgress?: (message: string) => void;
+  /** A game's bet that settled later was collected: the receipt it now has, for the game that placed it. */
+  onGameReceipt?: (game: GameIntent, receipt: any) => void;
   storage?: Store;
   trustedDeployment?: Deployment | null;
 }
@@ -92,6 +94,7 @@ export class CasinoWallet extends GameSessions {
   declare recommendedStake: string;
   declare onChange: (wallet: CasinoWallet) => void;
   declare onProgress: (message: string) => void;
+  declare onGameReceipt: (game: GameIntent, receipt: any) => void;
   declare storage: Store;
   declare trustedDeployment: Deployment | null;
   declare publicState: Record<string, any>;
@@ -109,7 +112,7 @@ export class CasinoWallet extends GameSessions {
    * that placed it, and what the casino last said of it. */
   declare held: Record<
     string,
-    { operationId?: string; game: GameName; asset: AssetId; state?: PlayerBet; error?: string }
+    { operationId?: string; game: GameRef; asset: AssetId; state?: PlayerBet; error?: string }
   >;
   declare heldCursors: Partial<Record<AssetId, string>>;
   heldError: string | null = null;
@@ -174,7 +177,7 @@ export class CasinoWallet extends GameSessions {
     alias: string | null;
     since: number;
     stats: any;
-    games: { name: string; url: string; key: string }[];
+    games: { name: string; url: string; key: string; developer: string; referee?: string }[];
   } | null;
   reportedBankroll = '0';
   /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */
@@ -186,6 +189,7 @@ export class CasinoWallet extends GameSessions {
     network = 'sepolia',
     onChange = () => {},
     onProgress = () => {},
+    onGameReceipt = () => {},
     storage = new BrowserStore(),
     trustedDeployment = null,
   }: WalletOptions = {}) {
@@ -200,6 +204,7 @@ export class CasinoWallet extends GameSessions {
       recommendedStake: n.stake,
       onChange,
       onProgress,
+      onGameReceipt,
       storage,
       trustedDeployment,
       publicState: {},
@@ -515,11 +520,18 @@ export class CasinoWallet extends GameSessions {
     return this.profile;
   }
   /**
-   * Publish a game under this account, or, with no URL, take it out of the profile. Publishing claims
-   * a public name and asks for a funded channel; taking your own game down only has to be you, so a
-   * developer who has closed their channel can still withdraw a game that turned out to be broken.
+   * Publish a game under this account, naming the developer its bets pay commission to (this account, unless
+   * it names another), or, with no URL, take it out of the profile. Publishing claims a public name and asks for a funded channel; taking your own game
+   * down only has to be you, so a developer who has closed their channel can still withdraw a game that turned
+   * out to be broken.
    */
-  async publishGame(this: CasinoWallet, name: string, url: string | null, referee: string | null = null) {
+  async publishGame(
+    this: CasinoWallet,
+    name: string,
+    url: string | null,
+    referee: string | null = null,
+    developer: string | null = null,
+  ) {
     // Publishing speaks from the open channel. Taking a game down speaks from any ETH channel this
     // account still holds a key for, including one already closed, because a broken game has to come
     // down whether or not its developer still has money at stake.
@@ -530,7 +542,12 @@ export class CasinoWallet extends GameSessions {
     if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
     this.profile = await this.api(
       `/api/channels/${c.state.channelId}/games`,
-      { name: name.trim(), url, ...(url && referee ? { referee } : {}) },
+      {
+        name: name.trim(),
+        url,
+        ...(url ? { developer: developer ?? this.address } : {}),
+        ...(url && referee ? { referee } : {}),
+      },
       c,
     );
     this.render();

@@ -404,13 +404,17 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A bet with prizes alone is on the wallet's own round; with a deadline its referee draws it; with terms and
-  // a deadline its referee settles it. A group labels any of them.
+  // A bet settles now, on the wallet's own round. A placed bet settles later: drawn on the round of its referee's
+  // it names, or split by its referee by the deadline it names. A group labels any of them.
   assert.throws(() => validateRequest(bet({ round: '0x' + '22'.repeat(32) })), /Unexpected/);
-  assert.equal(validateRequest(bet({ deadline: 1_900_000_000_000 })).params.deadline, 1_900_000_000_000);
-  assert.throws(() => validateRequest(bet({ deadline: '1' })), /deadline/);
+  assert.throws(() => validateRequest(bet({ deadline: 1_900_000_000_000 })), /Unexpected/);
+  const placed = (overrides: any) =>
+    request(1, 'game.place', { ...params, round: '0x' + '22'.repeat(32), ...overrides });
+  assert.equal(validateRequest(placed({})).params.round, '0x' + '22'.repeat(32));
+  for (const bad of [{ round: undefined }, { round: '0x22' }, { deadline: 1_900_000_000_000 }])
+    assert.throws(() => validateRequest(placed(bad)), /round/);
   const refereed = (overrides: any) =>
-    request(1, 'game.bet', {
+    request(1, 'game.place', {
       id: 'hand-1',
       stake: '10',
       terms: { pick: 'home' },
@@ -418,7 +422,14 @@ test('validation accepts only plain parameter records and bounded exact terms', 
       ...overrides,
     });
   assert.deepEqual(validateRequest(refereed({})).params.terms, { pick: 'home' });
-  for (const bad of [{ prizes: [prize] }, { deadline: undefined }, { terms: 'home' }, { terms: null }])
+  for (const bad of [
+    { prizes: [prize] },
+    { round: '0x' + '22'.repeat(32) },
+    { deadline: undefined },
+    { deadline: '1' },
+    { terms: 'home' },
+    { terms: null },
+  ])
     assert.throws(() => validateRequest(refereed(bad)), /terms has a deadline/);
   assert.equal(validateRequest(refereed({ group: 'match-9' })).params.group, 'match-9');
   for (const group of ['', 'x'.repeat(65), 7]) assert.throws(() => validateRequest(bet({ group })), /group/);

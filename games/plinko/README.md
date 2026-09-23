@@ -47,9 +47,9 @@ No bucket pays exactly 1×.
 `DropClient` in [src/drop.ts](src/drop.ts) does four things, in this order:
 
 1. **Build and check the bet.** The board is checked against half the casino's reported bankroll with the casino's own admission rule (`admits` from the SDK). A board the casino cannot back is reported in the player's terms before anything is saved. A bet so small that a multiplier would round to zero wei is refused.
-2. **Save first.** The drop and a fresh operation `id` are written to the game's `localStorage`, scoped by page, chain, player and channel, before `game.bet` is called.
-3. **Settle.** One `game.bet` request per ball. If the reply is lost, `restore()` finds the result through `game.receipt` under the same `id`. A verified rejection keeps the same drop and gives it a fresh `id`.
-4. **Land.** Only a verified receipt moves the ball. The client recomputes the bucket from `receipt.outcome` and refuses a receipt whose payout differs from the board's.
+2. **Save first.** The drop and a fresh operation `id` are written to the game's `localStorage`, scoped by page, chain, player and asset, before `game.bet` is called.
+3. **Settle.** One `game.bet` request per ball. If the reply is lost, `restore()` finds the result through `game.receipt` under the same `id`. A rejection keeps the same drop and gives it a fresh `id`.
+4. **Land.** Only a settled receipt moves the ball. The client recomputes the bucket from `receipt.outcome` and refuses a receipt whose payout differs from the board's.
 
 Wagers settle one at a time while balls fall together. The balance strip leaves a ball's winnings out (`bank.withhold`) until it lands. The bankroll figure is only a planning hint, so it is refreshed every fifty balls rather than on each drop.
 
@@ -68,7 +68,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 
 - **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet draws its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
-- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive a receipt with `verified: true`.
+- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`, with basis `outcome`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **The ball is the outcome.** The path shown is decoded from the verified 64-bit outcome. There is no second random draw that could disagree with the payout.
 
@@ -114,7 +114,7 @@ Your game is then playable by anyone who loads `https://your-host/manifest.json`
 
 ## Get listed
 
-Publish it yourself: in the wallet, open **My wallet** and, under your name, give the game a name and this manifest's URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
+Publish it yourself: in the wallet, open **My games** and give the game a name and this manifest's URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
 
 ## Tests
 

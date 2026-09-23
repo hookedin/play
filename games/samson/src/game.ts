@@ -472,7 +472,9 @@ const round = new RoundClient(HookedIn, slotGraph);
         saved = { ...saved, ...JSON.parse(localStorage.getItem(storageKey) ?? '{}') };
       } catch {}
       bank.update(startup.state);
-      session = await round.restore();
+      // A spin this page cannot finish is let go with a word to the player, who plays on.
+      let dropped: string | null = null;
+      session = await round.restore().catch((error: Error) => ((dropped = error.message), null));
       // A spin that settled while the page was away is applied now, once, without replaying it.
       if (session?.terminal) settle(session);
       if (saved.bonus && !saved.bonus.left) saved.bonus = null;
@@ -480,6 +482,7 @@ const round = new RoundClient(HookedIn, slotGraph);
       phase = 'idle';
       if (session && !session.terminal) message('Your last spin is still open. Resume it to see the result.');
       else if (saved.bonus) message(`Your Honey Bonus has ${saved.bonus.left} spins left.`);
+      if (dropped) message(dropped, true);
       round.watch(() => {
         if (phase !== 'idle') return;
         session = round.state();

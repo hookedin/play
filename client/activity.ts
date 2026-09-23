@@ -151,12 +151,13 @@ const trust = (bet: { prizes?: unknown } | undefined) =>
     : 'Its referee signs what it pays: that is the game developer’s word, and what it wins beyond its stake is theirs to pay. Unsettled by its deadline, the stake comes back.';
 /** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
 export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
-/** A bet can have settled while what it paid still waits to enter the channel balance. */
-export function heldSummary(bet: PlayerBet) {
+/** A bet can have settled while what it paid still waits to enter the channel balance. Its game goes by the name
+ * its receipt kept, when this wallet has the receipt. */
+export function heldSummary(bet: PlayerBet, name = 'A bet that settles later') {
   const settled = bet.status === 'settled',
     amount = settled ? (bet.payout ?? '0') : bet.stake;
   return {
-    title: bet.game.name,
+    title: name,
     status: !settled
       ? 'Waiting for result'
       : bet.payout === '0'

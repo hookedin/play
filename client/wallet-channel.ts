@@ -45,9 +45,10 @@ import {
   hashWithdraw,
   settleStep,
   checkpointEvidence,
+  MAX_PAYOUTS,
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
-import { gameAmount, gameName } from './game-account.ts';
+import { gameAmount, gameRef } from './game-account.ts';
 import { gameError } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
@@ -61,10 +62,10 @@ export interface BetInput {
   prizes: Prize[];
   group?: string;
 }
-/** A bet that settles later, by the game's referee: drawn against the bankroll if it has prizes, split by
- * the referee if it has terms, and refunded if neither happens by its deadline. */
-export type LaterInput = { stake: Integer; deadline: number; group?: string } & (
-  { prizes: Prize[] } | { terms: Record<string, unknown> }
+/** A bet that settles later, by the game's referee: drawn on the round it names if it has prizes, split by the
+ * referee if it has terms, and refunded if neither happens by its deadline. */
+export type LaterInput = { stake: Integer; group?: string } & (
+  { prizes: Prize[]; round: string } | { terms: Record<string, unknown>; deadline: number }
 );
 
 /** The off-chain channel protocol: exact signed requests, verified results, rejections, rounds, bets that
@@ -140,7 +141,7 @@ export class ChannelClient extends WalletTransactions {
     return this.perform(
       'faucet',
       { amount: FAUCET_AMOUNT, source: FAUCET_ID },
-      `faucet:${this.channel!.state.sequence}`,
+      `faucet:${this.channelId}:${this.channel!.state.sequence}`,
     );
   }
   async balance(this: CasinoWallet) {
@@ -216,7 +217,7 @@ export class ChannelClient extends WalletTransactions {
     // game may give them a group. An investment, a deposit and a payout name what they pay into or collect from.
     const details: Details = plain({
       id: id(operationId),
-      ...(['bet', 'payment', 'wager'].includes(kind) ? { game: gameName(this.requireGame().identity) } : {}),
+      ...(['bet', 'payment', 'wager'].includes(kind) ? { game: gameRef(this.requireGame().identity) } : {}),
       ...(input.group ? { group: input.group } : {}),
       ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
       ...(kind === 'wager' ? { bet: input.bet } : {}),
@@ -343,7 +344,8 @@ export class ChannelClient extends WalletTransactions {
       // The casino declined the saved operation with a signed unchanged-balance checkpoint above
       // it. The wallet countersigns only now, so the casino never holds a player-signed
       // checkpoint that could supersede a completed result.
-      if (!c.pending?.request || !['bet', 'wager', 'invest'].includes(kind)) throw new Error('Unexpected rejection');
+      if (!c.pending?.request || !['bet', 'wager', 'invest', 'payment'].includes(kind))
+        throw new Error('Unexpected rejection');
       next = rejectionCheckpoint(this.domain, c.state, c.pending.request);
       assertSignature(this.domain, STATE_TYPES, next, response.casinoSignature, this.operator);
     } else {
@@ -408,6 +410,8 @@ export class ChannelClient extends WalletTransactions {
       ...(game ? { game: { key: game.key, id: game.id, name: game.name } } : {}),
       status: rejected ? 'rejected' : 'signed',
       ...(rejected ? { request: op, reason: response.reason } : {}),
+      // Declined as one this player carried out on another channel: the game must not take it for a fresh decline.
+      ...(rejected && response.used === true ? { used: true } : {}),
       // The seed of a declined bet stays with its receipt, beside what it would have paid.
       ...(rejected && c.pending?.seed ? { seed: c.pending.seed } : {}),
       ...(wouldHavePaid === null ? {} : { wouldHavePaid }),
@@ -447,40 +451,50 @@ export class ChannelClient extends WalletTransactions {
   // --- Bets that settle later --------------------------------------------------------------------
 
   /** Place a bet of the open game that settles later: a debit that completes at once, its stake held by the
-   * casino until the game's referee draws or splits it. Asking again with the same ID finds the bet, and once
-   * it has settled, what it paid, collected into this channel. */
+   * casino until the game's referee draws the round it names or splits it. Asking again with the same ID returns
+   * the receipt as it stands; the wallet collects what the bet paid once it has settled. */
   async placeLater(this: CasinoWallet, input: LaterInput, operationId: string, game: GameIntent) {
-    // The bet signs the referee its developer published the game with, the one the casino holds its bets to.
+    // The bet signs the referee its publisher named for the game, the one the casino holds its bets to.
     const referee = this.requireGame().identity.referee;
     if (!referee) throw gameError('invalid-request', 'This game was published with no referee to settle its bets');
-    const bet: LaterBet = {
-      referee: getAddress(referee),
-      deadline: input.deadline,
-      ...('prizes' in input
-        ? { ...(await this.betRound(referee, operationId)), prizes: plain(input.prizes) as WirePrizes }
-        : { terms: input.terms }),
-    };
-    const receipt = await this.perform(
+    const bet: LaterBet =
+      'prizes' in input
+        ? {
+            referee: getAddress(referee),
+            ...(await this.betRound(input.round, referee, operationId)),
+            prizes: plain(input.prizes) as WirePrizes,
+          }
+        : { referee: getAddress(referee), deadline: input.deadline, terms: input.terms };
+    return this.perform(
       'wager',
       { amount: input.stake, bet, ...(input.group ? { group: input.group } : {}) },
       operationId,
       game,
     );
-    if (receipt.status === 'signed' && receipt.payout === undefined) await this.collectBet(receipt.bet);
-    return (await this.getReceipt(operationId)) ?? receipt;
   }
-  /** The round a bet with prizes rides, and the hash of the seed its referee committed to it: the ones the
-   * bet already named if this ID has one, and otherwise the referee's open round, whose commitment must be the
-   * referee's own. So the bet's outcome is fixed before it is placed. */
-  async betRound(this: CasinoWallet, referee: string, operationId: string) {
+  /** The round a bet with prizes rides, the hash of the seed its referee committed to it and its deadline: the
+   * ones the bet already signed if this ID has one, and otherwise the round the game named, which must be open,
+   * the game's, in this asset and committed by the game's referee. So the bet's outcome is fixed before it is
+   * placed, and it names the one round the player meant. */
+  async betRound(this: CasinoWallet, round: string, referee: string, operationId: string) {
     const known =
       (await this.getReceipt(operationId))?.details?.bet ??
       (this.pending?.operationId === operationId ? this.pending.details?.bet : undefined);
-    if (known && 'round' in known) return { round: known.round, seedHash: known.seedHash };
-    const open: Round = await this.api(`/api/rounds?referee=${referee}&asset=${this.playing}`);
-    if (!bytes32(open?.id) || !bytes32(open.seedHash)) throw new Error('Invalid round');
+    if (known && 'round' in known) return { deadline: known.deadline, round: known.round, seedHash: known.seedHash };
+    const open: Round = await this.api(`/api/rounds/${round}`);
+    if (
+      !same(open?.id, round) ||
+      !bytes32(open.seedHash) ||
+      !same(open.game, this.requireGame().key) ||
+      !same(open.referee, referee) ||
+      open.asset !== this.playing ||
+      !Number.isSafeInteger(open.deadline) ||
+      typeof open.signature !== 'string'
+    )
+      throw new Error("This round is not one of the game's");
+    if (open.status !== 'open') throw gameError('round-closed', 'This round takes no more bets');
     assertSignature(this.domain, COMMIT_TYPES, { round: open.id, seedHash: open.seedHash }, open.signature, referee);
-    return { round: open.id.toLowerCase(), seedHash: open.seedHash.toLowerCase() };
+    return { deadline: open.deadline, round: open.id.toLowerCase(), seedHash: open.seedHash.toLowerCase() };
   }
   /** What a settled bet paid, worked out here from what settled it: for a bet with prizes, the seed and the
    * secret that drew its round, which must hash to the seed hash and the round the bet signed, read against the
@@ -499,10 +513,7 @@ export class ChannelClient extends WalletTransactions {
       if (!bytes32(secret) || !same(roundId(secret), signed.round))
         throw new Error("The draw's secret is not its round's");
       const drawn = outcome(signed.prizes, seed, secret);
-      // A bet the draw could not take gets its stake back, and what it would have paid is known.
-      return bet.refunded
-        ? { payout: BigInt(receipt.stake), declined: drawn.payout, draw: plain(bet.draw) }
-        : { payout: drawn.payout, outcome: String(drawn.value), draw: plain(bet.draw) };
+      return { payout: drawn.payout, outcome: String(drawn.value), draw: plain(bet.draw) };
     }
     // Unsettled by its deadline, the stake comes back.
     if (bet.refunded) return { payout: BigInt(receipt.stake) };
@@ -519,7 +530,7 @@ export class ChannelClient extends WalletTransactions {
   }
   /** Collect what a bet this wallet placed paid once it settled. The wallet works the amount out itself
    * and signs a credit for exactly it, which raises the open game's limit if it is the game that placed
-   * the bet. The bet's receipt then says what it paid. */
+   * the bet. The bet's receipt then says what it paid, and goes to the game that placed it. */
   async collectBet(this: CasinoWallet, hash: string) {
     const tracked = this.held[hash],
       channelId = this.channelId;
@@ -569,28 +580,23 @@ export class ChannelClient extends WalletTransactions {
       );
       if (credited.status !== 'signed') throw new Error('What the bet paid was not credited');
     }
+    const settled = plain({
+      ...receipt,
+      payout: paid.payout,
+      ...(paid.outcome === undefined ? {} : { outcome: paid.outcome }),
+      ...(paid.draw ? { draw: paid.draw } : {}),
+      ...(paid.settlement ? { settlement: paid.settlement } : {}),
+      // A refund says why: nobody settled the bet by its deadline.
+      ...(bet.refunded ? { refunded: true, reason: 'Refunded: not settled by its deadline' } : {}),
+      settledAt: bet.settledAt,
+    });
     await this.exclusive(
       async () => {
         if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
+        if (!this.held[hash]) return;
         const { [hash]: _collected, ...rest } = this.held;
-        await this.save(
-          plain({
-            ...receipt,
-            payout: paid.payout,
-            ...(paid.outcome === undefined ? {} : { outcome: paid.outcome }),
-            ...(paid.draw ? { draw: paid.draw } : {}),
-            ...(paid.settlement ? { settlement: paid.settlement } : {}),
-            // A refund says why: the draw could not take the bet, and what it would have paid, or its deadline
-            // passed first.
-            ...(paid.declined !== undefined
-              ? { reason: 'Refunded: the casino could not take it in the draw', wouldHavePaid: paid.declined }
-              : bet.refunded
-                ? { reason: 'Refunded: not settled by its deadline' }
-                : {}),
-            settledAt: bet.settledAt,
-          }),
-          { held: rest },
-        );
+        await this.save(settled, { held: rest });
+        if (game) this.onGameReceipt(game, settled);
       },
       { wait: true },
     );
@@ -883,7 +889,7 @@ export class ChannelClient extends WalletTransactions {
     const channelId = this.channelId,
       collected: any[] = [];
     const due = await this.api(`/api/channels/${channelId}/payouts`);
-    if (!Array.isArray(due) || due.length > 256) throw new Error('Invalid payout list');
+    if (!Array.isArray(due) || due.length > MAX_PAYOUTS) throw new Error('Invalid payout list');
     for (const payout of due) {
       if (this.channelId !== channelId || this.busy || this.pending) break;
       if (same(payout.source, DEVELOPER_ID)) {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { admits } from '@hookedin/play/sdk/admits';
 import { bet, covers, payouts, pocket, returns, RED, WHEEL } from '../src/table.ts';
-import { betReturn } from '@hookedin/play/protocol/risk.ts';
+import { betReturn } from '@hookedin/play/sdk/admits';
 
 const SPACE = 1n << 64n,
   SPOTS = [
