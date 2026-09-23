@@ -18,10 +18,13 @@ export interface BetRow {
   /** Who placed it, on a public list. This wallet's own rows leave it out. */
   who?: string | null;
   asset: 'eth' | 'test';
+  /** The label the game gave it, such as a hand or a match. */
+  group?: string;
   stake: bigint;
   payout: bigint;
-  /** The bet's expected payout, out of 2^64 stakes: what its own prize table was worth. */
-  expected: bigint;
+  /** The bet's expected payout, out of 2^64 stakes: what its own prize table was worth. A bet with terms
+   * has no prize table, so nothing says what it was worth. */
+  expected: bigint | null;
   /** The most the bet could pay, when the reader knows it. */
   maxPayout?: bigint | null;
   /** This wallet's own name for the bet. A public row has none: it is known by `index` instead. */
@@ -48,15 +51,20 @@ export interface BetTotals {
   bets: number;
   staked: bigint;
   paid: bigint;
+  /** What the bets with a prize table were expected to pay, and what they staked. */
   expected: bigint;
+  priced: bigint;
   net: bigint;
 }
-export const emptyTotals = (): BetTotals => ({ bets: 0, staked: 0n, paid: 0n, expected: 0n, net: 0n });
-export function addBet(totals: BetTotals, row: { stake: bigint; payout: bigint; expected: bigint }) {
+export const emptyTotals = (): BetTotals => ({ bets: 0, staked: 0n, paid: 0n, expected: 0n, priced: 0n, net: 0n });
+export function addBet(totals: BetTotals, row: { stake: bigint; payout: bigint; expected: bigint | null }) {
   totals.bets++;
   totals.staked += row.stake;
   totals.paid += row.payout;
-  totals.expected += row.expected;
+  if (row.expected !== null) {
+    totals.expected += row.expected;
+    totals.priced += row.stake;
+  }
   totals.net += row.payout - row.stake;
   return totals;
 }
@@ -90,7 +98,7 @@ export function totalCards(byAsset: Map<string, BetTotals>) {
     .map(([asset, totals]) => {
       const unit = unitOf(asset),
         card = element('div', 'wallet-balance-card'),
-        expected = measuredReturn(totals.staked, totals.expected),
+        expected = measuredReturn(totals.priced, totals.expected),
         realised = realisedReturn(totals.staked, totals.paid);
       card.append(
         element(
@@ -106,7 +114,8 @@ export function totalCards(byAsset: Map<string, BetTotals>) {
         element(
           'p',
           '',
-          `What these bets' own prize tables were worth. They paid back ${realised === null ? '—' : percent(realised)}: ` +
+          `What these bets' own prize tables were worth${totals.priced < totals.staked ? ", where a bet had one: a referee's word is priced by no table" : ''}. ` +
+            `They paid back ${realised === null ? '—' : percent(realised)}: ` +
             `${formatEther(totals.paid)} ${unit} for ${formatEther(totals.staked)} ${unit} staked.`,
         ),
       );
@@ -151,14 +160,77 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
       `${formatEther(row.payout)} ${unit}`,
     ),
     figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
-    figure('Return of this bet', percent(returnParts(row.stake, row.expected)), 'bet-return'),
+    figure(
+      'Return of this bet',
+      row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
+      'bet-return',
+    ),
   );
   // This wallet's own operation ID is long: it is searched, not shown. A public row is its number in the game's record.
   const named = row.operation ? `operation ${row.operation}` : row.index === undefined ? null : `bet #${row.index}`;
   if (named) {
-    item.dataset.search = named.toLowerCase();
+    item.dataset.search = `${named} ${row.group ?? ''}`.toLowerCase();
     item.title = onOpen ? `Open this bet in full · ${named}` : named[0].toUpperCase() + named.slice(1);
   }
+  return item;
+}
+
+/** Bets that carry the same group, in the same game and by the same player, belong together: the steps
+ * of one hand, the bets on one match. Each group stands where its latest bet would, as one list of its
+ * bets, oldest first; a bet alone stands as itself. */
+export function groupRows(rows: readonly BetRow[]): BetRow[][] {
+  const groups = new Map<string, BetRow[]>(),
+    order: BetRow[][] = [];
+  for (const row of rows) {
+    const key = row.group === undefined ? null : JSON.stringify([row.key ?? row.game, row.who ?? null, row.group]);
+    const known = key === null ? undefined : groups.get(key);
+    if (known) known.unshift(row);
+    else {
+      const group = [row];
+      if (key !== null) groups.set(key, group);
+      order.push(group);
+    }
+  }
+  return order;
+}
+/** One row for a group of bets: its label, how many, and what they came to together. Only the net is summed:
+ * a sequential game stakes again what its last step paid, so adding up its stakes or its payouts would count
+ * the same money more than once. */
+export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonly BetRow[]) => void) {
+  const last = rows.at(-1)!,
+    unit = unitOf(last.asset),
+    net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n),
+    item = element(
+      onOpen ? 'button' : 'div',
+      `bet-row tone-${net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral'}`,
+    );
+  if (onOpen) {
+    (item as HTMLButtonElement).type = 'button';
+    item.addEventListener('click', () => onOpen(rows));
+  }
+  const name = element('div', 'bet-game');
+  name.append(element('span', 'bet-game-name', last.game));
+  if (last.who) name.append(element('span', 'bet-who', last.who));
+  const date = new Date(last.at);
+  name.append(
+    element(
+      'span',
+      'bet-time',
+      Number.isNaN(date.getTime())
+        ? '—'
+        : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} · ${date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}`,
+    ),
+  );
+  item.append(
+    name,
+    figure('Group', last.group!, 'bet-group'),
+    figure('Bets', String(rows.length)),
+    figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
+  );
+  item.dataset.search =
+    `group ${last.group} ${rows.map(row => row.operation ?? `bet #${row.index}`).join(' ')}`.toLowerCase();
+  item.dataset.bets = String(rows.length);
+  item.title = onOpen ? `Open the ${rows.length} bets of ${last.group}` : `The ${rows.length} bets of ${last.group}`;
   return item;
 }
 
@@ -208,7 +280,15 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     receipt = row.receipt ?? {},
     step = receipt.proof?.step,
     op = step?.operation,
-    prizes: { start: bigint; end: bigint; payout: bigint }[] = (Array.isArray(op?.prizes) ? op.prizes : []).map(
+    later = receipt.details?.bet,
+    // A drawn bet keeps its prizes, round and seed hash in its details, and the seed and secret that drew its
+    // round on its receipt; a bet on its own round keeps them all in the operation.
+    draw = later?.prizes
+      ? receipt.draw && { prizes: later.prizes, round: later.round, seedHash: later.seedHash, ...receipt.draw }
+      : op && step && !later
+        ? { prizes: op.prizes, seed: step.seed, secret: step.secret, round: op.round, seedHash: op.seedHash }
+        : null,
+    prizes: { start: bigint; end: bigint; payout: bigint }[] = (Array.isArray(draw?.prizes) ? draw!.prizes : []).map(
       (prize: any) => ({
         start: BigInt(prize.rangeStart),
         end: BigInt(prize.rangeEnd),
@@ -216,7 +296,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       }),
     ),
     // Both preimages are here, so the round is drawn again from nothing but them.
-    drawn = op && step ? outcome(op.prizes, step.seed, step.secret) : null,
+    drawn = draw?.seed && draw.secret ? outcome(draw.prizes, draw.seed, draw.secret) : null,
     landed = drawn ? drawn.value : null,
     body = document.createDocumentFragment();
 
@@ -234,11 +314,33 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     figure('Staked', `${formatEther(row.stake)} ${unit}`),
     figure('Paid', `${formatEther(row.payout)} ${unit}`),
     figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
-    figure('Return of this bet', percent(returnParts(row.stake, row.expected)), 'bet-return'),
+    figure(
+      'Return of this bet',
+      row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
+      'bet-return',
+    ),
   );
   body.append(figures);
 
-  if (!prizes.length || landed === null) {
+  if (later?.terms) {
+    // A bet with terms has no prize table and no round: its referee signed what it paid.
+    const settled = detailSection(
+      'How it settled',
+      'The game’s referee signed what this bet paid you and what it gave the casino; the developer’s bank kept the rest of the stake or paid what the two came to beyond it. Your wallet checked the signature before it collected.',
+    );
+    settled.append(
+      factList([
+        ['Referee', hex(later.referee)],
+        ['Terms you signed', element('code', 'bet-detail-hex', JSON.stringify(later.terms))],
+        ['Refunded if unsettled by', new Date(later.deadline).toLocaleString()],
+        receipt.settlement ? ['Paid to you', `${formatEther(receipt.settlement.player)} ${unit}`] : null,
+        receipt.settlement ? ['Given to the casino', `${formatEther(receipt.settlement.casino)} ${unit}`] : null,
+        receipt.settlement ? ['The referee’s signature', hex(receipt.settlement.signature)] : null,
+        receipt.reason ? ['Refund', receipt.reason] : null,
+      ]),
+    );
+    body.append(settled);
+  } else if (!prizes.length || landed === null) {
     body.append(
       element(
         'p',
@@ -305,7 +407,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       element(
         'p',
         'bet-detail-note',
-        `Together they were worth ${percent(returnParts(row.stake, row.expected))} of the stake, and could have paid ` +
+        `Together they were worth ${percent(returnParts(row.stake, row.expected ?? 0n))} of the stake, and could have paid ` +
           `at most ${formatEther(row.maxPayout ?? 0n)} ${unit}.`,
       ),
     );
@@ -313,50 +415,55 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
   }
 
   if (step && op) {
-    const draw = detailSection(
-      'How the outcome was drawn',
-      'The casino fixed the round by publishing the hash of its secret, and your bet named the hash of its seed. ' +
-        'Neither side could see the outcome while choosing, and neither can change it afterwards.',
-    );
-    draw.append(
-      factList([
-        ['Your seed', hex(step.seed)],
-        [
-          'Hashes to the seed hash your bet named',
-          rederived(
-            op.seedHash,
-            same(seedHash(step.seed), op.seedHash),
-            'keccak256 of the seed above, against the hash inside the operation you signed',
-          ),
-        ],
-        ['The casino’s secret', hex(step.secret)],
-        [
-          'Hashes to the round your bet was on',
-          rederived(
-            op.round,
-            same(roundId(step.secret), op.round),
-            'keccak256 of the secret above, against the round your bet named before the secret was out',
-          ),
-        ],
-        [
-          'Both hashed together',
-          rederived(
-            drawn!.randomHash,
-            receipt.randomHash === undefined || same(drawn!.randomHash, receipt.randomHash),
-            'keccak256 of the tag HOOKEDIN/OUTCOME, the seed and the secret',
-          ),
-        ],
-        [
-          'Its lowest 64 bits are the outcome',
-          rederived(
-            `${drawn!.value} · 0x${drawn!.value.toString(16)}`,
-            receipt.payout === undefined || drawn!.payout === BigInt(receipt.payout),
-            'The outcome the prizes were read against, and the payout it produced',
-          ),
-        ],
-      ]),
-    );
-    body.append(draw);
+    if (draw && drawn) {
+      const how = detailSection(
+        'How the outcome was drawn',
+        later
+          ? 'The casino named the round by publishing the hash of its secret, and the game’s referee committed to the hash of its seed, both before you bet. ' +
+              'Your bet named both, so its outcome was fixed before it was placed, and nobody can change it.'
+          : 'The casino fixed the round by publishing the hash of its secret, and your bet named the hash of its seed. ' +
+              'Neither side could see the outcome while choosing, and neither can change it afterwards.',
+      );
+      how.append(
+        factList([
+          [later ? 'The referee’s seed' : 'Your seed', hex(draw.seed)],
+          [
+            'Hashes to the seed hash your bet named',
+            rederived(
+              draw.seedHash,
+              same(seedHash(draw.seed), draw.seedHash),
+              'keccak256 of the seed above, against the hash your bet signed',
+            ),
+          ],
+          ['The casino’s secret', hex(draw.secret)],
+          [
+            'Hashes to the round your bet was on',
+            rederived(
+              draw.round,
+              same(roundId(draw.secret), draw.round),
+              'keccak256 of the secret above, against the round your bet named before the secret was out',
+            ),
+          ],
+          [
+            'Both hashed together',
+            rederived(
+              drawn!.randomHash,
+              receipt.randomHash === undefined || same(drawn!.randomHash, receipt.randomHash),
+              'keccak256 of the tag HOOKEDIN/OUTCOME, the seed and the secret',
+            ),
+          ],
+          [
+            'Its lowest 64 bits are the outcome',
+            rederived(
+              `${drawn!.value} · 0x${drawn!.value.toString(16)}`,
+              receipt.payout === undefined || drawn!.payout === BigInt(receipt.payout),
+              'The outcome the prizes were read against, and the payout it produced',
+            ),
+          ],
+        ]),
+      );
+      body.append(how);
+    }
 
     const record = detailSection(
       'The record you both signed',
@@ -423,14 +530,18 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
  * plus the operation ID or number each row carries. */
 export function filterBets(list: HTMLElement, query: string, empty: HTMLElement, count: HTMLElement, none: string) {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  let visible = 0;
-  for (const row of list.children) {
-    const text = (row.textContent! + ' ' + ((row as HTMLElement).dataset.search ?? '')).toLowerCase();
+  let visible = 0,
+    total = 0;
+  for (const row of list.children as HTMLCollectionOf<HTMLElement>) {
+    const text = (row.textContent! + ' ' + (row.dataset.search ?? '')).toLowerCase();
     const matches = terms.every(term => text.includes(term));
+    // A group's row stands for every bet in it.
+    const bets = Number(row.dataset.bets ?? 1);
     row.classList.toggle('hidden', !matches);
-    if (matches) visible++;
+    total += bets;
+    if (matches) visible += bets;
   }
-  count.textContent = terms.length ? `${visible} / ${list.childElementCount}` : String(visible);
+  count.textContent = `${terms.length ? `${visible} / ` : ''}${total} ${total === 1 ? 'bet' : 'bets'}`;
   empty.classList.toggle('hidden', visible !== 0);
   empty.textContent = terms.length
     ? 'No bet matches that. Try a game, an amount, a bet number or an operation ID.'

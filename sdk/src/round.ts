@@ -285,11 +285,13 @@ export class RoundClient {
     }
     const { ticket, id } = this.data.pending;
     if (ticket.actionId !== action) throw new Error('Retry the pending action first');
+    // Every step of one round carries the round's ID as its group, so the wallet shows them as one game.
+    const group = this.data.id;
     let receipt;
     if (ticket.kind === 'bet')
       // The whole step is one bet: the stake at risk, and a prize for every better successor.
-      receipt = await this.call('game.bet', { id, stake: ticket.bet.stake, prizes: ticket.bet.prizes });
-    else if (ticket.kind === 'payment') receipt = await this.call('game.payment', { id, amount: ticket.amount });
+      receipt = await this.call('game.bet', { id, stake: ticket.bet.stake, prizes: ticket.bet.prizes, group });
+    else if (ticket.kind === 'payment') receipt = await this.call('game.payment', { id, amount: ticket.amount, group });
     else receipt = { kind: 'noop' };
     this.account = await this.balance();
     await this.resolve(receipt);

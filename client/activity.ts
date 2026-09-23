@@ -1,5 +1,5 @@
 import { formatEther } from 'ethers';
-import type { PlayerPot } from '../protocol/types.ts';
+import type { PlayerBet } from '../protocol/types.ts';
 import { plain } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
 
@@ -128,7 +128,8 @@ export function filterActivity(list: HTMLElement, query: string, empty: HTMLElem
     row.classList.toggle('hidden', !matches);
     if (matches) visible++;
   }
-  count.textContent = terms.length ? `${visible} / ${list.childElementCount}` : String(visible);
+  const total = terms.length ? list.childElementCount : visible;
+  count.textContent = `${terms.length ? `${visible} / ` : ''}${total} ${total === 1 ? 'event' : 'events'}`;
   empty.classList.toggle('hidden', visible !== 0);
   empty.textContent = terms.length
     ? 'No matching events. Try a method, amount, operation ID or transaction hash.'
@@ -140,50 +141,47 @@ export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
   const parts = returnParts(BigInt(stake as string), BigInt(expectedPayout as string));
   return `RTP ${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
 }
-/** What an entry into a pot costs the player, said as plainly as the docs say it. */
-const POT =
-  "The casino holds the pot's money until it ends, and what it pays is owed to you, collected by your wallet: like winnings, it is the casino's promise until then.";
-/** Whose word a pot's end is: it differs by the pot's bank, which the entry's terms show. */
-const trust = (entry: { prizes?: unknown; quote?: unknown } | undefined) =>
-  entry?.quote
-    ? "In a developer's pot, winnings beyond the pot are the developer's promise: they name the outcome and pay it, and can leave a pot they would lose to its deadline, when every stake comes back."
-    : entry?.prizes
-      ? "The game's referee and the casino each drew half of the outcome: neither could choose it alone, but together they could."
-      : "The game's referee signs how the pot is split: that is its word, and nothing more.";
+/** What a bet that settles later asks of the player, said as plainly as the docs say it. */
+const HELD =
+  'The casino holds its stake until it settles, and what it pays is owed to you, collected by your wallet: like winnings, it is the casino’s promise until then.';
+/** Whose word a bet that settles later is: with prizes, a draw's; with terms, its referee's. */
+const trust = (bet: { prizes?: unknown } | undefined) =>
+  bet?.prizes
+    ? 'Its referee draws it against the casino’s bankroll, on a round the casino named and the referee committed its seed to before you bet: its outcome was fixed before your bet, and nobody can change it. Neither sees it alone before the draw; together they could, and turn the bet away, which its receipt would show. The referee chooses when to draw, not what it pays. Undrawn by its deadline, the stake comes back.'
+    : 'Its referee signs what it pays: that is the game developer’s word, and what it wins beyond its stake is theirs to pay. Unsettled by its deadline, the stake comes back.';
 /** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
 export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
-/** A pot can be resolved while its payment is still waiting to enter the channel balance. */
-export function potSummary(pot: PlayerPot) {
-  const resolved = pot.status === 'resolved',
-    refund = pot.resolution === 'refund',
-    amount = resolved ? (pot.payout ?? '0') : pot.stake;
+/** A bet can have settled while what it paid still waits to enter the channel balance. */
+export function heldSummary(bet: PlayerBet) {
+  const settled = bet.status === 'settled',
+    amount = settled ? (bet.payout ?? '0') : bet.stake;
   return {
-    title: pot.game.name,
-    status: !resolved
+    title: bet.game.name,
+    status: !settled
       ? 'Waiting for result'
-      : pot.payout === '0'
-        ? 'Resolved · no payout'
-        : pot.collected
-          ? refund
+      : bet.payout === '0'
+        ? 'Settled · no payout'
+        : bet.collected
+          ? bet.refunded
             ? 'Refund collected'
             : 'Payout collected'
-          : refund
+          : bet.refunded
             ? 'Refund ready'
             : 'Payout ready',
-    amount: `${formatEther(amount)} ${receiptUnit(pot)}`,
-    amountLabel: !resolved
-      ? 'Stake in pot'
-      : pot.payout === '0'
+    amount: `${formatEther(amount)} ${receiptUnit(bet)}`,
+    amountLabel: !settled
+      ? 'Stake held'
+      : bet.payout === '0'
         ? 'Payout'
-        : pot.collected
+        : bet.collected
           ? 'Collected'
           : 'Awaiting collection',
-    description: !resolved
-      ? `Automatic refund if unresolved by ${new Date(pot.deadline).toLocaleString()}.`
-      : refund
-        ? `Stake returned: pot ${pot.refundReason}.`
-        : 'The pot has resolved.',
-    tone: (!resolved ? 'neutral' : pot.payout === '0' ? 'neutral' : pot.collected ? 'positive' : 'warning') as Tone,
+    description: !settled
+      ? `Refunded if unsettled by ${new Date(bet.deadline).toLocaleString()}.`
+      : bet.refunded
+        ? 'Its stake came back.'
+        : 'The bet has settled.',
+    tone: (!settled ? 'neutral' : bet.payout === '0' ? 'neutral' : bet.collected ? 'positive' : 'warning') as Tone,
   };
 }
 export function receiptSummary(
@@ -192,17 +190,12 @@ export function receiptSummary(
   const unit = receiptUnit(receipt);
   if (receipt.status === 'rejected')
     return {
-      title:
-        receipt.kind === 'invest'
-          ? 'Investment declined'
-          : receipt.kind === 'entry'
-            ? 'Entry declined'
-            : 'Bet rejected',
+      title: receipt.kind === 'invest' ? 'Investment declined' : 'Bet rejected',
       status: receipt.kind === 'invest' ? 'No shares bought' : 'No wager placed',
       tone: receipt.lost ? 'warning' : 'neutral',
       amount: `0 ${unit}`,
       amountLabel: 'Balance change',
-      description: ['invest', 'entry'].includes(receipt.kind)
+      description: ['invest', 'wager'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
         : receipt.lost
           ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this wager would have paid cannot be checked.'
@@ -222,34 +215,37 @@ export function receiptSummary(
         orphaned: 'Unconfirmed · reorg',
       } as Record<string, string>
     )[receipt.status] || 'Unconfirmed';
-  // A bet's stake was paid to enter; its result is what the prizes paid against that stake.
-  const net = receipt.kind === 'bet' ? BigInt(receipt.payout ?? 0) - BigInt(receipt.stake ?? 0) : 0n;
+  // A bet's stake was paid to enter; its result is what it paid against that stake. A bet that settles
+  // later has a result once its payout is collected.
+  const played = receipt.kind === 'bet' || (receipt.kind === 'wager' && receipt.payout !== undefined),
+    net = played ? BigInt(receipt.payout ?? 0) - BigInt(receipt.stake ?? 0) : 0n;
   const title =
-    receipt.kind === 'bet'
-      ? net > 0n
-        ? 'Bet won'
-        : net < 0n
-          ? 'Bet lost'
-          : 'Bet returned'
-      : (
-          {
-            deposit: 'Channel funded',
-            withdrawal: 'Claim collected',
-            closure: 'Channel closed',
-            dispute: 'Channel dispute',
-            payment: 'Game payment',
-            entry: 'Entered a pot',
-            payout: 'Pot payout',
-            bank: 'Put into your bank',
-            withdrawn: 'Taken from your bank',
-            invest: 'Invested in the bankroll',
-            redeem: 'Shares redeemed',
-            divest: 'Bankroll payout',
-            earnings: 'Developer earnings',
-            faucet: 'Test coins claimed',
-            transaction: 'Transaction',
-          } as Record<string, string>
-        )[receipt.kind] || receipt.kind;
+    receipt.kind === 'wager' && !played
+      ? 'Bet placed'
+      : played
+        ? net > 0n
+          ? 'Bet won'
+          : net < 0n
+            ? 'Bet lost'
+            : 'Bet returned'
+        : (
+            {
+              deposit: 'Channel funded',
+              withdrawal: 'Claim collected',
+              closure: 'Channel closed',
+              dispute: 'Channel dispute',
+              payment: 'Game payment',
+              payout: 'Bet payout',
+              bank: 'Put into your bank',
+              withdrawn: 'Taken from your bank',
+              invest: 'Invested in the bankroll',
+              redeem: 'Shares redeemed',
+              divest: 'Bankroll payout',
+              earnings: 'Developer earnings',
+              faucet: 'Test coins claimed',
+              transaction: 'Transaction',
+            } as Record<string, string>
+          )[receipt.kind] || receipt.kind;
   let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ${unit}`;
   let amountLabel = !settled
     ? 'No confirmed payment'
@@ -261,14 +257,14 @@ export function receiptSummary(
           ? 'Invested'
           : receipt.kind === 'redeem'
             ? 'Owed to you'
-            : ['payment', 'entry', 'bank'].includes(receipt.kind)
+            : ['payment', 'wager', 'bank'].includes(receipt.kind)
               ? 'Sent'
               : receipt.kind === 'closure'
                 ? 'Claim recorded'
                 : `${unit} received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
-  if (receipt.kind === 'bet') {
+  if (played) {
     amount = settled ? `${net < 0n ? '−' : '+'}${formatEther(net < 0n ? -net : net)} ${unit}` : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
     if (settled) tone = net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral';
@@ -276,7 +272,7 @@ export function receiptSummary(
       receipt.maxPayout === undefined
         ? ''
         : ` of up to ${formatEther(receipt.maxPayout)} ${unit} · ${returnToPlayer(receipt.stake, receipt.expectedPayout)}`
-    } · Balance ${formatEther(receipt.balance)} ${unit}`;
+    }${receipt.kind === 'bet' ? ` · Balance ${formatEther(receipt.balance)} ${unit}` : ''}`;
   } else if (
     settled &&
     ['withdrawal', 'divest', 'earnings', 'faucet', 'payout', 'withdrawn'].includes(receipt.kind) &&
@@ -291,24 +287,27 @@ export function receiptSummary(
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'payment')
     description = `An extra wager this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
-  if (receipt.kind === 'entry') {
-    status =
-      receipt.payout === undefined
-        ? 'Waiting for result'
-        : receipt.resolution === 'refund'
-          ? 'Refund collected'
-          : receipt.payout === '0'
-            ? 'Resolved · no payout'
-            : 'Payout collected';
-    description =
-      receipt.payout === undefined
-        ? `In the pot until it ends. ${POT} ${trust(receipt.details?.entry)} Balance ${formatEther(receipt.balance)} ${unit}`
-        : `The pot paid ${formatEther(receipt.payout)} ${unit} for this entry${receipt.reason ? ': ' + receipt.reason.toLowerCase() : ''}.`;
+  if (receipt.kind === 'wager') {
+    status = !played
+      ? 'Waiting for result'
+      : receipt.reason
+        ? 'Refund collected'
+        : BigInt(receipt.payout)
+          ? 'Payout collected'
+          : 'Settled · no payout';
+    if (!played)
+      description = `Placed; it settles later. ${HELD} ${trust(receipt.details?.bet)} Balance ${formatEther(receipt.balance)} ${unit}`;
+    else if (receipt.reason)
+      description = `${receipt.reason}${
+        receipt.wouldHavePaid === undefined
+          ? ''
+          : `: it would have paid ${formatEther(receipt.wouldHavePaid)} ${unit}, the draw on record beside it`
+      }. ${description}`;
   }
   if (receipt.kind === 'payout')
-    description = `What a pot you entered paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `What a bet that settled later paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'bank')
-    description = `Your bank pays what your pots owe beyond their entries, and keeps what they do not pay. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Your bank pays what your referee's splits owe beyond their stakes, and keeps what they do not pay. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'withdrawn')
     description = `Taken from your bank and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'faucet')

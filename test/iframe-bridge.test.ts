@@ -404,18 +404,25 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A bet is on the wallet's own round; a game shares an outcome by entering a pot.
-  assert.throws(() => validateRequest(bet({ round: { id: '0x' + '22'.repeat(32) } })), /Unexpected/);
-  const pot = '0x' + '22'.repeat(32),
-    quote = { expiresAt: '1900000000', signature: '0x' + '33'.repeat(65) },
-    enter = (overrides: any) => request(1, 'game.enter', { id: 'hand-1', pot, stake: '10', ...overrides });
-  assert.equal(validateRequest(enter({})).params.pot, pot);
-  assert.deepEqual(validateRequest(enter({ prizes: [prize], quote })).params.quote, quote);
-  assert.throws(() => validateRequest(enter({ pot: '0x12' })), /Invalid pot/);
-  assert.throws(() => validateRequest(enter({ prizes: [] })), /prizes/);
-  assert.throws(() => validateRequest(enter({ quote: { ...quote, signature: '0x12' } })), /Invalid quote/);
-  assert.throws(() => validateRequest(enter({ quote: { ...quote, by: 'x' } })), /Invalid quote/);
-  assert.throws(() => validateRequest(enter({ round: pot })), /Unexpected/);
+  // A bet with prizes alone is on the wallet's own round; with a deadline its referee draws it; with terms and
+  // a deadline its referee settles it. A group labels any of them.
+  assert.throws(() => validateRequest(bet({ round: '0x' + '22'.repeat(32) })), /Unexpected/);
+  assert.equal(validateRequest(bet({ deadline: 1_900_000_000_000 })).params.deadline, 1_900_000_000_000);
+  assert.throws(() => validateRequest(bet({ deadline: '1' })), /deadline/);
+  const refereed = (overrides: any) =>
+    request(1, 'game.bet', {
+      id: 'hand-1',
+      stake: '10',
+      terms: { pick: 'home' },
+      deadline: 1_900_000_000_000,
+      ...overrides,
+    });
+  assert.deepEqual(validateRequest(refereed({})).params.terms, { pick: 'home' });
+  for (const bad of [{ prizes: [prize] }, { deadline: undefined }, { terms: 'home' }, { terms: null }])
+    assert.throws(() => validateRequest(refereed(bad)), /terms has a deadline/);
+  assert.equal(validateRequest(refereed({ group: 'match-9' })).params.group, 'match-9');
+  for (const group of ['', 'x'.repeat(65), 7]) assert.throws(() => validateRequest(bet({ group })), /group/);
+  assert.throws(() => validateRequest(request(1, 'game.enter', { id: 'hand-1', stake: '10' })), /not available/);
   const safe = Object.assign(Object.create(null), params);
   assert.equal(validateRequest(request(1, 'game.bet', safe)).params.stake, '10');
 });

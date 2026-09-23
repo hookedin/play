@@ -1,14 +1,8 @@
-import type {
-  EntryRequest,
-  GameIdentity,
-  GameLimit,
-  GameReceipt,
-  GameRequest,
-  GameSession,
-} from '../protocol/game-types.ts';
+import type { GameIdentity, GameLimit, GameReceipt, GameRequest, GameSession } from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { getAddress } from 'ethers';
 import { MAX_PRIZES, MAX_ROUND_BETS, OUTCOME_SPACE } from '../protocol/risk.ts';
+import { MAX_DEADLINE_MS } from '../protocol/protocol.ts';
 import { gameKey, gameAmount, gameOperationKey } from './game-account.ts';
 import { METHODS, gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
@@ -16,23 +10,23 @@ import { ChannelClient } from './wallet-channel.ts';
 /** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
  * channel and its balance stay out: they would name the player. */
 export const gameReceipt = (id: string, receipt: any): GameReceipt => {
-  const op = receipt.request ?? receipt.proof.step.operation;
+  const op = receipt.request ?? receipt.proof.step.operation,
+    later = receipt.details?.bet;
   return {
     id,
-    kind: receipt.kind,
+    // A bet that settles later is a bet to the game, whatever the wallet signed to place it.
+    kind: receipt.kind === 'wager' ? 'bet' : receipt.kind,
     status: receipt.status,
     verified: receipt.verified,
-    ...(receipt.kind === 'bet' ? { stake: op.amount, prizes: op.prizes } : {}),
-    ...(receipt.kind === 'entry'
-      ? {
-          stake: op.amount,
-          pot: receipt.details.counterparty,
-          ...(receipt.details.entry?.prizes ? { prizes: receipt.details.entry.prizes } : {}),
-        }
-      : {}),
+    ...(['bet', 'wager'].includes(receipt.kind) ? { stake: op.amount } : {}),
+    ...(receipt.kind === 'bet' ? { prizes: op.prizes } : {}),
+    ...(later?.prizes ? { prizes: later.prizes } : {}),
+    ...(later?.terms ? { terms: later.terms } : {}),
+    ...(later ? { deadline: later.deadline } : {}),
+    ...(receipt.details?.group ? { group: receipt.details.group } : {}),
+    ...(receipt.bet ? { bet: receipt.bet } : {}),
     // The outcome and what it paid: everything a game needs to show the result.
     ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome }),
-    ...(receipt.resolution ? { resolution: receipt.resolution, resolvedAt: receipt.resolvedAt } : {}),
     ...(receipt.payout === undefined ? {} : { payout: receipt.payout }),
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
   };
@@ -81,7 +75,12 @@ export class GameSessions extends ChannelClient {
       asset: this.asset,
       chainId: String(this.expectedChainId),
       // Every bound a game has to respect, so none of them is a number compiled into the game.
-      limits: { prizes: MAX_PRIZES, outcomeSpace: String(OUTCOME_SPACE), entries: MAX_ROUND_BETS },
+      limits: {
+        prizes: MAX_PRIZES,
+        outcomeSpace: String(OUTCOME_SPACE),
+        bets: MAX_ROUND_BETS,
+        deadline: MAX_DEADLINE_MS,
+      },
     };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
@@ -119,52 +118,38 @@ export class GameSessions extends ChannelClient {
       this.render();
     });
   }
+  /** A bet of the open game: on its own round, settled at once; or, with a deadline, settled later by the
+   * game's referee, which draws a bet with prizes against the bankroll or signs what a bet with terms pays.
+   * The same request again returns its receipt, and for a bet that settles later, what it paid once it has. */
   async gameBet(this: CasinoWallet, request: GameRequest) {
-    const game = this.requireGame();
-    const terms = {
-      stake: gameAmount(request.stake),
-      prizes: request.prizes.map(prize => ({
+    const game = this.requireGame(),
+      intent = { key: game.key, id: request.id, name: game.identity.name },
+      operationId = this.gameOperationId(request.id),
+      stake = gameAmount(request.stake),
+      group = request.group === undefined ? {} : { group: request.group },
+      prizes = request.prizes?.map(prize => ({
         rangeStart: gameAmount(prize.rangeStart, false),
         rangeEnd: gameAmount(prize.rangeEnd),
         payout: gameAmount(prize.payout),
-      })),
-    };
+      }));
+    if (request.deadline === undefined)
+      return gameReceipt(request.id, await this.executeBet({ stake, prizes: prizes!, ...group }, operationId, intent));
+    const settles = prizes ? { prizes } : { terms: request.terms! };
     return gameReceipt(
       request.id,
-      await this.executeBet(terms, this.gameOperationId(request.id), {
-        key: game.key,
-        id: request.id,
-        name: game.identity.name,
-      }),
+      await this.placeLater({ stake, deadline: request.deadline, ...settles, ...group }, operationId, intent),
     );
   }
-  /** Enter a pot of this game. The entry is final; the same request again finds it, and once the pot
-   * has ended, what it paid. */
-  async gameEnter(this: CasinoWallet, request: EntryRequest) {
+  async gamePayment(this: CasinoWallet, request: { id: string; amount: string; group?: string }) {
     const game = this.requireGame();
     return gameReceipt(
       request.id,
-      await this.enterPot(
-        {
-          pot: request.pot.toLowerCase(),
-          stake: gameAmount(request.stake),
-          ...(request.prizes ? { prizes: request.prizes } : {}),
-          ...(request.quote ? { quote: request.quote } : {}),
-        },
+      await this.payBankroll(
+        gameAmount(request.amount),
         this.gameOperationId(request.id),
         { key: game.key, id: request.id, name: game.identity.name },
+        request.group,
       ),
-    );
-  }
-  async gamePayment(this: CasinoWallet, request: { id: string; amount: string }) {
-    const game = this.requireGame();
-    return gameReceipt(
-      request.id,
-      await this.payBankroll(gameAmount(request.amount), this.gameOperationId(request.id), {
-        key: game.key,
-        id: request.id,
-        name: game.identity.name,
-      }),
     );
   }
 }

@@ -43,78 +43,86 @@ export interface GameName {
 export interface Details {
   /** The wallet's name for the operation, as a hash: an exact retry is the same operation. */
   id: string;
-  /** The game that asked for a bet, a payment or a pot entry. */
+  /** The game that asked for a bet or a payment. */
   game?: GameName;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a pot, a
-   * developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
+  /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
+  group?: string;
+  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a bet that
+   * settled later, a developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
-  /** A pot entry's terms beyond its stake: the prizes it holds, and a referee's quote for them. */
-  entry?: EntryTerms;
+  /** A bet that settles later: a debit that names its game, and the referee who settles it. */
+  bet?: LaterBet;
 }
-/** Prizes of a house or developer pot's entry, on the wire; a players' pot's entry has none. */
-export interface EntryTerms {
-  prizes?: { rangeStart: string; rangeEnd: string; payout: string }[];
-  /** The referee's price for a developer's pot: its signed `Quote`, good until `expiresAt` (unix seconds). */
-  quote?: { expiresAt: string; signature: string };
+/** Prizes on the wire: decimal strings. */
+export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string }[];
+/** A bet its game's referee settles by its deadline, or its stake comes back. With `prizes`, it names the
+ * referee's open round and the hash of the seed the referee committed to it, so its outcome is fixed before it
+ * is placed; the referee draws the round against the bankroll, and the bet pays what its prizes pay on the
+ * round's outcome. With `terms`, the referee signs what it pays, and the developer's bank pays what that comes
+ * to beyond the stake. */
+export type LaterBet = {
+  /** The key the game's developer published to settle its bets. */
+  referee: string;
+  /** Unix milliseconds. Unsettled by then, the stake is refunded. */
+  deadline: number;
+} & ({ round: string; seedHash: string; prizes: WirePrizes } | { terms: Record<string, unknown> });
+/** What drew a round: the referee's seed and the casino's secret, which hash to the seed hash and the round
+ * its bets named. Every bet on the round rides their one outcome. */
+export interface Draw {
+  seed: string;
+  secret: string;
 }
-/** Who pays a pot beyond its entries: the casino's bankroll, the developer's bank, or nobody. */
-export type Bank = 'house' | 'developer' | 'players';
-/** A pot as anyone may read it: the game it is for, its referee and bank, its entries by the names their
- * players answer to, and, once it ends, what ended it. It names no operation, channel or address. */
-export interface PotStatus {
-  id: string;
+/** A bet that settles later, as anyone may read it by its hash (the hash of the operation that placed it). */
+export interface PublicBet {
+  bet: string;
   /** The game's key. */
   game: string;
+  group?: string;
+  asset: 'eth' | 'test';
+  uname: string | null;
+  alias: string | null;
   referee: string;
-  bank: Bank;
-  asset: 'eth' | 'test';
-  status: 'unresolved' | 'resolved';
-  resolution?: 'outcome' | 'refund';
-  refundReason?: 'cancelled' | 'expired';
-  resolvedAt?: number;
-  /** A house pot's seed hash: its referee's seed, which with the casino's secret picks the outcome. */
-  seedHash?: string;
-  /** A developer's pot names its outcomes 0 to `outcomes - 1`. */
-  outcomes?: number;
-  /** A players' pot takes at most this rake, in basis points of its entries. */
-  rake?: number;
-  /** No entry after this (unix milliseconds): null for a house pot nobody has entered. */
-  closesAt: number | null;
-  /** Unresolved by then (unix milliseconds), the pot resolves with a refund of every entry. */
-  deadline: number;
-  entries: { uname: string | null; alias: string | null; stake: string; prizes?: EntryTerms['prizes'] }[];
-  /** How it ended: a house pot's seed and the casino's secret, or the referee's signed result. */
-  seed?: string;
-  secret?: string;
-  result?: PotResult;
-  signature?: string;
-}
-/** An authenticated account's stake and result in a pot, across all its channels in one asset.
- * A resolution includes zero payouts. Collection credits a positive payout to a channel separately. */
-export interface PlayerPot {
-  id: string;
-  game: GameName;
-  asset: 'eth' | 'test';
-  status: PotStatus['status'];
-  closesAt: number | null;
-  deadline: number;
   stake: string;
+  placedAt: number;
+  deadline: number;
+  status: 'open' | 'settled';
+  /** A bet with prizes: the round it rides, the hash of the seed its referee committed to the round, and its
+   * prizes; once the round is drawn, what drew it. */
+  round?: string;
+  seedHash?: string;
+  prizes?: WirePrizes;
+  draw?: Draw;
+  /** A bet with terms: its terms, and once it is settled, the referee's signed split. */
+  terms?: Record<string, unknown>;
+  settlement?: { player: string; casino: string; signature: string };
+  /** What it paid the player, once settled. */
   payout?: string;
-  collected: boolean;
-  resolution?: PotStatus['resolution'];
-  refundReason?: PotStatus['refundReason'];
-  resolvedAt?: number;
+  /** Its stake came back: its deadline passed first, or, with a `draw`, the casino could not take it in its round. */
+  refunded?: true;
+  settledAt?: number;
 }
-/** Pass cursor as after for the next page. Resolved cursors can be saved and resumed on later polls.
- * Unresolved pages describe the current set; start at the beginning on each refresh. */
-export interface PlayerPots {
-  pots: PlayerPot[];
+/** An account's bet that settles later, across its channels in one asset: open, or settled and whether
+ * what it paid has been collected into a channel. */
+export interface PlayerBet {
+  bet: string;
+  game: GameName;
+  group?: string;
+  asset: 'eth' | 'test';
+  status: 'open' | 'settled';
+  stake: string;
+  deadline: number;
+  payout?: string;
+  refunded?: true;
+  settledAt?: number;
+  collected: boolean;
+}
+/** Pass cursor as after for the next page. Settled cursors can be saved and resumed on later polls.
+ * Open pages describe the current set; start at the beginning on each refresh. */
+export interface PlayerBets {
+  bets: PlayerBet[];
   cursor: string;
   more: boolean;
 }
-/** What a referee says a pot came to: a developer's pot's outcome, or a players' pot's split of its
- * entries (each entry's payout, by index) and the rake it keeps. */
-export type PotResult = { outcome: number } | { split: { entry: number; amount: string }[]; rake: string };
 export interface Operation {
   channelId: string;
   previousStateHash: string;
@@ -204,8 +212,6 @@ export interface OperationResponse {
   /** An investment's response carries the casino's signed statement of the holding, and a bank
    * deposit the statement of the bank. */
   statement?: SignedStatement;
-  /** A pot entry's number among the pot's entries. */
-  entry?: number;
 }
 /** What a wallet sends the casino: its signed operation, what the operation means, and its
  * countersignature of the previous response. A bet brings the seed it names. */
@@ -216,10 +222,12 @@ export interface Submission {
   acknowledgment?: { stateHash: string; signature: string };
   seed?: string;
 }
-/** What a bet names: a round and the hash of the seed every bet on it shares. */
+/** A referee's open round: the casino's round, the hash of the seed the referee will draw it with, and the
+ * referee's `Commit(round, seedHash)` over the two. A bet to be drawn names the round and the seed hash. */
 export interface Round {
   id: string;
   seedHash: string;
+  signature: string;
 }
 /** The bankroll fund: every share in issue, and how many of them are the house's own capital. */
 export interface FundState {

@@ -1,14 +1,7 @@
 import { gameAmount, gameOperationKey } from './game-account.ts';
+import { MAX_GROUP } from '../protocol/protocol.ts';
 /** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
-export const METHODS = [
-  'wallet.hello',
-  'wallet.info',
-  'game.receipt',
-  'game.bet',
-  'game.enter',
-  'game.payment',
-  'game.requestFunds',
-];
+export const METHODS = ['wallet.hello', 'wallet.info', 'game.receipt', 'game.bet', 'game.payment', 'game.requestFunds'];
 const methods = new Set(METHODS);
 /** Questions the wallet answers at once. Everything else signs or asks the player, and waits its turn. */
 const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'game.receipt']);
@@ -76,31 +69,29 @@ function validate(data: any) {
     if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
   } else {
-    const fields = ['game.bet', 'game.enter'].includes(data.method)
-      ? ['stake']
-      : data.method === 'game.payment'
-        ? ['amount']
-        : [];
+    const fields = data.method === 'game.bet' ? ['stake'] : data.method === 'game.payment' ? ['amount'] : [];
     const terms =
-      data.method === 'game.bet' ? ['prizes'] : data.method === 'game.enter' ? ['pot', 'prizes', 'quote'] : [];
+      data.method === 'game.bet'
+        ? ['prizes', 'terms', 'deadline', 'group']
+        : data.method === 'game.payment'
+          ? ['group']
+          : [];
     if (!only(params, ['id', ...fields, ...terms])) throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);
     for (const field of fields) gameAmount(params[field]);
-    if (data.method === 'game.bet') validatePrizes(params.prizes);
-    if (data.method === 'game.enter') {
-      // A pot of this game: a house or developer pot's entry holds prizes, a developer's with its referee's quote.
-      if (typeof params.pot !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.pot)) throw new Error('Invalid pot.');
-      if (params.prizes !== undefined) validatePrizes(params.prizes);
-      const quote = params.quote;
-      if (
-        quote !== undefined &&
-        (!object(quote) ||
-          !only(quote, ['expiresAt', 'signature']) ||
-          typeof quote.signature !== 'string' ||
-          !/^0x[0-9a-fA-F]{130}$/.test(quote.signature))
-      )
-        throw new Error('Invalid quote.');
-      if (quote !== undefined) gameAmount(quote.expiresAt);
+    if (
+      params.group !== undefined &&
+      (typeof params.group !== 'string' || !params.group.length || params.group.length > MAX_GROUP)
+    )
+      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
+    if (data.method === 'game.bet') {
+      // A bet has prizes, which settle on a round, the player's own or a draw of its referee's, or terms its
+      // referee settles; either of those settles later, by its deadline.
+      if (params.deadline !== undefined && !Number.isSafeInteger(params.deadline))
+        throw new Error('A deadline is a time in unix milliseconds.');
+      if (params.terms === undefined) validatePrizes(params.prizes);
+      else if (!object(params.terms) || params.prizes !== undefined || params.deadline === undefined)
+        throw new Error('A bet with terms has a deadline, and no prizes.');
     }
   }
   return { ...data, params };

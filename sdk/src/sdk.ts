@@ -20,8 +20,10 @@ export interface WalletLimits {
   prizes: number;
   /** The size of the outcome space, as a decimal string: a prize range lies within [0, this). */
   outcomeSpace: string;
-  /** The most entries one pot holds. */
-  entries: number;
+  /** The most bets one round takes. */
+  bets: number;
+  /** The furthest a bet that settles later has its deadline, in milliseconds. */
+  deadline: number;
 }
 /** What a wallet says when a game page loads: the methods it offers, the money it plays with, and
  * every bound it holds a bet to. */
@@ -45,8 +47,8 @@ export interface WalletInfo {
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
  * `invalid-request`, `unknown-method`, `busy`, `no-channel`, `insufficient-funds`, `pending-operation`,
- * `declined`, `id-conflict`, `game-closed`, `wrong-asset`, `pot-closed` and `failed`; a refusal by the
- * casino carries the casino's code, such as `pot-closed` or `quote-expired`. */
+ * `declined`, `id-conflict`, `game-closed` and `failed`; a refusal by the
+ * casino carries the casino's code. */
 export class HookedInError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -61,8 +63,8 @@ export interface WirePrize {
   rangeEnd: string;
   payout: string;
 }
-export type { EntryRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
-import type { EntryRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
+export type { GameRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
+import type { GameRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
 import { playerScope, showName } from './wire.ts';
 export const HookedIn = (() => {
   'use strict';
@@ -208,14 +210,16 @@ export const HookedIn = (() => {
 
   /** The wallet persists nothing for a game, so a game keeps its round state at its own origin. */
   const receipt = (id: string): Promise<GameReceipt | null> => call('game.receipt', { id });
-  /** One atomic bet: `stake` is paid to enter and every prize whose range holds the outcome pays. */
-  const bet = (request: { id: string; stake: string; prizes: WirePrize[] }): Promise<GameReceipt> =>
-    call('game.bet', request);
-  /** Enter a pot of this game: the stake leaves the balance at once, and the entry is final. Once the pot
-   * has ended, the same call returns the receipt with what the entry was paid. */
-  const enter = (request: EntryRequest): Promise<GameReceipt> => call('game.enter', { ...request });
+  /** A bet: `stake` is paid to enter. With `prizes` alone it settles at once on the player's own round, and
+   * every prize whose range holds the outcome pays. With a `deadline` it settles later, by your referee: with
+   * `prizes`, it rides your referee's open round and pays what its prizes pay on the round's outcome; with `terms`,
+   * your referee signs what it pays. A bet that settles later is placed at once and final; the same call again
+   * returns what it paid once it has settled. `group` labels bets that belong together, such as the steps of
+   * one hand. */
+  const bet = (request: GameRequest): Promise<GameReceipt> => call('game.bet', { ...request });
   /** A deterministic payment to the bankroll. */
-  const payment = (id: string, amount: string): Promise<GameReceipt> => call('game.payment', { id, amount });
+  const payment = (id: string, amount: string, group?: string): Promise<GameReceipt> =>
+    call('game.payment', { id, amount, ...(group === undefined ? {} : { group }) });
   /** Scope game storage to this page, player and asset: games sharing a host, accounts sharing a
    * browser, and the same player's ETH and test-coin play must not see each other's state. It keys
    * on the player's uname, so taking or giving up an alias does not lose what they had. */
@@ -270,7 +274,6 @@ export const HookedIn = (() => {
     requestFunds,
     receipt,
     bet,
-    enter,
     payment,
     storageScope,
     /** How a player is written: an alias wears `@`, a uname wears `~`. */

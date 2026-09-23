@@ -50,12 +50,14 @@ const quote = (text: unknown) => (typeof text === 'string' && text ? ` · “${t
 /** One line a developer can read without opening the payload. */
 export function describeRequest(method: string, params: any = {}) {
   switch (method) {
-    case 'game.bet':
-      return `stake ${eth(params.stake)} · ${betSummary(params)} · id ${params.id}`;
-    case 'game.enter':
-      return `stake ${eth(params.stake)} · pot ${String(params.pot).slice(0, 10)}…${params.prizes ? ' · ' + betSummary(params) : ''}${params.quote ? ' · quoted' : ''} · id ${params.id}`;
+    case 'game.bet': {
+      const settles = params.terms
+        ? `refereed · deadline ${new Date(params.deadline).toLocaleString()}`
+        : `${betSummary(params)}${params.deadline === undefined ? '' : ' · drawn by its referee'}`;
+      return `stake ${eth(params.stake)} · ${settles}${params.group ? ` · group ${params.group}` : ''} · id ${params.id}`;
+    }
     case 'game.payment':
-      return `amount ${eth(params.amount)} · id ${params.id}`;
+      return `amount ${eth(params.amount)}${params.group ? ` · group ${params.group}` : ''} · id ${params.id}`;
     case 'game.receipt':
       return `id ${params.id}`;
     case 'game.requestFunds':
@@ -81,13 +83,9 @@ export function describeResult(method: string, result: any) {
     case 'game.bet':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
-        : `paid ${eth(result.payout)} · ${result.id}`;
-    case 'game.enter':
-      return result.status === 'rejected'
-        ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
         : result.payout === undefined
-          ? `in the pot · ${result.id}`
-          : `the pot paid ${eth(result.payout)} · ${result.id}`;
+          ? `placed, settles later · ${result.id}`
+          : `paid ${eth(result.payout)} · ${result.id}`;
     case 'game.payment':
       return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.id}`;
     default:

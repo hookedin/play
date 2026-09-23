@@ -34,7 +34,7 @@ export async function buildGame(root = process.cwd()) {
     );
   if (manifest.referee !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(manifest.referee))
     throw new Error(
-      `"${manifest.referee}" is not a referee address. It is the address of the key that runs the game's pots.`,
+      `"${manifest.referee}" is not a referee address. It is the address of the key that settles the game's bets that settle later.`,
     );
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'brand'), { recursive: true });

@@ -1,30 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activityJSON, potSummary, receiptSummary, receiptUnit } from '../client/activity.ts';
-import type { PlayerPot } from '../protocol/types.ts';
+import { activityJSON, heldSummary, receiptSummary, receiptUnit } from '../client/activity.ts';
+import type { PlayerBet } from '../protocol/types.ts';
 
-test('pot presentation separates results from collection and treats a zero payout as completed', () => {
-  const pot: PlayerPot = {
-    id: 'pot',
+test('a bet that settles later shows its result apart from its collection, and a zero payout as settled', () => {
+  const bet: PlayerBet = {
+    bet: '0x' + '1'.repeat(64),
     game: { developer: 'developer', name: 'Table' },
     asset: 'test',
-    status: 'unresolved',
-    closesAt: 1,
+    status: 'open',
     deadline: 2,
     stake: '10',
     collected: false,
   };
-  assert.equal(potSummary(pot).status, 'Waiting for result');
-  const resolved = { ...pot, status: 'resolved' as const, resolution: 'outcome' as const, payout: '20' };
-  assert.equal(potSummary(resolved).status, 'Payout ready');
-  assert.equal(potSummary(resolved).amountLabel, 'Awaiting collection');
-  assert.equal(potSummary({ ...resolved, payout: '0' }).status, 'Resolved · no payout');
-  assert.equal(potSummary({ ...resolved, collected: true }).status, 'Payout collected');
-  assert.equal(potSummary({ ...resolved, resolution: 'refund' }).status, 'Refund ready');
-  const receipt = { kind: 'entry', status: 'signed', balance: '100', amount: '10' };
+  assert.equal(heldSummary(bet).status, 'Waiting for result');
+  const settled = { ...bet, status: 'settled' as const, payout: '20' };
+  assert.equal(heldSummary(settled).status, 'Payout ready');
+  assert.equal(heldSummary(settled).amountLabel, 'Awaiting collection');
+  assert.equal(heldSummary({ ...settled, payout: '0' }).status, 'Settled · no payout');
+  assert.equal(heldSummary({ ...settled, collected: true }).status, 'Payout collected');
+  assert.equal(heldSummary({ ...settled, refunded: true }).status, 'Refund ready');
+  const receipt = { kind: 'wager', status: 'signed', balance: '100', amount: '10', stake: '10' };
   assert.equal(receiptSummary(receipt).status, 'Waiting for result');
-  assert.equal(receiptSummary({ ...receipt, payout: '0', resolution: 'outcome' }).status, 'Resolved · no payout');
-  assert.equal(receiptSummary({ ...receipt, payout: '10', resolution: 'refund' }).status, 'Refund collected');
+  assert.equal(receiptSummary(receipt).title, 'Bet placed');
+  assert.equal(receiptSummary({ ...receipt, payout: '0' }).status, 'Settled · no payout');
+  assert.equal(receiptSummary({ ...receipt, payout: '0' }).title, 'Bet lost');
+  assert.equal(
+    receiptSummary({ ...receipt, payout: '10', reason: 'Refunded: not settled by its deadline' }).status,
+    'Refund collected',
+  );
 });
 
 test('bet summaries show the payout against the stake and retain exact wei amounts', () => {

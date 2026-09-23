@@ -15,7 +15,7 @@ interface Env {
   /** The game as its developer published it: their address and the game's name. */
   DEVELOPER: string;
   GAME_NAME: string;
-  /** The referee's private key: it opens and resolves the game's pots and nothing else. A secret. */
+  /** The referee's private key: it draws the game's bets and nothing else. A secret. */
   REFEREE_KEY: string;
 }
 
@@ -56,8 +56,7 @@ export class RouletteWheel implements DurableObject {
     try {
       const wheel = await this.open(url);
       if (url.pathname === '/api/table' && request.method === 'GET') return Response.json(await wheel.view());
-      if (url.pathname === '/api/table/entered' && request.method === 'POST')
-        return Response.json(await wheel.entered());
+      if (url.pathname === '/api/table/placed' && request.method === 'POST') return Response.json(await wheel.placed());
       return Response.json({ error: 'Not found' }, { status: 404 });
     } catch (error: any) {
       return Response.json({ error: error.message || 'The wheel is unavailable' }, { status: 503 });

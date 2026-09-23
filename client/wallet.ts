@@ -1,7 +1,7 @@
 /// <reference path="../types/browser.d.ts" />
 import type { JsonRpcProvider, Signer } from 'ethers';
 import type { Store } from './storage.ts';
-import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerPot, GameName } from '../protocol/types.ts';
+import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerBet, GameName } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
@@ -105,13 +105,14 @@ export class CasinoWallet extends GameSessions {
     owed?: string[];
     alert?: string;
   };
-  /** The pots this account has entries in, by pot, until what each pot came to is collected. */
-  declare pots: Record<
+  /** This account's bets that settle later, by hash, until what each paid is collected: the receipt
+   * that placed it, and what the casino last said of it. */
+  declare held: Record<
     string,
-    { entries: string[]; game: GameName; asset: AssetId; state?: PlayerPot; error?: string }
+    { operationId?: string; game: GameName; asset: AssetId; state?: PlayerBet; error?: string }
   >;
-  declare potCursors: Partial<Record<AssetId, string>>;
-  potError: string | null = null;
+  declare heldCursors: Partial<Record<AssetId, string>>;
+  heldError: string | null = null;
   /** This account's bank as a developer, per asset: the casino's statement for its latest deposit or
    * withdrawal, a withdrawal signed and not yet answered, and withdrawn money not yet collected. */
   declare bank: Partial<
@@ -206,8 +207,8 @@ export class CasinoWallet extends GameSessions {
       alias: null,
       profile: null,
       fund: { sequence: 0, shares: '0', statement: null },
-      pots: {},
-      potCursors: {},
+      held: {},
+      heldCursors: {},
       bank: {},
       developerEarnings: null,
       testId: null,
@@ -403,11 +404,11 @@ export class CasinoWallet extends GameSessions {
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
-      // Bankroll shares, entries in pots and a developer's bank belong to the account, not to any one channel.
+      // Bankroll shares, bets that settle later and a developer's bank belong to the account, not to any one channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
-      pots: saved?.pots || {},
-      potCursors: saved?.potCursors || {},
-      potError: null,
+      held: saved?.held || {},
+      heldCursors: saved?.heldCursors || {},
+      heldError: null,
       bank: saved?.bank || {},
     });
   }
@@ -446,7 +447,7 @@ export class CasinoWallet extends GameSessions {
     const revision = this.revision + 1;
     // Newest first by the clock, not by when a receipt was last written: a rejected operation is
     // rewritten when its round reveals, and would otherwise jump above the bet that replaced it.
-    const outstanding = new Set(Object.values(changes.pots ?? this.pots).flatMap((pot: any) => pot.entries));
+    const outstanding = new Set(Object.values(changes.held ?? this.held).map((bet: any) => bet.operationId));
     const history = receipt
       ? [receipt, ...this.history.filter(r => r.operationId !== receipt.operationId)]
           .sort((a, b) => Date.parse(b.createdAt ?? '') - Date.parse(a.createdAt ?? ''))
@@ -462,8 +463,8 @@ export class CasinoWallet extends GameSessions {
         history,
         transactionIntent: this.transactionIntent,
         fund: this.fund,
-        pots: this.pots,
-        potCursors: this.potCursors,
+        held: this.held,
+        heldCursors: this.heldCursors,
         bank: this.bank,
         ...changes,
         revision,

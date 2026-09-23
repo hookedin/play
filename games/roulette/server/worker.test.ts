@@ -1,19 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Wallet, keccak256 } from 'ethers';
+import { Wallet } from 'ethers';
 import { PROTOCOL } from '@hookedin/play/protocol/protocol.ts';
 import { RouletteWheel } from './worker.ts';
 
-const CASINO = 'https://casino.test';
+const CASINO = 'https://casino.test',
+  ROUND = '0x' + 'd'.repeat(64);
 const body = async (response: Response) => (await response.json()) as any;
 
 /** A casino that can be taken away and put back, and somewhere for the Durable Object to keep its state. */
 function worker(t: { mock: { method: typeof import('node:test').mock.method } }) {
-  const secret = keccak256('0x' + '5'.repeat(64)),
-    pot = keccak256(secret),
-    calls: string[] = [];
+  const calls: string[] = [];
   let reachable = false;
-  t.mock.method(globalThis, 'fetch', async (url: string) => {
+  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
     const path = String(url).slice(CASINO.length);
     calls.push(path);
     if (!reachable) throw new TypeError('Network connection lost.');
@@ -25,15 +24,16 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
         limits: {
           prizes: 64,
           outcomeSpace: String(1n << 64n),
-          entries: 256,
+          bets: 256,
           cells: 128,
-          window: { min: 1000, max: 60000 },
+          deadline: 30 * 86_400_000,
         },
       });
-    if (path === '/api/pots') return Response.json({ id: pot, status: 'unresolved', closesAt: null, entries: [] });
-    if (path.startsWith('/api/pots/'))
-      return Response.json({ id: pot, status: 'unresolved', closesAt: null, entries: [] });
-    return Response.json({ error: 'Unknown pot' }, { status: 404 });
+    // The wheel opens its round: the casino names it, and the wheel commits its seed to it.
+    if (path === '/api/rounds') return Response.json({ id: ROUND });
+    if (path === `/api/rounds/${ROUND}/commit`) return Response.json({ id: ROUND, ...JSON.parse(String(init!.body)) });
+    if (path.startsWith('/api/bets?')) return Response.json([]);
+    return Response.json({ error: 'Not found' }, { status: 404 });
   });
   const stored = new Map<string, unknown>();
   const ctx = {
@@ -50,7 +50,6 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
     REFEREE_KEY: Wallet.createRandom().privateKey,
   } as never);
   return {
-    pot,
     calls,
     start: () => void (reachable = true),
     table: () => wheel.fetch(new Request('https://roulette.test/api/table?asset=test')),
@@ -66,7 +65,7 @@ test('a wheel that could not reach the casino opens at the next request', async 
   // The pages keep asking, and the one that arrives after the casino is back opens the table.
   const up = await x.table();
   assert.equal(up.status, 200);
-  assert.equal((await body(up)).pot, x.pot);
+  assert.deepEqual((await body(up)).last, null);
 });
 
 test('every request that arrives while the wheel is opening shares the one attempt', async t => {

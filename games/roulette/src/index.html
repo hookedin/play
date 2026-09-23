@@ -67,13 +67,13 @@
             even, low and high 2 for 1. Zero belongs to the house, which is the game's whole 2.7% edge.
           </p>
           <p>
-            Everyone at the table shares one spin. The wheel is the game's referee: it opens a pot at the casino with
-            the hash of a seed it has drawn, and the casino names the pot by the hash of a secret it has already fixed.
-            Your wallet enters the pot with your bet, which is final once it is in, and the wheel spins twenty seconds
-            after the first chip is down. The casino then reveals the secret, the number is read from the secret and the
-            seed together, and your wallet checks both before it collects what your bet won. The wheel never knew the
-            secret, and the casino fixed it before there was a seed; together they could choose the number. A bet the
-            casino declines costs nothing, and if the wheel does not spin in time every bet is refunded. Each asset has
+            Everyone at the table shares one spin. Before anybody bets, the casino names the spin's round, the hash of a
+            secret, and the wheel, the game's referee, commits the hash of its seed to it; your bet names both, so where
+            the ball lands is fixed before your bet is in, and nobody can change it. Your wallet places your bet with
+            the casino, and it is final once it is in; twenty seconds after the first chip at the table is down, the
+            wheel draws the round against the casino's bankroll. The number is read from the secret and the seed
+            together, and your wallet checks both against the hashes your bet named before it collects what your bet
+            won. A bet the casino cannot take in a spin is refunded, and so is one the wheel never draws. Each asset has
             its own wheel: you join the one for what your wallet plays with.
           </p>
         </details>

@@ -1307,7 +1307,7 @@ main {
 .wallet-cash-card > p {
   color: #94ad9f;
 }
-.wallet-pots-card {
+.wallet-held-card {
   margin: 0 0 24px;
 }
 .funding-steps {
@@ -2435,6 +2435,10 @@ html:has(dialog[open]) {
   background: var(--panel);
   border-radius: 9px;
   padding: 14px 18px;
+}
+/* A group's label takes the room a single bet's stake and payout would. */
+.bet-group {
+  grid-column: span 2;
 }
 /* Only your own bets open: their receipt is the one that holds the prizes and the preimages. */
 button.bet-row:hover {

@@ -1,6 +1,6 @@
 # HookedIn Roulette
 
-European roulette with one wheel for the whole table: every player's chips ride the same spin. A reference game for [HookedIn](https://play.hookedin.com), and the example of a game played **against the house by many players at once**: a house pot, which the game's referee opens and resolves and every player's own wallet enters.
+European roulette with one wheel for the whole table: every player's chips ride the same spin. A reference game for [HookedIn](https://play.hookedin.com), and the example of a game played **against the house by many players at once**: every player's own wallet places a bet, and the game's referee draws the whole table on one outcome.
 
 Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) and choose Roulette. It is hosted at `roulette-game.hookedin.com`.
 
@@ -15,45 +15,45 @@ There is a wheel for each asset: you join the one for what your wallet plays wit
 
 ## How it works
 
-This game uses a **house pot**. The pieces are:
+Every spin is one **draw**. The pieces are:
 
-- **The table** ([src/table.ts](src/table.ts)): the wheel's 37 pockets are 37 stretches of the pot's 64-bit outcome, a chip is a prize over the stretches of the numbers it covers, and a player's whole layout is **one entry** of at most 37 prizes. The wallet signs it whole, so the player's wallet, not this page, establishes what was offered.
-- **The game page** ([src/game.ts](src/game.ts)): lays out the chips, asks the wallet to enter the open pot, and reads the landed number from the verified receipt.
-- **The wheel** ([server/wheel.ts](server/wheel.ts)): the game's referee. It opens a house pot with the hash of a seed, and resolves it with the seed when the betting time is up. It is built on `createReferee` from the [game SDK](../../sdk), holds no money and never touches a bet.
-- **The casino**: names each house pot by the hash of a secret of its own, which it draws knowing only the hash of the wheel's seed, admits each entry against everything already in the pot, and on resolution reveals the secret and owes every entry what it won.
-- **Each player's wallet**: signs the entry, sends it to the casino itself, and checks the seed and secret before it collects the winnings.
+- **The table** ([src/table.ts](src/table.ts)): the wheel's 37 pockets are 37 stretches of the spin's 64-bit outcome, a chip is a prize over the stretches of the numbers it covers, and a player's whole layout is **one bet** of at most 37 prizes. The wallet signs it whole, so the player's wallet, not this page, establishes what was offered.
+- **The game page** ([src/game.ts](src/game.ts)): lays out the chips, asks the wallet to place them, and reads the landed number from the verified receipt.
+- **The wheel** ([server/wheel.ts](server/wheel.ts)): the game's referee. It keeps a round open for the table, committed to its seed before anybody bets, and twenty seconds after the first chip at the table is down it draws the round: every bet on it rides one spin. It is built on `createReferee` from the [game SDK](../../sdk), holds no money and never touches a bet.
+- **The casino**: holds each player's stake until the spin, names the table's round by the hash of a secret, admits the round's bets one at a time against those before them, reveals the secret and owes every bet what it won, all in the one request that draws them.
+- **Each player's wallet**: checks that the open round's commitment is the wheel's, signs the bet on it, sends it to the casino itself, and checks the revealed seed and secret against the round and the seed hash its bet named before it collects the winnings.
 
 Page and wheel are one Cloudflare Worker ([server/worker.ts](server/worker.ts)): `dist/` is served as static assets and `/api/` is the wheel, a Durable Object per asset, on the same origin. The page names its asset with `?asset=`.
 
 ### The flow
 
-1. The page polls `GET /api/table`. The wheel keeps one pot open: `referee.open({bank: 'house'})` draws a seed and opens a pot in its asset, with the table's betting time and room to resolve it, sending only the seed's hash. Pot and seed are saved before any page is shown the pot, and no page is ever shown the seed. The reply is `{pot, closesAt, now, players, staked, last}`; the page counts down to `closesAt` against `now`, the wheel's clock, not its own.
-2. The page turns the chips into `{stake, prizes}` and calls `HookedIn.enter({id, pot, stake, prizes})`, having saved `id` and the terms first. The wallet signs a debit into the pot and sends it to the casino, which admits it against everything already in the pot: red and black hedge each other, ten players on one number share the room one would have had. The stake leaves the game's balance at once, and the entry is final. One that does not fit comes back as a verified rejection and the chips are the player's again.
-3. The page tells the wheel somebody entered (`POST /api/table/entered`). The wheel believes the casino, not the page: it reads the pot, whose window the casino starts at the first entry, and spins twenty seconds after it.
-4. At the time, the wheel calls `referee.resolve(pot, {seed})`. The casino checks the seed against the hash the pot was opened with, reveals the pot's secret, and owes every entry what it won. The number is `pocket(roundOutcome(seed, secret))`, the same for every player.
-5. Each page sees the wheel move on from its pot and calls `HookedIn.enter` again with the same `id`: the wallet checks the seed and secret, collects what the entry won, and returns the receipt. The page reads the number from `receipt.outcome`, never from the wheel, and spins to it.
+1. The page polls `GET /api/table`: `{closesAt, now, players, staked, last}`, when the wheel spins, who is at the table, and the last spin. The page counts down to `closesAt` against `now`, the wheel's clock, not its own.
+2. The page turns the chips into `{stake, prizes}` and calls `HookedIn.bet({id, stake, prizes, deadline})`, having saved `id` and the terms first. The wallet signs a debit on the wheel's open round and sends it to the casino, which holds the stake: it leaves the game's balance at once, and the bet is final. No bankroll is held for it yet. A bet nobody draws in five minutes comes back.
+3. The page tells the wheel somebody bet (`POST /api/table/placed`). The wheel believes the casino, not the page: it reads the open bets on its round, and spins twenty seconds after the first was placed, by the casino's clock.
+4. At the time, the wheel calls `referee.draw(asset)`, revealing its seed. The casino admits the round's bets one at a time against those before them: red and black hedge each other, ten players on one number share the room one would have had, and one that does not fit is refunded. It reveals the secret and owes every bet it took what it won, and the next round opens. The number is `pocket(outcome)`, the same for every player.
+5. Each page sees a new spin and calls `HookedIn.bet` again with the same `id`: the wallet checks the draw, collects what the bet won, and returns the receipt. The page reads the number from `receipt.outcome`, never from the wheel, and spins to it. A bet placed while the wheel was spinning rides the next spin; one that reaches the casino after its round was drawn comes back, to be placed again.
 
-After a reload the page finds its saved entry's receipt with `HookedIn.receipt(id)`. A pot the casino does not know gives way to a fresh one, and one left empty for eight minutes is called off.
+After a reload the page finds its saved bet's receipt with `HookedIn.receipt(id)`.
 
 ### Files
 
-| Path                                                               | What                                                                                                  |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| [src/table.ts](src/table.ts)                                       | Pockets, spots, and a layout as one entry. Shared by the page and the wheel                           |
-| [src/game.ts](src/game.ts), [src/wheel-view.ts](src/wheel-view.ts) | The page and its canvas wheel                                                                         |
-| [server/wheel.ts](server/wheel.ts)                                 | The referee: one open pot, the clock, the spin. Everything outside is handed in, so it runs in a test |
-| [server/worker.ts](server/worker.ts)                               | The Worker and the Durable Object that holds an asset's wheel                                         |
-| [test/](test/)                                                     | The table's arithmetic against the casino's own admission rule, and the wheel against a stub casino   |
-| [server/worker.test.ts](server/worker.test.ts)                     | The Durable Object opening its wheel against a stub casino                                            |
+| Path                                                               | What                                                                                                   |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| [src/table.ts](src/table.ts)                                       | Pockets, spots, and a layout as one bet. Shared by the page and the wheel                              |
+| [src/game.ts](src/game.ts), [src/wheel-view.ts](src/wheel-view.ts) | The page and its canvas wheel                                                                          |
+| [server/wheel.ts](server/wheel.ts)                                 | The referee: the open bets, the clock, the spin. Everything outside is handed in, so it runs in a test |
+| [server/worker.ts](server/worker.ts)                               | The Worker and the Durable Object that holds an asset's wheel                                          |
+| [test/](test/)                                                     | The table's arithmetic against the casino's own admission rule, and the wheel against a stub casino    |
+| [server/worker.test.ts](server/worker.test.ts)                     | The Durable Object opening its wheel against a stub casino                                             |
 
 ## Fairness and trust
 
 - **The game never holds keys or money.** The wallet signs the layout whole and records exactly what it risks and the most it can pay.
-- **The casino commits before the seed exists.** A house pot is named by the hash of its secret, and the wheel draws the seed only after it has that name. The outcome is `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`, low 64 bits, and the wallet checks the revealed secret and seed against the pot and its seed hash.
-- **Neither the wheel nor the casino can choose the number alone; together they could.** The wheel never knows the secret, the casino fixed it before the seed, and the casino sees the seed only when the pot is resolved: while chips go down, nobody knows the number, so nobody can take or turn away a bet by what it would win.
-- **The wheel can stall, not steal.** A pot it never resolves is void once the window it asked for has run from the first entry, and every entry refunded.
+- **The spin is fixed before anybody bets.** The casino names the table's round by the hash of a secret, and the wheel commits the hash of its seed to it before the table opens; every bet names both. The outcome is `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`, low 64 bits, and the wallet checks the revealed seed and secret against the hashes its bet named before it collects.
+- **Nobody can choose the number, and neither knows it alone.** The wheel never sees the secret before the draw, and the casino never sees the seed. Together they could know it in advance, and turn winning bets away: a bet the draw declines is refunded with the draw on record, so what it would have paid is on its receipt.
+- **The wheel can stall, not steal.** It chooses when to spin, never what a bet pays, and a bet it never draws comes back at its deadline.
 
-Read [pots](../../docs/protocol.md#pots) before you build on this.
+Read [bets that settle later](../../docs/protocol.md#bets-that-settle-later) before you build on this.
 
 ## Run it
 
@@ -77,16 +77,16 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 
 - [src/manifest.json](src/manifest.json): `id`, `name`, `description`, `developer` (your address) and `referee` (the address of the wheel's key).
 - [wrangler.jsonc](wrangler.jsonc): `DEVELOPER` and `GAME_NAME`, the address and name you publish the game under.
-- A different shared game is a different [src/table.ts](src/table.ts): what the outcome means and how a player's choices become prizes. A crash game with automatic cash-out is nested ranges (`[0, t(m))` pays `m × stake`); a wheel of fortune is one range per segment. The wheel's server stays as it is.
+- A different shared game is a different [src/table.ts](src/table.ts): what the outcome means and how a player's choices become prizes. A wheel of fortune is one range per segment, and the wheel's server stays as it is; so is a crash game whose players set their cash-out before the round, each cash-out one prize. A game whose players decide while the round runs, a crash game cashed out by hand, is not a draw: its server settles each bet itself, with [terms and a split](../../sdk/docs/game-sdk.md#bets-that-settle-later).
 - The betting time is `BETTING_MS` in [server/wheel.ts](server/wheel.ts).
 
-You earn half of every entry's commission. It accrues to the address you publish the game under; the casino keeps the other half. See [pricing and commission](../../docs/economics.md).
+You earn half of every bet's commission. It accrues to the address you publish the game under; the casino keeps the other half. See [pricing and commission](../../docs/economics.md).
 
 ## Deploy
 
 Whenever `main` is pushed, this repository's [deploy workflow](../../.github/workflows/deploy.yml) publishes the game to Cloudflare by running `npx wrangler deploy` in `games/roulette`, with [wrangler.jsonc](wrangler.jsonc): one Worker that serves the page and runs the wheel. `wrangler.jsonc` sets `CASINO_URL` and builds the page before every deploy, so the same command in `games/roulette` publishes it by hand.
 
-Once, give the Worker the wheel's key: run `npx wrangler secret put REFEREE_KEY` in `games/roulette`, with a private key you generated for this purpose, and publish the game with its address as referee. It holds no money, and a lost one costs nothing but the pots it had open, whose entries are refunded.
+Once, give the Worker the wheel's key: run `npx wrangler secret put REFEREE_KEY` in `games/roulette`, with a private key you generated for this purpose, and publish the game with its address as referee. It holds no money, and a lost one costs nothing but the bets it had not drawn, which come back at their deadline.
 
 A repository made from game-template deploys itself; [its README](https://github.com/hookedin/game-template#deploy) says how.
 
@@ -102,7 +102,7 @@ Publish it yourself: in the wallet, open **My games** and give the game a name a
 node --test games/roulette/test/*.test.ts games/roulette/server/*.test.ts
 ```
 
-In this repository's root, `npm test` type-checks everything, the page and the server among it, and runs every test; this runs only this game's. They check the table's arithmetic against the casino's own admission rule, and test the wheel and its Durable Object against a stub casino. Pots and the wallet's handling of entries are tested in the [game SDK](../../sdk) and the casino service.
+In this repository's root, `npm test` type-checks everything, the page and the server among it, and runs every test; this runs only this game's. They check the table's arithmetic against the casino's own admission rule, and test the wheel and its Durable Object against a stub casino. Draws and the wallet's handling of them are tested in the [game SDK](../../sdk) and the casino service.
 
 ## License
 

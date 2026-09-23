@@ -9,6 +9,8 @@ export interface GameIdentity {
   slug?: string;
   /** What the game calls itself. */
   name: string;
+  /** The key its developer published to settle its bets that settle later, if it has one. */
+  referee?: string;
 }
 /** The open game in this tab. Never persisted: closing the tab or leaving the game releases the limit. */
 export interface GameSession {
@@ -19,42 +21,42 @@ export interface GameSession {
   /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
 }
+/** A bet, in one of three forms. With `prizes` alone it settles at once on the player's own round. With a
+ * `deadline` it settles later, by the game's referee: with `prizes`, it rides the referee's open round, which
+ * the referee draws against the bankroll, and it pays what its prizes pay on the round's outcome; with `terms`,
+ * the referee signs what it pays, and the developer's bank pays what that comes to beyond the stake. */
 export interface GameRequest {
   /** The game's own idempotency key: an exact retry returns the saved receipt. */
   id: string;
   /** Paid to enter. */
   stake: string;
   /** Each prize pays `payout` when the round's 64-bit outcome falls in [rangeStart, rangeEnd); overlapping prizes add. */
-  prizes: { rangeStart: string; rangeEnd: string; payout: string }[];
-}
-/** An entry into a pot of this game. A house or developer pot's entry holds prizes over the pot's outcome;
- * a developer's needs its referee's `quote` for them; a players' pot's entry is only its stake. */
-export interface EntryRequest {
-  id: string;
-  pot: string;
-  stake: string;
-  prizes?: GameRequest['prizes'];
-  quote?: { expiresAt: string; signature: string };
+  prizes?: { rangeStart: string; rangeEnd: string; payout: string }[];
+  /** What the game and the player agree for a bet its referee settles, in the game's own form. */
+  terms?: Record<string, unknown>;
+  /** When a bet that settles later is refunded if its referee has not settled it (unix milliseconds). */
+  deadline?: number;
+  /** A label for bets that belong together, such as the steps of one hand. */
+  group?: string;
 }
 /** What a game learns about an operation, under its own `id`: how it ended, never the signed evidence. */
 export interface GameReceipt {
   id: string;
-  kind: 'bet' | 'payment' | 'entry';
-  /** `signed`: settled, or for an entry, in its pot. `rejected`: a verified rejection; the balance is unchanged. */
+  kind: 'bet' | 'payment';
+  /** `signed`: settled, or for a bet that settles later, placed. `rejected`: a verified rejection; the balance is unchanged. */
   status: 'signed' | 'rejected';
   verified: boolean;
-  /** A bet's or an entry's terms. */
+  /** A bet's terms, as it was placed. */
   stake?: string;
   prizes?: GameRequest['prizes'];
-  /** An entry's pot. */
-  pot?: string;
-  /** A resolved entry's outcome or refund, after the wallet has verified and collected it. */
-  resolution?: 'outcome' | 'refund';
-  resolvedAt?: number;
-  /** A settled bet: the round's 64-bit outcome, and what the prizes holding it paid in total. An entry,
-   * once its pot has ended and the wallet has collected: the outcome that picked its prizes, if the pot
-   * had one, and what the entry was paid. */
+  terms?: Record<string, unknown>;
+  deadline?: number;
+  group?: string;
+  /** A bet that settles later: the hash that names it at the casino, and to its referee. */
+  bet?: string;
+  /** A bet with prizes: the 64-bit outcome of the round or draw that settled it. */
   outcome?: string;
+  /** What a settled bet paid, after the wallet has verified it, and for a bet that settled later, collected it. */
   payout?: string;
   reason?: string;
 }

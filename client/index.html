@@ -206,11 +206,11 @@
             </div>
           </div>
           <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
-          <section class="surface wallet-pots-card" aria-labelledby="pots-title">
-            <h2 id="pots-title">Game pots</h2>
-            <p id="pots-status" role="status"></p>
-            <button id="refresh-pots" class="text-button" type="button">Check results and collect payouts</button>
-            <div id="wallet-pots" class="activity-list"></div>
+          <section class="surface wallet-held-card" aria-labelledby="held-title">
+            <h2 id="held-title">Bets that settle later</h2>
+            <p id="held-status" role="status"></p>
+            <button id="refresh-held" class="text-button" type="button">Check results and collect payouts</button>
+            <div id="wallet-held" class="activity-list"></div>
           </section>
           <div class="funding-steps">
             <section class="surface receive-card" aria-labelledby="receive-title">
@@ -378,7 +378,7 @@
             </h2>
             <p id="wallet-uname" class="game-handle"></p>
             <p>
-              The only thing games, pots and the public player list ever learn about you. Everything else — your
+              The only thing games, referees and the public player list ever learn about you. Everything else — your
               address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
               <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
               a shorter name you are shown by instead. Both always find you.
@@ -436,9 +436,9 @@
             <div id="my-games"></div>
             <label for="bank-amount">Your bank <span id="bank-balance" class="subtle-count">—</span></label>
             <p>
-              Your games' own pots are paid from it: what a pot owes its winners beyond its entries comes out of it, and
-              what it does not pay goes in. A pot it cannot pay in full waits, and is refunded at its deadline. Nothing
-              in it is reserved, so you can take it out at any time.
+              Your games' bets with terms are paid from it: what your referee's split pays beyond a bet's stake comes
+              out of it, and what it does not pay goes in. A settlement it cannot pay in full is refused, and an
+              unsettled bet is refunded at its deadline. Nothing in it is reserved, so you can take it out at any time.
             </p>
             <div class="input-row">
               <input id="bank-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.01" /><button
@@ -473,7 +473,7 @@
               placeholder="Search games, amounts or operation IDs…"
               autocomplete="off"
             /><span class="activity-list-note"
-              ><span id="bet-visible-count">0</span> bets · newest first<br />Latest 100 saved receipts</span
+              ><span id="bet-visible-count">0 bets</span> · newest first<br />Latest 100 saved receipts</span
             >
           </div>
           <div id="bet-list" class="bet-table"></div>
@@ -634,7 +634,7 @@
             <button id="gamebets-play" class="button primary hidden">Open this game ↗</button>
           </div>
           <div id="gamebets-totals" class="funding-balances"></div>
-          <p id="gamebets-pots" class="intro hidden"></p>
+          <p id="gamebets-later" class="intro hidden"></p>
           <div class="activity-toolbar">
             <label class="sr-only" for="gamebets-search">Search this game’s bets</label
             ><input
@@ -643,7 +643,7 @@
               placeholder="Search players or amounts…"
               autocomplete="off"
             /><span class="activity-list-note"
-              ><span id="gamebets-visible-count">0</span> bets · newest first<br />Latest 200 the casino holds</span
+              ><span id="gamebets-visible-count">0 bets</span> · newest first<br />Latest 200 the casino holds</span
             >
           </div>
           <div id="gamebets-list" class="bet-table"></div>
@@ -681,7 +681,7 @@
               placeholder="Search events, amounts, operation IDs or transaction hashes…"
               autocomplete="off"
             /><span class="activity-list-note"
-              ><span id="activity-visible-count">0</span> events · newest first<br />Latest 100 saved receipts</span
+              ><span id="activity-visible-count">0 events</span> · newest first<br />Latest 100 saved receipts</span
             >
           </div>
           <div id="activity-list" class="activity-list"></div>
@@ -764,7 +764,7 @@
     <dialog id="bet-dialog" class="bet-dialog" aria-labelledby="bet-detail-title">
       <div class="bet-detail-bar">
         <div>
-          <div class="eyebrow">ONE BET, IN FULL</div>
+          <div id="bet-detail-eyebrow" class="eyebrow">ONE BET, IN FULL</div>
           <h2 id="bet-detail-title">This bet</h2>
         </div>
         <button id="bet-detail-close" class="button secondary small" type="button">Close</button>

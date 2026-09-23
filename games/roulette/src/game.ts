@@ -1,10 +1,9 @@
 /**
  * Roulette where everyone at the table shares one spin. The page lays chips on the layout, turns the
- * whole layout into one bet, and asks the wallet to enter it into the pot the wheel has open. The
- * wallet enters by itself; the wheel is the game's referee and only opens and resolves pots. Once the
- * pot is resolved the same request to the wallet returns the verified receipt, and the number is read
- * from its outcome. The table is for one asset: players with ETH share one wheel, players with test
- * coins another.
+ * whole layout into one bet, and asks the wallet to place it for the wheel to draw. The wallet places it by
+ * itself; the wheel is the game's referee and draws every open bet on one spin. Once the bet is drawn the same
+ * request to the wallet returns the verified receipt, and the number is read from its outcome. The table is
+ * for one asset: players with ETH share one wheel, players with test coins another.
  */
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import type { GameReceipt } from '@hookedin/play/sdk/sdk';
@@ -16,22 +15,26 @@ import { mountWheel } from './wheel-view.ts';
 /** A bet the wallet was asked to sign, saved first so that a reload finds its result under the same name. */
 interface Saved extends WireBet {
   id: string;
-  pot: string;
+  /** When the bet is refunded if the wheel has not drawn it. */
+  deadline: number;
   chips: Record<string, string>;
-  /** The wallet signed it and the pot holds it: it rides the spin, and cannot be taken back. */
-  entered?: boolean;
+  /** The wallet signed it and the casino holds it: it rides a spin, and cannot be taken back. */
+  placed?: boolean;
+  /** The last spin the page had seen when it found the bet open: the wallet is asked again after the next. */
+  seen?: string | null;
 }
 interface Table {
-  pot: string | null;
   closesAt: number | null;
   now: number;
   players: number;
   staked: string;
-  last: { pot: string; number: number } | null;
+  last: { round: string; number: number } | null;
 }
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-/** Too late to join: a bet that arrives as the wheel spins is declined. */
+/** Too late for this spin: the wheel is about to draw, and a bet now would ride the one after. */
 const LAST_CALL_MS = 3000;
+/** How long a bet waits for the wheel: one it has not drawn by then comes back. */
+const DEADLINE_MS = 300_000;
 
 (() => {
   'use strict';
@@ -112,7 +115,7 @@ const LAST_CALL_MS = 3000;
     won = null;
     render();
   }
-  /** The chips cannot move while a request is in flight, a bet is in the pot, or the wheel is turning. */
+  /** The chips cannot move while a request is in flight, a bet is on the round, or the wheel is turning. */
   const locked = () => working || spinning || Boolean(saved);
 
   // --- What the player sees ----------------------------------------------------------------
@@ -189,7 +192,7 @@ const LAST_CALL_MS = 3000;
     );
     render();
   }
-  /** A bet the casino declined, or one in a pot that was called off: the chips are the player's again. */
+  /** A bet the casino declined, or one refunded because no spin took it: the chips are the player's again. */
   function returned(receipt: GameReceipt) {
     saved = null;
     persist();
@@ -201,18 +204,17 @@ const LAST_CALL_MS = 3000;
     if (receipt.status === 'rejected' || (receipt.payout !== undefined && receipt.outcome === undefined))
       return returned(receipt);
     if (receipt.payout !== undefined) return land(receipt);
-    saved!.entered = true;
+    Object.assign(saved!, { placed: true, seen: table?.last?.round ?? null });
     persist();
     bank.hold(false);
-    // Tell the wheel somebody entered, so that its clock starts now and not at its next look.
-    table = await wheelAPI('/table/entered', true).catch(() => table);
+    // Tell the wheel somebody bet, so that its clock starts now and not at its next look.
+    table = await wheelAPI('/table/placed', true).catch(() => table);
     message('Your bet is in. It rides the next spin.');
     render();
   }
   async function place() {
-    const terms = bet(chips),
-      pot = table?.pot;
-    if (!pot) throw new Error('The wheel is not ready. Try again in a moment.');
+    const terms = bet(chips);
+    if (!table) throw new Error('The wheel is not ready. Try again in a moment.');
     const limit = BigInt((await HookedIn.balance()).balance);
     if (BigInt(terms.stake) > limit) {
       const funding = await HookedIn.requestFunds({ amount: BigInt(terms.stake) - limit });
@@ -222,21 +224,21 @@ const LAST_CALL_MS = 3000;
     saved = {
       id: crypto.randomUUID(),
       ...terms,
-      pot,
+      deadline: Date.now() + DEADLINE_MS,
       chips: Object.fromEntries(Object.entries(chips).map(([id, amount]) => [id, String(amount)])),
     };
     persist();
     await ask();
   }
-  /** Ask the wallet for the saved bet: its entry while the pot is open, its receipt once the pot has ended. */
+  /** Ask the wallet for the saved bet: placed until a spin draws it, its receipt once one has. */
   async function ask() {
-    const { id, stake, prizes, pot } = saved!;
+    const { id, stake, prizes, deadline } = saved!;
     bank.hold(true);
     try {
-      await settle(await HookedIn.enter({ id, pot, stake, prizes }));
+      await settle(await HookedIn.bet({ id, stake, prizes, deadline }));
     } catch (error) {
       // A bet the wallet signed but has no answer for yet is asked about again; one it never signed is off.
-      if (!saved!.entered && !(await HookedIn.balance()).pending) {
+      if (!saved!.placed && !(await HookedIn.balance()).pending) {
         saved = null;
         persist();
         bank.hold(false);
@@ -264,8 +266,9 @@ const LAST_CALL_MS = 3000;
     try {
       table = await wheelAPI('/table');
       skew = table.now - Date.now();
-      // The wheel has moved on from the pot this bet is in, or the wallet has yet to answer for it: ask.
-      if (saved && (!saved.entered || table.pot !== saved.pot) && !working && !spinning) await act(ask);
+      // The wheel has spun since the bet was last found open, or the wallet has yet to answer for it: ask.
+      if (saved && (!saved.placed || (table.last?.round ?? null) !== saved.seen) && !working && !spinning)
+        await act(ask);
     } catch (error: any) {
       if (!saved) message(error.message, true);
     }
@@ -287,7 +290,7 @@ const LAST_CALL_MS = 3000;
       if (saved) {
         chips = Object.fromEntries(Object.entries(saved.chips).map(([id, amount]) => [id, BigInt(amount)]));
         const receipt = await HookedIn.receipt(saved.id);
-        // Paid while away, still in the pot, or never signed at all.
+        // Paid while away, still waiting for a spin, or never signed at all.
         if (receipt) await settle(receipt);
         else if (startup.state.pending) await act(ask);
         else {

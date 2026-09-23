@@ -16,6 +16,8 @@ interface ActiveGame {
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
  * the name it has in their profile. Any other manifest is linkable by its URL alone. */
 type GameRoute = { owner: string; name: string } | { manifest: string };
+/** What a profile records of a game it publishes: the game's key, and the referee that settles its bets. */
+type Published = { key: string; referee?: string };
 import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { withLock } from './storage.ts';
@@ -26,7 +28,7 @@ import {
   createActivityEntry,
   filterActivity,
   receiptSummary,
-  potSummary,
+  heldSummary,
   receiptUnit,
 } from './activity.ts';
 import type { BetRow } from './bets.ts';
@@ -34,6 +36,8 @@ import {
   betDetail,
   betRowElement,
   filterBets,
+  groupRowElement,
+  groupRows,
   percent,
   measuredReturn,
   totalCards,
@@ -315,7 +319,7 @@ async function route(push = false) {
     else {
       const published = await wallet.api(`/api/players/${target.owner}/${target.name}`);
       if (!published.url) throw new Error('This game is not published at that name.');
-      await loadGame(published.url, target, push, published.key);
+      await loadGame(published.url, target, push, published);
     }
     return true;
   });
@@ -634,42 +638,41 @@ function renderWallet() {
     clearTimeout(statusTimer);
     statusTimer = setTimeout(() => $('operation-status').classList.add('hidden'), 2200);
   }
-  renderPots();
+  renderHeld();
   if (!$('page-activity').classList.contains('hidden')) renderActivity();
   renderClaims();
   renderGameAccount();
 }
 
-function renderPots() {
-  const list = $('wallet-pots'),
-    pots = Object.entries(wallet.pots),
+function renderHeld() {
+  const list = $('wallet-held'),
+    held = Object.entries(wallet.held),
     receiptsById = new Map(wallet.history.map(receipt => [receipt.operationId, receipt]));
-  $('pots-status').textContent = wallet.potError
-    ? `Pot information is stale. ${wallet.potError}`
-    : pots.length
-      ? 'Stakes in pots and payouts awaiting collection are separate from your playing balance.'
-      : 'No pots awaiting a result or collection.';
-  $('pots-status').classList.toggle('check-failed', Boolean(wallet.potError));
-  $<HTMLButtonElement>('refresh-pots').disabled = historyBusy || wallet.busy || !wallet.channel;
+  $('held-status').textContent = wallet.heldError
+    ? `Bet information is stale. ${wallet.heldError}`
+    : held.length
+      ? 'Stakes held for bets that settle later, and payouts awaiting collection, are separate from your playing balance.'
+      : 'No bets awaiting a result or collection.';
+  $('held-status').classList.toggle('check-failed', Boolean(wallet.heldError));
+  $<HTMLButtonElement>('refresh-held').disabled = historyBusy || wallet.busy || !wallet.channel;
   const existing = new Map(
-    [...list.children].map(row => [(row as HTMLElement).dataset.pot, row as HTMLDetailsElement]),
+    [...list.children].map(row => [(row as HTMLElement).dataset.bet, row as HTMLDetailsElement]),
   );
   list.replaceChildren(
-    ...pots.map(([id, tracked]) => {
-      const receipts = tracked.entries.map(id => receiptsById.get(id)).filter(Boolean);
+    ...held.map(([hash, tracked]) => {
+      const receipt = tracked.operationId ? receiptsById.get(tracked.operationId) : undefined;
       const state = tracked.state ?? {
-        id,
+        bet: hash,
         game: tracked.game,
         asset: tracked.asset,
-        status: 'unresolved' as const,
-        stake: String(receipts.reduce((sum, receipt) => sum + BigInt(receipt.stake), 0n)),
-        closesAt: null,
+        status: 'open' as const,
+        stake: String(receipt?.stake ?? 0),
         deadline: 0,
         collected: false,
       };
-      const presentation = potSummary(state);
+      const presentation = heldSummary(state);
       const payload = activityJSON({ ...state, error: tracked.error }),
-        previous = existing.get(id);
+        previous = existing.get(hash);
       if (
         previous?.dataset.playing === wallet.playing &&
         previous.querySelector('.activity-payload')?.textContent === payload
@@ -677,18 +680,18 @@ function renderPots() {
         return previous;
       const item = createActivityEntry({
         ...presentation,
-        timestamp: state.resolvedAt ? new Date(state.resolvedAt).toISOString() : (receipts[0]?.createdAt ?? ''),
+        timestamp: state.settledAt ? new Date(state.settledAt).toISOString() : (receipt?.createdAt ?? ''),
         description: [
-          state.deadline ? presentation.description : 'Waiting for the casino to report this pot.',
+          state.deadline ? presentation.description : 'Waiting for the casino to report this bet.',
           tracked.error,
           tracked.asset !== wallet.playing ? `Switch to ${receiptUnit(state)} to check and collect.` : '',
         ]
           .filter(Boolean)
           .join(' '),
         payload,
-        facts: [['Pot', id]],
+        facts: [['Bet', hash], ...(state.group ? [['Group', state.group] as [string, string]] : [])],
       });
-      item.dataset.pot = id;
+      item.dataset.bet = hash;
       item.dataset.playing = wallet.playing;
       (item as HTMLDetailsElement).open = previous?.open ?? false;
       return item;
@@ -883,7 +886,7 @@ async function refreshActivity() {
     historyError = error;
   } finally {
     historyBusy = false;
-    renderPots();
+    renderHeld();
     renderActivity();
     if (!$('page-bets').classList.contains('hidden')) renderBets();
     if (!$('page-games').classList.contains('hidden')) renderMyGames();
@@ -992,19 +995,20 @@ async function fetchGame(url: string) {
     manifest.referee !== undefined &&
     (typeof manifest.referee !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(manifest.referee))
   )
-    throw new Error("A manifest's referee is the address of the key that runs the game's pots.");
+    throw new Error("A manifest's referee is the address of the key that settles the game's bets.");
   const entry = safeURL(manifest.entry, response.url);
   if (entry.origin === location.origin || new URL(response.url).origin === location.origin)
     throw new Error('Games cannot be served from the wallet’s own origin.');
   return { manifestURL, manifest, developer, entry };
 }
 
-/** Open a game. A published one comes with the key its profile records: its publisher and the name they
- * published it under. Its manifest must name that publisher as its developer, or it is not their game. */
-async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: string) {
+/** Open a game. A published one comes with what its profile records: its key, its publisher and the name
+ * they published it under, which its manifest must name as its developer, or it is not their game; and the
+ * referee they published to settle its bets. */
+async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: Published) {
   const { manifestURL, manifest, developer, entry } = await fetchGame(url);
   const slug = 'manifest' in gameRoute ? undefined : gameRoute.name;
-  if (slug !== undefined && !same(gameKey({ developer, name: slug }), published))
+  if (slug !== undefined && !same(gameKey({ developer, name: slug }), published?.key))
     throw new Error(`${manifestURL.host} serves a manifest whose developer did not publish ${gamePath(gameRoute)}.`);
   closeGame();
   const frame = document.createElement('iframe');
@@ -1022,6 +1026,8 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     developer,
     ...(slug === undefined ? {} : { slug }),
     name: manifest.name,
+    // The key that settles its bets that settle later, which each of them signs: the one its developer published.
+    ...(published?.referee ? { referee: getAddress(published.referee) } : {}),
   };
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
   const isCurrent = () =>
@@ -1081,7 +1087,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       }
       if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
       if (method === 'game.bet') return wallet.gameBet(params);
-      if (method === 'game.enter') return wallet.gameEnter(params);
       return wallet.gamePayment(params);
     },
     onError: message => toast(message, true),
@@ -1108,7 +1113,7 @@ $<HTMLButtonElement>('game-funds').addEventListener('click', () => {
   if (active) void openFundDialog({ take: BigInt(wallet.game?.balance || '0') > 0n });
 });
 /** One card for a published game, read from its manifest. */
-async function gameCard(route: GameRoute, url: string, key: string) {
+async function gameCard(route: GameRoute, url: string, published: Published) {
   const manifest = await readManifest(
     await fetch(safeURL(url), { credentials: 'omit', signal: AbortSignal.timeout(12000) }),
   );
@@ -1125,7 +1130,8 @@ async function gameCard(route: GameRoute, url: string, key: string) {
   card.append(title, description, link);
   // A bet's receipt names its game only by this key, so remembering the card is what lets a line of
   // history be opened again, and its public record found.
-  knownGames.set(key.toLowerCase(), { route, url, key, name: title.textContent });
+  const key = published.key;
+  knownGames.set(key.toLowerCase(), { route, url, ...published, name: title.textContent });
   const record = document.createElement('span');
   record.className = 'catalog-record';
   record.textContent = 'Every bet ↗';
@@ -1138,7 +1144,7 @@ async function gameCard(route: GameRoute, url: string, key: string) {
   card.append(record);
   card.addEventListener('click', event => {
     event.preventDefault();
-    task(() => loadGame(url, route, true, key));
+    task(() => loadGame(url, route, true, published));
   });
   return card;
 }
@@ -1148,7 +1154,7 @@ const SHOWN_GAMES = 32;
 /** Every game a profile publishes, as cards. A manifest that cannot be read is left out. */
 async function profileCards(owner: string, games: { name: string; url: string; key: string }[]) {
   const cards = await Promise.all(
-    games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url, game.key).catch(() => null)),
+    games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url, game).catch(() => null)),
   );
   return cards.filter(card => card !== null);
 }
@@ -1278,7 +1284,7 @@ function renderAccount(name: string | null) {
   $('account-heading').textContent = name ?? 'My account';
   $('account-handle').textContent = name
     ? wallet.alias
-      ? `~${wallet.uname} · the name every game and pot knows you by`
+      ? `~${wallet.uname} · the name every game and referee knows you by`
       : 'Take an alias below and this becomes the shorter name you are shown by.'
     : 'Connecting to your wallet…';
   $<HTMLAnchorElement>('account-public').href = name ? profilePath(name) : '/';
@@ -1308,7 +1314,7 @@ function renderAccount(name: string | null) {
 /** Games this wallet can reopen, by their key: whatever the library showed.
  * A bet's receipt carries only the game's key and the name it went by, so this is what turns a
  * line of history back into something to play. */
-const knownGames = new Map<string, { route: GameRoute; url: string; key: string; name: string }>();
+const knownGames = new Map<string, Published & { route: GameRoute; url: string; name: string }>();
 const favouriteSetting = `hookedin:v1:${network}:favourite-games`;
 function favourites(): Set<string> {
   try {
@@ -1330,16 +1336,21 @@ function toggleFavourite(key: string) {
 function ownBets(): BetRow[] {
   return wallet.history
     .filter(
-      (receipt: any) => receipt.kind === 'bet' && receipt.status === 'signed' && receipt.expectedPayout !== undefined,
+      (receipt: any) =>
+        receipt.status === 'signed' &&
+        ((receipt.kind === 'bet' && receipt.expectedPayout !== undefined) ||
+          // A bet that settled later is one once what it paid is collected; a refund was never played.
+          (receipt.kind === 'wager' && receipt.payout !== undefined && !receipt.reason)),
     )
     .map((receipt: any) => ({
       at: Date.parse(receipt.createdAt),
       game: receipt.game?.name || 'Unnamed game',
       key: receipt.game?.key ?? null,
       asset: receipt.asset === 'test' ? 'test' : 'eth',
+      ...(receipt.details?.group ? { group: receipt.details.group } : {}),
       stake: BigInt(receipt.stake),
       payout: BigInt(receipt.payout ?? 0),
-      expected: BigInt(receipt.expectedPayout),
+      expected: receipt.expectedPayout === undefined ? null : BigInt(receipt.expectedPayout),
       maxPayout: receipt.maxPayout === undefined ? null : BigInt(receipt.maxPayout),
       operation: receipt.operationId,
       receipt,
@@ -1352,6 +1363,7 @@ const showGameRecord = (row: { key?: string | null }) => {
 /** One bet in full: the prize table it rode, where its round landed, and the preimages that drew
  * it. Everything shown comes out of the receipt this wallet kept. */
 function showBet(row: BetRow) {
+  $('bet-detail-eyebrow').textContent = 'ONE BET, IN FULL';
   $('bet-detail-title').textContent = row.game;
   $('bet-detail').replaceChildren(
     betDetail(row, opened => {
@@ -1360,7 +1372,8 @@ function showBet(row: BetRow) {
     }),
   );
   $('bet-dialog').scrollTop = 0;
-  $<HTMLDialogElement>('bet-dialog').showModal();
+  // A bet opened from its group's list replaces the list in the dialog already open.
+  if (!$<HTMLDialogElement>('bet-dialog').open) $<HTMLDialogElement>('bet-dialog').showModal();
 }
 /** A list is rebuilt only when what it shows has changed. The wallet renders on every poll, and a
  * row replaced under the player's cursor takes their click with it. */
@@ -1374,7 +1387,7 @@ function renderBets() {
   const signature = betSignature(rows);
   if (signature === shownBets) return;
   shownBets = signature;
-  $('bet-list').replaceChildren(...rows.map(row => betRowElement(row, showBet)));
+  $('bet-list').replaceChildren(...betElements(rows, showBet));
   filterBets(
     $('bet-list'),
     $<HTMLInputElement>('bet-search').value,
@@ -1382,6 +1395,24 @@ function renderBets() {
     $('bet-visible-count'),
     'No bets yet. Open a game from the library and every bet you sign is recorded here.',
   );
+}
+/** A list of bets, the ones a game grouped standing together as one row. */
+function betElements(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
+  return groupRows(rows).map(group =>
+    group.length === 1 ? betRowElement(group[0]!, onOpen) : groupRowElement(group, bets => showGroup(bets, onOpen)),
+  );
+}
+/** The bets of one group, each opening in full where this wallet kept its receipt. */
+function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
+  const last = rows.at(-1)!;
+  $('bet-detail-eyebrow').textContent = `ONE GROUP, ${rows.length} BETS`;
+  $('bet-detail-title').textContent = `${last.game} · ${last.group}`;
+  const list = document.createElement('div');
+  list.className = 'bet-list';
+  list.append(...rows.map(row => betRowElement(row, onOpen)));
+  $('bet-detail').replaceChildren(list);
+  $('bet-dialog').scrollTop = 0;
+  if (!$<HTMLDialogElement>('bet-dialog').open) $<HTMLDialogElement>('bet-dialog').showModal();
 }
 /** One line per game: what this wallet staked in it, what came back, and what its bets were worth. */
 function renderMyGames() {
@@ -1436,7 +1467,7 @@ function renderMyGames() {
       figures.className = 'played-figures';
       for (const [asset, totals] of totalsByAsset(entry.rows)) {
         const unit = unitOf(asset),
-          expected = measuredReturn(totals.staked, totals.expected),
+          expected = measuredReturn(totals.priced, totals.expected),
           cell = document.createElement('dl');
         cell.className = 'played-asset';
         for (const [label, value] of [
@@ -1468,7 +1499,7 @@ function renderMyGames() {
         play.type = 'button';
         play.className = 'button secondary small';
         play.textContent = 'Play again ↗';
-        play.addEventListener('click', () => task(() => loadGame(known.url, known.route, true, known.key)));
+        play.addEventListener('click', () => task(() => loadGame(known.url, known.route, true, known)));
         actions.append(play);
       }
       if (entry.key) {
@@ -1494,14 +1525,14 @@ async function openGameRecord(key: string, push = true) {
   $('gamebets-key').textContent = key;
   $('gamebets-list').replaceChildren();
   $('gamebets-totals').replaceChildren();
-  $('gamebets-pots').classList.add('hidden');
+  $('gamebets-later').classList.add('hidden');
   $('gamebets-empty').classList.add('hidden');
   $<HTMLInputElement>('gamebets-search').value = '';
   navigate('gamebets', push, gameBetsPath(key));
   document.title = `${name} — HookedIn`;
   const play = $<HTMLButtonElement>('gamebets-play');
   play.classList.toggle('hidden', !known);
-  play.onclick = known ? () => task(() => loadGame(known.url, known.route, true, known.key)) : null;
+  play.onclick = known ? () => task(() => loadGame(known.url, known.route, true, known)) : null;
   try {
     const record = await wallet.api(`/api/games/${key}?limit=200`);
     if (location.pathname !== gameBetsPath(key)) return;
@@ -1510,9 +1541,10 @@ async function openGameRecord(key: string, push = true) {
       game: name,
       who: bet.alias ? '@' + bet.alias : bet.uname ? '~' + bet.uname : 'a player',
       asset: bet.asset === 'test' ? 'test' : 'eth',
+      ...(bet.group === undefined ? {} : { group: bet.group }),
       stake: BigInt(bet.stake),
       payout: BigInt(bet.payout),
-      expected: BigInt(bet.expected),
+      expected: bet.expected === null ? null : BigInt(bet.expected),
       index: Number(bet.index),
     }));
     $('gamebets-totals').replaceChildren(
@@ -1525,20 +1557,22 @@ async function openGameRecord(key: string, push = true) {
               staked: BigInt(totals.staked || 0),
               paid: BigInt(totals.paid || 0),
               expected: BigInt(totals.expected || 0),
+              priced: BigInt(totals.priced || 0),
               net: BigInt(totals.paid || 0) - BigInt(totals.staked || 0),
             },
           ]),
         ),
       ),
     );
-    // How the game's pots ended: a referee that lets the pots it would lose go void shows here.
-    const pots: { unresolved: number; resolved: number; refunded: number } = record.pots;
-    if (pots.unresolved + pots.resolved) {
-      $('gamebets-pots').textContent =
-        `Pots: ${pots.unresolved} unresolved, ${pots.resolved} resolved (${pots.refunded} refunded). A refunded pot returned every entry: its referee called it off, or did not end it by its deadline.`;
-      $('gamebets-pots').classList.remove('hidden');
+    // How the game's bets that settle later ended: a referee that lets the bets it would lose run past
+    // their deadline shows here.
+    const later: { open: number; settled: number; expired: number } = record.later;
+    if (later.open + later.settled + later.expired) {
+      $('gamebets-later').textContent =
+        `Bets that settle later: ${later.open} open, ${later.settled} settled, and ${later.expired} its referee let run past their deadline, whose stakes came back.`;
+      $('gamebets-later').classList.remove('hidden');
     }
-    $('gamebets-list').replaceChildren(...rows.map(row => betRowElement(row)));
+    $('gamebets-list').replaceChildren(...betElements(rows));
     filterBets(
       $('gamebets-list'),
       '',
@@ -1895,7 +1929,7 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
     const { manifestURL, manifest, developer } = await fetchGame(url.value.trim());
     if (!same(developer, wallet.address))
       throw new Error(`That manifest names ${developer} as its developer. Publish it from that account.`);
-    // A game with pots names the key of its referee, which the casino then holds its pots to.
+    // A game with a referee names its key, which the casino then holds its rounds and bets to.
     await wallet.publishGame(published, manifestURL.href, manifest.referee ?? null);
     name.value = url.value = '';
     await loadLibrary();
@@ -1932,7 +1966,7 @@ $<HTMLAnchorElement>('wallet-name-link').addEventListener('click', event => {
   event.preventDefault();
   if (wallet.uname) void openProfile(showName(wallet));
 });
-$<HTMLButtonElement>('refresh-pots').addEventListener('click', () => void refreshActivity());
+$<HTMLButtonElement>('refresh-held').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('refresh-wallet').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('wallet-history').addEventListener('click', () => navigate('activity'));
 $<HTMLButtonElement>('connect-casino').addEventListener('click', () =>

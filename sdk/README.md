@@ -14,15 +14,15 @@ Developers earn half the commission on every bet placed through their game. It i
 
 The fastest way to build a game is to fork [hookedin/game-template](https://github.com/hookedin/game-template). Its README is the step-by-step developer guide. The reference games are in [games/](../games/); the template is its own repository:
 
-| Game                                                       | What it shows                                                                      |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [dice](../games/dice/)                                     | The smallest `RoundClient` game: one decision, two outcomes                        |
-| [plinko](../games/plinko/)                                 | A one-shot prize table written by hand, with no round helper                       |
-| [samson](../games/samson/)                                 | A 243-ways slot whose prize table is counted exactly from its reel strips          |
-| [blackjack](../games/blackjack/)                           | A multi-step game with doubles, splits and insurance, priced by the engine         |
-| [mines](../games/mines/)                                   | Reveal-or-cash-out, the simplest multi-step graph                                  |
-| [roulette](../games/roulette/)                             | Many players against the house in one house pot, with its wheel in the same Worker |
-| [game-template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand. The starting point for forks    |
+| Game                                                       | What it shows                                                                       |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| [dice](../games/dice/)                                     | The smallest `RoundClient` game: one decision, two outcomes                         |
+| [plinko](../games/plinko/)                                 | A one-shot prize table written by hand, with no round helper                        |
+| [samson](../games/samson/)                                 | A 243-ways slot whose prize table is counted exactly from its reel strips           |
+| [blackjack](../games/blackjack/)                           | A multi-step game with doubles, splits and insurance, priced by the engine          |
+| [mines](../games/mines/)                                   | Reveal-or-cash-out, the simplest multi-step graph                                   |
+| [roulette](../games/roulette/)                             | Many players against the house, their bets drawn on one outcome a spin by its wheel |
+| [game-template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand. The starting point for forks     |
 
 ## Install
 
@@ -84,23 +84,24 @@ if (receipt.status === 'signed' && receipt.verified) {
 }
 ```
 
-| Member                                                    | What it does                                                                                                                 |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `call(method, params)`                                    | Send any bridge request. Rejects with the wallet's error message, or after 180 seconds of silence                            |
-| `limits()`                                                | Every bound this wallet holds a bet to: the prizes one holds, the outcome space, the entries in a pot                        |
-| `balance()`                                               | The game's latest spending limit `{ balance, pending }`, as pushed by the wallet                                             |
-| `onBalance(listener)`                                     | Called on every `game.balance` push. Returns a function that stops listening                                                 |
-| `requestFunds({ amount? })`                               | Ask the player for money. The wallet shows its own dialog, in its own words; resolves `{ funded, amount, balance, pending }` |
-| `receipt(id)`                                             | The outcome of an earlier operation by the game's own `id`, or `null`                                                        |
-| `bet({ id, stake, prizes })`                              | One atomic bet                                                                                                               |
-| `enter({ id, pot, stake, prizes?, quote? })`              | Enter a pot, finally; once the pot has ended, the same call returns what the entry was paid                                  |
-| `payment(id, amount)`                                     | A deterministic payment to the bankroll                                                                                      |
-| `storageScope(info)`                                      | A storage key unique to this page, chain, player and asset, on the player's uname                                            |
-| `initializeGame({ stakeInput, assetLabels })`             | Read-only startup: `wallet.hello`, `wallet.info`, the first balance, asset labels and the recommended stake                  |
-| `hello()`, `info()`                                       | The wallet's methods and asset `{id, symbol, decimals}`; the player's `{uname, alias, chainId, bankroll, recommendedStake}`  |
-| `parseAmount`, `formatAmount`, `exactAmount`, `stepStake` | Amounts in the wallet's asset, whatever its decimals, and a 1-2-5 stake ladder for an input field                            |
+| Member                                                    | What it does                                                                                                                     |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `call(method, params)`                                    | Send any bridge request. Rejects with the wallet's error message, or after 180 seconds of silence                                |
+| `limits()`                                                | Every bound this wallet holds a bet to: the prizes one holds, the outcome space, the bets one round takes, the furthest deadline |
+| `balance()`                                               | The game's latest spending limit `{ balance, pending }`, as pushed by the wallet                                                 |
+| `onBalance(listener)`                                     | Called on every `game.balance` push. Returns a function that stops listening                                                     |
+| `requestFunds({ amount? })`                               | Ask the player for money. The wallet shows its own dialog, in its own words; resolves `{ funded, amount, balance, pending }`     |
+| `receipt(id)`                                             | The outcome of an earlier operation by the game's own `id`, or `null`                                                            |
+| `bet({ id, stake, prizes, group? })`                      | One atomic bet on the player's own round                                                                                         |
+| `bet({ id, stake, prizes, deadline, group? })`            | A bet on your referee's open round, drawn against the bankroll; the same call returns what it paid once it has                   |
+| `bet({ id, stake, terms, deadline, group? })`             | A bet your referee settles by a split; the same call returns what it paid once it has                                            |
+| `payment(id, amount, group?)`                             | A deterministic payment to the bankroll                                                                                          |
+| `storageScope(info)`                                      | A storage key unique to this page, chain, player and asset, on the player's uname                                                |
+| `initializeGame({ stakeInput, assetLabels })`             | Read-only startup: `wallet.hello`, `wallet.info`, the first balance, asset labels and the recommended stake                      |
+| `hello()`, `info()`                                       | The wallet's methods and asset `{id, symbol, decimals}`; the player's `{uname, alias, chainId, bankroll, recommendedStake}`      |
+| `parseAmount`, `formatAmount`, `exactAmount`, `stepStake` | Amounts in the wallet's asset, whatever its decimals, and a 1-2-5 stake ladder for an input field                                |
 
-The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.enter`, `game.payment`, `game.receipt` and `game.requestFunds`. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and pots.
+The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.payment`, `game.receipt` and `game.requestFunds`. A `group` labels bets and payments that belong together, the steps of one hand or the bets on one match, and the wallet shows them as one; `RoundClient` gives every step of a round its round's ID. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and bets that settle later.
 
 `mountBank(element, { round? })` renders the balance strip the reference games show: the money the wallet lets the game risk in this tab, live, with an **Add funds** button. With the game's `RoundClient` it leaves out the cash inside an unfinished round. It shows the asset's symbol and marks test coins. `createSynth()` makes short tones without audio files.
 
@@ -177,24 +178,28 @@ src/manifest.json   { id, name, description, entry, developer }
 
 ## A game with a server
 
-Many players share one outcome when a server referees a pot: it opens the pot at the casino, the pages enter it with their own wallets, and it ends the pot. `createReferee` is the server's side:
+A game with a server has a **referee**: a key you publish with the game. Its pages place bets that settle later with their own wallets, and the referee settles them: it **draws** bets with prizes against the bankroll, many players on one outcome, and it **splits** bets with terms, whose outcome no prize table can say: a cash-out when the player chooses, a match that ends next month. `createReferee` is the server's side:
 
 ```ts
-import { createReferee, roundOutcome } from '@hookedin/play/sdk/referee';
+import { createReferee } from '@hookedin/play/sdk/referee';
 
 const referee = await createReferee({ casinoURL, key, game: { developer, name } });
-// A house pot: 20 seconds of betting time, counted from the first entry, within this casino's own
-// `referee.window`. Give `pot.id` to the pages, keep `seed`.
-const { pot, seed } = await referee.open({ bank: 'house', window: 20_000 });
-const ended = await referee.resolve(pot.id, { seed }); // the casino reveals its secret; every entry is paid
-const outcome = roundOutcome(seed, ended.secret); // what every entry's prizes were read against
+// Before anybody bets: the casino names the round and the referee commits its seed to it, so every bet on it
+// has its outcome fixed before it is placed. Players' wallets bet on the open round.
+await referee.open('eth');
+// A spin: every open bet on the round, drawn on one outcome, each admitted with those before it or refunded,
+// and every bet it took is paid. The next round opens with it.
+const { outcome, bets } = await referee.draw('eth');
+
+// Splits: the open bets of a group, and what each pays, signed here. Your bank at the casino keeps the rest
+// of each stake or pays what the split comes to beyond it.
+const open = await referee.bets('round-812');
+await referee.settle(open.map(bet => ({ bet: bet.bet, player: cashedOut(bet), casino: share(bet) })));
 ```
 
-A developer's pot pays at your own odds, priced entry by entry with `referee.quote` and paid beyond its entries from your bank at the casino; a players' pot is split as you sign, less a capped rake. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Pots](docs/game-sdk.md#pots) explains it; [roulette](../games/roulette/) is the reference.
+A bet nobody settles by its deadline is refunded. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
 
 ## Testing against the real wallet
-
-Pots move from `unresolved` to `resolved`. Check `resolution` on the returned pot: `outcome` carries the seed/secret or signed result; `refund` returns the stakes and explains why in `refundReason` (`cancelled` or `expired`). A retry returns the recorded resolution, even if a refund won the race. Resolved entry receipts expose `resolution`, `resolvedAt`, and the collected `payout`; zero is a completed loss.
 
 Game tests do not mock the wallet. `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store, an open channel and a stub casino that derives and signs states exactly as the protocol says. A test wires a bridge object to it and hands that to `RoundClient` or to the game's own client:
 
@@ -223,7 +228,7 @@ test('a round settles through the wallet', async () => {
 });
 ```
 
-[test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, verified rejections, reloads and two tabs. For a game with pots the stub casino plays the referee's part too: `f.openPot(identity, bank)` opens one, `f.quote` prices a developer's pot's entry, and `f.resolvePot` and `f.voidPot` end it, so a test enters with `w.gameEnter` and asks again for what the entry was paid.
+[test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, verified rejections, reloads and two tabs. For a game with a referee the stub casino plays the referee's part too: `f.draw()` draws the referee's open round, `f.settle(bet, player, casino)` splits a bet with terms and `f.refund` lets its deadline pass, so a test bets with `w.gameBet` and asks again for what the bet paid.
 
 The SDK's tests run with the rest of play's, from the repository root:
 
@@ -256,7 +261,7 @@ docs/                                reference documentation
 
 ## Documentation
 
-- [docs/game-sdk.md](docs/game-sdk.md): manifests, the sandbox, game balances, every bridge method, recovery, pots and developer earnings.
+- [docs/game-sdk.md](docs/game-sdk.md): manifests, the sandbox, game balances, every bridge method, recovery, bets that settle later and developer earnings.
 - [docs/engine.md](docs/engine.md): the pricing engine's API.
 - [docs/sequential-games.md](docs/sequential-games.md): how a multi-step game becomes a sequence of native bets, with the blackjack rules and exact edge.
 - [docs/collapsing-bets.md](docs/collapsing-bets.md): playing a prize table too large for one bet.

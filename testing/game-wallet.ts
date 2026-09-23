@@ -7,24 +7,24 @@ import {
   initialState,
   channelId,
   STATE_TYPES,
-  QUOTE_TYPES,
-  RESOLUTION_TYPES,
+  SETTLEMENT_TYPES,
+  COMMIT_TYPES,
   deriveState,
   roundId,
   seedHash,
-  hashJSON,
+  gameKey as keyOf,
+  hashOperation,
   outcome,
-  potPayouts,
   plain,
   checkpointEvidence,
   rejectionCheckpoint,
   KIND,
 } from '../protocol/protocol.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
-import type { Bank, GameName, PotResult, PotStatus } from '../protocol/types.ts';
+import type { PublicBet } from '../protocol/types.ts';
 
-/** A real wallet wired to an in-memory casino stub, with a stub referee for the game's pots: what a game
- * is tested against without the private casino. */
+/** A real wallet wired to an in-memory casino stub, with a stub referee that draws and settles the game's
+ * bets: what a game is tested against without the private casino. */
 export async function gameWallet(storage = new MemoryStore()) {
   const owner = Wallet.createRandom(),
     player = Wallet.createRandom(),
@@ -54,11 +54,27 @@ export async function gameWallet(storage = new MemoryStore()) {
     secrets.set(round, secret);
     return round;
   };
-  // Its pots, and what each ended pot owes this player, until the wallet collects it.
-  const pots = new Map<string, PotStatus & { seeds?: string }>(),
+  // The referee's open round: named by the stub casino and committed to the referee's seed.
+  let open: { id: string; secret: string; seed: string; seedHash: string; signature: string } | null = null;
+  const openRound = async () => {
+    if (open) return open;
+    const secret = hexlify(randomBytes(32)),
+      seed = hexlify(randomBytes(32)),
+      id = roundId(secret),
+      hash = seedHash(seed);
+    return (open = {
+      id,
+      secret,
+      seed,
+      seedHash: hash,
+      signature: await referee.signTypedData(d, COMMIT_TYPES, { round: id, seedHash: hash }),
+    });
+  };
+  // Its bets that settle later, what each settled bet owes this player until the wallet collects it, and the
+  // order bets settled in.
+  const held = new Map<string, PublicBet & { developer: string; name: string }>(),
     owed = new Map<string, bigint>(),
-    games = new Map<string, GameName>(),
-    resolutions = new Map<string, { sequence: number; payout: string }>();
+    order = new Map<string, number>();
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
   const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
@@ -95,43 +111,41 @@ export async function gameWallet(storage = new MemoryStore()) {
     wallet.api = async (path, body) => {
       if (path === '/api/metrics') return { bankroll };
       if (path.endsWith('/round')) return { id: (own ||= createRound()) };
-      const pot = /^\/api\/pots\/(0x[0-9a-f]{64})$/.exec(path);
-      if (pot) return publicPot(pot[1]!);
+      if (path.startsWith('/api/rounds?')) {
+        const { id, seedHash, signature } = await openRound();
+        return { id, seedHash, signature };
+      }
+      const bet = /^\/api\/bets\/(0x[0-9a-f]{64})$/.exec(path);
+      if (bet) return publicBet(bet[1]!);
       const list = new URL(path, 'https://casino.example');
-      if (list.pathname.endsWith('/pots')) {
-        const resolved = list.searchParams.get('status') === 'resolved',
+      if (list.pathname.endsWith('/bets')) {
+        const settled = list.searchParams.get('status') === 'settled',
           after = list.searchParams.get('after') ?? '';
         const limit = Number(list.searchParams.get('limit') ?? 50);
-        const cursor = (pot: PotStatus) => (resolved ? resolutions.get(pot.id)!.sequence : pot.id);
-        const all = [...pots.values()]
-          .filter(
-            pot =>
-              pot.entries.length &&
-              pot.status === (resolved ? 'resolved' : 'unresolved') &&
-              (resolved ? Number(cursor(pot)) > Number(after) : String(cursor(pot)) > after),
+        const all = [...held.values()]
+          .filter(bet =>
+            settled
+              ? bet.status === 'settled' && order.get(bet.bet)! > Number(after || '0')
+              : bet.status === 'open' && bet.bet > after,
           )
-          .sort((a, b) => (resolved ? Number(cursor(a)) - Number(cursor(b)) : a.id.localeCompare(b.id)));
+          .sort((a, b) => (settled ? order.get(a.bet)! - order.get(b.bet)! : a.bet.localeCompare(b.bet)));
         const page = all.slice(0, limit);
         return plain({
-          pots: page.map(pot => ({
-            id: pot.id,
-            game: games.get(pot.id),
-            asset: pot.asset,
-            status: pot.status,
-            closesAt: pot.closesAt,
-            deadline: pot.deadline,
-            stake: String(pot.entries.reduce((sum, entry) => sum + BigInt(entry.stake), 0n)),
-            collected: resolved && resolutions.get(pot.id)!.payout !== '0' && !owed.has(pot.id),
-            ...(resolved
-              ? {
-                  payout: resolutions.get(pot.id)!.payout,
-                  resolution: pot.resolution,
-                  refundReason: pot.refundReason,
-                  resolvedAt: pot.resolvedAt,
-                }
+          bets: page.map(bet => ({
+            bet: bet.bet,
+            game: { developer: bet.developer, name: bet.name },
+            asset: bet.asset,
+            status: bet.status,
+            stake: bet.stake,
+            deadline: bet.deadline,
+            collected: settled && bet.payout !== '0' && !owed.has(bet.bet),
+            ...(settled
+              ? { payout: bet.payout, settledAt: bet.settledAt, ...(bet.refunded ? { refunded: true } : {}) }
               : {}),
           })),
-          cursor: page.length ? String(cursor(page.at(-1)!)) : after || (resolved ? '0' : ''),
+          cursor: page.length
+            ? String(settled ? order.get(page.at(-1)!.bet) : page.at(-1)!.bet)
+            : after || (settled ? '0' : ''),
           more: all.length > limit,
         });
       }
@@ -140,8 +154,7 @@ export async function gameWallet(storage = new MemoryStore()) {
       if (!path.endsWith('/operations')) return {};
       const { request, details, signature, seed } = body as any;
       if (responses.has(request.memo)) return responses.get(request.memo);
-      if (Number(request.kind) === KIND.debit && details.counterparty && pots.has(details.counterparty))
-        return enter(request, details, signature);
+      if (Number(request.kind) === KIND.debit && details.bet) return place(request, details, signature);
       if (Number(request.kind) === KIND.credit && owed.has(details.counterparty)) {
         if (owed.get(details.counterparty) !== BigInt(request.amount))
           throw new Error('No payout of this amount is due');
@@ -149,7 +162,7 @@ export async function gameWallet(storage = new MemoryStore()) {
       }
       return settle(request, details, signature, seed ?? ZeroHash);
     };
-    /** The casino declines an entry with a signed checkpoint above it: the balance is unchanged. */
+    /** The casino declines a bet with a signed checkpoint above it: the balance is unchanged. */
     const decline = async (request: any, details: any, reason: string) => {
       const base = wallet.current!,
         state = rejectionCheckpoint(d, base.state, request);
@@ -168,7 +181,7 @@ export async function gameWallet(storage = new MemoryStore()) {
       responses.set(request.memo, response);
       return response;
     };
-    const settle = async (request: any, details: any, signature: string, seed: string, extra = {}) => {
+    const settle = async (request: any, details: any, signature: string, seed: string) => {
       const base = wallet.current!,
         secret = Number(request.kind) === KIND.bet ? secrets.get(request.round)! : ZeroHash;
       const next = deriveState(d, base.state, request, secret, seed);
@@ -186,43 +199,48 @@ export async function gameWallet(storage = new MemoryStore()) {
         },
         bankroll,
         ...(request.round === own ? { nextRound: (own = createRound()) } : {}),
-        ...extra,
       });
       responses.set(request.memo, response);
       settlements++;
       return response;
     };
-    /** An entry is final and completes at once, if the pot is open and, for a developer's pot, at its
-     * referee's quote. */
-    const enter = async (request: any, details: any, signature: string) => {
-      const pot = pots.get(details.counterparty)!,
-        prizes = details.entry?.prizes,
-        quote = details.entry?.quote;
-      if (pot.status !== 'unresolved') return decline(request, details, 'The pot takes no more entries');
-      if (pot.bank === 'developer') {
-        const quoted = await new Wallet(referee.privateKey).signTypedData(d, QUOTE_TYPES, {
-          pot: pot.id,
-          stake: String(request.amount),
-          prizes: hashJSON(prizes),
-          expiresAt: quote?.expiresAt ?? '0',
-        });
-        if (quoted !== quote?.signature || Number(quote.expiresAt) < Date.now() / 1000)
-          return decline(request, details, "The entry is not at the referee's quote");
-      }
-      pot.entries.push({ uname, alias: null, stake: String(request.amount), ...(prizes ? { prizes } : {}) });
-      return settle(request, details, signature, ZeroHash, { entry: pot.entries.length - 1 });
+    /** A bet that settles later is final and completes at once, if its referee is the game's and, to be drawn,
+     * it rides the referee's open round. */
+    const place = async (request: any, details: any, signature: string) => {
+      const later = details.bet;
+      if (later.referee !== referee.address)
+        return decline(request, details, "This is not the referee the game's developer published");
+      const round = open;
+      if (later.prizes && !(round && later.round === round.id && later.seedHash === round.seedHash))
+        return decline(request, details, 'The round is not open');
+      const hash = hashOperation(d, request).toLowerCase();
+      held.set(hash, {
+        bet: hash,
+        game: keyOf(details.game),
+        developer: details.game.developer,
+        name: details.game.name,
+        ...(details.group ? { group: details.group } : {}),
+        asset: 'eth',
+        uname,
+        alias: null,
+        stake: String(request.amount),
+        placedAt: Date.now(),
+        status: 'open',
+        ...later,
+      });
+      return settle(request, details, signature, ZeroHash);
     };
     return wallet;
   };
-  const publicPot = (id: string) => {
-    const { seeds: _seeds, ...pot } = pots.get(id)!;
-    return plain(pot);
+  const publicBet = (hash: string) => {
+    const { developer: _developer, name: _name, ...bet } = held.get(hash)!;
+    return plain(bet);
   };
-  /** A pot ends: what each entry is owed, summed for this one player, waits for the wallet to collect it. */
-  const end = (pot: PotStatus, payouts: bigint[]) => {
-    const total = payouts.reduce((sum, payout) => sum + payout, 0n);
-    if (total) owed.set(pot.id, total);
-    resolutions.set(pot.id, { sequence: resolutions.size + 1, payout: String(total) });
+  /** A bet settles: what it paid waits, owed to this player, for the wallet to collect. */
+  const end = (hash: string, payout: bigint, change: Partial<PublicBet> = {}) => {
+    Object.assign(held.get(hash)!, { status: 'settled', payout: String(payout), settledAt: Date.now(), ...change });
+    if (payout) owed.set(hash, payout);
+    order.set(hash, order.size + 1);
   };
   const wallet = make();
   await wallet.save();
@@ -235,73 +253,47 @@ export async function gameWallet(storage = new MemoryStore()) {
     settlements: () => settlements,
     /** A round's secret, which only the casino knows until it reveals the round. */
     secretOf: (round: string) => secrets.get(round)!,
-    /** What a game's referee does at the casino: open a pot of `game`. A house pot is a round whose seed
-     * the referee keeps. */
-    openPot(game: GameIdentity, bank: Bank, { outcomes = 3, rake = 0 } = {}) {
-      const secret = hexlify(randomBytes(32)),
-        seed = hexlify(randomBytes(32)),
-        id = bank === 'house' ? roundId(secret) : hexlify(randomBytes(32));
-      if (bank === 'house') secrets.set(id, secret);
-      const pot: PotStatus = {
-        id,
-        game: gameKey(game),
-        referee: referee.address.toLowerCase(),
-        bank,
-        asset: 'eth',
-        status: 'unresolved',
-        ...(bank === 'house' ? { seedHash: seedHash(seed) } : bank === 'developer' ? { outcomes } : { rake }),
-        closesAt: null,
-        deadline: Date.now() + 600_000,
-        entries: [],
-      };
-      pots.set(id, { ...pot, seeds: seed });
-      games.set(id, { developer: game.developer, name: game.slug ?? game.manifestURL });
-      return plain(pot);
+    /** The referee draws its open round: every open bet on it is owed what its prizes pay on the one outcome,
+     * or, if it is in `declined`, refunded beside the draw. The next round is then open. */
+    async draw(declined: string[] = []) {
+      const { id, seed, secret } = await openRound(),
+        draw = { seed, secret };
+      for (const bet of held.values())
+        if (bet.status === 'open' && bet.round === id)
+          if (declined.includes(bet.bet)) end(bet.bet, BigInt(bet.stake), { draw, refunded: true });
+          else end(bet.bet, outcome(bet.prizes!, seed, secret).payout, { draw });
+      open = null;
+      return { round: id, seed, secret, outcome: outcome([], seed, secret).value };
     },
-    /** The referee's price for an entry into a developer's pot. */
-    async quote(pot: string, stake: string, prizes: any[], expiresAt = Math.floor(Date.now() / 1000) + 60) {
-      const message = { pot, stake, prizes: hashJSON(prizes), expiresAt: String(expiresAt) };
-      return { expiresAt: message.expiresAt, signature: await referee.signTypedData(d, QUOTE_TYPES, message) };
+    /** The referee's open round, as a wallet reads it. */
+    openRound: async () => {
+      const { id, seedHash, signature } = await openRound();
+      return { id, seedHash, signature };
     },
-    /** The referee ends a pot: a house pot with its seed, a developer's or players' pot with a result it signs. */
-    async resolvePot(id: string, result?: PotResult) {
-      const pot = pots.get(id)!;
-      if (pot.bank === 'house') {
-        const secret = secrets.get(id)!;
-        Object.assign(pot, {
-          status: 'resolved',
-          resolution: 'outcome',
-          resolvedAt: Date.now(),
-          seed: pot.seeds,
-          secret,
-        });
-        end(pot, potPayouts(pot, { value: outcome([], pot.seeds!, secret).value }));
-      } else {
-        const signature = await referee.signTypedData(d, RESOLUTION_TYPES, { pot: id, result: hashJSON(result) });
-        Object.assign(pot, { status: 'resolved', resolution: 'outcome', resolvedAt: Date.now(), result, signature });
-        end(pot, potPayouts(pot, result!));
-      }
-      return publicPot(id);
-    },
-    /** The referee calls a pot off, or its deadline passes: every entry is refunded. */
-    voidPot(id: string) {
-      const pot = pots.get(id)!;
-      Object.assign(pot, {
-        status: 'resolved',
-        resolution: 'refund',
-        refundReason: 'cancelled',
-        resolvedAt: Date.now(),
+    /** The referee settles a bet with terms: `player` to the player and `casino` to the casino, signed. */
+    async settle(hash: string, player: bigint, casino = 0n) {
+      const message = { bet: hash, player: String(player), casino: String(casino) };
+      end(hash, player, {
+        settlement: { ...message, signature: await referee.signTypedData(d, SETTLEMENT_TYPES, message) },
       });
-      end(pot, potPayouts(pot, { refund: true }));
-      return publicPot(id);
+      return publicBet(hash);
     },
-    /** A game as its developer published it. `declared` is anything its manifest says otherwise. */
+    /** A bet's deadline passes before anybody settles it: its stake comes back. */
+    refund(hash: string) {
+      end(hash, BigInt(held.get(hash)!.stake), { refunded: true });
+      return publicBet(hash);
+    },
+    /** The game's bets that are open. */
+    open: () => [...held.values()].filter(bet => bet.status === 'open').map(bet => publicBet(bet.bet)),
+    /** A game as its developer published it, with the stub's referee. `declared` is anything its manifest
+     * says otherwise. */
     identity: (name = 'test', declared: Partial<GameIdentity> = {}) => ({
       name,
       slug: name,
       manifestURL: `https://${name}.example/manifest.json`,
       entryURL: `https://${name}.example/`,
       developer: owner.address,
+      referee: referee.address,
       ...declared,
     }),
     async reload() {
