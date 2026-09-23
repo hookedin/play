@@ -148,7 +148,7 @@ const HELD =
 const trust = (bet: { prizes?: unknown } | undefined) =>
   bet?.prizes
     ? 'Its referee draws it against the casino’s bankroll, on a round the casino named and the referee committed its seed to before you bet: its outcome was fixed before your bet, and nobody can change it. Neither sees it alone before the draw; together they could, and turn the bet away, which its receipt would show. The referee chooses when to draw, not what it pays. Undrawn by its deadline, the stake comes back.'
-    : 'Its referee signs what it pays: that is the game developer’s word, and what it wins beyond its stake is theirs to pay. Unsettled by its deadline, the stake comes back.';
+    : 'Its referee signs what it pays: that is its word, and what it wins beyond its stake is paid from the referee’s own bank. Unsettled by its deadline, the stake comes back.';
 /** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
 export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
 /** A bet can have settled while what it paid still waits to enter the channel balance. Its game goes by the name
@@ -308,7 +308,7 @@ export function receiptSummary(
   if (receipt.kind === 'payout')
     description = `What a bet that settled later paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'bank')
-    description = `Your bank pays what your referee's splits owe beyond their stakes, and keeps what they do not pay. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Your bank pays what the splits you sign as a referee owe beyond their stakes, and keeps what they do not pay. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'withdrawn')
     description = `Taken from your bank and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'faucet')

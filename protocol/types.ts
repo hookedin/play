@@ -53,7 +53,7 @@ export interface Details {
   game?: GameRef;
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a bet that
+  /** What a debit pays into or a credit collects from: the bankroll fund, a referee's bank, a bet that
    * settled later, a developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
   /** A bet that settles later: a debit that names its game, and the referee who settles it. */
@@ -64,10 +64,10 @@ export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string 
 /** A bet its game's referee settles by its deadline, or its stake comes back. With `prizes`, it names one of
  * its referee's open rounds and the hash of the seed the referee committed to it, so its outcome is fixed before
  * it is placed; the casino admits it against the bankroll as it takes it, the referee draws the round, and the
- * bet pays what its prizes pay on the round's outcome. With `terms`, the referee signs what it pays, and the
- * developer's bank pays what that comes to beyond the stake. */
+ * bet pays what its prizes pay on the round's outcome. With `terms`, the referee signs what it pays, and its own
+ * bank pays what that comes to beyond the stake. */
 export type LaterBet = {
-  /** The key the game's developer published to settle its bets. */
+  /** The key the game's publisher named to settle its bets. */
   referee: string;
   /** Unix milliseconds. Unsettled by then, the stake is refunded. A bet with prizes has its round's deadline. */
   deadline: number;

@@ -38,8 +38,8 @@ export interface GameBet {
 }
 /** A bet its game's referee settles later. With `prizes` it rides the referee's open `round`, is admitted
  * against the bankroll as it is placed, and pays what its prizes pay when the referee draws the round, or its
- * stake comes back at the round's deadline. With `terms` the referee signs what it pays, and the developer's bank
- * pays what that comes to beyond the stake; unsettled by `deadline` (unix milliseconds), its stake comes back. */
+ * stake comes back at the round's deadline. With `terms` the referee signs what it pays, and its own bank pays
+ * what that comes to beyond the stake; unsettled by `deadline` (unix milliseconds), its stake comes back. */
 export type GamePlace = { id: string; stake: string; group?: string } & (
   { prizes: Prizes; round: string } | { terms: Record<string, unknown>; deadline: number }
 );

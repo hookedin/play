@@ -1282,7 +1282,7 @@ function renderProfile() {
     }),
   );
 }
-/** This account's bank as a developer, in what the wallet plays with, as the casino has it now. */
+/** This account's bank as a referee, in what the wallet plays with, as the casino has it now. */
 async function refreshBank() {
   if (!wallet.channel?.key) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();

@@ -254,7 +254,7 @@ test('a refereed bet pays what its referee signs, and its stake comes back if it
   await assert.rejects(w.gamePlace({ ...request, id: 'nobody' }), /published with no referee/);
 });
 
-test("a split the developer's bank cannot pay is refused whole, and the bet waits", async () => {
+test("a split the referee's bank cannot pay is refused whole, and the bet waits", async () => {
   const f = await gameWallet({ bank: 5n }),
     w = f.wallet;
   w.openGame(f.identity());

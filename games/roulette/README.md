@@ -87,7 +87,7 @@ You earn half of every bet's commission. It accrues to the `developer` address t
 
 Whenever `main` is pushed, this repository's [deploy workflow](../../.github/workflows/deploy.yml) publishes the game to Cloudflare by running `npx wrangler deploy` in `games/roulette`, with [wrangler.jsonc](wrangler.jsonc): one Worker that serves the page and runs the wheel. `wrangler.jsonc` sets `CASINO_URL`, `PUBLISHER` and `GAME_NAME` and builds the page before every deploy, so the same command in `games/roulette` publishes it by hand.
 
-Once, give the Worker the wheel's key: run `npx wrangler secret put REFEREE_KEY` in `games/roulette`, with a private key you generated for this purpose, and publish the game with its address as referee. It holds no money of its own, and roulette's bets are all drawn, so nothing is paid from the developer's bank on its word: a lost key costs nothing but the bets it had not drawn, which come back at their deadline.
+Once, give the Worker the wheel's key: run `npx wrangler secret put REFEREE_KEY` in `games/roulette`, with a private key you generated for this purpose, and publish the game with its address as referee. Roulette's bets are all drawn, so the wheel's key needs no bank and holds no money: a lost key costs nothing but the bets it had not drawn, which come back at their deadline.
 
 A repository made from game-template deploys itself; [its README](https://github.com/hookedin/game-template#deploy) says how.
 

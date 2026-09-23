@@ -194,17 +194,17 @@ const round = await referee.open('eth');
 // as it is placed. Save the id, then draw: every bet on the round rides one outcome, and each is paid.
 const { outcome, bets } = await referee.draw(round.id);
 
-// Splits: the open bets of a group, and what each pays, signed here. Your bank at the casino keeps the rest
-// of each stake or pays what the split comes to beyond it.
+// Splits: the open bets of a group, and what each pays, signed here. The referee's bank at the casino keeps the
+// rest of each stake or pays what the split comes to beyond it.
 const open = await referee.bets('round-812');
 await referee.settle(open.map(bet => ({ bet: bet.bet, player: cashedOut(bet), casino: share(bet) })));
 ```
 
-A drawn bet has its round's deadline, ten minutes after the casino names the round; a split bet has the one its page gives it. A bet nobody settles by its deadline is refunded. A referee holds no money of its own, but a split it signs is paid from your bank: keep its key as safe as the bank. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
+A drawn bet has its round's deadline, ten minutes after the casino names the round; a split bet has the one its page gives it. A bet nobody settles by its deadline is refunded. A referee that only draws holds no money; a split it signs is paid from its own bank, the bank of the account at its address: keep its key as safe as the bank. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
 
 ## Testing against the real wallet
 
-Game tests do not mock the wallet. `gameWallet({ bankroll?, bank? })` from `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store and an open channel, against a stub casino that derives and signs states exactly as the protocol says. The stub holds every bet to the casino's own admission rule and charges its commission, so a table the casino declines, a zero-edge one for instance, is declined in a test too; `bankroll` is what it covers bets with, and `bank` what the developer's bank holds. `f.bridge` is a game's side of the bridge, to hand to `RoundClient` or the game's own client: every request goes through the wallet bridge's validation, the player agrees to every request for funds, and `onReceipt` hears pushed receipts.
+Game tests do not mock the wallet. `gameWallet({ bankroll?, bank? })` from `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store and an open channel, against a stub casino that derives and signs states exactly as the protocol says. The stub holds every bet to the casino's own admission rule and charges its commission, so a table the casino declines, a zero-edge one for instance, is declined in a test too; `bankroll` is what it covers bets with, and `bank` what the referee's bank holds. `f.bridge` is a game's side of the bridge, to hand to `RoundClient` or the game's own client: every request goes through the wallet bridge's validation, the player agrees to every request for funds, and `onReceipt` hears pushed receipts.
 
 ```ts
 import test from 'node:test';

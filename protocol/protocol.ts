@@ -79,12 +79,12 @@ export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
 /** A game's referee proves itself with its own key, as a channel does with its signer. Only the referee
- * a game's developer published draws and settles that game's bets. */
+ * a game's publisher named draws and settles that game's bets. */
 export const REFEREE_ACCESS_TYPES = {
   RefereeAccess: fields('address referee,uint256 expiresAt'),
 };
 /** A referee settles a bet with terms that names it: `player` is what the player is paid and `casino` what
- * the casino is given. The developer's bank keeps the rest of the stake, or pays what the two come to beyond
+ * the casino is given. The referee's own bank keeps the rest of the stake, or pays what the two come to beyond
  * it. `bet` is the hash of the operation that placed the bet, which signs its terms. */
 export const SETTLEMENT_TYPES = {
   Settlement: fields('bytes32 bet,uint256 player,uint256 casino'),
@@ -188,20 +188,21 @@ export const REDEEM_TYPES = {
 };
 export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, REDEEM_TYPES, s);
-/** A developer's bank: the developer's own money, per asset, that pays what their referee's splits owe
- * beyond the stakes and keeps what they do not pay. A deposit is a debit that names it, answered with a
- * statement of the balance; money leaves it only by the developer's own signed `Withdraw` or a split it pays. */
+/** A referee's bank: the money, per asset, of the account at the referee's address, which pays what the splits
+ * that referee signs owe beyond the stakes and keeps what they do not pay. A split moves no other money. A deposit
+ * is a debit that names it, from a channel of that account, answered with a statement of the balance; money
+ * leaves it only by that account's own signed `Withdraw` or a split its referee signs. */
 export const BANK_ID = id('HOOKEDIN/BANK');
-/** The casino signs the balance of a developer's bank in one asset after every deposit and withdrawal.
- * `cause` is the hash of the developer's signed deposit or `Withdraw`. */
+/** The casino signs the balance of a referee's bank in one asset after every deposit and withdrawal.
+ * `cause` is the hash of the account's signed deposit or `Withdraw`. */
 export const BANK_TYPES = {
-  BankStatement: fields('address developer,string asset,uint256 sequence,uint256 balance,bytes32 cause'),
+  BankStatement: fields('address referee,string asset,uint256 sequence,uint256 balance,bytes32 cause'),
 };
-/** A developer takes money out of their bank. `sequence` is the statement it will produce, so it works once. */
+/** A referee's account takes money out of its bank. `sequence` is the statement it will produce, so it works once. */
 export const WITHDRAW_TYPES = {
-  Withdraw: fields('address developer,string asset,uint256 amount,uint256 sequence'),
+  Withdraw: fields('address referee,string asset,uint256 amount,uint256 sequence'),
 };
-export const hashWithdraw = (d: Domain, s: { developer: string; asset: string; amount: Integer; sequence: Integer }) =>
+export const hashWithdraw = (d: Domain, s: { referee: string; asset: string; amount: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, WITHDRAW_TYPES, s);
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {

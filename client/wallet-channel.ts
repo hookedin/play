@@ -666,23 +666,24 @@ export class ChannelClient extends WalletTransactions {
     }
   }
 
-  // --- A developer's bank ------------------------------------------------------------------------
+  // --- A referee's bank --------------------------------------------------------------------------
 
   /** Put money into this account's bank, in what this tab plays with: a debit answered with the casino's
-   * signed statement of the balance. The bank pays what this developer's splits owe beyond their stakes. */
+   * signed statement of the balance. The bank pays what the splits this account's key signs as a referee owe
+   * beyond their stakes. */
   async depositBank(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
     return this.perform('bank', { amount, source: BANK_ID }, operationId);
   }
   /** A statement of this account's bank, for a deposit or withdrawal this wallet signed: the casino's
    * signature on it, for this account and asset, and caused by `cause`. The balance is the casino's to
-   * state: every split of this developer's bets moves it. */
+   * state: every split this account signs as a referee moves it. */
   bankStatement(this: CasinoWallet, statement: any, cause: string) {
     const asset = this.playing,
       held = this.bank[asset] ?? {};
     assertSignature(this.domain, BANK_TYPES, statement?.message, statement?.signature, this.operator);
     const { message } = statement;
     if (
-      !same(message.developer, this.address) ||
+      !same(message.referee, this.address) ||
       message.asset !== asset ||
       !same(message.cause, cause) ||
       Number(message.sequence) <= Number(held.statement?.message.sequence ?? 0)
@@ -707,7 +708,7 @@ export class ChannelClient extends WalletTransactions {
         if (BigInt(amount) <= 0n || BigInt(amount) > BigInt(bank.balance))
           throw new Error('Not that much is in the bank');
         const message = {
-          developer: this.address,
+          referee: this.address,
           asset,
           amount: String(BigInt(amount)),
           sequence: String(bank.sequence + 1),
@@ -920,7 +921,7 @@ export class ChannelClient extends WalletTransactions {
         continue;
       }
       if (same(payout.source, BANK_ID)) {
-        // Money this developer took out of their bank: signed for only as one of their own statements priced it.
+        // Money this account took out of its bank: signed for only as one of its own statements priced it.
         const held = this.bank[this.playing],
           at = (held?.owed ?? []).indexOf(String(payout.amount));
         if (!held || at < 0) continue;

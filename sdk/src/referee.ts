@@ -1,7 +1,8 @@
 /**
- * The server side of a game with a referee. A referee is a key a game's publisher names with the game. It has no
- * account at the casino and holds no money of its own, but what it signs moves money: a split it signs is paid
- * from its developer's bank, so keep the key as safe as that bank. Players' wallets place the game's bets by
+ * The server side of a game with a referee. A referee is a key a game's publisher names with the game. One that
+ * only draws needs no account at the casino and holds no money. A split it signs is paid from its own bank, the
+ * bank of the account at its address, which that account funds from a channel of its own: keep the key as safe as
+ * that bank. Players' wallets place the game's bets by
  * themselves, and the referee settles them. It draws bets with prizes on its rounds: the casino names a round and
  * the referee commits the seed it will draw it with, the game tells its players the round, and each bet names it,
  * so its outcome is fixed before it is placed. It signs what a bet with terms pays. Each wallet checks what
@@ -28,8 +29,8 @@ import type { PublicBet, Round } from '../../protocol/types.ts';
 export type { AssetId, PublicBet, Round };
 /** A game's key, as its publisher and the name they published it under make it: what `createReferee` takes. */
 export { gameKey };
-/** What one bet with terms pays: `player` to its player and `casino` to the casino. Your bank keeps the rest
- * of the stake, or pays what the two come to beyond it. Give the casino about half of what the bet was
+/** What one bet with terms pays: `player` to its player and `casino` to the casino. The referee's bank keeps the
+ * rest of the stake, or pays what the two come to beyond it. Give the casino about half of what the bet was
  * expected to earn you: that is the casino's policy, and nothing enforces it. */
 export interface Settlement {
   bet: string;
@@ -71,8 +72,8 @@ export interface Referee {
   draw(round: string): Promise<Drawn>;
   /** A round as anyone may read it, drawn or not. */
   round(id: string): Promise<Round>;
-  /** Settle bets with terms, each with a split signed here. The casino takes the batch whole or, if your bank
-   * cannot pay it, not at all. A bet settled before answers with what settled it. */
+  /** Settle bets with terms, each with a split signed here. The casino takes the batch whole or, if this
+   * referee's bank cannot pay it, not at all. A bet settled before answers with what settled it. */
   settle(settlements: Settlement[]): Promise<PublicBet[]>;
   /** This game's open bets, or those of one group, in the order they were placed. */
   bets(group?: string): Promise<PublicBet[]>;

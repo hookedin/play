@@ -116,7 +116,7 @@ export class CasinoWallet extends GameSessions {
   >;
   declare heldCursors: Partial<Record<AssetId, string>>;
   heldError: string | null = null;
-  /** This account's bank as a developer, per asset: the casino's statement for its latest deposit or
+  /** This account's bank as a referee, per asset: the casino's statement for its latest deposit or
    * withdrawal, a withdrawal signed and not yet answered, and withdrawn money not yet collected. */
   declare bank: Partial<
     Record<
@@ -409,7 +409,7 @@ export class CasinoWallet extends GameSessions {
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
-      // Bankroll shares, bets that settle later and a developer's bank belong to the account, not to any one channel.
+      // Bankroll shares, bets that settle later and a referee's bank belong to the account, not to any one channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
       held: saved?.held || {},
       heldCursors: saved?.heldCursors || {},

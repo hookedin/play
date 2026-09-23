@@ -84,7 +84,7 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
  * A real wallet wired to an in-memory casino stub, and a stub referee shaped like the one a game's server
  * creates: what a game is tested against without the private casino. The stub holds every bet to the casino's
  * own admission rule and charges its commission, so a table it passes is one the casino takes. `bankroll` is
- * what it covers bets with; `bank` is what the developer's bank holds to pay bets with terms.
+ * what it covers bets with; `bank` is what the referee's bank holds to pay bets with terms.
  */
 export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds = 10n ** 12n } = {}) {
   const storage = new MemoryStore(),
@@ -451,7 +451,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         0n,
       );
       if (bank + change < 0n)
-        throw Object.assign(new Error("The developer's bank cannot pay these settlements"), {
+        throw Object.assign(new Error("The referee's bank cannot pay these settlements"), {
           status: 409,
           code: 'bank-short',
         });
@@ -492,7 +492,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     bridge: bridgeTo(wallet),
     bridgeFor: bridgeTo,
     settlements: () => settlements,
-    /** What the stub casino has to cover bets with, and what the developer's bank holds. */
+    /** What the stub casino has to cover bets with, and what the referee's bank holds. */
     bankroll: () => bankroll,
     bank: () => bank,
     /** A round's secret, which only the casino knows until it reveals the round. */
