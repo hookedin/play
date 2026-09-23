@@ -22,13 +22,13 @@ Do not state what your game pays back, and the manifest gives you no field for i
 
 Build a game whose table you would be willing to have measured, and prove the floor in your own test rather than in your manifest: the reference games do, over every bet they can place at every stake they take ([plinko](../../games/plinko/test/plinko.test.ts)). Two things make a table pay back slightly less than its arithmetic suggests, so leave room for them: prize ranges are whole outcomes, and payouts are whole units. Both round down, and at dust stakes they dominate — a Plinko board that returns 99% at a thousand wei returns 38% at one wei. `betReturn(bet)` from `@hookedin/play/protocol/risk.ts` returns what the wallet measures, in millionths of the stake.
 
-`rounds` is `true` when the game bets on rounds its own host opens. The wallet asks the player before it frames such a game — its host, not their wallet, draws the seed — and does not open it at all if they refuse, so nobody is stranded inside a game they have declined to play. A game that did not declare it is refused with `rounds-undeclared` when it sends a bet naming a round.
+`referee` is the address of the key your game's server runs its [pots](#pots) with, if it has any. It is published with the game, and the casino lets only that key open, resolve or void the game's pots.
 
 A published game's wallet URL is `/@<alias>/<name>`, or `/~<uname>/<name>` from a publisher with no alias: the name they gave the game in their profile, under the name they play as. Any manifest, published or not, is linkable as `/games/custom?manifest=<encoded manifest URL>`. Opening a link loads the manifest and shows the game; no spending authority comes from the URL. The wallet's other pages are `/`, `/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity` and a player's own `/@<alias>` or `/~<uname>`.
 
 The wallet embeds the entry with `sandbox="allow-scripts allow-same-origin"`. The game keeps its own origin, so it can use its host's localStorage, IndexedDB and cookies for round state and preferences. Everything else stays denied: no parent DOM, no wallet keys or storage, no browser wallet provider, no top-level navigation, popups, forms, modal dialogs or downloads. The wallet refuses any manifest or entry served from its own origin, because a same-origin frame could remove its own sandbox; the wallet host also sends `frame-ancestors 'none'`, so its pages are never frameable. Modules must support CORS. `hookedin-game build` writes these headers into `dist/_headers`, the file Cloudflare Pages reads; on another host, send the same headers yourself. Assets at the manifest and entry URLs are not content-pinned.
 
-A game is its developer and the name it goes by. Publish your game yourself, from the account its manifest names as `developer`: in the wallet, open **My wallet** and, under your name, give the game a name (`[a-z0-9-]`, at most 32 characters) and its manifest URL. It is then at `@<your alias>/<game name>` — or `~<your uname>/<game name>` if you have no alias — for anyone, and in your library. A profile holds a hundred games, and publishing needs a funded ETH channel. Whoever publishes a game is its developer: the wallet refuses a published game whose manifest names anyone else, so a host that is taken over cannot redirect your commission. The URL is only where the game is served. Move hosts by publishing the same name at the new URL, and the game keeps its key, its bets and its players' receipts. The library a deployment ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json); to be in it, open an issue or pull request on [hookedin/play](https://github.com/hookedin/play). A manifest that is published nowhere can still be loaded directly: open Games, choose **Add a custom game** and paste the manifest URL. It then goes by its manifest URL, so it is a different game from any you publish.
+A game is its developer and the name it goes by. Publish your game yourself, from the account its manifest names as `developer`: in the wallet, open **My games** and give the game a name (`[a-z0-9-]`, at most 32 characters) and its manifest URL. It is then at `@<your alias>/<game name>` — or `~<your uname>/<game name>` if you have no alias — for anyone, and in your library. A profile holds a hundred games, and publishing needs a funded ETH channel. Whoever publishes a game is its developer: the wallet refuses a published game whose manifest names anyone else, so a host that is taken over cannot redirect your commission. The URL is only where the game is served. Move hosts by publishing the same name at the new URL, and the game keeps its key, its bets and its players' receipts. The library a deployment ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json); to be in it, open an issue or pull request on [hookedin/play](https://github.com/hookedin/play). A manifest that is published nowhere can still be loaded directly: open Games, choose **Add a custom game** and paste the manifest URL. It then goes by its manifest URL, so it is a different game from any you publish.
 
 ## Game balances
 
@@ -52,20 +52,19 @@ parent.postMessage({ hookedin: true, id: 1, method: 'wallet.hello', params: {} }
 
 Replies carry the same `id` and either `result` or `error: {code, message}`. Both sides check the exact window sending the message, and the wallet also checks that the message comes from the origin of your entry page and answers only that origin, so keep the game on the origin it was loaded from. The wallet accepts requests only from its active iframe and bounds message sizes (70,000 characters a request). Questions (`wallet.hello`, `wallet.info`, `game.receipt`) are answered at once, also while a bet or the player's dialog is open. Everything else signs something or asks the player, and takes its turn in the order you asked; at most 32 requests wait. The envelope `id` is a non-negative safe integer that must rise with every request (the SDK counts from 1); the wallet refuses one that does not. It routes one reply; the `id` inside a financial request is the game's durable name for that operation.
 
-| Method              | Parameters                   | Result                                                                               |
-| ------------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
-| `wallet.hello`      | `{}`                         | `{methods, asset: {id, symbol, decimals}, chainId, limits}`: what this wallet offers |
-| `wallet.info`       | `{}`                         | `{uname, alias, chainId, bankroll, recommendedStake}`: the player's two names        |
-| `game.receipt`      | `{id}`                       | The receipt of a previous operation by its game ID, or `null`                        |
-| `game.bet`          | `{id, stake, prizes}`        | Verified result or rejection receipt                                                 |
-| `game.bet` (hosted) | `{id, stake, prizes, round}` | `{status: 'pending'}` while the host keeps the round open, then the receipt          |
-| `game.cancel`       | `{id}`                       | Give up a seat in an open round: a rejection receipt, or the bet's result            |
-| `game.payment`      | `{id, amount}`               | Verified signed receipt                                                              |
-| `game.requestFunds` | `{amount?}`                  | `{funded, amount, balance, pending}` after the player's decision                     |
+| Method              | Parameters                          | Result                                                                               |
+| ------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `wallet.hello`      | `{}`                                | `{methods, asset: {id, symbol, decimals}, chainId, limits}`: what this wallet offers |
+| `wallet.info`       | `{}`                                | `{uname, alias, chainId, bankroll, recommendedStake}`: the player's two names        |
+| `game.receipt`      | `{id}`                              | The receipt of a previous operation by its game ID, or `null`                        |
+| `game.bet`          | `{id, stake, prizes}`               | Verified result or rejection receipt                                                 |
+| `game.enter`        | `{id, pot, stake, prizes?, quote?}` | The entry's receipt at once, and once the pot has ended, what it paid                |
+| `game.payment`      | `{id, amount}`                      | Verified signed receipt                                                              |
+| `game.requestFunds` | `{amount?}`                         | `{funded, amount, balance, pending}` after the player's decision                     |
 
-`HookedIn` has a typed method for each: `receipt`, `bet`, `cancel`, `payment` and `requestFunds`; `HookedIn.call(method, params)` sends any of them.
+`HookedIn` has a typed method for each: `receipt`, `bet`, `enter`, `payment` and `requestFunds`; `HookedIn.call(method, params)` sends any of them.
 
-Every reply about an operation is one receipt, whichever method asked: `{id, kind, status, verified}` under your own `id`, a bet's `stake` and `prizes` as they played, a settled bet's `outcome` and `payout`, and a rejection's `reason`. One still waiting is `{id, status: 'pending', verified: false}`. The signed evidence, the player's channel and its balance stay in the wallet.
+Every reply about an operation is one receipt, whichever method asked: `{id, kind, status, verified}` under your own `id`, a bet's `stake` and `prizes` as they played, a settled bet's `outcome` and `payout`, an entry's `pot`, and once its pot has ended its `payout` and, unless the pot was void, its `outcome`; and a rejection's or a void pot's `reason`. The signed evidence, the player's channel and its balance stay in the wallet.
 
 Unsolicited messages from the wallet carry `event` instead of `id`:
 
@@ -73,7 +72,7 @@ Unsolicited messages from the wallet carry `event` instead of `id`:
 | -------------- | -------------------- | -------------------------------------------------- |
 | `game.balance` | `{balance, pending}` | The game's spending limit or pending state changed |
 
-`wallet.hello` also carries `limits`: `prizes`, the most one bet holds; `outcomeSpace`, the size of the space a prize range lies in; and `seats`, the most one shared round holds. Read them rather than assuming them — a deployment can change any of them, and a game carrying its own copies would not know. A host reads the same from the casino's `GET /api/config`, which adds the betting windows it takes.
+`wallet.hello` also carries `limits`: `prizes`, the most one bet holds; `outcomeSpace`, the size of the space a prize range lies in; and `entries`, the most one pot holds. Read them rather than assuming them — a deployment can change any of them, and a game carrying its own copies would not know. A referee reads the same from the casino's `GET /api/config`, which adds the betting windows it takes for a house pot.
 
 Amounts are whole numbers of the asset's smallest unit, as decimal strings: `wallet.hello` names the asset and its `decimals`, and `HookedIn.parseAmount`, `formatAmount` and `exactAmount` convert with them, so a game never assumes a unit. A bet is a `stake`, paid to enter, and 1 to 64 `prizes`. Each prize is `{rangeStart, rangeEnd, payout}`: it pays when the round's outcome, a uniform integer below `2^64`, falls in `[rangeStart, rangeEnd)`, so its probability is its width over `2^64`. Prizes may overlap, and then they add; an outcome in no prize pays nothing; a prize smaller than the stake is a partial loss. The balance moves by `−stake + every prize that holds the outcome`. Casino commissions do not add another player debit. A payment subtracts `amount` with no commission. All operations are off-chain channel updates.
 
@@ -100,37 +99,36 @@ if (receipt.status === 'signed') {
 
 A table with more distinct prizes than one bet holds can still be played by [collapsing it client-side](collapsing-bets.md), at a cost in what the wallet can verify. None of the sample games needs to.
 
-### Shared rounds
+### Pots
 
-Several players can bet on **one outcome**: a roulette wheel, a crash curve, a dealer's card. The game's server is the round's **host**. A host is just a key: it needs no channel and holds no money.
+Several players share **one outcome** by entering a **pot**: a roulette wheel, a crash curve, a football match. The game's server is the pot's **referee**. A referee is just a key, the one you publish the game with as its manifest's `referee`: it needs no channel and holds no money. It opens pots, and ends them.
 
 ```ts
-import { createHost, roundOutcome } from '@hookedin/play/sdk/host';
+import { createReferee, roundOutcome } from '@hookedin/play/sdk/referee';
 
-const host = await createHost({ casinoURL, key });
-// A seed is drawn here and only its hash is sent; `round` is {id, seedHash}. 20 seconds is this
-// game's betting time: it runs from the round's first seat, and it is how long a player's money waits.
-const { round, seed } = await host.round('eth', 20_000);
-// ...give `round` to the pages, keep `seed` with your game state and show it to nobody; each wallet joins by itself...
-const seats = await host.seats(round.id); // who is in: {seats: [{uname, alias, stake, prizes}], bankroll, ...}
-const closed = await host.close(round.id, seed); // only now does the seed leave you: the casino reveals its secret and settles every seat
-const outcome = roundOutcome(seed, closed.secret); // the 64-bit value every seat's prizes were read against
-const testRound = await host.round('test', 20_000); // the same again for the wallets playing with test coins
+const referee = await createReferee({ casinoURL, key, game: { developer, name } });
+// A house pot, against the bankroll: a seed is drawn here and only its hash is sent. 20 seconds is this
+// game's betting time: it runs from the pot's first entry, and it is how long a player's money waits.
+const { pot, seed } = await referee.open({ bank: 'house', asset: 'eth', window: 20_000 });
+// ...give `pot.id` to the pages, keep `seed` with your game state and show it to nobody; each wallet enters by itself...
+const now = await referee.pot(pot.id); // who is in: {entries: [{uname, alias, stake, prizes}], closesAt, ...}
+const ended = await referee.resolve(pot.id, { seed }); // only now does the seed leave you: the casino reveals its secret
+const outcome = roundOutcome(seed, ended.secret); // the 64-bit value every entry's prizes were read against
 ```
 
-The page calls `HookedIn.bet({id, stake, prizes, round})`. The wallet signs the bet, naming the host's round and the hash of its seed, and **sends it to the casino itself**: the reply is `{status: 'pending'}`, the player's seat. The host never touches a bet. Once the host has closed the round, the same call with the same `id` and terms returns the verified receipt, so have your server tell its pages that the round is closed and let each ask its wallet again. The host relays nothing the wallet relies on.
+The page calls `HookedIn.enter({id, pot, stake, prizes})`. The wallet signs a debit into the pot and **sends it to the casino itself**: the reply is the entry's receipt, the stake has left the game's balance, and **the entry is final** — there is no taking it back. The referee never touches an entry. Once the pot has ended, the same call with the same `id` and terms returns the receipt with what the entry was paid: the wallet checks what ended the pot, collects the payout into the channel and raises the game's limit by it. So have your server tell its pages that the pot has ended, and let each ask its wallet again. After a reload, `game.receipt` finds the entry, and its `payout` once collected. The referee relays nothing the wallet relies on.
 
-Equal ranges pay together, disjoint ranges never both pay, nested ranges pay in order, and a player's several chips are simply that player's prizes, overlapping where the chips do. The casino admits seats one at a time against the whole round: bets on the same side share the capacity one player would have had, bets on opposite sides hedge each other, and a seat that does not fit is declined by itself, with a verified rejection receipt, while the others stay. Price a layout before asking for it with the casino's own rule ([`admits`](../src/admits.ts)) and the `bankroll` that `host.seats` reports. A round holds up to 256 seats, one per channel.
+A pot has a **bank**, which settles the difference between what it takes in and what it pays:
 
-**Ask for the betting time your game takes, and no more.** `host.round(asset?, window?)` names it in milliseconds, within `host.window` (`{min, max}`, which the casino publishes and `createHost` reads from it), and the casino counts it from the round's **first seat**. That time is exactly how long a player's money waits on you: a seated bet holds their channel, so nothing else of theirs can be signed until you close the round. Leave room for the close itself — the alarm, the request, a retry — because a round whose window runs out is revealed by the casino and every seat declined. A round nobody has joined holds nothing and waits ten minutes for its first player, and gets that wait back if its last one leaves, so an empty table can sit open.
+- **`house`**: played against the bankroll, like a bet, with one 64-bit outcome for every entry. Equal ranges pay together, disjoint ranges never both pay, and a player's several chips are simply their prizes. The casino admits entries one at a time against the whole pot: entries on the same side share the capacity one would have had, entries on opposite sides hedge each other, and one that does not fit is declined by itself with a verified rejection receipt. Price a layout before asking for it with the casino's own rule ([`admits`](../src/admits.ts)). Ask for the betting time your game takes, and no more: `window`, within `referee.window` (which the casino publishes), runs from the pot's **first entry**, and the pot is void if you have not resolved it by then, so leave room for the resolution itself. An empty house pot waits ten minutes for its first entry. You keep the seed until you resolve: the casino sees only its hash while it admits entries, so nobody knows the outcome meanwhile, but you and the casino together could choose it. [Roulette](../../games/roulette/) is the reference.
+- **`developer`**: pays at odds you set, on an outcome you name. Open it with `outcomes`, `closesAt` and `deadline`; price each entry with `referee.quote(pot, stake, prizes)`, prizes over the outcome numbers `0` to `outcomes − 1`, and the page passes the quote to `HookedIn.enter` with those prizes. End it with `referee.resolve(pot, {outcome})`. What the pot pays beyond its entries comes from your **bank** at the casino, which keeps what it does not pay: deposit into it, and take money out, on the wallet's **My games** page. Nothing in it is reserved, but a pot your bank cannot pay in full is not resolved, and at its deadline every entry is refunded. The result is your word, signed. [Sports](../../games/sports/) is the reference.
+- **`players`**: players against each other. Open it with `rake`, the most you may keep in basis points, `closesAt` and `deadline`; entries hold no prizes. End it with `referee.resolve(pot, {split: [{entry, amount}], rake})`, which pays out exactly what the pot took in. The rake is shared like commission, half yours.
 
-`HookedIn.cancel(id)` gives up a seat the host has not closed; the balance is unchanged and the next bet can proceed. If the round was closed first, the same call returns that verified result. To change a player's chips, cancel the seat and place the new chips as a new bet under a new `id`; the same `id` with other terms fails with `id-conflict`. A bet that reaches the casino as the round closes is refused; the wallet still holds the signed bet, so call `cancel` to take it back.
-
-In a hosted round the seed is the host's, and the host keeps it until it closes the round: the casino, which knows the round's secret, sees only the seed's hash while it admits seats, so nobody knows the outcome while bets are taken. Lose the seed and the round cannot be closed: the casino declines every seat once the betting window runs out. The player still trusts that the host and the casino do not collude. A game therefore declares `rounds` in its manifest, and the wallet asks the player before it frames it at all: refusing leaves the game closed instead of stranding them inside one they cannot play, the choice is never persisted, and every hosted bet is marked in the player's activity. A round is bet on in one asset: the first argument of `host.round` is ETH unless you name another, and a bet from a wallet playing something else is refused with `wrong-asset`, so run a round for each asset your game takes. [Roulette](../../games/roulette/) is the reference: one wheel per asset, each for the whole table, as one Worker. See [rounds](../../docs/protocol.md#rounds).
+`referee.void(pot)` calls a pot off, and a pot nobody resolves by its deadline is void: every entry is refunded. A pot is played in one asset, ETH unless you name another, and a wallet playing something else is declined, so run pots for each asset your game takes. A pot holds up to 256 entries. See [pots](../../docs/protocol.md#pots).
 
 `id` is 1–64 characters of letters, digits, `.`, `_`, `:` or `-`. The wallet scopes it by channel and game, so another game cannot reuse it. The same `id` with the same terms returns the saved receipt; changing the terms fails. There is at most one pending channel operation.
 
-**One Worker.** A game with a host ships page and server as one Cloudflare Worker: `dist/` as static assets and a `server/worker.ts` that answers `/api/`, with a Durable Object for its state. Page and server share an origin, so the build's `connect-src 'self'` holds. The server takes `CASINO_URL` as a variable and `HOST_KEY` as a secret (`wrangler secret put HOST_KEY`; locally, `.dev.vars`). For local play, the casino's launcher runs such a game in [games/](../../games/) with `wrangler dev`, against its own casino and with a fresh `HOST_KEY`, and publishes it in `@hookedin` at the address its `wrangler.jsonc` gives `wrangler dev`. [Roulette](../../games/roulette/) is the full reference: a wheel per asset, each a Durable Object that opens a round, waits out the betting time and closes it.
+**One Worker.** A game with a referee ships page and server as one Cloudflare Worker: `dist/` as static assets and a `server/worker.ts` that answers `/api/`, with a Durable Object for its state. Page and server share an origin, so the build's `connect-src 'self'` holds. The server takes `CASINO_URL`, `DEVELOPER` and `GAME_NAME` as variables and `REFEREE_KEY` as a secret (`wrangler secret put REFEREE_KEY`; locally, `.dev.vars`). For local play, the casino's launcher runs such a game in [games/](../../games/) with `wrangler dev`, against its own casino and with a fresh `REFEREE_KEY`, and publishes it in `@hookedin` at the address its `wrangler.jsonc` gives `wrangler dev`, with that key as its referee.
 
 ## State and recovery
 
@@ -144,26 +142,25 @@ Round state does not travel in wallet backups or to another browser, and the spe
 
 The optional [src/round.ts](../src/round.ts) helper (`RoundClient`) keeps the round in the game origin's localStorage under that scope (its page path by default, or a `name` option), keeps the pending step across rejection and reload, resolves lost replies through `game.receipt`, and asks the wallet for money through `game.requestFunds` when a step needs more than the limit holds: it suggests the shortfall plus four stakes so one authorization lasts. Every started round carries an `id`, so a game with state beyond one round, such as the slot's bonus counter, applies a finished round exactly once. Two tabs of one game share its origin storage; the helper re-reads the round before every action and `watch(listener)` reloads it when another tab writes, while the wallet's single pending operation per channel keeps the money consistent regardless. The wallet also allows only one funded game per wallet across tabs. [src/bank.ts](../src/bank.ts) (`mountBank`) renders the balance strip the sample games show, listening to `game.balance` events and offering an **Add funds** button. Its `hold` keeps the shown figure still while a game is revealing a settled result. Given the game's `RoundClient` (`mountBank(element, { round })`), it also leaves out the cash inside an unfinished round and stands still while a step settles: between steps the wallet's limit holds the round's continuation cash, which is not a cash-out quote, so a hand's running value is never shown as money. The figure drops by what the player put in and rises by what the round finally pays. The sample games bundle the sequential compiler and construct their own graphs. Other games can use different implementations and submit the same atomic operations.
 
-The wallet draws the seed of a bet on its own round; a hosted round's seed is the host's. A game page learns an outcome only from a completed receipt. Casino withholding and changes in shared bankroll can interrupt a game. Signed winnings remain subject to the existing channel settlement and house-liquidity rules.
+The wallet draws the seed of a bet on its own round; a house pot's seed is its referee's. A game page learns an outcome only from a completed receipt. Casino withholding and changes in shared bankroll can interrupt a game. Signed winnings remain subject to the existing channel settlement and house-liquidity rules.
 
 ## Errors
 
 A refused call rejects with a `HookedInError`. Branch on `code`; `message` is for the player.
 
-| Code                 | Meaning                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `invalid-request`    | The request is malformed, or its envelope `id` did not rise                                                                          |
-| `unknown-method`     | This wallet offers no such method; `wallet.hello` lists what it does                                                                 |
-| `busy`               | The player is doing something in the wallet, or 32 of your requests already wait                                                     |
-| `no-channel`         | No open channel: call `requestFunds`                                                                                                 |
-| `insufficient-funds` | The request exceeds the game's spending limit: call `requestFunds`                                                                   |
-| `pending-operation`  | A signed operation awaits recovery in the wallet; watch the pushed `pending` flag                                                    |
-| `not-pending`        | `game.cancel` named no pending operation of this game                                                                                |
-| `declined`           | The player said no in the wallet's dialog                                                                                            |
-| `id-conflict`        | This operation `id` is already bound to other terms                                                                                  |
-| `rounds-undeclared`  | A bet named a round, and this manifest did not declare `rounds`                                                                      |
-| `game-closed`        | The game is not the open one                                                                                                         |
-| `failed`             | Anything else. A refusal by the casino carries the casino's own code, such as `round-not-open`, `paused`, `wrong-asset` or `not-due` |
+| Code                 | Meaning                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `invalid-request`    | The request is malformed, or its envelope `id` did not rise                                         |
+| `unknown-method`     | This wallet offers no such method; `wallet.hello` lists what it does                                |
+| `busy`               | The player is doing something in the wallet, or 32 of your requests already wait                    |
+| `no-channel`         | No open channel: call `requestFunds`                                                                |
+| `insufficient-funds` | The request exceeds the game's spending limit: call `requestFunds`                                  |
+| `pending-operation`  | A signed operation awaits recovery in the wallet; watch the pushed `pending` flag                   |
+| `pot-closed`         | The pot takes no more entries                                                                       |
+| `wrong-asset`        | The pot is played with another asset than this wallet's                                             |
+| `id-conflict`        | This operation `id` is already bound to other terms                                                 |
+| `game-closed`        | The game is not the open one                                                                        |
+| `failed`             | Anything else. A refusal by the casino carries the casino's own code, such as `paused` or `not-due` |
 
 The SDK itself adds `no-wallet` (the page is not inside a wallet) and `timeout` (no reply in three minutes).
 

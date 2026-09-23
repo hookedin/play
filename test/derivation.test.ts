@@ -122,10 +122,10 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     'the stake left, and every prize over the whole space came back',
   );
   // Two channels betting complementary ranges on one round and seed: exactly one of them is paid.
-  const seat = { seed: id('shared seed'), secret: id('the secret of a shared round') };
-  const low = await step(f, a, 1, 100n, { ...seat, prizes: [{ rangeStart: 0n, rangeEnd: 1n << 63n, payout: 150n }] }),
+  const shared = { seed: id('one seed'), secret: id('one secret') };
+  const low = await step(f, a, 1, 100n, { ...shared, prizes: [{ rangeStart: 0n, rangeEnd: 1n << 63n, payout: 150n }] }),
     high = await step(f, b, 1, 100n, {
-      ...seat,
+      ...shared,
       prizes: [{ rangeStart: 1n << 63n, rangeEnd: 1n << 64n, payout: 150n }],
     });
   assert.deepEqual(

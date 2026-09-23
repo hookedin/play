@@ -40,7 +40,7 @@ const betSummary = (params: any) => {
           payout: BigInt(prize.payout),
         })),
       });
-    return `${params.prizes.length} prize${params.prizes.length === 1 ? '' : 's'} · pays up to ${eth(table.maxPayout)} · ${returnToPlayer(stake, table.expectedPayout)}${params.round ? ' · shared round' : ''}`;
+    return `${params.prizes.length} prize${params.prizes.length === 1 ? '' : 's'} · pays up to ${eth(table.maxPayout)} · ${returnToPlayer(stake, table.expectedPayout)}`;
   } catch {
     return 'unreadable prizes';
   }
@@ -52,6 +52,8 @@ export function describeRequest(method: string, params: any = {}) {
   switch (method) {
     case 'game.bet':
       return `stake ${eth(params.stake)} · ${betSummary(params)} · id ${params.id}`;
+    case 'game.enter':
+      return `stake ${eth(params.stake)} · pot ${String(params.pot).slice(0, 10)}…${params.prizes ? ' · ' + betSummary(params) : ''}${params.quote ? ' · quoted' : ''} · id ${params.id}`;
     case 'game.payment':
       return `amount ${eth(params.amount)} · id ${params.id}`;
     case 'game.receipt':
@@ -79,9 +81,13 @@ export function describeResult(method: string, result: any) {
     case 'game.bet':
       return result.status === 'rejected'
         ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
-        : result.status === 'pending'
-          ? `signed for the round's host · ${result.id}`
-          : `paid ${eth(result.payout)} · ${result.id}`;
+        : `paid ${eth(result.payout)} · ${result.id}`;
+    case 'game.enter':
+      return result.status === 'rejected'
+        ? `rejected${result.verified ? ' (verified)' : ''}${quote(result.reason)}`
+        : result.payout === undefined
+          ? `in the pot · ${result.id}`
+          : `the pot paid ${eth(result.payout)} · ${result.id}`;
     case 'game.payment':
       return `${result.status}${result.verified ? ' (verified)' : ''} · ${result.id}`;
     default:

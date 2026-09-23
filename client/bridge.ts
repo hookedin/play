@@ -5,7 +5,7 @@ export const METHODS = [
   'wallet.info',
   'game.receipt',
   'game.bet',
-  'game.cancel',
+  'game.enter',
   'game.payment',
   'game.requestFunds',
 ];
@@ -28,7 +28,7 @@ const object = (value: unknown) =>
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
 /** The stake is paid to enter; every prize whose range holds the outcome pays. Prizes may overlap. */
 function validatePrizes(prizes: unknown) {
-  if (!Array.isArray(prizes) || prizes.length > 64) throw new Error('A bet holds 1 to 64 prizes.');
+  if (!Array.isArray(prizes) || !prizes.length || prizes.length > 64) throw new Error('A bet holds 1 to 64 prizes.');
   for (const prize of prizes) {
     if (!object(prize) || !only(prize, ['rangeStart', 'rangeEnd', 'payout']))
       throw new Error('A prize is {rangeStart, rangeEnd, payout}.');
@@ -76,23 +76,31 @@ function validate(data: any) {
     if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
   } else {
-    const fields = data.method === 'game.bet' ? ['stake'] : data.method === 'game.payment' ? ['amount'] : [];
-    if (!only(params, ['id', ...fields, ...(data.method === 'game.bet' ? ['prizes', 'round'] : [])]))
-      throw new Error('Unexpected game request field.');
+    const fields = ['game.bet', 'game.enter'].includes(data.method)
+      ? ['stake']
+      : data.method === 'game.payment'
+        ? ['amount']
+        : [];
+    const terms =
+      data.method === 'game.bet' ? ['prizes'] : data.method === 'game.enter' ? ['pot', 'prizes', 'quote'] : [];
+    if (!only(params, ['id', ...fields, ...terms])) throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);
     for (const field of fields) gameAmount(params[field]);
-    if (data.method === 'game.bet') {
-      if (!Array.isArray(params.prizes) || !params.prizes.length) throw new Error('A bet holds 1 to 64 prizes.');
-      validatePrizes(params.prizes);
-      // A shared round its host opened: the wallet joins it with this bet, and the host closes it.
-      const round = params.round;
+    if (data.method === 'game.bet') validatePrizes(params.prizes);
+    if (data.method === 'game.enter') {
+      // A pot of this game: a house or developer pot's entry holds prizes, a developer's with its referee's quote.
+      if (typeof params.pot !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.pot)) throw new Error('Invalid pot.');
+      if (params.prizes !== undefined) validatePrizes(params.prizes);
+      const quote = params.quote;
       if (
-        round !== undefined &&
-        (!object(round) ||
-          !only(round, ['id', 'seedHash']) ||
-          ![round.id, round.seedHash].every(v => typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v)))
+        quote !== undefined &&
+        (!object(quote) ||
+          !only(quote, ['expiresAt', 'signature']) ||
+          typeof quote.signature !== 'string' ||
+          !/^0x[0-9a-fA-F]{130}$/.test(quote.signature))
       )
-        throw new Error('Invalid round.');
+        throw new Error('Invalid quote.');
+      if (quote !== undefined) gameAmount(quote.expiresAt);
     }
   }
   return { ...data, params };

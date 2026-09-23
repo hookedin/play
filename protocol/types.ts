@@ -43,12 +43,52 @@ export interface GameName {
 export interface Details {
   /** The wallet's name for the operation, as a hash: an exact retry is the same operation. */
   id: string;
-  /** The game that asked for a bet or a payment. */
+  /** The game that asked for a bet, a payment or a pot entry. */
   game?: GameName;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's earnings or the
-   * faucet. A game's payment pays the bankroll and names nothing. */
+  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a pot, a
+   * developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
+  /** A pot entry's terms beyond its stake: the prizes it holds, and a referee's quote for them. */
+  entry?: EntryTerms;
 }
+/** Prizes of a house or developer pot's entry, on the wire; a players' pot's entry has none. */
+export interface EntryTerms {
+  prizes?: { rangeStart: string; rangeEnd: string; payout: string }[];
+  /** The referee's price for a developer's pot: its signed `Quote`, good until `expiresAt` (unix seconds). */
+  quote?: { expiresAt: string; signature: string };
+}
+/** Who pays a pot beyond its entries: the casino's bankroll, the developer's bank, or nobody. */
+export type Bank = 'house' | 'developer' | 'players';
+/** A pot as anyone may read it: the game it is for, its referee and bank, its entries by the names their
+ * players answer to, and, once it ends, what ended it. It names no operation, channel or address. */
+export interface PotStatus {
+  id: string;
+  /** The game's key. */
+  game: string;
+  referee: string;
+  bank: Bank;
+  asset: 'eth' | 'test';
+  status: 'open' | 'resolved' | 'void';
+  /** A house pot's seed hash: its referee's seed, which with the casino's secret picks the outcome. */
+  seedHash?: string;
+  /** A developer's pot names its outcomes 0 to `outcomes - 1`. */
+  outcomes?: number;
+  /** A players' pot takes at most this rake, in basis points of its entries. */
+  rake?: number;
+  /** No entry after this (unix milliseconds): null for a house pot nobody has entered. */
+  closesAt: number | null;
+  /** Unresolved by then (unix milliseconds), the pot is void and every entry refunded. */
+  deadline: number;
+  entries: { uname: string | null; alias: string | null; stake: string; prizes?: EntryTerms['prizes'] }[];
+  /** How it ended: a house pot's seed and the casino's secret, or the referee's signed result. */
+  seed?: string;
+  secret?: string;
+  result?: PotResult;
+  signature?: string;
+}
+/** What a referee says a pot came to: a developer's pot's outcome, or a players' pot's split of its
+ * entries (each entry's payout, by index) and the rake it keeps. */
+export type PotResult = { outcome: number } | { split: { entry: number; amount: string }[]; rake: string };
 export interface Operation {
   channelId: string;
   previousStateHash: string;
@@ -135,13 +175,15 @@ export interface OperationResponse {
   operationId: string;
   commission: string;
   bankroll?: string;
-  /** An investment's response carries the casino's signed statement of the holding. */
+  /** An investment's response carries the casino's signed statement of the holding, and a bank
+   * deposit the statement of the bank. */
   statement?: SignedStatement;
+  /** A pot entry's number among the pot's entries. */
+  entry?: number;
 }
-/** One seat in a round: the player's signed bet, what it means, and their countersignature of the
- * previous response. A bet on the channel's own round brings its `seed`; in a hosted round the host
- * reveals it at the close. */
-export interface RoundBet {
+/** What a wallet sends the casino: its signed operation, what the operation means, and its
+ * countersignature of the previous response. A bet brings the seed it names. */
+export interface Submission {
   request: Operation;
   details: Details;
   signature: string;
@@ -152,35 +194,6 @@ export interface RoundBet {
 export interface Round {
   id: string;
   seedHash: string;
-}
-/** A round at the casino. Its host asked for it and got its ID, the hash of a secret the casino
- * keeps. The host opens it with the hash of a seed, players' wallets join it with their bets, and
- * the host closes it with the seed: the casino reveals the secret and settles every seat on the one
- * outcome. Until then nobody knows that outcome. A round that is declined or left open too long is
- * revealed too, and settles nobody. */
-export interface RoundStatus {
-  id: string;
-  host: string;
-  /** What every seat of the round bets with. */
-  asset: 'eth' | 'test';
-  status: 'created' | 'open' | 'revealed';
-  seedHash: string | null;
-  /** The seed its host closed the round with. */
-  seed: string | null;
-  /** Unix milliseconds after which the casino reveals an open round by itself and rejects its seats.
-   * It is the host's betting window once somebody is seated, and much longer while the round is empty. */
-  expiresAt: number | null;
-  seats: RoundSeat[];
-  secret: string | null;
-  bankroll: string;
-}
-export interface RoundSeat {
-  /** The names the seat's player answers to, `~uname` and `@alias`: a round is public, and nothing
-   * else of them is. */
-  uname: string;
-  alias: string | null;
-  stake: Integer;
-  prizes: Prize[];
 }
 /** The bankroll fund: every share in issue, and how many of them are the house's own capital. */
 export interface FundState {

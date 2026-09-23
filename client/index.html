@@ -68,7 +68,6 @@
             >Your exact request is saved. Retry it without changing its terms or randomness.</span
           ><button id="recover-wallet" class="button small">Retry same request</button
           ><button id="speed-up-transaction" class="button small hidden">Speed up transaction</button
-          ><button id="withdraw-bet" class="button small hidden">Withdraw bet</button
           ><button id="export-evidence" class="button small">Export channel evidence</button
           ><button id="start-close" class="button small">Start unilateral close</button>
         </div>
@@ -373,8 +372,8 @@
             </h2>
             <p id="wallet-uname" class="game-handle"></p>
             <p>
-              The only thing games, shared rounds and the public player list ever learn about you. Everything else —
-              your address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
+              The only thing games, pots and the public player list ever learn about you. Everything else — your
+              address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
               <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
               a shorter name you are shown by instead. Both always find you.
             </p>
@@ -429,6 +428,21 @@
               /><button id="publish-game" class="button secondary" type="button">Publish</button>
             </div>
             <div id="my-games"></div>
+            <label for="bank-amount">Your bank <span id="bank-balance" class="subtle-count">—</span></label>
+            <p>
+              Your games' own pots are paid from it: what a pot owes its winners beyond its entries comes out of it, and
+              what it does not pay goes in. A pot it cannot pay in full waits, and is refunded at its deadline. Nothing
+              in it is reserved, so you can take it out at any time.
+            </p>
+            <div class="input-row">
+              <input id="bank-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.01" /><button
+                id="bank-deposit"
+                class="button secondary"
+                type="button"
+              >
+                Deposit</button
+              ><button id="bank-withdraw" class="button secondary" type="button">Withdraw</button>
+            </div>
           </section>
         </section>
         <section id="page-bets" class="page hidden">
@@ -614,6 +628,7 @@
             <button id="gamebets-play" class="button primary hidden">Open this game ↗</button>
           </div>
           <div id="gamebets-totals" class="funding-balances"></div>
+          <p id="gamebets-pots" class="intro hidden"></p>
           <div class="activity-toolbar">
             <label class="sr-only" for="gamebets-search">Search this game’s bets</label
             ><input
@@ -738,18 +753,6 @@
         </p>
         <button id="fund-faucet" class="text-button fund-aside mode-fund" type="button">Claim 100 test coins</button>
         <button id="fund-switch" class="text-button fund-aside mode-fund" type="button"></button>
-      </form>
-    </dialog>
-    <dialog id="hosted-dialog" class="fund-dialog" aria-labelledby="hosted-title">
-      <form method="dialog">
-        <div id="hosted-eyebrow" class="eyebrow">SHARED ROUND</div>
-        <h2 id="hosted-title">Join this game's shared rounds?</h2>
-        <p id="hosted-reason" class="fund-reason"></p>
-        <p id="hosted-note" class="security-note"></p>
-        <div class="fund-actions">
-          <button id="hosted-decline" class="button secondary" type="button">Keep my own randomness</button
-          ><button id="hosted-allow" class="button primary" type="button">Allow shared rounds</button>
-        </div>
       </form>
     </dialog>
     <dialog id="bet-dialog" class="bet-dialog" aria-labelledby="bet-detail-title">

@@ -217,7 +217,10 @@ function showPage(page: string) {
     void refreshActivity();
   }
   if (page === 'bets') renderBets();
-  if (page === 'games') renderMyGames();
+  if (page === 'games') {
+    renderMyGames();
+    void refreshBank().catch(() => {});
+  }
   if (page === 'wallet' || page === 'bankroll') void refreshFund();
 }
 /** The bankroll fund as the casino states it, signed, against the shares this wallet can prove it holds. */
@@ -480,47 +483,6 @@ function openFundDialog({ amount, asked = false, take = false }: { amount?: bigi
     fundRequest = { resolve };
   });
 }
-/** A decision only the player makes, before the wallet opens the game: it explains what changes and waits. */
-function openConsentDialog(text: {
-  eyebrow: string;
-  title: string;
-  reason: string;
-  note: string;
-  allow: string;
-  decline: string;
-  log: string;
-}) {
-  const dialog = $<HTMLDialogElement>('hosted-dialog');
-  for (const part of ['eyebrow', 'title', 'reason', 'note', 'allow', 'decline'] as const)
-    $('hosted-' + part).textContent = text[part];
-  logGameActivity(`${text.log} requested`);
-  if (!dialog.open) dialog.showModal();
-  return new Promise<boolean>(resolve =>
-    dialog.addEventListener(
-      'close',
-      () => {
-        const allowed = dialog.returnValue === 'allow';
-        dialog.returnValue = '';
-        logGameActivity(`${text.log} ${allowed ? 'allowed' : 'declined'}`);
-        resolve(allowed);
-      },
-      { once: true },
-    ),
-  );
-}
-/** A game whose manifest declares shared rounds asks this before it is opened: its host, not this
- * wallet, draws the seed of every round it runs. */
-const openHostedDialog = (name: string) =>
-  openConsentDialog({
-    eyebrow: 'SHARED ROUND',
-    title: `Open ${name}, where everyone shares one result?`,
-    reason:
-      "Everyone at the table bets on one result, so its randomness comes from the game's host instead of your wallet.",
-    note: 'In your own bets neither you nor the casino can choose the result. Here the host and the casino could choose it together; neither can alone. Your wallet still verifies every result and marks these bets in your activity. Refusing leaves the game closed; every other game plays with your own randomness.',
-    allow: 'Open the game',
-    decline: 'Keep my own randomness',
-    log: 'Shared-round randomness',
-  });
 function renderWallet() {
   renderFund();
   renderProfile();
@@ -602,14 +564,9 @@ function renderWallet() {
           : maxDepositEstimate
             ? `Maximum to add: ${eth(maxDepositEstimate.amount, networkDefaults.precision)} ETH. Deposit fee: up to ${eth(maxDepositEstimate.maxFee, networkDefaults.precision)} ETH.`
             : `In your wallet: ${eth(nativeBalance, networkDefaults.precision)} ETH. Max calculates what you can add after the gas reserve and fee.`;
-  // A seat in a shared round is the normal way to wait for a spin, and the open game already shows it
-  // with its own "take my bet back". Offering unilateral close over the table, and shifting the
-  // layout under the player's next click, would make every ordinary round look like an emergency.
-  const seatedInOpenGame =
-    Boolean(wallet.pending?.hosted) && Boolean(active) && wallet.pending!.game?.key === wallet.game?.key;
   $('pending-banner').classList.toggle(
     'hidden',
-    !(wallet.pending || wallet.needsOpening || wallet.transactionIntent) || busy || seatedInOpenGame,
+    !(wallet.pending || wallet.needsOpening || wallet.transactionIntent) || busy,
   );
   const challengeExpired = Date.now() / 1000 >= Number(state.deadline);
   $('challenge-banner').classList.toggle('hidden', !state.needsChallenge);
@@ -625,13 +582,8 @@ function renderWallet() {
       : 'The wallet did not return a transaction hash. Recover checks its result, then requests approval to resend the same action with the same nonce.'
     : wallet.needsOpening
       ? 'Your channel registration needs recovery. The opening and channel key are saved.'
-      : wallet.pending?.hosted
-        ? "Your bet is waiting for the game's host to close the round. Retry looks for its result; withdrawing it leaves your balance unchanged."
-        : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
+      : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
-  const cancellable = Boolean(wallet.pending?.hosted);
-  $<HTMLButtonElement>('withdraw-bet').classList.toggle('hidden', !cancellable);
-  $<HTMLButtonElement>('withdraw-bet').disabled = busy || !cancellable;
   $<HTMLButtonElement>('speed-up-transaction').disabled = busy || !wallet.transactionIntent;
   $<HTMLButtonElement>('export-evidence').disabled = busy || !wallet.current;
   $<HTMLButtonElement>('start-close').disabled = busy || !wallet.current || Number(state.channelStatus) !== 1;
@@ -862,7 +814,6 @@ async function refreshActivity() {
   try {
     await wallet.refresh();
     await wallet.refreshDetails();
-    await wallet.auditRejections();
   } catch (error) {
     historyError = error;
   } finally {
@@ -971,8 +922,11 @@ async function fetchGame(url: string) {
     throw new Error(`The manifest's developer, ${String(manifest.developer).slice(0, 60)}, is not an address.`);
   }
   if (developer === ZeroAddress) throw new Error('The developer fee recipient cannot be the zero address.');
-  if (manifest.rounds !== undefined && typeof manifest.rounds !== 'boolean')
-    throw new Error("A manifest's rounds is true when the game bets on rounds its own host opens.");
+  if (
+    manifest.referee !== undefined &&
+    (typeof manifest.referee !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(manifest.referee))
+  )
+    throw new Error("A manifest's referee is the address of the key that runs the game's pots.");
   const entry = safeURL(manifest.entry, response.url);
   if (entry.origin === location.origin || new URL(response.url).origin === location.origin)
     throw new Error('Games cannot be served from the wallet’s own origin.');
@@ -986,9 +940,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   const slug = 'manifest' in gameRoute ? undefined : gameRoute.name;
   if (slug !== undefined && !same(gameKey({ developer, name: slug }), published))
     throw new Error(`${manifestURL.host} serves a manifest whose developer did not publish ${gamePath(gameRoute)}.`);
-  // The one decision the player takes before a game is framed: its host's randomness, or none of it.
-  if (manifest.rounds && !(await openHostedDialog(String(manifest.name))))
-    throw new Error(`${manifest.name} runs shared rounds, so it stays closed while you keep your own randomness.`);
   closeGame();
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -1005,7 +956,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     developer,
     ...(slug === undefined ? {} : { slug }),
     name: manifest.name,
-    ...(manifest.rounds ? { rounds: true } : {}),
   };
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
   const isCurrent = () =>
@@ -1065,7 +1015,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       }
       if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
       if (method === 'game.bet') return wallet.gameBet(params);
-      if (method === 'game.cancel') return wallet.gameCancel(params);
+      if (method === 'game.enter') return wallet.gameEnter(params);
       return wallet.gamePayment(params);
     },
     onError: message => toast(message, true),
@@ -1210,6 +1160,8 @@ function renderProfile() {
   // The uname is always there; when an alias covers it up, it is shown underneath.
   $('wallet-uname').textContent = wallet.alias ? '~' + wallet.uname : '';
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !funded;
+  for (const id of ['bank-deposit', 'bank-withdraw'])
+    $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.channel?.key || Boolean(wallet.pending);
   $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !funded;
   $('clear-alias').classList.toggle('hidden', !wallet.alias);
   $('alias-note').textContent = !funded
@@ -1245,6 +1197,12 @@ function renderProfile() {
     }),
   );
 }
+/** This account's bank as a developer, in what the wallet plays with, as the casino has it now. */
+async function refreshBank() {
+  if (!wallet.channel?.key) return void ($('bank-balance').textContent = '—');
+  const { balance } = await wallet.bankBalance();
+  $('bank-balance').textContent = `${formatEther(balance)} ${units()}`;
+}
 /** The account: the name this wallet answers to, in the top bar and at the head of its own page,
  * and one line under each card saying what is behind it. No balance is named here — that is the
  * wallet's page, and the one place a figure is not competing with a game's own. */
@@ -1254,7 +1212,7 @@ function renderAccount(name: string | null) {
   $('account-heading').textContent = name ?? 'My account';
   $('account-handle').textContent = name
     ? wallet.alias
-      ? `~${wallet.uname} · the name every game and shared round knows you by`
+      ? `~${wallet.uname} · the name every game and pot knows you by`
       : 'Take an alias below and this becomes the shorter name you are shown by.'
     : 'Connecting to your wallet…';
   $<HTMLAnchorElement>('account-public').href = name ? profilePath(name) : '/';
@@ -1318,7 +1276,6 @@ function ownBets(): BetRow[] {
       expected: BigInt(receipt.expectedPayout),
       maxPayout: receipt.maxPayout === undefined ? null : BigInt(receipt.maxPayout),
       operation: receipt.operationId,
-      hosted: receipt.hosted === true,
       receipt,
     }));
 }
@@ -1471,6 +1428,7 @@ async function openGameRecord(key: string, push = true) {
   $('gamebets-key').textContent = key;
   $('gamebets-list').replaceChildren();
   $('gamebets-totals').replaceChildren();
+  $('gamebets-pots').classList.add('hidden');
   $('gamebets-empty').classList.add('hidden');
   $<HTMLInputElement>('gamebets-search').value = '';
   navigate('gamebets', push, gameBetsPath(key));
@@ -1507,6 +1465,13 @@ async function openGameRecord(key: string, push = true) {
         ),
       ),
     );
+    // How the game's pots ended: a referee that lets the pots it would lose go void shows here.
+    const pots: { open: number; resolved: number; void: number } = record.pots;
+    if (pots.open + pots.resolved + pots.void) {
+      $('gamebets-pots').textContent =
+        `Pots: ${pots.open} open, ${pots.resolved} resolved, ${pots.void} void. A void pot refunded every entry: its referee called it off, or did not end it by its deadline.`;
+      $('gamebets-pots').classList.remove('hidden');
+    }
     $('gamebets-list').replaceChildren(...rows.map(row => betRowElement(row)));
     filterBets(
       $('gamebets-list'),
@@ -1597,10 +1562,6 @@ $<HTMLDialogElement>('fund-dialog').addEventListener('close', () => {
   request?.resolve(value ? BigInt(value) : null);
   $<HTMLDialogElement>('fund-dialog').returnValue = '';
 });
-$<HTMLButtonElement>('hosted-allow').addEventListener('click', () =>
-  $<HTMLDialogElement>('hosted-dialog').close('allow'),
-);
-$<HTMLButtonElement>('hosted-decline').addEventListener('click', () => $<HTMLDialogElement>('hosted-dialog').close(''));
 $<HTMLButtonElement>('bet-detail-close').addEventListener('click', () => $<HTMLDialogElement>('bet-dialog').close());
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-fund-cancel]'))
   button.addEventListener('click', () => $<HTMLDialogElement>('fund-dialog').close(''));
@@ -1685,21 +1646,7 @@ $<HTMLButtonElement>('start-close').addEventListener('click', () =>
 $<HTMLButtonElement>('recover-wallet').addEventListener('click', () =>
   task(async () => {
     await wallet.recover();
-    toast(
-      wallet.pending
-        ? "The bet is still waiting for the game's host to close its round."
-        : 'Saved wallet operation recovered. Reopen its game to continue the session.',
-    );
-  }),
-);
-$<HTMLButtonElement>('withdraw-bet').addEventListener('click', () =>
-  task(async () => {
-    const receipt = await wallet.cancelPending();
-    toast(
-      receipt.status === 'rejected'
-        ? 'Withdrawn. Your balance is unchanged.'
-        : 'The round was already played; its verified result is in your history.',
-    );
+    toast('Saved wallet operation recovered. Reopen its game to continue the session.');
   }),
 );
 $<HTMLButtonElement>('speed-up-transaction').addEventListener('click', () =>
@@ -1879,13 +1826,34 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
     if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
     // Anyone who opens this card has to be able to play it, so it is loaded before it is published, and
     // a game is its developer's: whoever publishes it is the developer its manifest names.
-    const { manifestURL, developer } = await fetchGame(url.value.trim());
+    const { manifestURL, manifest, developer } = await fetchGame(url.value.trim());
     if (!same(developer, wallet.address))
       throw new Error(`That manifest names ${developer} as its developer. Publish it from that account.`);
-    await wallet.publishGame(published, manifestURL.href);
+    // A game with pots names the key of its referee, which the casino then holds its pots to.
+    await wallet.publishGame(published, manifestURL.href, manifest.referee ?? null);
     name.value = url.value = '';
     await loadLibrary();
     toast(`Published at ${showName(wallet)}/${published}.`);
+  }),
+);
+$<HTMLButtonElement>('bank-deposit').addEventListener('click', () =>
+  task(async () => {
+    const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
+    if (amount <= 0n) throw new Error('Enter how much to put in your bank.');
+    await wallet.depositBank(amount);
+    $<HTMLInputElement>('bank-amount').value = '';
+    toast(`Put ${formatEther(amount)} ${units()} in your bank.`);
+    await refreshBank();
+  }),
+);
+$<HTMLButtonElement>('bank-withdraw').addEventListener('click', () =>
+  task(async () => {
+    const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
+    await wallet.withdrawBank(amount);
+    $<HTMLInputElement>('bank-amount').value = '';
+    toast(`Took ${formatEther(amount)} ${units()} out of your bank. Collecting it now.`);
+    await wallet.collectPayouts();
+    await refreshBank();
   }),
 );
 $<HTMLButtonElement>('clear-alias').addEventListener('click', () =>

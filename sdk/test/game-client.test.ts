@@ -103,58 +103,66 @@ test('verified gains and losses move the limit; exact retries by ID never charge
   assert.equal(f.settlements(), 21);
 });
 
-test('a shared round: the wallet takes a seat, the host closes the round, and the same call returns the receipt', async () => {
+test('a house pot: the entry leaves the limit at once, and once the pot ends the same call returns what it paid', async () => {
   const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity('table', { rounds: true }));
+    w = f.wallet,
+    game = f.identity('wheel');
+  w.openGame(game);
   await w.setGameLimit('1000');
-  // The stub casino plays the host's part: a round with the hash of the host's seed, closed when the host says.
-  const round = f.openRound(),
-    request = { ...terms('spin-1'), round };
-  assert.deepEqual(await w.gameBet(request), { id: 'spin-1', status: 'pending', verified: false });
-  assert.equal(w.gameLimit().pending, true);
-  assert.equal((await w.gameBet(request)).status, 'pending', 'asking again while the round is open');
-  assert.equal(f.settlements(), 0);
-  await f.closeRound(round.id);
-  const receipt = await w.gameBet(request),
-    saved = await w.getReceipt(w.gameOperationId('spin-1'));
-  assert.equal(receipt.status, 'signed');
-  assert.equal(saved.hosted, true);
-  assert.equal(saved.proof.step.operation.seedHash, round.seedHash, "the seat signed the hash of the host's seed");
-  assert.equal(w.gameLimit().balance, String(1000n - 10n + BigInt(receipt.payout!)));
-  assert.equal(w.gameLimit().pending, false);
+  // The stub casino plays the referee's part: a pot of this game, resolved when the referee says.
+  const pot = f.openPot(game, 'house'),
+    request = { ...terms('spin-1'), pot: pot.id };
+  const entered = await w.gameEnter(request);
+  assert.deepEqual(entered, {
+    id: 'spin-1',
+    kind: 'entry',
+    status: 'signed',
+    verified: true,
+    stake: '10',
+    pot: pot.id,
+    prizes: [prize],
+  });
+  assert.equal(w.gameLimit().balance, '990', 'the stake is in the pot');
+  assert.deepEqual(await w.gameEnter(request), entered, 'asking again while the pot is open');
+  await assert.rejects(w.gameEnter({ ...request, stake: '20' }), /different intent/);
+  await f.resolvePot(pot.id);
+  const receipt = await w.gameEnter(request);
+  assert.equal(receipt.outcome, String(BigInt(receipt.outcome!)));
+  assert.equal(receipt.payout, BigInt(receipt.outcome!) < 9000000000000000000n ? '20' : '0');
+  assert.equal(w.gameLimit().balance, String(990n + BigInt(receipt.payout!)), 'what it paid is credited to the game');
+  assert.deepEqual(await w.gameReceipt('spin-1'), receipt);
+  await assert.rejects(w.gameEnter({ ...terms('late'), pot: pot.id }), /no more entries/);
   // The wallet's own next bet is unaffected: it still has the round the casino named for it.
   assert.equal((await w.gameBet(terms('own'))).status, 'signed');
 });
 
-test('changing the chips on a seat is giving it up and placing a new bet', async () => {
+test("a developer's pot takes an entry only at its referee's quote, and a void pot refunds it", async () => {
   const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity('table', { rounds: true }));
+    w = f.wallet,
+    game = f.identity('sports');
+  w.openGame(game);
   await w.setGameLimit('1000');
-  const round = f.openRound(),
-    chips = (id: string, stake: string) => ({
-      id,
-      stake,
-      prizes: [{ ...prize, payout: String(2n * BigInt(stake)) }],
-      round,
-    });
-  assert.equal((await w.gameBet(chips('layout', '10'))).status, 'pending');
-  // A name is bound to the terms the wallet signed: other chips need another bet.
-  await assert.rejects(w.gameBet(chips('layout', '40')), /different intent/);
-  assert.equal((await w.gameCancel({ id: 'layout' })).status, 'rejected');
-  assert.equal(w.gameLimit().balance, '1000', 'a withdrawn bet moves no money');
-  assert.equal((await w.gameBet(chips('layout-2', '40'))).status, 'pending');
-  await f.closeRound(round.id);
-  const receipt: any = await w.gameBet(chips('layout-2', '40'));
-  assert.deepEqual([receipt.status, receipt.stake], ['signed', '40']);
-  assert.equal(w.gameLimit().balance, String(1000n - 40n + BigInt(receipt.payout!)));
+  const pot = f.openPot(game, 'developer', { outcomes: 2 }),
+    prizes = [{ rangeStart: '1', rangeEnd: '2', payout: '35' }],
+    quote = await f.quote(pot.id, '10', prizes),
+    request = { id: 'home', pot: pot.id, stake: '10', prizes, quote };
+  const refused = await w.gameEnter({ ...request, id: 'cheaper', prizes: [{ ...prizes[0]!, payout: '36' }] });
+  assert.deepEqual([refused.status, refused.reason], ['rejected', "The entry is not at the referee's quote"]);
+  assert.equal(w.gameLimit().balance, '1000', 'a declined entry moves no money');
+  assert.equal((await w.gameEnter(request)).status, 'signed');
+  assert.equal(w.gameLimit().balance, '990');
+  f.voidPot(pot.id);
+  const receipt = await w.gameEnter(request);
+  assert.deepEqual([receipt.payout, receipt.reason], ['10', 'The pot was void, and every entry refunded']);
+  assert.equal(receipt.outcome, undefined);
+  assert.equal(w.gameLimit().balance, '1000');
 });
 
 test('a game learns how its operations ended and never whose they were', async () => {
   const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity('table', { rounds: true }));
+    w = f.wallet,
+    game = f.identity('table');
+  w.openGame(game);
   await w.setGameLimit('1000');
   const replies: any[] = [],
     reply = async (value: unknown) => void replies.push(await value);
@@ -162,15 +170,13 @@ test('a game learns how its operations ended and never whose they were', async (
   await reply(w.gameInfo());
   await reply(w.gameLimit());
   await reply(w.gameBet(terms('own')));
-  const round = f.openRound();
-  await reply(w.gameBet({ ...terms('left'), round }));
-  await reply(w.gameCancel({ id: 'left' }));
-  await reply(w.gameBet({ ...terms('seat'), round }));
-  await f.closeRound(round.id);
-  await reply(w.gameBet({ ...terms('seat'), round }));
+  const pot = f.openPot(game, 'players', { rake: 100 });
+  await reply(w.gameEnter({ id: 'seat', pot: pot.id, stake: '10' }));
+  await f.resolvePot(pot.id, { split: [{ entry: 0, amount: '10' }], rake: '0' });
+  await reply(w.gameEnter({ id: 'seat', pot: pot.id, stake: '10' }));
   await reply(w.gamePayment({ id: 'pay', amount: '1' }));
-  for (const id of ['own', 'left', 'seat', 'pay']) await reply(w.gameReceipt(id));
-  const fields = ['id', 'kind', 'status', 'verified', 'stake', 'prizes', 'outcome', 'payout', 'reason'];
+  for (const id of ['own', 'seat', 'pay']) await reply(w.gameReceipt(id));
+  const fields = ['id', 'kind', 'status', 'verified', 'stake', 'prizes', 'pot', 'outcome', 'payout', 'reason'];
   for (const r of replies.filter(r => r.status))
     assert.deepEqual(
       Object.keys(r).filter(key => !fields.includes(key)),
@@ -180,37 +186,16 @@ test('a game learns how its operations ended and never whose they were', async (
   const player = [w.channelId!, f.player.address, w.current!.opening.signer].map(hex => hex.slice(2).toLowerCase());
   for (const r of replies)
     for (const secret of player) assert.doesNotMatch(JSON.stringify(r).toLowerCase(), new RegExp(secret));
-  const statuses = replies.filter(r => r.status).map(r => `${r.id} ${r.status}`);
+  const statuses = replies.filter(r => r.status).map(r => `${r.id} ${r.kind} ${r.status} ${r.payout ?? ''}`);
   assert.deepEqual(statuses, [
-    'own signed',
-    'left pending',
-    'left rejected',
-    'seat pending',
-    'seat signed',
-    'pay signed',
-    'own signed',
-    'left rejected',
-    'seat signed',
-    'pay signed',
+    `own bet signed ${replies[3].payout}`,
+    'seat entry signed ',
+    'seat entry signed 10',
+    'pay payment signed ',
+    `own bet signed ${replies[3].payout}`,
+    'seat entry signed 10',
+    'pay payment signed ',
   ]);
-});
-
-test('the limit moves while a seat waits: what the bet committed is not the player’s to allocate', async () => {
-  const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity('table', { rounds: true }));
-  await w.setGameLimit('1000');
-  const round = f.openRound(),
-    request = { ...terms('spin'), round };
-  assert.equal((await w.gameBet(request)).status, 'pending');
-  await w.setGameLimit('999990');
-  assert.equal(w.gameLimit().balance, '999990', 'the limit is the player’s to set while the seat waits');
-  await assert.rejects(w.setGameLimit('999991'), /exceeds your playing balance/, 'all but the stake it committed');
-  await w.setGameLimit('10');
-  await f.closeRound(round.id);
-  const receipt = await w.gameBet(request);
-  assert.equal(receipt.status, 'signed');
-  assert.equal(w.gameLimit().balance, receipt.payout, 'and the result moves the limit it was left at');
 });
 
 test('a lost reply is recovered after reload without any game state in the wallet', async () => {

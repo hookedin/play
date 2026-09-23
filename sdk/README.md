@@ -14,15 +14,16 @@ Developers earn half the commission on every bet placed through their game. It i
 
 The fastest way to build a game is to fork [hookedin/game-template](https://github.com/hookedin/game-template). Its README is the step-by-step developer guide. The reference games are in [games/](../games/); the template is its own repository:
 
-| Game                                                       | What it shows                                                                         |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| [dice](../games/dice/)                                     | The smallest `RoundClient` game: one decision, two outcomes                           |
-| [plinko](../games/plinko/)                                 | A one-shot prize table written by hand, with no round helper                          |
-| [samson](../games/samson/)                                 | A 243-ways slot whose prize table is counted exactly from its reel strips             |
-| [blackjack](../games/blackjack/)                           | A multi-step game with doubles, splits and insurance, priced by the engine            |
-| [mines](../games/mines/)                                   | Reveal-or-cash-out, the simplest multi-step graph                                     |
-| [roulette](../games/roulette/)                             | Many players against the house on one shared round, with its wheel in the same Worker |
-| [game-template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand. The starting point for forks       |
+| Game                                                       | What it shows                                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [dice](../games/dice/)                                     | The smallest `RoundClient` game: one decision, two outcomes                        |
+| [plinko](../games/plinko/)                                 | A one-shot prize table written by hand, with no round helper                       |
+| [samson](../games/samson/)                                 | A 243-ways slot whose prize table is counted exactly from its reel strips          |
+| [blackjack](../games/blackjack/)                           | A multi-step game with doubles, splits and insurance, priced by the engine         |
+| [mines](../games/mines/)                                   | Reveal-or-cash-out, the simplest multi-step graph                                  |
+| [roulette](../games/roulette/)                             | Many players against the house in one house pot, with its wheel in the same Worker |
+| [sports](../games/sports/)                                 | Fixed odds from a book that pays winners from its own bank: developer's pots       |
+| [game-template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand. The starting point for forks    |
 
 ## Install
 
@@ -42,17 +43,17 @@ It needs Node 24.4 or later. It ships raw TypeScript, not compiled JavaScript. A
 
 Package entry points:
 
-| Import                                           | What it is                                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `@hookedin/play/sdk`                             | Everything. Browser only: the bridge touches `window` when it loads                            |
-| `@hookedin/play/sdk/engine`                      | The pricing engine. Pure and safe to import in Node                                            |
-| `@hookedin/play/sdk/sdk`                         | The `HookedIn` wallet bridge ([src/sdk.ts](src/sdk.ts))                                        |
-| `@hookedin/play/sdk/round`                       | `RoundClient` ([src/round.ts](src/round.ts))                                                   |
-| `@hookedin/play/sdk/bank`                        | `mountBank` ([src/bank.ts](src/bank.ts))                                                       |
-| `@hookedin/play/sdk/synth`                       | `createSynth` ([src/synth.ts](src/synth.ts))                                                   |
-| `@hookedin/play/sdk/admits`                      | The casino's admission rule ([src/admits.ts](src/admits.ts))                                   |
-| `@hookedin/play/sdk/host`                        | `createHost`, for a game's own server ([src/host.ts](src/host.ts)). Runs wherever `fetch` does |
-| `@hookedin/play/sdk/generated/blackjack-funding` | The precomputed blackjack price table                                                          |
+| Import                                           | What it is                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `@hookedin/play/sdk`                             | Everything. Browser only: the bridge touches `window` when it loads                                     |
+| `@hookedin/play/sdk/engine`                      | The pricing engine. Pure and safe to import in Node                                                     |
+| `@hookedin/play/sdk/sdk`                         | The `HookedIn` wallet bridge ([src/sdk.ts](src/sdk.ts))                                                 |
+| `@hookedin/play/sdk/round`                       | `RoundClient` ([src/round.ts](src/round.ts))                                                            |
+| `@hookedin/play/sdk/bank`                        | `mountBank` ([src/bank.ts](src/bank.ts))                                                                |
+| `@hookedin/play/sdk/synth`                       | `createSynth` ([src/synth.ts](src/synth.ts))                                                            |
+| `@hookedin/play/sdk/admits`                      | The casino's admission rule ([src/admits.ts](src/admits.ts))                                            |
+| `@hookedin/play/sdk/referee`                     | `createReferee`, for a game's own server ([src/referee.ts](src/referee.ts)). Runs wherever `fetch` does |
+| `@hookedin/play/sdk/generated/blackjack-funding` | The precomputed blackjack price table                                                                   |
 
 Any other `@hookedin/play/sdk/<module>` resolves to `src/<module>.ts`.
 
@@ -87,20 +88,20 @@ if (receipt.status === 'signed' && receipt.verified) {
 | Member                                                    | What it does                                                                                                                 |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `call(method, params)`                                    | Send any bridge request. Rejects with the wallet's error message, or after 180 seconds of silence                            |
-| `limits()`                                                | Every bound this wallet holds a bet to: the prizes one holds, the outcome space, the seats in a round                        |
+| `limits()`                                                | Every bound this wallet holds a bet to: the prizes one holds, the outcome space, the entries in a pot                        |
 | `balance()`                                               | The game's latest spending limit `{ balance, pending }`, as pushed by the wallet                                             |
 | `onBalance(listener)`                                     | Called on every `game.balance` push. Returns a function that stops listening                                                 |
 | `requestFunds({ amount? })`                               | Ask the player for money. The wallet shows its own dialog, in its own words; resolves `{ funded, amount, balance, pending }` |
 | `receipt(id)`                                             | The outcome of an earlier operation by the game's own `id`, or `null`                                                        |
-| `bet({ id, stake, prizes, round? })`                      | One atomic bet; with a `round`, the signed entry for that round's host                                                       |
-| `cancel(id)`                                              | Withdraw a hosted bet its host has not played                                                                                |
+| `bet({ id, stake, prizes })`                              | One atomic bet                                                                                                               |
+| `enter({ id, pot, stake, prizes?, quote? })`              | Enter a pot, finally; once the pot has ended, the same call returns what the entry was paid                                  |
 | `payment(id, amount)`                                     | A deterministic payment to the bankroll                                                                                      |
 | `storageScope(info)`                                      | A storage key unique to this page, chain, player and asset, on the player's uname                                            |
 | `initializeGame({ stakeInput, assetLabels })`             | Read-only startup: `wallet.hello`, `wallet.info`, the first balance, asset labels and the recommended stake                  |
 | `hello()`, `info()`                                       | The wallet's methods and asset `{id, symbol, decimals}`; the player's `{uname, alias, chainId, bankroll, recommendedStake}`  |
 | `parseAmount`, `formatAmount`, `exactAmount`, `stepStake` | Amounts in the wallet's asset, whatever its decimals, and a 1-2-5 stake ladder for an input field                            |
 
-The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.payment`, `game.receipt`, `game.cancel` and `game.requestFunds`. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and shared rounds.
+The bridge methods are `wallet.hello`, `wallet.info`, `game.bet`, `game.enter`, `game.payment`, `game.receipt` and `game.requestFunds`. [docs/game-sdk.md](docs/game-sdk.md) is the full reference: parameters, results, recovery after a lost reply and pots.
 
 `mountBank(element, { round? })` renders the balance strip the reference games show: the money the wallet lets the game risk in this tab, live, with an **Add funds** button. With the game's `RoundClient` it leaves out the cash inside an unfinished round. It shows the asset's symbol and marks test coins. `createSynth()` makes short tones without audio files.
 
@@ -177,20 +178,20 @@ src/manifest.json   { id, name, description, entry, developer }
 
 ## A game with a server
 
-Many players bet on one outcome when a server hosts the round: it opens a round with the hash of a seed it keeps, the pages bet on that round with their own wallets, and it closes the round with the seed. `createHost` is the server's side:
+Many players share one outcome when a server referees a pot: it opens the pot at the casino, the pages enter it with their own wallets, and it ends the pot. `createReferee` is the server's side:
 
 ```ts
-import { createHost, roundOutcome } from '@hookedin/play/sdk/host';
+import { createReferee, roundOutcome } from '@hookedin/play/sdk/referee';
 
-const host = await createHost({ casinoURL, key });
-// 20 seconds of betting time, counted from the first seat, within this casino's own `host.window`:
-// give `round` to the pages, keep `seed`
-const { round, seed } = await host.round('eth', 20_000);
-const closed = await host.close(round.id, seed); // the casino reveals its secret and settles every seat
-const outcome = roundOutcome(seed, closed.secret); // what every seat's prizes were read against
+const referee = await createReferee({ casinoURL, key, game: { developer, name } });
+// A house pot: 20 seconds of betting time, counted from the first entry, within this casino's own
+// `referee.window`. Give `pot.id` to the pages, keep `seed`.
+const { pot, seed } = await referee.open({ bank: 'house', window: 20_000 });
+const ended = await referee.resolve(pot.id, { seed }); // the casino reveals its secret; every entry is paid
+const outcome = roundOutcome(seed, ended.secret); // what every entry's prizes were read against
 ```
 
-Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Shared rounds](docs/game-sdk.md#shared-rounds) explains it; [roulette](../games/roulette/) is the reference.
+A developer's pot pays at your own odds, priced entry by entry with `referee.quote` and paid beyond its entries from your bank at the casino; a players' pot is split as you sign, less a capped rake. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Pots](docs/game-sdk.md#pots) explains it; [roulette](../games/roulette/) and [sports](../games/sports/) are the references.
 
 ## Testing against the real wallet
 
@@ -221,7 +222,7 @@ test('a round settles through the wallet', async () => {
 });
 ```
 
-[test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, verified rejections, reloads and two tabs.
+[test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, verified rejections, reloads and two tabs. For a game with pots the stub casino plays the referee's part too: `f.openPot(identity, bank)` opens one, `f.quote` prices a developer's pot's entry, and `f.resolvePot` and `f.voidPot` end it, so a test enters with `w.gameEnter` and asks again for what the entry was paid.
 
 The SDK's tests run with the rest of play's, from the repository root:
 
@@ -241,7 +242,7 @@ src/round.ts                         RoundClient
 src/bank.ts                          mountBank balance strip
 src/synth.ts                         createSynth
 src/admits.ts                        the casino's admission rule
-src/host.ts                          createHost, for a game's own server
+src/referee.ts                       createReferee, for a game's own server
 src/wire.ts                          types shared by the page and the server
 src/engine/                          exact continuation pricing, blackjack and mines rules
 src/generated/blackjack-funding.ts   precomputed blackjack prices
@@ -254,7 +255,7 @@ docs/                                reference documentation
 
 ## Documentation
 
-- [docs/game-sdk.md](docs/game-sdk.md): manifests, the sandbox, game balances, every bridge method, recovery, shared rounds and developer payments.
+- [docs/game-sdk.md](docs/game-sdk.md): manifests, the sandbox, game balances, every bridge method, recovery, pots and developer earnings.
 - [docs/engine.md](docs/engine.md): the pricing engine's API.
 - [docs/sequential-games.md](docs/sequential-games.md): how a multi-step game becomes a sequence of native bets, with the blackjack rules and exact edge.
 - [docs/collapsing-bets.md](docs/collapsing-bets.md): playing a prize table too large for one bet.

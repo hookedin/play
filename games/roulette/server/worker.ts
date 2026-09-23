@@ -3,7 +3,7 @@
  * /api/ is the wheel, one Durable Object. The page talks to nobody but this origin, and the Worker
  * to nobody but the casino's public API.
  */
-import { createHost } from '@hookedin/play/sdk/host';
+import { createReferee } from '@hookedin/play/sdk/referee';
 import { Wheel } from './wheel.ts';
 import type { WheelState } from './wheel.ts';
 
@@ -12,8 +12,11 @@ interface Env {
   WHEEL: DurableObjectNamespace;
   /** The casino's public API. */
   CASINO_URL: string;
-  /** The host's private key: it opens and closes rounds and nothing else. A secret. */
-  HOST_KEY: string;
+  /** The game as its developer published it: their address and the game's name. */
+  DEVELOPER: string;
+  GAME_NAME: string;
+  /** The referee's private key: it opens and resolves the game's pots and nothing else. A secret. */
+  REFEREE_KEY: string;
 }
 
 export class RouletteWheel implements DurableObject {
@@ -31,7 +34,11 @@ export class RouletteWheel implements DurableObject {
       await this.ctx.storage.put('url', url.href);
       return new Wheel(
         {
-          host: await createHost({ casinoURL: this.env.CASINO_URL, key: this.env.HOST_KEY }),
+          referee: await createReferee({
+            casinoURL: this.env.CASINO_URL,
+            key: this.env.REFEREE_KEY,
+            game: { developer: this.env.DEVELOPER, name: this.env.GAME_NAME },
+          }),
           asset: assetOf(url),
           now: () => Date.now(),
           save: state => this.ctx.storage.put('state', state),
@@ -49,7 +56,8 @@ export class RouletteWheel implements DurableObject {
     try {
       const wheel = await this.open(url);
       if (url.pathname === '/api/table' && request.method === 'GET') return Response.json(await wheel.view());
-      if (url.pathname === '/api/table/seated' && request.method === 'POST') return Response.json(await wheel.seated());
+      if (url.pathname === '/api/table/entered' && request.method === 'POST')
+        return Response.json(await wheel.entered());
       return Response.json({ error: 'Not found' }, { status: 404 });
     } catch (error: any) {
       return Response.json({ error: error.message || 'The wheel is unavailable' }, { status: 503 });

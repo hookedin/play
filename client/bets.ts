@@ -28,8 +28,6 @@ export interface BetRow {
   operation?: string;
   /** A public row's number in the casino's record of every bet. */
   index?: number;
-  /** The seed came from the game's host, not this wallet. */
-  hosted?: boolean;
   /** This wallet's own receipt, whole: the prizes, the preimages and the signatures it kept. A
    * public row has none, because the casino's list is only what anyone may read. */
   receipt?: any;
@@ -131,7 +129,6 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const name = element('div', 'bet-game');
   name.append(element('span', 'bet-game-name', row.game));
   if (row.who) name.append(element('span', 'bet-who', row.who));
-  if (row.hosted) name.append(element('span', 'bet-tag', 'shared round'));
   const date = new Date(row.at),
     time = document.createElement('time');
   time.className = 'bet-time';
@@ -229,8 +226,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       'p',
       'bet-detail-when',
       `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Returned'} ${signed(net, unit)}` +
-        (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`) +
-        (row.hosted ? ' · the seed was this round’s host’s, not your wallet’s' : ''),
+        (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`),
     ),
   );
   const figures = element('div', 'bet-detail-figures');
@@ -324,7 +320,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     );
     draw.append(
       factList([
-        [row.hosted ? 'The host’s seed' : 'Your seed', hex(step.seed)],
+        ['Your seed', hex(step.seed)],
         [
           'Hashes to the seed hash your bet named',
           rederived(

@@ -15,11 +15,11 @@ A useful report says which component and revision is affected, what an attacker 
 - The settlement contract, [contracts/HookedInCasino.sol](contracts/HookedInCasino.sol): loss or freezing of protected principal, bypassing the challenge window, replay of evidence, incorrect winnings allocation, unauthorized withdrawals.
 - The wallet, [client/](client/): key exposure, accepting a result, rejection, payout or share statement it should refuse, losing or downgrading saved evidence, escaping the game iframe boundary, signing something other than what is shown.
 - The shared protocol and player-side tools, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, recovery CLI or watchtower failing to settle or challenge with valid evidence.
-- The game SDK and the house's games, [sdk/](sdk/) and [games/](games/): step pricing that disagrees with the risk rule, a game losing its saved round, a host revealing its seed before its round closes.
+- The game SDK and the house's games, [sdk/](sdk/) and [games/](games/): step pricing that disagrees with the risk rule, a game losing its saved round, a referee revealing its seed before its pot ends.
 - The build: anything that makes the published `dist/`, or a game's, differ from what these sources produce.
 
 The casino service, the website and the games other developers publish are separate codebases. If you find a problem in the running casino service, report it here privately as well.
 
 ## Not vulnerabilities
 
-The trust assumptions stated in [README.md](README.md#trust-model) and [architecture.md](architecture.md) are accepted design choices: one operator controls signing and the bankroll, winnings above the deposit are unsecured claims on the shared pool, the player must challenge a stale close within 24 hours, the casino can withhold completion, a host and the casino together could choose a hosted round's outcome, and bankroll fund shares are the casino's promise. Reports that restate these are welcome as design feedback in a public issue.
+The trust assumptions stated in [README.md](README.md#trust-model) and [architecture.md](architecture.md) are accepted design choices: one operator controls signing and the bankroll, winnings above the deposit are unsecured claims on the shared pool, the player must challenge a stale close within 24 hours, the casino can withhold completion, a game's referee and the casino together could choose a house pot's outcome, a developer's or players' pot ends on its referee's word, and bankroll fund shares are the casino's promise. Reports that restate these are welcome as design feedback in a public issue.

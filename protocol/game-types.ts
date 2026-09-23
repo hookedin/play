@@ -9,9 +9,6 @@ export interface GameIdentity {
   slug?: string;
   /** What the game calls itself. */
   name: string;
-  /** This game bets on rounds its own host opens, so its host draws their seed. The player allows it
-   * before the game is framed, or the game is not opened. */
-  rounds?: boolean;
 }
 /** The open game in this tab. Never persisted: closing the tab or leaving the game releases the limit. */
 export interface GameSession {
@@ -29,29 +26,34 @@ export interface GameRequest {
   stake: string;
   /** Each prize pays `payout` when the round's 64-bit outcome falls in [rangeStart, rangeEnd); overlapping prizes add. */
   prizes: { rangeStart: string; rangeEnd: string; payout: string }[];
-  /** A round a game's host opened. The wallet joins it with this bet, and the host closes it. */
-  round?: import('./types.ts').Round;
+}
+/** An entry into a pot of this game. A house or developer pot's entry holds prizes over the pot's outcome;
+ * a developer's needs its referee's `quote` for them; a players' pot's entry is only its stake. */
+export interface EntryRequest {
+  id: string;
+  pot: string;
+  stake: string;
+  prizes?: GameRequest['prizes'];
+  quote?: { expiresAt: string; signature: string };
 }
 /** What a game learns about an operation, under its own `id`: how it ended, never the signed evidence. */
 export interface GameReceipt {
   id: string;
-  kind: 'bet' | 'payment';
-  /** `signed`: settled. `rejected`: a verified rejection; the balance is unchanged. */
+  kind: 'bet' | 'payment' | 'entry';
+  /** `signed`: settled, or for an entry, in its pot. `rejected`: a verified rejection; the balance is unchanged. */
   status: 'signed' | 'rejected';
   verified: boolean;
-  /** A bet's terms as they played. A seat changed as its round closed played the chips it had. */
+  /** A bet's or an entry's terms. */
   stake?: string;
   prizes?: GameRequest['prizes'];
-  /** A settled bet: the round's 64-bit outcome, and what the prizes holding it paid in total. */
+  /** An entry's pot. */
+  pot?: string;
+  /** A settled bet: the round's 64-bit outcome, and what the prizes holding it paid in total. An entry,
+   * once its pot has ended and the wallet has collected: the outcome that picked its prizes, if the pot
+   * had one, and what the entry was paid. */
   outcome?: string;
   payout?: string;
   reason?: string;
-}
-/** A bet seated in a shared round its host has not closed. Sending the same request again finds the result. */
-export interface PendingReceipt {
-  id: string;
-  status: 'pending';
-  verified: false;
 }
 /** What the wallet pushes to the game: its spending limit and whether an operation awaits recovery. */
 export interface GameLimit {

@@ -1,13 +1,5 @@
 /** What travels between a game page, the wallet and the game's own server. */
 
-/** A round a game's host opened: every bet that names it shares one outcome. `id` is the hash of a
- * secret the casino drew, and `seedHash` the hash of a seed the host keeps until it closes the
- * round, so nobody knows the outcome while bets are taken. */
-export interface Round {
-  id: string;
-  seedHash: string;
-}
-
 /** The two names a player answers to. A uname is theirs for good; an alias is what they are
  * called today. */
 export interface PlayerNames {

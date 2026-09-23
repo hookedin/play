@@ -1,0 +1,25 @@
+// One Worker is the whole game: dist/ is served as static assets, and server/worker.ts answers /api/ with the
+// book, a Durable Object. For a copy of this game, change `name`, replace or remove `routes`, and set the vars to
+// your casino, your address and the name you publish the game under. Run wrangler from this folder. Two secrets,
+// set once: `npx wrangler secret put REFEREE_KEY`, the key you publish the game with as its referee, and
+// `npx wrangler secret put ADMIN_TOKEN`, what you send to open and resolve markets.
+// Locally, caserver's `npm run dev` runs this Worker against its own casino, with a fresh key.
+{
+  "name": "hookedin-sports-game",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "durable_objects": { "bindings": [{ "name": "BOOK", "class_name": "SportsBook" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SportsBook"] }],
+  "vars": {
+    "CASINO_URL": "https://casino.hookedin.com",
+    "DEVELOPER": "0xcD0C778307e7D3Da6D3D23440285050f911840d4",
+    "GAME_NAME": "sports",
+  },
+  "routes": [{ "pattern": "sports-game.hookedin.com", "custom_domain": true }],
+  // The page is built before every deploy, and `wrangler dev` builds it again whenever src/ changes.
+  "build": { "command": "node ../../sdk/bin/hookedin-game.js build", "watch_dir": "src" },
+  // Locally the Worker is reached at its own address, not at the route above.
+  "dev": { "port": 8791, "ip": "127.0.0.1", "host": "127.0.0.1:8791", "upstream_protocol": "http" },
+}

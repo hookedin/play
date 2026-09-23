@@ -1,11 +1,26 @@
 {
   "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4",
   "games": {
-    "samson": "https://samson-game.hookedin.com/manifest.json",
-    "plinko": "https://plinko-game.hookedin.com/manifest.json",
-    "dice": "https://dice-game.hookedin.com/manifest.json",
-    "blackjack": "https://blackjack-game.hookedin.com/manifest.json",
-    "mines": "https://mines-game.hookedin.com/manifest.json",
-    "roulette": "https://roulette-game.hookedin.com/manifest.json"
+    "samson": {
+      "url": "https://samson-game.hookedin.com/manifest.json"
+    },
+    "plinko": {
+      "url": "https://plinko-game.hookedin.com/manifest.json"
+    },
+    "dice": {
+      "url": "https://dice-game.hookedin.com/manifest.json"
+    },
+    "blackjack": {
+      "url": "https://blackjack-game.hookedin.com/manifest.json"
+    },
+    "mines": {
+      "url": "https://mines-game.hookedin.com/manifest.json"
+    },
+    "roulette": {
+      "url": "https://roulette-game.hookedin.com/manifest.json"
+    },
+    "sports": {
+      "url": "https://sports-game.hookedin.com/manifest.json"
+    }
   }
 }

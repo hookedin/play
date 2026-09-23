@@ -404,16 +404,18 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A bet on a shared round names the round its host opened, and the hash of the host's seed.
-  const round = { id: '0x' + '22'.repeat(32), seedHash: '0x' + '33'.repeat(32) };
-  const shared = (overrides: any) => request(1, 'game.bet', { ...params, round, ...overrides });
-  assert.equal(validateRequest(shared({})).params.round.id, round.id);
-  assert.throws(() => validateRequest(shared({ round: { ...round, seedHash: '0x12' } })), /Invalid round/);
-  assert.throws(() => validateRequest(shared({ round: { id: round.id, seed: round.seedHash } })), /Invalid round/);
-  assert.throws(() => validateRequest(shared({ round: { ...round, id: '0x12' } })), /Invalid round/);
-  assert.throws(() => validateRequest(shared({ round: { ...round, host: 'x' } })), /Invalid round/);
-  assert.equal(validateRequest(request(1, 'game.cancel', { id: 'hand-1' })).params.id, 'hand-1');
-  assert.throws(() => validateRequest(request(1, 'game.cancel', { id: 'hand-1', stake: '1' })), /Unexpected/);
+  // A bet is on the wallet's own round; a game shares an outcome by entering a pot.
+  assert.throws(() => validateRequest(bet({ round: { id: '0x' + '22'.repeat(32) } })), /Unexpected/);
+  const pot = '0x' + '22'.repeat(32),
+    quote = { expiresAt: '1900000000', signature: '0x' + '33'.repeat(65) },
+    enter = (overrides: any) => request(1, 'game.enter', { id: 'hand-1', pot, stake: '10', ...overrides });
+  assert.equal(validateRequest(enter({})).params.pot, pot);
+  assert.deepEqual(validateRequest(enter({ prizes: [prize], quote })).params.quote, quote);
+  assert.throws(() => validateRequest(enter({ pot: '0x12' })), /Invalid pot/);
+  assert.throws(() => validateRequest(enter({ prizes: [] })), /prizes/);
+  assert.throws(() => validateRequest(enter({ quote: { ...quote, signature: '0x12' } })), /Invalid quote/);
+  assert.throws(() => validateRequest(enter({ quote: { ...quote, by: 'x' } })), /Invalid quote/);
+  assert.throws(() => validateRequest(enter({ round: pot })), /Unexpected/);
   const safe = Object.assign(Object.create(null), params);
   assert.equal(validateRequest(request(1, 'game.bet', safe)).params.stake, '10');
 });

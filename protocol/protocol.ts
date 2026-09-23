@@ -1,7 +1,9 @@
 import type { TypedDataField } from 'ethers';
 import type {
   Details,
+  EntryTerms,
   GameName,
+  PotResult,
   Domain,
   Opening,
   Checkpoint,
@@ -76,12 +78,22 @@ export const CLOSE_TYPES = {
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
-/** A round belongs to the key that asked for it, its host: a channel's signer for its own bets, or
- * the key of a game's server. Only that key opens or closes it. */
-export const HOST_ACCESS_TYPES = {
-  HostAccess: fields('address host,uint256 expiresAt'),
+/** A game's referee proves itself with its own key, as a channel does with its signer. Only the referee
+ * a game's developer published opens, resolves or voids that game's pots. */
+export const REFEREE_ACCESS_TYPES = {
+  RefereeAccess: fields('address referee,uint256 expiresAt'),
 };
-/** The `authorization` header carrying a signed `Access` or `HostAccess` message. */
+/** A referee's price for one entry into a developer's pot: the stake and prizes it will pay, until
+ * `expiresAt` (unix seconds). `prizes` is the hash (`hashJSON`) of the entry's prizes. */
+export const QUOTE_TYPES = {
+  Quote: fields('bytes32 pot,uint256 stake,bytes32 prizes,uint256 expiresAt'),
+};
+/** A referee names what a pot it resolves by signature came to: `result` is the hash (`hashJSON`) of
+ * `{outcome}` for a developer's pot, or `{split, rake}` for a players' pot. */
+export const RESOLUTION_TYPES = {
+  Resolution: fields('bytes32 pot,bytes32 result'),
+};
+/** The `authorization` header carrying a signed `Access` or `RefereeAccess` message. */
 export const authorization = (message: unknown, signature: string) =>
   'HookedIn ' + btoa(json({ message, signature })).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 export const domain = (chainId: Integer, casino: string) => ({
@@ -174,6 +186,21 @@ export const REDEEM_TYPES = {
 };
 export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, REDEEM_TYPES, s);
+/** A developer's bank: the developer's own money, per asset, that pays what their pots owe beyond their
+ * entries and receives what they keep. A deposit is a debit that names it, answered with a statement of
+ * the balance; money leaves it only by the developer's own signed `Withdraw` or a pot it pays. */
+export const BANK_ID = id('HOOKEDIN/BANK');
+/** The casino signs the balance of a developer's bank in one asset after every deposit and withdrawal.
+ * `cause` is the hash of the developer's signed deposit or `Withdraw`. */
+export const BANK_TYPES = {
+  BankStatement: fields('address developer,string asset,uint256 sequence,uint256 balance,bytes32 cause'),
+};
+/** A developer takes money out of their bank. `sequence` is the statement it will produce, so it works once. */
+export const WITHDRAW_TYPES = {
+  Withdraw: fields('address developer,string asset,uint256 amount,uint256 sequence'),
+};
+export const hashWithdraw = (d: Domain, s: { developer: string; asset: string; amount: Integer; sequence: Integer }) =>
+  TypedDataEncoder.hash(d, WITHDRAW_TYPES, s);
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
   if (BigInt(amount) <= 0n) throw new Error('Invalid investment');
@@ -264,10 +291,12 @@ export const gameKey = ({ developer, name }: GameName) =>
   keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [developer, name]));
 export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
-/** The one shape details have for each kind: a bet names its game; a debit its game (a payment) or the fund
- * (an investment); a credit what it collects from. Every field is in one form, so one meaning has one memo. */
+/** The one shape details have for each kind: a bet names its game; a debit its game (a payment), what it
+ * pays into (an investment, a bank deposit) or both (a pot entry, which alone carries terms); a credit what
+ * it collects from. Every field is in one form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const game = details?.game,
+    entry = details?.entry,
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
   const named =
     game !== undefined &&
@@ -283,18 +312,98 @@ export function checkDetails(kind: number, details: Details) {
     game.name.length <= 2048;
   const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
   if (
-    !keys.every(key => ['id', 'game', 'counterparty'].includes(key)) ||
+    !keys.every(key => ['id', 'game', 'counterparty', 'entry'].includes(key)) ||
     typeof details.id !== 'string' ||
     !bytes32Pattern.test(details.id) ||
     (game !== undefined && !named) ||
     (details.counterparty !== undefined && !counterparty) ||
+    (entry !== undefined && !validEntry(entry)) ||
     !(kind === KIND.bet
-      ? named && !counterparty
+      ? named && !counterparty && entry === undefined
       : kind === KIND.debit
-        ? named !== counterparty
-        : kind === KIND.credit && counterparty && !named)
+        ? (named || counterparty) && (entry === undefined || (named && counterparty))
+        : kind === KIND.credit && counterparty && !named && entry === undefined)
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
+}
+const decimal = (value: unknown) => typeof value === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(value);
+/** An entry's terms in their one form: decimal strings, at most `MAX_PRIZES` well-formed prizes. */
+function validEntry(entry: EntryTerms) {
+  const only = (value: any, keys: string[]) =>
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).every(k => keys.includes(k));
+  if (!only(entry, ['prizes', 'quote'])) return false;
+  const { prizes, quote } = entry;
+  if (
+    prizes !== undefined &&
+    (!Array.isArray(prizes) ||
+      !prizes.length ||
+      prizes.length > MAX_PRIZES ||
+      !prizes.every(
+        prize =>
+          only(prize, ['rangeStart', 'rangeEnd', 'payout']) &&
+          [prize.rangeStart, prize.rangeEnd, prize.payout].every(decimal) &&
+          BigInt(prize.rangeStart) < BigInt(prize.rangeEnd) &&
+          BigInt(prize.rangeEnd) <= OUTCOME_SPACE &&
+          BigInt(prize.payout) > 0n &&
+          BigInt(prize.payout) < MAX_BALANCE,
+      ))
+  )
+    return false;
+  return (
+    quote === undefined ||
+    (only(quote, ['expiresAt', 'signature']) &&
+      decimal(quote.expiresAt) &&
+      typeof quote.signature === 'string' &&
+      /^0x[0-9a-fA-F]{130}$/.test(quote.signature))
+  );
+}
+/** What each entry of a pot is owed when it ends, in entry order. A void pot returns every stake. A
+ * house pot's round, or a developer's pot's named outcome, picks the prizes each entry holds. A players'
+ * pot pays each entry what its referee's split gives it, and the split with its rake must account for
+ * every entry, within the rake the pot was opened with. The casino pays by this and the wallet checks by it. */
+export function potPayouts(
+  pot: { rake?: number; outcomes?: number; entries: { stake: string; prizes?: EntryTerms['prizes'] }[] },
+  ending: { void: true } | { value: bigint } | PotResult,
+): bigint[] {
+  const entries = pot.entries;
+  if ('void' in ending) return entries.map(entry => BigInt(entry.stake));
+  const picked = (value: bigint) =>
+    entries.map(entry =>
+      (entry.prizes ?? []).reduce(
+        (sum, prize) =>
+          value >= BigInt(prize.rangeStart) && value < BigInt(prize.rangeEnd) ? sum + BigInt(prize.payout) : sum,
+        0n,
+      ),
+    );
+  if ('value' in ending) return picked(ending.value);
+  if ('outcome' in ending) {
+    if (!Number.isSafeInteger(ending.outcome) || ending.outcome < 0 || ending.outcome >= (pot.outcomes ?? 0))
+      throw new Error('The outcome is not one this pot names');
+    return picked(BigInt(ending.outcome));
+  }
+  const paid = entries.map(() => 0n),
+    total = entries.reduce((sum, entry) => sum + BigInt(entry.stake), 0n);
+  if (!Array.isArray(ending.split) || !decimal(ending.rake)) throw new Error('Invalid split');
+  for (const { entry, amount } of ending.split) {
+    if (
+      !Number.isSafeInteger(entry) ||
+      entry < 0 ||
+      entry >= entries.length ||
+      paid[entry] ||
+      !decimal(amount) ||
+      !BigInt(amount)
+    )
+      throw new Error('Invalid split');
+    paid[entry] = BigInt(amount);
+  }
+  const rake = BigInt(ending.rake);
+  if (paid.reduce((sum, amount) => sum + amount, 0n) + rake !== total)
+    throw new Error('The split and its rake do not account for every entry');
+  if (rake * 10000n > total * BigInt(pot.rake ?? 0)) throw new Error('The rake exceeds what the pot was opened with');
+  return paid;
 }
 /** A round is named by the hash of its secret. */
 export const roundId = (secret: string) => keccak256(secret);
@@ -465,7 +574,20 @@ export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
 /** One value for the whole signed protocol: the hash of every typed structure. A wallet or a host
  * that was built against other structures learns so from `GET /api/config` before it signs anything. */
 export const PROTOCOL = id(
-  [STATE_TYPES, OP_TYPES, CLOSE_TYPES, ACCESS_TYPES, HOST_ACCESS_TYPES, SHARE_TYPES, FUND_TYPES, REDEEM_TYPES]
+  [
+    STATE_TYPES,
+    OP_TYPES,
+    CLOSE_TYPES,
+    ACCESS_TYPES,
+    REFEREE_ACCESS_TYPES,
+    QUOTE_TYPES,
+    RESOLUTION_TYPES,
+    SHARE_TYPES,
+    FUND_TYPES,
+    REDEEM_TYPES,
+    BANK_TYPES,
+    WITHDRAW_TYPES,
+  ]
     .map(types => TypedDataEncoder.from(types).encodeType(Object.keys(types)[0]))
     .join(''),
 );

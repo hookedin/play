@@ -20,8 +20,8 @@ export interface WalletLimits {
   prizes: number;
   /** The size of the outcome space, as a decimal string: a prize range lies within [0, this). */
   outcomeSpace: string;
-  /** The most seats one shared round holds. */
-  seats: number;
+  /** The most entries one pot holds. */
+  entries: number;
 }
 /** What a wallet says when a game page loads: the methods it offers, the money it plays with, and
  * every bound it holds a bet to. */
@@ -45,8 +45,8 @@ export interface WalletInfo {
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
  * `invalid-request`, `unknown-method`, `busy`, `no-channel`, `insufficient-funds`, `pending-operation`,
- * `not-pending`, `declined`, `id-conflict`, `game-closed` and `failed`; a
- * refusal by the casino carries the casino's code, such as `round-not-open`. */
+ * `declined`, `id-conflict`, `game-closed`, `wrong-asset`, `pot-closed` and `failed`; a refusal by the
+ * casino carries the casino's code, such as `pot-closed` or `quote-expired`. */
 export class HookedInError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -61,10 +61,8 @@ export interface WirePrize {
   rangeEnd: string;
   payout: string;
 }
-export type { Round } from './wire.ts';
-export type { GameReceipt, PendingReceipt } from '@hookedin/play/protocol/game-types.ts';
-import type { Round } from './wire.ts';
-import type { GameReceipt, PendingReceipt } from '@hookedin/play/protocol/game-types.ts';
+export type { EntryRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
+import type { EntryRequest, GameReceipt } from '@hookedin/play/protocol/game-types.ts';
 import { playerScope, showName } from './wire.ts';
 export const HookedIn = (() => {
   'use strict';
@@ -210,17 +208,12 @@ export const HookedIn = (() => {
 
   /** The wallet persists nothing for a game, so a game keeps its round state at its own origin. */
   const receipt = (id: string): Promise<GameReceipt | null> => call('game.receipt', { id });
-  /** One atomic bet: `stake` is paid to enter and every prize whose range holds the outcome pays. With
-   * a `round` the game's host opened, the wallet takes a seat in that round and the reply is pending;
-   * once the host has closed the round, the same call returns the verified receipt. */
-  const bet = (request: {
-    id: string;
-    stake: string;
-    prizes: WirePrize[];
-    round?: Round;
-  }): Promise<GameReceipt | PendingReceipt> => call('game.bet', request);
-  /** Give up a seat in a round its host has not closed; if it was closed, this is the bet's result. */
-  const cancel = (id: string): Promise<GameReceipt> => call('game.cancel', { id });
+  /** One atomic bet: `stake` is paid to enter and every prize whose range holds the outcome pays. */
+  const bet = (request: { id: string; stake: string; prizes: WirePrize[] }): Promise<GameReceipt> =>
+    call('game.bet', request);
+  /** Enter a pot of this game: the stake leaves the balance at once, and the entry is final. Once the pot
+   * has ended, the same call returns the receipt with what the entry was paid. */
+  const enter = (request: EntryRequest): Promise<GameReceipt> => call('game.enter', { ...request });
   /** A deterministic payment to the bankroll. */
   const payment = (id: string, amount: string): Promise<GameReceipt> => call('game.payment', { id, amount });
   /** Scope game storage to this page, player and asset: games sharing a host, accounts sharing a
@@ -277,7 +270,7 @@ export const HookedIn = (() => {
     requestFunds,
     receipt,
     bet,
-    cancel,
+    enter,
     payment,
     storageScope,
     /** How a player is written: an alias wears `@`, a uname wears `~`. */

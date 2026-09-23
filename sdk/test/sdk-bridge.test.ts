@@ -76,13 +76,13 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     });
     assert.equal((await funding).funded, false);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
-    const round = { id: '0x' + '4'.repeat(64), seedHash: '0x' + '5'.repeat(64) };
-    const calls = [HookedIn.payment('pay', '5'), HookedIn.bet({ id: 'seat', stake: '5', prizes: [], round })];
+    const pot = '0x' + '4'.repeat(64);
+    const calls = [HookedIn.payment('pay', '5'), HookedIn.enter({ id: 'seat', pot, stake: '5' })];
     assert.deepEqual(
       posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
         { method: 'game.payment', params: { id: 'pay', amount: '5' } },
-        { method: 'game.bet', params: { id: 'seat', stake: '5', prizes: [], round } },
+        { method: 'game.enter', params: { id: 'seat', pot, stake: '5' } },
       ],
     );
     for (const { id } of posted.slice(-2)) deliver(parent, { hookedin: true, id, result: id });

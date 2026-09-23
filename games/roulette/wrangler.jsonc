@@ -1,6 +1,7 @@
 // One Worker is the whole game: dist/ is served as static assets, and server/worker.ts answers /api/ with the
-// wheel, a Durable Object. For a copy of this game, change `name`, replace or remove `routes`, and set CASINO_URL.
-// Run wrangler from this folder. The host's key is a secret, set once: `npx wrangler secret put HOST_KEY`.
+// wheel, a Durable Object. For a copy of this game, change `name`, replace or remove `routes`, and set the vars to
+// your casino, your address and the name you publish the game under. Run wrangler from this folder. The referee's
+// key is a secret, set once: `npx wrangler secret put REFEREE_KEY`; publish the game with its address as referee.
 // Locally, caserver's `npm run dev` runs this Worker against its own casino, with a fresh key.
 {
   "name": "hookedin-roulette-game",
@@ -10,7 +11,11 @@
   "assets": { "directory": "dist", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
   "durable_objects": { "bindings": [{ "name": "WHEEL", "class_name": "RouletteWheel" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RouletteWheel"] }],
-  "vars": { "CASINO_URL": "https://casino.hookedin.com" },
+  "vars": {
+    "CASINO_URL": "https://casino.hookedin.com",
+    "DEVELOPER": "0xcD0C778307e7D3Da6D3D23440285050f911840d4",
+    "GAME_NAME": "roulette",
+  },
   "routes": [{ "pattern": "roulette-game.hookedin.com", "custom_domain": true }],
   // The page is built before every deploy, and `wrangler dev` builds it again whenever src/ changes.
   "build": { "command": "node ../../sdk/bin/hookedin-game.js build", "watch_dir": "src" },

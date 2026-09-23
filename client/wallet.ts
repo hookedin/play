@@ -105,6 +105,20 @@ export class CasinoWallet extends GameSessions {
     owed?: string[];
     alert?: string;
   };
+  /** The pots this account has entries in, by pot, until what each pot came to is collected. */
+  declare pots: Record<string, string[]>;
+  /** This account's bank as a developer, per asset: the casino's statement for its latest deposit or
+   * withdrawal, a withdrawal signed and not yet answered, and withdrawn money not yet collected. */
+  declare bank: Partial<
+    Record<
+      AssetId,
+      {
+        statement?: { message: any; signature: string };
+        withdrawing?: { message: any; signature: string } | null;
+        owed?: string[];
+      }
+    >
+  >;
   /** What the casino says this account's games have earned and what it has collected; shown, never relied on. */
   declare developerEarnings: { earned: string; collected: string } | null;
   declare channels: Record<string, WalletChannel>;
@@ -187,6 +201,8 @@ export class CasinoWallet extends GameSessions {
       alias: null,
       profile: null,
       fund: { sequence: 0, shares: '0', statement: null },
+      pots: {},
+      bank: {},
       developerEarnings: null,
       testId: null,
       preferTest: false,
@@ -315,7 +331,6 @@ export class CasinoWallet extends GameSessions {
       if (!this.busy)
         void this.refresh()
           .then(() => this.collectPayouts())
-          .then(() => this.auditRejections())
           .catch(() => {});
     }, 4000);
     this.timer.unref?.();
@@ -382,8 +397,10 @@ export class CasinoWallet extends GameSessions {
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
-      // Bankroll shares belong to the account, not to any one channel.
+      // Bankroll shares, entries in pots and a developer's bank belong to the account, not to any one channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
+      pots: saved?.pots || {},
+      bank: saved?.bank || {},
     });
   }
   /** The on-chain channel: what deposits, closes and recovery are about. */
@@ -436,6 +453,8 @@ export class CasinoWallet extends GameSessions {
         history,
         transactionIntent: this.transactionIntent,
         fund: this.fund,
+        pots: this.pots,
+        bank: this.bank,
         ...changes,
         revision,
       });
@@ -489,7 +508,7 @@ export class CasinoWallet extends GameSessions {
    * a public name and asks for a funded channel; taking your own game down only has to be you, so a
    * developer who has closed their channel can still withdraw a game that turned out to be broken.
    */
-  async publishGame(this: CasinoWallet, name: string, url: string | null) {
+  async publishGame(this: CasinoWallet, name: string, url: string | null, referee: string | null = null) {
     // Publishing speaks from the open channel. Taking a game down speaks from any ETH channel this
     // account still holds a key for, including one already closed, because a broken game has to come
     // down whether or not its developer still has money at stake.
@@ -498,7 +517,11 @@ export class CasinoWallet extends GameSessions {
       : (this.current ?? Object.values(this.channels).find(row => row.key && row.state.channelId !== this.testId));
     if (!c?.key) throw new Error('This account has no channel to publish from');
     if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
-    this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }, c);
+    this.profile = await this.api(
+      `/api/channels/${c.state.channelId}/games`,
+      { name: name.trim(), url, ...(url && referee ? { referee } : {}) },
+      c,
+    );
     this.render();
     return this.profile;
   }

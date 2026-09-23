@@ -1,23 +1,35 @@
 import { Wallet, ZeroHash, hexlify, randomBytes } from 'ethers';
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
+import { gameKey } from '../client/game-account.ts';
 import {
   domain,
   initialState,
   channelId,
   STATE_TYPES,
+  QUOTE_TYPES,
+  RESOLUTION_TYPES,
   deriveState,
   roundId,
   seedHash,
+  hashJSON,
+  outcome,
+  potPayouts,
   plain,
   checkpointEvidence,
   rejectionCheckpoint,
+  KIND,
 } from '../protocol/protocol.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
+import type { Bank, PotResult, PotStatus } from '../protocol/types.ts';
+
+/** A real wallet wired to an in-memory casino stub, with a stub referee for the game's pots: what a game
+ * is tested against without the private casino. */
 export async function gameWallet(storage = new MemoryStore()) {
   const owner = Wallet.createRandom(),
     player = Wallet.createRandom(),
-    key = Wallet.createRandom();
+    key = Wallet.createRandom(),
+    referee = Wallet.createRandom();
   const casino = Wallet.createRandom().address,
     d = domain(31337, casino);
   const message = {
@@ -33,10 +45,8 @@ export async function gameWallet(storage = new MemoryStore()) {
   const bankroll = '1000000000000';
   const responses = new Map();
   let settlements = 0;
-  // The stub casino's rounds: each is the hash of its secret. The channel's own round settles with
-  // its bet; a hosted round holds its seats until `closeRound`.
-  const secrets = new Map<string, string>(),
-    hosted = new Map<string, { seed: string; seats: { request: any; signature: string }[] }>();
+  // The stub casino's rounds: each is the hash of its secret, settled with the channel's next bet.
+  const secrets = new Map<string, string>();
   let own = '';
   const createRound = () => {
     const secret = hexlify(randomBytes(32)),
@@ -44,6 +54,9 @@ export async function gameWallet(storage = new MemoryStore()) {
     secrets.set(round, secret);
     return round;
   };
+  // Its pots, and what each ended pot owes this player, until the wallet collects it.
+  const pots = new Map<string, PotStatus & { seeds?: string }>(),
+    owed = new Map<string, bigint>();
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
   const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
@@ -80,35 +93,32 @@ export async function gameWallet(storage = new MemoryStore()) {
     wallet.api = async (path, body) => {
       if (path === '/api/metrics') return { bankroll };
       if (path.endsWith('/round')) return { id: (own ||= createRound()) };
-      if (path.endsWith('/cancel')) return takeBack((body as any).request);
+      const pot = /^\/api\/pots\/(0x[0-9a-f]{64})$/.exec(path);
+      if (pot) return publicPot(pot[1]!);
+      if (path.endsWith('/payouts'))
+        return [...owed].map(([source, amount]) => ({ source, index: 0, amount: String(amount) }));
       if (!path.endsWith('/operations')) return {};
-      const { request, signature, seed } = body as any;
+      const { request, details, signature, seed } = body as any;
       if (responses.has(request.memo)) return responses.get(request.memo);
-      const seats = hosted.get(request.round);
-      if (seats) {
-        if (request.seedHash !== seedHash(seats.seed)) throw new Error('Every bet in a round shares its seed');
-        if (!seats.seats.some(seat => seat.request.memo === request.memo)) seats.seats.push({ request, signature });
-        return { status: 'seated', operationId: request.memo };
+      if (Number(request.kind) === KIND.debit && details.counterparty && pots.has(details.counterparty))
+        return enter(request, details, signature);
+      if (Number(request.kind) === KIND.credit && owed.has(details.counterparty)) {
+        if (owed.get(details.counterparty) !== BigInt(request.amount))
+          throw new Error('No payout of this amount is due');
+        owed.delete(details.counterparty);
       }
-      return settle(request, signature, seed ?? ZeroHash);
+      return settle(request, details, signature, seed ?? ZeroHash);
     };
-    /** A seat taken back from its round is declined, unless the round's host closed it first. */
-    const takeBack = async (request: any) => {
-      const settled = responses.get(request.memo);
-      if (settled) return settled;
-      const open = hosted.get(request.round);
-      if (open) open.seats = open.seats.filter(s => s.request.memo !== request.memo);
-      return decline(request);
-    };
-    /** The casino declines a bet with a signed checkpoint above it: the balance is unchanged. */
-    const decline = async (request: any) => {
+    /** The casino declines an entry with a signed checkpoint above it: the balance is unchanged. */
+    const decline = async (request: any, details: any, reason: string) => {
       const base = wallet.current!,
         state = rejectionCheckpoint(d, base.state, request);
       const response = plain({
         status: 'rejected',
-        reason: 'Bet withdrawn by the player',
+        reason,
         request,
-        operationId: request.memo,
+        details,
+        operationId: details.id,
         state,
         casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
         commission: '0',
@@ -118,40 +128,61 @@ export async function gameWallet(storage = new MemoryStore()) {
       responses.set(request.memo, response);
       return response;
     };
-    const settle = async (request: any, signature: string, seed: string) => {
+    const settle = async (request: any, details: any, signature: string, seed: string, extra = {}) => {
       const base = wallet.current!,
-        secret = Number(request.kind) === 1 ? secrets.get(request.round)! : ZeroHash;
+        secret = Number(request.kind) === KIND.bet ? secrets.get(request.round)! : ZeroHash;
       const next = deriveState(d, base.state, request, secret, seed);
       const signed = await owner.signTypedData(d, STATE_TYPES, next);
       const response = plain({
         status: 'signed',
         state: next,
         casinoSignature: signed,
+        details,
+        operationId: details.id,
+        commission: '0',
         evidence: {
           ...checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
-          step: {
-            operation: request,
-            authorization: signature,
-            seed,
-            secret,
-            casinoSignature: signed,
-          },
+          step: { operation: request, authorization: signature, seed, secret, casinoSignature: signed },
         },
         bankroll,
         ...(request.round === own ? { nextRound: (own = createRound()) } : {}),
+        ...extra,
       });
       responses.set(request.memo, response);
       settlements++;
       return response;
     };
-    closers.add(async (round: string) => {
-      const open = hosted.get(round);
-      for (const seat of open?.seats ?? []) await settle(seat.request, seat.signature, open!.seed);
-      hosted.delete(round);
-    });
+    /** An entry is final and completes at once, if the pot is open and, for a developer's pot, at its
+     * referee's quote. */
+    const enter = async (request: any, details: any, signature: string) => {
+      const pot = pots.get(details.counterparty)!,
+        prizes = details.entry?.prizes,
+        quote = details.entry?.quote;
+      if (pot.status !== 'open') return decline(request, details, 'The pot takes no more entries');
+      if (pot.bank === 'developer') {
+        const quoted = await new Wallet(referee.privateKey).signTypedData(d, QUOTE_TYPES, {
+          pot: pot.id,
+          stake: String(request.amount),
+          prizes: hashJSON(prizes),
+          expiresAt: quote?.expiresAt ?? '0',
+        });
+        if (quoted !== quote?.signature || Number(quote.expiresAt) < Date.now() / 1000)
+          return decline(request, details, "The entry is not at the referee's quote");
+      }
+      pot.entries.push({ uname, alias: null, stake: String(request.amount), ...(prizes ? { prizes } : {}) });
+      return settle(request, details, signature, ZeroHash, { entry: pot.entries.length - 1 });
+    };
     return wallet;
   };
-  const closers = new Set<(round: string) => Promise<void>>();
+  const publicPot = (id: string) => {
+    const { seeds: _seeds, ...pot } = pots.get(id)!;
+    return plain(pot);
+  };
+  /** A pot ends: what each entry is owed, summed for this one player, waits for the wallet to collect it. */
+  const end = (pot: PotStatus, payouts: bigint[]) => {
+    const total = payouts.reduce((sum, payout) => sum + payout, 0n);
+    if (total) owed.set(pot.id, total);
+  };
   const wallet = make();
   await wallet.save();
   return {
@@ -159,22 +190,62 @@ export async function gameWallet(storage = new MemoryStore()) {
     storage,
     owner,
     player,
+    referee,
     settlements: () => settlements,
     /** A round's secret, which only the casino knows until it reveals the round. */
     secretOf: (round: string) => secrets.get(round)!,
-    /** What a game's host does at the casino: open a round with the hash of its seed, and close it with the seed. */
-    openRound(seed = hexlify(randomBytes(32))) {
-      const id = createRound();
-      hosted.set(id, { seed, seats: [] });
-      return { id, seedHash: seedHash(seed) };
+    /** What a game's referee does at the casino: open a pot of `game`. A house pot is a round whose seed
+     * the referee keeps. */
+    openPot(game: GameIdentity, bank: Bank, { outcomes = 3, rake = 0 } = {}) {
+      const secret = hexlify(randomBytes(32)),
+        seed = hexlify(randomBytes(32)),
+        id = bank === 'house' ? roundId(secret) : hexlify(randomBytes(32));
+      if (bank === 'house') secrets.set(id, secret);
+      const pot: PotStatus = {
+        id,
+        game: gameKey(game),
+        referee: referee.address.toLowerCase(),
+        bank,
+        asset: 'eth',
+        status: 'open',
+        ...(bank === 'house' ? { seedHash: seedHash(seed) } : bank === 'developer' ? { outcomes } : { rake }),
+        closesAt: null,
+        deadline: Date.now() + 600_000,
+        entries: [],
+      };
+      pots.set(id, { ...pot, seeds: seed });
+      return plain(pot);
     },
-    async closeRound(round: string) {
-      for (const close of closers) await close(round);
+    /** The referee's price for an entry into a developer's pot. */
+    async quote(pot: string, stake: string, prizes: any[], expiresAt = Math.floor(Date.now() / 1000) + 60) {
+      const message = { pot, stake, prizes: hashJSON(prizes), expiresAt: String(expiresAt) };
+      return { expiresAt: message.expiresAt, signature: await referee.signTypedData(d, QUOTE_TYPES, message) };
     },
-    /** A game as its manifest describes it. `declared` is what that manifest says about itself, such
-     * as whether it bets on rounds its own host opens. */
+    /** The referee ends a pot: a house pot with its seed, a developer's or players' pot with a result it signs. */
+    async resolvePot(id: string, result?: PotResult) {
+      const pot = pots.get(id)!;
+      if (pot.bank === 'house') {
+        const secret = secrets.get(id)!;
+        Object.assign(pot, { status: 'resolved', seed: pot.seeds, secret });
+        end(pot, potPayouts(pot, { value: outcome([], pot.seeds!, secret).value }));
+      } else {
+        const signature = await referee.signTypedData(d, RESOLUTION_TYPES, { pot: id, result: hashJSON(result) });
+        Object.assign(pot, { status: 'resolved', result, signature });
+        end(pot, potPayouts(pot, result!));
+      }
+      return publicPot(id);
+    },
+    /** The referee calls a pot off, or its deadline passes: every entry is refunded. */
+    voidPot(id: string) {
+      const pot = pots.get(id)!;
+      Object.assign(pot, { status: 'void' });
+      end(pot, potPayouts(pot, { void: true }));
+      return publicPot(id);
+    },
+    /** A game as its developer published it. `declared` is anything its manifest says otherwise. */
     identity: (name = 'test', declared: Partial<GameIdentity> = {}) => ({
       name,
+      slug: name,
       manifestURL: `https://${name}.example/manifest.json`,
       entryURL: `https://${name}.example/`,
       developer: owner.address,

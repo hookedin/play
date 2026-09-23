@@ -32,8 +32,10 @@ export async function buildGame(root = process.cwd()) {
     throw new Error(
       "The developer address cannot be the zero address. Set the developer field in src/manifest.json to the address that earns this game's commission.",
     );
-  if (manifest.rounds !== undefined && typeof manifest.rounds !== 'boolean')
-    throw new Error("A manifest's rounds is true when the game bets on rounds its own host opens.");
+  if (manifest.referee !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(manifest.referee))
+    throw new Error(
+      `"${manifest.referee}" is not a referee address. It is the address of the key that runs the game's pots.`,
+    );
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'brand'), { recursive: true });
   await build({

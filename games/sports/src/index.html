@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Sports</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header class="game-head">
+        <div>
+          <div class="eyebrow">HOOKEDIN ORIGINALS / 09</div>
+          <div class="game-title">
+            <h1>Sports</h1>
+            <span class="edition">FIXED ODDS, ONE BOOK</span>
+          </div>
+        </div>
+        <div class="head-note"><span class="live-dot"></span><span id="note">Loading the markets…</span></div>
+      </header>
+      <div id="bank" class="bank" data-state="connecting"></div>
+      <section class="markets" id="markets" aria-label="Markets"></section>
+      <section class="controls" aria-label="Bet slip">
+        <div class="field">
+          <label for="stake">Stake</label>
+          <div class="bet-row">
+            <button class="step" id="bet-down" type="button" aria-label="Smaller stake">−</button>
+            <div class="input-wrap">
+              <input
+                id="stake"
+                inputmode="decimal"
+                value="0.000001"
+                autocomplete="off"
+                aria-label="Stake in ETH"
+              /><span data-asset>ETH</span>
+            </div>
+            <button class="step" id="bet-up" type="button" aria-label="Larger stake">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">Your pick</div>
+          <div class="readout"><strong id="pick">—</strong></div>
+        </div>
+        <div class="field">
+          <div class="field-label">Returns if it wins</div>
+          <div class="readout"><strong id="returns">0</strong><span data-asset>ETH</span></div>
+        </div>
+        <button class="primary" id="place" type="button">Connecting wallet…</button>
+      </section>
+      <div class="status" id="status" role="status" aria-live="polite">Connecting to your wallet…</div>
+      <section class="slips" aria-label="Your bets">
+        <div class="field-label">Your bets</div>
+        <div id="bets"></div>
+      </section>
+      <footer class="foot">
+        <div class="foot-note">
+          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        </div>
+        <details class="rules">
+          <summary>How it works</summary>
+          <p>
+            Pick an outcome and a stake. The book quotes what your bet returns if that outcome wins, the stake times its
+            odds, and your wallet signs exactly that: the stake leaves your balance into the market's pot at the casino,
+            and the bet is final.
+          </p>
+          <p>
+            When the event is over, the book names the winner. The casino pays every winning bet from the pot, and the
+            book's own bank there pays what the pot cannot; your wallet checks the book's signed result before it
+            collects your winnings. A result is the book's word: nothing but its reputation stops it naming the wrong
+            one. If it names none by the market's deadline, or its bank cannot pay, every bet is refunded.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

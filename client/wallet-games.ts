@@ -1,10 +1,10 @@
 import type {
+  EntryRequest,
   GameIdentity,
   GameLimit,
   GameReceipt,
   GameRequest,
   GameSession,
-  PendingReceipt,
 } from '../protocol/game-types.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { getAddress } from 'ethers';
@@ -15,8 +15,7 @@ import { ChannelClient } from './wallet-channel.ts';
 
 /** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
  * channel and its balance stay out: they would name the player. */
-export const gameReceipt = (id: string, receipt: any): GameReceipt | PendingReceipt => {
-  if (receipt.status === 'pending') return { id, status: 'pending', verified: false };
+export const gameReceipt = (id: string, receipt: any): GameReceipt => {
   const op = receipt.request ?? receipt.proof.step.operation;
   return {
     id,
@@ -24,8 +23,16 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt | PendingRece
     status: receipt.status,
     verified: receipt.verified,
     ...(receipt.kind === 'bet' ? { stake: op.amount, prizes: op.prizes } : {}),
-    // The round's 64-bit outcome and the total its prizes paid: everything a game needs to show the result.
-    ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome, payout: receipt.payout }),
+    ...(receipt.kind === 'entry'
+      ? {
+          stake: op.amount,
+          pot: receipt.details.counterparty,
+          ...(receipt.details.entry?.prizes ? { prizes: receipt.details.entry.prizes } : {}),
+        }
+      : {}),
+    // The outcome and what it paid: everything a game needs to show the result.
+    ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome }),
+    ...(receipt.payout === undefined ? {} : { payout: receipt.payout }),
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
   };
 };
@@ -73,7 +80,7 @@ export class GameSessions extends ChannelClient {
       asset: this.asset,
       chainId: String(this.expectedChainId),
       // Every bound a game has to respect, so none of them is a number compiled into the game.
-      limits: { prizes: MAX_PRIZES, outcomeSpace: String(OUTCOME_SPACE), seats: MAX_ROUND_BETS },
+      limits: { prizes: MAX_PRIZES, outcomeSpace: String(OUTCOME_SPACE), entries: MAX_ROUND_BETS },
     };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
@@ -113,11 +120,6 @@ export class GameSessions extends ChannelClient {
   }
   async gameBet(this: CasinoWallet, request: GameRequest) {
     const game = this.requireGame();
-    // In the wallet's own rounds neither side can choose the outcome. In a hosted round the host and
-    // the casino together could, so only a game whose manifest declares them may bet on one, and the
-    // player allowed them before this game was framed.
-    if (request.round && game.identity.rounds !== true)
-      throw gameError('rounds-undeclared', 'This game did not declare that it bets on rounds its own host opens');
     const terms = {
       stake: gameAmount(request.stake),
       prizes: request.prizes.map(prize => ({
@@ -125,7 +127,6 @@ export class GameSessions extends ChannelClient {
         rangeEnd: gameAmount(prize.rangeEnd),
         payout: gameAmount(prize.payout),
       })),
-      ...(request.round ? { round: request.round } : {}),
     };
     return gameReceipt(
       request.id,
@@ -136,12 +137,23 @@ export class GameSessions extends ChannelClient {
       }),
     );
   }
-  /** Withdraw this game's hosted bet, or learn its result if the round's owner settled it first. */
-  async gameCancel(this: CasinoWallet, request: { id: string }) {
+  /** Enter a pot of this game. The entry is final; the same request again finds it, and once the pot
+   * has ended, what it paid. */
+  async gameEnter(this: CasinoWallet, request: EntryRequest) {
     const game = this.requireGame();
-    if (this.pending?.game?.key !== game.key || this.pending.game.id !== request.id)
-      throw gameError('not-pending', 'No pending operation with this ID');
-    return gameReceipt(request.id, await this.cancelPending());
+    return gameReceipt(
+      request.id,
+      await this.enterPot(
+        {
+          pot: request.pot.toLowerCase(),
+          stake: gameAmount(request.stake),
+          ...(request.prizes ? { prizes: request.prizes } : {}),
+          ...(request.quote ? { quote: request.quote } : {}),
+        },
+        this.gameOperationId(request.id),
+        { key: game.key, id: request.id, name: game.identity.name },
+      ),
+    );
   }
   async gamePayment(this: CasinoWallet, request: { id: string; amount: string }) {
     const game = this.requireGame();
