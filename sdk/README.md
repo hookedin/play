@@ -8,7 +8,7 @@ A bet is a stake plus 1 to 64 prizes. Each prize is a range of a 64-bit outcome 
 
 No game states what it pays back, and the manifest has no field for it: nothing bounds how often a game wagers the money it holds, so a promised percentage is unverifiable and reads as a guarantee it is not. What a player gets instead is measured. The wallet works out the exact return of every bet from its own prize table before it signs it and keeps that figure in the player's bet history, and the casino publishes the same figure for every bet placed in a game.
 
-Developers earn half the commission on every bet placed through their game. It is owed to the `developer` address in the game's manifest: the casino keeps the tally, and an ordinary HookedIn wallet opened from that address shows it and collects it by itself.
+Developers earn half the commission on every bet placed through their game. It is owed to the account that publishes the game, which its manifest names as `developer`: the casino keeps the tally, and an ordinary HookedIn wallet opened from that address shows it and collects it by itself.
 
 ## Start from the template
 
@@ -167,7 +167,7 @@ hookedin-game serve [dir]       # serve one on http://127.0.0.1:4185 (PORT moves
 
 `serve` builds the game again on every page load, so a change shows on reload.
 
-The wallet refuses a manifest whose `developer` is the zero address, and `build` refuses one that is not a real address: set `developer` in `src/manifest.json` to the address that earns the game's commission.
+The wallet refuses a manifest whose `developer` is the zero address, and `build` refuses one that is not a real address: set `developer` in `src/manifest.json` to the address of the account you publish the game from.
 
 A game folder needs only this:
 
@@ -180,13 +180,13 @@ src/manifest.json   { id, name, description, entry, developer }
 
 ## A game with a server
 
-A game with a server has a **referee**: a key you publish with the game. Its pages place bets that settle later with their own wallets, and the referee settles them: it **draws** bets with prizes against the bankroll, many players on one outcome, and it **splits** bets with terms, whose outcome no prize table can say: a cash-out when the player chooses, a match that ends next month. `createReferee` is the server's side:
+A game with a server has a **referee**: your key, the one the account you publish the game from signs with. Its pages place bets that settle later with their own wallets, and the referee settles them: it **draws** bets with prizes against the bankroll, many players on one outcome, and it **splits** bets with terms, whose outcome no prize table can say: a cash-out when the player chooses, a match that ends next month. `createReferee` is the server's side:
 
 ```ts
-import { createReferee, gameKey } from '@hookedin/play/sdk/referee';
+import { createReferee } from '@hookedin/play/sdk/referee';
 
-// The game's key: the address you publish it from, and the name you publish it under.
-const referee = await createReferee({ casinoURL, key, game: gameKey({ publisher, name }) });
+// Your key, and the name you publish the game under: the two make the game's key.
+const referee = await createReferee({ casinoURL, key, name });
 // Before anybody bets: the casino names the round and the referee commits its seed to it, so every bet on it
 // has its outcome fixed before it is placed. It is the same round until it is drawn or its deadline passes.
 const round = await referee.open('eth');
@@ -194,17 +194,17 @@ const round = await referee.open('eth');
 // as it is placed. Save the id, then draw: every bet on the round rides one outcome, and each is paid.
 const { outcome, bets } = await referee.draw(round.id);
 
-// Splits: the open bets of a group, and what each pays, signed here. The referee's bank at the casino keeps the
-// rest of each stake or pays what the split comes to beyond it.
+// Splits: the open bets of a group, and what each pays, signed here. Your bank at the casino keeps the rest
+// of each stake or pays what the split comes to beyond it.
 const open = await referee.bets('round-812');
 await referee.settle(open.map(bet => ({ bet: bet.bet, player: cashedOut(bet), casino: share(bet) })));
 ```
 
-A drawn bet has its round's deadline, ten minutes after the casino names the round; a split bet has the one its page gives it. A bet nobody settles by its deadline is refunded. A referee that only draws holds no money; a split it signs is paid from its own bank, the bank of the account at its address: keep its key as safe as the bank. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
+A drawn bet has its round's deadline, ten minutes after the casino names the round; a split bet has the one its page gives it. A bet nobody settles by its deadline is refunded. Your server signs with the key of the account you publish the game from, so it holds that account's games, commission and bank, which pays the splits it signs: keep the key as safe as all of that, or publish the game from an account of its own. Page and server ship as one Cloudflare Worker: `dist/` as static assets, and a `server/worker.ts` that answers `/api/` on the same origin. [Bets that settle later](docs/game-sdk.md#bets-that-settle-later) explains it; [roulette](../games/roulette/) is the reference for a draw.
 
 ## Testing against the real wallet
 
-Game tests do not mock the wallet. `gameWallet({ bankroll?, bank? })` from `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store and an open channel, against a stub casino that derives and signs states exactly as the protocol says. The stub holds every bet to the casino's own admission rule and charges its commission, so a table the casino declines, a zero-edge one for instance, is declined in a test too; `bankroll` is what it covers bets with, and `bank` what the referee's bank holds. `f.bridge` is a game's side of the bridge, to hand to `RoundClient` or the game's own client: every request goes through the wallet bridge's validation, the player agrees to every request for funds, and `onReceipt` hears pushed receipts.
+Game tests do not mock the wallet. `gameWallet({ bankroll?, bank? })` from `@hookedin/play/testing/game-wallet.ts` builds the real `CasinoWallet` with an in-memory store and an open channel, against a stub casino that derives and signs states exactly as the protocol says. The stub holds every bet to the casino's own admission rule and charges its commission, so a table the casino declines, a zero-edge one for instance, is declined in a test too; `bankroll` is what it covers bets with, and `bank` what the developer's bank holds. `f.bridge` is a game's side of the bridge, to hand to `RoundClient` or the game's own client: every request goes through the wallet bridge's validation, the player agrees to every request for funds, and `onReceipt` hears pushed receipts.
 
 ```ts
 import test from 'node:test';
@@ -220,7 +220,7 @@ test('a round settles through the wallet', async () => {
 });
 ```
 
-`f.identity(name)` is a game as its publisher published it, and `f.bridgeFor(wallet)` the bridge to another wallet, such as the one `f.reload()` starts afresh from what this one saved. For a game with a server, `f.referee` is a stub shaped like the real `Referee` (`open`, `draw`, `round`, `settle`, `bets`, `bet`), which a test hands to the server in place of the one `createReferee` makes. `f.advance(ms)` lets time pass, and bets past their deadlines come back. `f.replaceChannel()` gives the player a new channel, and `f.forget()` a wallet that has lost its receipts. `f.bankroll()` and `f.bank()` are what the stub holds, and `f.secretOf(round)` is a round's secret. [test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, rejections, reloads and bets that settle later.
+`f.identity(name)` is a game as its developer published it, and `f.bridgeFor(wallet)` the bridge to another wallet, such as the one `f.reload()` starts afresh from what this one saved. For a game with a server, `f.referee` is a stub shaped like the real `Referee` (`open`, `draw`, `round`, `settle`, `bets`, `bet`), which a test hands to the server in place of the one `createReferee` makes. `f.advance(ms)` lets time pass, and bets past their deadlines come back. `f.replaceChannel()` gives the player a new channel, and `f.forget()` a wallet that has lost its receipts. `f.bankroll()` and `f.bank()` are what the stub holds, and `f.secretOf(round)` is a round's secret. [test/game-client.test.ts](test/game-client.test.ts) is the fullest example: spending limits, lost replies, rejections, reloads and bets that settle later.
 
 [testing/conformance.ts](../testing/conformance.ts) is what a game can count on from any casino, as one behaviour suite: a lost reply, a new channel, lost receipts, a bet the bankroll cannot back, a deadline refund, a referee restart and changed rules. play runs it against the stub and the casino service runs it against itself, so the stub behaves as the casino does wherever a game depends on it.
 

@@ -32,42 +32,36 @@ export interface Prize {
   rangeEnd: Integer;
   payout: Integer;
 }
-/** What a game's key is made from when it is first published: its publisher and the name they gave it, or, for
- * a game loaded straight from its manifest, that manifest's developer and URL. */
+/** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
+ * under; or, for a game loaded straight from its manifest, that manifest's developer and URL. */
 export interface GameName {
-  publisher: string;
-  name: string;
-}
-/** The game an operation is for: its key, fixed when it was first published and kept whatever changes later,
- * and the developer the operation pays commission to, the address its publisher named. */
-export interface GameRef {
-  key: string;
   developer: string;
+  name: string;
 }
 /** What an operation means to the wallet and the casino, beside what the contract settles. The operation
  * signs only its hash, `memo`; the request carries it whole, and both sides keep it with the evidence. */
 export interface Details {
   /** The wallet's name for the operation, as a hash: an exact retry is the same operation. */
   id: string;
-  /** The game that asked for a bet or a payment. */
-  game?: GameRef;
+  /** The key of the game that asked for a bet or a payment. */
+  game?: string;
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a referee's bank, a bet that
+  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a bet that
    * settled later, a developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
-  /** A bet that settles later: a debit that names its game, and the referee who settles it. */
+  /** A bet that settles later: a debit that names its game, and its game's developer, who settles it. */
   bet?: LaterBet;
 }
 /** Prizes on the wire: decimal strings. */
 export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string }[];
-/** A bet its game's referee settles by its deadline, or its stake comes back. With `prizes`, it names one of
- * its referee's open rounds and the hash of the seed the referee committed to it, so its outcome is fixed before
- * it is placed; the casino admits it against the bankroll as it takes it, the referee draws the round, and the
- * bet pays what its prizes pay on the round's outcome. With `terms`, the referee signs what it pays, and its own
- * bank pays what that comes to beyond the stake. */
+/** A bet its game's developer settles by its deadline, as the game's referee, or its stake comes back. With
+ * `prizes`, it names one of the referee's open rounds and the hash of the seed the referee committed to it, so its
+ * outcome is fixed before it is placed; the casino admits it against the bankroll as it takes it, the referee
+ * draws the round, and the bet pays what its prizes pay on the round's outcome. With `terms`, the referee signs
+ * what it pays, and its bank pays what that comes to beyond the stake. */
 export type LaterBet = {
-  /** The key the game's publisher named to settle its bets. */
+  /** The game's developer, whose key settles it. */
   referee: string;
   /** Unix milliseconds. Unsettled by then, the stake is refunded. A bet with prizes has its round's deadline. */
   deadline: number;
@@ -111,7 +105,8 @@ export interface PublicBet {
  * what it paid has been collected into a channel. */
 export interface PlayerBet {
   bet: string;
-  game: GameRef;
+  /** The game's key. */
+  game: string;
   group?: string;
   asset: 'eth' | 'test';
   status: 'open' | 'settled';
@@ -216,6 +211,9 @@ export interface OperationResponse {
   evidence: Evidence;
   operationId: string;
   commission: string;
+  /** A bet on the channel's own round: the developer of its game, who earns half of its commission. A game nobody
+   * publishes has none. */
+  developer?: string;
   bankroll?: string;
   /** An investment's response carries the casino's signed statement of the holding, and a bank
    * deposit the statement of the bank. */

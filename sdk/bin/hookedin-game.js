@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // hookedin-game build [dir ...] | serve [dir] — turn a game's src/ into dist/, the folder any static host serves as is.
+// HOOKEDIN_DEVELOPER, when set, is the developer the built manifest names in place of its own: a local casino's house.
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -17,24 +18,22 @@ const types = {
   '.png': 'image/png',
 };
 
-/** Build the game in `root` (its src/) into root/dist/, and return its manifest. */
-export async function buildGame(root = process.cwd()) {
+/** Build the game in `root` (its src/) into root/dist/, and return its manifest. `developer`, when given, is the
+ * developer the built manifest names in place of its own. */
+export async function buildGame(root = process.cwd(), developer = process.env.HOOKEDIN_DEVELOPER) {
   const src = path.join(root, 'src');
   const dist = path.join(root, 'dist');
   const manifest = JSON.parse(fs.readFileSync(path.join(src, 'manifest.json'), 'utf8'));
+  if (developer) manifest.developer = developer;
   // The wallet refuses a manifest whose developer is not a real address, so a typo here is otherwise
   // a green build, a green deploy, and a game nobody can open.
   if (!/^0x[0-9a-fA-F]{40}$/.test(manifest.developer ?? ''))
     throw new Error(
-      `"${manifest.developer}" is not a developer address. Set the developer field in src/manifest.json to the address that earns this game's commission.`,
+      `"${manifest.developer}" is not a developer address. Set the developer field in src/manifest.json to the address of the account you publish this game from.`,
     );
   if (/^0x0{40}$/.test(manifest.developer))
     throw new Error(
-      "The developer address cannot be the zero address. Set the developer field in src/manifest.json to the address that earns this game's commission.",
-    );
-  if (manifest.referee !== undefined && !/^0x[0-9a-fA-F]{40}$/.test(manifest.referee))
-    throw new Error(
-      `"${manifest.referee}" is not a referee address. It is the address of the key that settles the game's bets that settle later.`,
+      'The developer address cannot be the zero address. Set the developer field in src/manifest.json to the address of the account you publish this game from.',
     );
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'brand'), { recursive: true });
@@ -49,6 +48,7 @@ export async function buildGame(root = process.cwd()) {
   });
   // Everything in src/ that is not TypeScript ships as it is: the page, its styles, images.
   fs.cpSync(src, dist, { recursive: true, filter: file => !file.endsWith('.ts') });
+  if (developer) fs.writeFileSync(path.join(dist, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   fs.copyFileSync(path.join(sdk, 'shared.css'), path.join(dist, 'shared.css'));
   fs.copyFileSync(path.join(sdk, '../brand/hookedin-mark.svg'), path.join(dist, 'brand/hookedin-mark.svg'));
   // The wallet frames the game and fetches its manifest from another origin. The page itself talks to no one

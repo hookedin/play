@@ -428,7 +428,6 @@ export class ChannelClient extends WalletTransactions {
       details,
       ...(later ? { bet: later } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
-      ...(details.game ? { developer: details.game.developer } : {}),
       commission,
       balance: next.balance,
       createdAt: new Date().toISOString(),
@@ -451,20 +450,23 @@ export class ChannelClient extends WalletTransactions {
   // --- Bets that settle later --------------------------------------------------------------------
 
   /** Place a bet of the open game that settles later: a debit that completes at once, its stake held by the
-   * casino until the game's referee draws the round it names or splits it. Asking again with the same ID returns
-   * the receipt as it stands; the wallet collects what the bet paid once it has settled. */
+   * casino until the game's developer, as its referee, draws the round it names or splits it. Asking again with
+   * the same ID returns the receipt as it stands; the wallet collects what the bet paid once it has settled. */
   async placeLater(this: CasinoWallet, input: LaterInput, operationId: string, game: GameIntent) {
-    // The bet signs the referee its publisher named for the game, the one the casino holds its bets to.
-    const referee = this.requireGame().identity.referee;
-    if (!referee) throw gameError('invalid-request', 'This game was published with no referee to settle its bets');
+    // The bet signs its game's developer, the one whose key the casino holds its bets to. A game loaded straight
+    // from its manifest is published by nobody, so nobody settles its bets.
+    const { developer, slug } = this.requireGame().identity;
+    if (slug === undefined)
+      throw gameError('invalid-request', 'A game published nowhere takes no bets that settle later');
+    const referee = getAddress(developer);
     const bet: LaterBet =
       'prizes' in input
         ? {
-            referee: getAddress(referee),
+            referee,
             ...(await this.betRound(input.round, referee, operationId)),
             prizes: plain(input.prizes) as WirePrizes,
           }
-        : { referee: getAddress(referee), deadline: input.deadline, terms: input.terms };
+        : { referee, deadline: input.deadline, terms: input.terms };
     return this.perform(
       'wager',
       { amount: input.stake, bet, ...(input.group ? { group: input.group } : {}) },
@@ -666,24 +668,24 @@ export class ChannelClient extends WalletTransactions {
     }
   }
 
-  // --- A referee's bank --------------------------------------------------------------------------
+  // --- A developer's bank ------------------------------------------------------------------------
 
   /** Put money into this account's bank, in what this tab plays with: a debit answered with the casino's
-   * signed statement of the balance. The bank pays what the splits this account's key signs as a referee owe
-   * beyond their stakes. */
+   * signed statement of the balance. The bank pays what the splits of this developer's games owe beyond their
+   * stakes. */
   async depositBank(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
     return this.perform('bank', { amount, source: BANK_ID }, operationId);
   }
   /** A statement of this account's bank, for a deposit or withdrawal this wallet signed: the casino's
    * signature on it, for this account and asset, and caused by `cause`. The balance is the casino's to
-   * state: every split this account signs as a referee moves it. */
+   * state: every split of this developer's games moves it. */
   bankStatement(this: CasinoWallet, statement: any, cause: string) {
     const asset = this.playing,
       held = this.bank[asset] ?? {};
     assertSignature(this.domain, BANK_TYPES, statement?.message, statement?.signature, this.operator);
     const { message } = statement;
     if (
-      !same(message.referee, this.address) ||
+      !same(message.developer, this.address) ||
       message.asset !== asset ||
       !same(message.cause, cause) ||
       Number(message.sequence) <= Number(held.statement?.message.sequence ?? 0)
@@ -708,7 +710,7 @@ export class ChannelClient extends WalletTransactions {
         if (BigInt(amount) <= 0n || BigInt(amount) > BigInt(bank.balance))
           throw new Error('Not that much is in the bank');
         const message = {
-          referee: this.address,
+          developer: this.address,
           asset,
           amount: String(BigInt(amount)),
           sequence: String(bank.sequence + 1),

@@ -17,8 +17,7 @@
       "url": "https://mines-game.hookedin.com/manifest.json"
     },
     "roulette": {
-      "url": "https://roulette-game.hookedin.com/manifest.json",
-      "referee": "0x6c21bC850e69CCB303f6081B3bBE42Adc1290E8E"
+      "url": "https://roulette-game.hookedin.com/manifest.json"
     }
   }
 }

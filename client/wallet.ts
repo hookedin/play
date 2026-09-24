@@ -1,7 +1,7 @@
 /// <reference path="../types/browser.d.ts" />
 import type { JsonRpcProvider, Signer } from 'ethers';
 import type { Store } from './storage.ts';
-import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerBet, GameRef } from '../protocol/types.ts';
+import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerBet } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
@@ -112,11 +112,11 @@ export class CasinoWallet extends GameSessions {
    * that placed it, and what the casino last said of it. */
   declare held: Record<
     string,
-    { operationId?: string; game: GameRef; asset: AssetId; state?: PlayerBet; error?: string }
+    { operationId?: string; game: string; asset: AssetId; state?: PlayerBet; error?: string }
   >;
   declare heldCursors: Partial<Record<AssetId, string>>;
   heldError: string | null = null;
-  /** This account's bank as a referee, per asset: the casino's statement for its latest deposit or
+  /** This account's bank as a developer, per asset: the casino's statement for its latest deposit or
    * withdrawal, a withdrawal signed and not yet answered, and withdrawn money not yet collected. */
   declare bank: Partial<
     Record<
@@ -177,7 +177,7 @@ export class CasinoWallet extends GameSessions {
     alias: string | null;
     since: number;
     stats: any;
-    games: { name: string; url: string; key: string; developer: string; referee?: string }[];
+    games: { name: string; url: string; key: string; developer: string }[];
   } | null;
   reportedBankroll = '0';
   /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */
@@ -409,7 +409,7 @@ export class CasinoWallet extends GameSessions {
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
-      // Bankroll shares, bets that settle later and a referee's bank belong to the account, not to any one channel.
+      // Bankroll shares, bets that settle later and a developer's bank belong to the account, not to any one channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
       held: saved?.held || {},
       heldCursors: saved?.heldCursors || {},
@@ -520,18 +520,11 @@ export class CasinoWallet extends GameSessions {
     return this.profile;
   }
   /**
-   * Publish a game under this account, naming the developer its bets pay commission to (this account, unless
-   * it names another), or, with no URL, take it out of the profile. Publishing claims a public name and asks for a funded channel; taking your own game
-   * down only has to be you, so a developer who has closed their channel can still withdraw a game that turned
-   * out to be broken.
+   * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing
+   * claims a public name and asks for a funded channel; taking your own game down only has to be you, so a
+   * developer who has closed their channel can still withdraw a game that turned out to be broken.
    */
-  async publishGame(
-    this: CasinoWallet,
-    name: string,
-    url: string | null,
-    referee: string | null = null,
-    developer: string | null = null,
-  ) {
+  async publishGame(this: CasinoWallet, name: string, url: string | null) {
     // Publishing speaks from the open channel. Taking a game down speaks from any ETH channel this
     // account still holds a key for, including one already closed, because a broken game has to come
     // down whether or not its developer still has money at stake.
@@ -540,16 +533,7 @@ export class CasinoWallet extends GameSessions {
       : (this.current ?? Object.values(this.channels).find(row => row.key && row.state.channelId !== this.testId));
     if (!c?.key) throw new Error('This account has no channel to publish from');
     if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
-    this.profile = await this.api(
-      `/api/channels/${c.state.channelId}/games`,
-      {
-        name: name.trim(),
-        url,
-        ...(url ? { developer: developer ?? this.address } : {}),
-        ...(url && referee ? { referee } : {}),
-      },
-      c,
-    );
+    this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }, c);
     this.render();
     return this.profile;
   }

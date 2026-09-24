@@ -78,14 +78,14 @@ export const CLOSE_TYPES = {
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
-/** A game's referee proves itself with its own key, as a channel does with its signer. Only the referee
- * a game's publisher named draws and settles that game's bets. */
+/** A game's developer referees its bets that settle later, and proves itself with its own key, as a channel does
+ * with its signer. Only a game's developer draws and settles that game's bets. */
 export const REFEREE_ACCESS_TYPES = {
   RefereeAccess: fields('address referee,uint256 expiresAt'),
 };
 /** A referee settles a bet with terms that names it: `player` is what the player is paid and `casino` what
- * the casino is given. The referee's own bank keeps the rest of the stake, or pays what the two come to beyond
- * it. `bet` is the hash of the operation that placed the bet, which signs its terms. */
+ * the casino is given. The developer's bank keeps the rest of the stake, or pays what the two come to beyond it.
+ * `bet` is the hash of the operation that placed the bet, which signs its terms. */
 export const SETTLEMENT_TYPES = {
   Settlement: fields('bytes32 bet,uint256 player,uint256 casino'),
 };
@@ -188,21 +188,21 @@ export const REDEEM_TYPES = {
 };
 export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, REDEEM_TYPES, s);
-/** A referee's bank: the money, per asset, of the account at the referee's address, which pays what the splits
- * that referee signs owe beyond the stakes and keeps what they do not pay. A split moves no other money. A deposit
- * is a debit that names it, from a channel of that account, answered with a statement of the balance; money
- * leaves it only by that account's own signed `Withdraw` or a split its referee signs. */
+/** A developer's bank: the developer's own money, per asset, which pays what the splits their key signs as their
+ * games' referee owe beyond the stakes and keeps what they do not pay. A split moves no other money. A deposit is
+ * a debit that names it, from the developer's own channel, answered with a statement of the balance; money leaves
+ * it only by the developer's own signed `Withdraw` or a split they sign. */
 export const BANK_ID = id('HOOKEDIN/BANK');
-/** The casino signs the balance of a referee's bank in one asset after every deposit and withdrawal.
- * `cause` is the hash of the account's signed deposit or `Withdraw`. */
+/** The casino signs the balance of a developer's bank in one asset after every deposit and withdrawal.
+ * `cause` is the hash of the developer's signed deposit or `Withdraw`. */
 export const BANK_TYPES = {
-  BankStatement: fields('address referee,string asset,uint256 sequence,uint256 balance,bytes32 cause'),
+  BankStatement: fields('address developer,string asset,uint256 sequence,uint256 balance,bytes32 cause'),
 };
-/** A referee's account takes money out of its bank. `sequence` is the statement it will produce, so it works once. */
+/** A developer takes money out of their bank. `sequence` is the statement it will produce, so it works once. */
 export const WITHDRAW_TYPES = {
-  Withdraw: fields('address referee,string asset,uint256 amount,uint256 sequence'),
+  Withdraw: fields('address developer,string asset,uint256 amount,uint256 sequence'),
 };
-export const hashWithdraw = (d: Domain, s: { referee: string; asset: string; amount: Integer; sequence: Integer }) =>
+export const hashWithdraw = (d: Domain, s: { developer: string; asset: string; amount: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, WITHDRAW_TYPES, s);
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
@@ -288,12 +288,11 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     ...values,
   });
 }
-/** A game's key: the one value its bets, its commission and its public record are kept under. It is made from
- * its publisher and name when the game is first published and kept from then on, whoever it later pays and
- * wherever it is served, so the game keeps its history. A game loaded straight from its manifest has the key
- * of its manifest's developer and URL. */
-export const gameKey = ({ publisher, name }: GameName) =>
-  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [publisher, name]));
+/** A game's key: the one value its bets, its commission and its public record are kept under, made from its
+ * developer and the name they publish it under, so it is the same wherever the game is served. A game loaded
+ * straight from its manifest has the key of its manifest's developer and URL. */
+export const gameKey = ({ developer, name }: GameName) =>
+  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [developer, name]));
 export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
@@ -338,14 +337,7 @@ function address(value: unknown) {
 export function checkDetails(kind: number, details: Details) {
   const { game, group, bet } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
-  const named =
-    game !== undefined &&
-    game !== null &&
-    typeof game === 'object' &&
-    Object.keys(game).length === 2 &&
-    typeof game.key === 'string' &&
-    bytes32Pattern.test(game.key) &&
-    address(game.developer);
+  const named = typeof game === 'string' && bytes32Pattern.test(game);
   const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
   if (
     !keys.every(key => ['id', 'game', 'group', 'counterparty', 'bet'].includes(key)) ||

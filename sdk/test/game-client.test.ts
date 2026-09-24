@@ -248,13 +248,13 @@ test('a refereed bet pays what its referee signs, and its stake comes back if it
     ['refunded', '10', 'Refunded: not settled by its deadline'],
   );
   assert.equal(w.gameLimit().balance, '1015');
-  // A game published with no referee has nobody to settle a bet that settles later.
-  w.openGame(f.identity('plain', { referee: undefined }));
+  // A game published nowhere has nobody to settle a bet that settles later.
+  w.openGame(f.identity('plain', { slug: undefined }));
   await w.setGameLimit('100');
-  await assert.rejects(w.gamePlace({ ...request, id: 'nobody' }), /published with no referee/);
+  await assert.rejects(w.gamePlace({ ...request, id: 'nobody' }), /published nowhere/);
 });
 
-test("a split the referee's bank cannot pay is refused whole, and the bet waits", async () => {
+test("a split the developer's bank cannot pay is refused whole, and the bet waits", async () => {
   const f = await gameWallet({ bank: 5n }),
     w = f.wallet;
   w.openGame(f.identity());

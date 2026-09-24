@@ -82,15 +82,15 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
 
 /**
  * A real wallet wired to an in-memory casino stub, and a stub referee shaped like the one a game's server
- * creates: what a game is tested against without the private casino. The stub holds every bet to the casino's
- * own admission rule and charges its commission, so a table it passes is one the casino takes. `bankroll` is
- * what it covers bets with; `bank` is what the referee's bank holds to pay bets with terms.
+ * creates with its developer's key: what a game is tested against without the private casino. The stub holds
+ * every bet to the casino's own admission rule and charges its commission, so a table it passes is one the casino
+ * takes. `bankroll` is what it covers bets with; `bank` is what the developer's bank holds to pay bets with terms.
  */
 export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds = 10n ** 12n } = {}) {
   const storage = new MemoryStore(),
     owner = Wallet.createRandom(),
     player = Wallet.createRandom(),
-    referee = Wallet.createRandom();
+    developer = Wallet.createRandom();
   const casino = Wallet.createRandom().address,
     d = domain(31337, casino);
   let bankroll = capital,
@@ -139,7 +139,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
   let waiting: string | null = null;
   // Bets that settle later, what each settled bet owes this player until the wallet collects it, and the order
   // bets settled in.
-  const held = new Map<string, PublicBet & { developer: string }>(),
+  const held = new Map<string, PublicBet>(),
     owed = new Map<string, bigint>(),
     order = new Map<string, number>();
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
@@ -152,7 +152,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     return plain({
       id: round.id,
       game: round.game,
-      referee: referee.address.toLowerCase(),
+      referee: developer.address.toLowerCase(),
       asset: 'eth' as const,
       deadline: round.deadline,
       status: round.drawn ? ('drawn' as const) : round.deadline <= now() ? ('expired' as const) : ('open' as const),
@@ -161,10 +161,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       ...(round.drawn ? { seed: round.seed, secret, outcome: String(outcome([], round.seed, secret).value) } : {}),
     });
   };
-  const publicBet = (hash: string) => {
-    const { developer: _developer, ...bet } = held.get(hash)!;
-    return plain(bet);
-  };
+  const publicBet = (hash: string) => plain(held.get(hash)!);
   /** A bet settles: what it paid waits, owed to this player, for the wallet to collect. */
   const end = (hash: string, payout: bigint, change: Partial<PublicBet> = {}) => {
     Object.assign(held.get(hash)!, { status: 'settled', payout: String(payout), settledAt: now(), ...change });
@@ -225,7 +222,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         return plain({
           bets: page.map(bet => ({
             bet: bet.bet,
-            game: { key: bet.game, developer: bet.developer },
+            game: bet.game,
             asset: bet.asset,
             status: bet.status,
             stake: bet.stake,
@@ -336,19 +333,19 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       bankroll += terms.stake - paid - fee / 2n;
       return { ...(await settle(request, details, signature, seed, secret, fee)), ...nextRound };
     };
-    /** A bet that settles later is final and completes at once, if its referee is the game's, its deadline is in
-     * range and, to be drawn, it rides the referee's open round and fits the bankroll with the bets there before it. */
+    /** A bet that settles later is final and completes at once, if its referee is the game's developer, its
+     * deadline is in range and, to be drawn, it rides the developer's open round and fits the bankroll with the
+     * bets there before it. */
     const place = async (request: any, details: any, signature: string) => {
       const later = details.bet;
-      if (!same(later.referee, referee.address))
-        return decline(request, details, "This is not the referee the game's publisher named");
+      if (!same(later.referee, developer.address)) return decline(request, details, "This is not the game's developer");
       if ('prizes' in later) {
         const round = rounds.get(later.round);
         if (
           !round ||
           round.drawn ||
           round.deadline <= now() ||
-          !same(round.game, details.game.key) ||
+          !same(round.game, details.game) ||
           round.seedHash !== later.seedHash ||
           round.deadline !== later.deadline
         )
@@ -370,8 +367,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       const hash = hashOperation(d, request).toLowerCase();
       held.set(hash, {
         bet: hash,
-        game: details.game.key,
-        developer: details.game.developer,
+        game: details.game,
         ...(details.group ? { group: details.group } : {}),
         asset: 'eth',
         uname,
@@ -385,9 +381,9 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     };
     return wallet;
   };
-  /** The referee a game's server would create, against this stub casino. */
+  /** The referee a game's server would create with its developer's key, against this stub casino. */
   const stubReferee: Referee = {
-    address: referee.address,
+    address: developer.address,
     limits: LIMITS,
     async open() {
       const current = waiting && rounds.get(waiting);
@@ -400,7 +396,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         game: game.key,
         seed,
         seedHash: hash,
-        signature: await referee.signTypedData(d, COMMIT_TYPES, { round: id, seedHash: hash }),
+        signature: await developer.signTypedData(d, COMMIT_TYPES, { round: id, seedHash: hash }),
         deadline: now() + ROUND_MS,
         drawn: false,
       });
@@ -451,7 +447,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         0n,
       );
       if (bank + change < 0n)
-        throw Object.assign(new Error("The referee's bank cannot pay these settlements"), {
+        throw Object.assign(new Error("The developer's bank cannot pay these settlements"), {
           status: 409,
           code: 'bank-short',
         });
@@ -459,7 +455,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       for (const entry of open) {
         const message = { bet: entry.bet.toLowerCase(), player: String(entry.player), casino: String(entry.casino) };
         end(message.bet, BigInt(message.player), {
-          settlement: { ...message, signature: await referee.signTypedData(d, SETTLEMENT_TYPES, message) },
+          settlement: { ...message, signature: await developer.signTypedData(d, SETTLEMENT_TYPES, message) },
         });
       }
       return hashes.map(publicBet);
@@ -471,7 +467,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         .map(bet => publicBet(bet.bet)),
     bet: async hash => (held.has(hash.toLowerCase()) ? publicBet(hash.toLowerCase()) : null),
   };
-  const game = { name: 'test', key: gameKey({ publisher: owner.address, name: 'test' }) };
+  const game = { name: 'test', key: gameKey({ developer: developer.address, name: 'test' }) };
   const wallet = make();
   await wallet.save();
   /** A wallet started afresh from what this one saved, as a reload does. */
@@ -485,14 +481,14 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     storage,
     owner,
     player,
-    /** The key the stub referee signs with; `referee` is the referee itself. */
-    refereeKey: referee,
+    /** The game's developer, whose key the stub referee signs with; `referee` is the referee itself. */
+    developer,
     referee: stubReferee,
     /** The game's side of the bridge to this fixture's wallet, and to any other. */
     bridge: bridgeTo(wallet),
     bridgeFor: bridgeTo,
     settlements: () => settlements,
-    /** What the stub casino has to cover bets with, and what the referee's bank holds. */
+    /** What the stub casino has to cover bets with, and what the developer's bank holds. */
     bankroll: () => bankroll,
     bank: () => bank,
     /** A round's secret, which only the casino knows until it reveals the round. */
@@ -519,16 +515,15 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       await storage.put('game-wallet', { ...record, history: [] });
       return reload();
     },
-    /** A game as its publisher published it, with the stub's referee: the game this fixture's referee runs is
-     * `test`. `declared` is anything its manifest says otherwise. */
+    /** A game as its developer published it: the game this fixture's referee runs is `test`. `declared` is
+     * anything its manifest says otherwise. */
     identity: (name = game.name, declared: Partial<GameIdentity> = {}): GameIdentity => ({
       name,
       slug: name,
-      key: gameKey({ publisher: owner.address, name }),
+      key: gameKey({ developer: developer.address, name }),
       manifestURL: `https://${name}.example/manifest.json`,
       entryURL: `https://${name}.example/`,
-      developer: owner.address,
-      referee: referee.address,
+      developer: developer.address,
       ...declared,
     }),
   };

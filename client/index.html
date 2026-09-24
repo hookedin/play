@@ -113,7 +113,7 @@
                 required
               /><button class="button primary" type="submit">Load game</button>
             </div>
-            <p>Manifests declare the game entry URL and developer fee recipient.</p>
+            <p>Manifests declare the game entry URL and its developer.</p>
           </form>
           <p class="trust-note">
             The casino controls its bankroll and whether it returns a signed result. Winnings are not guaranteed. Check
@@ -419,8 +419,9 @@
             <div class="eyebrow">PUBLISHED UNDER YOUR NAME</div>
             <h2>Games you publish</h2>
             <p>
-              A game you publish is reachable at your name, and anyone may play it with their own wallet. Publishing
-              needs a funded ETH channel; taking one down never does.
+              A game you publish is reachable at your name, and anyone may play it with their own wallet. Its manifest
+              names this account as its developer: you earn its commission, and your key settles its bets that settle
+              later. Publishing needs a funded ETH channel; taking one down never does.
             </p>
             <label for="game-name-input"
               >Games you publish <span id="profile-game-count" class="subtle-count">0/100</span></label
@@ -436,9 +437,8 @@
             <div id="my-games"></div>
             <label for="bank-amount">Your bank <span id="bank-balance" class="subtle-count">—</span></label>
             <p>
-              It pays the splits this account signs as a game's referee: what a split pays beyond a bet's stake comes
-              out of it, and what it does not pay goes in. A referee with a key of its own has a bank of its own: import
-              that key in Settings to fund it. A settlement it cannot pay in full is refused, and an unsettled bet is
+              Your games' bets with terms are paid from it: what your split pays beyond a bet's stake comes out of it,
+              and what it does not pay goes in. A settlement it cannot pay in full is refused, and an unsettled bet is
               refunded at its deadline. Nothing in it is reserved, so you can take it out at any time.
             </p>
             <div class="input-row">

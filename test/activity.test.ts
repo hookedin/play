@@ -6,7 +6,7 @@ import type { PlayerBet } from '../protocol/types.ts';
 test('a bet that settles later shows its result apart from its collection, and a zero payout as settled', () => {
   const bet: PlayerBet = {
     bet: '0x' + '1'.repeat(64),
-    game: { key: '0x' + '2'.repeat(64), developer: '0x' + '3'.repeat(40) },
+    game: '0x' + '2'.repeat(64),
     asset: 'test',
     status: 'open',
     deadline: 2,

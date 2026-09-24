@@ -16,9 +16,8 @@ interface ActiveGame {
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
  * the name it has in their profile. Any other manifest is linkable by its URL alone. */
 type GameRoute = { owner: string; name: string } | { manifest: string };
-/** What a profile records of a game it publishes: its key, the developer its bets pay commission to, and the
- * referee that settles its bets if it has one. */
-type Published = { key: string; developer: string; referee?: string };
+/** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
+type Published = { key: string; developer: string };
 import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { gameReceipt } from './wallet-games.ts';
@@ -479,7 +478,10 @@ function openFundDialog({ amount, asked = false, take = false }: { amount?: bigi
   const dialog = $<HTMLDialogElement>('fund-dialog');
   // The game page shows nothing but the game, so the dialog that grants it money says who it is.
   $('fund-who').textContent =
-    `${active.manifest.name}, served from ${new URL(active.frame.src).host}. Its developer, ${active.manifest.developer}, earns half of each bet’s fee.`;
+    `${active.manifest.name}, served from ${new URL(active.frame.src).host}. ` +
+    (active.identity.slug === undefined
+      ? 'Nobody publishes it, so no developer earns from it.'
+      : `Its developer, ${active.manifest.developer}, earns half of each bet’s fee and settles its bets that settle later.`);
   $('fund-channel-note').textContent =
     wallet.playing === 'eth'
       ? 'Your channel is not open for play yet. Play with test coins meanwhile, or check the channel in My wallet.'
@@ -739,7 +741,6 @@ function renderActivity() {
       if (channelId) facts.push(['Channel', channelId]);
       if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
       if (receipt.game?.revision !== undefined) facts.push(['Game revision', String(receipt.game.revision)]);
-      if (receipt.developer) facts.push(['Developer', receipt.developer]);
       if (receipt.commission !== undefined)
         facts.push(['Commission', `${formatEther(receipt.commission)} ${receiptUnit(receipt)}`]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
@@ -999,21 +1000,16 @@ async function fetchGame(url: string) {
   } catch {
     throw new Error(`The manifest's developer, ${String(manifest.developer).slice(0, 60)}, is not an address.`);
   }
-  if (developer === ZeroAddress) throw new Error('The developer fee recipient cannot be the zero address.');
-  if (
-    manifest.referee !== undefined &&
-    (typeof manifest.referee !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(manifest.referee))
-  )
-    throw new Error("A manifest's referee is the address of the key that settles the game's bets.");
+  if (developer === ZeroAddress) throw new Error('The developer cannot be the zero address.');
   const entry = safeURL(manifest.entry, response.url);
   if (entry.origin === location.origin || new URL(response.url).origin === location.origin)
     throw new Error('Games cannot be served from the wallet’s own origin.');
   return { manifestURL, manifest, developer, entry };
 }
 
-/** Open a game. A published one comes with what its profile records: its key, the developer its bets pay
- * commission to, which its manifest must name too or it is not the game its publisher published, and the referee
- * that settles its bets. A game loaded straight from its manifest is its manifest's developer's, under its URL. */
+/** Open a game. A published one comes with what its profile records: its key, and its developer, whom its
+ * manifest must name too or it is not the game its developer published. A game loaded straight from its manifest
+ * is its manifest's developer's, under its URL. */
 async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: Published) {
   const { manifestURL, manifest, developer, entry } = await fetchGame(url);
   const slug = 'manifest' in gameRoute ? undefined : gameRoute.name;
@@ -1034,12 +1030,10 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   const identity: GameIdentity = {
     manifestURL: manifestURL.href,
     entryURL: entry.href,
-    key: published?.key ?? gameKey({ publisher: developer, name: manifestURL.href }),
+    key: published?.key ?? gameKey({ developer, name: manifestURL.href }),
     developer,
     ...(slug === undefined ? {} : { slug }),
     name: manifest.name,
-    // The key that settles its bets that settle later, which each of them signs: the one its developer published.
-    ...(published?.referee ? { referee: getAddress(published.referee) } : {}),
   };
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
   const isCurrent = () =>
@@ -1282,7 +1276,7 @@ function renderProfile() {
     }),
   );
 }
-/** This account's bank as a referee, in what the wallet plays with, as the casino has it now. */
+/** This account's bank as a developer, in what the wallet plays with, as the casino has it now. */
 async function refreshBank() {
   if (!wallet.channel?.key) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();
@@ -1937,11 +1931,12 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
       url = $<HTMLInputElement>('game-url-input');
     const published = name.value.trim();
     if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-    // Anyone who opens this card has to be able to play it, so it is loaded before it is published. Its bets pay
-    // commission to the developer its manifest names, and a game with a referee names its key, which the casino
-    // then holds its rounds and bets to.
-    const { manifestURL, manifest, developer } = await fetchGame(url.value.trim());
-    await wallet.publishGame(published, manifestURL.href, manifest.referee ?? null, developer);
+    // Anyone who opens this card has to be able to play it, so it is loaded before it is published, and a wallet
+    // plays it only if its manifest names the account that published it: its developer.
+    const { manifestURL, developer } = await fetchGame(url.value.trim());
+    if (!same(developer, wallet.address))
+      throw new Error(`This manifest names another developer, ${developer}: publish it from that account.`);
+    await wallet.publishGame(published, manifestURL.href);
     name.value = url.value = '';
     await loadLibrary();
     toast(`Published at ${showName(wallet)}/${published}.`);

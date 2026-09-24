@@ -1,16 +1,12 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
-import type { GameRef } from '../protocol/types.ts';
-import { getAddress, ZeroAddress } from 'ethers';
 
 /** The game an operation is for, as a bet or a payment signs it: its key, which stays the same wherever the game
- * is served and whomever it pays, and the developer its bets pay commission to. */
-export function gameRef(identity: GameIdentity): GameRef {
-  const developer = getAddress(identity.developer);
-  if (developer === ZeroAddress) throw new Error('A developer fee recipient is required');
+ * is served. */
+export function gameRef(identity: GameIdentity): string {
   for (const url of [identity.manifestURL, identity.entryURL])
     if (!['http:', 'https:'].includes(new URL(url).protocol)) throw new Error('Game URLs must use HTTP(S)');
   if (!/^0x[0-9a-f]{64}$/.test(identity.key)) throw new Error('A game key is a lowercase 32-byte hash');
-  return { key: identity.key, developer };
+  return identity.key;
 }
 export function gameAmount(value: unknown, positive = true) {
   if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,77})$/.test(value)) throw new Error('Use decimal wei amounts');

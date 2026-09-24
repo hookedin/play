@@ -3,7 +3,7 @@
  * /api/ is the wheel, one Durable Object. The page talks to nobody but this origin, and the Worker
  * to nobody but the casino's public API.
  */
-import { createReferee, gameKey } from '@hookedin/play/sdk/referee';
+import { createReferee } from '@hookedin/play/sdk/referee';
 import { Wheel } from './wheel.ts';
 import type { WheelState } from './wheel.ts';
 
@@ -12,11 +12,10 @@ interface Env {
   WHEEL: DurableObjectNamespace;
   /** The casino's public API. */
   CASINO_URL: string;
-  /** The game as it is published: its publisher's address and the name they published it under, which make its key. */
-  PUBLISHER: string;
+  /** The name the game is published under, which with its developer's address makes its key. */
   GAME_NAME: string;
-  /** The referee's private key: it draws the game's bets and nothing else. A secret. */
-  REFEREE_KEY: string;
+  /** The private key of the game's developer, the account it is published from: it draws the game's bets. A secret. */
+  DEVELOPER_KEY: string;
 }
 
 export class RouletteWheel implements DurableObject {
@@ -36,8 +35,8 @@ export class RouletteWheel implements DurableObject {
         {
           referee: await createReferee({
             casinoURL: this.env.CASINO_URL,
-            key: this.env.REFEREE_KEY,
-            game: gameKey({ publisher: this.env.PUBLISHER, name: this.env.GAME_NAME }),
+            key: this.env.DEVELOPER_KEY,
+            name: this.env.GAME_NAME,
           }),
           asset: assetOf(url),
           now: () => Date.now(),

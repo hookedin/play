@@ -67,10 +67,7 @@ export function buildVectors() {
     round: roundId(secrets[0]),
     memo: memo({
       id: `0x${'82'.repeat(32)}`,
-      game: {
-        key: gameKey({ publisher: getAddress(identity.player), name: 'roulette' }),
-        developer: getAddress(identity.player),
-      },
+      game: gameKey({ developer: getAddress(identity.player), name: 'roulette' }),
     }),
   });
   const requestHash = hashOperation(d, request);

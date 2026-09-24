@@ -19,7 +19,7 @@ Every spin is one **draw**. The pieces are:
 
 - **The table** ([src/table.ts](src/table.ts)): the wheel's 37 pockets are 37 stretches of the spin's 64-bit outcome, a chip is a prize over the stretches of the numbers it covers, and a player's whole layout is **one bet** of at most 37 prizes. The wallet signs it whole, so the player's wallet, not this page, establishes what was offered.
 - **The game page** ([src/game.ts](src/game.ts)): lays out the chips, asks the wallet to place them on the table's round, and reads the landed number from the settled receipt the wallet sends it.
-- **The wheel** ([server/wheel.ts](server/wheel.ts)): the game's referee. It keeps the table's round, named by the casino and committed to the wheel's seed before anybody bets, saves it and names it to the pages. Twenty seconds after the first chip on it is down, and at the latest five seconds before its deadline, it draws the round: every bet on it rides one spin. It is built on `createReferee` from the [game SDK](../../sdk), holds no money of its own and never touches a bet.
+- **The wheel** ([server/wheel.ts](server/wheel.ts)): the game's referee. It keeps the table's round, named by the casino and committed to the wheel's seed before anybody bets, saves it and names it to the pages. Twenty seconds after the first chip on it is down, and at the latest five seconds before its deadline, it draws the round: every bet on it rides one spin. It is built on `createReferee` from the [game SDK](../../sdk), with the key of the account the game is published from, and never touches a bet.
 - **The casino**: names the table's round by the hash of a secret, holds each player's stake, and takes each bet against the bankroll as it is placed, with every bet on the round before it. When the wheel draws the round, it reveals the secret and owes every bet on it what it won.
 - **Each player's wallet**: checks that the round the page names is open, this game's and committed by the wheel, signs the bet on it, sends it to the casino itself, and checks the revealed seed and secret against the round and the seed hash its bet named before it collects the winnings and sends the page the receipt.
 
@@ -60,13 +60,13 @@ Read [bets that settle later](../../docs/protocol.md#bets-that-settle-later) bef
 
 You need Node 24.4 or later.
 
-The casino the wheel talks to must be the one the players' wallets use. With the full local stack, caserver's `npm run dev` runs the Worker, page and wheel together with `wrangler dev`, at `http://127.0.0.1:8790`, against its own casino and with a fresh key for the wheel, and publishes the game in `@hookedin` with that key as its referee. Against another wallet, run `npm ci` in this repository's root, then in `games/roulette`:
+The casino the wheel talks to must be the one the players' wallets use. With the full local stack, caserver's `npm run dev` runs the Worker, page and wheel together with `wrangler dev`, at `http://127.0.0.1:8790`, against its own casino and with its local house's key, and publishes the game in that house's `@hookedin`. Against another wallet, run `npm ci` in this repository's root, then in `games/roulette`:
 
 ```sh
-npx wrangler dev --var REFEREE_KEY:0xYourWheelKey --var PUBLISHER:0xYourAddress --var GAME_NAME:roulette
+npx wrangler dev --var DEVELOPER_KEY:0xYourKey --var GAME_NAME:roulette
 ```
 
-`REFEREE_KEY` is the wheel's key, a private key you generated for this purpose; `PUBLISHER` and `GAME_NAME` are the address you publish the game from and the name you publish it under, which make its key. The wheel talks to the `CASINO_URL` in [wrangler.jsonc](wrangler.jsonc), the public deployment's casino; for another, add `--var CASINO_URL:` and its casino (the `casino` value in the wallet's `config.js`). Then set `referee` in [src/manifest.json](src/manifest.json) to the wheel key's address, publish the game under `GAME_NAME` with `http://127.0.0.1:8790/manifest.json` from the wallet of `PUBLISHER`, and open it.
+`DEVELOPER_KEY` is the private key of the account you publish the game from, and `GAME_NAME` the name you publish it under: the two make its key. The wheel talks to the `CASINO_URL` in [wrangler.jsonc](wrangler.jsonc), the public deployment's casino; for another, add `--var CASINO_URL:` and its casino (the `casino` value in the wallet's `config.js`). Then set `developer` in [src/manifest.json](src/manifest.json) to that account's address, publish the game under `GAME_NAME` with `http://127.0.0.1:8790/manifest.json` from that account's wallet, and open it.
 
 `wrangler dev` builds the page into `dist/` as it starts, and again whenever `src/` changes.
 
@@ -76,18 +76,18 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 
 ### What to change first
 
-- [src/manifest.json](src/manifest.json): `id`, `name`, `description`, `developer` (the address that earns the game's commission) and `referee` (the address of the wheel's key).
-- [wrangler.jsonc](wrangler.jsonc): `PUBLISHER` and `GAME_NAME`, the address you publish the game from and the name you publish it under.
+- [src/manifest.json](src/manifest.json): `id`, `name`, `description` and `developer`, the address of the account you publish the game from.
+- [wrangler.jsonc](wrangler.jsonc): `GAME_NAME`, the name you publish the game under.
 - A different shared game is a different [src/table.ts](src/table.ts): what the outcome means and how a player's choices become prizes. A wheel of fortune is one range per segment, and the wheel's server stays as it is; so is a crash game whose players all set their cash-out before the round, each cash-out one prize. A game whose players decide while the round runs is not a draw. A crash game with cash-out by hand is one, even for the cash-outs set before the round: to know when to crash, its server would have to draw at take-off, and a draw is public, so every page would know the crash point. Its server keeps the crash point itself and settles every bet with [terms and a split](../../sdk/docs/game-sdk.md#bets-that-settle-later): its word.
 - The betting time is `BETTING_MS` in [server/wheel.ts](server/wheel.ts).
 
-You earn half of every bet's commission. It accrues to the `developer` address the manifest names; the casino keeps the other half. See [pricing and commission](../../docs/economics.md).
+You earn half of every bet's commission. It accrues to the account you publish the game from; the casino keeps the other half. See [pricing and commission](../../docs/economics.md).
 
 ## Deploy
 
-Whenever `main` is pushed, this repository's [deploy workflow](../../.github/workflows/deploy.yml) publishes the game to Cloudflare by running `npx wrangler deploy` in `games/roulette`, with [wrangler.jsonc](wrangler.jsonc): one Worker that serves the page and runs the wheel. `wrangler.jsonc` sets `CASINO_URL`, `PUBLISHER` and `GAME_NAME` and builds the page before every deploy, so the same command in `games/roulette` publishes it by hand.
+Whenever `main` is pushed, this repository's [deploy workflow](../../.github/workflows/deploy.yml) publishes the game to Cloudflare by running `npx wrangler deploy` in `games/roulette`, with [wrangler.jsonc](wrangler.jsonc): one Worker that serves the page and runs the wheel. `wrangler.jsonc` sets `CASINO_URL` and `GAME_NAME` and builds the page before every deploy, so the same command in `games/roulette` publishes it by hand.
 
-Once, give the Worker the wheel's key: run `npx wrangler secret put REFEREE_KEY` in `games/roulette`, with a private key you generated for this purpose, and publish the game with its address as referee. Roulette's bets are all drawn, so the wheel's key needs no bank and holds no money: a lost key costs nothing but the bets it had not drawn, which come back at their deadline.
+Once, give the Worker the key of the account the game is published from: run `npx wrangler secret put DEVELOPER_KEY` in `games/roulette`. The Worker then holds everything that account holds: its games, their commission and its bank. Roulette's bets are all drawn, so its bank pays nothing on the wheel's word.
 
 A repository made from game-template deploys itself; [its README](https://github.com/hookedin/game-template#deploy) says how.
 
@@ -95,7 +95,7 @@ The build writes `dist/_headers`, which Cloudflare applies by itself. The header
 
 ## Get listed
 
-Publish it yourself: in the wallet, open **My games** and give the game a name and this manifest's URL; the manifest's `developer` and `referee` are published with it. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
+Publish it yourself: in the wallet of the account the manifest's `developer` names, open **My games** and give the game a name and this manifest's URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
 
 ## Tests
 

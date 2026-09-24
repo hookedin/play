@@ -326,7 +326,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     // A bet with terms has no prize table and no round: its referee signed what it paid.
     const settled = detailSection(
       'How it settled',
-      'The game’s referee signed what this bet paid you and what it gave the casino; the referee’s own bank kept the rest of the stake or paid what the two came to beyond it. Your wallet checked the signature before it collected.',
+      'The game’s referee signed what this bet paid you and what it gave the casino; the developer’s bank kept the rest of the stake or paid what the two came to beyond it. Your wallet checked the signature before it collected.',
     );
     settled.append(
       factList([
@@ -474,8 +474,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Operation', hex(receipt.operationId)],
         ['Channel', hex(op.channelId)],
         ['Sequence', String(op.sequence)],
-        ['Game', receipt.details?.game?.name ?? '—'],
-        ['Developer', hex(receipt.details?.game?.developer)],
+        ['Game', receipt.game?.name ?? '—'],
+        ['Game key', hex(receipt.details?.game)],
         ['Memo, the hash of the details above', hex(op.memo)],
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
         ['Balance after it settled', `${formatEther(receipt.balance ?? 0)} ${unit}`],

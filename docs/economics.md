@@ -6,7 +6,7 @@ A bet is a stake paid to enter and up to 64 prizes; every prize whose range hold
 
 | Symbol    | Meaning                                                                                                                                                                       |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B         | Positive unreserved accounting bankroll, after active player balances, finalized claims, unpaid developer commissions, escrow, held stakes, referees' banks and reservations. |
+| B         | Positive unreserved accounting bankroll, after active player balances, finalized claims, unpaid developer commissions, escrow, held stakes, developer banks and reservations. |
 | S         | Player stake, debited from the player's balance.                                                                                                                              |
 | G = S + W | The prize's payout. W is what the player gains net of the stake.                                                                                                              |
 | Q = 2^64  | Size of the outcome space.                                                                                                                                                    |
@@ -75,7 +75,7 @@ developer commission = bet fee / 2
 casino commission    = bet fee / 2
 ```
 
-Each bet's rounding leaves under two wei in the bankroll. Probability rounding can likewise leave a slightly more favorable residual bet. JavaScript BigInt preserves the exact intermediate products.
+The developer is the account that publishes the game; a game nobody publishes has none, and all of its commission is the casino's. Each bet's rounding leaves under two wei in the bankroll. Probability rounding can likewise leave a slightly more favorable residual bet. JavaScript BigInt preserves the exact intermediate products.
 
 This defines excess profit as the amount that can be removed while leaving the bankroll a Kelly-compliant residual wager. Charging only that excess is [a settled trade-off](../architecture.md#settled-trade-offs). A bet is admitted when the condition holds with `F = 0`, and the left side falls as `F` grows, so a fee fixed first would turn away bets the bankroll could take; setting `F` afterwards admits every one of them and charges only the surplus. Subtracting the two advertised edge percentages alone is not generally correct: doing so ignores how an outcome-independent commission changes the bankroll's exposure.
 
@@ -93,7 +93,7 @@ Commission is credited on executed wins and losses. Unexecuted requests receive 
 
 ## Bets the bankroll does not back
 
-A drawn bet is a wager against the bankroll, admitted as it is placed with the rest of its round and priced with the whole round at the draw. A bet its referee splits is its referee's risk: the referee's own bank at the casino keeps what its settlement does not pay and pays what it pays beyond the stake, and nothing of it is reserved, so the casino neither admits such bets by Kelly nor prices their commission. Whether the developer can pay is [outside HookedIn](../architecture.md#settled-trade-offs): a split the referee's bank cannot pay is refused, and the bet comes back at its deadline. The casino's part is what the referee's signed settlement gives it, which the casino keeps in its earnings. Its policy asks a referee for about half of what each bet is expected to earn it, as a bet's commission splits in two; nothing enforces it.
+A drawn bet is a wager against the bankroll, admitted as it is placed with the rest of its round and priced with the whole round at the draw. A bet its referee splits is its game developer's risk: their bank at the casino keeps what the referee's settlement does not pay and pays what it pays beyond the stake, and nothing of it is reserved, so the casino neither admits such bets by Kelly nor prices their commission. Whether the developer can pay is [outside HookedIn](../architecture.md#settled-trade-offs): a split their bank cannot pay is refused, and the bet comes back at its deadline. The casino's part is what the referee's signed settlement gives it, which the casino keeps in its earnings. Its policy asks a developer for about half of what each bet is expected to earn them, as a bet's commission splits in two; nothing enforces it.
 
 ## Available capital and concurrency
 
@@ -101,9 +101,9 @@ Signed results change the player balance and casino accounting off-chain. Casino
 
 At a consistent confirmed block, reported bankroll is:
 
-    max(0, pool cash - active signed player balances - finalized unpaid claims - accrued unpaid developer commissions - round reservations - escrow - held stakes - referee banks)
+    max(0, pool cash - active signed player balances - finalized unpaid claims - accrued unpaid developer commissions - round reservations - escrow - held stakes - developer banks)
 
-Round reservations are the worst cases rounds hold back: a channel's own while its bet is decided, a referee's until it is drawn or its bets are refunded. Escrow is every payout awarded but not yet collected: money that has left the bankroll for a player who has not signed for it yet. Held stakes are those of bets that settle later and have not: they are their players' until then, and a drawn bet's become the bankroll's only when it is drawn. Referee banks are the referees' own money.
+Round reservations are the worst cases rounds hold back: a channel's own while its bet is decided, a referee's until it is drawn or its bets are refunded. Escrow is every payout awarded but not yet collected: money that has left the bankroll for a player who has not signed for it yet. Held stakes are those of bets that settle later and have not: they are their players' until then, and a drawn bet's become the bankroll's only when it is drawn. Developer banks are the developers' own money.
 
 The casino keeps one set of these books per asset; ETH and test coins never add up. Test coins have no chain: their pool cash is ten million test coins plus every coin the faucet has minted, and a claim credits the channel the same amount, so the test bankroll is unchanged by it.
 
