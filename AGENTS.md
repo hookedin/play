@@ -30,8 +30,9 @@ something that depended on the mess, or touching several repositories. Leaving i
 
 The wallet, the settlement contract, the shared protocol, the game SDK and the house's games. Keep the guarantees we
 advertise correct and testable. Preserve explicitly accepted trust assumptions and manual responsibilities; do not
-expand the protocol merely to offer stronger guarantees. Reuse existing state, validation and recovery paths. See
-[architecture.md](architecture.md).
+expand the protocol merely to offer stronger guarantees. Reuse existing state, validation and recovery paths. A change
+to the contract's compiled code is a new deployment; once a release holds money that matters, the contract stays as it
+is. See [architecture.md](architecture.md).
 
 ## Settled decisions
 

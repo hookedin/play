@@ -23,6 +23,9 @@ const input = {
     optimizer: { enabled: true, runs: 200 },
     viaIR: true,
     evmVersion: 'cancun',
+    // No metadata hash in the bytecode: the pinned runtime changes only when the compiled code does, never for a
+    // comment or a name.
+    metadata: { appendCBOR: false },
     outputSelection: {
       '*': { '': ['ast'], '*': ['abi', 'evm.bytecode.object', 'evm.deployedBytecode', 'evm.gasEstimates'] },
     },
