@@ -13,14 +13,14 @@ test('a receipt keeps the name of the game it was placed in, after that game is 
     w = f.wallet;
   w.openGame(f.identity('Dice'));
   await w.setGameLimit('200000');
-  await w.gameBet(terms('bet-1'));
+  await w.gameCasinoBet(terms('bet-1'));
   w.closeGame();
   w.openGame(f.identity('Roulette'));
   await w.setGameLimit('200000');
-  await w.gameBet(terms('bet-2'));
+  await w.gameCasinoBet(terms('bet-2'));
   w.closeGame();
 
-  const names = w.history.filter((r: any) => r.kind === 'bet').map((r: any) => r.game?.name);
+  const names = w.history.filter((r: any) => r.kind === 'casino-bet').map((r: any) => r.game?.name);
   assert.deepEqual(names, ['Roulette', 'Dice'], 'every bet names its own game, newest first');
 });
 
@@ -29,8 +29,8 @@ test('activity stays newest first when an earlier receipt is written again', asy
     w = f.wallet;
   w.openGame(f.identity('Dice'));
   await w.setGameLimit('200000');
-  await w.gameBet(terms('bet-a'));
-  await w.gameBet(terms('bet-b'));
+  await w.gameCasinoBet(terms('bet-a'));
+  await w.gameCasinoBet(terms('bet-b'));
   // A receipt rewritten later keeps its own place in time.
   const first: any = w.history.find((r: any) => r.game?.id === 'bet-a');
   await w.save({ ...first, note: 'revealed later' });

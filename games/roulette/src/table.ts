@@ -50,25 +50,60 @@ export function payouts(chips: Chips) {
     for (const n of covers(spot)) pays.set(n, (pays.get(n) ?? 0n) + amount * returns(spot));
   return pays;
 }
-/** A layout as one bet: the stake is every chip, and neighbouring stretches that pay the same are one prize. */
-export function bet(chips: Chips): WireBet {
-  const pays = payouts(chips),
-    prizes: { rangeStart: bigint; rangeEnd: bigint; payout: bigint }[] = [];
-  ORDER.forEach((n, i) => {
-    const payout = pays.get(n) ?? 0n,
-      rangeStart = BigInt(i) * WIDTH,
-      rangeEnd = n === 0 ? SPACE : rangeStart + WIDTH,
+/** What each stretch of the outcome space pays, in its order, as prizes: neighbouring stretches that pay the same
+ * are one prize. */
+function prizesOf(pays: readonly bigint[]): WireBet['prizes'] {
+  const prizes: { rangeStart: bigint; rangeEnd: bigint; payout: bigint }[] = [];
+  pays.forEach((payout, i) => {
+    const rangeStart = BigInt(i) * WIDTH,
+      rangeEnd = i === 36 ? SPACE : rangeStart + WIDTH,
       last = prizes.at(-1);
     if (!payout) return;
     if (last && last.rangeEnd === rangeStart && last.payout === payout) last.rangeEnd = rangeEnd;
     else prizes.push({ rangeStart, rangeEnd, payout });
   });
+  return prizes.map(prize => ({
+    rangeStart: String(prize.rangeStart),
+    rangeEnd: String(prize.rangeEnd),
+    payout: String(prize.payout),
+  }));
+}
+/** A layout as one bet: the stake is every chip, and each pocket pays what the chips on it pay. */
+export function bet(chips: Chips): WireBet {
+  const pays = payouts(chips);
   return {
     stake: String(Object.values(chips).reduce((sum, amount) => sum + amount, 0n)),
-    prizes: prizes.map(prize => ({
-      rangeStart: String(prize.rangeStart),
-      rangeEnd: String(prize.rangeEnd),
-      payout: String(prize.payout),
-    })),
+    prizes: prizesOf(ORDER.map(n => pays.get(n) ?? 0n)),
+  };
+}
+/** The edges of the pockets' stretches, where a layout's prizes begin and end. */
+const EDGES = new Set([...ORDER.map((_, i) => BigInt(i) * WIDTH), SPACE]);
+/** What a bet's prizes pay on each pocket, in the order of the outcome space; null if a prize splits a pocket. */
+export function pocketPays(prizes: WireBet['prizes']): bigint[] | null {
+  const pays = ORDER.map(() => 0n);
+  for (const prize of prizes) {
+    const start = BigInt(prize.rangeStart),
+      end = BigInt(prize.rangeEnd);
+    if (!EDGES.has(start) || !EDGES.has(end)) return null;
+    pays.forEach((_, i) => {
+      if (BigInt(i) * WIDTH >= start && (i === 36 ? SPACE : BigInt(i + 1) * WIDTH) <= end)
+        pays[i] = pays[i]! + BigInt(prize.payout);
+    });
+  }
+  return pays;
+}
+/** A bet the wheel takes: whole pockets, paying no more over all 37 of them than chips of its stake can, 36 times
+ * the stake. The wheel covers nothing else, so no player can sign themselves a better table. */
+export function isLayout(bet: WireBet) {
+  const pays = pocketPays(bet.prizes);
+  return pays !== null && pays.reduce((sum, pay) => sum + pay, 0n) <= 36n * BigInt(bet.stake);
+}
+/** Layouts on one spin as one bet: their stakes together, and each pocket paying what they pay on it together. */
+export function together(bets: readonly WireBet[]): WireBet {
+  const pays = ORDER.map(() => 0n);
+  for (const one of bets) pocketPays(one.prizes)!.forEach((pay, i) => (pays[i] = pays[i]! + pay));
+  return {
+    stake: String(bets.reduce((sum, one) => sum + BigInt(one.stake), 0n)),
+    prizes: prizesOf(pays),
   };
 }

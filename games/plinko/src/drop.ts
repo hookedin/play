@@ -1,5 +1,5 @@
 /**
- * One Plinko drop is one native bet: the stake, and a prize for each bucket. The reference for a
+ * One Plinko drop is one casino bet: the stake, and a prize for each bucket. The reference for a
  * one-shot prize table: build the bet, save its operation ID, settle it, and read the ball from
  * the round's outcome.
  */
@@ -17,7 +17,7 @@ export interface DropConfig {
 }
 /** A drop in flight, saved before the wallet signs anything. */
 interface Pending extends DropConfig {
-  /** The game's durable name for the wager; replaced only after a verified rejection. */
+  /** The game's durable name for the casino bet; replaced only after a verified rejection. */
   id: string;
 }
 export interface Landed extends DropConfig {
@@ -63,7 +63,7 @@ export class DropClient {
     this.name = name;
   }
 
-  /** Load the saved drop for this player. A wager the wallet settled meanwhile lands now. */
+  /** Load the saved drop for this player. A casino bet the wallet settled meanwhile lands now. */
   async restore(): Promise<Landed | null> {
     const info = await this.info();
     const hello = await this.bridge.call('wallet.hello');
@@ -93,7 +93,7 @@ export class DropClient {
 
   /**
    * Check the table against half the reported bankroll with the casino's own rule, so ordinary movement
-   * between drops does not invalidate it; the casino still checks each wager against its live bankroll.
+   * between drops does not invalidate it; the casino still checks each casino bet against its live bankroll.
    */
   private bet(config: DropConfig) {
     const bet = dropBet(config.rows, config.risk, BigInt(config.stake));
@@ -129,7 +129,7 @@ export class DropClient {
       this.save();
     }
     const { rows, risk, stake, id } = this.pending;
-    return this.resolve(await this.bridge.call('game.bet', { id, ...wire(dropBet(rows, risk, BigInt(stake))) }));
+    return this.resolve(await this.bridge.call('game.casinoBet', { id, ...wire(dropBet(rows, risk, BigInt(stake))) }));
   }
 
   private resolve(receipt: any): Landed {
@@ -141,7 +141,7 @@ export class DropClient {
       throw new Error(receipt.reason || 'The casino declined this drop. Drop again to retry the same ball.');
     }
     if (receipt.status !== 'settled' || !/^[0-9]+$/.test(String(receipt.outcome)))
-      throw new Error('A settled wager result is required');
+      throw new Error('A settled casino bet is required');
     const { rows, risk, stake } = drop,
       { bucket, turns } = landing(rows, BigInt(receipt.outcome)),
       paid = payout(BigInt(stake), multipliers(rows, risk)[bucket]!);

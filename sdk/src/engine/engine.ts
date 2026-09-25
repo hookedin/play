@@ -271,7 +271,7 @@ export interface PolicyEvaluation {
   readonly expectedPayout: Rational;
   readonly expectedAdditionalCash: Rational;
   readonly netEV: Rational;
-  readonly expectedAtomicBets: Rational;
+  readonly expectedCasinoBets: Rational;
   readonly expectedPayments: Rational;
 }
 
@@ -299,7 +299,7 @@ export function evaluatePolicy(plan: GamePlan, policy: Policy): PolicyEvaluation
     let bets = ZERO;
     let payments = ZERO;
     let additional = fraction(action.additionalCash);
-    if (action.transition.kind === 'bet') bets = ONE;
+    if (action.transition.kind === 'casino-bet') bets = ONE;
     if (action.transition.kind === 'payment') payments = ONE;
     for (const outcome of action.transition.outcomes) {
       const child = evaluate(outcome.next);
@@ -327,7 +327,7 @@ export function evaluatePolicy(plan: GamePlan, policy: Policy): PolicyEvaluation
     expectedPayout,
     expectedAdditionalCash: result.additional,
     netEV: add(add(expectedPayout, fraction(-plan.initialCash)), fraction(-result.additional.n, result.additional.d)),
-    expectedAtomicBets: result.bets,
+    expectedCasinoBets: result.bets,
     expectedPayments: result.payments,
   });
 }
@@ -402,7 +402,7 @@ interface PreparedBase {
 }
 export type PreparedTransition =
   | (PreparedBase & {
-      readonly kind: 'bet';
+      readonly kind: 'casino-bet';
       /** Exactly what the wallet signs: the stake and the prizes it can pay. */
       readonly bet: Bet;
       /** The cash kept whatever the outcome. */
@@ -439,10 +439,10 @@ export function prepareAction(
   const step = action.transition,
     before = Object.freeze({ ...state });
   let prepared: PreparedTransition;
-  if (step.kind === 'bet') {
+  if (step.kind === 'casino-bet') {
     if (!plan.admits(state.bankroll, step.bet)) throw new RangeError('the live bankroll does not admit this step');
     prepared = Object.freeze({
-      kind: 'bet',
+      kind: 'casino-bet',
       before,
       actionId,
       additionalCash: action.additionalCash,
@@ -482,7 +482,7 @@ export interface Resolution {
  * it reports ignores the casino's commission, which only ever lowers it further. */
 export function resolveTransition(prepared: PreparedTransition, outcome?: bigint): Resolution {
   if (!preparedTransitions.has(prepared)) throw new TypeError('use a transition returned by prepareAction');
-  if (prepared.kind === 'bet') {
+  if (prepared.kind === 'casino-bet') {
     if (typeof outcome !== 'bigint' || outcome < 0n || outcome >= OUTCOME_SPACE)
       throw new TypeError("the round's verified 64-bit outcome is required for a bet");
     const next = prepared.successors.find(s => outcome >= s.rangeStart && outcome < s.rangeEnd);
@@ -514,7 +514,7 @@ export function resolveTransition(prepared: PreparedTransition, outcome?: bigint
 
 /** Demonstration only: production gets this outcome from the verified round. */
 export function simulateServerResult(prepared: PreparedTransition, random: RandomBelow): bigint {
-  if (prepared.kind !== 'bet') throw new Error('not a bet');
+  if (prepared.kind !== 'casino-bet') throw new Error('not a bet');
   if (typeof random !== 'function') throw new TypeError('an independent server RNG is required');
   return draw(random, OUTCOME_SPACE);
 }

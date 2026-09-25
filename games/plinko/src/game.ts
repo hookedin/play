@@ -158,7 +158,7 @@ const drops = new DropClient(HookedIn);
     });
   }
 
-  /** Wagers settle one at a time; balls fall together. Each tap queues one more ball. */
+  /** Casino bets settle one at a time; balls fall together. Each tap queues one more ball. */
   async function work() {
     if (working) return;
     working = true;
@@ -214,7 +214,7 @@ const drops = new DropClient(HookedIn);
       } else if (drops.pending) {
         setBoard(drops.pending.rows, drops.pending.risk);
         stakeInput.value = HookedIn.exactAmount(drops.pending.stake);
-        message('A ball is still waiting for its wager. Drop to finish it.');
+        message('A ball is still waiting for its casino bet. Drop to finish it.');
       }
     } catch (error: any) {
       message(error.message, true);

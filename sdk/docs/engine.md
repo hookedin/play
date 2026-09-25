@@ -1,10 +1,10 @@
 # The pricing engine
 
-`@hookedin/play/sdk/engine` is a TypeScript library for finite games with decisions and exact state probabilities. It prices cash continuation values backward through a public-state graph, then executes each chosen action as one native bet (a stake, and a prize for every better successor), an explicit cash payment, or a no-wager transition. Two rule sets ship with it: Stake-rules blackjack with an infinite replacement deck ([blackjack.ts](../src/engine/blackjack.ts)) and reveal-or-cashout Mines ([mines.ts](../src/engine/mines.ts)).
+`@hookedin/play/sdk/engine` is a TypeScript library for finite games with decisions and exact state probabilities. It prices cash continuation values backward through a public-state graph, then executes each chosen action as one casino bet (a stake, and a prize for every better successor), an explicit cash payment, or a no-wager transition. Two rule sets ship with it: Stake-rules blackjack with an infinite replacement deck ([blackjack.ts](../src/engine/blackjack.ts)) and reveal-or-cashout Mines ([mines.ts](../src/engine/mines.ts)).
 
-The engine is a layer over the casino's native bet. It adds no contract and reserves no whole hand. The round's verified outcome decides every step, including which card was drawn; the library samples nothing. Each bet must be independently assessed, accepted and settled by the casino.
+The engine is a layer over casino bets. It adds no contract and reserves no whole hand. The round's verified outcome decides every step, including which card was drawn; the library samples nothing. Each bet must be independently assessed, accepted and settled by the casino.
 
-The derivation is in [sequential games built from native bets](sequential-games.md). This page is the API guide.
+The derivation is in [sequential games built from casino bets](sequential-games.md). This page is the API guide.
 
 ## Files
 
@@ -58,13 +58,13 @@ The compiler prices successors first, prices each action's successor-cash table,
 
 `requiredCash` is a computed funding requirement, not terminal payout EV. The blackjack terminal prize scale and this starting requirement need not be equal. `cashQuantum` selects the monetary grid. A price is the least grid cash whose bet the admission rule accepts, found by bisection.
 
-For an individual transition, `priceTransition({ admits, bankroll, outcomes, quantum })` returns its required cash, and `compileTransition({ admits, bankroll, cash, outcomes })` builds the step for a specified current balance. Each outcome is `{ next, cash, probability, label? }`. A step is `{ kind: 'bet', bet, retained, successors }`: the bet stakes `cash − retained`, where `retained` is the cheapest successor's cash, and holds a prize `[rangeStart, rangeEnd)` paying `successor cash − retained` for every better successor. Successors lie along the outcome space in their stated order, each as wide as its probability to the nearest outcome in 2^64, and successors needing the same cash keep their own stretch. A step whose successors all need the same cash is a `noop`, or a `payment` of whatever cash exceeds it. A step with more than 64 distinct prizes is refused.
+For an individual transition, `priceTransition({ admits, bankroll, outcomes, quantum })` returns its required cash, and `compileTransition({ admits, bankroll, cash, outcomes })` builds the step for a specified current balance. Each outcome is `{ next, cash, probability, label? }`. A step is `{ kind: 'casino-bet', bet, retained, successors }`: the bet stakes `cash − retained`, where `retained` is the cheapest successor's cash, and holds a prize `[rangeStart, rangeEnd)` paying `successor cash − retained` for every better successor. Successors lie along the outcome space in their stated order, each as wide as its probability to the nearest outcome in 2^64, and successors needing the same cash keep their own stretch. A step whose successors all need the same cash is a `noop`, or a `payment` of whatever cash exceeds it. A step with more than 64 distinct prizes is refused.
 
 ## Runtime and policy
 
 `prepareAction(plan, state, actionId, random?)` takes the chosen action and a runtime state `{ nodeId, cash, bankroll }`. Choose the action before its round's outcome exists. The same action is always the same bet, so there is nothing to protect from a redraw.
 
-`prepareAction` returns a tagged `bet`, `noop` or `payment` result, after asking the admission rule again at the live bankroll. `resolveTransition(prepared, outcome?)` returns `{ state, label, payout, payment }` using reference accounting that ignores commission. The `outcome` of a bet must be the round's verified 64-bit value from native settlement in a live adapter; it names the successor and its label. The resolver is not an oracle or a transaction sender. Explicit payment steps require verified settlement of the corresponding debit before acknowledgement; no-wager steps create no money. Durable restart recovery and exactly-once application belong to the adapter. [`RoundClient`](../src/round.ts) is that adapter for a game page.
+`prepareAction` returns a tagged `casino-bet`, `noop` or `payment` result, after asking the admission rule again at the live bankroll. `resolveTransition(prepared, outcome?)` returns `{ state, label, payout, payment }` using reference accounting that ignores commission. The `outcome` of a casino bet must be the round's verified 64-bit value from its settlement in a live adapter; it names the successor and its label. The resolver is not an oracle or a transaction sender. Explicit payment steps require verified settlement of the corresponding debit before acknowledgement; no-wager steps create no money. Durable restart recovery and exactly-once application belong to the adapter. [`RoundClient`](../src/round.ts) is that adapter for a game page.
 
 `evaluatePolicy(plan, policy)` obtains an exact terminal payout distribution, expectation, net EV after initial cash and additional contributions, and expected counts of bets and payments. It assumes completion to graph terminals and excludes optional stopping outside graph actions. The policy must be a pure deterministic function of the public node; stateful callbacks are incompatible with its per-node cache. `optimalExpectedValuePolicy(plan)` supplies a policy chosen for net payout expectation after additional contributions. These are separate from the backward Kelly funding calculation. `getNode(plan, id)` exposes a compiled public state for a consumer.
 
@@ -98,6 +98,6 @@ With initial stake 1 ETH, floor 1,000,000 ETH and quantum 10^9 wei, the graph ha
 
 ## Further reading
 
-- [Sequential games built from native bets](sequential-games.md): the derivation, the bankroll floor, and the blackjack rules and edge.
+- [Sequential games built from casino bets](sequential-games.md): the derivation, the bankroll floor, and the blackjack rules and edge.
 - [Collapsing a table too large for one bet](collapsing-bets.md).
 - [Kelly pricing and commission](../../docs/economics.md): the admission rule the engine prices against.

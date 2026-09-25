@@ -1,7 +1,8 @@
 import { formatEther } from 'ethers';
-import type { PlayerBet } from '../protocol/types.ts';
+import type { PlayerDeveloperBet } from '../protocol/types.ts';
 import { plain } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
+import { developerBetStatus } from './game-account.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
 interface ActivityEntry {
@@ -141,47 +142,40 @@ export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
   const parts = returnParts(BigInt(stake as string), BigInt(expectedPayout as string));
   return `RTP ${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
 }
-/** What a bet that settles later asks of the player, said as plainly as the docs say it. */
-const HELD =
-  'The casino holds its stake until it settles, and what it pays is owed to you, collected by your wallet: like winnings, it is the casino’s promise until then.';
-/** Whose word a bet that settles later is: with prizes, a draw's; with terms, its referee's. */
-const trust = (bet: { prizes?: unknown } | undefined) =>
-  bet?.prizes
-    ? 'Its referee draws it against the casino’s bankroll, on a round the casino named and the referee committed its seed to before you bet: its outcome was fixed before your bet, and nobody can change it. Neither sees it alone before the draw; together they could, and turn the bet away, which its receipt would show. The referee chooses when to draw, not what it pays. Undrawn by its deadline, the stake comes back.'
-    : 'Its game’s developer signs what it pays: that is their word, and what it wins beyond its stake is theirs to pay. Unsettled by its deadline, the stake comes back.';
+/** What a developer bet asks of the player, said as plainly as the docs say it. */
+const DEVELOPER_BET =
+  'Its stake went to the game’s developer when you placed it, and the developer settles it: you trust the developer to pay. Your wallet collects what they pay.';
+/** What a developer bet is owed: with prizes, what the round's outcome says, which the wallet checks; with terms, the
+ * developer's word. */
+const trust = (developerBet: { prizes?: unknown } | undefined) =>
+  developerBet?.prizes
+    ? 'It is provably fair: its outcome was fixed before you bet, by a round the casino named and a seed the developer committed to. It is owed what its prizes pay on that outcome if the developer’s casino bet on the round covers it, and its stake back if not. Your wallet checks what the developer pays and shows any shortfall.'
+    : 'Its game’s developer says what it pays: that is their word.';
 /** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
 export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
-/** A bet can have settled while what it paid still waits to enter the channel balance. Its game goes by the name
- * its receipt kept, when this wallet has the receipt. */
-export function heldSummary(bet: PlayerBet, name = 'A bet that settles later') {
+/** A developer bet can have settled while what it was paid still waits to enter the channel balance. Its game goes by
+ * the name its receipt kept, when this wallet has the receipt. */
+export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer bet') {
   const settled = bet.status === 'settled',
     amount = settled ? (bet.payout ?? '0') : bet.stake;
   return {
     title: name,
     status: !settled
-      ? 'Waiting for result'
+      ? 'Waiting for the developer'
       : bet.payout === '0'
         ? 'Settled · no payout'
         : bet.collected
-          ? bet.refunded
-            ? 'Refund collected'
-            : 'Payout collected'
-          : bet.refunded
-            ? 'Refund ready'
-            : 'Payout ready',
+          ? 'Payout collected'
+          : 'Payout ready',
     amount: `${formatEther(amount)} ${receiptUnit(bet)}`,
     amountLabel: !settled
-      ? 'Stake held'
+      ? 'Stake with the developer'
       : bet.payout === '0'
         ? 'Payout'
         : bet.collected
           ? 'Collected'
           : 'Awaiting collection',
-    description: !settled
-      ? `Refunded if unsettled by ${new Date(bet.deadline).toLocaleString()}.`
-      : bet.refunded
-        ? 'Its stake came back.'
-        : 'The bet has settled.',
+    description: !settled ? 'Its developer settles it when they choose.' : 'Its developer has settled it.',
     tone: (!settled ? 'neutral' : bet.payout === '0' ? 'neutral' : bet.collected ? 'positive' : 'warning') as Tone,
   };
 }
@@ -191,18 +185,25 @@ export function receiptSummary(
   const unit = receiptUnit(receipt);
   if (receipt.status === 'rejected')
     return {
-      title: receipt.kind === 'invest' ? 'Investment declined' : 'Bet rejected',
-      status: receipt.kind === 'invest' ? 'No shares bought' : 'No wager placed',
+      title:
+        receipt.kind === 'invest'
+          ? 'Investment declined'
+          : receipt.kind === 'developer-bet'
+            ? 'Developer bet rejected'
+            : receipt.kind === 'casino-bet'
+              ? 'Casino bet rejected'
+              : 'Payment rejected',
+      status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: receipt.lost ? 'warning' : 'neutral',
       amount: `0 ${unit}`,
       amountLabel: 'Balance change',
-      description: ['invest', 'wager'].includes(receipt.kind)
+      description: ['invest', 'developer-bet'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
         : receipt.lost
-          ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this wager would have paid cannot be checked.'
+          ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this casino bet would have paid cannot be checked.'
           : receipt.wouldHavePaid === undefined
             ? 'Your balance is unchanged. You can place another bet.'
-            : `Your balance is unchanged. The casino revealed the round: this wager would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} for its ${formatEther(receipt.request?.amount ?? 0)} ${unit} stake.`,
+            : `Your balance is unchanged. The casino revealed the round: this casino bet would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} for its ${formatEther(receipt.request?.amount ?? 0)} ${unit} stake.`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -216,49 +217,53 @@ export function receiptSummary(
         orphaned: 'Unconfirmed · reorg',
       } as Record<string, string>
     )[receipt.status] || 'Unconfirmed';
-  // A bet's stake was paid to enter; its result is what it paid against that stake. A bet that settles
-  // later has a result once its payout is collected.
-  const played = receipt.kind === 'bet' || (receipt.kind === 'wager' && receipt.payout !== undefined),
-    net = played ? BigInt(receipt.payout ?? 0) - BigInt(receipt.stake ?? 0) : 0n;
+  // A bet's stake was paid to enter; its result is what it paid against that stake. A developer bet has a result
+  // once what its developer paid is collected.
+  const played = receipt.kind === 'casino-bet' || (receipt.kind === 'developer-bet' && receipt.payout !== undefined),
+    net = played ? BigInt(receipt.payout ?? 0) - BigInt(receipt.stake ?? 0) : 0n,
+    bet = receipt.kind === 'developer-bet' ? 'Developer bet' : 'Casino bet';
+  // A developer bet its developer did not cover was returned: its stake came back, whatever it would have paid.
   const title =
-    receipt.kind === 'wager' && !played
-      ? 'Bet placed'
-      : played
-        ? net > 0n
-          ? 'Bet won'
-          : net < 0n
-            ? 'Bet lost'
-            : 'Bet returned'
-        : (
-            {
-              deposit: 'Channel funded',
-              withdrawal: 'Claim collected',
-              closure: 'Channel closed',
-              dispute: 'Channel dispute',
-              payment: 'Game payment',
-              payout: 'Bet payout',
-              bank: 'Put into your bank',
-              withdrawn: 'Taken from your bank',
-              invest: 'Invested in the bankroll',
-              redeem: 'Shares redeemed',
-              divest: 'Bankroll payout',
-              earnings: 'Developer earnings',
-              faucet: 'Test coins claimed',
-              transaction: 'Transaction',
-            } as Record<string, string>
-          )[receipt.kind] || receipt.kind;
+    receipt.kind === 'developer-bet' && !played
+      ? 'Developer bet placed'
+      : receipt.kind === 'developer-bet' && developerBetStatus(receipt) === 'returned'
+        ? 'Developer bet returned'
+        : played
+          ? net > 0n
+            ? `${bet} won`
+            : net < 0n
+              ? `${bet} lost`
+              : `${bet} broke even`
+          : (
+              {
+                deposit: 'Channel funded',
+                withdrawal: 'Claim collected',
+                closure: 'Channel closed',
+                dispute: 'Channel dispute',
+                payment: 'Game payment',
+                'developer-bet-payout': 'Developer bet payout',
+                bank: 'Put into your bank',
+                withdrawn: 'Taken from your bank',
+                invest: 'Invested in the bankroll',
+                redeem: 'Shares redeemed',
+                divest: 'Bankroll payout',
+                earnings: 'Developer earnings',
+                faucet: 'Test coins claimed',
+                transaction: 'Transaction',
+              } as Record<string, string>
+            )[receipt.kind] || receipt.kind;
   let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ${unit}`;
   let amountLabel = !settled
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
       ? 'Deposited'
-      : ['withdrawal', 'divest', 'earnings', 'faucet', 'payout', 'withdrawn'].includes(receipt.kind)
+      : ['withdrawal', 'divest', 'earnings', 'faucet', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
         ? 'Received'
         : receipt.kind === 'invest'
           ? 'Invested'
           : receipt.kind === 'redeem'
             ? 'Owed to you'
-            : ['payment', 'wager', 'bank'].includes(receipt.kind)
+            : ['payment', 'developer-bet', 'bank'].includes(receipt.kind)
               ? 'Sent'
               : receipt.kind === 'closure'
                 ? 'Claim recorded'
@@ -273,10 +278,10 @@ export function receiptSummary(
       receipt.maxPayout === undefined
         ? ''
         : ` of up to ${formatEther(receipt.maxPayout)} ${unit} · ${returnToPlayer(receipt.stake, receipt.expectedPayout)}`
-    }${receipt.kind === 'bet' ? ` · Balance ${formatEther(receipt.balance)} ${unit}` : ''}`;
+    }${receipt.kind === 'casino-bet' ? ` · Balance ${formatEther(receipt.balance)} ${unit}` : ''}`;
   } else if (
     settled &&
-    ['withdrawal', 'divest', 'earnings', 'faucet', 'payout', 'withdrawn'].includes(receipt.kind) &&
+    ['withdrawal', 'divest', 'earnings', 'faucet', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind) &&
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
@@ -287,28 +292,35 @@ export function receiptSummary(
   if (receipt.kind === 'divest')
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'payment')
-    description = `An extra wager this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
-  if (receipt.kind === 'wager') {
-    status = !played
-      ? 'Waiting for result'
-      : receipt.reason
-        ? 'Refund collected'
-        : BigInt(receipt.payout)
-          ? 'Payout collected'
-          : 'Settled · no payout';
-    if (!played)
-      description = `Placed; it settles later. ${HELD} ${trust(receipt.details?.bet)} Balance ${formatEther(receipt.balance)} ${unit}`;
-    else if (receipt.reason)
-      description = `${receipt.reason}${
+    description = `A payment this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
+  if (receipt.kind === 'developer-bet') {
+    const standing = developerBetStatus(receipt);
+    status =
+      standing === 'open'
+        ? 'Waiting for the developer'
+        : standing === 'shorted'
+          ? 'Paid short'
+          : standing === 'returned'
+            ? 'Stake returned'
+            : BigInt(receipt.payout)
+              ? 'Payout collected'
+              : 'Settled · no payout';
+    if (standing === 'shorted') tone = 'negative';
+    if (standing === 'open')
+      description = `Placed with the game’s developer. ${DEVELOPER_BET} ${trust(receipt.details?.developerBet)} Balance ${formatEther(receipt.balance)} ${unit}`;
+    else if (standing === 'shorted')
+      description = `Its developer paid ${formatEther(receipt.payout)} ${unit} of the ${formatEther(receipt.owed)} ${unit} it is owed on its round’s outcome; your wallet keeps the proof. ${description}`;
+    else if (standing === 'returned')
+      description = `Its developer did not cover it and paid its stake back${
         receipt.wouldHavePaid === undefined
           ? ''
-          : `: it would have paid ${formatEther(receipt.wouldHavePaid)} ${unit}, the draw on record beside it`
+          : `: it would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} on its round’s outcome`
       }. ${description}`;
   }
-  if (receipt.kind === 'payout')
-    description = `What a bet that settled later paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
+  if (receipt.kind === 'developer-bet-payout')
+    description = `What a developer bet’s developer paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'bank')
-    description = `Your bank pays what your games' splits owe beyond their stakes, and keeps what they do not pay. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'withdrawn')
     description = `Taken from your bank and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'faucet')

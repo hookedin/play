@@ -81,26 +81,26 @@ test('contract derive and deriveState agree on every operation kind and invalid 
   const secret = id('a secret'),
     seed = id('s'),
     prize = { rangeStart: 0n, rangeEnd: 1n << 62n, payout: 150n },
-    wager = {
+    casinoBet = {
       kind: 1,
       amount: 100n,
       prizes: [prize],
       seedHash: seedHash(seed),
     };
-  const round = { ...wager, round: roundId(secret) };
-  await disagreeNever(await craft(a, { ...wager, round: id('another round') }, secret, seed), /Invalid bet/);
-  await disagreeNever(await craft(a, round, id('another secret'), seed), /Invalid bet/);
-  await disagreeNever(await craft(a, round, secret, id('another seed')), /Invalid bet/);
-  await disagreeNever(await craft(a, round, secret), /Invalid bet/);
+  const round = { ...casinoBet, round: roundId(secret) };
+  await disagreeNever(await craft(a, { ...casinoBet, round: id('another round') }, secret, seed), /Invalid casino bet/);
+  await disagreeNever(await craft(a, round, id('another secret'), seed), /Invalid casino bet/);
+  await disagreeNever(await craft(a, round, secret, id('another seed')), /Invalid casino bet/);
+  await disagreeNever(await craft(a, round, secret), /Invalid casino bet/);
   for (const bad of [{ rangeStart: 1n << 62n }, { rangeEnd: (1n << 64n) + 1n }, { payout: 0n }, { payout: 1n << 128n }])
     await disagreeNever(
       await craft(a, { ...round, prizes: [prize, { ...prize, ...bad }] }, secret, seed),
-      /Invalid bet/,
+      /Invalid casino bet/,
     );
-  await disagreeNever(await craft(a, { ...round, prizes: [] }, secret, seed), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, prizes: Array(65).fill(prize) }, secret, seed), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, seedHash: ZeroHash }, secret, ZeroHash), /Invalid bet/);
-  await disagreeNever(await craft(a, { ...round, amount: 5000n }, secret, seed), /Invalid bet/);
+  await disagreeNever(await craft(a, { ...round, prizes: [] }, secret, seed), /Invalid casino bet/);
+  await disagreeNever(await craft(a, { ...round, prizes: Array(65).fill(prize) }, secret, seed), /Invalid casino bet/);
+  await disagreeNever(await craft(a, { ...round, seedHash: ZeroHash }, secret, ZeroHash), /Invalid casino bet/);
+  await disagreeNever(await craft(a, { ...round, amount: 5000n }, secret, seed), /Invalid casino bet/);
   // The stake is paid to enter and every prize holding the outcome pays: a full table of 64 overlapping
   // prizes, a prize over the whole outcome space and a prize below the stake all agree on-chain.
   const everything = { rangeStart: 0n, rangeEnd: 1n << 64n, payout: 3n };

@@ -84,7 +84,7 @@ test('the published machines return what the paytable states, exactly', () => {
     const [n, d] = expected[machine.name].rtp;
     assert.equal(returned * d, n * BigInt(total), `${machine.name} return to player`);
     assert.equal(Math.max(...[...counts.keys()].map(payoutStakes)), expected[machine.name].top);
-    // Pricing one wager costs about the cube of the distinct payouts; the rules exist to keep this small.
+    // Pricing one casino bet costs about the cube of the distinct payouts; the rules exist to keep this small.
     assert.ok(new Set([...counts.keys()].map(payoutStakes)).size <= 56, `${machine.name} distinct payouts`);
     console.log(
       `${machine.name}: RTP ${Number((returned * 10n ** 8n) / BigInt(total)) / 1e6}%, ${counts.size} outcomes, top ${expected[machine.name].top}x`,
@@ -109,7 +109,7 @@ test('the published machines return what the paytable states, exactly', () => {
   }
 });
 
-test('a spin prices as one wager at the stake, even against a modest bankroll', () => {
+test('a spin prices as one casino bet at the stake, even against a modest bankroll', () => {
   const stake = 10n ** 12n;
   for (const mode of ['base', 'bonus']) {
     const started = performance.now();
@@ -123,7 +123,7 @@ test('a spin prices as one wager at the stake, even against a modest bankroll', 
     assert.equal(plan.maximumDepth, 1);
     // The spin is one bet the player signs whole: a prize per paying outcome, and its exact return.
     const [{ transition: step }] = (plan.nodes.find(n => n.id === plan.root) as any).actions;
-    assert.equal(step.kind, 'bet');
+    assert.equal(step.kind, 'casino-bet');
     assert.equal(step.bet.stake, stake);
     assert.ok(step.bet.prizes.length <= 64 && step.bet.prizes.length >= 30, `${step.bet.prizes.length} prizes`);
     const { counts, total } = distribution(mode === 'bonus' ? MACHINES.bonus : MACHINES.base),
@@ -142,7 +142,7 @@ test('a spin prices as one wager at the stake, even against a modest bankroll', 
   assert.throws(() => slotGraph({ stake: '0' }), /greater than zero/);
 });
 
-test('spins settle through the atomic bridge in both modes and survive a reload', async () => {
+test('spins settle through the wallet bridge in both modes and survive a reload', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('samson'));
@@ -163,8 +163,8 @@ test('spins settle through the atomic bridge in both modes and survive a reload'
           ? { ...w.gameInfo(), bankroll: '1000000000000' }
           : method === 'game.receipt'
             ? w.gameReceipt(params.id)
-            : method === 'game.bet'
-              ? w.gameBet(params)
+            : method === 'game.casinoBet'
+              ? w.gameCasinoBet(params)
               : w.gamePayment(params),
   };
   let round = new RoundClient(bridge, slotGraph, undefined, { store, name: 'samson' });
@@ -213,8 +213,8 @@ test('every step pays back at least the floor this game is built to', () => {
         for (const action of node.actions) {
           const step = action.transition;
           // Every step is a bet that pays something back: this game never charges for nothing.
-          assert.ok(step.kind === 'bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
-          if (step.kind !== 'bet') continue;
+          assert.ok(step.kind === 'casino-bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
+          if (step.kind !== 'casino-bet') continue;
           assert.ok(
             betReturn(step.bet) >= FLOOR,
             `${node.id}/${action.id} at ${stake} wei pays back less than this game's floor`,

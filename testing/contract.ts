@@ -18,7 +18,7 @@ import {
   seedHash,
   checkpointEvidence,
 } from '../protocol/protocol.ts';
-import { assessRound } from '../protocol/risk.ts';
+import { assessBet } from '../protocol/risk.ts';
 import { loadArtifact } from '../protocol/deployment.ts';
 export async function anvil(chainId = 31337) {
   const probe = net.createServer();
@@ -87,18 +87,18 @@ export async function accessFor(d: any, opening: any, signer: any) {
 }
 /** One prize: `payout` when the round's outcome falls below `threshold`. */
 export const below = (threshold: any, payout: any) => [{ rangeStart: 0, rangeEnd: threshold, payout }];
-/** The simplest bet, a stake that wins `netWin` below a threshold, priced as the round of one it is. */
-export function assessBet({ bankroll, stake, netWin, winThreshold }: Record<string, bigint>) {
+/** The simplest casino bet, a stake that wins `netWin` below a threshold, priced by the casino's admission rule. */
+export function assessBinary({ bankroll, stake, netWin, winThreshold }: Record<string, bigint>) {
   const prizes = [{ rangeStart: 0n, rangeEnd: winThreshold, payout: stake + netWin }],
-    risk = assessRound({ bankroll, bets: [{ stake, prizes }] });
+    risk = assessBet({ bankroll, bet: { stake, prizes } });
   return {
     ...risk,
     stake,
     netWin,
     winThreshold,
     prizes,
-    developerFee: risk.totalFee / 2n,
-    casinoFee: risk.totalFee / 2n,
+    developerFee: risk.fee / 2n,
+    casinoFee: risk.fee / 2n,
   };
 }
 export async function open(f: any, player: any, deposit = 1000n, overrides: any = {}) {

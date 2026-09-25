@@ -2,7 +2,7 @@
 export interface GameBalance {
   /** What this game may still risk in this tab, including its winnings, in the asset's smallest units. Released when the player leaves. */
   balance: string;
-  /** A signed operation awaits recovery in the wallet; no new wager is possible. */
+  /** A signed operation awaits recovery in the wallet; no new bet or payment is possible. */
   pending: boolean;
 }
 /** What the wallet plays with: the network's ETH, or `test`, the casino's test coins, which every
@@ -20,14 +20,9 @@ export interface WalletLimits {
   prizes: number;
   /** The size of the outcome space, as a decimal string: a prize range lies within [0, this). */
   outcomeSpace: string;
-  /** The most bets one round takes, and the most distinct outcomes they may cut it into. */
-  bets: number;
-  cells: number;
-  /** How long a referee's round takes bets, in milliseconds: not drawn by then, its bets are refunded. */
-  round: number;
-  /** The furthest a bet with terms may have its deadline, in milliseconds. */
-  deadline: number;
-  /** The most a bet's terms take, as canonical JSON, and the longest group label. */
+  /** The most developer bets one developer's casino bet covers, and one batch of settlements settles. */
+  covers: number;
+  /** The most a developer bet's terms take, as canonical JSON, and the longest group label. */
   terms: number;
   group: number;
 }
@@ -69,8 +64,8 @@ export interface WirePrize {
   rangeEnd: string;
   payout: string;
 }
-export type { GameBet, GamePlace, GameReceipt } from '../../protocol/game-types.ts';
-import type { GameBet, GamePlace, GameReceipt } from '../../protocol/game-types.ts';
+export type { CasinoBetRequest, DeveloperBetRequest, GameReceipt } from '../../protocol/game-types.ts';
+import type { CasinoBetRequest, DeveloperBetRequest, GameReceipt } from '../../protocol/game-types.ts';
 import { playerScope, showName } from './wire.ts';
 export const HookedIn = (() => {
   'use strict';
@@ -98,7 +93,7 @@ export const HookedIn = (() => {
       if (greeted) for (const listener of balanceListeners) listener(latest);
       return;
     }
-    // A placed bet has settled, or come back, and the wallet has collected it.
+    // A developer bet's developer has settled it, and the wallet has checked and collected what it was paid.
     if (message.event === 'game.receipt') {
       for (const listener of receiptListeners) listener(message.receipt);
       return;
@@ -220,18 +215,22 @@ export const HookedIn = (() => {
     input.value = exactAmount(next);
   }
 
-  /** The receipt of an earlier operation by your own `id`, or `null` if this wallet has none. For a placed bet
-   * the wallet also asks the casino: once the bet has settled, the wallet collects it and `onReceipt` hears. */
+  /** The receipt of an earlier operation by your own `id`, or `null` if this wallet has none. For an open developer bet
+   * the wallet also asks the casino: once its developer has settled it, the wallet collects it and `onReceipt`
+   * hears. */
   const receipt = (id: string): Promise<GameReceipt | null> => call('game.receipt', { id });
-  /** A bet that settles at once on the player's own round: `stake` is paid to enter, and every prize whose range
-   * holds the outcome pays. `group` labels bets that belong together, such as the steps of one hand. */
-  const bet = (request: GameBet): Promise<GameReceipt> => call('game.bet', { ...request });
-  /** A bet your referee settles later, placed at once and final: with `prizes`, on the `round` of your referee's
-   * that it names, drawn against the bankroll; with `terms` and a `deadline`, split by your referee. The receipt
-   * says `placed`; once the bet has settled or come back, `onReceipt` hears. */
-  const place = (request: GamePlace): Promise<GameReceipt> => call('game.place', { ...request });
-  /** Called with the new receipt whenever one of your placed bets has settled, or come back, and the wallet has
-   * collected it. Returns a function that stops listening. */
+  /** A casino bet: settled at once against the casino's bankroll, on the player's own round. `stake` is paid to
+   * enter, and every prize whose range holds the outcome pays. `group` labels bets that belong together, such as
+   * the steps of one hand. */
+  const casinoBet = (request: CasinoBetRequest): Promise<GameReceipt> => call('game.casinoBet', { ...request });
+  /** A developer bet: a bet against your game's developer, whose bank takes the stake at once and who settles it.
+   * With `prizes` it names one of your developer's open rounds by `round`, and is owed what its prizes pay on the
+   * round's outcome if your developer's casino bet on the round covers it, its stake back if not; with `terms`,
+   * what your developer's settlement says. The receipt says `open`; once it is settled, `onReceipt` hears. */
+  const developerBet = (request: DeveloperBetRequest): Promise<GameReceipt> =>
+    call('game.developerBet', { ...request });
+  /** Called with the new receipt whenever one of your developer bets has been settled and the wallet has checked and
+   * collected what it was paid. Returns a function that stops listening. */
   const onReceipt = (listener: (receipt: GameReceipt) => void) => {
     receiptListeners.add(listener);
     return () => {
@@ -294,8 +293,8 @@ export const HookedIn = (() => {
     onBalance,
     requestFunds,
     receipt,
-    bet,
-    place,
+    casinoBet,
+    developerBet,
     onReceipt,
     payment,
     storageScope,

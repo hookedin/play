@@ -103,7 +103,7 @@ const round = new RoundClient(HookedIn, diceGraph);
     if (busy || !ready) return;
     setBusy(true);
     $('die').classList.remove('lost');
-    message('The game prepares your wager. The wallet verifies its settlement.');
+    message('The game prepares your casino bet. The wallet verifies its settlement.');
     try {
       if (!session || session.terminal) {
         const stake = HookedIn.parseAmount($<HTMLInputElement>('stake').value);

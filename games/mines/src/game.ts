@@ -77,7 +77,7 @@ const round = new RoundClient(HookedIn, minesGraph);
     busy = true;
     if (chosen >= 0) tiles[chosen].classList.add('pending');
     render();
-    message('The wallet is verifying and settling the wager…');
+    message('The wallet is verifying and settling the casino bet…');
     try {
       session = await round.action(action);
       if (chosen >= 0) {

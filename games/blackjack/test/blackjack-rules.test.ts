@@ -342,7 +342,7 @@ test('a hand is not one bet: a step can pay back almost nothing', () => {
     if (node.kind !== 'decision') continue;
     for (const action of node.actions) {
       const step = action.transition;
-      if (step.kind !== 'bet') {
+      if (step.kind !== 'casino-bet') {
         if (step.amount > 0n) payments++;
         continue;
       }

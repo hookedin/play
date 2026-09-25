@@ -57,7 +57,7 @@ test('a roll settles through the real wallet and pays what the rules promise', a
       if (method === 'wallet.hello') return w.gameHello();
       if (method === 'wallet.info') return { ...w.gameInfo(), bankroll: '1000000000000' };
       if (method === 'game.receipt') return w.gameReceipt(params.id);
-      if (method === 'game.bet') return w.gameBet(params);
+      if (method === 'game.casinoBet') return w.gameCasinoBet(params);
       throw new Error(`unexpected ${method}`);
     },
   };
@@ -109,8 +109,8 @@ test('every step pays back at least the floor this game is built to', () => {
         for (const action of node.actions) {
           const step = action.transition;
           // Every step is a bet that pays something back: this game never charges for nothing.
-          assert.ok(step.kind === 'bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
-          if (step.kind !== 'bet') continue;
+          assert.ok(step.kind === 'casino-bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
+          if (step.kind !== 'casino-bet') continue;
           assert.ok(
             betReturn(step.bet) >= FLOOR,
             `${node.id}/${action.id} at ${stake} wei pays back less than this game's floor`,

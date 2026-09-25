@@ -1,8 +1,9 @@
 /**
  * Roulette where everyone at the table shares one spin. The page lays chips on the layout, turns the whole
- * layout into one bet, and asks the wallet to place it on the round the table shows. The wallet places it by
- * itself; the wheel is the game's referee and draws every open bet on one spin. Once the bet is drawn and the
- * wallet has collected it, the wallet sends the page the settled receipt, and the number is read from its
+ * layout into one bet, and asks the wallet to place it as a developer bet on the round the table shows: its stake goes
+ * to the game's developer, who runs the wheel. At the spin the wheel covers every layout with one casino bet of them
+ * all against the casino's bankroll, which reveals where the ball lands, and pays each what it wins there. Once the
+ * wallet has checked and collected that, it sends the page the settled receipt, and the number is read from its
  * outcome. The table is for one asset: players with ETH share one wheel, players with test coins another.
  */
 import { HookedIn } from '@hookedin/play/sdk/sdk';
@@ -18,7 +19,7 @@ interface Saved extends WireBet {
   /** The round it rides: the spin the player put their chips on. */
   round: string;
   chips: Record<string, string>;
-  /** The wallet signed it and the casino holds it: it rides its spin, and cannot be taken back. */
+  /** The wallet signed it and its stake is with the developer: it rides its spin, and cannot be taken back. */
   placed?: boolean;
 }
 interface Table {
@@ -31,7 +32,7 @@ interface Table {
   last: { round: string; number: number } | null;
 }
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-/** Too late for this spin: the wheel is about to draw, and a bet now would come too late for it. */
+/** Too late for this spin: the wheel is about to spin, and a bet now would come too late for it and come back. */
 const LAST_CALL_MS = 3000;
 
 (() => {
@@ -184,23 +185,35 @@ const LAST_CALL_MS = 3000;
     $('landed').dataset.colour = colour(number);
     remember(number);
     message(
-      payout
+      (payout
         ? `${number} ${colour(number)}. ${HookedIn.formatAmount(payout, 9)} ${asset} back from ${HookedIn.formatAmount(receipt.stake!, 9)} ${asset} of chips.`
-        : `${number} ${colour(number)}. Nothing on it this time.`,
+        : `${number} ${colour(number)}. Nothing on it this time.`) +
+        (receipt.status === 'shorted'
+          ? ` The wheel paid less than your chips are owed there; your wallet keeps the proof.`
+          : ''),
+      receipt.status === 'shorted',
     );
     render();
   }
-  /** A bet the casino declined, or one refunded because its spin never came: the chips are the player's again. */
+  /** A bet the casino did not take, or one the wheel did not cover, came too late for its spin or whose spin the
+   * bankroll turned down: the chips are the player's again. */
   function returned(receipt: GameReceipt) {
     saved = null;
     persist();
     bank.hold(false);
-    message(receipt.reason ? `${receipt.reason}. Your chips are back.` : 'Your chips are back.', true);
+    message(
+      receipt.status === 'returned'
+        ? 'The wheel did not cover your bet on this spin. Your chips are back.'
+        : receipt.reason
+          ? `${receipt.reason}. Your chips are back.`
+          : 'Your chips are back.',
+      true,
+    );
     render();
   }
   async function settle(receipt: GameReceipt) {
-    if (receipt.status === 'rejected' || receipt.status === 'refunded') return returned(receipt);
-    if (receipt.status === 'settled') return land(receipt);
+    if (receipt.status === 'rejected' || receipt.status === 'returned') return returned(receipt);
+    if (receipt.status === 'settled' || receipt.status === 'shorted') return land(receipt);
     if (saved!.placed) return;
     saved!.placed = true;
     persist();
@@ -228,13 +241,13 @@ const LAST_CALL_MS = 3000;
     persist();
     await ask();
   }
-  /** Ask the wallet to place the saved bet on its round: placed until its spin is drawn and the wallet has
-   * collected it, when the wallet sends the settled receipt. */
+  /** Ask the wallet to place the saved bet on its round: open until its spin is settled and the wallet has checked
+   * and collected what it was paid, when the wallet sends the settled receipt. */
   async function ask() {
     const { id, stake, prizes, round } = saved!;
     bank.hold(true);
     try {
-      await settle(await HookedIn.place({ id, stake, prizes, round }));
+      await settle(await HookedIn.developerBet({ id, stake, prizes, round }));
     } catch (error) {
       // A bet the wallet signed but has no answer for yet is asked about again; one it never signed is off.
       if (!saved!.placed && !(await HookedIn.balance()).pending) {
@@ -265,7 +278,7 @@ const LAST_CALL_MS = 3000;
     try {
       table = await wheelAPI('/table');
       skew = table.now - Date.now();
-      // The wallet has yet to answer for the bet: ask again. Once its spin is drawn, ask the wallet about it, so
+      // The wallet has yet to answer for the bet: ask again. Once its spin is settled, ask the wallet about it, so
       // it collects the bet at once; the settled receipt then arrives by itself.
       if (saved && !saved.placed && !working && !spinning) await act(ask);
       else if (saved?.placed && table.last?.round === saved.round && !spinning) await HookedIn.receipt(saved.id);
@@ -287,7 +300,7 @@ const LAST_CALL_MS = 3000;
       bank.update(startup.state);
       saved = JSON.parse(localStorage.getItem(scope) ?? 'null');
       ready = true;
-      // A placed bet's settled receipt arrives by itself once the wallet has collected it.
+      // A developer bet's settled receipt arrives by itself once the wallet has collected it.
       HookedIn.onReceipt(receipt => {
         if (saved && receipt.id === saved.id) void settle(receipt);
       });

@@ -12,7 +12,7 @@ import {
   OUTCOME_SPACE,
 } from '../src/engine/index.ts';
 import { admits } from '../src/admits.ts';
-import { assessRound, describeBet } from '../../protocol/risk.ts';
+import { assessBet, describeBet } from '../../protocol/risk.ts';
 
 const ZERO = fraction(0n);
 const labeled = (cash: any, probability: any, next = `cash-${cash}`, label?: string) => ({
@@ -25,7 +25,7 @@ const width = (s: any): bigint => BigInt(s.rangeEnd) - BigInt(s.rangeStart);
 
 /** A step is one bet: check the bet against the successors it was built from, outcome by outcome. */
 function verifyStep(step: any, bankroll: bigint) {
-  assert.equal(step.kind, 'bet');
+  assert.equal(step.kind, 'casino-bet');
   const { bet, successors, retained, cash } = step;
   // The successors tile the outcome space in their stated order.
   let edge = 0n;
@@ -58,7 +58,7 @@ function verifyStep(step: any, bankroll: bigint) {
     if (i) assert.ok(prize.rangeStart >= bet.prizes[i - 1].rangeEnd);
   }
   // The casino's own rule admits it, and the expected cash after the bet is the successors' mean.
-  assert.ok(assessRound({ bankroll, bets: [bet] }).totalFee >= 0n);
+  assert.ok(assessBet({ bankroll, bet }).fee >= 0n);
   const mean = successors.reduce((sum: bigint, s: any) => sum + s.cash * width(s), 0n);
   assert.equal(describeBet(bet).expectedPayout + retained * OUTCOME_SPACE, mean);
 }
@@ -197,7 +197,7 @@ test('small generated distributions are priced, built and verified exactly, neve
     const bankroll = 5000n + seed * 1000n,
       cash = priceTransition({ admits, bankroll, outcomes, quantum: 1n }),
       step = compileTransition({ admits, bankroll, cash, outcomes });
-    if (step.kind !== 'bet') continue;
+    if (step.kind !== 'casino-bet') continue;
     verifyStep(step, bankroll);
     steps++;
   }

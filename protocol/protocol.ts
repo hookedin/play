@@ -1,8 +1,8 @@
 import type { TypedDataField } from 'ethers';
 import type {
+  DeveloperBetDetails,
   Details,
   GameName,
-  LaterBet,
   WirePrizes,
   Domain,
   Opening,
@@ -26,7 +26,7 @@ import {
   ZeroAddress,
   toUtf8Bytes,
 } from 'ethers';
-import { OUTCOME_SPACE, MAX_BALANCE, MAX_PRIZES, MAX_ROUND_BETS, MAX_ROUND_CELLS, uint256 } from './risk.ts';
+import { OUTCOME_SPACE, MAX_BALANCE, MAX_PRIZES, uint256 } from './risk.ts';
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 export const plain = <T>(value: T): Json<T> => JSON.parse(json(value));
 export const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -78,24 +78,34 @@ export const CLOSE_TYPES = {
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
-/** A game's developer referees its bets that settle later, and proves itself with its own key, as a channel does
- * with its signer. Only a game's developer draws and settles that game's bets. */
-export const REFEREE_ACCESS_TYPES = {
-  RefereeAccess: fields('address referee,uint256 expiresAt'),
+/** A game's developer settles its game's developer bets, opens its rounds and places its casino bets from its bank,
+ * and proves itself with its own key, as a channel does with its signer. */
+export const DEVELOPER_ACCESS_TYPES = {
+  DeveloperAccess: fields('address developer,uint256 expiresAt'),
 };
-/** A referee settles a bet with terms that names it: `player` is what the player is paid and `casino` what
- * the casino is given. The developer's bank keeps the rest of the stake, or pays what the two come to beyond it.
- * `bet` is the hash of the operation that placed the bet, which signs its terms. */
+/** A developer settles a developer bet on one of its games: `player` is what the player is paid and `casino` what the
+ * casino is given, both from the developer's bank, which took the stake when the bet was placed. `bet` is the hash
+ * of the operation that placed the developer bet, which signs its prizes or its terms. */
 export const SETTLEMENT_TYPES = {
   Settlement: fields('bytes32 bet,uint256 player,uint256 casino'),
 };
-/** A referee commits the seed it will draw a round with before anybody bets on the round: `round` is the hash
- * of a secret the casino fixed, and `seedHash` the hash of the referee's seed. A bet to be drawn names both, so
- * its outcome is fixed before it is placed, and neither the casino nor the referee can see it alone. */
+/** A developer commits the seed of its casino bet on one of its rounds before any developer bet names the round:
+ * `round` is the hash of a secret the casino fixed, and `seedHash` the hash of the developer's seed. A developer bet
+ * with prizes names both, so its outcome is fixed before it is placed, and neither the casino nor the developer
+ * can see it alone. */
 export const COMMIT_TYPES = {
   Commit: fields('bytes32 round,bytes32 seedHash'),
 };
-/** The `authorization` header carrying a signed `Access` or `RefereeAccess` message. */
+/** A developer's casino bet from its bank, on one of its rounds, with the seed it committed to: settled against
+ * the bankroll at once, it reveals the round. `covers` are the developer bets that name the round and are owed what
+ * their prizes pay on its outcome: every other developer bet on the round is owed its stake back. The developer names
+ * them in the same request that reveals the outcome, so it names them before anybody can know it. `game` is the one
+ * whose commission it earns. */
+export const BANK_CASINO_BET_TYPES = {
+  BankCasinoBet: fields('bytes32 round,bytes32 game,uint256 stake,Prize[] prizes,bytes32[] covers'),
+  Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
+};
+/** The `authorization` header carrying a signed `Access` or `DeveloperAccess` message. */
 export const authorization = (message: unknown, signature: string) =>
   'HookedIn ' + btoa(json({ message, signature })).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
 export const domain = (chainId: Integer, casino: string) => ({
@@ -188,10 +198,10 @@ export const REDEEM_TYPES = {
 };
 export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, REDEEM_TYPES, s);
-/** A developer's bank: the developer's own money, per asset, which pays what the splits their key signs as their
- * games' referee owe beyond the stakes and keeps what they do not pay. A split moves no other money. A deposit is
- * a debit that names it, from the developer's own channel, answered with a statement of the balance; money leaves
- * it only by the developer's own signed `Withdraw` or a split they sign. */
+/** A developer's bank: the developer's money at the casino, per asset. Every developer bet on the developer's games
+ * pays its stake into it, and it pays the settlements and the casino bets the developer's key signs. A deposit is a
+ * debit that names it, from the developer's own channel, answered with a statement of the balance; money leaves it
+ * only by the developer's own signed `Withdraw`, settlement or casino bet. */
 export const BANK_ID = id('HOOKEDIN/BANK');
 /** The casino signs the balance of a developer's bank in one asset after every deposit and withdrawal.
  * `cause` is the hash of the developer's signed deposit or `Withdraw`. */
@@ -297,58 +307,44 @@ export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
 export const MAX_GROUP = 64;
-/** The most a bet's terms take, as canonical JSON. */
+/** The most a developer bet's terms take, as canonical JSON. */
 export const MAX_TERMS_BYTES = 4096;
-/** The furthest a bet with terms has its deadline. */
-export const MAX_DEADLINE_MS = 30 * 24 * 60 * 60 * 1000;
-/** How long a referee's round takes bets from when the casino names it: not drawn by then, its bets are refunded. */
-export const ROUND_MS = 10 * 60 * 1000;
+/** The most developer bets one developer's casino bet covers, and one batch of settlements settles. */
+export const MAX_COVERS = 256;
 /** The most payouts one reply lists. A wallet collects them, and the next reply lists the rest. */
 export const MAX_PAYOUTS = 256;
-/** Every bound a bet is held to, as the wallet reports it to a game and the casino to a referee. They are part of
- * the protocol revision, so a wallet or a referee that holds other ones stops before it signs anything. */
+/** Every bound a bet is held to, as the wallet reports it to a game and the casino to a developer. They are part
+ * of the protocol revision, so a wallet or a developer that holds other ones stops before it signs anything. */
 export const LIMITS = {
   /** The most prizes one bet holds. */
   prizes: MAX_PRIZES,
   /** The size of the space a prize range lies in, as a decimal string. */
   outcomeSpace: String(OUTCOME_SPACE),
-  /** The most bets one round takes, and the most distinct outcomes they may cut it into. */
-  bets: MAX_ROUND_BETS,
-  cells: MAX_ROUND_CELLS,
-  /** How long a referee's round takes bets, and the furthest a bet with terms may have its deadline, in ms. */
-  round: ROUND_MS,
-  deadline: MAX_DEADLINE_MS,
-  /** The most a bet's terms take as canonical JSON, and the longest group label. */
+  /** The most developer bets one developer's casino bet covers, and one batch of settlements settles. */
+  covers: MAX_COVERS,
+  /** The most a developer bet's terms take as canonical JSON, and the longest group label. */
   terms: MAX_TERMS_BYTES,
   group: MAX_GROUP,
 };
-/** A checksummed, nonzero address: the one form an address takes in details. */
-function address(value: unknown) {
-  try {
-    return typeof value === 'string' && getAddress(value) === value && value !== ZeroAddress;
-  } catch {
-    return false;
-  }
-}
-/** The one shape details have for each kind: a bet names its game; a debit its game (a payment, or a bet
- * that settles later, which alone says how) or what it pays into (an investment, a bank deposit); a credit
- * what it collects from. Only what names a game carries a group. Every field is in one form, so one
- * meaning has one memo. */
+/** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
+ * developer bet, which alone says how it is settled) or what it pays into (an investment, a bank deposit); a credit
+ * what it collects from. Only what names a game carries a group. Every field is in one form, so one meaning has
+ * one memo. */
 export function checkDetails(kind: number, details: Details) {
-  const { game, group, bet } = details ?? {},
+  const { game, group, developerBet } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
   const named = typeof game === 'string' && bytes32Pattern.test(game);
   const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
   if (
-    !keys.every(key => ['id', 'game', 'group', 'counterparty', 'bet'].includes(key)) ||
+    !keys.every(key => ['id', 'game', 'group', 'counterparty', 'developerBet'].includes(key)) ||
     typeof details.id !== 'string' ||
     !bytes32Pattern.test(details.id) ||
     (game !== undefined && !named) ||
     (details.counterparty !== undefined && !counterparty) ||
     (group !== undefined && (!named || typeof group !== 'string' || !group.length || group.length > MAX_GROUP)) ||
-    (bet !== undefined && (!named || !validBet(bet))) ||
-    !(kind === KIND.bet
-      ? named && !counterparty && bet === undefined
+    (developerBet !== undefined && (!named || !validDeveloperBet(developerBet))) ||
+    !(kind === KIND.casinoBet
+      ? named && !counterparty && developerBet === undefined
       : kind === KIND.debit
         ? named !== counterparty
         : kind === KIND.credit && counterparty && !named)
@@ -379,28 +375,26 @@ export function validPrizes(prizes: unknown): prizes is WirePrizes {
     )
   );
 }
-/** A bet that settles later, in its one form: its referee, a deadline, and either the round it rides, the
- * hash of the seed committed to it and prizes, or terms that are a JSON object. */
-function validBet(bet: LaterBet) {
-  if (bet === null || typeof bet !== 'object' || !address(bet.referee) || !Number.isSafeInteger(bet.deadline))
-    return false;
-  if (bet.deadline <= 0) return false;
-  if ('prizes' in bet)
+/** A developer bet in its one form: either the developer's round it names, the hash of the seed committed to it and
+ * prizes, or terms that are a JSON object. */
+function validDeveloperBet(developerBet: DeveloperBetDetails) {
+  if (developerBet === null || typeof developerBet !== 'object') return false;
+  if ('prizes' in developerBet)
     return (
-      only(bet, ['referee', 'deadline', 'round', 'seedHash', 'prizes']) &&
-      bytes32Pattern.test(bet.round) &&
-      bytes32Pattern.test(bet.seedHash) &&
-      validPrizes(bet.prizes)
+      only(developerBet, ['round', 'seedHash', 'prizes']) &&
+      bytes32Pattern.test(developerBet.round) &&
+      bytes32Pattern.test(developerBet.seedHash) &&
+      validPrizes(developerBet.prizes)
     );
   if (
-    !only(bet, ['referee', 'deadline', 'terms']) ||
-    bet.terms === null ||
-    typeof bet.terms !== 'object' ||
-    Array.isArray(bet.terms)
+    !only(developerBet, ['terms']) ||
+    developerBet.terms === null ||
+    typeof developerBet.terms !== 'object' ||
+    Array.isArray(developerBet.terms)
   )
     return false;
   try {
-    return toUtf8Bytes(canonicalJSON(bet.terms)).length <= MAX_TERMS_BYTES;
+    return toUtf8Bytes(canonicalJSON(developerBet.terms)).length <= MAX_TERMS_BYTES;
   } catch {
     return false;
   }
@@ -410,8 +404,8 @@ export const roundId = (secret: string) => keccak256(secret);
 /** A bet names its seed by its hash, so whoever knows the round's secret cannot know the outcome
  * before the seed is out. */
 export const seedHash = (seed: string) => keccak256(seed);
-/** Every bet on one round and seed sees the same 64-bit outcome, whichever channel signed it.
- * The stake is paid to enter; every prize whose range holds the outcome pays, so overlapping prizes add. */
+/** Every bet on one round and seed sees the same 64-bit outcome, whoever signed it. The stake is paid to enter;
+ * every prize whose range holds the outcome pays, so overlapping prizes add. */
 const OUTCOME_TAG = 'HOOKEDIN/OUTCOME';
 export function outcome(prizes: readonly Prize[], seed: string, secret: string) {
   const randomHash = keccak256(
@@ -425,8 +419,9 @@ export function outcome(prizes: readonly Prize[], seed: string, secret: string) 
   );
   return { randomHash, value, payout };
 }
-/** What an operation does to the balance. Every signed operation names one of these. */
-export const KIND = { none: 0, bet: 1, debit: 2, credit: 3 } as const;
+/** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
+ * the operation itself; a developer bet is a debit that pays its stake to its developer's bank. */
+export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3 } as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
   if (
     !same(base.channelId, op.channelId) ||
@@ -445,14 +440,14 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
   const kind = Number(op.kind),
     balance = uint256(BigInt(base.balance)),
     amount = uint256(BigInt(op.amount));
-  const wager = kind === KIND.bet,
+  const casinoBet = kind === KIND.casinoBet,
     credit = kind === KIND.credit;
-  if (![KIND.bet, KIND.debit, KIND.credit].includes(kind as 1)) throw new Error('Unknown operation');
-  // Every field a kind does not use must be zero: one meaning, one encoding. A bet names its
+  if (![KIND.casinoBet, KIND.debit, KIND.credit].includes(kind as 1)) throw new Error('Unknown operation');
+  // Every field a kind does not use must be zero: one meaning, one encoding. A casino bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
   if (
     !Array.isArray(op.prizes) ||
-    (wager
+    (casinoBet
       ? !op.prizes.length ||
         op.prizes.length > MAX_PRIZES ||
         op.prizes.some(
@@ -475,24 +470,27 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     amount === 0n ||
     amount >= MAX_BALANCE
   )
-    throw new Error(wager ? 'Invalid bet commitment or balance' : credit ? 'Invalid credit' : 'Invalid debit');
+    throw new Error(
+      casinoBet ? 'Invalid casino bet commitment or balance' : credit ? 'Invalid credit' : 'Invalid debit',
+    );
   if (credit) next.balance = String(balance + amount);
   else {
-    if (amount > balance) throw new Error(wager ? 'Invalid bet commitment or balance' : 'Insufficient balance');
-    next.balance = String(balance - amount + (wager ? outcome(op.prizes, seed, secret).payout : 0n));
+    if (amount > balance)
+      throw new Error(casinoBet ? 'Invalid casino bet commitment or balance' : 'Insufficient balance');
+    next.balance = String(balance - amount + (casinoBet ? outcome(op.prizes, seed, secret).payout : 0n));
   }
   if (BigInt(next.balance) >= MAX_BALANCE) throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
-/** A joint checkpoint above an authorized bet or debit supersedes it without consuming entropy or money. */
+/** A joint checkpoint above an authorized casino bet or debit supersedes it without consuming entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
-    ![KIND.bet, KIND.debit].includes(Number(op.kind) as 1) ||
+    ![KIND.casinoBet, KIND.debit].includes(Number(op.kind) as 1) ||
     !same(op.channelId, base.channelId) ||
     !same(op.previousStateHash, hashState(d, base)) ||
     BigInt(op.sequence) !== BigInt(base.sequence) + 1n
   )
-    throw new Error('Rejection must identify the next bet or debit');
+    throw new Error('Rejection must identify the next casino bet or debit');
   return {
     ...base,
     sequence: String(uint256(BigInt(op.sequence) + 1n)),
@@ -583,9 +581,10 @@ export const PROTOCOL = id(
     OP_TYPES,
     CLOSE_TYPES,
     ACCESS_TYPES,
-    REFEREE_ACCESS_TYPES,
+    DEVELOPER_ACCESS_TYPES,
     SETTLEMENT_TYPES,
     COMMIT_TYPES,
+    BANK_CASINO_BET_TYPES,
     SHARE_TYPES,
     FUND_TYPES,
     REDEEM_TYPES,
@@ -599,14 +598,14 @@ export const PROTOCOL = id(
       limits: LIMITS,
     }),
 );
-/** What a referee shares with the casino, and nothing more: the three structures it signs, the outcome and the
- * limits. A change to what only a wallet signs leaves it alone, so it does not stop every referee. */
-export const REFEREE_PROTOCOL = id(
-  encoded([REFEREE_ACCESS_TYPES, COMMIT_TYPES, SETTLEMENT_TYPES]) +
+/** What a developer's server shares with the casino, and nothing more: the four structures it signs, the outcome
+ * and the limits. A change to what only a wallet signs leaves it alone, so it does not stop every developer. */
+export const DEVELOPER_PROTOCOL = id(
+  encoded([DEVELOPER_ACCESS_TYPES, COMMIT_TYPES, SETTLEMENT_TYPES, BANK_CASINO_BET_TYPES]) +
     canonicalJSON({ outcome: OUTCOME_TAG, limits: LIMITS }),
 );
-/** A wallet checks `protocol` in the casino's `GET /api/config`, and a referee `refereeProtocol`. */
-export function assertProtocol(config: { protocol?: unknown; refereeProtocol?: unknown }, referee = false) {
-  if (referee ? config?.refereeProtocol !== REFEREE_PROTOCOL : config?.protocol !== PROTOCOL)
+/** A wallet checks `protocol` in the casino's `GET /api/config`, and a developer's server `developerProtocol`. */
+export function assertProtocol(config: { protocol?: unknown; developerProtocol?: unknown }, developer = false) {
+  if (developer ? config?.developerProtocol !== DEVELOPER_PROTOCOL : config?.protocol !== PROTOCOL)
     throw Object.assign(new Error('The casino speaks another revision of the protocol'), { code: 'protocol-mismatch' });
 }

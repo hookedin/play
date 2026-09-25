@@ -37,7 +37,7 @@ export function traceGame(plan: GamePlan, policy: Policy): void {
     const step = prepareAction(plan, state, actionId, random);
     contributions += step.additionalCash;
     console.log(`\n${state.nodeId}\n  ${actionId}; funded balance ${amount(state.cash)}`);
-    if (step.kind === 'bet') {
+    if (step.kind === 'casino-bet') {
       const outcome = simulateServerResult(step, random),
         result = resolveTransition(step, outcome);
       console.log(

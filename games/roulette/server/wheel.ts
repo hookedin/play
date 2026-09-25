@@ -1,14 +1,16 @@
 /**
- * The wheel everyone at the table shares. It is the game's referee at the casino. It keeps a round open, which
- * the casino names and the wheel commits the seed it will draw it with to, so where the ball lands is fixed
- * before anybody bets, and neither the casino nor the wheel knows it until both are out. Pages bet on the round
- * the table shows, by name, and their wallets place the bets by themselves; the casino takes each against the
- * bankroll as it is placed. Twenty seconds after the first chip is down the wheel draws the round: every bet on
- * it rides one spin. The wheel never touches a bet, and it holds no money. Everything that touches the outside
- * world is handed in, so the same wheel runs in a Worker or a test.
+ * The wheel everyone at the table shares, run by the game's developer. It keeps a round of its own open, which the
+ * casino names and the wheel commits the seed of its casino bet to, so where the ball lands is fixed before anybody
+ * bets, and neither the casino nor the wheel knows it until both are out. Pages bet on the round the table shows, by
+ * name: each wallet places a developer bet, whose stake goes to the developer's bank. Twenty seconds after the first
+ * chip is down the wheel spins: it covers every bet that is a roulette layout with one casino bet of the table's
+ * layouts together against the casino's bankroll, which reveals where the ball lands, and pays each covered bet what
+ * its layout pays there and every other its stake back. Everything that touches the outside world is handed in, so
+ * the same wheel runs in a Worker or a test.
  */
-import type { AssetId, PublicBet, Referee, Round } from '@hookedin/play/sdk/referee';
-import { pocket } from '../src/table.ts';
+import { owed } from '@hookedin/play/sdk/developer';
+import type { AssetId, Developer, PublicDeveloperBet, Round } from '@hookedin/play/sdk/developer';
+import { isLayout, pocket, together } from '../src/table.ts';
 
 export interface Spin {
   round: string;
@@ -19,12 +21,12 @@ export interface Spin {
 }
 export interface WheelState {
   last: Spin | null;
-  /** The round the table takes bets on, saved before anybody is told of it, so a draw whose reply was lost is
-   * the round the wheel asks about again. */
+  /** The round the table takes bets on, saved before anybody is told of it, so a spin that stopped halfway is
+   * finished on that round. */
   round: string | null;
 }
 export interface Deps {
-  referee: Referee;
+  developer: Developer;
   /** What this wheel's table is played with. Every asset has a wheel of its own. */
   asset: AssetId;
   now(): number;
@@ -34,8 +36,6 @@ export interface Deps {
 }
 /** How long players have once the first chip is down. */
 export const BETTING_MS = 20_000;
-/** A round is drawn this long before its deadline at the latest, however late its first chip came. */
-export const MARGIN_MS = 5_000;
 const RETRY_MS = 5_000,
   LOOK_MS = 1_000;
 
@@ -43,11 +43,11 @@ export class Wheel {
   readonly deps: Deps;
   state: WheelState;
   /** The table's round and its open bets, as the casino had them when the wheel last looked. */
-  private table: { at: number; round: Round | null; open: PublicBet[] } = { at: 0, round: null, open: [] };
+  private table: { at: number; round: Round | null; open: PublicDeveloperBet[] } = { at: 0, round: null, open: [] };
   private queue: Promise<unknown> = Promise.resolve();
   constructor(deps: Deps, saved?: WheelState) {
     this.deps = deps;
-    this.state = { last: null, round: null, ...saved };
+    this.state = { last: saved?.last ?? null, round: saved?.round ?? null };
   }
   /** One thing at a time: a Durable Object's handlers interleave across awaits. */
   private serialized<T>(work: () => Promise<T>): Promise<T> {
@@ -78,12 +78,10 @@ export class Wheel {
   alarm() {
     return this.serialized(() => this.turn());
   }
-  /** The wheel spins `BETTING_MS` after the first open bet was placed, by the casino's clock, and always before
-   * the round's deadline, when its bets would come back. */
+  /** The wheel spins `BETTING_MS` after the first open bet on its round was placed, by the casino's clock. */
   private closesAt() {
-    const first = this.table.open[0],
-      round = this.table.round;
-    return first && round ? Math.min(first.placedAt + BETTING_MS, round.deadline - MARGIN_MS) : null;
+    const first = this.table.open[0];
+    return first && this.table.round ? first.placedAt + BETTING_MS : null;
   }
   private async turn() {
     const now = this.deps.now(),
@@ -94,46 +92,89 @@ export class Wheel {
     const next = this.closesAt();
     if (next !== null) this.deps.wake(next);
   }
-  /** The table's round and its open bets, as the casino has them: asked at most once a second, and always before
-   * a spin. A saved round that is not the one taking bets was drawn, or passed its deadline; if
-   * it was drawn, where the ball landed is recorded before the next round is saved. One the casino does not
-   * know, lost with its row or another deployment's, has nothing to show. */
+  /** Every open developer bet of the game, a page at a time, in the order they were placed. */
+  private async openDeveloperBets() {
+    const bets: PublicDeveloperBet[] = [];
+    for (let after = ''; ;) {
+      const page = await this.deps.developer.bets({ status: 'open', after });
+      bets.push(...page.bets.filter(bet => bet.asset === this.deps.asset));
+      if (!page.more) break;
+      after = page.cursor;
+    }
+    return bets.sort((a, b) => a.placedAt - b.placedAt);
+  }
+  /** The table's round and its open bets, as the casino has them: asked at most once a second, and always before a
+   * spin. A saved round the casino does not know, lost with its row or another deployment's, or one already revealed,
+   * makes way for a new one. An open bet on any other round is what a spin left behind, or came too late for it: it
+   * is settled now, from what that round's reveal says it is owed. */
   private async look(now: number, always: boolean) {
     if (now - this.table.at < LOOK_MS && !always) return;
-    const round = await this.deps.referee.open(this.deps.asset);
-    if (this.state.round !== round.id) {
-      const saved = this.state.round,
-        known =
-          saved &&
-          (await this.deps.referee.round(saved).catch((error: any) => {
-            if (error.status === 404) return null;
-            throw error;
-          }));
-      if (saved && known) this.record(saved, known);
+    let round =
+      this.state.round &&
+      (await this.deps.developer.round(this.state.round).catch((error: any) => {
+        if (error.status === 404) return null;
+        throw error;
+      }));
+    if (!round || round.status === 'revealed') {
+      // A spin that stopped halfway still shows where the ball landed.
+      if (round) this.record(round, 0);
+      round = await this.deps.developer.openRound(this.deps.asset);
       this.state.round = round.id;
       await this.deps.save(this.state);
     }
-    const open = (await this.deps.referee.bets()).filter(bet => bet.round === round.id && bet.status === 'open');
-    this.table = { at: now, round, open };
+    const bets = await this.openDeveloperBets(),
+      current = round.id;
+    for (const other of new Set(bets.map(bet => bet.round ?? '').filter(id => id !== current)))
+      await this.settle(
+        other ? await this.deps.developer.round(other) : null,
+        bets.filter(bet => (bet.round ?? '') === other),
+      );
+    this.table = { at: now, round, open: bets.filter(bet => bet.round === current) };
   }
-  /** Where a drawn round's ball landed, for the table to show, unless it is shown already. */
-  private record(round: string, drawn: { seed?: string; secret?: string; outcome?: string }, players = 0) {
-    const { seed, secret, outcome } = drawn;
-    if (outcome === undefined || seed === undefined || secret === undefined || this.state.last?.round === round) return;
-    this.state.last = { round, seed, secret, number: pocket(BigInt(outcome)), players };
-  }
-  /** The round is drawn: the casino reveals its secret and pays every bet on it, and the ball lands where the
-   * outcome says. The next look opens the round after it. */
+  /** The spin: the wheel covers the table's layouts with one casino bet of them all together, which reveals the
+   * round, and settles every bet on it. A spin that stopped halfway, its casino bet placed and its reply lost, finds
+   * the round revealed and settles from what it says. */
   private async spin() {
     try {
-      const drawn = await this.deps.referee.draw(this.state.round!);
-      this.record(drawn.round, drawn, new Set(drawn.bets.map(bet => bet.uname)).size);
+      const developer = this.deps.developer;
+      let round = await developer.round(this.state.round!);
+      const bets = (await this.openDeveloperBets()).filter(bet => bet.round === round.id);
+      if (round.status !== 'revealed') {
+        const covered = bets
+          .filter(bet => bet.prizes && isLayout({ stake: bet.stake, prizes: bet.prizes }))
+          .slice(0, developer.limits.covers);
+        if (covered.length)
+          round = await developer.casinoBet({
+            round: round.id,
+            ...together(covered.map(bet => ({ stake: bet.stake, prizes: bet.prizes! }))),
+            covers: covered.map(bet => bet.bet),
+          });
+      }
+      await this.settle(round, bets);
+      if (round.status === 'revealed') this.record(round, new Set(bets.map(bet => bet.uname)).size);
+      this.state.round = null;
       await this.deps.save(this.state);
       this.table = { at: 0, round: null, open: [] };
     } catch (error) {
-      // Tried again shortly; the same round and seed make it the same draw.
+      // Tried again shortly; the same round and seed make it the same casino bet.
       this.deps.wake(this.deps.now() + RETRY_MS);
       throw error;
     }
+  }
+  /** Pay the open bets on a round what they are owed: what its layout pays where the ball landed, for a bet the
+   * wheel's accepted casino bet covers; its stake back for every other, and for any bet on a round never revealed.
+   * The casino's part is nothing: its commission is on the wheel's casino bet. */
+  private async settle(round: Round | null, bets: PublicDeveloperBet[]) {
+    const settlements = bets.map(bet => ({ bet: bet.bet, player: owed(bet, round), casino: 0n })),
+      batch = this.deps.developer.limits.covers;
+    for (let i = 0; i < settlements.length; i += batch)
+      await this.deps.developer.settle(settlements.slice(i, i + batch));
+  }
+  /** Where a revealed round's ball landed, for the table to show, unless it is shown already. */
+  private record(round: Round, players: number) {
+    const { seed, secret, outcome } = round;
+    if (outcome === undefined || seed === undefined || secret === undefined || this.state.last?.round === round.id)
+      return;
+    this.state.last = { round: round.id, seed, secret, number: pocket(BigInt(outcome)), players };
   }
 }

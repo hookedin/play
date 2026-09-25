@@ -36,5 +36,5 @@ expand the protocol merely to offer stronger guarantees. Reuse existing state, v
 ## Settled decisions
 
 [architecture.md](architecture.md#settled-trade-offs) records trade-offs made on purpose: how commission is set, a
-multi-step game as atomic steps a player can walk away from, and a developer's solvency left to the trust of its
-players. They are decisions, not open questions. Explain them where it helps; do not propose changing them.
+multi-step game as a sequence of casino bets a player can walk away from, and a developer's solvency left to the trust
+of its players. They are decisions, not open questions. Explain them where it helps; do not propose changing them.

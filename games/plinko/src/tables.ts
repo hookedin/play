@@ -1,6 +1,6 @@
 /**
  * Plinko rules: boards of independent 50/50 pegs and their prize tables. Pure arithmetic: a drop is one
- * native bet whose prizes are the buckets, and the ball's whole path is read from the round's outcome.
+ * casino bet whose prizes are the buckets, and the ball's whole path is read from the round's outcome.
  * No DOM, wallet or randomness of its own.
  */
 export const ROWS = [8, 12, 16] as const;
@@ -51,7 +51,7 @@ function bucketStart(rows: number, bucket: number): bigint {
   for (let b = 0; b < bucket; b++) before += paths(rows, b);
   return before << (WORD_BITS - BigInt(rows));
 }
-/** One drop as the casino's native bet: the stake, and a prize for every bucket that pays. */
+/** One drop as a casino bet: the stake, and a prize for every bucket that pays. */
 export function dropBet(rows: Rows, risk: Risk, stake: bigint) {
   return {
     stake,

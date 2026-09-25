@@ -13,7 +13,7 @@ export interface Prize {
   readonly rangeEnd: bigint;
   readonly payout: bigint;
 }
-/** The casino's native wager: a stake paid to enter, and the prizes it can pay. */
+/** A casino bet: a stake paid to enter, and the prizes it can pay. */
 export interface Bet {
   readonly stake: bigint;
   readonly prizes: readonly Prize[];
@@ -41,14 +41,14 @@ export interface TransitionInput {
   readonly outcomes: readonly CashOutcome[];
 }
 /**
- * One step of a game is one native bet. The round's outcome picks the successor; the player stakes
+ * One step of a game is one casino bet. The round's outcome picks the successor; the player stakes
  * the cash that successor could cost them and each better successor is a prize, so the cash after
  * the bet is exactly the successor's. A step whose successors all need the same cash moves no money:
  * nothing is bet, and what is left over is paid to the bankroll.
  */
 export type TransitionPlan =
   | {
-      readonly kind: 'bet';
+      readonly kind: 'casino-bet';
       readonly cash: bigint;
       /** The cash kept whatever happens: the cheapest successor's. */
       readonly retained: bigint;
@@ -157,7 +157,14 @@ export function compileTransition({ admits, bankroll, cash, outcomes }: Transiti
   if (cash <= retained) throw new RangeError('cash does not cover the step');
   const bet = Object.freeze({ stake: cash - retained, prizes: Object.freeze(prizes.map(p => Object.freeze(p))) });
   if (!admits(bankroll, bet)) throw new RangeError('cash does not finance this step at the planning bankroll');
-  return Object.freeze({ kind: 'bet', cash, retained, bet, successors: Object.freeze(successors), outcomes: live });
+  return Object.freeze({
+    kind: 'casino-bet',
+    cash,
+    retained,
+    bet,
+    successors: Object.freeze(successors),
+    outcomes: live,
+  });
 }
 
 /** The least cash on the grid whose bet the planning bankroll admits. A larger stake is never less

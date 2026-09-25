@@ -47,11 +47,11 @@ test('the spending limit lives in memory: leaving the game releases it, and noth
     w = f.wallet;
   await assert.rejects(w.setGameLimit('100'), /No game is open/);
   w.openGame(f.identity('a'));
-  await assert.rejects(w.gameBet(terms()), /exceeds the game balance/);
+  await assert.rejects(w.gameCasinoBet(terms()), /exceeds the game balance/);
   await w.setGameLimit('100');
   assert.equal(w.availableBalance(), 999900n);
   await assert.rejects(w.setGameLimit('1000001'), /exceeds your playing balance/);
-  await assert.rejects(w.gameBet({ ...terms(), stake: '101' }), /game balance/);
+  await assert.rejects(w.gameCasinoBet({ ...terms(), stake: '101' }), /game balance/);
   await assert.rejects(w.payBankroll(999901n), /unallocated/);
   w.closeGame();
   assert.equal(w.availableBalance(), 1000000n);
@@ -71,14 +71,14 @@ test('verified gains and losses move the limit; exact retries by ID never charge
   let balance = 1000n;
   for (let i = 0; i < 20; i++) {
     const request = terms(`round-${i}`),
-      receipt = await w.gameBet(request);
+      receipt = await w.gameCasinoBet(request);
     assert.equal(receipt.status, 'settled');
     balance += BigInt(receipt.payout!) - 10n;
     assert.equal(w.gameLimit().balance, String(balance));
     assert.equal(w.availableBalance(), 999000n);
     assert.deepEqual(receipt, {
       id: request.id,
-      kind: 'bet',
+      kind: 'casino-bet',
       status: 'settled',
       basis: 'outcome',
       stake: '10',
@@ -86,208 +86,236 @@ test('verified gains and losses move the limit; exact retries by ID never charge
       outcome: receipt.outcome,
       payout: receipt.payout,
     });
-    assert.deepEqual(await w.gameBet(request), receipt);
+    assert.deepEqual(await w.gameCasinoBet(request), receipt);
     assert.deepEqual(await w.gameReceipt(request.id), receipt);
-    await assert.rejects(w.gameBet({ ...request, prizes: [{ ...prize, payout: '21' }] }), /different intent/);
+    await assert.rejects(w.gameCasinoBet({ ...request, prizes: [{ ...prize, payout: '21' }] }), /different intent/);
   }
   assert.equal(f.settlements(), 20);
   assert.equal(await w.gameReceipt('never-played'), null);
   // Another game cannot reuse this game's operation IDs.
   w.openGame(f.identity('other'));
   await w.setGameLimit('100');
-  await w.gameBet(terms('round-0'));
+  await w.gameCasinoBet(terms('round-0'));
   assert.equal(f.settlements(), 21);
 });
 
-test('a drawn bet names its round, is taken as it is placed, and reaches the game settled once drawn and collected', async () => {
+test("a developer bet with prizes names its developer's round, and reaches the game settled once covered, paid and collected", async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
-  const open = await f.referee.open('eth'),
-    request = { ...terms('spin-1'), round: open.id };
-  // A round whose commitment is not its referee's is refused before the wallet signs anything.
+  const round = await f.developer.openRound('eth'),
+    request = { ...terms('spin-1'), round: round.id };
+  // A round whose commitment is not its developer's is refused before the wallet signs anything.
   const api = w.api.bind(w);
   w.api = async (...args: [string, unknown?]) => {
     const value = await api(...args);
     if (args[0].startsWith('/api/rounds/')) value.seedHash = '0x' + '2'.repeat(64);
     return value;
   };
-  await assert.rejects(w.gamePlace(request), /Invalid signature/);
+  await assert.rejects(w.gameDeveloperBet(request), /Invalid signature/);
   assert.equal(w.pending, null);
   w.api = api;
-  const placed = await w.gamePlace(request);
+  const placed = await w.gameDeveloperBet(request);
   assert.match(placed.bet!, /^0x[0-9a-f]{64}$/);
   assert.deepEqual(placed, {
     id: 'spin-1',
-    kind: 'bet',
-    status: 'placed',
+    kind: 'developer-bet',
+    status: 'open',
     stake: '10',
     prizes: [prize],
-    round: open.id,
-    deadline: open.deadline,
+    round: round.id,
     bet: placed.bet,
   });
-  assert.equal(w.gameLimit().balance, '990', 'the stake is held');
-  assert.deepEqual(await w.gamePlace(request), placed, 'asking again while it waits for a draw');
-  await assert.rejects(w.gamePlace({ ...request, stake: '20' }), /different intent/);
-  await w.gamePlace({ ...terms('spin-2'), round: open.id });
-  const drawn = await f.referee.draw(open.id);
-  assert.deepEqual(
-    drawn.bets.map(bet => bet.status),
-    ['settled', 'settled'],
-    'every bet the round took is paid: each was admitted as it was placed',
-  );
-  // A draw with any seed but the one its referee committed to the round is refused before the wallet signs
-  // anything for it.
+  assert.equal(w.gameLimit().balance, '990', 'the stake went to the developer');
+  assert.equal(f.bank(), 10n ** 12n + 10n, "into the developer's bank");
+  assert.deepEqual(await w.gameDeveloperBet(request), placed, 'asking again while it is open');
+  await assert.rejects(w.gameDeveloperBet({ ...request, stake: '20' }), /different intent/);
+  const other = await w.gameDeveloperBet({ ...terms('spin-2'), round: round.id });
+  // The developer covers both with one casino bet of them together, which reveals the round.
+  const revealed = await f.developer.casinoBet({
+    round: round.id,
+    stake: '20',
+    prizes: [{ ...prize, payout: '40' }],
+    covers: [placed.bet!, other.bet!],
+  });
+  assert.deepEqual([revealed.status, revealed.casinoBet?.accepted], ['revealed', true]);
+  const owed = BigInt(revealed.outcome!) < 9000000000000000000n ? 20n : 0n;
+  await f.developer.settle([
+    { bet: placed.bet!, player: owed, casino: 0n },
+    { bet: other.bet!, player: owed, casino: 0n },
+  ]);
+  // A reveal with any seed but the one its developer committed to is refused before the wallet signs anything.
   w.api = async (...args: [string, unknown?]) => {
     const value = await api(...args);
-    if (args[0].startsWith('/api/bets/')) value.draw.seed = '0x' + '1'.repeat(64);
+    if (args[0].startsWith('/api/rounds/')) value.seed = '0x' + '1'.repeat(64);
     return value;
   };
-  await assert.rejects(w.collectBet(placed.bet!), /committed to the round/);
+  await assert.rejects(w.collectDeveloperBet(placed.bet!), /committed to/);
+  // So is a list of covered bets its developer did not sign.
+  w.api = async (...args: [string, unknown?]) => {
+    const value = await api(...args);
+    if (args[0].startsWith('/api/rounds/')) value.casinoBet.covers = [placed.bet];
+    return value;
+  };
+  await assert.rejects(w.collectDeveloperBet(other.bet!), /Invalid signature/);
   assert.equal(w.pending, null);
   w.api = api;
   await w.collectPayouts();
   const receipt = (await w.gameReceipt('spin-1'))!;
-  assert.deepEqual([receipt.status, receipt.basis, receipt.outcome], ['settled', 'outcome', drawn.outcome]);
-  assert.equal(receipt.payout, BigInt(drawn.outcome!) < 9000000000000000000n ? '20' : '0');
+  assert.deepEqual(
+    [receipt.status, receipt.basis, receipt.outcome, receipt.owed, receipt.payout],
+    ['settled', 'outcome', revealed.outcome, String(owed), String(owed)],
+  );
   assert.deepEqual(
     pushed.map(r => `${r.id} ${r.status}`).sort(),
     ['spin-1 settled', 'spin-2 settled'],
     'the wallet sends the game every bet it collected',
   );
-  assert.equal(w.gameLimit().balance, String(980n + 2n * BigInt(receipt.payout!)), "what they paid is the game's");
-  // A round that has been drawn takes no more bets: the wallet signs nothing for it.
+  assert.equal(w.gameLimit().balance, String(980n + 2n * owed), "what they were paid is the game's");
+  // A revealed round takes no more bets: the wallet signs nothing for it.
   await assert.rejects(
-    w.gamePlace({ ...terms('late'), round: open.id }),
+    w.gameDeveloperBet({ ...terms('late'), round: round.id }),
     (error: any) => error.code === 'round-closed',
   );
-  // A bet signed while its round was open that reaches the casino after the draw comes back declined.
+  // A bet signed while its round was open that reaches the casino after the reveal is not covered: it is owed its
+  // stake back, and its receipt shows what it would have paid.
   w.api = async (...args: [string, unknown?]) =>
     args[0].startsWith('/api/rounds/') ? { ...(await api(...args)), status: 'open' } : api(...args);
-  const late = await w.gamePlace({ ...terms('late'), round: open.id });
-  assert.deepEqual([late.status, late.reason], ['rejected', 'The round is not open']);
+  const late = await w.gameDeveloperBet({ ...terms('late'), round: round.id });
   w.api = api;
-  // The wallet's own next bet is unaffected: it still has the round the casino named for it.
-  assert.equal((await w.gameBet(terms('own'))).status, 'settled');
+  assert.equal(late.status, 'open');
+  await f.developer.settle([{ bet: late.bet!, player: 10n, casino: 0n }]);
+  await w.collectPayouts();
+  const returned = (await w.gameReceipt('late'))!;
+  assert.deepEqual([returned.status, returned.owed, returned.payout], ['returned', '10', '10']);
+  // The wallet's own casino bets are unaffected.
+  assert.equal((await w.gameCasinoBet(terms('own'))).status, 'settled');
 });
 
-test('the casino takes a drawn bet against the bankroll as it is placed, and declines one that does not fit', async () => {
+test("the developer's casino bet is taken against the bankroll whole, and one it cannot back covers nothing", async () => {
   const f = await gameWallet({ bankroll: 200000n }),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
-  const open = await f.referee.open('eth'),
+  const round = await f.developer.openRound('eth'),
     // Pocket 3 of 37 pays 36 times: a net 3,500 wei a win, which this bankroll can back once and not twice.
     pocket = {
       rangeStart: String(((1n << 64n) / 37n) * 3n),
       rangeEnd: String(((1n << 64n) / 37n) * 4n),
       payout: '3600',
     };
-  const first = await w.gamePlace({ id: 'first', stake: '100', prizes: [pocket], round: open.id });
-  assert.equal(first.status, 'placed');
-  const stacked = await w.gamePlace({ id: 'second', stake: '100', prizes: [pocket], round: open.id });
+  const first = await w.gameDeveloperBet({ id: 'first', stake: '100', prizes: [pocket], round: round.id }),
+    second = await w.gameDeveloperBet({ id: 'second', stake: '100', prizes: [pocket], round: round.id });
   assert.deepEqual(
-    [stacked.status, stacked.reason],
-    ['rejected', 'Casino capacity is too low for this bet on this round'],
-    'the same pocket again stacks on the first: declined as it is placed, the balance unchanged',
+    [first.status, second.status],
+    ['open', 'open'],
+    'the developer takes developer bets: the bankroll takes only its casino bets',
   );
-  assert.equal(w.gameLimit().balance, '900');
-  const drawn = await f.referee.draw(open.id);
+  const both = await f.developer.casinoBet({
+    round: round.id,
+    stake: '200',
+    prizes: [{ ...pocket, payout: '7200' }],
+    covers: [first.bet!, second.bet!],
+  });
   assert.deepEqual(
-    drawn.bets.map(bet => bet.status),
-    ['settled'],
+    [both.status, both.casinoBet!.accepted],
+    ['revealed', false],
+    'the same pocket twice is more than this bankroll backs: declined, and revealed all the same',
   );
+  await f.developer.settle([
+    { bet: first.bet!, player: 100n, casino: 0n },
+    { bet: second.bet!, player: 100n, casino: 0n },
+  ]);
+  await w.collectPayouts();
+  assert.deepEqual(
+    [(await w.gameReceipt('first'))!.status, (await w.gameReceipt('second'))!.status],
+    ['returned', 'returned'],
+  );
+  assert.equal(w.gameLimit().balance, '1000');
+  // One of them alone, on a round of its own, is a bet the bankroll backs.
+  const next = await f.developer.openRound('eth'),
+    third = await w.gameDeveloperBet({ id: 'third', stake: '100', prizes: [pocket], round: next.id });
+  const taken = await f.developer.casinoBet({ round: next.id, stake: '100', prizes: [pocket], covers: [third.bet!] });
+  assert.equal(taken.casinoBet!.accepted, true);
 });
-test('a refereed bet pays what its referee signs, and its stake comes back if its deadline passes first', async () => {
+
+test('a developer bet with terms is paid what its developer signs, and a game published nowhere takes none', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
-  const deadline = Date.now() + 60_000,
-    request = { id: 'ride', stake: '10', terms: { cashout: '2.5' }, deadline, group: 'round-7' };
-  const placed = await w.gamePlace(request);
+  const request = { id: 'ride', stake: '10', terms: { cashout: '2.5' }, group: 'round-7' };
+  const placed = await w.gameDeveloperBet(request);
   assert.deepEqual(
-    [placed.status, placed.group, placed.terms, placed.deadline, placed.payout],
-    ['placed', 'round-7', { cashout: '2.5' }, deadline, undefined],
+    [placed.status, placed.group, placed.terms, placed.payout],
+    ['open', 'round-7', { cashout: '2.5' }, undefined],
   );
   assert.equal(w.gameLimit().balance, '990');
-  await f.referee.settle([{ bet: placed.bet!, player: 25n, casino: 1n }]);
-  // A split its referee did not sign is refused before the wallet signs anything for it.
+  await f.developer.settle([{ bet: placed.bet!, player: 25n, casino: 1n }]);
+  // A settlement its developer did not sign is refused before the wallet signs anything for it.
   const api = w.api.bind(w);
   w.api = async (...args: [string, unknown?]) => {
     const value = await api(...args);
-    if (args[0].startsWith('/api/bets/')) value.settlement.player = '26';
+    if (args[0].startsWith('/api/developer-bets/')) value.settlement.player = '26';
     return value;
   };
-  await assert.rejects(w.collectBet(placed.bet!), /Invalid signature/);
+  await assert.rejects(w.collectDeveloperBet(placed.bet!), /Invalid signature/);
   assert.equal(w.pending, null);
   w.api = api;
   // Asking about it is enough: the wallet collects it, and sends the settled receipt.
-  assert.equal((await w.gameReceipt('ride'))!.status, 'placed');
+  assert.equal((await w.gameReceipt('ride'))!.status, 'open');
   await w.collectPayouts();
   const receipt = (await w.gameReceipt('ride'))!;
   assert.deepEqual(
     [receipt.status, receipt.basis, receipt.payout, receipt.outcome],
-    ['settled', 'referee', '25', undefined],
-    "a split rests on its referee's word",
+    ['settled', 'developer', '25', undefined],
+    "a bet with terms rests on its developer's word",
   );
   assert.deepEqual(pushed, [receipt]);
   assert.equal(w.gameLimit().balance, '1015');
-  await w.gamePlace({ ...request, id: 'late' });
-  f.advance(60_001);
-  await w.collectPayouts();
-  const refunded = (await w.gameReceipt('late'))!;
-  assert.deepEqual(
-    [refunded.status, refunded.payout, refunded.reason],
-    ['refunded', '10', 'Refunded: not settled by its deadline'],
-  );
-  assert.equal(w.gameLimit().balance, '1015');
-  // A game published nowhere has nobody to settle a bet that settles later.
+  // A game published nowhere has no developer to take a developer bet.
   w.openGame(f.identity('plain', { slug: undefined }));
   await w.setGameLimit('100');
-  await assert.rejects(w.gamePlace({ ...request, id: 'nobody' }), /published nowhere/);
+  await assert.rejects(w.gameDeveloperBet({ ...request, id: 'nobody' }), /published nowhere/);
 });
 
-test("a split the developer's bank cannot pay is refused whole, and the bet waits", async () => {
+test("settlements the developer's bank cannot pay are refused whole, and the bets wait", async () => {
   const f = await gameWallet({ bank: 5n }),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
-  const deadline = Date.now() + 60_000,
-    won = await w.gamePlace({ id: 'won', stake: '10', terms: {}, deadline }),
-    lost = await w.gamePlace({ id: 'lost', stake: '10', terms: {}, deadline });
+  const won = await w.gameDeveloperBet({ id: 'won', stake: '10', terms: {} }),
+    lost = await w.gameDeveloperBet({ id: 'lost', stake: '10', terms: {} });
+  assert.equal(f.bank(), 25n, "both stakes went into the developer's bank");
   await assert.rejects(
-    f.referee.settle([{ bet: won.bet!, player: 30n, casino: 0n }]),
+    f.developer.settle([{ bet: won.bet!, player: 30n, casino: 0n }]),
     (error: any) => error.code === 'bank-short',
   );
-  // With the loser in the same batch, the bank keeps its stake and can pay the winner.
-  await f.referee.settle([
+  await f.developer.settle([
     { bet: won.bet!, player: 25n, casino: 0n },
     { bet: lost.bet!, player: 0n, casino: 0n },
   ]);
   assert.equal(f.bank(), 0n);
 });
-test('settled bets are found through the account feed, zero payouts are recorded, and a failed collection survives reload', async () => {
+test('settled developer bets are found through the account feed, zero payouts are recorded, and a failed collection survives reload', async () => {
   const f = await gameWallet(),
     w = f.wallet,
     game = f.identity();
   w.openGame(game);
   await w.setGameLimit('1000');
-  const deadline = Date.now() + 60_000,
-    place = async (id: string, by = deadline) => (await w.gamePlace({ id, stake: '10', terms: {}, deadline: by })).bet!;
-  const waiting = await place('waiting', deadline + 3_600_000),
-    refunded = await place('refund'),
+  const place = async (id: string) => (await w.gameDeveloperBet({ id, stake: '10', terms: {} })).bet!;
+  const waiting = await place('waiting'),
+    returned = await place('return'),
     lost = await place('loss');
   let betReads = 0;
   const api = w.api.bind(w);
   w.api = async (...args) => {
-    if (args[0].startsWith('/api/bets/')) betReads++;
+    if (args[0].startsWith('/api/developer-bets/')) betReads++;
     return api(...args);
   };
   await w.collectPayouts();
@@ -295,44 +323,45 @@ test('settled bets are found through the account feed, zero payouts are recorded
   const revision = w.revision;
   await w.collectPayouts();
   assert.equal(w.revision, revision, 'unchanged pages do not invalidate another tab');
-  await f.referee.settle([{ bet: lost, player: 0n, casino: 0n }]);
-  f.advance(60_001);
+  await f.developer.settle([
+    { bet: lost, player: 0n, casino: 0n },
+    { bet: returned, player: 10n, casino: 0n },
+  ]);
   const perform = w.perform.bind(w);
   w.perform = async (...args) => {
-    if (args[0] === 'payout') throw new Error('Credit unavailable');
+    if (args[0] === 'developer-bet-payout') throw new Error('Credit unavailable');
     return perform(...args);
   };
   await w.collectPayouts();
   assert.equal((await w.gameReceipt('loss'))!.payout, '0');
-  assert.equal(w.held[lost], undefined);
-  assert.equal(w.held[refunded]!.state!.status, 'settled');
-  assert.equal(w.held[refunded]!.state!.payout, '10');
-  assert.equal(w.held[refunded]!.error, 'Credit unavailable');
+  assert.equal(w.developerBets[lost], undefined);
+  assert.equal(w.developerBets[returned]!.state!.status, 'settled');
+  assert.equal(w.developerBets[returned]!.state!.payout, '10');
+  assert.equal(w.developerBets[returned]!.error, 'Credit unavailable');
   assert.equal(await w.balance(), 999970n);
   const restored = await f.reload(),
-    cursor = restored.heldCursors.eth;
+    cursor = restored.developerBetCursors.eth;
   await restored.collectPayouts();
-  assert.equal(restored.heldCursors.eth, cursor, 'retry uses saved settlements even with an empty feed');
-  assert.deepEqual(Object.keys(restored.held), [waiting]);
+  assert.equal(restored.developerBetCursors.eth, cursor, 'retry uses saved settlements even with an empty feed');
+  assert.deepEqual(Object.keys(restored.developerBets), [waiting]);
   assert.equal(await restored.balance(), 999980n);
   restored.openGame(game);
-  assert.equal((await restored.gameReceipt('refund'))!.reason, 'Refunded: not settled by its deadline');
+  assert.equal((await restored.gameReceipt('return'))!.payout, '10');
 });
-test('encrypted backups retain every open bet beyond recent history', async () => {
+test('encrypted backups retain every open developer bet beyond recent history', async () => {
   const f = await gameWallet(),
     w = f.wallet,
     game = f.identity();
   w.openGame(game);
   await w.setGameLimit('1000');
-  const deadline = Date.now() + 60_000;
-  await w.gamePlace({ id: 'a', stake: '10', terms: {}, deadline });
-  await w.gamePlace({ id: 'b', stake: '20', terms: {}, deadline });
+  await w.gameDeveloperBet({ id: 'a', stake: '10', terms: {} });
+  await w.gameDeveloperBet({ id: 'b', stake: '20', terms: {} });
   for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
   const password = 'long bet backup passphrase',
     backup = await w.encryptedBackup(password);
   const contents = await decryptBackup(backup, password);
   assert.equal(contents.record.history.length, 102);
-  assert.equal(contents.record.history.filter((receipt: any) => receipt.kind === 'wager').length, 2);
+  assert.equal(contents.record.history.filter((receipt: any) => receipt.kind === 'developer-bet').length, 2);
   const restored = await f.reload();
   restored.storage = new MemoryStore();
   restored.channels = {};
@@ -340,10 +369,12 @@ test('encrypted backups retain every open bet beyond recent history', async () =
   restored.revision = 0;
   restored.refresh = async () => ({});
   await restored.restoreBackup(backup, password);
-  f.advance(60_001);
+  // Their developer pays both stakes back while the wallet is away.
+  const open = await f.developer.bets({ status: 'open' });
+  await f.developer.settle(open.bets.map(bet => ({ bet: bet.bet, player: BigInt(bet.stake), casino: 0n })));
   await restored.collectPayouts();
   assert.equal(await restored.balance(), 999899n);
-  assert.deepEqual(restored.held, {});
+  assert.deepEqual(restored.developerBets, {});
   restored.openGame(game);
   assert.equal((await restored.gameReceipt('a'))!.payout, '10');
   assert.equal((await restored.gameReceipt('b'))!.payout, '20');
@@ -360,9 +391,9 @@ test('a game learns how its operations ended and never whose they were', async (
   await reply(w.gameHello());
   await reply(w.gameInfo());
   await reply(w.gameLimit());
-  await reply(w.gameBet(terms('own')));
-  await reply(w.gamePlace({ id: 'seat', stake: '10', terms: { seat: 1 }, deadline: Date.now() + 60_000 }));
-  await f.referee.settle([{ bet: replies.at(-1).bet, player: 10n, casino: 0n }]);
+  await reply(w.gameCasinoBet(terms('own')));
+  await reply(w.gameDeveloperBet({ id: 'seat', stake: '10', terms: { seat: 1 } }));
+  await f.developer.settle([{ bet: replies.at(-1).bet, player: 10n, casino: 0n }]);
   await w.collectPayouts();
   await reply(w.gamePayment({ id: 'pay', amount: '1' }));
   for (const id of ['own', 'seat', 'pay']) await reply(w.gameReceipt(id));
@@ -376,9 +407,9 @@ test('a game learns how its operations ended and never whose they were', async (
     'group',
     'terms',
     'round',
-    'deadline',
     'bet',
     'outcome',
+    'owed',
     'payout',
     'reason',
   ];
@@ -393,12 +424,12 @@ test('a game learns how its operations ended and never whose they were', async (
     for (const secret of player) assert.doesNotMatch(JSON.stringify(r).toLowerCase(), new RegExp(secret));
   const statuses = replies.filter(r => r.status).map(r => `${r.id} ${r.kind} ${r.status} ${r.payout ?? ''}`);
   assert.deepEqual(statuses, [
-    `own bet settled ${replies[3].payout}`,
-    'seat bet placed ',
-    'seat bet settled 10',
+    `own casino-bet settled ${replies[3].payout}`,
+    'seat developer-bet open ',
+    'seat developer-bet settled 10',
     'pay payment settled ',
-    `own bet settled ${replies[3].payout}`,
-    'seat bet settled 10',
+    `own casino-bet settled ${replies[3].payout}`,
+    'seat developer-bet settled 10',
     'pay payment settled ',
   ]);
 });
@@ -413,7 +444,7 @@ test('a lost reply is recovered after reload without any game state in the walle
     if (args[0].endsWith('/operations')) throw new Error('lost reply');
     return result;
   };
-  await assert.rejects(w.gameBet(terms('lost')), /lost reply/);
+  await assert.rejects(w.gameCasinoBet(terms('lost')), /lost reply/);
   assert.equal(w.gameLimit().pending, true);
   const request = structuredClone(w.pending.request);
   const restored = await f.reload();
@@ -425,7 +456,7 @@ test('a lost reply is recovered after reload without any game state in the walle
   assert.equal(restored.gameLimit().pending, false);
   assert.equal((await restored.gameReceipt('lost'))!.status, 'settled', 'the game can still learn the outcome by ID');
   assert.equal(f.settlements(), 1);
-  await restored.gameBet(terms('lost'));
+  await restored.gameCasinoBet(terms('lost'));
   assert.equal(f.settlements(), 1);
 });
 
@@ -444,14 +475,14 @@ test('a result recovered in the same tab updates the open game; a closed game ch
     }
     return result;
   };
-  await assert.rejects(w.gameBet(terms('a')), /lost reply/);
+  await assert.rejects(w.gameCasinoBet(terms('a')), /lost reply/);
   const receipt: any = await w.exclusive(() => w.resume());
   assert.equal(w.gameLimit().balance, String(100n - 10n + BigInt(receipt.payout)));
   w.closeGame();
   w.openGame(f.identity('b'));
   await w.setGameLimit('50');
   lose = true;
-  await assert.rejects(w.gameBet(terms('b')), /lost reply/);
+  await assert.rejects(w.gameCasinoBet(terms('b')), /lost reply/);
   w.closeGame();
   const before = await w.balance();
   const settled: any = await w.exclusive(() => w.resume());
@@ -515,25 +546,24 @@ test('the bridge validates game requests without revisions or checkpoints', () =
     { ...terms(), deadline: 1 },
     { id: 'r', stake: '10', terms: { pick: 'home' }, deadline: 1 },
   ])
-    assert.throws(() => valid('game.bet', params));
+    assert.throws(() => valid('game.casinoBet', params));
   for (const params of [
     terms(),
     { ...terms(), deadline: 1 },
     { ...terms(), round: '0x1' },
     { ...terms(), round, deadline: 1 },
     { ...terms(), round, terms: {} },
-    { id: 'r', stake: '10', terms: {}, deadline: '1' },
-    { id: 'r', stake: '10', terms: [], deadline: 1 },
-    { id: 'r', stake: '10', terms: {} },
-    { id: 'r', stake: '10', terms: {}, deadline: 1, round },
+    { id: 'r', stake: '10', terms: {}, deadline: 1 },
+    { id: 'r', stake: '10', terms: [] },
+    { id: 'r', stake: '10', terms: {}, round },
   ])
-    assert.throws(() => valid('game.place', params));
-  assert.equal(valid('game.bet', terms()), 'game.bet');
-  assert.equal(valid('game.bet', { ...terms(), group: 'hand-1' }), 'game.bet');
-  assert.equal(valid('game.place', { ...terms(), round }), 'game.place');
+    assert.throws(() => valid('game.developerBet', params));
+  assert.equal(valid('game.casinoBet', terms()), 'game.casinoBet');
+  assert.equal(valid('game.casinoBet', { ...terms(), group: 'hand-1' }), 'game.casinoBet');
+  assert.equal(valid('game.developerBet', { ...terms(), round }), 'game.developerBet');
   assert.equal(
-    valid('game.place', { id: 'r', stake: '10', terms: { pick: 'home' }, deadline: 1, group: 'match-9' }),
-    'game.place',
+    valid('game.developerBet', { id: 'r', stake: '10', terms: { pick: 'home' }, group: 'match-9' }),
+    'game.developerBet',
   );
   for (const id of ['1', -1, 1.5])
     assert.throws(() => validateRequest({ hookedin: true, id, method: 'wallet.info' }), /request ID/);
@@ -551,19 +581,19 @@ for (const boundary of ['request', 'settlement'])
     f.storage.beforeCommit = () => {
       if (++commits === (boundary === 'request' ? 1 : 2)) throw new Error('disk failed');
     };
-    await assert.rejects(w.gameBet(terms()), /disk failed/);
+    await assert.rejects(w.gameCasinoBet(terms()), /disk failed/);
     await assert.rejects(w.setGameLimit('10'), /storage needs recovery/);
     f.storage.beforeCommit = null;
     const restored = await f.reload();
     if (restored.pending) await restored.exclusive(() => restored.resume());
     restored.openGame(f.identity());
     await restored.setGameLimit('100');
-    await restored.gameBet(terms());
+    await restored.gameCasinoBet(terms());
     assert.equal(f.settlements(), 1);
   });
 
 for (const name of ['mines', 'blackjack'])
-  test(name + ' runs its own rules through the atomic bridge and its own storage, including reload', async () => {
+  test(name + ' runs its own rules through the wallet bridge and its own storage, including reload', async () => {
     const allocation = name === 'blackjack' ? '1000000' : '100000';
     const f = await gameWallet(),
       w = f.wallet;
@@ -608,7 +638,7 @@ test('encrypted backups carry no game state and restore the channel evidence alo
     w = f.wallet;
   w.openGame(f.identity('a'));
   await w.setGameLimit('1000');
-  await w.gameBet(terms('kept'));
+  await w.gameCasinoBet(terms('kept'));
   for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
   const password = 'game backup test passphrase',
     backup = await w.encryptedBackup(password);
@@ -628,7 +658,7 @@ test('encrypted backups carry no game state and restore the channel evidence alo
   restored.openGame(f.identity('a'));
   assert.equal(await restored.gameReceipt('kept'), null, 'receipts beyond the retained history are not restored');
   await restored.setGameLimit('100');
-  await restored.gameBet(terms('after-restore'));
+  await restored.gameCasinoBet(terms('after-restore'));
   assert.equal(f.settlements(), 103);
 });
 
@@ -638,7 +668,7 @@ test('importing newer financial evidence needs no game bookkeeping', async () =>
   w.openGame(f.identity());
   await w.setGameLimit('100');
   const before = await f.storage.get(w.storageKey);
-  await w.gameBet(terms());
+  await w.gameCasinoBet(terms());
   const bundle = await w.exportEvidence();
   const restored = await f.reload();
   restored.storage = new MemoryStore();
@@ -663,8 +693,8 @@ test('additional game wagers debit the limit once and recover their cards and co
     settlements = 0;
   const bridge = bridgeFor(f, w, async (method, params) => {
     if (method === 'game.requestFunds') return { funded: false, amount: null, ...w.gameLimit() };
-    if (method !== 'game.bet' && method !== 'game.payment') return undefined;
-    const receipt = method === 'game.bet' ? await w.gameBet(params) : await w.gamePayment(params);
+    if (method !== 'game.casinoBet' && method !== 'game.payment') return undefined;
+    const receipt = method === 'game.casinoBet' ? await w.gameCasinoBet(params) : await w.gamePayment(params);
     settlements++;
     if (loseReply) {
       loseReply = false;
@@ -922,8 +952,8 @@ test('a rejected game action survives a lost reply and reload without resampling
     return api(url, body);
   };
   const bridge = bridgeFor(f, w, async (method, params) => {
-    if (method !== 'game.bet') return undefined;
-    const receipt = await w.gameBet(params);
+    if (method !== 'game.casinoBet') return undefined;
+    const receipt = await w.gameCasinoBet(params);
     if (receipt.status === 'rejected') throw new Error('reply lost');
     return receipt;
   });

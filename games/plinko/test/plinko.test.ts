@@ -46,7 +46,7 @@ test('every board is one bet that tiles the outcome space and returns exactly 99
       const signed = describeBet(bet);
       assert.equal(signed.expectedPayout * 100n, 99n * stake * OUTCOME_SPACE);
       assert.equal(signed.maxPayout, (stake * BigInt(Math.max(...table))) / 100n);
-      assert.ok(admits(20000n * stake, bet), 'and the casino admits it as one wager');
+      assert.ok(admits(20000n * stake, bet), 'and the casino admits it as one casino bet');
       assert.ok(
         !admits(BigInt(Math.max(...table)) * (stake / 100n), bet),
         'but not against a bankroll its top prize would empty',
@@ -80,7 +80,7 @@ test("the round's outcome is the ball: every path once, in its own bucket, to th
   }
 });
 
-test('drops settle as single wagers, recover a lost reply under the same ID, and explain limits', async () => {
+test('drops settle as single casino bets, recover a lost reply under the same ID, and explain limits', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('plinko'));
@@ -95,7 +95,7 @@ test('drops settle as single wagers, recover a lost reply under the same ID, and
       if (method === 'wallet.hello') return w.gameHello();
       if (method === 'wallet.info') return { ...w.gameInfo(), bankroll };
       if (method === 'game.receipt') return w.gameReceipt(params.id);
-      if (method !== 'game.bet') throw new Error(`unexpected ${method}`);
+      if (method !== 'game.casinoBet') throw new Error(`unexpected ${method}`);
       bets++;
       assert.equal(JSON.parse(store.map.values().next().value!).id, params.id, 'the drop is saved before it is sent');
       assert.equal(
@@ -103,7 +103,7 @@ test('drops settle as single wagers, recover a lost reply under the same ID, and
         JSON.parse(store.map.values().next().value!).rows + 1,
         'one bet carries the whole board',
       );
-      const receipt = await w.gameBet(params);
+      const receipt = await w.gameCasinoBet(params);
       if (loseReply) throw new Error('The wallet did not respond.');
       return receipt;
     },
@@ -121,12 +121,12 @@ test('drops settle as single wagers, recover a lost reply under the same ID, and
     assert.equal(await w.balance(), expected, 'a ball moves exactly its payout minus the bet');
     assert.equal(store.map.size, 0, 'a landed ball leaves no ticket');
   }
-  assert.equal(bets, 24, 'one wager per ball');
+  assert.equal(bets, 24, 'one casino bet per ball');
 
   loseReply = true;
   await assert.rejects(client.drop({ rows: 16, risk: 'high', stake: '1000' }), /did not respond/);
   loseReply = false;
-  // After a reload the settled wager lands once, on its own board, without another bet.
+  // After a reload the settled casino bet lands once, on its own board, without another bet.
   client = new DropClient(bridge, { store, name: 'plinko' });
   const recovered = await client.restore();
   assert.equal(recovered!.rows, 16);

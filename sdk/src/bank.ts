@@ -92,7 +92,7 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     get balance() {
       return current;
     },
-    /** Disable the button while the game settles a wager; the bridge serializes requests anyway. */
+    /** Disable the button while the game settles a bet; the bridge serializes requests anyway. */
     setBusy(value: boolean) {
       busy = value;
       render();

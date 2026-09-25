@@ -67,14 +67,16 @@
             even, low and high 2 for 1. Zero belongs to the house, which is the game's whole 2.7% edge.
           </p>
           <p>
-            Everyone at the table shares one spin. Before anybody bets, the casino names the spin's round, the hash of a
-            secret, and the wheel, the game's referee, commits the hash of its seed to it; your bet names both, so where
-            the ball lands is fixed before your bet is in, and nobody can change it. Your wallet places your bet with
-            the casino, and it is final once it is in; twenty seconds after the first chip at the table is down, the
-            wheel draws the round against the casino's bankroll. The number is read from the secret and the seed
-            together, and your wallet checks both against the hashes your bet named before it collects what your bet
-            won. A bet the casino cannot take in a spin is refunded, and so is one the wheel never draws. Each asset has
-            its own wheel: you join the one for what your wallet plays with.
+            Everyone at the table shares one spin, and your bet is a developer bet: its stake goes to the game's
+            developer, who runs the wheel, and you trust them to pay. Before anybody bets, the casino names the spin's
+            round, the hash of a secret, and the wheel commits the hash of its seed to it; your bet names both, so where
+            the ball lands is fixed before your bet is in, and nobody can change it. Twenty seconds after the first chip
+            at the table is down, the wheel covers every layout on the spin with one casino bet of them all against the
+            casino's bankroll, which reveals the secret and the seed, and pays each covered bet what its chips win
+            there. Your wallet reads the number from the secret and the seed, checks both against the hashes your bet
+            named, and shows any shortfall. A bet the wheel does not cover, one that comes too late for its spin or a
+            spin the bankroll turns down, gets its stake back. Each asset has its own wheel: you join the one for what
+            your wallet plays with.
           </p>
         </details>
       </footer>

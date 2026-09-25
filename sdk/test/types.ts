@@ -30,7 +30,7 @@ const rng = rngFromBytes(bytes => {
 });
 if (node.kind === 'decision') {
   const step = prepareAction(plan, state, policy(node), rng);
-  resolveTransition(step, step.kind === 'bet' ? 0n : undefined);
+  resolveTransition(step, step.kind === 'casino-bet' ? 0n : undefined);
 }
 evaluatePolicy(plan, policy);
 createMines({ tiles: 5, mines: 1, cashouts: [unit] });

@@ -41,7 +41,7 @@ prize_i  = [start_i, end_i) pays (cash of successor i − cheapest), for every b
 
 Each successor's range is as wide as its probability, to the nearest outcome in 2^64. Every card keeps its own stretch of the outcome space, even when two cards lead to the same cash, so the casino's verified outcome names the card as well as what it paid. Whatever the outcome, the player's cash after the bet is exactly the cash of the state reached. A step that moves no money places no bet. Extra wagers (double, split, insurance) add existing player money through the action's `additionalCash`.
 
-A hand is therefore a short sequence of ordinary bets. Nothing reserves a whole hand, and stopping between steps leaves the player holding the current signed balance: a [settled trade-off](../../architecture.md#settled-trade-offs). The derivation is in [sequential games built from native bets](../../sdk/docs/sequential-games.md).
+A hand is therefore a short sequence of casino bets. Nothing reserves a whole hand, and stopping between steps leaves the player holding the current signed balance: a [settled trade-off](../../architecture.md#settled-trade-offs). The derivation is in [sequential games built from casino bets](../../sdk/docs/sequential-games.md).
 
 ### The funding table
 
@@ -77,7 +77,7 @@ The cards on screen are replayed from the labels of settled steps, which `RoundC
 The game page is untrusted by design. It runs in a sandboxed iframe on its own origin and talks to the wallet only through `postMessage`.
 
 - **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
-- **Nobody picks the outcome.** Every bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet draws its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
+- **Nobody picks the outcome.** Every casino bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet picks its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
 - **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`, with basis `outcome`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **Every card is an outcome.** The card drawn at each step is named by that step's verified outcome. You choose an action before its outcome exists, and the same action is always the same bet, so nothing is gained by retrying.

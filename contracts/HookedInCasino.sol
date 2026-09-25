@@ -15,7 +15,7 @@ contract HookedInCasino {
     uint8 private constant STATUS_CLOSING = 2;
     uint8 private constant STATUS_FINALIZED = 3;
     uint256 private constant KIND_NONE = 0;
-    uint256 private constant KIND_BET = 1;
+    uint256 private constant KIND_CASINO_BET = 1;
     uint256 private constant KIND_DEBIT = 2;
     uint256 private constant KIND_CREDIT = 3;
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
@@ -49,7 +49,7 @@ contract HookedInCasino {
         uint256 balance;
     }
 
-    /// A bet pays `payout` when its round's outcome falls in [rangeStart, rangeEnd).
+    /// A casino bet pays `payout` when its round's outcome falls in [rangeStart, rangeEnd).
     /// Prizes may overlap: every prize that contains the outcome pays.
     struct Prize {
         uint256 rangeStart;
@@ -57,7 +57,7 @@ contract HookedInCasino {
         uint256 payout;
     }
 
-    /// The contract settles money: a bet, a debit or a credit. What an operation means to the wallet and
+    /// The contract settles money: a casino bet, a debit or a credit. What an operation means to the wallet and
     /// the casino (its name, its game, what it pays into or collects from) is the hash `memo`, which the
     /// contract does not read.
     struct Operation {
@@ -274,13 +274,13 @@ contract HookedInCasino {
         next.sequence = op.sequence;
         next.previousStateHash = baseHash;
         next.transitionHash = keccak256(abi.encode(operationHash, step.secret));
-        bool wager = op.kind == KIND_BET;
-        // A bet names two hashes: its round, the hash of a secret the casino fixed first, and the hash
+        bool casinoBet = op.kind == KIND_CASINO_BET;
+        // A casino bet names two hashes: its round, the hash of a secret the casino fixed first, and the hash
         // of a seed. Only that secret and that seed settle it, and every bet on one round and seed
         // shares one outcome. Whoever holds one of the two cannot know the outcome before both are out.
         // Every field a debit or a credit does not use must be zero.
         if (
-            (wager ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seedHash == bytes32(0)
+            (casinoBet ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seedHash == bytes32(0)
                     || op.round == bytes32(0)
                     || keccak256(abi.encodePacked(step.secret)) != op.round
                     || keccak256(abi.encodePacked(step.seed)) != op.seedHash
@@ -291,11 +291,11 @@ contract HookedInCasino {
         if (op.kind == KIND_CREDIT) {
             // The casino attests what the credit collects. Principal and liquidity do not move.
             next.balance += op.amount;
-        } else if (wager || op.kind == KIND_DEBIT) {
+        } else if (casinoBet || op.kind == KIND_DEBIT) {
             // The stake is paid to enter; every prize whose range holds the outcome pays out.
             if (op.amount > base.balance) revert InvalidTerms();
             next.balance -= op.amount;
-            if (wager) {
+            if (casinoBet) {
                 uint256 outcome = uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, step.seed, step.secret))));
                 for (uint256 i = 0; i < op.prizes.length; i++) {
                     Prize calldata prize = op.prizes[i];

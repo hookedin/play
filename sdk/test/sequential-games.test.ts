@@ -17,7 +17,7 @@ import {
   simulateServerResult,
 } from '../src/engine/index.ts';
 import { admits } from '../src/admits.ts';
-import { assessRound } from '../../protocol/risk.ts';
+import { assessBet } from '../../protocol/risk.ts';
 import { blackjackFunding } from '../src/generated/blackjack-funding.ts';
 
 const UNIT = 10n ** 18n;
@@ -62,7 +62,7 @@ test('every blackjack action is one admitted bet whose ranges name each successo
         action.outcomes.filter(o => o.probability.n > 0n).map(o => [o.next, o.label, o.probability]),
         'every original successor and card label survives, in order',
       );
-      if (step.kind !== 'bet') continue;
+      if (step.kind !== 'casino-bet') continue;
       let edge = 0n;
       for (const s of step.successors) {
         // A card's share of the outcome space is its probability to within one outcome in 2^64.
@@ -76,8 +76,8 @@ test('every blackjack action is one admitted bet whose ranges name each successo
       assert.equal(step.bet.stake, priced.cash + pricedAction.additionalCash - step.retained);
       // The casino's own rule admits the step at the planning floor, and no step can cost the
       // bankroll more than the conservative starting bound allows for.
-      const risk = assessRound({ bankroll: plan.bankrollFloor, bets: [step.bet] });
-      assert.ok(risk.liability - risk.totalFee < plan.maximumCash);
+      const risk = assessBet({ bankroll: plan.bankrollFloor, bet: step.bet });
+      assert.ok(risk.liability - risk.fee < plan.maximumCash);
       most = Math.max(most, step.bet.prizes.length);
       bets++;
     }
@@ -101,7 +101,7 @@ test('backward funding covers all choices while exact terminal EV depends on the
     best.distribution.reduce((total, item) => add(total, item.probability), ZERO),
     ONE,
   );
-  assert(best.expectedAtomicBets.n > 4n * best.expectedAtomicBets.d);
+  assert(best.expectedCasinoBets.n > 4n * best.expectedCasinoBets.d);
   assert.throws(() => evaluatePolicy(plan, () => 'split'), /invalid policy action/);
 });
 
@@ -150,7 +150,7 @@ test('a step needs no randomness of its own, fails before it is built, and is im
   assert.throws(() => prepareAction(plan, { ...state, bankroll: plan.bankrollFloor - 1n }, 'deal'), /planning floor/);
   const step = prepareAction(plan, state, 'deal');
   assert(Object.isFrozen(step) && Object.isFrozen(step.before));
-  assert.equal(step.kind, 'bet');
+  assert.equal(step.kind, 'casino-bet');
   // The same action is always the same bet: there is no ticket to protect or to redraw.
   assert.deepEqual(prepareAction(plan, state, 'deal'), step);
   assert.throws(() => resolveTransition(step), /64-bit outcome/);
@@ -185,15 +185,15 @@ test('a step needs no randomness of its own, fails before it is built, and is im
       admits: (b, bet) => b !== live && admits(b, bet),
     });
   const ready = { nodeId: 'flip', cash: refusing.initialCash, bankroll: refusing.conservativeBankroll };
-  assert.equal(prepareAction(refusing, ready, 'toss').kind, 'bet');
+  assert.equal(prepareAction(refusing, ready, 'toss').kind, 'casino-bet');
   assert.throws(() => prepareAction(refusing, { ...ready, bankroll: live }, 'toss'), /does not admit/);
 });
 
 test('every outcome lands on a funded state and moves exactly its prize between player and bankroll', () => {
   const state = { nodeId: plan.root, cash: plan.initialCash, bankroll: 2n * plan.conservativeBankroll };
   const step = prepareAction(plan, state, 'deal');
-  assert.equal(step.kind, 'bet');
-  if (step.kind !== 'bet') return;
+  assert.equal(step.kind, 'casino-bet');
+  if (step.kind !== 'casino-bet') return;
   for (const s of step.successors)
     for (const outcome of [s.rangeStart, s.rangeEnd - 1n]) {
       const result = resolveTransition(step, outcome);
@@ -219,7 +219,7 @@ test('the extreme outcomes of every round complete funded blackjack paths', () =
       while (getNode(plan, state.nodeId).kind !== 'terminal') {
         const node = getNode(plan, state.nodeId);
         const step = prepareAction(plan, state, policy(node as any), () => 0n);
-        const result = resolveTransition(step, step.kind === 'bet' ? outcome : undefined);
+        const result = resolveTransition(step, step.kind === 'casino-bet' ? outcome : undefined);
         contributions += step.additionalCash;
         state = result.state;
         assert.equal(state.cash, getNode(plan, state.nodeId).cash);

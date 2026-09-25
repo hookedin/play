@@ -12,7 +12,7 @@ import {
   gameKey,
 } from '../protocol/protocol.ts';
 import { fileURLToPath } from 'node:url';
-import { assessRound, OUTCOME_SPACE } from '../protocol/risk.ts';
+import { assessBet, OUTCOME_SPACE } from '../protocol/risk.ts';
 
 export function buildVectors() {
   const clientSeed = `0x${'72'.repeat(32)}`;
@@ -26,12 +26,12 @@ export function buildVectors() {
   const Q = OUTCOME_SPACE,
     priced = (
       bankroll: bigint,
-      bets: { stake: bigint; prizes: { rangeStart: bigint; rangeEnd: bigint; payout: bigint }[] }[],
+      bet: { stake: bigint; prizes: { rangeStart: bigint; rangeEnd: bigint; payout: bigint }[] },
     ) => {
-      const { maxFee, totalFee, fees, liability } = assessRound({ bankroll, bets });
-      return { bankroll, bets, risk: { maxFee, totalFee, fees, liability } };
+      const { maxFee, fee, liability } = assessBet({ bankroll, bet });
+      return { bankroll, bet, risk: { maxFee, fee, liability } };
     };
-  // One stake with one prize below a threshold, at a stated edge: the binary wager.
+  // One stake with one prize below a threshold, at a stated edge: the binary casino bet.
   const below = (stake: bigint, payout: bigint, edgeBps: bigint) => ({
     stake,
     prizes: [{ rangeStart: 0n, rangeEnd: (Q * stake * (10_000n - edgeBps)) / (10_000n * payout), payout }],
@@ -41,10 +41,10 @@ export function buildVectors() {
     below(100_000_000n, 200_000_000n, 200n),
     below(1_000_000_000n, 1_100_000_000n, 200n),
     below(100_000_000n, 9_100_000_000n, 9000n),
-  ].map(bet => priced(10_000_000_000n, [bet]));
+  ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
-  // One outcome for the whole round: a lone red, two stacked reds, a red hedged by a black, and one
-  // player whose overlapping chips (red, a dozen, a number) pay together.
+  // Roulette as one casino bet each: a lone red, and one player whose overlapping chips (red, a dozen, a number)
+  // pay together.
   const pocket = Q / 37n,
     chip = (from: number, to: number, payout: bigint) => ({
       rangeStart: pocket * BigInt(from),
@@ -52,12 +52,11 @@ export function buildVectors() {
       payout,
     }),
     red = { stake: 100_000_000n, prizes: [chip(0, 18, 200_000_000n)] },
-    black = { stake: 100_000_000n, prizes: [chip(18, 36, 200_000_000n)] },
     chips = {
       stake: 160_000_000n,
       prizes: [chip(0, 18, 200_000_000n), chip(6, 18, 150_000_000n), chip(17, 18, 360_000_000n)],
     };
-  const rounds = [[red], [red, red], [red, black], [chips], [chips, black]].map(bets => priced(10_000_000_000n, bets));
+  const tables = [red, chips].map(bet => priced(10_000_000_000n, bet));
   const state = initialState({ channelId: `0x${'53'.repeat(32)}`, deposit: '1000000000' });
   const request = operation(d, state, {
     kind: 1,
@@ -74,7 +73,7 @@ export function buildVectors() {
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     cases,
-    rounds,
+    tables,
     secrets,
     identity,
     state,
@@ -90,8 +89,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const canonical = `${JSON.stringify(buildVectors(), (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)}\n`;
   if (process.argv.includes('--check')) {
     if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== canonical)
-      throw new Error('Atomic wager vectors differ; run npm run vectors for an intentional update');
-    console.log('Round pricing and outcome vectors verified.');
+      throw new Error('Casino bet vectors differ; run npm run vectors for an intentional update');
+    console.log('Casino bet pricing and outcome vectors verified.');
   } else {
     fs.mkdirSync(new URL('../vectors/', import.meta.url), { recursive: true });
     fs.writeFileSync(file, canonical);

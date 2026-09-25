@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ContractFactory, Wallet, id, ZeroHash } from 'ethers';
-import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBet } from '../testing/contract.ts';
+import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBinary } from '../testing/contract.ts';
 import { initialState, checkpointEvidence, channelId, STATE_TYPES, hashState } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import release from '../client/contract-artifact.ts';
@@ -110,7 +110,7 @@ for (const initialSeed of [1, 17, 913, 9127, 65537, 741231, 123456789, 429496729
             await transition(f, ch, 2, BigInt(1 + random(Number(ch.state.balance))));
           else if (choice === 1 && BigInt(ch.state.balance) > 0n) {
             const amount = BigInt(ch.state.balance) < 10n ? 1n : 10n;
-            const q = assessBet({
+            const q = assessBinary({
               bankroll: 1000000n,
               stake: amount,
               netWin: amount,
@@ -225,11 +225,11 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     await new Wallet(ch.key).signTypedData(f.d, STATE_TYPES, base),
     await f.owner.signTypedData(f.d, STATE_TYPES, base),
   );
-  // Exercise full-width wager terms.
+  // Exercise full-width casino bet terms.
   const { operation, OP_TYPES, deriveState, roundId, seedHash } = await import('../protocol/protocol.ts');
   const secret = id('wide secret'),
     seed = id('wide entropy');
-  const q = assessBet({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, winThreshold: OUTCOME_SPACE / 4n });
+  const q = assessBinary({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, winThreshold: OUTCOME_SPACE / 4n });
   const op = operation(f.d, base, {
     kind: 1,
     amount: q.stake,

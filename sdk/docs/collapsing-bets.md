@@ -1,6 +1,6 @@
 # Collapsing a large prize table into a small bet
 
-A native bet is a stake and up to 64 prizes, each paying when the round's outcome falls in its range (see [the protocol](../../docs/protocol.md#checkpoints-and-transitions)). That covers almost every game directly: a Plinko board is 17 prizes, a roulette layout at most 37, a 243-ways slot a few dozen distinct pays, and the wallet signs the whole distribution. Nothing in this repository needs the technique below, and no library implements it.
+A casino bet is a stake and up to 64 prizes, each paying when the round's outcome falls in its range (see [the protocol](../../docs/protocol.md#checkpoints-and-transitions)). That covers almost every game directly: a Plinko board is 17 prizes, a roulette layout at most 37, a 243-ways slot a few dozen distinct pays, and the wallet signs the whole distribution. Nothing in this repository needs the technique below, and no library implements it.
 
 It is kept here because some prize tables do not fit. A slot with millions of distinct payouts, a lottery with a prize per ticket number, or a table whose entries are rarer than one outcome in 2^64 cannot be written as 64 ranges. Such a game can still be played on the same primitive by **collapsing** its table: the client draws, with its own randomness, which small bet to place, such that placing that bet and letting the casino settle it reproduces the full table exactly.
 

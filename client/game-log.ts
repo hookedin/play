@@ -51,13 +51,11 @@ const quote = (text: unknown) => (typeof text === 'string' && text ? ` · “${t
 export function describeRequest(method: string, params: any = {}) {
   const named = `${params.group ? ` · group ${params.group}` : ''} · id ${params.id}`;
   switch (method) {
-    case 'game.bet':
-      return `stake ${eth(params.stake)} · ${betSummary(params)}${named}`;
-    case 'game.place': {
-      const settles = params.terms
-        ? `split by its referee · deadline ${new Date(params.deadline).toLocaleString()}`
-        : `${betSummary(params)} · drawn by its referee`;
-      return `stake ${eth(params.stake)} · ${settles}${named}`;
+    case 'game.casinoBet':
+      return `casino bet · stake ${eth(params.stake)} · ${betSummary(params)}${named}`;
+    case 'game.developerBet': {
+      const settles = params.terms ? "on its developer's word" : `${betSummary(params)} · round ${params.round}`;
+      return `developer bet · stake ${eth(params.stake)} · ${settles}${named}`;
     }
     case 'game.payment':
       return `amount ${eth(params.amount)}${named}`;
@@ -80,19 +78,20 @@ export function describeResult(method: string, result: any) {
     case 'game.requestFunds':
       return `${result.funded ? `limit set to ${eth(result.amount)}` : 'unchanged'} · ${limit(result)}`;
     case 'game.receipt':
-    case 'game.bet':
-    case 'game.place':
+    case 'game.casinoBet':
+    case 'game.developerBet':
     case 'game.payment':
       return describeReceipt(result);
     default:
       return '';
   }
 }
-/** A receipt in one line: what became of the operation, what it paid, and whose word a payout rests on. */
+/** A receipt in one line: what became of the operation, what it paid and was owed, and whose word a payout
+ * rests on. */
 export const describeReceipt = (receipt: any) =>
   `${receipt.kind} ${receipt.status}${receipt.payout === undefined ? '' : ` · paid ${eth(receipt.payout)}`}${
-    receipt.basis === 'referee' ? " · on its referee's word" : ''
-  }${quote(receipt.reason)} · ${receipt.id}`;
+    receipt.owed === undefined ? '' : ` · owed ${eth(receipt.owed)}`
+  }${receipt.basis === 'developer' ? " · on its developer's word" : ''}${quote(receipt.reason)} · ${receipt.id}`;
 
 export interface GameLogElements {
   list: HTMLElement;

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Wallet } from 'ethers';
-import { LIMITS, REFEREE_PROTOCOL } from '../../../protocol/protocol.ts';
+import { LIMITS, DEVELOPER_PROTOCOL } from '../../../protocol/protocol.ts';
 import { RouletteWheel } from './worker.ts';
 
 const CASINO = 'https://casino.test',
@@ -20,14 +20,14 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
       return Response.json({
         chainId: '31337',
         contractAddress: '0x' + 'c'.repeat(40),
-        refereeProtocol: REFEREE_PROTOCOL,
+        developerProtocol: DEVELOPER_PROTOCOL,
         limits: LIMITS,
       });
-    // The wheel opens its round: the casino names it, and the wheel commits its seed to it.
-    const round = { id: ROUND, deadline: Date.now() + LIMITS.round, status: 'open' };
+    // The wheel opens its round: the casino names it, and the wheel commits the seed of its casino bet to it.
+    const round = { id: ROUND, status: 'open' };
     if (path === '/api/rounds') return Response.json(round);
     if (path === `/api/rounds/${ROUND}/commit`) return Response.json({ ...round, ...JSON.parse(String(init!.body)) });
-    if (path.startsWith('/api/bets?')) return Response.json([]);
+    if (path.startsWith('/api/developer-bets?')) return Response.json({ bets: [], cursor: '', more: false });
     return Response.json({ error: 'Not found' }, { status: 404 });
   });
   const stored = new Map<string, unknown>();

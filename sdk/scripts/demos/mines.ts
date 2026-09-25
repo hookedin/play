@@ -7,7 +7,7 @@ const plan = compileGame(
   createMines({ tiles: 5, mines: 1, cashouts: [(120n * UNIT) / 100n, (156n * UNIT) / 100n, (228n * UNIT) / 100n] }),
   { admits, bankrollFloor: 1_000_000n * UNIT, cashQuantum: 1_000_000_000n, initialCash: UNIT },
 );
-console.log('Mines reference: 5 tiles, 1 mine; at most 3 safe picks; simulated native bets.');
+console.log('Mines reference: 5 tiles, 1 mine; at most 3 safe picks; simulated casino bets.');
 console.log(`Required root continuation cash ${amount(plan.requiredCash)}.`);
 const policyFor =
   (count: number): Policy =>

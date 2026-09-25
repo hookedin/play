@@ -1,8 +1,8 @@
-# Sequential games built from native bets
+# Sequential games built from casino bets
 
-The [pricing engine](../src/engine/) represents a finite game as a graph of public states, then works backward to assign each state enough **actual player cash** to finance its next transition. The examples are Stake-rules blackjack and a reveal-or-cashout Mines game. The casino core is unchanged: each random transition is one ordinary native bet, a stake and a prize for every better successor.
+The [pricing engine](../src/engine/) represents a finite game as a graph of public states, then works backward to assign each state enough **actual player cash** to finance its next transition. The examples are Stake-rules blackjack and a reveal-or-cashout Mines game. The casino core is unchanged: each random transition is one ordinary casino bet, a stake and a prize for every better successor.
 
-The casino enforces each accepted bet's stake, prizes, commission, signed checkpoint and round rules. Games run this optional compiler themselves and request atomic operations from the wallet. The wallet checks each bet and its game allocation, without interpreting the graph. The reference preserves full-game probabilities only under its stated execution and bankroll assumptions. Casino withholding can prevent completion.
+The casino enforces each accepted bet's stake, prizes, commission, signed checkpoint and round rules. Games run this optional compiler themselves and request casino bets and payments from the wallet. The wallet checks each bet and its game allocation, without interpreting the graph. The reference preserves full-game probabilities only under its stated execution and bankroll assumptions. Casino withholding can prevent completion.
 
 ## Cash continuation values, not expected values
 
@@ -16,7 +16,7 @@ Taking the maximum makes all offered choices financeable. It does not mean the p
 
 ### Why the price exceeds the expected value
 
-For one action with successor cash values v_i and probabilities p_i, current cash c, and bankroll b, the casino's [round condition](../../docs/economics.md#a-round-is-one-wager) at zero commission is:
+For one action with successor cash values v_i and probabilities p_i, current cash c, and bankroll b, the casino's [admission condition](../../docs/economics.md#a-casino-bet-is-one-wager) at zero commission is:
 
 ```text
 sum_i p_i × (c − v_i) / (b + c − v_i) >= 0        with every b + c − v_i > 0

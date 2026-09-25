@@ -33,7 +33,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     assert.equal(HookedIn.formatAmount('1', 2), '<0.01');
     assert.throws(() => HookedIn.parseAmount('0.0000001'), /6 decimal places/);
     // A refusal carries a code the game can act on.
-    const refused = HookedIn.call('game.bet');
+    const refused = HookedIn.call('game.casinoBet');
     deliver(parent, {
       hookedin: true,
       id: posted.at(-1).id,
@@ -76,16 +76,15 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     });
     assert.equal((await funding).funded, false);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
-    const deadline = 1_900_000_000_000;
     const calls = [
       HookedIn.payment('pay', '5', 'hand-1'),
-      HookedIn.place({ id: 'seat', stake: '5', terms: { seat: 2 }, deadline }),
+      HookedIn.developerBet({ id: 'seat', stake: '5', terms: { seat: 2 } }),
     ];
     assert.deepEqual(
       posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
         { method: 'game.payment', params: { id: 'pay', amount: '5', group: 'hand-1' } },
-        { method: 'game.place', params: { id: 'seat', stake: '5', terms: { seat: 2 }, deadline } },
+        { method: 'game.developerBet', params: { id: 'seat', stake: '5', terms: { seat: 2 } } },
       ],
     );
     for (const { id } of posted.slice(-2)) deliver(parent, { hookedin: true, id, result: id });
@@ -93,7 +92,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
       await Promise.all(calls),
       posted.slice(-2).map(message => message.id),
     );
-    // A placed bet that settled reaches the game by itself, once the wallet has collected it.
+    // A developer bet its developer settled reaches the game by itself, once the wallet has collected it.
     const heard: any[] = [];
     const deaf = HookedIn.onReceipt(receipt => heard.push(receipt));
     deliver(parent, { hookedin: true, event: 'game.receipt', receipt: { id: 'seat', status: 'settled' } });

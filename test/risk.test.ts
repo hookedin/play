@@ -3,15 +3,7 @@ import test from 'node:test';
 import { AbiCoder, id, keccak256 } from 'ethers';
 import { domain, hashOperation, outcome, seedHash } from '../protocol/protocol.ts';
 import { buildVectors } from '../scripts/vectors.ts';
-import {
-  OUTCOME_SPACE,
-  UINT256_MAX,
-  assessRound,
-  describeBet,
-  MAX_ROUND_BETS,
-  MAX_PRIZES,
-  MAX_ROUND_CELLS,
-} from '../protocol/risk.ts';
+import { OUTCOME_SPACE, UINT256_MAX, assessBet, describeBet, MAX_PRIZES } from '../protocol/risk.ts';
 
 const zero32 = `0x${'00'.repeat(32)}`;
 const secret0 = `0x${'cd'.repeat(32)}`;
@@ -19,17 +11,17 @@ const casino = '0x0000000000000000000000000000000000000001';
 const player = '0x0000000000000000000000000000000000000002';
 const units = 1_000_000n;
 const terms = { bankroll: 10_000n * units, stake: 1_000n * units, netWin: 100n * units };
-/** One stake with one prize below a threshold: the binary wager whose closed form
- * (B-W-F)(S-F)Q >= B*t*(S+W) the round condition must reduce to exactly. */
-const assessBet = ({
+/** One stake with one prize below a threshold: the binary casino bet whose closed form
+ * (B-W-F)(S-F)Q >= B*t*(S+W) the general condition must reduce to exactly. */
+const assessBinary = ({
   bankroll,
   stake,
   netWin,
   winThreshold,
 }: Record<'bankroll' | 'stake' | 'netWin' | 'winThreshold', bigint>) => {
-  const risk = assessRound({
+  const risk = assessBet({
     bankroll,
-    bets: [{ stake, prizes: [{ rangeStart: 0n, rangeEnd: winThreshold, payout: stake + netWin }] }],
+    bet: { stake, prizes: [{ rangeStart: 0n, rangeEnd: winThreshold, payout: stake + netWin }] },
   });
   return {
     ...risk,
@@ -37,17 +29,17 @@ const assessBet = ({
     netWin,
     winThreshold,
     grossPayout: stake + netWin,
-    developerFee: risk.totalFee / 2n,
-    casinoFee: risk.totalFee / 2n,
+    developerFee: risk.fee / 2n,
+    casinoFee: risk.fee / 2n,
   };
 };
 /** The largest integer threshold whose edge is at least `edgeBps`. */
 const thresholdForEdge = ({ stake, netWin, edgeBps }: Record<'stake' | 'netWin' | 'edgeBps', bigint>) =>
   (OUTCOME_SPACE * stake * (10_000n - edgeBps)) / (10_000n * (stake + netWin));
 const riskAtEdge = (edgeBps: any, input = terms) =>
-  assessBet({ ...input, winThreshold: thresholdForEdge({ ...input, edgeBps: edgeBps as bigint }) });
+  assessBinary({ ...input, winThreshold: thresholdForEdge({ ...input, edgeBps: edgeBps as bigint }) });
 const safe = (
-  q: Pick<ReturnType<typeof assessBet>, 'bankroll' | 'stake' | 'netWin' | 'winThreshold' | 'grossPayout'>,
+  q: Pick<ReturnType<typeof assessBinary>, 'bankroll' | 'stake' | 'netWin' | 'winThreshold' | 'grossPayout'>,
   fee: bigint,
 ) =>
   fee < q.stake &&
@@ -56,20 +48,20 @@ const safe = (
 
 test('a bet exactly at the stated Kelly edge pays no material commission', () => {
   const q = riskAtEdge(100n);
-  assert.equal(q.totalFee, 0n);
+  assert.equal(q.fee, 0n);
   assert.equal(q.liability, q.netWin);
-  assert.ok(safe(q, q.totalFee));
+  assert.ok(safe(q, q.fee));
 });
 
 test('extra edge funds equal fixed fees while preserving exact bankroll Kelly', () => {
   const q = riskAtEdge(200n);
   assert.equal(q.developerFee, q.casinoFee);
-  assert.equal(q.totalFee, q.developerFee * 2n);
-  assert.ok(q.totalFee > 0n);
-  assert.ok(q.maxFee - q.totalFee <= 1n);
+  assert.equal(q.fee, q.developerFee * 2n);
+  assert.ok(q.fee > 0n);
+  assert.ok(q.maxFee - q.fee <= 1n);
   assert.ok(safe(q, q.maxFee));
   assert.ok(!safe(q, q.maxFee + 1n));
-  assert.equal(q.liability, q.netWin + q.totalFee);
+  assert.equal(q.liability, q.netWin + q.fee);
   assert.equal(q.grossPayout, q.stake + q.netWin);
   assert.ok(!safe(q, 10n * units), 'a naive stake times excess-edge fee overbets this risk');
 });
@@ -78,9 +70,9 @@ test('paying developers never relies on the expected profit as collateral', () =
   const q = riskAtEdge(200n);
   assert.equal(q.stake + q.liability, q.grossPayout + q.developerFee + q.casinoFee);
   const onWin = q.bankroll - q.liability;
-  const onLoss = q.bankroll + q.stake - q.totalFee;
+  const onLoss = q.bankroll + q.stake - q.fee;
   assert.ok(onWin > 0n);
-  assert.equal(onLoss - q.bankroll, q.stake - q.totalFee);
+  assert.equal(onLoss - q.bankroll, q.stake - q.fee);
 });
 
 test('a self-referring player receives only their funded half of commission', () => {
@@ -99,8 +91,8 @@ test('the integer search matches exhaustive fee enumeration on small bankrolls',
           for (let fee = 0n; fee < stake && fee + netWin < bankroll; fee += 1n) {
             if (safe(input, fee)) fees.push(fee);
           }
-          if (fees.length === 0) assert.throws(() => assessBet(input), /Kelly/);
-          else assert.equal(assessBet(input).maxFee, fees.at(-1));
+          if (fees.length === 0) assert.throws(() => assessBinary(input), /Kelly/);
+          else assert.equal(assessBinary(input).maxFee, fees.at(-1));
         }
       }
     }
@@ -111,27 +103,27 @@ test('more available bankroll cannot reduce the safe commission', () => {
   const winThreshold = thresholdForEdge({ ...terms, edgeBps: 200n });
   let previous = 0n;
   for (const multiple of [1n, 2n, 5n, 10n, 100n]) {
-    const q = assessBet({ ...terms, bankroll: terms.bankroll * multiple, winThreshold });
+    const q = assessBinary({ ...terms, bankroll: terms.bankroll * multiple, winThreshold });
     assert.ok(q.maxFee >= previous);
     previous = q.maxFee;
   }
 });
 
 test('there is no percentage cap apart from Kelly and bankroll backing', () => {
-  const q = assessBet({ bankroll: 1_000_000n, stake: 100n, netWin: 999_999n, winThreshold: 1n });
+  const q = assessBinary({ bankroll: 1_000_000n, stake: 100n, netWin: 999_999n, winThreshold: 1n });
   assert.equal(q.netWin, q.bankroll - 1n);
-  assert.equal(q.totalFee, 0n);
+  assert.equal(q.fee, 0n);
 });
 
 test('large intermediate products stay exact near uint256 limits', () => {
-  const q = assessBet({
+  const q = assessBinary({
     bankroll: UINT256_MAX - UINT256_MAX / 4n,
     stake: UINT256_MAX / 4n,
     netWin: UINT256_MAX / 2n,
     winThreshold: 1n,
   });
   assert.ok(q.bankroll * q.winThreshold * q.grossPayout > UINT256_MAX);
-  assert.ok(safe(q, q.totalFee));
+  assert.ok(safe(q, q.fee));
   assert.ok(!safe(q, q.maxFee + 1n));
   assert.equal(q.developerFee, q.casinoFee);
 });
@@ -139,23 +131,24 @@ test('large intermediate products stay exact near uint256 limits', () => {
 test('invalid odds, unbacked bets, excessive fees, and uint256 overflow are rejected', () => {
   const good = { ...terms, winThreshold: OUTCOME_SPACE / 2n };
   for (const field of ['bankroll', 'stake']) {
-    for (const value of [0n, -1n, UINT256_MAX + 1n, 100]) assert.throws(() => assessBet({ ...good, [field]: value }));
+    for (const value of [0n, -1n, UINT256_MAX + 1n, 100])
+      assert.throws(() => assessBinary({ ...good, [field]: value }));
   }
   for (const payout of [0n, -1n, UINT256_MAX + 1n, 100])
     assert.throws(() =>
-      assessRound({
+      assessBet({
         bankroll: good.bankroll,
-        bets: [{ stake: good.stake, prizes: [{ rangeStart: 0n, rangeEnd: 1n, payout: payout as bigint }] }],
+        bet: { stake: good.stake, prizes: [{ rangeStart: 0n, rangeEnd: 1n, payout: payout as bigint }] },
       }),
     );
   // A prize that always pays more than the stake can never be admitted; one past the outcome space is malformed.
   for (const winThreshold of [0n, OUTCOME_SPACE, OUTCOME_SPACE + 1n, 0.5])
-    assert.throws(() => assessBet({ ...good, winThreshold: winThreshold as bigint }));
-  assert.throws(() => assessBet({ ...good, netWin: terms.bankroll }), /available bankroll/);
+    assert.throws(() => assessBinary({ ...good, winThreshold: winThreshold as bigint }));
+  assert.throws(() => assessBinary({ ...good, netWin: terms.bankroll }), /available bankroll/);
   assert.throws(() => riskAtEdge(99n), /Kelly/);
-  assert.throws(() => assessBet({ ...good, stake: UINT256_MAX }), /payout/);
+  assert.throws(() => assessBinary({ ...good, stake: UINT256_MAX }), /payout/);
   assert.throws(
-    () => assessBet({ bankroll: UINT256_MAX, stake: 2n, netWin: 1n, winThreshold: 1n }),
+    () => assessBinary({ bankroll: UINT256_MAX, stake: 2n, netWin: 1n, winThreshold: 1n }),
     /bankroll after player loss/,
   );
 });
@@ -221,63 +214,60 @@ test('outcome depends only on the round: every prize holding it pays, and overla
   }
 });
 
-test('round admission prices the shared outcome: stacked bets divide capacity, opposite bets hedge', t => {
+test('a casino bet is one wager: prizes on the same outcomes stack, prizes on different outcomes hedge', t => {
   const bankroll = 10n ** 18n,
-    pocket = OUTCOME_SPACE / 37n;
-  const seat = (rangeStart: bigint, rangeEnd: bigint, stake = 10n ** 16n) => ({
-    stake,
-    prizes: [{ rangeStart, rangeEnd, payout: 2n * stake }],
+    pocket = OUTCOME_SPACE / 37n,
+    stake = 10n ** 16n;
+  /** Chips of `stake` each on red, and on black: one casino bet, whoever holds the chips. */
+  const table = (reds: bigint, blacks: bigint) => ({
+    stake: (reds + blacks) * stake,
+    prizes: [
+      ...(reds ? [{ rangeStart: 0n, rangeEnd: pocket * 18n, payout: 2n * reds * stake }] : []),
+      ...(blacks ? [{ rangeStart: pocket * 18n, rangeEnd: pocket * 36n, payout: 2n * blacks * stake }] : []),
+    ],
   });
-  const red = seat(0n, pocket * 18n),
-    black = seat(pocket * 18n, pocket * 36n);
-  const one = assessRound({ bankroll, bets: [red] }),
-    two = assessRound({ bankroll, bets: [red, red] }),
-    hedged = assessRound({ bankroll, bets: [red, black] });
-  // One bet is exactly the single-wager formula.
-  const single = assessBet({ bankroll, stake: red.stake, netWin: red.stake, winThreshold: pocket * 18n });
-  assert.deepEqual([one.maxFee, one.totalFee, one.liability], [single.maxFee, single.totalFee, single.liability]);
-  // Two players on the same side are one double-sized wager for the bankroll.
-  const doubled = assessBet({ bankroll, stake: 2n * red.stake, netWin: 2n * red.stake, winThreshold: pocket * 18n });
+  const one = assessBet({ bankroll, bet: table(1n, 0n) }),
+    two = assessBet({ bankroll, bet: table(2n, 0n) }),
+    hedged = assessBet({ bankroll, bet: table(1n, 1n) });
+  // One chip is exactly the single-wager formula.
+  const single = assessBinary({ bankroll, stake, netWin: stake, winThreshold: pocket * 18n });
+  assert.deepEqual([one.maxFee, one.fee, one.liability], [single.maxFee, single.fee, single.liability]);
+  // Two chips on the same side are one double-sized wager for the bankroll.
+  const doubled = assessBinary({ bankroll, stake: 2n * stake, netWin: 2n * stake, winThreshold: pocket * 18n });
   assert.equal(two.maxFee, doubled.maxFee);
-  assert.equal(two.liability - two.totalFee, 2n * red.stake);
-  assert.ok(two.totalFee < 2n * one.totalFee, 'stacked risk leaves less surplus edge per seat');
+  assert.equal(two.liability - two.fee, 2n * stake);
+  assert.ok(two.fee < 2n * one.fee, 'stacked risk leaves less surplus edge per chip');
   // Red and black cannot both win: the bankroll never loses, and gains both stakes on green.
-  assert.ok(hedged.totalFee > 2n * one.totalFee, 'a hedged table carries more surplus edge');
-  assert.equal(hedged.liability, hedged.totalFee, 'no outcome costs the bankroll more than its commission');
-  // One player holding both chips is the same wager as two players holding one each.
-  const both = assessRound({ bankroll, bets: [{ stake: 2n * red.stake, prizes: [...red.prizes, ...black.prizes] }] });
-  assert.equal(both.maxFee, hedged.maxFee);
-  // A 2.7% edge carries 1% of bankroll per seat twice, not three times.
-  assert.throws(() => assessRound({ bankroll, bets: [red, red, red] }), /Kelly limit/);
-  assert.ok(assessRound({ bankroll, bets: [red, red, red, black, black, black] }).totalFee > 0n);
-  // Fees follow stakes, each an even number of wei, never more than the safe total.
-  const uneven = assessRound({ bankroll, bets: [red, seat(pocket * 18n, pocket * 36n, 3n * 10n ** 15n)] });
-  assert.ok(uneven.fees.every(fee => fee % 2n === 0n) && uneven.totalFee <= uneven.maxFee);
-  assert.ok(uneven.fees[0] > uneven.fees[1]);
-  assert.throws(() => assessRound({ bankroll, bets: [] }), /1 to 256/);
-  assert.throws(() => assessRound({ bankroll, bets: Array(MAX_ROUND_BETS + 1).fill(red) }), /1 to 256/);
-  assert.throws(() => assessRound({ bankroll, bets: [{ stake: 1n, prizes: [] }] }), /1 to 64 prizes/);
+  assert.ok(hedged.fee > 2n * one.fee, 'a hedged table carries more surplus edge');
+  assert.equal(hedged.liability, hedged.fee, 'no outcome costs the bankroll more than its commission');
+  // A 2.7% edge carries 1% of bankroll per chip twice, not three times.
+  assert.throws(() => assessBet({ bankroll, bet: table(3n, 0n) }), /Kelly limit/);
+  assert.ok(assessBet({ bankroll, bet: table(3n, 3n) }).fee > 0n);
+  // The fee is an even number of wei, never more than the safe most.
+  assert.ok(hedged.fee % 2n === 0n && hedged.fee <= hedged.maxFee);
+  const seat = (rangeStart: bigint, rangeEnd: bigint, amount = stake) => ({
+    stake: amount,
+    prizes: [{ rangeStart, rangeEnd, payout: 2n * amount }],
+  });
+  assert.throws(() => assessBet({ bankroll, bet: { stake: 1n, prizes: [] } }), /1 to 64 prizes/);
   assert.throws(
-    () => assessRound({ bankroll, bets: [{ stake: 1n, prizes: Array(MAX_PRIZES + 1).fill(red.prizes[0]) }] }),
+    () => assessBet({ bankroll, bet: { stake: 1n, prizes: Array(MAX_PRIZES + 1).fill(seat(0n, 1n).prizes[0]) } }),
     /1 to 64 prizes/,
   );
-  assert.throws(() => assessRound({ bankroll, bets: [seat(5n, 5n)] }), /within \[0, 2\^64\)/);
-  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, OUTCOME_SPACE + 1n)] }), /within \[0, 2\^64\)/);
-  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, 1n, bankroll)] }), /less than the available bankroll/);
+  assert.throws(() => assessBet({ bankroll, bet: seat(5n, 5n) }), /within \[0, 2\^64\)/);
+  assert.throws(() => assessBet({ bankroll, bet: seat(0n, OUTCOME_SPACE + 1n) }), /within \[0, 2\^64\)/);
+  assert.throws(() => assessBet({ bankroll, bet: seat(0n, 1n, bankroll) }), /less than the available bankroll/);
   // A bet that cannot lose is not a bet the bankroll takes; covering the wheel at the house's odds is.
-  assert.throws(() => assessRound({ bankroll, bets: [seat(0n, OUTCOME_SPACE)] }), /Kelly limit/);
+  assert.throws(() => assessBet({ bankroll, bet: seat(0n, OUTCOME_SPACE) }), /Kelly limit/);
   const everything = {
     stake: 37n * 10n ** 15n,
     prizes: [{ rangeStart: 0n, rangeEnd: OUTCOME_SPACE, payout: 36n * 10n ** 15n }],
   };
-  assert.equal(
-    assessRound({ bankroll, bets: [everything] }).liability,
-    assessRound({ bankroll, bets: [everything] }).totalFee,
-  );
+  assert.equal(assessBet({ bankroll, bet: everything }).liability, assessBet({ bankroll, bet: everything }).fee);
   t.diagnostic(
     JSON.stringify(
-      { one: one.totalFee, stackedTwo: two.totalFee, hedged: hedged.totalFee, hedgedLiability: hedged.liability },
-      (_, v) => String(v),
+      { one: one.fee, stackedTwo: two.fee, hedged: hedged.fee, hedgedLiability: hedged.liability },
+      (_, v) => (typeof v === 'bigint' ? String(v) : v),
     ),
   );
 });
@@ -303,8 +293,8 @@ test('a paytable is one bet: partial losses, overlapping chips and the exact ret
   const expected = ways.reduce((sum, w, i) => sum + w * tenths[i], 0n); // out of 2560 stakes
   assert.equal(table.expectedPayout * 2560n, expected * stake * Q, 'the return is exact, not sampled');
   assert.ok(expected < 2560n, 'and below one stake');
-  const risk = assessRound({ bankroll: 10n ** 20n, bets: [plinko] });
-  assert.equal(risk.liability - risk.totalFee, stake * 25n, 'the bankroll can lose the top bucket less the stake');
+  const risk = assessBet({ bankroll: 10n ** 20n, bet: plinko });
+  assert.equal(risk.liability - risk.fee, stake * 25n, 'the bankroll can lose the top bucket less the stake');
   // Roulette: chips overlap. 10 on red, 5 on the first dozen, 1 on 9, which is red and in that dozen.
   const pocket = Q / 37n,
     reds = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
@@ -332,38 +322,28 @@ test('a paytable is one bet: partial losses, overlapping chips and the exact ret
     ),
   })).filter(p => p.payout > 0n);
   const flat = { stake: chips.stake, prizes: perPocket.map(p => at(p.n, p.payout)) };
-  const a = assessRound({ bankroll: 10n ** 20n, bets: [chips] }),
-    b = assessRound({ bankroll: 10n ** 20n, bets: [flat] });
+  const a = assessBet({ bankroll: 10n ** 20n, bet: chips }),
+    b = assessBet({ bankroll: 10n ** 20n, bet: flat });
   assert.deepEqual([a.maxFee, a.liability], [b.maxFee, b.liability]);
   assert.deepEqual(describeBet(chips), describeBet(flat));
-  // A table of 32 such players shares the wheel's 37 pockets, so the round stays small however many sit down.
+  // A table of players as one casino bet: each pocket pays what their chips pay on it together, so the bet stays
+  // within 37 pockets however many sit down.
   const started = performance.now(),
-    full = assessRound({
+    full = assessBet({
       bankroll: 10n ** 22n,
-      bets: Array.from({ length: MAX_ROUND_BETS }, (_, i) => ({
-        ...chips,
-        prizes: [...chips.prizes.slice(0, 19), at(1 + (i % 36), 36n * stake)],
-      })),
+      bet: {
+        stake: 256n * chips.stake,
+        prizes: Array.from({ length: 37 }, (_, n) =>
+          at(n, 256n * perPocket.reduce((sum, p) => (p.n === n ? sum + p.payout : sum), 0n) + 7n * stake),
+        ),
+      },
     }),
     elapsed = performance.now() - started;
-  assert.ok(full.totalFee > 0n && elapsed < 2000);
-  // Too many distinct outcomes for one round is declined rather than priced slowly.
-  const wide = (offset: bigint) => ({
-    stake: 10n ** 18n,
-    prizes: Array.from({ length: MAX_PRIZES }, (_, i) => ({
-      rangeStart: (BigInt(i) * 2n + offset) * (Q / 400n),
-      rangeEnd: (BigInt(i) * 2n + offset + 1n) * (Q / 400n),
-      payout: BigInt(i + 1) * 10n ** 15n + offset,
-    })),
-  });
-  assert.throws(
-    () => assessRound({ bankroll: 10n ** 24n, bets: [wide(0n), wide(1n), wide(200n)] }),
-    new RegExp(`at most ${MAX_ROUND_CELLS}`),
-  );
+  assert.ok(full.fee > 0n && elapsed < 2000);
   t.diagnostic(
     JSON.stringify({
       plinkoRtp: Number(expected) / 2560,
-      rouletteSeats: 32,
+      rouletteSeats: 256,
       ms: Math.round(elapsed),
       chipsMaxPayoutInStakes: 71,
     }),
@@ -406,10 +386,10 @@ test('wallet pricing: 240 boundary-oriented risks match an independent integer-r
     ];
     const expected = oracle(b, s, w, p);
     if (expected === null) {
-      assert.throws(() => assessBet({ bankroll: b, stake: s, netWin: w, winThreshold: p }));
+      assert.throws(() => assessBinary({ bankroll: b, stake: s, netWin: w, winThreshold: p }));
       rejected++;
     } else {
-      assert.equal(assessBet({ bankroll: b, stake: s, netWin: w, winThreshold: p }).totalFee, expected);
+      assert.equal(assessBinary({ bankroll: b, stake: s, netWin: w, winThreshold: p }).fee, expected);
       accepted++;
     }
   }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { admits } from '@hookedin/play/sdk/admits';
-import { bet, covers, payouts, pocket, returns, RED, WHEEL } from '../src/table.ts';
+import { bet, covers, isLayout, payouts, pocket, returns, together, RED, WHEEL } from '../src/table.ts';
 import { betReturn } from '@hookedin/play/sdk/admits';
 
 const SPACE = 1n << 64n,
@@ -111,4 +111,27 @@ test('every chip and every layout pays back at least the floor this game is buil
     // A layout of several chips is one bet, and it meets the same statement.
     assert.ok(betReturn(terms(bet({ '17': stake, red: stake, 'dozen:2': stake, '0': stake }))) >= FLOOR);
   }
+});
+
+test('the wheel covers only layouts, and a table of them is one bet paying each number what they all pay there', () => {
+  const layouts = [bet({ red: 100n, '17': 10n }), bet({ black: 50n, 'dozen:2': 20n }), bet({ '0': 5n })];
+  assert.ok(layouts.every(isLayout));
+  const table = together(layouts);
+  assert.equal(table.stake, '185');
+  assert.ok(isLayout(table), 'layouts together are a layout');
+  for (const [n, outcome] of sample)
+    assert.equal(
+      pays(table, outcome),
+      layouts.reduce((sum, one) => sum + pays(one, outcome), 0n),
+      `number ${n}`,
+    );
+  // A prize that splits a number, or pays more over all 37 than chips of its stake could, is no layout: the wheel
+  // does not cover a table a player signed themselves.
+  assert.equal(isLayout({ stake: '1', prizes: [{ rangeStart: '0', rangeEnd: '1000', payout: '36' }] }), false);
+  assert.equal(isLayout({ stake: '1', prizes: [{ rangeStart: '0', rangeEnd: String(SPACE), payout: '1' }] }), false);
+  const wider = bet({ red: 1n });
+  assert.equal(
+    isLayout({ ...wider, prizes: wider.prizes.map(p => ({ ...p, payout: String(BigInt(p.payout) + 1n) })) }),
+    false,
+  );
 });

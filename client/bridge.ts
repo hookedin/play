@@ -1,12 +1,12 @@
 import { gameAmount, gameOperationKey } from './game-account.ts';
-import { MAX_GROUP } from '../protocol/protocol.ts';
+import { LIMITS, MAX_GROUP } from '../protocol/protocol.ts';
 /** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
 export const METHODS = [
   'wallet.hello',
   'wallet.info',
   'game.receipt',
-  'game.bet',
-  'game.place',
+  'game.casinoBet',
+  'game.developerBet',
   'game.payment',
   'game.requestFunds',
 ];
@@ -29,12 +29,16 @@ const object = (value: unknown) =>
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
 /** The stake is paid to enter; every prize whose range holds the outcome pays. Prizes may overlap. */
 function validatePrizes(prizes: unknown) {
-  if (!Array.isArray(prizes) || !prizes.length || prizes.length > 64) throw new Error('A bet holds 1 to 64 prizes.');
+  if (!Array.isArray(prizes) || !prizes.length || prizes.length > LIMITS.prizes)
+    throw new Error(`A bet holds 1 to ${LIMITS.prizes} prizes.`);
   for (const prize of prizes) {
     if (!object(prize) || !only(prize, ['rangeStart', 'rangeEnd', 'payout']))
       throw new Error('A prize is {rangeStart, rangeEnd, payout}.');
     gameAmount(prize.payout);
-    if (gameAmount(prize.rangeStart, false) >= gameAmount(prize.rangeEnd) || BigInt(prize.rangeEnd) > 1n << 64n)
+    if (
+      gameAmount(prize.rangeStart, false) >= gameAmount(prize.rangeEnd) ||
+      BigInt(prize.rangeEnd) > BigInt(LIMITS.outcomeSpace)
+    )
       throw new Error('A prize range lies within [0, 2^64).');
   }
 }
@@ -78,8 +82,8 @@ function validate(data: any) {
     if (params.amount !== undefined) gameAmount(params.amount);
   } else {
     const fields = {
-      'game.bet': ['id', 'stake', 'prizes', 'group'],
-      'game.place': ['id', 'stake', 'prizes', 'round', 'terms', 'deadline', 'group'],
+      'game.casinoBet': ['id', 'stake', 'prizes', 'group'],
+      'game.developerBet': ['id', 'stake', 'prizes', 'round', 'terms', 'group'],
       'game.payment': ['id', 'amount', 'group'],
       'game.receipt': ['id'],
     }[data.method as string]!;
@@ -91,22 +95,16 @@ function validate(data: any) {
       (typeof params.group !== 'string' || !params.group.length || params.group.length > MAX_GROUP)
     )
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
-    // A bet settles now on the player's own round. A placed bet settles later: drawn on the round of its
-    // referee's it names, or split by its referee by the deadline it names.
-    if (data.method === 'game.bet') validatePrizes(params.prizes);
-    if (data.method === 'game.place') {
+    // A casino bet settles now against the bankroll, on the player's own round. A developer bet is its developer's
+    // to settle: with prizes on the developer's round it names, or with terms on the developer's word.
+    if (data.method === 'game.casinoBet') validatePrizes(params.prizes);
+    if (data.method === 'game.developerBet') {
       if (params.terms === undefined) {
         validatePrizes(params.prizes);
         if (typeof params.round !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.round))
-          throw new Error('A placed bet with prizes names the round it rides.');
-        if (params.deadline !== undefined) throw new Error("A placed bet with prizes has its round's deadline.");
-      } else if (
-        !object(params.terms) ||
-        params.prizes !== undefined ||
-        params.round !== undefined ||
-        !Number.isSafeInteger(params.deadline)
-      )
-        throw new Error('A placed bet with terms has a deadline in unix milliseconds, and no prizes or round.');
+          throw new Error("A developer bet with prizes names the developer's round it rides.");
+      } else if (!object(params.terms) || params.prizes !== undefined || params.round !== undefined)
+        throw new Error('A developer bet with terms has no prizes or round.');
     }
   }
   return { ...data, params };

@@ -206,11 +206,13 @@
             </div>
           </div>
           <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
-          <section class="surface wallet-held-card" aria-labelledby="held-title">
-            <h2 id="held-title">Bets that settle later</h2>
-            <p id="held-status" role="status"></p>
-            <button id="refresh-held" class="text-button" type="button">Check results and collect payouts</button>
-            <div id="wallet-held" class="activity-list"></div>
+          <section class="surface wallet-developer-bets-card" aria-labelledby="developer-bets-title">
+            <h2 id="developer-bets-title">Developer bets</h2>
+            <p id="developer-bets-status" role="status"></p>
+            <button id="refresh-developer-bets" class="text-button" type="button">
+              Check results and collect payouts
+            </button>
+            <div id="wallet-developer-bets" class="activity-list"></div>
           </section>
           <div class="funding-steps">
             <section class="surface receive-card" aria-labelledby="receive-title">
@@ -355,7 +357,9 @@
             <a class="account-card" href="/bankroll" data-page="bankroll">
               <span class="account-card-mark" aria-hidden="true">◎</span>
               <h2>Bankroll</h2>
-              <p>Put money into the bankroll the casino bets with, and sell your shares back at what they are worth.</p>
+              <p>
+                Put money into the bankroll that backs casino bets, and sell your shares back at what they are worth.
+              </p>
               <span id="account-bankroll-note" class="account-card-note"></span>
             </a>
             <a class="account-card" href="/activity" data-page="activity">
@@ -378,7 +382,7 @@
             </h2>
             <p id="wallet-uname" class="game-handle"></p>
             <p>
-              The only thing games, referees and the public player list ever learn about you. Everything else — your
+              The only thing games, developers and the public player list ever learn about you. Everything else — your
               address, your channel, your balances — stays yours. Your <strong>uname</strong>, written
               <code>~like-this</code>, is yours for good. An <strong>alias</strong>, written <code>@like-this</code>, is
               a shorter name you are shown by instead. Both always find you.
@@ -420,8 +424,8 @@
             <h2>Games you publish</h2>
             <p>
               A game you publish is reachable at your name, and anyone may play it with their own wallet. Its manifest
-              names this account as its developer: you earn its commission, and your key settles its bets that settle
-              later. Publishing needs a funded ETH channel; taking one down never does.
+              names this account as its developer: you earn its commission, your bank takes its developer bets, and your
+              key settles them. Publishing needs a funded ETH channel; taking one down never does.
             </p>
             <label for="game-name-input"
               >Games you publish <span id="profile-game-count" class="subtle-count">0/100</span></label
@@ -437,9 +441,9 @@
             <div id="my-games"></div>
             <label for="bank-amount">Your bank <span id="bank-balance" class="subtle-count">—</span></label>
             <p>
-              Your games' bets with terms are paid from it: what your split pays beyond a bet's stake comes out of it,
-              and what it does not pay goes in. A settlement it cannot pay in full is refused, and an unsettled bet is
-              refunded at its deadline. Nothing in it is reserved, so you can take it out at any time.
+              Your games' developer bets pay their stakes into it, and their settlements and your casino bets are paid
+              from it. A settlement or a casino bet it cannot pay in full is refused. Nothing in it is reserved, so you
+              can take it out at any time.
             </p>
             <div class="input-row">
               <input id="bank-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.01" /><button
@@ -461,7 +465,7 @@
                 Each bet with the return its own prize table gave it, worked out by your wallet before it signed. No
                 game states what it pays back, because nothing stops a game wagering your money over and over; this is
                 measured from the bets that really happened. Open a bet for the prize table it rode, where its outcome
-                landed, and the seed and the secret that drew it.
+                landed, and the seed and the secret that fixed it.
               </p>
             </div>
             <button id="refresh-bets" class="button secondary">Refresh ↻</button>
@@ -484,7 +488,7 @@
           <div class="eyebrow">OWN A PART OF THE HOUSE</div>
           <h1>Bankroll<span class="heading-dot">.</span></h1>
           <p class="intro">
-            Move money from your playing balance into the bankroll the casino bets with. You receive shares: when
+            Move money from your playing balance into the bankroll that backs casino bets. You receive shares: when
             players lose, every share is worth more, and when they win, less. Sell shares at any time for their current
             worth.
           </p>
@@ -635,7 +639,7 @@
             <button id="gamebets-play" class="button primary hidden">Open this game ↗</button>
           </div>
           <div id="gamebets-totals" class="funding-balances"></div>
-          <p id="gamebets-later" class="intro hidden"></p>
+          <p id="gamebets-developer-bets" class="intro hidden"></p>
           <div class="activity-toolbar">
             <label class="sr-only" for="gamebets-search">Search this game’s bets</label
             ><input
@@ -745,8 +749,7 @@
         <ul class="fund-terms mode-fund">
           <li>The money never leaves your wallet. This sets the most the game may put at risk.</li>
           <li>
-            It can lose all of it — including anything it wins — on wagers and on payments to its developer. It cannot
-            touch a wei more.
+            It can lose all of it — including anything it wins — on its bets and payments. It cannot touch a wei more.
           </li>
           <li>Leaving the game, or closing the tab, takes back whatever is left. You can change this at any time.</li>
           <li id="fund-returns">

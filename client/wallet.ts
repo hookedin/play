@@ -1,7 +1,7 @@
 /// <reference path="../types/browser.d.ts" />
 import type { JsonRpcProvider, Signer } from 'ethers';
 import type { Store } from './storage.ts';
-import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerBet } from '../protocol/types.ts';
+import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerDeveloperBet } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
@@ -41,6 +41,8 @@ export interface GameIntent {
   id: string;
   /** The game's own name, so a receipt still says where the money went long after the game is closed. */
   name: string;
+  /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
+  developer: string;
 }
 import { BrowserProvider, Contract, Wallet, getAddress, ZeroHash } from 'ethers';
 import {
@@ -108,14 +110,14 @@ export class CasinoWallet extends GameSessions {
     owed?: string[];
     alert?: string;
   };
-  /** This account's bets that settle later, by hash, until what each paid is collected: the receipt
-   * that placed it, and what the casino last said of it. */
-  declare held: Record<
+  /** This account's developer bets, by hash, until what each was paid is collected: the receipt that placed it,
+   * and what the casino last said of it. */
+  declare developerBets: Record<
     string,
-    { operationId?: string; game: string; asset: AssetId; state?: PlayerBet; error?: string }
+    { operationId?: string; game: string; asset: AssetId; state?: PlayerDeveloperBet; error?: string }
   >;
-  declare heldCursors: Partial<Record<AssetId, string>>;
-  heldError: string | null = null;
+  declare developerBetCursors: Partial<Record<AssetId, string>>;
+  developerBetError: string | null = null;
   /** This account's bank as a developer, per asset: the casino's statement for its latest deposit or
    * withdrawal, a withdrawal signed and not yet answered, and withdrawn money not yet collected. */
   declare bank: Partial<
@@ -212,8 +214,8 @@ export class CasinoWallet extends GameSessions {
       alias: null,
       profile: null,
       fund: { sequence: 0, shares: '0', statement: null },
-      held: {},
-      heldCursors: {},
+      developerBets: {},
+      developerBetCursors: {},
       bank: {},
       developerEarnings: null,
       testId: null,
@@ -409,11 +411,11 @@ export class CasinoWallet extends GameSessions {
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
-      // Bankroll shares, bets that settle later and a developer's bank belong to the account, not to any one channel.
+      // Bankroll shares, developer bets and a developer's bank belong to the account, not to any one channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
-      held: saved?.held || {},
-      heldCursors: saved?.heldCursors || {},
-      heldError: null,
+      developerBets: saved?.developerBets || {},
+      developerBetCursors: saved?.developerBetCursors || {},
+      developerBetError: null,
       bank: saved?.bank || {},
     });
   }
@@ -452,7 +454,9 @@ export class CasinoWallet extends GameSessions {
     const revision = this.revision + 1;
     // Newest first by the clock, not by when a receipt was last written: a rejected operation is
     // rewritten when its round reveals, and would otherwise jump above the bet that replaced it.
-    const outstanding = new Set(Object.values(changes.held ?? this.held).map((bet: any) => bet.operationId));
+    const outstanding = new Set(
+      Object.values(changes.developerBets ?? this.developerBets).map((bet: any) => bet.operationId),
+    );
     const history = receipt
       ? [receipt, ...this.history.filter(r => r.operationId !== receipt.operationId)]
           .sort((a, b) => Date.parse(b.createdAt ?? '') - Date.parse(a.createdAt ?? ''))
@@ -468,8 +472,8 @@ export class CasinoWallet extends GameSessions {
         history,
         transactionIntent: this.transactionIntent,
         fund: this.fund,
-        held: this.held,
-        heldCursors: this.heldCursors,
+        developerBets: this.developerBets,
+        developerBetCursors: this.developerBetCursors,
         bank: this.bank,
         ...changes,
         revision,

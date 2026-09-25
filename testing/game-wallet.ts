@@ -10,6 +10,7 @@ import {
   STATE_TYPES,
   SETTLEMENT_TYPES,
   COMMIT_TYPES,
+  BANK_CASINO_BET_TYPES,
   deriveState,
   roundId,
   seedHash,
@@ -17,27 +18,25 @@ import {
   hashOperation,
   outcome,
   plain,
-  same,
   betTerms,
   checkpointEvidence,
   rejectionCheckpoint,
   KIND,
   LIMITS,
-  MAX_DEADLINE_MS,
+  MAX_COVERS,
   MAX_PAYOUTS,
-  ROUND_MS,
 } from '../protocol/protocol.ts';
-import { assessRound } from '../protocol/risk.ts';
+import { assessBet } from '../protocol/risk.ts';
 import type { GameIdentity, GameLimit, GameReceipt } from '../protocol/game-types.ts';
-import type { PublicBet, Round } from '../protocol/types.ts';
-import type { Referee } from '../sdk/src/referee.ts';
+import type { DeveloperCasinoBet, PublicDeveloperBet, Round } from '../protocol/types.ts';
+import type { Developer } from '../sdk/src/developer.ts';
 
 /** A game's side of the bridge, as `RoundClient` and a game's own client take it: every request goes through the
  * checks the wallet's bridge makes, and the player agrees to every request for funds. */
 export interface TestBridge {
   call(method: string, params?: any): Promise<any>;
   balance(): Promise<GameLimit>;
-  /** Called with every receipt the wallet pushes: a placed bet that settled, or came back, once collected. */
+  /** Called with every receipt the wallet pushes: a developer bet its developer settled, once collected. */
   onReceipt(listener: (receipt: GameReceipt) => void): () => void;
 }
 
@@ -69,8 +68,8 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
         await wallet.setGameLimit(String(amount));
         return { funded: true, amount: String(amount), ...wallet.gameLimit() };
       }
-      if (method === 'game.bet') return wallet.gameBet(checked);
-      if (method === 'game.place') return wallet.gamePlace(checked);
+      if (method === 'game.casinoBet') return wallet.gameCasinoBet(checked);
+      if (method === 'game.developerBet') return wallet.gameDeveloperBet(checked);
       return wallet.gamePayment(checked);
     },
     onReceipt(listener) {
@@ -81,22 +80,21 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
 }
 
 /**
- * A real wallet wired to an in-memory casino stub, and a stub referee shaped like the one a game's server
- * creates with its developer's key: what a game is tested against without the private casino. The stub holds
- * every bet to the casino's own admission rule and charges its commission, so a table it passes is one the casino
- * takes. `bankroll` is what it covers bets with; `bank` is what the developer's bank holds to pay bets with terms.
+ * A real wallet wired to an in-memory casino stub, and a stub developer shaped like the one a game's server creates
+ * with its developer's key: what a game is tested against without the private casino. The stub holds every casino
+ * bet to the casino's own admission rule and charges its commission, so a table it passes is one the casino takes.
+ * `bankroll` is what it covers casino bets with; `bank` is what the developer's bank holds before any developer bet
+ * pays its stake into it.
  */
 export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds = 10n ** 12n } = {}) {
   const storage = new MemoryStore(),
     owner = Wallet.createRandom(),
     player = Wallet.createRandom(),
-    developer = Wallet.createRandom();
+    developerKey = Wallet.createRandom();
   const casino = Wallet.createRandom().address,
     d = domain(31337, casino);
   let bankroll = capital,
-    bank = funds,
-    ahead = 0;
-  const now = () => Date.now() + ahead;
+    bank = funds;
   /** A channel this player opens with `deposit`, jointly signed at its start. */
   const openChannel = async (deposit = 1000000n) => {
     const key = Wallet.createRandom(),
@@ -122,8 +120,8 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
   const responses = new Map<string, any>(),
     carried = new Map<string, string>();
   let settlements = 0;
-  // The stub casino's rounds: each is the hash of its secret. A channel's own settles its next bet; a referee's
-  // takes bets until it is drawn or its deadline passes.
+  // The stub casino's rounds: each is the hash of its secret. A channel's own settles its next casino bet; a
+  // developer's is revealed by the developer's casino bet on it.
   const secrets = new Map<string, string>(),
     own = new Map<string, string>();
   const createRound = () => {
@@ -134,44 +132,58 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
   };
   const rounds = new Map<
     string,
-    { id: string; game: string; seed: string; seedHash: string; signature: string; deadline: number; drawn: boolean }
+    { id: string; seed: string; seedHash: string; signature: string; casinoBet?: DeveloperCasinoBet }
   >();
-  let waiting: string | null = null;
-  // Bets that settle later, what each settled bet owes this player until the wallet collects it, and the order
-  // bets settled in.
-  const held = new Map<string, PublicBet>(),
+  // Developer bets, what each settled bet owes this player until the wallet collects it, and the order bets settled in.
+  const developerBets = new Map<string, PublicDeveloperBet>(),
     owed = new Map<string, bigint>(),
     order = new Map<string, number>();
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
   const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
+  const game = { name: 'test', key: gameKey({ developer: developerKey.address, name: 'test' }).toLowerCase() };
+  // The games this fixture's developer publishes, by key: only a published game takes developer bets.
+  const published = new Set([game.key]);
   const publicRound = (id: string): Round => {
     const round = rounds.get(id.toLowerCase());
     if (!round) throw Object.assign(new Error('Unknown round'), { status: 404, code: 'not-found' });
     const secret = secrets.get(round.id)!;
     return plain({
       id: round.id,
-      game: round.game,
-      referee: developer.address.toLowerCase(),
+      developer: developerKey.address.toLowerCase(),
       asset: 'eth' as const,
-      deadline: round.deadline,
-      status: round.drawn ? ('drawn' as const) : round.deadline <= now() ? ('expired' as const) : ('open' as const),
+      status: round.casinoBet ? ('revealed' as const) : ('open' as const),
       seedHash: round.seedHash,
       signature: round.signature,
-      ...(round.drawn ? { seed: round.seed, secret, outcome: String(outcome([], round.seed, secret).value) } : {}),
+      ...(round.casinoBet
+        ? {
+            seed: round.seed,
+            secret,
+            outcome: String(outcome([], round.seed, secret).value),
+            casinoBet: round.casinoBet,
+          }
+        : {}),
     });
   };
-  const publicBet = (hash: string) => plain(held.get(hash)!);
-  /** A bet settles: what it paid waits, owed to this player, for the wallet to collect. */
-  const end = (hash: string, payout: bigint, change: Partial<PublicBet> = {}) => {
-    Object.assign(held.get(hash)!, { status: 'settled', payout: String(payout), settledAt: now(), ...change });
-    if (payout) owed.set(hash, payout);
-    order.set(hash, order.size + 1);
-  };
-  /** Bets past their deadline come back, as the casino's tick refunds them. */
-  const expire = () => {
-    for (const bet of held.values())
-      if (bet.status === 'open' && bet.deadline <= now()) end(bet.bet, BigInt(bet.stake), { refunded: true });
+  const publicDeveloperBet = (hash: string) => plain(developerBets.get(hash)!);
+  /** A page of developer bets, as the casino's feeds give them: open ones by hash, settled ones in the order they
+   * settled. */
+  const page = (bets: PublicDeveloperBet[], settled: boolean, after: string, limit: number) => {
+    const all = bets
+      .filter(bet =>
+        settled
+          ? bet.status === 'settled' && order.get(bet.bet)! > Number(after || '0')
+          : bet.status === 'open' && bet.bet > after,
+      )
+      .sort((a, b) => (settled ? order.get(a.bet)! - order.get(b.bet)! : a.bet.localeCompare(b.bet)));
+    const bets$ = all.slice(0, limit);
+    return {
+      bets: bets$,
+      cursor: bets$.length
+        ? String(settled ? order.get(bets$.at(-1)!.bet) : bets$.at(-1)!.bet)
+        : after || (settled ? '0' : ''),
+      more: all.length > limit,
+    };
   };
   const make = () => {
     const wallet = new CasinoWallet({ network: 'local', storage });
@@ -195,7 +207,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       if (!wallet.current) throw new Error('No channel');
     };
     wallet.api = async (path, body) => {
-      expire();
       if (path === '/api/metrics') return { bankroll: String(bankroll) };
       const channelRound = /^\/api\/channels\/(0x[0-9a-f]{64})\/round$/.exec(path);
       if (channelRound) {
@@ -204,38 +215,29 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       }
       const round = /^\/api\/rounds\/(0x[0-9a-fA-F]{64})$/.exec(path);
       if (round) return publicRound(round[1]!);
-      const bet = /^\/api\/bets\/(0x[0-9a-f]{64})$/.exec(path);
-      if (bet) return publicBet(bet[1]!);
+      const developerBet = /^\/api\/developer-bets\/(0x[0-9a-f]{64})$/.exec(path);
+      if (developerBet) return publicDeveloperBet(developerBet[1]!);
       const list = new URL(path, 'https://casino.example');
-      if (list.pathname.endsWith('/bets')) {
+      if (list.pathname.endsWith('/developer-bets')) {
         const settled = list.searchParams.get('status') === 'settled',
-          after = list.searchParams.get('after') ?? '';
-        const limit = Number(list.searchParams.get('limit') ?? 50);
-        const all = [...held.values()]
-          .filter(bet =>
-            settled
-              ? bet.status === 'settled' && order.get(bet.bet)! > Number(after || '0')
-              : bet.status === 'open' && bet.bet > after,
-          )
-          .sort((a, b) => (settled ? order.get(a.bet)! - order.get(b.bet)! : a.bet.localeCompare(b.bet)));
-        const page = all.slice(0, limit);
+          { bets, cursor, more } = page(
+            [...developerBets.values()],
+            settled,
+            list.searchParams.get('after') ?? '',
+            Number(list.searchParams.get('limit') ?? 50),
+          );
         return plain({
-          bets: page.map(bet => ({
+          bets: bets.map(bet => ({
             bet: bet.bet,
             game: bet.game,
             asset: bet.asset,
             status: bet.status,
             stake: bet.stake,
-            deadline: bet.deadline,
-            collected: settled && bet.payout !== '0' && !owed.has(bet.bet),
-            ...(settled
-              ? { payout: bet.payout, settledAt: bet.settledAt, ...(bet.refunded ? { refunded: true } : {}) }
-              : {}),
+            collected: settled && bet.settlement?.player !== '0' && !owed.has(bet.bet),
+            ...(settled ? { payout: bet.settlement!.player, settledAt: bet.settledAt } : {}),
           })),
-          cursor: page.length
-            ? String(settled ? order.get(page.at(-1)!.bet) : page.at(-1)!.bet)
-            : after || (settled ? '0' : ''),
-          more: all.length > limit,
+          cursor,
+          more,
         });
       }
       if (path.endsWith('/payouts'))
@@ -248,10 +250,10 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       if (responses.has(recorded)) return responses.get(recorded);
       const kind = Number(request.kind),
         elsewhere = details.game && carried.has(details.id) && carried.get(details.id) !== request.channelId;
-      if (kind === KIND.bet) return bet$(request, details, signature, seed, elsewhere);
+      if (kind === KIND.casinoBet) return casinoBet(request, details, signature, seed, elsewhere);
       if (elsewhere)
         return decline(request, details, 'This operation was carried out on another channel', { used: true });
-      if (kind === KIND.debit && details.bet) return place(request, details, signature);
+      if (kind === KIND.debit && details.developerBet) return placeDeveloperBet(request, details, signature);
       if (kind === KIND.credit && owed.has(details.counterparty)) {
         if (owed.get(details.counterparty) !== BigInt(request.amount))
           throw new Error('No payout of this amount is due');
@@ -302,9 +304,9 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       settlements++;
       return response;
     };
-    /** A bet on the channel's own round: admitted by the casino's rule against the bankroll, or declined with
-     * the round revealed, so the wallet records what it would have paid. */
-    const bet$ = async (request: any, details: any, signature: string, seed: string, elsewhere: boolean) => {
+    /** A casino bet on the channel's own round: admitted by the casino's rule against the bankroll, or declined
+     * with the round revealed, so the wallet records what it would have paid. */
+    const casinoBet = async (request: any, details: any, signature: string, seed: string, elsewhere: boolean) => {
       const round = String(request.round).toLowerCase(),
         secret = secrets.get(round)!;
       if (own.get(request.channelId) !== round) return decline(request, details, 'Round is not open', { lost: true });
@@ -321,11 +323,11 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         };
       let fee: bigint;
       try {
-        fee = assessRound({ bankroll, bets: [terms] }).fees[0]!;
+        fee = assessBet({ bankroll, bet: terms }).fee;
       } catch (error) {
         if (!(error instanceof RangeError)) throw error;
         return {
-          ...(await decline(request, details, 'Casino capacity is too low for this wager', { secret })),
+          ...(await decline(request, details, 'The bankroll cannot take this casino bet', { secret })),
           ...nextRound,
         };
       }
@@ -333,141 +335,133 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       bankroll += terms.stake - paid - fee / 2n;
       return { ...(await settle(request, details, signature, seed, secret, fee)), ...nextRound };
     };
-    /** A bet that settles later is final and completes at once, if its referee is the game's developer, its
-     * deadline is in range and, to be drawn, it rides the developer's open round and fits the bankroll with the
-     * bets there before it. */
-    const place = async (request: any, details: any, signature: string) => {
-      const later = details.bet;
-      if (!same(later.referee, developer.address)) return decline(request, details, "This is not the game's developer");
-      if ('prizes' in later) {
-        const round = rounds.get(later.round);
-        if (
-          !round ||
-          round.drawn ||
-          round.deadline <= now() ||
-          !same(round.game, details.game) ||
-          round.seedHash !== later.seedHash ||
-          round.deadline !== later.deadline
-        )
-          return decline(request, details, 'The round is not open');
-        const riding = [...held.values()].filter(bet => bet.round === later.round && bet.status === 'open');
-        try {
-          assessRound({
-            bankroll,
-            bets: [...riding, { stake: request.amount, prizes: later.prizes }].map(bet =>
-              betTerms(bet.stake, bet.prizes!),
-            ),
-          });
-        } catch (error) {
-          if (!(error instanceof RangeError)) throw error;
-          return decline(request, details, 'Casino capacity is too low for this bet on this round');
-        }
-      } else if (later.deadline <= now() || later.deadline > now() + MAX_DEADLINE_MS)
-        return decline(request, details, 'A bet with terms settles within 30 days');
+    /** A developer bet is final and completes at once if its game is published: its stake goes into the developer's
+     * bank, and the developer settles it. */
+    const placeDeveloperBet = async (request: any, details: any, signature: string) => {
+      if (!published.has(details.game)) return decline(request, details, 'This game is published nowhere');
       const hash = hashOperation(d, request).toLowerCase();
-      held.set(hash, {
+      bank += BigInt(request.amount);
+      developerBets.set(hash, {
         bet: hash,
         game: details.game,
         ...(details.group ? { group: details.group } : {}),
         asset: 'eth',
         uname,
         alias: null,
+        developer: developerKey.address.toLowerCase(),
         stake: String(request.amount),
-        placedAt: now(),
+        placedAt: Date.now(),
         status: 'open',
-        ...later,
+        ...details.developerBet,
       });
       return settle(request, details, signature, ZeroHash, ZeroHash, 0n);
     };
     return wallet;
   };
-  /** The referee a game's server would create with its developer's key, against this stub casino. */
-  const stubReferee: Referee = {
-    address: developer.address,
+  const refused = (status: number, code: string, message: string) =>
+    Object.assign(new Error(message), { status, code });
+  /** The developer a game's server would create with its developer's key, against this stub casino. */
+  const stubDeveloper: Developer = {
+    address: developerKey.address,
+    game: game.key,
     limits: LIMITS,
-    async open() {
-      const current = waiting && rounds.get(waiting);
-      if (current && !current.drawn && current.deadline > now()) return publicRound(current.id);
+    async openRound() {
       const id = createRound(),
         seed = hexlify(randomBytes(32)),
         hash = seedHash(seed);
       rounds.set(id, {
         id,
-        game: game.key,
         seed,
         seedHash: hash,
-        signature: await developer.signTypedData(d, COMMIT_TYPES, { round: id, seedHash: hash }),
-        deadline: now() + ROUND_MS,
-        drawn: false,
+        signature: await developerKey.signTypedData(d, COMMIT_TYPES, { round: id, seedHash: hash }),
       });
-      waiting = id;
       return publicRound(id);
     },
-    async draw(id) {
-      expire();
-      const round = rounds.get(id.toLowerCase());
-      if (!round) throw Object.assign(new Error('Unknown round'), { status: 404, code: 'not-found' });
-      const riding = [...held.values()].filter(bet => bet.round === round.id);
-      if (!round.drawn && riding.some(bet => bet.status === 'open')) {
-        const secret = secrets.get(round.id)!,
-          open = riding.filter(bet => bet.status === 'open'),
-          terms = open.map(bet => betTerms(bet.stake, bet.prizes!));
-        let fees: readonly bigint[] = terms.map(() => 0n);
-        try {
-          fees = assessRound({ bankroll, bets: terms }).fees;
-        } catch (error) {
-          if (!(error instanceof RangeError)) throw error;
-        }
-        open.forEach((bet, i) => {
-          const paid = outcome(bet.prizes!, round.seed, secret).payout;
-          bankroll += BigInt(bet.stake) - paid - fees[i]! / 2n;
-          end(bet.bet, paid, { draw: { seed: round.seed, secret } });
-        });
-        round.drawn = true;
-      }
-      const view = publicRound(round.id);
-      return {
-        round: round.id,
-        ...(view.status === 'drawn' ? { seed: view.seed, secret: view.secret, outcome: view.outcome } : {}),
-        bets: riding.map(bet => publicBet(bet.bet)),
-      };
-    },
     round: async id => publicRound(id),
+    async casinoBet({ round: id, stake, prizes, covers }) {
+      const round = rounds.get(id.toLowerCase());
+      if (!round) throw refused(404, 'not-found', 'Unknown round');
+      const message = {
+        round: round.id,
+        game: game.key,
+        stake: String(stake),
+        prizes: plain(prizes),
+        covers: covers.map(cover => cover.toLowerCase()),
+      };
+      const signature = await developerKey.signTypedData(d, BANK_CASINO_BET_TYPES, message);
+      // A round is revealed once: the same casino bet again is answered as it stands.
+      if (round.casinoBet) {
+        if (round.casinoBet.signature !== signature)
+          throw refused(409, 'round-revealed', 'This round was revealed by another casino bet');
+        return publicRound(round.id);
+      }
+      if (message.covers.length > MAX_COVERS || new Set(message.covers).size !== message.covers.length)
+        throw refused(400, 'invalid', `A casino bet covers up to ${MAX_COVERS} developer bets, each once`);
+      if (
+        message.covers.some(
+          cover => developerBets.get(cover)?.status !== 'open' || developerBets.get(cover)?.round !== round.id,
+        )
+      )
+        throw refused(409, 'not-covered', 'A casino bet covers open developer bets that name its round');
+      const terms = betTerms(message.stake, message.prizes);
+      if (terms.stake > bank) throw refused(409, 'bank-short', "The developer's bank cannot pay this casino bet");
+      let fee: bigint | null = null;
+      try {
+        fee = assessBet({ bankroll, bet: terms }).fee;
+      } catch (error) {
+        if (!(error instanceof RangeError)) throw error;
+      }
+      const secret = secrets.get(round.id)!,
+        paid = fee === null ? 0n : outcome(terms.prizes, round.seed, secret).payout;
+      if (fee !== null) {
+        bankroll += terms.stake - paid - fee / 2n;
+        bank += paid - terms.stake;
+      }
+      round.casinoBet = plain({
+        game: message.game,
+        stake: message.stake,
+        prizes: message.prizes,
+        covers: message.covers,
+        signature,
+        accepted: fee !== null,
+        ...(fee === null ? {} : { payout: String(paid) }),
+      });
+      return publicRound(round.id);
+    },
     async settle(list) {
-      expire();
       const hashes = list.map(entry => entry.bet.toLowerCase());
-      if (hashes.some(hash => !held.has(hash) || held.get(hash)!.prizes))
-        throw Object.assign(new Error('Unknown bet'), { status: 404, code: 'not-found' });
-      const open = list.filter((_, i) => held.get(hashes[i]!)!.status === 'open');
-      if (open.some(entry => held.get(entry.bet.toLowerCase())!.deadline <= now()))
-        throw Object.assign(new Error('The bet is past its deadline'), { status: 409, code: 'bet-expired' });
-      const change = open.reduce(
-        (sum, entry) =>
-          sum + BigInt(held.get(entry.bet.toLowerCase())!.stake) - BigInt(entry.player) - BigInt(entry.casino),
-        0n,
-      );
-      if (bank + change < 0n)
-        throw Object.assign(new Error("The developer's bank cannot pay these settlements"), {
-          status: 409,
-          code: 'bank-short',
-        });
-      bank += change;
+      if (!hashes.length || hashes.length > MAX_COVERS)
+        throw refused(400, 'invalid', `Settle 1 to ${MAX_COVERS} developer bets at once`);
+      if (hashes.some(hash => !developerBets.has(hash))) throw refused(404, 'not-found', 'Unknown developer bet');
+      const open = list.filter((_, i) => developerBets.get(hashes[i]!)!.status === 'open');
+      const total = open.reduce((sum, entry) => sum + BigInt(entry.player) + BigInt(entry.casino), 0n);
+      if (total > bank) throw refused(409, 'bank-short', "The developer's bank cannot pay these settlements");
+      bank -= total;
       for (const entry of open) {
         const message = { bet: entry.bet.toLowerCase(), player: String(entry.player), casino: String(entry.casino) };
-        end(message.bet, BigInt(message.player), {
-          settlement: { ...message, signature: await developer.signTypedData(d, SETTLEMENT_TYPES, message) },
+        Object.assign(developerBets.get(message.bet)!, {
+          status: 'settled',
+          settlement: { ...message, signature: await developerKey.signTypedData(d, SETTLEMENT_TYPES, message) },
+          settledAt: Date.now(),
         });
+        if (BigInt(message.player)) owed.set(message.bet, BigInt(message.player));
+        order.set(message.bet, order.size + 1);
       }
-      return hashes.map(publicBet);
+      return hashes.map(publicDeveloperBet);
     },
-    bets: async group =>
-      [...held.values()]
-        .filter(bet => bet.status === 'open' && (group === undefined || bet.group === group))
-        .sort((a, b) => a.placedAt - b.placedAt)
-        .map(bet => publicBet(bet.bet)),
-    bet: async hash => (held.has(hash.toLowerCase()) ? publicBet(hash.toLowerCase()) : null),
+    bets: async ({ status = 'open', group, after = '', limit = 50 } = {}) => {
+      const { bets, cursor, more } = page(
+        [...developerBets.values()].filter(
+          bet => bet.game === game.key && (group === undefined || bet.group === group),
+        ),
+        status === 'settled',
+        after,
+        limit,
+      );
+      return { bets: bets.map(bet => publicDeveloperBet(bet.bet)), cursor, more };
+    },
+    bet: async hash => (developerBets.has(hash.toLowerCase()) ? publicDeveloperBet(hash.toLowerCase()) : null),
   };
-  const game = { name: 'test', key: gameKey({ developer: developer.address, name: 'test' }) };
   const wallet = make();
   await wallet.save();
   /** A wallet started afresh from what this one saved, as a reload does. */
@@ -481,23 +475,18 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     storage,
     owner,
     player,
-    /** The game's developer, whose key the stub referee signs with; `referee` is the referee itself. */
-    developer,
-    referee: stubReferee,
+    /** The developer the game's server would create: it opens rounds, places its casino bets and settles developer
+     * bets, with the developer's key. */
+    developer: stubDeveloper,
     /** The game's side of the bridge to this fixture's wallet, and to any other. */
     bridge: bridgeTo(wallet),
     bridgeFor: bridgeTo,
     settlements: () => settlements,
-    /** What the stub casino has to cover bets with, and what the developer's bank holds. */
+    /** What the stub casino has to cover casino bets with, and what the developer's bank holds. */
     bankroll: () => bankroll,
     bank: () => bank,
     /** A round's secret, which only the casino knows until it reveals the round. */
     secretOf: (round: string) => secrets.get(round.toLowerCase())!,
-    /** Time passes: every bet whose deadline it passes comes back. */
-    advance(ms: number) {
-      ahead += ms;
-      expire();
-    },
     /** The player closes their channel and opens another. A game's operation IDs are theirs across both. */
     async replaceChannel(of = wallet) {
       const old = of.channels[of.currentId!]!,
@@ -515,16 +504,20 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       await storage.put('game-wallet', { ...record, history: [] });
       return reload();
     },
-    /** A game as its developer published it: the game this fixture's referee runs is `test`. `declared` is
-     * anything its manifest says otherwise. */
-    identity: (name = game.name, declared: Partial<GameIdentity> = {}): GameIdentity => ({
-      name,
-      slug: name,
-      key: gameKey({ developer: developer.address, name }),
-      manifestURL: `https://${name}.example/manifest.json`,
-      entryURL: `https://${name}.example/`,
-      developer: developer.address,
-      ...declared,
-    }),
+    /** A game as its developer published it: the game this fixture's developer serves is `test`. `declared` is
+     * anything its manifest says otherwise. Every game named here is published. */
+    identity: (name = game.name, declared: Partial<GameIdentity> = {}): GameIdentity => {
+      const key = gameKey({ developer: developerKey.address, name });
+      published.add(key.toLowerCase());
+      return {
+        name,
+        slug: name,
+        key,
+        manifestURL: `https://${name}.example/manifest.json`,
+        entryURL: `https://${name}.example/`,
+        developer: developerKey.address,
+        ...declared,
+      };
+    },
   };
 }

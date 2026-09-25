@@ -313,15 +313,15 @@ export class RoundClient {
     // Every step of one round carries the round's ID as its group, so the wallet shows them as one game.
     const group = this.data.id;
     let receipt;
-    if (ticket.kind === 'bet')
+    if (ticket.kind === 'casino-bet')
       // The whole step is one bet: the stake at risk, and a prize for every better successor.
-      receipt = await this.call('game.bet', { id, stake: ticket.bet.stake, prizes: ticket.bet.prizes, group });
+      receipt = await this.call('game.casinoBet', { id, stake: ticket.bet.stake, prizes: ticket.bet.prizes, group });
     else if (ticket.kind === 'payment') receipt = await this.call('game.payment', { id, amount: ticket.amount, group });
     else receipt = { kind: 'noop' };
     this.account = await this.balance();
     await this.resolve(receipt);
     if (receipt.status === 'rejected')
-      throw new Error(receipt.reason || 'Wager rejected; retry this action or stop the game');
+      throw new Error(receipt.reason || 'The casino declined this step; retry this action or stop the game');
     return this.state()!;
   }
   async resolve(receipt: any) {
@@ -336,9 +336,9 @@ export class RoundClient {
     }
     let label,
       landed: { rangeStart: string; rangeEnd: string } | null = null;
-    if (ticket.kind === 'bet') {
+    if (ticket.kind === 'casino-bet') {
       if (receipt.status !== 'settled' || !/^[0-9]+$/.test(String(receipt.outcome)))
-        throw new Error('A settled wager result is required');
+        throw new Error('A settled casino bet is required');
       // The round's outcome names the next state; the wallet's verified payout must agree with it.
       const outcome = BigInt(receipt.outcome),
         next = ticket.successors.find((s: any) => outcome >= BigInt(s.rangeStart) && outcome < BigInt(s.rangeEnd));

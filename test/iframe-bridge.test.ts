@@ -5,7 +5,7 @@ import { attachGameBridge, validateRequest } from '../client/bridge.ts';
 const request = (id = 1, method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
 const prize = { rangeStart: '0', rangeEnd: '100', payout: '20' };
 const params = { id: 'op-1', stake: '10', prizes: [prize] };
-const bet = (overrides: any = {}) => request(1, 'game.bet', { ...params, ...overrides });
+const bet = (overrides: any = {}) => request(1, 'game.casinoBet', { ...params, ...overrides });
 
 class FakeEventTarget {
   listeners = new Set<(event: any) => unknown>();
@@ -171,26 +171,26 @@ test('diagnostic failures cannot interrupt request execution, error replies or l
 
 test('bridge executes only a request ID larger than the last, whatever action it carries', async () => {
   const bridge = harness();
-  await bridge.send(request(2, 'game.bet', params));
+  await bridge.send(request(2, 'game.casinoBet', params));
   for (const id of [2, 1, 0]) {
-    await bridge.send(request(id, 'game.bet', { ...params, stake: '11' }));
+    await bridge.send(request(id, 'game.casinoBet', { ...params, stake: '11' }));
     assert.deepEqual(bridge.replies.at(-1).message, {
       hookedin: true,
       id,
       error: { code: 'invalid-request', message: 'A request ID must be larger than the last.' },
     });
   }
-  assert.deepEqual(bridge.calls, [{ method: 'game.bet', params }]);
+  assert.deepEqual(bridge.calls, [{ method: 'game.casinoBet', params }]);
   bridge.detach();
 });
 
 test('a page the frame loads afresh counts from the start and never hears an answer meant for the page before it', async () => {
   const pending = deferred();
   // Only the bet stays open; everything else is answered at once.
-  const bridge = harness(method => (method === 'game.bet' ? pending.promise : { cash: '200' }));
+  const bridge = harness(method => (method === 'game.casinoBet' ? pending.promise : { cash: '200' }));
   await bridge.send(request(1));
   // The wallet reloads the game, for instance to play with another asset, while a request is still open.
-  const open = bridge.send(request(7, 'game.bet', params));
+  const open = bridge.send(request(7, 'game.casinoBet', params));
   bridge.reload();
   await bridge.send(request(1));
   assert.deepEqual(bridge.replies.at(-1).message, { hookedin: true, id: 1, result: { cash: '200' } });
@@ -206,14 +206,14 @@ test('operations take their turn in the order asked, while questions are answere
   const pending = deferred();
   let first = true;
   const bridge = harness(method => {
-    if (method === 'game.bet' && first) {
+    if (method === 'game.casinoBet' && first) {
       first = false;
       return pending.promise;
     }
     return { cash: '200' };
   });
-  const operation = bridge.send(request(1, 'game.bet', params));
-  const queued = bridge.send(request(2, 'game.bet', { ...params, id: 'op-2' }));
+  const operation = bridge.send(request(1, 'game.casinoBet', params));
+  const queued = bridge.send(request(2, 'game.casinoBet', { ...params, id: 'op-2' }));
   await Promise.resolve();
   assert.equal(bridge.calls.length, 1, 'the second bet waits for the first');
   // A question never waits behind a bet or the player's dialog.
@@ -231,7 +231,7 @@ test('operations take their turn in the order asked, while questions are answere
     bridge.calls.map(call => call.params.id),
     ['op-1', 'op-1', 'op-2'],
   );
-  await bridge.send(request(2, 'game.bet', params));
+  await bridge.send(request(2, 'game.casinoBet', params));
   assert.equal(bridge.replies.at(-1).message.error.code, 'invalid-request', 'an answered ID cannot be replayed');
   bridge.detach();
 });
@@ -239,7 +239,7 @@ test('operations take their turn in the order asked, while questions are answere
 test('a game cannot pile up more operations than the wallet will hold', async () => {
   const pending = deferred();
   const bridge = harness(() => pending.promise);
-  const open = Array.from({ length: 33 }, (_, i) => bridge.send(request(i + 1, 'game.bet', params)));
+  const open = Array.from({ length: 33 }, (_, i) => bridge.send(request(i + 1, 'game.casinoBet', params)));
   assert.deepEqual(
     bridge.replies.map(reply => [reply.message.id, reply.message.error.code]),
     [[33, 'busy']],
@@ -375,7 +375,7 @@ test('a wallet offers games only the methods it lists', () => {
 
 test('validation accepts only plain parameter records and bounded exact terms', () => {
   for (const value of [[], new Date(), 'params', 1, true, Object.create({ revision: 0 })])
-    assert.throws(() => validateRequest(request(1, 'game.bet', value)), /parameters must be an object/);
+    assert.throws(() => validateRequest(request(1, 'game.casinoBet', value)), /parameters must be an object/);
   for (const id of ['1', -1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1, null, {}])
     assert.throws(() => validateRequest(request(id as any)), /Invalid request ID/);
   assert.equal(validateRequest(request(0)).id, 0);
@@ -404,36 +404,24 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A bet settles now, on the wallet's own round. A placed bet settles later: drawn on the round of its referee's
-  // it names, or split by its referee by the deadline it names. A group labels any of them.
+  // A casino bet settles now, on the wallet's own round. A developer bet is its developer's to settle: with prizes on
+  // the developer's round it names, or with terms on the developer's word. A group labels any of them.
   assert.throws(() => validateRequest(bet({ round: '0x' + '22'.repeat(32) })), /Unexpected/);
-  assert.throws(() => validateRequest(bet({ deadline: 1_900_000_000_000 })), /Unexpected/);
-  const placed = (overrides: any) =>
-    request(1, 'game.place', { ...params, round: '0x' + '22'.repeat(32), ...overrides });
-  assert.equal(validateRequest(placed({})).params.round, '0x' + '22'.repeat(32));
-  for (const bad of [{ round: undefined }, { round: '0x22' }, { deadline: 1_900_000_000_000 }])
-    assert.throws(() => validateRequest(placed(bad)), /round/);
-  const refereed = (overrides: any) =>
-    request(1, 'game.place', {
-      id: 'hand-1',
-      stake: '10',
-      terms: { pick: 'home' },
-      deadline: 1_900_000_000_000,
-      ...overrides,
-    });
-  assert.deepEqual(validateRequest(refereed({})).params.terms, { pick: 'home' });
-  for (const bad of [
-    { prizes: [prize] },
-    { round: '0x' + '22'.repeat(32) },
-    { deadline: undefined },
-    { deadline: '1' },
-    { terms: 'home' },
-    { terms: null },
-  ])
-    assert.throws(() => validateRequest(refereed(bad)), /terms has a deadline/);
-  assert.equal(validateRequest(refereed({ group: 'match-9' })).params.group, 'match-9');
+  assert.throws(() => validateRequest(bet({ terms: { pick: 'home' } })), /Unexpected/);
+  const onRound = (overrides: any) =>
+    request(1, 'game.developerBet', { ...params, round: '0x' + '22'.repeat(32), ...overrides });
+  assert.equal(validateRequest(onRound({})).params.round, '0x' + '22'.repeat(32));
+  for (const bad of [{ round: undefined }, { round: '0x22' }])
+    assert.throws(() => validateRequest(onRound(bad)), /round/);
+  assert.throws(() => validateRequest(onRound({ deadline: 1_900_000_000_000 })), /Unexpected/);
+  const onWord = (overrides: any) =>
+    request(1, 'game.developerBet', { id: 'hand-1', stake: '10', terms: { pick: 'home' }, ...overrides });
+  assert.deepEqual(validateRequest(onWord({})).params.terms, { pick: 'home' });
+  for (const bad of [{ prizes: [prize] }, { round: '0x' + '22'.repeat(32) }, { terms: 'home' }, { terms: null }])
+    assert.throws(() => validateRequest(onWord(bad)), /terms has no prizes or round/);
+  assert.equal(validateRequest(onWord({ group: 'match-9' })).params.group, 'match-9');
   for (const group of ['', 'x'.repeat(65), 7]) assert.throws(() => validateRequest(bet({ group })), /group/);
   assert.throws(() => validateRequest(request(1, 'game.enter', { id: 'hand-1', stake: '10' })), /not available/);
   const safe = Object.assign(Object.create(null), params);
-  assert.equal(validateRequest(request(1, 'game.bet', safe)).params.stake, '10');
+  assert.equal(validateRequest(request(1, 'game.casinoBet', safe)).params.stake, '10');
 });

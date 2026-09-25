@@ -21,6 +21,7 @@ type Published = { key: string; developer: string };
 import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { gameReceipt } from './wallet-games.ts';
+import { developerBetStatus } from './game-account.ts';
 import { withLock } from './storage.ts';
 import { json, verifyEvidence, gameKey, same, FAUCET_BELOW } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
@@ -29,7 +30,7 @@ import {
   createActivityEntry,
   filterActivity,
   receiptSummary,
-  heldSummary,
+  developerBetSummary,
   receiptUnit,
 } from './activity.ts';
 import type { BetRow } from './bets.ts';
@@ -113,7 +114,7 @@ const wallet = new CasinoWallet({
     clearTimeout(statusTimer);
     if (!wallet.busy) statusTimer = setTimeout(() => $('operation-status').classList.add('hidden'), 3500);
   },
-  // A bet that settled later reaches the game that placed it as soon as the wallet has collected it.
+  // A developer bet's receipt reaches the game that placed it as soon as the wallet has collected what it was paid.
   onGameReceipt: (game, receipt) => {
     if (!active || active.key !== game.key || !active.frame.contentWindow || active.pushed === null) return;
     const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.id, receipt) };
@@ -286,7 +287,7 @@ function renderFund() {
 function navigate(page: string, push = true, path = pagePaths[page]) {
   if (wallet.busy && active && wallet.pending?.game?.key === active.key) {
     if (!push) history.pushState(null, '', active.path);
-    return toast('Wait for the current wager to finish before leaving the game.', true);
+    return toast('Wait for the current operation to finish before leaving the game.', true);
   }
   showPage(page);
   closeGame();
@@ -481,7 +482,7 @@ function openFundDialog({ amount, asked = false, take = false }: { amount?: bigi
     `${active.manifest.name}, served from ${new URL(active.frame.src).host}. ` +
     (active.identity.slug === undefined
       ? 'Nobody publishes it, so no developer earns from it.'
-      : `Its developer, ${active.manifest.developer}, earns half of each bet’s fee and settles its bets that settle later.`);
+      : `Its developer, ${active.manifest.developer}, earns half of each casino bet’s fee, and takes and settles its developer bets.`);
   $('fund-channel-note').textContent =
     wallet.playing === 'eth'
       ? 'Your channel is not open for play yet. Play with test coins meanwhile, or check the channel in My wallet.'
@@ -649,28 +650,28 @@ function renderWallet() {
     clearTimeout(statusTimer);
     statusTimer = setTimeout(() => $('operation-status').classList.add('hidden'), 2200);
   }
-  renderHeld();
+  renderDeveloperBets();
   if (!$('page-activity').classList.contains('hidden')) renderActivity();
   renderClaims();
   renderGameAccount();
 }
 
-function renderHeld() {
-  const list = $('wallet-held'),
-    held = Object.entries(wallet.held),
+function renderDeveloperBets() {
+  const list = $('wallet-developer-bets'),
+    developerBets = Object.entries(wallet.developerBets),
     receiptsById = new Map(wallet.history.map(receipt => [receipt.operationId, receipt]));
-  $('held-status').textContent = wallet.heldError
-    ? `Bet information is stale. ${wallet.heldError}`
-    : held.length
-      ? 'Stakes held for bets that settle later, and payouts awaiting collection, are separate from your playing balance.'
-      : 'No bets awaiting a result or collection.';
-  $('held-status').classList.toggle('check-failed', Boolean(wallet.heldError));
-  $<HTMLButtonElement>('refresh-held').disabled = historyBusy || wallet.busy || !wallet.channel;
+  $('developer-bets-status').textContent = wallet.developerBetError
+    ? `Bet information is stale. ${wallet.developerBetError}`
+    : developerBets.length
+      ? 'Developer bets waiting for their developers, and what they were paid awaiting collection, are apart from your playing balance.'
+      : 'No developer bets awaiting their developers or collection.';
+  $('developer-bets-status').classList.toggle('check-failed', Boolean(wallet.developerBetError));
+  $<HTMLButtonElement>('refresh-developer-bets').disabled = historyBusy || wallet.busy || !wallet.channel;
   const existing = new Map(
     [...list.children].map(row => [(row as HTMLElement).dataset.bet, row as HTMLDetailsElement]),
   );
   list.replaceChildren(
-    ...held.map(([hash, tracked]) => {
+    ...developerBets.map(([hash, tracked]) => {
       const receipt = tracked.operationId ? receiptsById.get(tracked.operationId) : undefined;
       const state = tracked.state ?? {
         bet: hash,
@@ -678,10 +679,9 @@ function renderHeld() {
         asset: tracked.asset,
         status: 'open' as const,
         stake: String(receipt?.stake ?? 0),
-        deadline: 0,
         collected: false,
       };
-      const presentation = heldSummary(state, receipt?.game?.name);
+      const presentation = developerBetSummary(state, receipt?.game?.name);
       const payload = activityJSON({ ...state, error: tracked.error }),
         previous = existing.get(hash);
       if (
@@ -693,7 +693,7 @@ function renderHeld() {
         ...presentation,
         timestamp: state.settledAt ? new Date(state.settledAt).toISOString() : (receipt?.createdAt ?? ''),
         description: [
-          state.deadline ? presentation.description : 'Waiting for the casino to report this bet.',
+          tracked.state ? presentation.description : 'Waiting for the casino to report this bet.',
           tracked.error,
           tracked.asset !== wallet.playing ? `Switch to ${receiptUnit(state)} to check and collect.` : '',
         ]
@@ -896,7 +896,7 @@ async function refreshActivity() {
     historyError = error;
   } finally {
     historyBusy = false;
-    renderHeld();
+    renderDeveloperBets();
     renderActivity();
     if (!$('page-bets').classList.contains('hidden')) renderBets();
     if (!$('page-games').classList.contains('hidden')) renderMyGames();
@@ -1092,8 +1092,8 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
         return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
       }
       if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
-      if (method === 'game.bet') return wallet.gameBet(params);
-      if (method === 'game.place') return wallet.gamePlace(params);
+      if (method === 'game.casinoBet') return wallet.gameCasinoBet(params);
+      if (method === 'game.developerBet') return wallet.gameDeveloperBet(params);
       return wallet.gamePayment(params);
     },
     onError: message => toast(message, true),
@@ -1291,7 +1291,7 @@ function renderAccount(name: string | null) {
   $('account-heading').textContent = name ?? 'My account';
   $('account-handle').textContent = name
     ? wallet.alias
-      ? `~${wallet.uname} · the name every game and referee knows you by`
+      ? `~${wallet.uname} · the name every game and developer knows you by`
       : 'Take an alias below and this becomes the shorter name you are shown by.'
     : 'Connecting to your wallet…';
   $<HTMLAnchorElement>('account-public').href = name ? profilePath(name) : '/';
@@ -1345,9 +1345,9 @@ function ownBets(): BetRow[] {
     .filter(
       (receipt: any) =>
         receipt.status === 'signed' &&
-        ((receipt.kind === 'bet' && receipt.expectedPayout !== undefined) ||
-          // A bet that settled later is one once what it paid is collected; a refund was never played.
-          (receipt.kind === 'wager' && receipt.payout !== undefined && !receipt.reason)),
+        ((receipt.kind === 'casino-bet' && receipt.expectedPayout !== undefined) ||
+          // A developer bet is one once what it was paid is collected; a bet its developer returned was never played.
+          (receipt.kind === 'developer-bet' && ['settled', 'shorted'].includes(developerBetStatus(receipt)))),
     )
     .map((receipt: any) => ({
       at: Date.parse(receipt.createdAt),
@@ -1367,7 +1367,7 @@ function ownBets(): BetRow[] {
 const showGameRecord = (row: { key?: string | null }) => {
   if (row.key) void openGameRecord(row.key);
 };
-/** One bet in full: the prize table it rode, where its round landed, and the preimages that drew
+/** One bet in full: the prize table it rode, where its round landed, and the preimages that fixed
  * it. Everything shown comes out of the receipt this wallet kept. */
 function showBet(row: BetRow) {
   $('bet-detail-eyebrow').textContent = 'ONE BET, IN FULL';
@@ -1532,7 +1532,7 @@ async function openGameRecord(key: string, push = true) {
   $('gamebets-key').textContent = key;
   $('gamebets-list').replaceChildren();
   $('gamebets-totals').replaceChildren();
-  $('gamebets-later').classList.add('hidden');
+  $('gamebets-developer-bets').classList.add('hidden');
   $('gamebets-empty').classList.add('hidden');
   $<HTMLInputElement>('gamebets-search').value = '';
   navigate('gamebets', push, gameBetsPath(key));
@@ -1571,13 +1571,12 @@ async function openGameRecord(key: string, push = true) {
         ),
       ),
     );
-    // How the game's bets that settle later ended: a referee that lets the bets it would lose run past
-    // their deadline shows here.
-    const later: { open: number; settled: number; expired: number } = record.later;
-    if (later.open + later.settled + later.expired) {
-      $('gamebets-later').textContent =
-        `Bets that settle later: ${later.open} open, ${later.settled} settled, and ${later.expired} its referee let run past their deadline, whose stakes came back.`;
-      $('gamebets-later').classList.remove('hidden');
+    // How the game's developer bets stand: a developer that leaves bets unsettled shows here.
+    const developerBets: { open: number; settled: number } = record.developerBets;
+    if (developerBets.open + developerBets.settled) {
+      $('gamebets-developer-bets').textContent =
+        `Developer bets: ${developerBets.open} open, and ${developerBets.settled} its developer settled.`;
+      $('gamebets-developer-bets').classList.remove('hidden');
     }
     $('gamebets-list').replaceChildren(...betElements(rows));
     filterBets(
@@ -1972,7 +1971,7 @@ $<HTMLAnchorElement>('wallet-name-link').addEventListener('click', event => {
   event.preventDefault();
   if (wallet.uname) void openProfile(showName(wallet));
 });
-$<HTMLButtonElement>('refresh-held').addEventListener('click', () => void refreshActivity());
+$<HTMLButtonElement>('refresh-developer-bets').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('refresh-wallet').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('wallet-history').addEventListener('click', () => navigate('activity'));
 $<HTMLButtonElement>('connect-casino').addEventListener('click', () =>

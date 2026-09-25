@@ -11,10 +11,9 @@ export function uint256(value: unknown, name = 'value', positive = false) {
   return value;
 }
 
-/** One round holds a bounded table: the exact-integer admission cost grows with its distinct outcomes. */
-export const MAX_ROUND_BETS = 256;
+/** A casino bet holds a bounded table: the exact-integer admission cost grows with its distinct outcomes, which
+ * 64 prizes keep to at most 128. */
 export const MAX_PRIZES = 64;
-export const MAX_ROUND_CELLS = 128;
 /** A bet pays `payout` when its round's 64-bit outcome falls in [rangeStart, rangeEnd). */
 export interface Prize {
   rangeStart: bigint;
@@ -40,16 +39,15 @@ function checkTerms({ stake, prizes }: BetTerms) {
   }
 }
 /** Sweep the outcome space once: each cell is a stretch of outcomes that pays the same total. */
-function cells(bets: readonly BetTerms[]) {
+function cells(bet: BetTerms) {
   const steps = new Map<bigint, bigint>([
     [0n, 0n],
     [OUTCOME_SPACE, 0n],
   ]);
-  for (const bet of bets)
-    for (const { rangeStart, rangeEnd, payout } of bet.prizes) {
-      steps.set(rangeStart, (steps.get(rangeStart) || 0n) + payout);
-      steps.set(rangeEnd, (steps.get(rangeEnd) || 0n) - payout);
-    }
+  for (const { rangeStart, rangeEnd, payout } of bet.prizes) {
+    steps.set(rangeStart, (steps.get(rangeStart) || 0n) + payout);
+    steps.set(rangeEnd, (steps.get(rangeEnd) || 0n) - payout);
+  }
   const edges = [...steps.keys()].sort((a, b) => (a < b ? -1 : 1)),
     widths = new Map<bigint, bigint>();
   let paid = 0n;
@@ -59,18 +57,10 @@ function cells(bets: readonly BetTerms[]) {
   }
   return [...widths].map(([payout, width]) => ({ payout, width }));
 }
-/** The most a round's bets can cost the bankroll on one outcome, before commission: what their stakes fall short
- * of the payouts in the round's worst cell, or nothing. */
-export function worstCase(bets: readonly BetTerms[]) {
-  bets.forEach(checkTerms);
-  const totalStake = bets.reduce((sum, bet) => sum + bet.stake, 0n),
-    most = cells(bets).reduce((top, cell) => (cell.payout > top ? cell.payout : top), 0n);
-  return most > totalStake ? most - totalStake : 0n;
-}
 /** What a player is signing, exactly: the most the bet can pay and its expected payout out of 2^64. */
 export function describeBet(bet: BetTerms) {
   checkTerms(bet);
-  const table = cells([bet]);
+  const table = cells(bet);
   return {
     maxPayout: table.reduce((most, cell) => (cell.payout > most ? cell.payout : most), 0n),
     // expectedPayout / (stake * 2^64) is the return to player.
@@ -92,23 +82,19 @@ export const returnParts = (stake: bigint, expectedPayout: bigint) => {
 export const betReturn = (bet: BetTerms) => returnParts(bet.stake, describeBet(bet).expectedPayout);
 
 /**
- * Every bet in a round rides one 64-bit outcome, so the round is a single wager for the bankroll.
+ * A casino bet rides one 64-bit outcome, and is a single wager for the bankroll.
  * The prize ranges cut [0, 2^64) into cells; in a cell of width w the bankroll's cash flow is
- * X = (every stake) - (every payout due there) - F.
- * The Kelly condition for taking the whole round is E[X / (B + X)] >= 0 with every B + X > 0,
+ * X = stake - (every payout due there) - F.
+ * The Kelly condition for taking the bet is E[X / (B + X)] >= 0 with every B + X > 0,
  * checked exactly as sum_k w_k X_k prod_{j != k} (B + X_j) >= 0. For one stake S with one prize
  * S + W of width t this is (B-W-F)(S-F)Q >= B*t*(S+W). Prizes that cannot fall together hedge
  * each other; prizes that fall together stack.
  * Bigint intermediate products deliberately exceed uint256; final amounts do not.
  */
-export function assessRound({ bankroll, bets }: { bankroll: bigint; bets: readonly BetTerms[] }) {
+export function assessBet({ bankroll, bet }: { bankroll: bigint; bet: BetTerms }) {
   uint256(bankroll, 'bankroll', true);
-  if (!Array.isArray(bets) || !bets.length || bets.length > MAX_ROUND_BETS)
-    throw new RangeError(`a round holds 1 to ${MAX_ROUND_BETS} bets`);
-  bets.forEach(checkTerms);
-  const totalStake = bets.reduce((sum, bet) => sum + bet.stake, 0n),
-    table = cells(bets).map(cell => ({ flow: totalStake - cell.payout, width: cell.width }));
-  if (table.length > MAX_ROUND_CELLS) throw new RangeError(`a round has at most ${MAX_ROUND_CELLS} distinct outcomes`);
+  checkTerms(bet);
+  const table = cells(bet).map(cell => ({ flow: bet.stake - cell.payout, width: cell.width }));
   const worst = table.reduce((low, cell) => (cell.flow < low ? cell.flow : low), table[0].flow);
   if (bankroll + worst <= 0n) throw new RangeError('the net payout must be less than the available bankroll');
   const isSafe = (fee: bigint) => {
@@ -127,22 +113,18 @@ export function assessRound({ bankroll, bets }: { bankroll: bigint; bets: readon
 
   // The left side strictly decreases throughout this interval. At most 256 steps.
   let low = 0n;
-  let high = totalStake - 1n < bankroll + worst - 1n ? totalStake - 1n : bankroll + worst - 1n;
+  let high = bet.stake - 1n < bankroll + worst - 1n ? bet.stake - 1n : bankroll + worst - 1n;
   while (low < high) {
     const middle = low + (high - low + 1n) / 2n;
     if (isSafe(middle)) low = middle;
     else high = middle - 1n;
   }
 
-  // Each bet carries its stake's share of the fee, rounded down to an even number of wei and split equally.
+  // The fee is rounded down to an even number of wei, to be split equally.
   const maxFee = low,
-    fees = bets.map(bet => {
-      const share = (maxFee * bet.stake) / totalStake;
-      return share - (share % 2n);
-    }),
-    totalFee = fees.reduce((sum, fee) => sum + fee, 0n);
-  // The worst cell is the largest cash decrease the bankroll can suffer from this round.
-  const liability = uint256((worst < 0n ? -worst : 0n) + totalFee, 'liability');
-  uint256(bankroll + totalStake - totalFee, 'bankroll after player loss', true);
-  return Object.freeze({ bankroll, maxFee, totalFee, fees: Object.freeze(fees), liability });
+    fee = maxFee - (maxFee % 2n);
+  // The worst cell is the largest cash decrease the bankroll can suffer from this bet.
+  const liability = uint256((worst < 0n ? -worst : 0n) + fee, 'liability');
+  uint256(bankroll + bet.stake - fee, 'bankroll after player loss', true);
+  return Object.freeze({ bankroll, maxFee, fee, liability });
 }

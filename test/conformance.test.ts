@@ -15,8 +15,7 @@ behaviour('the test casino', async () => {
     wallet: f.wallet,
     bridge: f.bridge,
     asset: 'eth',
-    referee: async () => f.referee,
-    advance: async ms => f.advance(ms),
+    developer: async () => f.developer,
     async replaceChannel() {
       await f.replaceChannel();
       await f.wallet.setGameLimit(limit);

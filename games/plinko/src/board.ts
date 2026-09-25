@@ -141,7 +141,7 @@ export function mountBoard(canvas: HTMLCanvasElement, options: BoardOptions) {
         context.fillRect(x - w / 2, base - expected - 1, w, 2);
       }
     }
-    // The ball waiting in the chute while the wallet settles the wager.
+    // The ball waiting in the chute while the wallet settles the casino bet.
     if (hovering) {
       const first = spot(0, 0);
       paint(first.x, first.y - g.peg - g.ball - g.dy + Math.sin(now / 90) * 2.5, g.ball, 0.85);

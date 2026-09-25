@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { id, Wallet } from 'ethers';
-import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBet } from '../testing/contract.ts';
+import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBinary } from '../testing/contract.ts';
 import { hashState, checkpointEvidence, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 test('shared-pool contract protects principal, retains debts and verifies channel evidence', async t => {
@@ -43,7 +43,7 @@ test('shared-pool contract protects principal, retains debts and verifies channe
   await (await f.contract.withdrawHouse(id('surplus-withdrawal'), owner.address, 400n)).wait();
   assert.equal(await env.provider.getBalance(await f.contract.getAddress()), 0n);
   const cc = await open(f, a, 10000n);
-  const q = assessBet({
+  const q = assessBinary({
     bankroll: 1000000n,
     stake: 100n,
     netWin: 100n,
