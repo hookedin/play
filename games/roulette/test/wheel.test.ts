@@ -4,7 +4,7 @@ import { keccak256 } from 'ethers';
 import { outcome, seedHash } from '../../../protocol/protocol.ts';
 import type { Developer, PublicDeveloperBet, Round } from '@hookedin/play/sdk/developer';
 import { BETTING_MS, Wheel, coveredHash } from '../server/wheel.ts';
-import type { KeptSpin, WheelState } from '../server/wheel.ts';
+import type { Spin, WheelState } from '../server/wheel.ts';
 import { groupOf, payouts, pocket, wireChips } from '../src/table.ts';
 import type { Chips } from '../src/table.ts';
 
@@ -42,7 +42,7 @@ function table() {
     calls: string[] = [],
     casinoBets: Record<string, unknown>[] = [],
     saves: WheelState[] = [],
-    spins = new Map<string, KeptSpin>(),
+    spins = new Map<string, Spin>(),
     wakes: number[] = [];
   const developer = {
     address: '0x' + 'a'.repeat(40),
@@ -86,7 +86,7 @@ function table() {
     asset: 'test' as const,
     now: () => now,
     save: (s: WheelState) => void saves.push(structuredClone(s)),
-    keep: (spin: KeptSpin) => void spins.set(spin.round, structuredClone(spin)),
+    keep: (spin: Spin) => void spins.set(spin.round, structuredClone(spin)),
     kept: (round: string) => spins.get(round) ?? null,
     wake: (at: number) => void wakes.push(at),
   };
@@ -144,7 +144,7 @@ function table() {
 test('an empty table waits; the first bet starts the clock; the spin covers every layout with one casino bet', async () => {
   const t = table();
   const first = await t.wheel.view();
-  assert.deepEqual([first.closesAt, first.players, first.last], [null, 0, null]);
+  assert.deepEqual([first.closesAt, first.players], [null, 0]);
   assert.match(first.round!, /^0x[0-9a-f]{64}$/, 'the table names the round to bet on');
   assert.equal(first.seedHash, await t.deps.developer.seedHash(first.round!), 'and the hash of its seed');
   assert.equal(t.saves.at(-1)!.round, first.round, 'saved before anybody is told of it');
@@ -161,7 +161,8 @@ test('an empty table waits; the first bet starts the clock; the spin covers ever
   assert.equal(placed.closesAt, placedAt + BETTING_MS, 'twenty seconds after the first bet, by the casino');
   assert.equal(t.wakes.at(-1), placed.closesAt, 'and on time whether or not anybody asks');
   t.advance(BETTING_MS - 1);
-  assert.equal((await t.wheel.view()).last, null);
+  await t.wheel.view();
+  assert.ok(!t.calls.includes('casinoBet'), 'not a moment early');
   t.advance(1);
   await t.wheel.alarm();
   assert.deepEqual(t.casinoBets, [{ covered: coveredHash([a, b]) }], 'one casino bet for the whole table');
@@ -171,14 +172,12 @@ test('an empty table waits; the first bet starts the clock; the spin covers ever
     'each is paid what its chips win where the ball landed',
   );
   const after = await t.wheel.view();
-  assert.equal(after.last!.round, first.round);
-  assert.equal(after.last!.number, pocket(outcome([], after.last!.seed, after.last!.secret).value));
   assert.deepEqual([after.closesAt, after.players], [null, 0], 'and the table is empty again');
   assert.notEqual(after.round, first.round, 'with a new round to bet on');
-  assert.deepEqual(t.saves.at(-1)!.last, after.last, 'the spin is saved');
   // Anyone can check the spin: the bets it covered hash to its casino bet's meta, on the seed published before them.
   const kept = (await t.wheel.kept(first.round!))!;
-  assert.deepEqual([kept.covered, kept.accepted], [[a, b], true]);
+  assert.deepEqual([kept.round, kept.covered, kept.accepted], [first.round, [a, b], true]);
+  assert.equal(kept.number, pocket(outcome([], kept.seed, kept.secret).value));
   assert.equal(coveredHash(kept.covered), t.casinoBets[0]!.covered);
   assert.equal(seedHash(kept.seed), first.seedHash);
 });
@@ -266,7 +265,7 @@ test('a spin tried again places the casino bet with the bets it saved, and a bet
 test('a wheel woken on a saved round with no bets covered yet works out its seed hash and takes bets on it', async () => {
   const t = table();
   const { round } = await t.wheel.view();
-  const woken = new Wheel(t.deps, { last: null, round: round!, covered: null });
+  const woken = new Wheel(t.deps, { round: round!, covered: null });
   const view = await woken.view();
   assert.deepEqual([view.round, view.seedHash], [round, await t.deps.developer.seedHash(round!)]);
   const a = t.bet();
@@ -286,10 +285,9 @@ test('a casino bet whose reply was lost is found on the round the wheel saved, e
   await assert.rejects(t.wheel.alarm(), /reply lost/);
   t.loseReplies(false);
   // The Durable Object is evicted: a new wheel starts from what the old one saved. The round it saved is revealed,
-  // so it keeps the spin with the bets it saved, shows where the ball landed, pays the bet on it and moves on.
+  // so it keeps the spin with the bets it saved, pays the bet on it and moves on.
   const woken = new Wheel(t.deps, structuredClone(t.saves.at(-1)!));
   const view = await woken.view();
-  assert.equal(view.last!.round, opened.round);
   assert.notEqual(view.round, opened.round);
   assert.equal(t.paid.get(a), t.owed(opened.round!));
   assert.deepEqual((await woken.kept(opened.round!))!.covered, [a]);
@@ -298,19 +296,10 @@ test('a casino bet whose reply was lost is found on the round the wheel saved, e
 
 test('a wheel whose saved round the casino does not know moves on to a new round', async () => {
   const t = table();
-  const woken = new Wheel(t.deps, { last: null, round: '0x' + 'e'.repeat(64), covered: null });
+  const lost = '0x' + 'e'.repeat(64),
+    woken = new Wheel(t.deps, { round: lost, covered: null });
   const view = await woken.view();
-  assert.equal(view.last, null, 'a round the casino lost has no spin to show');
+  assert.notEqual(view.round, lost);
+  assert.equal(await woken.kept(lost), null, 'a round the casino lost has no spin to keep');
   assert.equal(t.saves.at(-1)!.round, view.round, 'and the new round is saved');
-});
-
-test('a wheel woken from storage carries on with the last spin it made', async () => {
-  const t = table();
-  await t.wheel.view();
-  t.bet();
-  await t.wheel.placed();
-  t.advance(BETTING_MS);
-  await t.wheel.alarm();
-  const woken = new Wheel(t.deps, structuredClone(t.saves.at(-1)!));
-  assert.deepEqual((await woken.view()).last, (await t.wheel.view()).last);
 });

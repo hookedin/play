@@ -15,7 +15,7 @@ import type { AssetId, Developer, PublicDeveloperBet, Round } from '@hookedin/pl
 import { groupOf, layout, payouts, pocket, together } from '../src/table.ts';
 import type { Chips } from '../src/table.ts';
 
-/** Where the ball landed, as the table shows it. */
+/** Where the ball landed, as the wheel keeps it for anyone to check. */
 export interface Spin {
   round: string;
   seed: string;
@@ -23,14 +23,10 @@ export interface Spin {
   number: number;
   /** Whether the bankroll took the wheel's casino bet: a spin it turned down pays every bet its stake back. */
   accepted: boolean;
-}
-/** A spin as the wheel keeps it for anyone to check: the bets its casino bet covered, in the order the hash in its
- * meta was taken over them. */
-export interface KeptSpin extends Spin {
+  /** The bets its casino bet covered, in the order the hash in its meta was taken over them. */
   covered: string[];
 }
 export interface WheelState {
-  last: Spin | null;
   /** The round the table takes bets on, saved before anybody is told of it, so a spin that stopped halfway is
    * finished on that round. */
   round: string | null;
@@ -45,8 +41,8 @@ export interface Deps {
   now(): number;
   save(state: WheelState): void | Promise<void>;
   /** Keep a spin for anyone to check, and read one back by its round. */
-  keep(spin: KeptSpin): void | Promise<void>;
-  kept(round: string): KeptSpin | null | undefined | Promise<KeptSpin | null | undefined>;
+  keep(spin: Spin): void | Promise<void>;
+  kept(round: string): Spin | null | undefined | Promise<Spin | null | undefined>;
   /** Ask for `alarm()` at this time. */
   wake(at: number): void;
 }
@@ -58,7 +54,7 @@ const RETRY_MS = 5_000,
 export const coveredHash = (covered: readonly string[]) => keccak256(concat(covered));
 /** What a bet on a spin is owed: what its chips pay on the number if the spin's accepted casino bet covered it, and
  * its stake back otherwise, as for a bet on a round the wheel never spun. */
-export function owed(bet: PublicDeveloperBet, spin: KeptSpin | null | undefined) {
+export function owed(bet: PublicDeveloperBet, spin: Spin | null | undefined) {
   const chips = spin?.accepted && spin.covered.includes(bet.bet) ? layout(bet.meta?.chips, bet.stake) : null;
   return chips ? (payouts(chips).get(spin!.number) ?? 0n) : BigInt(bet.stake);
 }
@@ -77,7 +73,7 @@ export class Wheel {
   private queue: Promise<unknown> = Promise.resolve();
   constructor(deps: Deps, saved?: WheelState) {
     this.deps = deps;
-    this.state = { last: saved?.last ?? null, round: saved?.round ?? null, covered: saved?.covered ?? null };
+    this.state = { round: saved?.round ?? null, covered: saved?.covered ?? null };
   }
   /** One thing at a time: a Durable Object's handlers interleave across awaits. */
   private serialized<T>(work: () => Promise<T>): Promise<T> {
@@ -85,8 +81,7 @@ export class Wheel {
     this.queue = result.catch(() => {});
     return result;
   }
-  /** What a page shows: the round to bet on and its seed hash, who is at the table, when the wheel spins, and where it
-   * last landed. */
+  /** What a page shows: the round to bet on and its seed hash, who is at the table, and when the wheel spins. */
   view() {
     return this.serialized(async () => {
       await this.turn();
@@ -98,7 +93,6 @@ export class Wheel {
         now: this.deps.now(),
         players: new Set(open.map(bet => bet.uname)).size,
         staked: String(open.reduce((sum, bet) => sum + BigInt(bet.stake), 0n)),
-        last: this.state.last,
       };
     });
   }
@@ -209,10 +203,10 @@ export class Wheel {
       throw error;
     }
   }
-  /** Keep a revealed round's spin with the bets the wheel's casino bet covered, show where the ball landed, and pay the
-   * open bets on it what they are owed. A round never revealed keeps no spin, and its bets get their stakes back. */
+  /** Keep a revealed round's spin with the bets the wheel's casino bet covered, and pay the open bets on it what they
+   * are owed. A round never revealed keeps no spin, and its bets get their stakes back. */
   private async finish(round: Round, bets: PublicDeveloperBet[]) {
-    let spin: KeptSpin | null = null;
+    let spin: Spin | null = null;
     const { seed, secret, outcome, casinoBet } = round;
     if (round.status === 'revealed' && seed !== undefined && secret !== undefined && outcome !== undefined) {
       spin = {
@@ -224,16 +218,12 @@ export class Wheel {
         covered: this.state.round === round.id ? (this.state.covered ?? []) : [],
       };
       await this.deps.keep(spin);
-      if (this.state.last?.round !== spin.round) {
-        const { covered: _covered, ...last } = spin;
-        this.state = { ...this.state, last };
-      }
     }
     await this.settle(spin, bets);
   }
   /** Pay the open bets on a spin what they are owed. The casino's part is nothing: its commission is on the wheel's
    * casino bet. */
-  private async settle(spin: KeptSpin | null | undefined, bets: PublicDeveloperBet[]) {
+  private async settle(spin: Spin | null | undefined, bets: PublicDeveloperBet[]) {
     if (bets.length)
       await this.deps.developer.settle(bets.map(bet => ({ bet: bet.bet, player: owed(bet, spin), casino: 0n })));
   }

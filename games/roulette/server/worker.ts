@@ -5,7 +5,7 @@
  */
 import { createDeveloper } from '@hookedin/play/sdk/developer';
 import { Wheel } from './wheel.ts';
-import type { KeptSpin, WheelState } from './wheel.ts';
+import type { Spin, WheelState } from './wheel.ts';
 
 interface Env {
   ASSETS: Fetcher;
@@ -43,7 +43,7 @@ export class RouletteWheel implements DurableObject {
           now: () => Date.now(),
           save: state => this.ctx.storage.put('state', state),
           keep: spin => this.ctx.storage.put(`spin:${spin.round}`, spin),
-          kept: round => this.ctx.storage.get<KeptSpin>(`spin:${round}`),
+          kept: round => this.ctx.storage.get<Spin>(`spin:${round}`),
           wake: at => void this.ctx.storage.setAlarm(at),
         },
         await this.ctx.storage.get<WheelState>('state'),

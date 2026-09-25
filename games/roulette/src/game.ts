@@ -13,7 +13,7 @@ import type { GameReceipt } from '@hookedin/play/sdk/sdk';
 import { mountBank } from '@hookedin/play/sdk/bank';
 import { colour, covers, groupOf, layout, payouts, pocket, wireChips } from './table.ts';
 import type { Chips } from './table.ts';
-import type { KeptSpin } from '../server/wheel.ts';
+import type { Spin } from '../server/wheel.ts';
 import { mountWheel } from './wheel-view.ts';
 
 /** A bet the wallet was asked to sign, saved first so that a reload finds its result under the same name. */
@@ -36,7 +36,6 @@ interface Table {
   now: number;
   players: number;
   staked: string;
-  last: { round: string; number: number } | null;
 }
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** Too late for this spin: the wheel is about to spin, and a bet now would come too late for it and come back. */
@@ -177,7 +176,7 @@ const LAST_CALL_MS = 3000;
   // --- The bet -----------------------------------------------------------------------------
 
   /** The spin the wheel kept for a round, or null if it kept none: a round it never spun. */
-  async function keptSpin(round: string): Promise<KeptSpin | null> {
+  async function keptSpin(round: string): Promise<Spin | null> {
     const response = await fetch(`./api/spins/${round}?asset=${assetId}`);
     if (response.status === 404) return null;
     const value = await response.json();

@@ -57,7 +57,7 @@ test('a wheel that could not reach the casino opens at the next request', async 
   // The pages keep asking, and the one that arrives after the casino is back opens the table.
   const up = await x.table();
   assert.equal(up.status, 200);
-  assert.deepEqual((await body(up)).last, null);
+  assert.equal((await body(up)).round, ROUND, 'on the round the casino named');
 });
 
 test('every request that arrives while the wheel is opening shares the one attempt', async t => {
