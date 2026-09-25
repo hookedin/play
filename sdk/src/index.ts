@@ -4,4 +4,5 @@ export * from './round.ts';
 export * from './bank.ts';
 export * from './synth.ts';
 export * from './admits.ts';
+export * from './outcome.ts';
 export * from './engine/index.ts';

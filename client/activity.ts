@@ -144,13 +144,7 @@ export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
 }
 /** What a developer bet asks of the player, said as plainly as the docs say it. */
 const DEVELOPER_BET =
-  'Its stake went to the game’s developer when you placed it, and the developer settles it: you trust the developer to pay. Your wallet collects what they pay.';
-/** What a developer bet is owed: with prizes, what the round's outcome says, which the wallet checks; with terms, the
- * developer's word. */
-const trust = (developerBet: { prizes?: unknown } | undefined) =>
-  developerBet?.prizes
-    ? 'It is provably fair: its outcome was fixed before you bet, by a round the casino named and a seed the developer committed to. It is owed what its prizes pay on that outcome if the developer’s casino bet on the round covers it, and its stake back if not. Your wallet checks what the developer pays and shows any shortfall.'
-    : 'Its game’s developer says what it pays: that is their word.';
+  'Its stake went to the game’s developer when you placed it, and the developer settles it: what it pays is their word, and you trust them to pay it. Your wallet collects what they pay.';
 /** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
 export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
 /** A developer bet can have settled while what it was paid still waits to enter the channel balance. Its game goes by
@@ -222,36 +216,33 @@ export function receiptSummary(
   const played = receipt.kind === 'casino-bet' || (receipt.kind === 'developer-bet' && receipt.payout !== undefined),
     net = played ? BigInt(receipt.payout ?? 0) - BigInt(receipt.stake ?? 0) : 0n,
     bet = receipt.kind === 'developer-bet' ? 'Developer bet' : 'Casino bet';
-  // A developer bet its developer did not cover was returned: its stake came back, whatever it would have paid.
   const title =
     receipt.kind === 'developer-bet' && !played
       ? 'Developer bet placed'
-      : receipt.kind === 'developer-bet' && developerBetStatus(receipt) === 'returned'
-        ? 'Developer bet returned'
-        : played
-          ? net > 0n
-            ? `${bet} won`
-            : net < 0n
-              ? `${bet} lost`
-              : `${bet} broke even`
-          : (
-              {
-                deposit: 'Channel funded',
-                withdrawal: 'Claim collected',
-                closure: 'Channel closed',
-                dispute: 'Channel dispute',
-                payment: 'Game payment',
-                'developer-bet-payout': 'Developer bet payout',
-                bank: 'Put into your bank',
-                withdrawn: 'Taken from your bank',
-                invest: 'Invested in the bankroll',
-                redeem: 'Shares redeemed',
-                divest: 'Bankroll payout',
-                earnings: 'Developer earnings',
-                faucet: 'Test coins claimed',
-                transaction: 'Transaction',
-              } as Record<string, string>
-            )[receipt.kind] || receipt.kind;
+      : played
+        ? net > 0n
+          ? `${bet} won`
+          : net < 0n
+            ? `${bet} lost`
+            : `${bet} broke even`
+        : (
+            {
+              deposit: 'Channel funded',
+              withdrawal: 'Claim collected',
+              closure: 'Channel closed',
+              dispute: 'Channel dispute',
+              payment: 'Game payment',
+              'developer-bet-payout': 'Developer bet payout',
+              bank: 'Put into your bank',
+              withdrawn: 'Taken from your bank',
+              invest: 'Invested in the bankroll',
+              redeem: 'Shares redeemed',
+              divest: 'Bankroll payout',
+              earnings: 'Developer earnings',
+              faucet: 'Test coins claimed',
+              transaction: 'Transaction',
+            } as Record<string, string>
+          )[receipt.kind] || receipt.kind;
   let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ${unit}`;
   let amountLabel = !settled
     ? 'No confirmed payment'
@@ -294,28 +285,10 @@ export function receiptSummary(
   if (receipt.kind === 'payment')
     description = `A payment this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'developer-bet') {
-    const standing = developerBetStatus(receipt);
-    status =
-      standing === 'open'
-        ? 'Waiting for the developer'
-        : standing === 'shorted'
-          ? 'Paid short'
-          : standing === 'returned'
-            ? 'Stake returned'
-            : BigInt(receipt.payout)
-              ? 'Payout collected'
-              : 'Settled · no payout';
-    if (standing === 'shorted') tone = 'negative';
-    if (standing === 'open')
-      description = `Placed with the game’s developer. ${DEVELOPER_BET} ${trust(receipt.details?.developerBet)} Balance ${formatEther(receipt.balance)} ${unit}`;
-    else if (standing === 'shorted')
-      description = `Its developer paid ${formatEther(receipt.payout)} ${unit} of the ${formatEther(receipt.owed)} ${unit} it is owed on its round’s outcome; your wallet keeps the proof. ${description}`;
-    else if (standing === 'returned')
-      description = `Its developer did not cover it and paid its stake back${
-        receipt.wouldHavePaid === undefined
-          ? ''
-          : `: it would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} on its round’s outcome`
-      }. ${description}`;
+    const open = developerBetStatus(receipt) === 'open';
+    status = open ? 'Waiting for the developer' : BigInt(receipt.payout) ? 'Payout collected' : 'Settled · no payout';
+    if (open)
+      description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${formatEther(receipt.balance)} ${unit}`;
   }
   if (receipt.kind === 'developer-bet-payout')
     description = `What a developer bet’s developer paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { admits } from '@hookedin/play/sdk/admits';
-import { bet, covers, isLayout, payouts, pocket, returns, together, RED, WHEEL } from '../src/table.ts';
+import { bet, covers, layout, payouts, pocket, returns, together, wireChips, RED, WHEEL } from '../src/table.ts';
+import type { Chips } from '../src/table.ts';
 import { betReturn } from '@hookedin/play/sdk/admits';
 
 const SPACE = 1n << 64n,
@@ -114,24 +115,21 @@ test('every chip and every layout pays back at least the floor this game is buil
 });
 
 test('the wheel covers only layouts, and a table of them is one bet paying each number what they all pay there', () => {
-  const layouts = [bet({ red: 100n, '17': 10n }), bet({ black: 50n, 'dozen:2': 20n }), bet({ '0': 5n })];
-  assert.ok(layouts.every(isLayout));
+  const layouts: Chips[] = [{ red: 100n, '17': 10n }, { black: 50n, 'dozen:2': 20n }, { '0': 5n }];
+  for (const chips of layouts) assert.deepEqual(layout(wireChips(chips), bet(chips).stake), chips);
   const table = together(layouts);
   assert.equal(table.stake, '185');
-  assert.ok(isLayout(table), 'layouts together are a layout');
   for (const [n, outcome] of sample)
     assert.equal(
       pays(table, outcome),
-      layouts.reduce((sum, one) => sum + pays(one, outcome), 0n),
+      layouts.reduce((sum, chips) => sum + pays(bet(chips), outcome), 0n),
       `number ${n}`,
     );
-  // A prize that splits a number, or pays more over all 37 than chips of its stake could, is no layout: the wheel
-  // does not cover a table a player signed themselves.
-  assert.equal(isLayout({ stake: '1', prizes: [{ rangeStart: '0', rangeEnd: '1000', payout: '36' }] }), false);
-  assert.equal(isLayout({ stake: '1', prizes: [{ rangeStart: '0', rangeEnd: String(SPACE), payout: '1' }] }), false);
-  const wider = bet({ red: 1n });
-  assert.equal(
-    isLayout({ ...wider, prizes: wider.prizes.map(p => ({ ...p, payout: String(BigInt(p.payout) + 1n) })) }),
-    false,
-  );
+  // Chips that are not on the felt, are not whole, or do not add up to the bet's stake are no layout: the wheel does
+  // not cover a table a player signed themselves.
+  assert.equal(layout({ '37': '100' }, '100'), null);
+  assert.equal(layout({ red: '1.5' }, '1'), null);
+  assert.equal(layout({ red: '0' }, '0'), null);
+  assert.equal(layout({ red: '100' }, '1'), null);
+  assert.equal(layout(['100'], '100'), null);
 });

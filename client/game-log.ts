@@ -53,10 +53,8 @@ export function describeRequest(method: string, params: any = {}) {
   switch (method) {
     case 'game.casinoBet':
       return `casino bet · stake ${eth(params.stake)} · ${betSummary(params)}${named}`;
-    case 'game.developerBet': {
-      const settles = params.terms ? "on its developer's word" : `${betSummary(params)} · round ${params.round}`;
-      return `developer bet · stake ${eth(params.stake)} · ${settles}${named}`;
-    }
+    case 'game.developerBet':
+      return `developer bet · stake ${eth(params.stake)} · on its developer's word${named}`;
     case 'game.payment':
       return `amount ${eth(params.amount)}${named}`;
     case 'game.receipt':
@@ -86,12 +84,11 @@ export function describeResult(method: string, result: any) {
       return '';
   }
 }
-/** A receipt in one line: what became of the operation, what it paid and was owed, and whose word a payout
- * rests on. */
+/** A receipt in one line: what became of the operation, what it paid, and whose word a payout rests on. */
 export const describeReceipt = (receipt: any) =>
   `${receipt.kind} ${receipt.status}${receipt.payout === undefined ? '' : ` · paid ${eth(receipt.payout)}`}${
-    receipt.owed === undefined ? '' : ` · owed ${eth(receipt.owed)}`
-  }${receipt.basis === 'developer' ? " · on its developer's word" : ''}${quote(receipt.reason)} · ${receipt.id}`;
+    receipt.kind === 'developer-bet' && receipt.payout !== undefined ? " · on its developer's word" : ''
+  }${quote(receipt.reason)} · ${receipt.id}`;
 
 export interface GameLogElements {
   list: HTMLElement;

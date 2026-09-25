@@ -12,7 +12,7 @@ const body = async (response: Response) => (await response.json()) as any;
 function worker(t: { mock: { method: typeof import('node:test').mock.method } }) {
   const calls: string[] = [];
   let reachable = false;
-  t.mock.method(globalThis, 'fetch', async (url: string, init?: RequestInit) => {
+  t.mock.method(globalThis, 'fetch', async (url: string) => {
     const path = String(url).slice(CASINO.length);
     calls.push(path);
     if (!reachable) throw new TypeError('Network connection lost.');
@@ -23,10 +23,8 @@ function worker(t: { mock: { method: typeof import('node:test').mock.method } })
         developerProtocol: DEVELOPER_PROTOCOL,
         limits: LIMITS,
       });
-    // The wheel opens its round: the casino names it, and the wheel commits the seed of its casino bet to it.
-    const round = { id: ROUND, status: 'open' };
-    if (path === '/api/rounds') return Response.json(round);
-    if (path === `/api/rounds/${ROUND}/commit`) return Response.json({ ...round, ...JSON.parse(String(init!.body)) });
+    // The wheel opens its round, which the casino names.
+    if (path === '/api/rounds') return Response.json({ id: ROUND, status: 'open' });
     if (path.startsWith('/api/developer-bets?')) return Response.json({ bets: [], cursor: '', more: false });
     return Response.json({ error: 'Not found' }, { status: 404 });
   });

@@ -1,14 +1,8 @@
-import type { Integer, Checkpoint, Operation, Prize, Round } from '../protocol/types.ts';
+import type { Integer, Checkpoint, Operation, Prize } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
-import { Wallet, getAddress, hexlify, randomBytes, ZeroHash, ZeroAddress, id } from 'ethers';
-import type {
-  DeveloperBetDetails,
-  Details,
-  PlayerDeveloperBets,
-  PublicDeveloperBet,
-  WirePrizes,
-} from '../protocol/types.ts';
+import { Wallet, hexlify, randomBytes, ZeroHash, id } from 'ethers';
+import type { Details, PlayerDeveloperBets, PublicDeveloperBet } from '../protocol/types.ts';
 import {
   canonicalJSON,
   plain,
@@ -18,9 +12,7 @@ import {
   STATE_TYPES,
   OP_TYPES,
   ACCESS_TYPES,
-  BANK_CASINO_BET_TYPES,
   assertSignature,
-  deriveState,
   hashState,
   hashOperation,
   betTerms,
@@ -45,7 +37,6 @@ import {
   FUND_TYPES,
   REDEEM_TYPES,
   SETTLEMENT_TYPES,
-  COMMIT_TYPES,
   BANK_TYPES,
   WITHDRAW_TYPES,
   BANK_ID,
@@ -53,10 +44,11 @@ import {
   settleStep,
   checkpointEvidence,
   MAX_PAYOUTS,
+  validMeta,
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
 import { gameAmount, gameRef } from './game-account.ts';
-import { gameError } from './bridge.ts';
+import { gameError, META } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
 /** Operations that collect what is owed. They commit none of the signed balance. */
@@ -69,11 +61,13 @@ export interface CasinoBetInput {
   prizes: Prize[];
   group?: string;
 }
-/** A developer bet: its stake goes to the bank of the game's developer, who settles it. With prizes it names one of
- * the developer's rounds; with terms, the developer's word decides it. */
-export type DeveloperBetInput = { stake: Integer; group?: string } & (
-  { prizes: Prize[]; round: string } | { terms: Record<string, unknown> }
-);
+/** A developer bet: its stake goes to the bank of the game's developer, who settles it on its word. Its meta is the
+ * game's own JSON, saying what the bet is. */
+export interface DeveloperBetInput {
+  stake: Integer;
+  meta: Record<string, unknown>;
+  group?: string;
+}
 
 /** The off-chain channel protocol: exact signed requests, verified results, rejections, rounds, casino bets,
  * developer bets, banks and recovery of lost replies. */
@@ -234,7 +228,7 @@ export class ChannelClient extends WalletTransactions {
         : {}),
       ...(input.group ? { group: input.group } : {}),
       ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
-      ...(kind === 'developer-bet' ? { developerBet: input.developerBet } : {}),
+      ...(kind === 'developer-bet' ? { meta: input.meta } : {}),
     });
     const matches = (operation: Operation, signed: Details) => {
       if (
@@ -259,15 +253,9 @@ export class ChannelClient extends WalletTransactions {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
         if (debit > BigInt(this.game.balance)) throw gameError('insufficient-funds', 'Bet exceeds the game balance');
       } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
-      const prizes =
-        kind === 'casino-bet'
-          ? intent.prizes
-          : details.developerBet && 'prizes' in details.developerBet
-            ? details.developerBet.prizes
-            : null;
-      if (prizes)
+      if (kind === 'casino-bet')
         try {
-          describeBet(betTerms(intent.amount, prizes));
+          describeBet(betTerms(intent.amount, intent.prizes));
         } catch {
           throw new Error('Invalid bet prizes');
         }
@@ -403,12 +391,7 @@ export class ChannelClient extends WalletTransactions {
       : { ...response, evidence: { ...response.evidence, step } };
     const settled = !rejected && casinoBet ? outcome(step.operation.prizes, step.seed, step.secret) : null,
       // What the player signed, exactly: the most the bet could pay and its return out of 2^64 stakes.
-      prizes = casinoBet
-        ? op.prizes
-        : details.developerBet && 'prizes' in details.developerBet
-          ? details.developerBet.prizes
-          : null,
-      table = prizes ? describeBet(betTerms(op.amount, prizes)) : null;
+      table = casinoBet ? describeBet(betTerms(op.amount, op.prizes)) : null;
     let commission: string | undefined;
     try {
       commission = String(gameAmount(String(rejected ? 0 : response.commission), false));
@@ -484,66 +467,22 @@ export class ChannelClient extends WalletTransactions {
     // A game loaded straight from its manifest is published by nobody, so nobody takes its developer bets.
     if (this.requireGame().identity.slug === undefined)
       throw gameError('invalid-request', 'A game published nowhere takes no developer bets');
-    const developerBet: DeveloperBetDetails =
-      'prizes' in input
-        ? {
-            ...(await this.developerBetRound(input.round, game.developer, operationId)),
-            prizes: plain(input.prizes) as WirePrizes,
-          }
-        : { terms: input.terms };
+    // Its meta is what makes the debit a developer bet: without it, the stake would pay the bankroll.
+    if (!validMeta(input.meta)) throw gameError('invalid-request', META);
     return this.perform(
       'developer-bet',
-      { amount: input.stake, developerBet, ...(input.group ? { group: input.group } : {}) },
+      { amount: input.stake, meta: input.meta, ...(input.group ? { group: input.group } : {}) },
       operationId,
       game,
     );
   }
-  /** The developer's round a developer bet with prizes names, and the hash of the seed the developer committed to it:
-   * the ones the bet already signed if this ID has one, and otherwise the round the game named, which must be open,
-   * the game developer's, in this asset and committed by the developer. So the bet's outcome is fixed before it is
-   * placed, and it names the one round the player meant. */
-  async developerBetRound(this: CasinoWallet, round: string, developer: string, operationId: string) {
-    const known =
-      (await this.getReceipt(operationId))?.details?.developerBet ??
-      (this.pending?.operationId === operationId ? this.pending.details?.developerBet : undefined);
-    if (known && 'round' in known) return { round: known.round, seedHash: known.seedHash };
-    const open: Round = await this.api(`/api/rounds/${round}`);
-    if (
-      !same(open?.id, round) ||
-      !bytes32(open.seedHash) ||
-      !same(open.developer, developer) ||
-      open.asset !== this.playing ||
-      typeof open.signature !== 'string'
-    )
-      throw new Error("This is not a committed round of the game's developer");
-    if (open.status !== 'open') throw gameError('round-closed', 'This round takes no more bets');
-    assertSignature(this.domain, COMMIT_TYPES, { round: open.id, seedHash: open.seedHash }, open.signature, developer);
-    return { round: open.id.toLowerCase(), seedHash: open.seedHash.toLowerCase() };
-  }
-  /** What a settled developer bet was paid and what it is owed, worked out here. The developer's signed settlement says
-   * what it paid, and a bet with terms is owed that: it is its developer's word. A bet with prizes is owed what its
-   * prizes pay on its round's outcome if the developer's accepted casino bet on the round covers it, and its stake
-   * otherwise: the wallet checks the round's seed and secret against the hashes the bet signed, and the casino bet
-   * against the developer's signature. Throws if the settlement is not the developer's, so the wallet signs nothing
-   * it cannot verify. */
-  async developerBetOwed(
-    this: CasinoWallet,
-    receipt: any,
-    bet: PublicDeveloperBet,
-  ): Promise<{
-    payout: bigint;
-    settlement: { player: string; casino: string; signature: string };
-    covered?: boolean;
-    owed?: bigint;
-    outcome?: string;
-    reveal?: { seed: string; secret: string };
-    wouldHavePaid?: bigint;
-  }> {
-    const signed: DeveloperBetDetails = receipt.details.developerBet,
-      developer: string = receipt.game?.developer,
-      hash = hashOperation(this.domain, receipt.proof.step.operation),
-      stake = BigInt(receipt.stake);
-    if (!same(bet.bet, hash) || BigInt(bet.stake) !== stake || !same(bet.developer, developer))
+  /** What a settled developer bet was paid: what its developer's signed settlement says, which is its developer's
+   * word. Throws if the casino describes another bet or the settlement is not the developer's, so the wallet signs
+   * nothing it cannot verify. */
+  developerBetPaid(this: CasinoWallet, receipt: any, bet: PublicDeveloperBet) {
+    const developer: string = receipt.game?.developer,
+      hash = hashOperation(this.domain, receipt.proof.step.operation);
+    if (!same(bet.bet, hash) || BigInt(bet.stake) !== BigInt(receipt.stake) || !same(bet.developer, developer))
       throw new Error('The casino describes another bet');
     const settlement = bet.settlement!;
     assertSignature(
@@ -553,46 +492,11 @@ export class ChannelClient extends WalletTransactions {
       settlement?.signature,
       developer,
     );
-    const paid = { payout: BigInt(settlement.player), settlement: plain(settlement) };
-    if (!('prizes' in signed)) return paid;
-    const round: Round = await this.api(`/api/rounds/${signed.round}`);
-    if (!same(round?.id, signed.round)) throw new Error('The casino describes another round');
-    // A round not yet revealed covers nothing yet: paying the stake back returns the bet.
-    if (round.status !== 'revealed') return { ...paid, covered: false, owed: stake };
-    const { seed, secret, casinoBet } = round;
-    if (!bytes32(seed) || !same(seedHash(seed), signed.seedHash))
-      throw new Error("The round's seed is not the one its developer committed to");
-    if (!bytes32(secret) || !same(roundId(secret), signed.round)) throw new Error("The round's secret is not its own");
-    if (!casinoBet) throw new Error('The round was revealed without its casino bet');
-    assertSignature(
-      this.domain,
-      BANK_CASINO_BET_TYPES,
-      {
-        round: signed.round,
-        game: casinoBet.game,
-        stake: casinoBet.stake,
-        prizes: casinoBet.prizes,
-        covers: casinoBet.covers,
-      },
-      casinoBet.signature,
-      developer,
-    );
-    const result = outcome(signed.prizes, seed, secret),
-      covered = casinoBet.accepted === true && casinoBet.covers.some(cover => same(cover, hash));
-    return {
-      ...paid,
-      covered,
-      owed: covered ? result.payout : stake,
-      outcome: String(result.value),
-      reveal: { seed: seed.toLowerCase(), secret: secret.toLowerCase() },
-      // What an uncovered bet would have paid, beside its stake back: a developer who covers by outcome shows.
-      ...(covered ? {} : { wouldHavePaid: result.payout }),
-    };
+    return { payout: BigInt(settlement.player), settlement: plain(settlement) };
   }
   /** Collect what a developer bet this wallet placed was paid, once its developer settled it. The wallet checks the
-   * settlement and works out what the bet is owed, then signs a credit for what was paid, which raises the open
-   * game's limit if it is the game that placed the bet. The bet's receipt then says what it was paid and owed, and
-   * goes to the game that placed it. */
+   * settlement, then signs a credit for what it pays, which raises the open game's limit if it is the game that
+   * placed the bet. The bet's receipt then says what it was paid, and goes to the game that placed it. */
   async collectDeveloperBet(this: CasinoWallet, hash: string) {
     const tracked = this.developerBets[hash],
       channelId = this.channelId;
@@ -601,7 +505,7 @@ export class ChannelClient extends WalletTransactions {
     if (!receipt) throw new Error('The proof of this bet is missing. Restore the wallet backup that holds it.');
     const bet: PublicDeveloperBet = await this.api(`/api/developer-bets/${hash}`);
     if (bet.status === 'open') return null;
-    const paid = await this.developerBetOwed(receipt, bet);
+    const paid = this.developerBetPaid(receipt, bet);
     await this.exclusive(
       async () => {
         if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
@@ -644,11 +548,6 @@ export class ChannelClient extends WalletTransactions {
       ...receipt,
       payout: paid.payout,
       settlement: paid.settlement,
-      ...(paid.covered === undefined ? {} : { covered: paid.covered }),
-      ...(paid.owed === undefined ? {} : { owed: paid.owed }),
-      ...(paid.outcome === undefined ? {} : { outcome: paid.outcome }),
-      ...(paid.reveal === undefined ? {} : { reveal: paid.reveal }),
-      ...(paid.wouldHavePaid === undefined ? {} : { wouldHavePaid: paid.wouldHavePaid }),
       settledAt: bet.settledAt,
     });
     await this.exclusive(

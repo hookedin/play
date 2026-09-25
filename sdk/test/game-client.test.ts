@@ -80,7 +80,6 @@ test('verified gains and losses move the limit; exact retries by ID never charge
       id: request.id,
       kind: 'casino-bet',
       status: 'settled',
-      basis: 'outcome',
       stake: '10',
       prizes: [prize],
       outcome: receipt.outcome,
@@ -99,7 +98,7 @@ test('verified gains and losses move the limit; exact retries by ID never charge
   assert.equal(f.settlements(), 21);
 });
 
-test("a developer bet with prizes names its developer's round, and reaches the game settled once covered, paid and collected", async () => {
+test("a developer bet carries its game's meta, and reaches the game settled once its developer paid and the wallet collected", async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
@@ -107,17 +106,12 @@ test("a developer bet with prizes names its developer's round, and reaches the g
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
   const round = await f.developer.openRound('eth'),
-    request = { ...terms('spin-1'), round: round.id };
-  // A round whose commitment is not its developer's is refused before the wallet signs anything.
-  const api = w.api.bind(w);
-  w.api = async (...args: [string, unknown?]) => {
-    const value = await api(...args);
-    if (args[0].startsWith('/api/rounds/')) value.seedHash = '0x' + '2'.repeat(64);
-    return value;
-  };
-  await assert.rejects(w.gameDeveloperBet(request), /Invalid signature/);
-  assert.equal(w.pending, null);
-  w.api = api;
+    request = {
+      id: 'spin-1',
+      stake: '10',
+      group: round.id.slice(2),
+      meta: { seedHash: await f.developer.seedHash(round.id), pick: 'red' },
+    };
   const placed = await w.gameDeveloperBet(request);
   assert.match(placed.bet!, /^0x[0-9a-f]{64}$/);
   assert.deepEqual(placed, {
@@ -125,77 +119,50 @@ test("a developer bet with prizes names its developer's round, and reaches the g
     kind: 'developer-bet',
     status: 'open',
     stake: '10',
-    prizes: [prize],
-    round: round.id,
+    meta: request.meta,
+    group: request.group,
     bet: placed.bet,
   });
   assert.equal(w.gameLimit().balance, '990', 'the stake went to the developer');
   assert.equal(f.bank(), 10n ** 12n + 10n, "into the developer's bank");
   assert.deepEqual(await w.gameDeveloperBet(request), placed, 'asking again while it is open');
   await assert.rejects(w.gameDeveloperBet({ ...request, stake: '20' }), /different intent/);
-  const other = await w.gameDeveloperBet({ ...terms('spin-2'), round: round.id });
-  // The developer covers both with one casino bet of them together, which reveals the round.
+  await assert.rejects(w.gameDeveloperBet({ ...request, meta: { pick: 'black' } }), /different intent/);
+  const other = await w.gameDeveloperBet({ ...request, id: 'spin-2' });
+  // The developer backs both with one casino bet of them together, whose meta names them, and which reveals the round.
   const revealed = await f.developer.casinoBet({
     round: round.id,
     stake: '20',
     prizes: [{ ...prize, payout: '40' }],
-    covers: [placed.bet!, other.bet!],
+    meta: { covered: [placed.bet!, other.bet!] },
   });
-  assert.deepEqual([revealed.status, revealed.casinoBet?.accepted], ['revealed', true]);
-  const owed = BigInt(revealed.outcome!) < 9000000000000000000n ? 20n : 0n;
+  assert.deepEqual(
+    [revealed.status, revealed.casinoBet?.accepted, revealed.casinoBet?.meta],
+    ['revealed', true, { covered: [placed.bet, other.bet] }],
+  );
+  const won = BigInt(revealed.outcome!) < 9000000000000000000n ? 20n : 0n;
   await f.developer.settle([
-    { bet: placed.bet!, player: owed, casino: 0n },
-    { bet: other.bet!, player: owed, casino: 0n },
+    { bet: placed.bet!, player: won, casino: 0n },
+    { bet: other.bet!, player: won, casino: 0n },
   ]);
-  // A reveal with any seed but the one its developer committed to is refused before the wallet signs anything.
-  w.api = async (...args: [string, unknown?]) => {
-    const value = await api(...args);
-    if (args[0].startsWith('/api/rounds/')) value.seed = '0x' + '1'.repeat(64);
-    return value;
-  };
-  await assert.rejects(w.collectDeveloperBet(placed.bet!), /committed to/);
-  // So is a list of covered bets its developer did not sign.
-  w.api = async (...args: [string, unknown?]) => {
-    const value = await api(...args);
-    if (args[0].startsWith('/api/rounds/')) value.casinoBet.covers = [placed.bet];
-    return value;
-  };
-  await assert.rejects(w.collectDeveloperBet(other.bet!), /Invalid signature/);
-  assert.equal(w.pending, null);
-  w.api = api;
   await w.collectPayouts();
   const receipt = (await w.gameReceipt('spin-1'))!;
   assert.deepEqual(
-    [receipt.status, receipt.basis, receipt.outcome, receipt.owed, receipt.payout],
-    ['settled', 'outcome', revealed.outcome, String(owed), String(owed)],
+    [receipt.status, receipt.payout, receipt.outcome],
+    ['settled', String(won), undefined],
+    "a developer bet rests on its developer's word",
   );
   assert.deepEqual(
     pushed.map(r => `${r.id} ${r.status}`).sort(),
     ['spin-1 settled', 'spin-2 settled'],
     'the wallet sends the game every bet it collected',
   );
-  assert.equal(w.gameLimit().balance, String(980n + 2n * owed), "what they were paid is the game's");
-  // A revealed round takes no more bets: the wallet signs nothing for it.
-  await assert.rejects(
-    w.gameDeveloperBet({ ...terms('late'), round: round.id }),
-    (error: any) => error.code === 'round-closed',
-  );
-  // A bet signed while its round was open that reaches the casino after the reveal is not covered: it is owed its
-  // stake back, and its receipt shows what it would have paid.
-  w.api = async (...args: [string, unknown?]) =>
-    args[0].startsWith('/api/rounds/') ? { ...(await api(...args)), status: 'open' } : api(...args);
-  const late = await w.gameDeveloperBet({ ...terms('late'), round: round.id });
-  w.api = api;
-  assert.equal(late.status, 'open');
-  await f.developer.settle([{ bet: late.bet!, player: 10n, casino: 0n }]);
-  await w.collectPayouts();
-  const returned = (await w.gameReceipt('late'))!;
-  assert.deepEqual([returned.status, returned.owed, returned.payout], ['returned', '10', '10']);
+  assert.equal(w.gameLimit().balance, String(980n + 2n * won), "what they were paid is the game's");
   // The wallet's own casino bets are unaffected.
   assert.equal((await w.gameCasinoBet(terms('own'))).status, 'settled');
 });
 
-test("the developer's casino bet is taken against the bankroll whole, and one it cannot back covers nothing", async () => {
+test("the developer's casino bet is taken against the bankroll whole, and one it cannot back moves no money", async () => {
   const f = await gameWallet({ bankroll: 200000n }),
     w = f.wallet;
   w.openGame(f.identity());
@@ -207,52 +174,49 @@ test("the developer's casino bet is taken against the bankroll whole, and one it
       rangeEnd: String(((1n << 64n) / 37n) * 4n),
       payout: '3600',
     };
-  const first = await w.gameDeveloperBet({ id: 'first', stake: '100', prizes: [pocket], round: round.id }),
-    second = await w.gameDeveloperBet({ id: 'second', stake: '100', prizes: [pocket], round: round.id });
+  const first = await w.gameDeveloperBet({ id: 'first', stake: '100', meta: { pocket: 3 } }),
+    second = await w.gameDeveloperBet({ id: 'second', stake: '100', meta: { pocket: 3 } });
   assert.deepEqual(
     [first.status, second.status],
     ['open', 'open'],
     'the developer takes developer bets: the bankroll takes only its casino bets',
   );
+  const bank = f.bank();
   const both = await f.developer.casinoBet({
     round: round.id,
     stake: '200',
     prizes: [{ ...pocket, payout: '7200' }],
-    covers: [first.bet!, second.bet!],
+    meta: {},
   });
   assert.deepEqual(
     [both.status, both.casinoBet!.accepted],
     ['revealed', false],
     'the same pocket twice is more than this bankroll backs: declined, and revealed all the same',
   );
+  assert.equal(f.bank(), bank, 'and it moved no money');
   await f.developer.settle([
     { bet: first.bet!, player: 100n, casino: 0n },
     { bet: second.bet!, player: 100n, casino: 0n },
   ]);
   await w.collectPayouts();
-  assert.deepEqual(
-    [(await w.gameReceipt('first'))!.status, (await w.gameReceipt('second'))!.status],
-    ['returned', 'returned'],
-  );
   assert.equal(w.gameLimit().balance, '1000');
   // One of them alone, on a round of its own, is a bet the bankroll backs.
-  const next = await f.developer.openRound('eth'),
-    third = await w.gameDeveloperBet({ id: 'third', stake: '100', prizes: [pocket], round: next.id });
-  const taken = await f.developer.casinoBet({ round: next.id, stake: '100', prizes: [pocket], covers: [third.bet!] });
+  const next = await f.developer.openRound('eth');
+  const taken = await f.developer.casinoBet({ round: next.id, stake: '100', prizes: [pocket], meta: {} });
   assert.equal(taken.casinoBet!.accepted, true);
 });
 
-test('a developer bet with terms is paid what its developer signs, and a game published nowhere takes none', async () => {
+test('a developer bet is paid what its developer signs, and a game published nowhere takes none', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
-  const request = { id: 'ride', stake: '10', terms: { cashout: '2.5' }, group: 'round-7' };
+  const request = { id: 'ride', stake: '10', meta: { cashout: '2.5' }, group: 'round-7' };
   const placed = await w.gameDeveloperBet(request);
   assert.deepEqual(
-    [placed.status, placed.group, placed.terms, placed.payout],
+    [placed.status, placed.group, placed.meta, placed.payout],
     ['open', 'round-7', { cashout: '2.5' }, undefined],
   );
   assert.equal(w.gameLimit().balance, '990');
@@ -272,9 +236,9 @@ test('a developer bet with terms is paid what its developer signs, and a game pu
   await w.collectPayouts();
   const receipt = (await w.gameReceipt('ride'))!;
   assert.deepEqual(
-    [receipt.status, receipt.basis, receipt.payout, receipt.outcome],
-    ['settled', 'developer', '25', undefined],
-    "a bet with terms rests on its developer's word",
+    [receipt.status, receipt.payout, receipt.outcome],
+    ['settled', '25', undefined],
+    "a developer bet rests on its developer's word",
   );
   assert.deepEqual(pushed, [receipt]);
   assert.equal(w.gameLimit().balance, '1015');
@@ -289,8 +253,8 @@ test("settlements the developer's bank cannot pay are refused whole, and the bet
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
-  const won = await w.gameDeveloperBet({ id: 'won', stake: '10', terms: {} }),
-    lost = await w.gameDeveloperBet({ id: 'lost', stake: '10', terms: {} });
+  const won = await w.gameDeveloperBet({ id: 'won', stake: '10', meta: {} }),
+    lost = await w.gameDeveloperBet({ id: 'lost', stake: '10', meta: {} });
   assert.equal(f.bank(), 25n, "both stakes went into the developer's bank");
   await assert.rejects(
     f.developer.settle([{ bet: won.bet!, player: 30n, casino: 0n }]),
@@ -308,7 +272,7 @@ test('settled developer bets are found through the account feed, zero payouts ar
     game = f.identity();
   w.openGame(game);
   await w.setGameLimit('1000');
-  const place = async (id: string) => (await w.gameDeveloperBet({ id, stake: '10', terms: {} })).bet!;
+  const place = async (id: string) => (await w.gameDeveloperBet({ id, stake: '10', meta: {} })).bet!;
   const waiting = await place('waiting'),
     returned = await place('return'),
     lost = await place('loss');
@@ -354,8 +318,8 @@ test('encrypted backups retain every open developer bet beyond recent history', 
     game = f.identity();
   w.openGame(game);
   await w.setGameLimit('1000');
-  await w.gameDeveloperBet({ id: 'a', stake: '10', terms: {} });
-  await w.gameDeveloperBet({ id: 'b', stake: '20', terms: {} });
+  await w.gameDeveloperBet({ id: 'a', stake: '10', meta: {} });
+  await w.gameDeveloperBet({ id: 'b', stake: '20', meta: {} });
   for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
   const password = 'long bet backup passphrase',
     backup = await w.encryptedBackup(password);
@@ -392,27 +356,12 @@ test('a game learns how its operations ended and never whose they were', async (
   await reply(w.gameInfo());
   await reply(w.gameLimit());
   await reply(w.gameCasinoBet(terms('own')));
-  await reply(w.gameDeveloperBet({ id: 'seat', stake: '10', terms: { seat: 1 } }));
+  await reply(w.gameDeveloperBet({ id: 'seat', stake: '10', meta: { seat: 1 } }));
   await f.developer.settle([{ bet: replies.at(-1).bet, player: 10n, casino: 0n }]);
   await w.collectPayouts();
   await reply(w.gamePayment({ id: 'pay', amount: '1' }));
   for (const id of ['own', 'seat', 'pay']) await reply(w.gameReceipt(id));
-  const fields = [
-    'id',
-    'kind',
-    'status',
-    'basis',
-    'stake',
-    'prizes',
-    'group',
-    'terms',
-    'round',
-    'bet',
-    'outcome',
-    'owed',
-    'payout',
-    'reason',
-  ];
+  const fields = ['id', 'kind', 'status', 'stake', 'prizes', 'group', 'meta', 'bet', 'outcome', 'payout', 'reason'];
   for (const r of replies.filter(r => r.status))
     assert.deepEqual(
       Object.keys(r).filter(key => !fields.includes(key)),
@@ -544,7 +493,7 @@ test('the bridge validates game requests without revisions or checkpoints', () =
     { ...terms(), group: 'x'.repeat(65) },
     { ...terms(), round },
     { ...terms(), deadline: 1 },
-    { id: 'r', stake: '10', terms: { pick: 'home' }, deadline: 1 },
+    { id: 'r', stake: '10', meta: { pick: 'home' } },
   ])
     assert.throws(() => valid('game.casinoBet', params));
   for (const params of [
@@ -552,17 +501,18 @@ test('the bridge validates game requests without revisions or checkpoints', () =
     { ...terms(), deadline: 1 },
     { ...terms(), round: '0x1' },
     { ...terms(), round, deadline: 1 },
-    { ...terms(), round, terms: {} },
-    { id: 'r', stake: '10', terms: {}, deadline: 1 },
-    { id: 'r', stake: '10', terms: [] },
-    { id: 'r', stake: '10', terms: {}, round },
+    { ...terms(), meta: {} },
+    { id: 'r', stake: '10' },
+    { id: 'r', stake: '10', terms: {} },
+    { id: 'r', stake: '10', meta: {}, deadline: 1 },
+    { id: 'r', stake: '10', meta: [] },
+    { id: 'r', stake: '10', meta: {}, round },
   ])
     assert.throws(() => valid('game.developerBet', params));
   assert.equal(valid('game.casinoBet', terms()), 'game.casinoBet');
   assert.equal(valid('game.casinoBet', { ...terms(), group: 'hand-1' }), 'game.casinoBet');
-  assert.equal(valid('game.developerBet', { ...terms(), round }), 'game.developerBet');
   assert.equal(
-    valid('game.developerBet', { id: 'r', stake: '10', terms: { pick: 'home' }, group: 'match-9' }),
+    valid('game.developerBet', { id: 'r', stake: '10', meta: { pick: 'home' }, group: 'match-9' }),
     'game.developerBet',
   );
   for (const id of ['1', -1, 1.5])

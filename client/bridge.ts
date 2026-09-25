@@ -1,5 +1,5 @@
 import { gameAmount, gameOperationKey } from './game-account.ts';
-import { LIMITS, MAX_GROUP } from '../protocol/protocol.ts';
+import { LIMITS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
 /** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
 export const METHODS = [
   'wallet.hello',
@@ -18,6 +18,8 @@ const MAX_QUEUE = 32;
 /** An error a game can act on: `code` is stable, the message is for people. */
 export const gameError = (code: string, message: string) => Object.assign(new Error(message), { code });
 const invalid = (message: string) => gameError('invalid-request', message);
+/** What a developer bet's meta must be, as the protocol checks it before anything is signed. */
+export const META = `A developer bet's meta is a JSON object of up to ${MAX_META_BYTES} bytes, whose numbers are whole.`;
 /** A code is the wallet's own or the casino's; anything else, such as a library's, is a plain failure. */
 const errorCode = (error: any) =>
   typeof error?.code === 'string' && /^[a-z][a-z-]{0,39}$/.test(error.code) ? error.code : 'failed';
@@ -83,7 +85,7 @@ function validate(data: any) {
   } else {
     const fields = {
       'game.casinoBet': ['id', 'stake', 'prizes', 'group'],
-      'game.developerBet': ['id', 'stake', 'prizes', 'round', 'terms', 'group'],
+      'game.developerBet': ['id', 'stake', 'meta', 'group'],
       'game.payment': ['id', 'amount', 'group'],
       'game.receipt': ['id'],
     }[data.method as string]!;
@@ -96,16 +98,9 @@ function validate(data: any) {
     )
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
     // A casino bet settles now against the bankroll, on the player's own round. A developer bet is its developer's
-    // to settle: with prizes on the developer's round it names, or with terms on the developer's word.
+    // to settle, on its developer's word: its meta is the game's own, which the casino keeps and never reads.
     if (data.method === 'game.casinoBet') validatePrizes(params.prizes);
-    if (data.method === 'game.developerBet') {
-      if (params.terms === undefined) {
-        validatePrizes(params.prizes);
-        if (typeof params.round !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.round))
-          throw new Error("A developer bet with prizes names the developer's round it rides.");
-      } else if (!object(params.terms) || params.prizes !== undefined || params.round !== undefined)
-        throw new Error('A developer bet with terms has no prizes or round.');
-    }
+    if (data.method === 'game.developerBet' && !validMeta(params.meta)) throw new Error(META);
   }
   return { ...data, params };
 }

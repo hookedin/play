@@ -2,7 +2,6 @@ import { formatEther } from 'ethers';
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
 import { activityJSON } from './activity.ts';
-import { developerBetStatus } from './game-account.ts';
 
 /**
  * One settled bet, however it was read: from this wallet's own receipt, or from a game's public
@@ -23,7 +22,7 @@ export interface BetRow {
   group?: string;
   stake: bigint;
   payout: bigint;
-  /** The bet's expected payout, out of 2^64 stakes: what its own prize table was worth. A bet with terms
+  /** The bet's expected payout, out of 2^64 stakes: what its own prize table was worth. A developer bet
    * has no prize table, so nothing says what it was worth. */
   expected: bigint | null;
   /** The most the bet could pay, when the reader knows it. */
@@ -115,7 +114,7 @@ export function totalCards(byAsset: Map<string, BetTotals>) {
         element(
           'p',
           '',
-          `What these bets' own prize tables were worth${totals.priced < totals.staked ? ", where a bet had one: a developer's word is priced by no table" : ''}. ` +
+          `What these bets' own prize tables were worth${totals.priced < totals.staked ? ', where a bet had one: a developer bet has none' : ''}. ` +
             `They paid back ${realised === null ? '—' : percent(realised)}: ` +
             `${formatEther(totals.paid)} ${unit} for ${formatEther(totals.staked)} ${unit} staked.`,
         ),
@@ -270,9 +269,9 @@ const factList = (rows: readonly (readonly [string, string | Node] | null | fals
 };
 
 /**
- * One of this wallet's own bets, whole: the prize table it rode drawn across the outcome space,
- * where its round landed in that space, and the seed and secret that fixed it; for a developer bet, how its
- * developer settled it. Every derived figure is worked out here from the receipt's own preimages, so it is
+ * One of this wallet's own bets, whole: for a casino bet, the prize table it rode drawn across the outcome space,
+ * where its round landed in that space, and the seed and secret that fixed it; for a developer bet, what it was and
+ * how its developer settled it. Every derived figure is worked out here from the receipt's own preimages, so it is
  * checked in front of the player rather than repeated back from what the casino said.
  */
 export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
@@ -281,17 +280,11 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     receipt = row.receipt ?? {},
     step = receipt.proof?.step,
     op = step?.operation,
-    developerBet = receipt.details?.developerBet,
-    // A developer bet with prizes keeps its prizes, round and seed hash in its details, and the seed and secret that
-    // revealed its round on its receipt; a casino bet keeps them all in its operation.
-    revealed = developerBet?.prizes
-      ? receipt.reveal && {
-          prizes: developerBet.prizes,
-          round: developerBet.round,
-          seedHash: developerBet.seedHash,
-          ...receipt.reveal,
-        }
-      : op && step && !developerBet
+    developerBet = receipt.kind === 'developer-bet',
+    // A casino bet keeps its prizes, its round and the hash of its seed in its operation, and the seed and secret
+    // that settled it in its step.
+    revealed =
+      op && step && !developerBet
         ? { prizes: op.prizes, seed: step.seed, secret: step.secret, round: op.round, seedHash: op.seedHash }
         : null,
     prizes: { start: bigint; end: bigint; payout: bigint }[] = (
@@ -304,9 +297,6 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     // Both preimages are here, so the round's outcome is worked out again from nothing but them.
     result = revealed?.seed && revealed.secret ? outcome(revealed.prizes, revealed.seed, revealed.secret) : null,
     landed = result ? result.value : null,
-    // What the prizes pay on the outcome: a casino bet's payout; a developer bet's if its developer covered it, and
-    // what it would have paid if not.
-    prizesPaid = developerBet ? (receipt.covered ? receipt.owed : receipt.wouldHavePaid) : receipt.payout,
     body = document.createDocumentFragment();
 
   const when = new Date(row.at);
@@ -314,15 +304,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     element(
       'p',
       'bet-detail-when',
-      `${
-        developerBet && receipt.settlement && developerBetStatus(receipt) === 'returned'
-          ? 'Returned'
-          : net > 0n
-            ? 'Won'
-            : net < 0n
-              ? 'Lost'
-              : 'Broke even'
-      } ${signed(net, unit)}` + (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`),
+      `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Broke even'} ${signed(net, unit)}` +
+        (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`),
     ),
   );
   const figures = element('div', 'bet-detail-figures');
@@ -339,26 +322,15 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
   body.append(figures);
 
   if (developerBet && receipt.settlement) {
-    // A developer bet is settled by its developer, from their bank: with terms on their word, with prizes on what
-    // the round's outcome says, which the wallet checked.
-    const standing = developerBetStatus(receipt);
+    // A developer bet is settled by its developer, from their bank, on their word.
     const settled = detailSection(
       'How it settled',
-      developerBet.terms
-        ? 'The game’s developer signed what this bet paid you and what it gave the casino, from their bank. Your wallet checked the signature before it collected.'
-        : standing === 'shorted'
-          ? 'The game’s developer paid less than this bet is owed on its round’s outcome. The developer’s signed settlement and its signed casino bet on the round are the proof, and your wallet keeps them.'
-          : standing === 'returned'
-            ? 'The game’s developer did not cover this bet with its casino bet on the round, so it is owed its stake back, which the developer paid.'
-            : 'The game’s developer covered this bet with its casino bet on the round, so it is owed what its prizes pay on the outcome, which the developer paid.',
+      'The game’s developer signed what this bet paid you and what it gave the casino, from their bank. Your wallet checked the signature before it collected.',
     );
     settled.append(
       factList([
         ['Developer', hex(receipt.game?.developer)],
-        developerBet.terms
-          ? ['Terms you signed', element('code', 'bet-detail-hex', JSON.stringify(developerBet.terms))]
-          : null,
-        receipt.owed === undefined ? null : ['Owed to you', `${formatEther(receipt.owed)} ${unit}`],
+        ['The bet you signed', element('code', 'bet-detail-hex', JSON.stringify(receipt.details?.meta))],
         ['Paid to you', `${formatEther(receipt.settlement.player)} ${unit}`],
         ['Given to the casino', `${formatEther(receipt.settlement.casino)} ${unit}`],
         ['The developer’s signature', hex(receipt.settlement.signature)],
@@ -366,8 +338,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     );
     body.append(settled);
   }
-  if (developerBet?.terms) {
-    // A bet with terms has no prize table and no round.
+  if (developerBet) {
+    // A developer bet has no prize table and no round.
   } else if (!prizes.length || landed === null) {
     body.append(
       element(
@@ -446,15 +418,12 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     if (revealed && result) {
       const how = detailSection(
         'How the outcome was fixed',
-        developerBet
-          ? 'The casino named the developer’s round by publishing the hash of its secret, and the game’s developer committed to the hash of its seed, both before you bet. ' +
-              'Your bet named both, so its outcome was fixed before it was placed, and nobody can change it.'
-          : 'The casino fixed the round by publishing the hash of its secret, and your bet named the hash of its seed. ' +
-              'Neither side could see the outcome while choosing, and neither can change it afterwards.',
+        'The casino fixed the round by publishing the hash of its secret, and your bet named the hash of its seed. ' +
+          'Neither side could see the outcome while choosing, and neither can change it afterwards.',
       );
       how.append(
         factList([
-          [developerBet ? 'The developer’s seed' : 'Your seed', hex(revealed.seed)],
+          ['Your seed', hex(revealed.seed)],
           [
             'Hashes to the seed hash your bet named',
             rederived(
@@ -484,7 +453,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
             'Its lowest 64 bits are the outcome',
             rederived(
               `${result!.value} · 0x${result!.value.toString(16)}`,
-              prizesPaid === undefined || result!.payout === BigInt(prizesPaid),
+              receipt.payout === undefined || result!.payout === BigInt(receipt.payout),
               'The outcome the prizes were read against, and what they pay on it',
             ),
           ],

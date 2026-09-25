@@ -50,19 +50,13 @@ export interface Details {
   /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a settled developer
    * bet, a developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
-  /** A developer bet: a debit that names its game, whose stake goes to the bank of the game's developer, who settles
-   * it. */
-  developerBet?: DeveloperBetDetails;
+  /** A developer bet's meta: the game's own JSON, saying what the bet is, which the casino keeps and never reads. A
+   * debit that names its game and carries meta is a developer bet: a bet against the game's developer, whose bank
+   * takes the stake at once and who settles it when they choose. */
+  meta?: Record<string, unknown>;
 }
 /** Prizes on the wire: decimal strings. */
 export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string }[];
-/** A developer bet: a bet against its game's developer, who takes its stake into their bank at once and settles it
- * when they choose. The player trusts the developer to pay. With `prizes` it is provably fair: it names one of the
- * developer's rounds and the hash of the seed the developer committed to it, so its outcome is fixed before it is
- * placed, and what it is owed follows from its prizes and the developer's casino bet on that round. With `terms` it
- * is owed what the developer's signed settlement says. */
-export type DeveloperBetDetails =
-  { round: string; seedHash: string; prizes: WirePrizes } | { terms: Record<string, unknown> };
 /** A developer bet, as anyone may read it by its hash (the hash of the operation that placed it). */
 export interface PublicDeveloperBet {
   bet: string;
@@ -77,13 +71,8 @@ export interface PublicDeveloperBet {
   stake: string;
   placedAt: number;
   status: 'open' | 'settled';
-  /** A developer bet with prizes: the developer's round it names, the hash of the seed the developer committed to
-   * that round, and its prizes. */
-  round?: string;
-  seedHash?: string;
-  prizes?: WirePrizes;
-  /** A developer bet with terms. */
-  terms?: Record<string, unknown>;
+  /** The game's own JSON, as the player signed it. */
+  meta: Record<string, unknown>;
   /** Once settled: the developer's signed settlement, what it pays the player and gives the casino. */
   settlement?: { player: string; casino: string; signature: string };
   settledAt?: number;
@@ -214,36 +203,31 @@ export interface Submission {
   seed?: string;
 }
 /** A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer in
- * one asset. The developer commits the seed of its casino bet on the round, `seedHash`, with its
- * `Commit(round, seedHash)`, and a developer bet with prizes names the round and the seed hash. The developer's casino
- * bet on the round reveals it: its seed, the casino's secret and their outcome, and the developer bets it covers. */
+ * one asset, for the developer's casino bet. That casino bet reveals it: its seed, the casino's secret and their
+ * outcome, and the casino bet itself. */
 export interface Round {
   id: string;
   developer: string;
   asset: 'eth' | 'test';
   /** `open` until the developer's casino bet on it reveals it. */
   status: 'open' | 'revealed';
-  seedHash?: string;
-  /** The developer's `Commit(round, seedHash)`. */
-  signature?: string;
   seed?: string;
   secret?: string;
   /** The 64-bit outcome of the seed and the secret, once revealed. */
   outcome?: string;
   casinoBet?: DeveloperCasinoBet;
 }
-/** The developer's casino bet on its round, as it signed it (`BankCasinoBet`, with the round's id), and whether the
- * bankroll took it. A developer bet with prizes that names the round is owed what its prizes pay on the round's
- * outcome if this bet was accepted and covers it, and its stake otherwise. */
+/** The developer's casino bet on its round, as it signed it (`BankCasinoBet`, with the round's id and the hash of its
+ * meta), and whether the bankroll took it. */
 export interface DeveloperCasinoBet {
   /** The game whose commission it earns. */
   game: string;
   stake: string;
   prizes: WirePrizes;
-  /** The developer bets it covers, by hash. */
-  covers: string[];
+  /** The developer's own JSON, which the casino keeps with the reveal and never reads. */
+  meta: Record<string, unknown>;
   signature: string;
-  /** Declined, it moved no money and covers nothing. */
+  /** Declined, it moved no money. */
   accepted: boolean;
   /** What it paid the developer's bank, once accepted. */
   payout?: string;

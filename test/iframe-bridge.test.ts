@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachGameBridge, validateRequest } from '../client/bridge.ts';
+import { checkDetails, KIND } from '../protocol/protocol.ts';
 
 const request = (id = 1, method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
 const prize = { rangeStart: '0', rangeEnd: '100', payout: '20' };
@@ -404,24 +405,46 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   ])
     assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
   assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
-  // A casino bet settles now, on the wallet's own round. A developer bet is its developer's to settle: with prizes on
-  // the developer's round it names, or with terms on the developer's word. A group labels any of them.
+  // A casino bet settles now, on the wallet's own round. A developer bet is its developer's to settle, on its word, and
+  // its meta is the game's own. A group labels any of them.
   assert.throws(() => validateRequest(bet({ round: '0x' + '22'.repeat(32) })), /Unexpected/);
-  assert.throws(() => validateRequest(bet({ terms: { pick: 'home' } })), /Unexpected/);
-  const onRound = (overrides: any) =>
-    request(1, 'game.developerBet', { ...params, round: '0x' + '22'.repeat(32), ...overrides });
-  assert.equal(validateRequest(onRound({})).params.round, '0x' + '22'.repeat(32));
-  for (const bad of [{ round: undefined }, { round: '0x22' }])
-    assert.throws(() => validateRequest(onRound(bad)), /round/);
-  assert.throws(() => validateRequest(onRound({ deadline: 1_900_000_000_000 })), /Unexpected/);
+  assert.throws(() => validateRequest(bet({ meta: { pick: 'home' } })), /Unexpected/);
   const onWord = (overrides: any) =>
-    request(1, 'game.developerBet', { id: 'hand-1', stake: '10', terms: { pick: 'home' }, ...overrides });
-  assert.deepEqual(validateRequest(onWord({})).params.terms, { pick: 'home' });
-  for (const bad of [{ prizes: [prize] }, { round: '0x' + '22'.repeat(32) }, { terms: 'home' }, { terms: null }])
-    assert.throws(() => validateRequest(onWord(bad)), /terms has no prizes or round/);
+    request(1, 'game.developerBet', { id: 'hand-1', stake: '10', meta: { pick: 'home' }, ...overrides });
+  assert.deepEqual(validateRequest(onWord({})).params.meta, { pick: 'home' });
+  for (const bad of [{ prizes: [prize] }, { round: '0x' + '22'.repeat(32) }, { terms: {} }])
+    assert.throws(() => validateRequest(onWord(bad)), /Unexpected/);
+  // Its meta is held to the rule the casino holds it to: a JSON object, whole numbers, 4,096 bytes at most.
+  for (const bad of [
+    { meta: 'home' },
+    { meta: null },
+    { meta: ['home'] },
+    { meta: undefined },
+    { meta: { odds: 1.5 } },
+    { meta: { pick: undefined } },
+    { meta: { note: 'x'.repeat(4096) } },
+  ])
+    assert.throws(() => validateRequest(onWord(bad)), /meta is a JSON object/);
+  assert.deepEqual(validateRequest(onWord({ meta: { odds: '1.5', n: 3 } })).params.meta, { odds: '1.5', n: 3 });
   assert.equal(validateRequest(onWord({ group: 'match-9' })).params.group, 'match-9');
   for (const group of ['', 'x'.repeat(65), 7]) assert.throws(() => validateRequest(bet({ group })), /group/);
   assert.throws(() => validateRequest(request(1, 'game.enter', { id: 'hand-1', stake: '10' })), /not available/);
   const safe = Object.assign(Object.create(null), params);
   assert.equal(validateRequest(request(1, 'game.casinoBet', safe)).params.stake, '10');
+});
+
+test('a debit that names a game and carries meta is a developer bet, and nothing else carries meta', () => {
+  const game = '0x' + '1'.repeat(64),
+    fund = '0x' + '2'.repeat(64),
+    id = '0x' + '3'.repeat(64),
+    meta = { pick: 'home' };
+  checkDetails(KIND.debit, { id, game, meta });
+  checkDetails(KIND.debit, { id, game, group: 'match-9', meta });
+  for (const [kind, details] of [
+    [KIND.casinoBet, { id, game, meta }],
+    [KIND.debit, { id, counterparty: fund, meta }],
+    [KIND.credit, { id, counterparty: fund, meta }],
+    [KIND.debit, { id, game, meta: { odds: 1.5 } }],
+  ] as const)
+    assert.throws(() => checkDetails(kind, details as any), /Invalid operation details/);
 });

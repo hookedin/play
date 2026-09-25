@@ -37,37 +37,33 @@ export interface CasinoBetRequest {
   group?: string;
 }
 /** A developer bet: a bet against the game's developer, whose bank takes the stake at once and who settles it when
- * they choose. The player trusts the developer to pay. With `prizes` it names one of the developer's open rounds
- * and is provably fair: it is owed what its prizes pay on the round's outcome if the developer's casino bet on the
- * round covers it, and its stake back otherwise. With `terms` it is owed what the developer says. */
-export type DeveloperBetRequest = { id: string; stake: string; group?: string } & (
-  { prizes: Prizes; round: string } | { terms: Record<string, unknown> }
-);
+ * they choose. `meta` is the game's own JSON, saying what the bet is, which the casino keeps and never reads. The
+ * player trusts the developer to pay, and it is paid what the developer settles. */
+export interface DeveloperBetRequest {
+  id: string;
+  stake: string;
+  meta: Record<string, unknown>;
+  group?: string;
+}
 /** What a game learns about an operation, under its own `id`: how it ended, never the signed evidence.
  * A casino bet or a payment is `settled` (done, and what it paid is in the channel) or `rejected` (declined with
  * a signed checkpoint that leaves the balance unchanged). A developer bet is `rejected` (the casino did not take it),
- * `open` (its stake is with the developer), `settled` (paid what it is owed), `returned` (its developer did not
- * cover it and paid its stake back) or `shorted` (paid less than it is owed, which the wallet can prove). */
+ * `open` (its stake is with the developer) or `settled` (its developer settled it, and the wallet collected what
+ * that pays). A casino bet's payout is its prizes on an outcome the wallet checked; a developer bet's is its
+ * developer's word. */
 export interface GameReceipt {
   id: string;
   kind: 'casino-bet' | 'developer-bet' | 'payment';
-  status: 'settled' | 'rejected' | 'open' | 'returned' | 'shorted';
-  /** What a settled developer bet's payout rests on: `outcome`, its prizes on its round's revealed outcome, which the
-   * wallet checked; or `developer`, a bet with terms, settled on its developer's word. */
-  basis?: 'outcome' | 'developer';
-  /** A bet's terms, as it was placed. */
+  status: 'settled' | 'rejected' | 'open';
+  /** A bet as it was placed: its stake, and a casino bet's prizes or a developer bet's meta. */
   stake?: string;
   prizes?: Prizes;
-  terms?: Record<string, unknown>;
-  round?: string;
+  meta?: Record<string, unknown>;
   group?: string;
   /** A developer bet: the hash that names it at the casino and to its developer. */
   bet?: string;
-  /** A bet with prizes, once its round is revealed: the round's 64-bit outcome. */
+  /** A casino bet, once its round is revealed: the round's 64-bit outcome. */
   outcome?: string;
-  /** A developer bet with prizes, once settled: what it is owed, its prizes' payout if the developer covered it and
-   * its stake if not. */
-  owed?: string;
   /** What a settled bet paid. */
   payout?: string;
   reason?: string;

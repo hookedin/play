@@ -18,31 +18,23 @@ test('a developer bet shows its result apart from its collection, and a zero pay
   assert.equal(developerBetSummary(settled).amountLabel, 'Awaiting collection');
   assert.equal(developerBetSummary({ ...settled, payout: '0' }).status, 'Settled · no payout');
   assert.equal(developerBetSummary({ ...settled, collected: true }).status, 'Payout collected');
-  const prizes = { round: '0x' + '3'.repeat(64), seedHash: '0x' + '4'.repeat(64), prizes: [] },
-    receipt = {
-      kind: 'developer-bet',
-      status: 'signed',
-      balance: '100',
-      amount: '10',
-      stake: '10',
-      details: { developerBet: prizes },
-    };
-  assert.equal(receiptSummary(receipt).status, 'Waiting for the developer');
-  assert.equal(receiptSummary(receipt).title, 'Developer bet placed');
-  const covered = { ...receipt, covered: true, owed: '0', payout: '0' };
-  assert.equal(receiptSummary(covered).status, 'Settled · no payout');
-  assert.equal(receiptSummary(covered).title, 'Developer bet lost');
-  const returned = receiptSummary({ ...receipt, covered: false, owed: '10', payout: '10', wouldHavePaid: '20' });
-  assert.deepEqual([returned.status, returned.title], ['Stake returned', 'Developer bet returned']);
-  // Covered, and paid back exactly its stake: it broke even, which is not the same as being returned.
-  const even = receiptSummary({ ...receipt, covered: true, owed: '10', payout: '10' });
+  const receipt = {
+    kind: 'developer-bet',
+    status: 'signed',
+    balance: '100',
+    amount: '10',
+    stake: '10',
+    details: { meta: { pick: 'home' } },
+  };
+  const open = receiptSummary(receipt);
+  assert.deepEqual([open.status, open.title], ['Waiting for the developer', 'Developer bet placed']);
+  assert.match(open.description!, /what it pays is their word/);
+  const lost = receiptSummary({ ...receipt, payout: '0' });
+  assert.deepEqual([lost.status, lost.title], ['Settled · no payout', 'Developer bet lost']);
+  const even = receiptSummary({ ...receipt, payout: '10' });
   assert.deepEqual([even.status, even.title], ['Payout collected', 'Developer bet broke even']);
-  assert.match(returned.description!, /would have paid 0\.00000000000000002 ETH on its round’s outcome/);
-  const shorted = receiptSummary({ ...receipt, covered: true, owed: '30', payout: '12' });
-  assert.deepEqual([shorted.status, shorted.tone], ['Paid short', 'negative']);
-  assert.match(shorted.description!, /your wallet keeps the proof/);
-  const terms = receiptSummary({ ...receipt, details: { developerBet: { terms: { pick: 'home' } } }, payout: '25' });
-  assert.deepEqual([terms.status, terms.title], ['Payout collected', 'Developer bet won']);
+  const won = receiptSummary({ ...receipt, payout: '25' });
+  assert.deepEqual([won.status, won.title], ['Payout collected', 'Developer bet won']);
 });
 
 test('bet summaries show the payout against the stake and retain exact wei amounts', () => {

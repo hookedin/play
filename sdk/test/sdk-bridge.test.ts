@@ -78,13 +78,13 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
     const calls = [
       HookedIn.payment('pay', '5', 'hand-1'),
-      HookedIn.developerBet({ id: 'seat', stake: '5', terms: { seat: 2 } }),
+      HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } }),
     ];
     assert.deepEqual(
       posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
         { method: 'game.payment', params: { id: 'pay', amount: '5', group: 'hand-1' } },
-        { method: 'game.developerBet', params: { id: 'seat', stake: '5', terms: { seat: 2 } } },
+        { method: 'game.developerBet', params: { id: 'seat', stake: '5', meta: { seat: 2 } } },
       ],
     );
     for (const { id } of posted.slice(-2)) deliver(parent, { hookedin: true, id, result: id });

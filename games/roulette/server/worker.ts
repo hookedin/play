@@ -5,7 +5,7 @@
  */
 import { createDeveloper } from '@hookedin/play/sdk/developer';
 import { Wheel } from './wheel.ts';
-import type { WheelState } from './wheel.ts';
+import type { KeptSpin, WheelState } from './wheel.ts';
 
 interface Env {
   ASSETS: Fetcher;
@@ -42,6 +42,8 @@ export class RouletteWheel implements DurableObject {
           asset: assetOf(url),
           now: () => Date.now(),
           save: state => this.ctx.storage.put('state', state),
+          keep: spin => this.ctx.storage.put(`spin:${spin.round}`, spin),
+          kept: round => this.ctx.storage.get<KeptSpin>(`spin:${round}`),
           wake: at => void this.ctx.storage.setAlarm(at),
         },
         await this.ctx.storage.get<WheelState>('state'),
@@ -57,6 +59,12 @@ export class RouletteWheel implements DurableObject {
       const wheel = await this.open(url);
       if (url.pathname === '/api/table' && request.method === 'GET') return Response.json(await wheel.view());
       if (url.pathname === '/api/table/placed' && request.method === 'POST') return Response.json(await wheel.placed());
+      // Every spin the wheel kept, with the bets its casino bet covered, for anyone to check.
+      const spin = /^\/api\/spins\/(0x[0-9a-fA-F]{64})$/.exec(url.pathname);
+      if (spin && request.method === 'GET') {
+        const kept = await wheel.kept(spin[1]!);
+        if (kept) return Response.json(kept);
+      }
       return Response.json({ error: 'Not found' }, { status: 404 });
     } catch (error: any) {
       return Response.json({ error: error.message || 'The wheel is unavailable' }, { status: 503 });

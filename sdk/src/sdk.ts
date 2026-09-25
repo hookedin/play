@@ -20,10 +20,8 @@ export interface WalletLimits {
   prizes: number;
   /** The size of the outcome space, as a decimal string: a prize range lies within [0, this). */
   outcomeSpace: string;
-  /** The most developer bets one developer's casino bet covers, and one batch of settlements settles. */
-  covers: number;
-  /** The most a developer bet's terms take, as canonical JSON, and the longest group label. */
-  terms: number;
+  /** The most a developer bet's meta takes, as canonical JSON, and the longest group label. */
+  meta: number;
   group: number;
 }
 /** What a wallet says when a game page loads: the methods it offers, the money it plays with, and
@@ -48,7 +46,7 @@ export interface WalletInfo {
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
  * `invalid-request`, `unknown-method`, `busy`, `no-channel`, `insufficient-funds`, `pending-operation`,
- * `id-conflict`, `id-used`, `round-closed`, `game-closed` and `failed`; a refusal by the casino carries the
+ * `id-conflict`, `id-used`, `game-closed` and `failed`; a refusal by the casino carries the
  * casino's code. */
 export class HookedInError extends Error {
   code: string;
@@ -223,10 +221,10 @@ export const HookedIn = (() => {
    * enter, and every prize whose range holds the outcome pays. `group` labels bets that belong together, such as
    * the steps of one hand. */
   const casinoBet = (request: CasinoBetRequest): Promise<GameReceipt> => call('game.casinoBet', { ...request });
-  /** A developer bet: a bet against your game's developer, whose bank takes the stake at once and who settles it.
-   * With `prizes` it names one of your developer's open rounds by `round`, and is owed what its prizes pay on the
-   * round's outcome if your developer's casino bet on the round covers it, its stake back if not; with `terms`,
-   * what your developer's settlement says. The receipt says `open`; once it is settled, `onReceipt` hears. */
+  /** A developer bet: a bet against your game's developer, whose bank takes the stake at once and who settles it,
+   * paying what its settlement says. `meta` is your game's own JSON, saying what the bet is: the casino keeps it with
+   * the bet and never reads it, and your developer's server does. The receipt says `open`; once it is settled,
+   * `onReceipt` hears. */
   const developerBet = (request: DeveloperBetRequest): Promise<GameReceipt> =>
     call('game.developerBet', { ...request });
   /** Called with the new receipt whenever one of your developer bets has been settled and the wallet has checked and

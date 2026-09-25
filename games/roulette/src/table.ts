@@ -1,7 +1,8 @@
 /**
- * The roulette table as one bet. A round's outcome is a uniform integer below 2^64; the wheel's 37
- * pockets are 37 stretches of it, so every chip is a prize over the stretches of the numbers it
- * covers, and a player's whole layout is one signed bet. Shared by the page and the wheel's server.
+ * The roulette table as one bet. A round's outcome is a uniform integer below 2^64; the wheel's 37 pockets are 37
+ * stretches of it. A player's whole layout is one developer bet whose meta names its chips, and the wheel adds up
+ * every layout on a spin into one casino bet, whose prizes pay each stretch what the chips on its number pay. Shared
+ * by the page and the wheel's server.
  */
 const SPACE = 1n << 64n,
   WIDTH = SPACE / 37n;
@@ -76,34 +77,32 @@ export function bet(chips: Chips): WireBet {
     prizes: prizesOf(ORDER.map(n => pays.get(n) ?? 0n)),
   };
 }
-/** The edges of the pockets' stretches, where a layout's prizes begin and end. */
-const EDGES = new Set([...ORDER.map((_, i) => BigInt(i) * WIDTH), SPACE]);
-/** What a bet's prizes pay on each pocket, in the order of the outcome space; null if a prize splits a pocket. */
-export function pocketPays(prizes: WireBet['prizes']): bigint[] | null {
-  const pays = ORDER.map(() => 0n);
-  for (const prize of prizes) {
-    const start = BigInt(prize.rangeStart),
-      end = BigInt(prize.rangeEnd);
-    if (!EDGES.has(start) || !EDGES.has(end)) return null;
-    pays.forEach((_, i) => {
-      if (BigInt(i) * WIDTH >= start && (i === 36 ? SPACE : BigInt(i + 1) * WIDTH) <= end)
-        pays[i] = pays[i]! + BigInt(prize.payout);
-    });
+/** Chips as a bet's meta carries them: each spot's amount as a decimal string. */
+export const wireChips = (chips: Chips) =>
+  Object.fromEntries(Object.entries(chips).map(([spot, amount]) => [spot, String(amount)]));
+/** The chips a bet's meta names, if they are a layout the wheel takes: known spots and whole amounts that add up to
+ * the bet's stake. The wheel covers nothing else, so no player can sign themselves a better table. */
+export function layout(wire: unknown, stake: string): Chips | null {
+  if (wire === null || typeof wire !== 'object' || Array.isArray(wire)) return null;
+  const chips: Chips = {};
+  for (const [spot, amount] of Object.entries(wire)) {
+    try {
+      covers(spot);
+    } catch {
+      return null;
+    }
+    if (typeof amount !== 'string' || !/^[1-9][0-9]{0,38}$/.test(amount)) return null;
+    chips[spot] = BigInt(amount);
   }
-  return pays;
+  const total = Object.values(chips).reduce((sum, amount) => sum + amount, 0n);
+  return total > 0n && total === BigInt(stake) ? chips : null;
 }
-/** A bet the wheel takes: whole pockets, paying no more over all 37 of them than chips of its stake can, 36 times
- * the stake. The wheel covers nothing else, so no player can sign themselves a better table. */
-export function isLayout(bet: WireBet) {
-  const pays = pocketPays(bet.prizes);
-  return pays !== null && pays.reduce((sum, pay) => sum + pay, 0n) <= 36n * BigInt(bet.stake);
+/** Layouts on one spin as one bet: their chips together, so each pocket pays what they all pay on it. */
+export function together(layouts: readonly Chips[]): WireBet {
+  const all: Chips = {};
+  for (const chips of layouts)
+    for (const [spot, amount] of Object.entries(chips)) all[spot] = (all[spot] ?? 0n) + amount;
+  return bet(all);
 }
-/** Layouts on one spin as one bet: their stakes together, and each pocket paying what they pay on it together. */
-export function together(bets: readonly WireBet[]): WireBet {
-  const pays = ORDER.map(() => 0n);
-  for (const one of bets) pocketPays(one.prizes)!.forEach((pay, i) => (pays[i] = pays[i]! + pay));
-  return {
-    stake: String(bets.reduce((sum, one) => sum + BigInt(one.stake), 0n)),
-    prizes: prizesOf(pays),
-  };
-}
+/** The group every bet on a spin carries: its round's 64 hex digits, so the casino lists a spin's bets together. */
+export const groupOf = (round: string) => round.slice(2).toLowerCase();

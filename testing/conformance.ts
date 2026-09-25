@@ -2,17 +2,15 @@
  * What a game can count on from any casino it runs against, as tests. play runs them against the stub in
  * `game-wallet.ts` and the casino service runs them against itself, so the stub a game is tested with behaves as the
  * casino does wherever a game depends on it: a lost reply, a new channel, a wallet that lost its receipts, a casino
- * bet the bankroll cannot back, a developer bet on its developer's word, a developer that restarts, a developer bet
- * its developer covers, returns or pays short, a casino bet of the developer's the bankroll declines, and a game whose
- * rules changed under a saved round.
+ * bet the bankroll cannot back, a developer bet on its developer's word, a developer that restarts, a casino bet of
+ * the developer's the bankroll declines, and a game whose rules changed under a saved round.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { CasinoWallet } from '../client/wallet.ts';
 import type { GameReceipt } from '../protocol/game-types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
-import { outcome } from '../protocol/protocol.ts';
-import { OUTCOME_SPACE } from '../protocol/risk.ts';
+import { outcome, seedHash } from '../protocol/protocol.ts';
 import type { Developer } from '../sdk/src/developer.ts';
 import type { TestBridge } from './game-wallet.ts';
 import { RoundClient } from '../sdk/src/round.ts';
@@ -135,42 +133,42 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     assert.deepEqual(await x.bridge.call('game.casinoBet', bet), declined);
   });
 
-  test(`${name}: a developer bet with terms is paid what its developer signs, and the game hears`, async t => {
+  test(`${name}: a developer bet is paid what its developer signs, and the game hears`, async t => {
     const x = await open(t),
       developer = await x.developer(),
       before = await x.wallet.balance(),
       placed = await x.bridge.call('game.developerBet', {
         id: 'match',
         stake: x.within.stake,
-        terms: { pick: 'home' },
+        meta: { pick: 'home' },
       });
-    assert.equal(placed.status, 'open');
+    assert.deepEqual([placed.status, placed.meta], ['open', { pick: 'home' }]);
     assert.equal(await x.wallet.balance(), before - BigInt(x.within.stake), 'the stake went to the developer');
     const heard = pushed(x.bridge, 'match');
     await developer.settle([{ bet: placed.bet!, player: 3n * BigInt(x.within.stake), casino: 0n }]);
     await x.bridge.call('game.receipt', { id: 'match' });
     const settled = await heard;
-    assert.deepEqual(
-      [settled.status, settled.basis, settled.payout],
-      ['settled', 'developer', String(3n * BigInt(x.within.stake))],
-    );
+    assert.deepEqual([settled.status, settled.payout], ['settled', String(3n * BigInt(x.within.stake))]);
     assert.equal(await x.wallet.balance(), before + 2n * BigInt(x.within.stake));
   });
 
-  test(`${name}: a developer that restarts places the same casino bet, and the developer bet it covers is paid its prizes`, async t => {
+  test(`${name}: a developer that restarts places the same casino bet, on the seed it published before the bet`, async t => {
     const x = await open(t),
       developer = await x.developer(),
       round = await developer.openRound(x.asset),
-      placed = await x.bridge.call('game.developerBet', { id: 'spin', ...x.within, round: round.id });
-    assert.deepEqual([placed.status, placed.round], ['open', round.id]);
+      committed = await developer.seedHash(round.id),
+      meta = { round: round.id, seedHash: committed, prizes: x.within.prizes },
+      placed = await x.bridge.call('game.developerBet', { id: 'spin', stake: x.within.stake, meta });
+    assert.deepEqual([placed.status, placed.meta], ['open', meta]);
     // The first casino bet's reply never reaches the developer, which restarts and places it again.
-    const bet = { round: round.id, stake: x.within.stake, prizes: x.within.prizes, covers: [placed.bet!] },
+    const bet = { round: round.id, stake: x.within.stake, prizes: x.within.prizes, meta: { covered: placed.bet! } },
       first = await developer.casinoBet(bet),
       again = await (await x.developer()).casinoBet(bet);
     assert.deepEqual(
-      [again.status, again.seed, again.secret, again.outcome, again.casinoBet?.accepted],
-      ['revealed', first.seed, first.secret, first.outcome, true],
+      [again.status, again.seed, again.secret, again.outcome, again.casinoBet?.accepted, again.casinoBet?.meta],
+      ['revealed', first.seed, first.secret, first.outcome, true, bet.meta],
     );
+    assert.equal(seedHash(first.seed!), committed, 'the seed is the one published before the bet');
     const owed = outcome(
       x.within.prizes.map(prize => ({ ...prize })),
       first.seed!,
@@ -180,57 +178,34 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     await developer.settle([{ bet: placed.bet!, player: owed, casino: 0n }]);
     await x.bridge.call('game.receipt', { id: 'spin' });
     const settled = await heard;
-    assert.deepEqual(
-      [settled.status, settled.basis, settled.outcome, settled.owed, settled.payout],
-      ['settled', 'outcome', first.outcome, String(owed), String(owed)],
-    );
+    assert.deepEqual([settled.status, settled.payout], ['settled', String(owed)]);
   });
 
-  test(`${name}: a developer bet its developer does not cover is owed its stake back, and one paid less than it is owed shows`, async t => {
+  test(`${name}: a casino bet of the developer's the bankroll declines reveals its round and moves no money`, async t => {
     const x = await open(t),
       developer = await x.developer(),
       round = await developer.openRound(x.asset),
-      stake = x.within.stake,
-      // Nine tenths of the stake back, whatever the outcome: owed for certain once covered.
-      sure = [{ rangeStart: '0', rangeEnd: String(OUTCOME_SPACE), payout: String((BigInt(stake) * 9n) / 10n) }];
-    const covered = await x.bridge.call('game.developerBet', { id: 'covered', stake, prizes: sure, round: round.id }),
-      uncovered = await x.bridge.call('game.developerBet', { id: 'uncovered', stake, prizes: sure, round: round.id });
-    await developer.casinoBet({ round: round.id, stake, prizes: sure, covers: [covered.bet!] });
-    await developer.settle([
-      { bet: covered.bet!, player: BigInt(stake) / 2n, casino: 0n },
-      { bet: uncovered.bet!, player: stake, casino: 0n },
-    ]);
-    // Asked about one at a time, as a game would: the wallet collects each and sends its receipt.
-    const collect = async (id: string) => {
-      const heard = pushed(x.bridge, id);
-      await x.bridge.call('game.receipt', { id });
-      return heard;
-    };
-    const short = await collect('covered'),
-      returned = await collect('uncovered');
-    assert.deepEqual(
-      [short.status, short.owed, short.payout],
-      ['shorted', String((BigInt(stake) * 9n) / 10n), String(BigInt(stake) / 2n)],
-    );
-    assert.deepEqual([returned.status, returned.owed, returned.payout], ['returned', stake, stake]);
-  });
-
-  test(`${name}: a casino bet of the developer's the bankroll declines reveals its round and covers nothing`, async t => {
-    const x = await open(t),
-      developer = await x.developer(),
-      round = await developer.openRound(x.asset),
-      placed = await x.bridge.call('game.developerBet', { id: 'unbacked', ...x.beyond, round: round.id }),
+      placed = await x.bridge.call('game.developerBet', {
+        id: 'unbacked',
+        stake: x.beyond.stake,
+        meta: { round: round.id },
+      }),
       revealed = await developer.casinoBet({
         round: round.id,
         stake: x.beyond.stake,
         prizes: x.beyond.prizes,
-        covers: [placed.bet!],
+        meta: { covered: placed.bet! },
       });
-    assert.deepEqual([revealed.status, revealed.casinoBet?.accepted], ['revealed', false]);
+    assert.deepEqual(
+      [revealed.status, revealed.casinoBet?.accepted, revealed.casinoBet?.payout],
+      ['revealed', false, undefined],
+    );
+    // The bank still holds the stake the declined casino bet did not take, so the developer can pay it back.
     const heard = pushed(x.bridge, 'unbacked');
     await developer.settle([{ bet: placed.bet!, player: x.beyond.stake, casino: 0n }]);
     await x.bridge.call('game.receipt', { id: 'unbacked' });
-    assert.deepEqual((await heard).status, 'returned');
+    const settled = await heard;
+    assert.deepEqual([settled.status, settled.payout], ['settled', x.beyond.stake]);
   });
 
   test(`${name}: a round saved under rules the game does not play is let go once, and the next one plays`, async t => {

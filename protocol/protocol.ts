@@ -1,6 +1,5 @@
 import type { TypedDataField } from 'ethers';
 import type {
-  DeveloperBetDetails,
   Details,
   GameName,
   WirePrizes,
@@ -85,24 +84,17 @@ export const DEVELOPER_ACCESS_TYPES = {
 };
 /** A developer settles a developer bet on one of its games: `player` is what the player is paid and `casino` what the
  * casino is given, both from the developer's bank, which took the stake when the bet was placed. `bet` is the hash
- * of the operation that placed the developer bet, which signs its prizes or its terms. */
+ * of the operation that placed the developer bet, which signs its meta. */
 export const SETTLEMENT_TYPES = {
   Settlement: fields('bytes32 bet,uint256 player,uint256 casino'),
 };
-/** A developer commits the seed of its casino bet on one of its rounds before any developer bet names the round:
- * `round` is the hash of a secret the casino fixed, and `seedHash` the hash of the developer's seed. A developer bet
- * with prizes names both, so its outcome is fixed before it is placed, and neither the casino nor the developer
- * can see it alone. */
-export const COMMIT_TYPES = {
-  Commit: fields('bytes32 round,bytes32 seedHash'),
-};
-/** A developer's casino bet from its bank, on one of its rounds, with the seed it committed to: settled against
- * the bankroll at once, it reveals the round. `covers` are the developer bets that name the round and are owed what
- * their prizes pay on its outcome: every other developer bet on the round is owed its stake back. The developer names
- * them in the same request that reveals the outcome, so it names them before anybody can know it. `game` is the one
- * whose commission it earns. */
+/** A developer's casino bet from its bank, on one of its rounds: settled against the bankroll at once, it reveals the
+ * round. Like every casino bet it signs the hash of the seed it brings, so only that seed settles it. `meta` is the
+ * hash of its meta, the developer's own JSON, which the casino keeps with the reveal and never reads: whatever the
+ * developer commits to there, it committed to before the outcome was revealed. `game` is the one whose commission it
+ * earns. */
 export const BANK_CASINO_BET_TYPES = {
-  BankCasinoBet: fields('bytes32 round,bytes32 game,uint256 stake,Prize[] prizes,bytes32[] covers'),
+  BankCasinoBet: fields('bytes32 round,bytes32 game,uint256 stake,Prize[] prizes,bytes32 seedHash,bytes32 meta'),
   Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
 };
 /** The `authorization` header carrying a signed `Access` or `DeveloperAccess` message. */
@@ -307,10 +299,10 @@ export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
 export const MAX_GROUP = 64;
-/** The most a developer bet's terms take, as canonical JSON. */
-export const MAX_TERMS_BYTES = 4096;
-/** The most developer bets one developer's casino bet covers, and one batch of settlements settles. */
-export const MAX_COVERS = 256;
+/** The most a bet's meta takes, as canonical JSON. */
+export const MAX_META_BYTES = 4096;
+/** The most developer bets one request settles, and one page lists. */
+export const MAX_DEVELOPER_BETS = 256;
 /** The most payouts one reply lists. A wallet collects them, and the next reply lists the rest. */
 export const MAX_PAYOUTS = 256;
 /** Every bound a bet is held to, as the wallet reports it to a game and the casino to a developer. They are part
@@ -320,31 +312,29 @@ export const LIMITS = {
   prizes: MAX_PRIZES,
   /** The size of the space a prize range lies in, as a decimal string. */
   outcomeSpace: String(OUTCOME_SPACE),
-  /** The most developer bets one developer's casino bet covers, and one batch of settlements settles. */
-  covers: MAX_COVERS,
-  /** The most a developer bet's terms take as canonical JSON, and the longest group label. */
-  terms: MAX_TERMS_BYTES,
+  /** The most a bet's meta takes as canonical JSON, and the longest group label. */
+  meta: MAX_META_BYTES,
   group: MAX_GROUP,
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
- * developer bet, which alone says how it is settled) or what it pays into (an investment, a bank deposit); a credit
+ * developer bet, whose meta alone says what it is) or what it pays into (an investment, a bank deposit); a credit
  * what it collects from. Only what names a game carries a group. Every field is in one form, so one meaning has
  * one memo. */
 export function checkDetails(kind: number, details: Details) {
-  const { game, group, developerBet } = details ?? {},
+  const { game, group, meta } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
   const named = typeof game === 'string' && bytes32Pattern.test(game);
   const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
   if (
-    !keys.every(key => ['id', 'game', 'group', 'counterparty', 'developerBet'].includes(key)) ||
+    !keys.every(key => ['id', 'game', 'group', 'counterparty', 'meta'].includes(key)) ||
     typeof details.id !== 'string' ||
     !bytes32Pattern.test(details.id) ||
     (game !== undefined && !named) ||
     (details.counterparty !== undefined && !counterparty) ||
     (group !== undefined && (!named || typeof group !== 'string' || !group.length || group.length > MAX_GROUP)) ||
-    (developerBet !== undefined && (!named || !validDeveloperBet(developerBet))) ||
+    (meta !== undefined && (!named || !validMeta(meta))) ||
     !(kind === KIND.casinoBet
-      ? named && !counterparty && developerBet === undefined
+      ? named && !counterparty && meta === undefined
       : kind === KIND.debit
         ? named !== counterparty
         : kind === KIND.credit && counterparty && !named)
@@ -375,26 +365,12 @@ export function validPrizes(prizes: unknown): prizes is WirePrizes {
     )
   );
 }
-/** A developer bet in its one form: either the developer's round it names, the hash of the seed committed to it and
- * prizes, or terms that are a JSON object. */
-function validDeveloperBet(developerBet: DeveloperBetDetails) {
-  if (developerBet === null || typeof developerBet !== 'object') return false;
-  if ('prizes' in developerBet)
-    return (
-      only(developerBet, ['round', 'seedHash', 'prizes']) &&
-      bytes32Pattern.test(developerBet.round) &&
-      bytes32Pattern.test(developerBet.seedHash) &&
-      validPrizes(developerBet.prizes)
-    );
-  if (
-    !only(developerBet, ['terms']) ||
-    developerBet.terms === null ||
-    typeof developerBet.terms !== 'object' ||
-    Array.isArray(developerBet.terms)
-  )
-    return false;
+/** Meta in its one form, a developer bet's and a developer's casino bet's alike: a JSON object of up to
+ * `MAX_META_BYTES` of canonical JSON, whose numbers are whole. The casino keeps it and never reads it. */
+export function validMeta(meta: unknown): meta is Record<string, unknown> {
+  if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) return false;
   try {
-    return toUtf8Bytes(canonicalJSON(developerBet.terms)).length <= MAX_TERMS_BYTES;
+    return toUtf8Bytes(canonicalJSON(meta)).length <= MAX_META_BYTES;
   } catch {
     return false;
   }
@@ -583,7 +559,6 @@ export const PROTOCOL = id(
     ACCESS_TYPES,
     DEVELOPER_ACCESS_TYPES,
     SETTLEMENT_TYPES,
-    COMMIT_TYPES,
     BANK_CASINO_BET_TYPES,
     SHARE_TYPES,
     FUND_TYPES,
@@ -598,10 +573,10 @@ export const PROTOCOL = id(
       limits: LIMITS,
     }),
 );
-/** What a developer's server shares with the casino, and nothing more: the four structures it signs, the outcome
+/** What a developer's server shares with the casino, and nothing more: the three structures it signs, the outcome
  * and the limits. A change to what only a wallet signs leaves it alone, so it does not stop every developer. */
 export const DEVELOPER_PROTOCOL = id(
-  encoded([DEVELOPER_ACCESS_TYPES, COMMIT_TYPES, SETTLEMENT_TYPES, BANK_CASINO_BET_TYPES]) +
+  encoded([DEVELOPER_ACCESS_TYPES, SETTLEMENT_TYPES, BANK_CASINO_BET_TYPES]) +
     canonicalJSON({ outcome: OUTCOME_TAG, limits: LIMITS }),
 );
 /** A wallet checks `protocol` in the casino's `GET /api/config`, and a developer's server `developerProtocol`. */

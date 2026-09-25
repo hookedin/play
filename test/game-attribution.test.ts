@@ -33,12 +33,12 @@ test('activity stays newest first when an earlier receipt is written again', asy
   await w.gameCasinoBet(terms('bet-b'));
   // A receipt rewritten later keeps its own place in time.
   const first: any = w.history.find((r: any) => r.game?.id === 'bet-a');
-  await w.save({ ...first, note: 'revealed later' });
+  await w.save({ ...first, note: 'collected later' });
   const times = w.history.map((r: any) => r.createdAt ?? 0);
   assert.deepEqual(
     times,
     [...times].sort((a: number, b: number) => b - a),
     'newest first by the clock',
   );
-  assert.equal(w.history.find((r: any) => r.game?.id === 'bet-a').note, 'revealed later');
+  assert.equal(w.history.find((r: any) => r.game?.id === 'bet-a').note, 'collected later');
 });

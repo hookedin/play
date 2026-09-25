@@ -1306,7 +1306,7 @@ function renderAccount(name: string | null) {
     : 'No channel open yet';
   $('account-games-note').textContent = `${games.size} played · ${wallet.profile?.games?.length ?? 0} published`;
   $('account-bets-note').textContent = mine
-    ? `${mine.bets} ${unitOf(unit)} bets · ${percent(measuredReturn(mine.staked, mine.expected) ?? 0n)} expected`
+    ? `${mine.bets} ${unitOf(unit)} bets · ${mine.priced ? percent(measuredReturn(mine.priced, mine.expected)!) : '—'} expected`
     : 'No bets yet';
   $('account-bankroll-note').textContent = BigInt(wallet.fund?.shares || 0)
     ? `${formatEther(BigInt(wallet.fund!.shares))} shares held`
@@ -1346,8 +1346,8 @@ function ownBets(): BetRow[] {
       (receipt: any) =>
         receipt.status === 'signed' &&
         ((receipt.kind === 'casino-bet' && receipt.expectedPayout !== undefined) ||
-          // A developer bet is one once what it was paid is collected; a bet its developer returned was never played.
-          (receipt.kind === 'developer-bet' && ['settled', 'shorted'].includes(developerBetStatus(receipt)))),
+          // A developer bet is one once what it was paid is collected.
+          (receipt.kind === 'developer-bet' && developerBetStatus(receipt) === 'settled')),
     )
     .map((receipt: any) => ({
       at: Date.parse(receipt.createdAt),

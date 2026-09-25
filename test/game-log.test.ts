@@ -18,12 +18,8 @@ test('bridge requests summarize their financial terms in one line', () => {
   assert.match(bet, /id round-7/);
   assert.match(bet, /^casino bet · /);
   assert.equal(
-    describeRequest('game.developerBet', { stake: '1', terms: { pick: 'home' }, group: 'match-9', id: 'p' }),
+    describeRequest('game.developerBet', { stake: '1', meta: { pick: 'home' }, group: 'match-9', id: 'p' }),
     "developer bet · stake 0.000000000000000001 ETH · on its developer's word · group match-9 · id p",
-  );
-  assert.match(
-    describeRequest('game.developerBet', { stake: '1', prizes: [], round: '0x' + 'a'.repeat(64), id: 'q' }),
-    /^developer bet · .* · round 0xa{64} · id q$/,
   );
   assert.equal(describeRequest('game.receipt', { id: 'round-7' }), 'id round-7');
   assert.equal(describeRequest('game.requestFunds', {}), 'no suggested amount');
@@ -37,7 +33,6 @@ test('bridge replies summarize outcomes without exposing more than the reply its
       id: 'op-1',
       kind: 'casino-bet',
       status: 'settled',
-      basis: 'outcome',
       payout: '3000',
     }),
     'casino-bet settled · paid 0.000000000000003 ETH · op-1',
@@ -55,7 +50,6 @@ test('bridge replies summarize outcomes without exposing more than the reply its
       id: 'op-4',
       kind: 'developer-bet',
       status: 'settled',
-      basis: 'developer',
       payout: '7',
     }),
     "developer-bet settled · paid 0.000000000000000007 ETH · on its developer's word · op-4",
@@ -63,10 +57,6 @@ test('bridge replies summarize outcomes without exposing more than the reply its
   assert.equal(
     describeResult('game.requestFunds', { funded: true, amount: '10', balance: '10', pending: false }),
     'limit set to 0.00000000000000001 ETH · balance 0.00000000000000001 ETH',
-  );
-  assert.equal(
-    describeResult('game.receipt', { id: 'op-2', kind: 'developer-bet', status: 'shorted', owed: '9', payout: '5' }),
-    'developer-bet shorted · paid 0.000000000000000005 ETH · owed 0.000000000000000009 ETH · op-2',
   );
   assert.match(describeResult('wallet.info', { bankroll: '2', uname: 'k3m9', alias: 'Bob' }), /@Bob/);
   assert.match(describeResult('wallet.info', { bankroll: '2', uname: 'k3m9', alias: null }), /~k3m9/);

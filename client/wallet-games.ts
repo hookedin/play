@@ -24,27 +24,20 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
       'This operation was carried out on another channel, and its result is not in this wallet',
     );
   const op = receipt.request ?? receipt.proof.step.operation,
-    developerBet = receipt.details?.developerBet,
     kind: GameReceipt['kind'] = receipt.kind,
-    collected = receipt.payout !== undefined,
     status: GameReceipt['status'] =
       receipt.status === 'rejected' ? 'rejected' : kind === 'developer-bet' ? developerBetStatus(receipt) : 'settled';
   return {
     id,
     kind,
     status,
-    // What a settled bet's payout rests on: an outcome the wallet checked, or a developer's word.
-    ...(kind === 'casino-bet' && status === 'settled' ? { basis: 'outcome' } : {}),
-    ...(kind === 'developer-bet' && collected ? { basis: developerBet?.terms ? 'developer' : 'outcome' } : {}),
     ...(kind !== 'payment' ? { stake: op.amount } : {}),
     ...(kind === 'casino-bet' ? { prizes: op.prizes } : {}),
-    ...(developerBet?.prizes ? { prizes: developerBet.prizes, round: developerBet.round } : {}),
-    ...(developerBet?.terms ? { terms: developerBet.terms } : {}),
+    ...(receipt.details?.meta ? { meta: receipt.details.meta } : {}),
     ...(receipt.details?.group ? { group: receipt.details.group } : {}),
     ...(receipt.bet ? { bet: receipt.bet } : {}),
-    // The outcome, what the bet is owed and what it paid: everything a game needs to show the result.
+    // The outcome and what the bet paid: everything a game needs to show the result.
     ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome }),
-    ...(receipt.owed === undefined ? {} : { owed: receipt.owed }),
     ...(receipt.payout === undefined ? {} : { payout: receipt.payout }),
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
   } as GameReceipt;
@@ -166,22 +159,11 @@ export class GameSessions extends ChannelClient {
    * has settled the bet, and pushes the new receipt to the game. The same request again returns the receipt as it
    * stands. */
   async gameDeveloperBet(this: CasinoWallet, request: DeveloperBetRequest) {
-    const group = request.group === undefined ? {} : { group: request.group },
-      settles =
-        'prizes' in request
-          ? {
-              round: request.round,
-              prizes: request.prizes.map(prize => ({
-                rangeStart: gameAmount(prize.rangeStart, false),
-                rangeEnd: gameAmount(prize.rangeEnd),
-                payout: gameAmount(prize.payout),
-              })),
-            }
-          : { terms: request.terms };
+    const group = request.group === undefined ? {} : { group: request.group };
     return gameReceipt(
       request.id,
       await this.placeDeveloperBet(
-        { stake: gameAmount(request.stake), ...settles, ...group },
+        { stake: gameAmount(request.stake), meta: request.meta, ...group },
         this.gameOperationId(request.id),
         this.gameIntent(request.id),
       ),

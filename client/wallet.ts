@@ -452,8 +452,8 @@ export class CasinoWallet extends GameSessions {
   async save(receipt: any = undefined, changes: Record<string, any> = {}) {
     this.requireDurableState();
     const revision = this.revision + 1;
-    // Newest first by the clock, not by when a receipt was last written: a rejected operation is
-    // rewritten when its round reveals, and would otherwise jump above the bet that replaced it.
+    // Newest first by the clock, not by when a receipt was last written: a developer bet's receipt is
+    // rewritten when what it was paid is collected, and would otherwise jump above the bets placed after it.
     const outstanding = new Set(
       Object.values(changes.developerBets ?? this.developerBets).map((bet: any) => bet.operationId),
     );
