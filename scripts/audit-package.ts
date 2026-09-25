@@ -39,7 +39,8 @@ function walk(dir: string) {
     if (item.name.startsWith('.') || ['node_modules', 'dist'].includes(item.name)) continue;
     const file = path.join(dir, item.name);
     if (item.isDirectory()) walk(file);
-    else if (item.isFile() && /(\.(ts|js|sol|md|json|jsonc|html|css|svg)|\/_headers)$/.test(file)) files.push(file);
+    else if (item.isFile() && /(\.(ts|js|sol|md|json|jsonc|html|css|svg)|\/_(headers|redirects))$/.test(file))
+      files.push(file);
   }
 }
 for (const root of roots) walk(root);

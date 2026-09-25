@@ -80,6 +80,7 @@ Recovery transactions can spend the reserved gas amount; deposits still preserve
 | `index.html`, `style.css` | Copied from `client/`                                                                                                                        |
 | `brand/`                  | The mark                                                                                                                                     |
 | `_headers`                | The response headers Cloudflare applies, from [client/\_headers](../client/_headers)                                                         |
+| `_redirects`              | Serves `/@<alias>` routes as written rather than redirected to `/%40<alias>`, from [client/\_redirects](../client/_redirects)                |
 
 `main.js` imports exactly `/config.js` and `/vendor/ethers.js`; `test/static.test.ts` checks that, the ethers hash and the headers. `config.js` is the JSON file named by the `HOOKEDIN_CLIENT_CONFIG` environment variable at build time, or the defaults in [client/config.ts](../client/config.ts) without it. `network` is `sepolia` or `local`, `casino` is the casino API's base URL, and `deployment` is the pinned manifest above. Settings saved in the wallet override `network` and `casino` in that browser.
 

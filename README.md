@@ -36,7 +36,7 @@ Read this before depositing anything you care about.
 
 | Path                                   | Contents                                                                                                                                                                         |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [client/](client/)                     | The wallet: channel, funding accounts, storage, backups, activity, the game iframe bridge, the pinned contract artifact, default settings and the static host's `_headers`       |
+| [client/](client/)                     | The wallet: channel, funding accounts, storage, backups, activity, the game iframe bridge, the pinned contract artifact, default settings, `_headers` and `_redirects`           |
 | [contracts/](contracts/)               | `HookedInCasino.sol` and two contracts used only by tests                                                                                                                        |
 | [protocol/](protocol/)                 | Signed structures and hashing, types, the risk rule, chain observation, deployment verification, evidence recovery, transaction journal and dispute worker                       |
 | [sdk/](sdk/)                           | The game SDK, `@hookedin/play/sdk`: the wallet bridge, round helper, exact step pricing, the developer kit, the `hookedin-game` build tool and the [guide](sdk/docs/game-sdk.md) |
@@ -106,7 +106,7 @@ Roulette takes the [developer bets](docs/protocol.md#developer-bets) of many pla
 
 To publish the wallet by hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy`. To publish a game: `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`.
 
-Client-side routes (`/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity`, `/games/<key>`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
+Client-side routes (`/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity`, `/games/<key>`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`, and `dist/_redirects` serves `/@<alias>` ones as written rather than letting Cloudflare redirect them to `/%40<alias>`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
 
 The operator commits `config/production.json`. It is published as `config.js`, so it is part of the trusted wallet release and must contain nothing secret:
 

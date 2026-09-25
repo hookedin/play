@@ -297,8 +297,8 @@ function navigate(page: string, push = true, path = pagePaths[page]) {
  * `/activity`, `/@<alias>` or `/~<uname>` for a player, the same and `/<game>` for a game they
  * publish, `/games/<key>` for a game's public record, and `/games/custom?manifest=<url>`. */
 function parseRoute(url: URL): string | GameRoute | { profile: string } | { record: string } | { unknown: string } {
-  // A player's sigil survives whatever encoded the link: `@` reaches here as `%40` from some clients,
-  // and the static host decodes the path the same way before it serves this page.
+  // A player's sigil survives a link that encodes it: `encodeURIComponent` writes `@` as `%40`, and the
+  // static host decodes the path the same way before it serves this page.
   let pathname = url.pathname;
   try {
     pathname = decodeURIComponent(pathname);

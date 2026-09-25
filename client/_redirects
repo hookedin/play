@@ -1,0 +1,2 @@
+# A player's routes are served here, as written: otherwise Cloudflare redirects /@alias to /%40alias.
+/@* / 200
