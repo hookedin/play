@@ -41,7 +41,7 @@ prize_i  = [start_i, end_i) pays (cash of successor i − cheapest), for every b
 
 Each successor's range is as wide as its probability, to the nearest outcome in 2^64. Every card keeps its own stretch of the outcome space, even when two cards lead to the same cash, so the casino's verified outcome names the card as well as what it paid. Whatever the outcome, the player's cash after the bet is exactly the cash of the state reached. A step that moves no money places no bet. Extra wagers (double, split, insurance) add existing player money through the action's `additionalCash`.
 
-A hand is therefore a short sequence of casino bets. Nothing reserves a whole hand, and stopping between steps leaves the player holding the current signed balance: a [settled trade-off](../../architecture.md#settled-trade-offs). The derivation is in [sequential games built from casino bets](../../sdk/docs/sequential-games.md).
+A hand is therefore a short sequence of casino bets. Nothing reserves a whole hand, and stopping between steps leaves the player holding the current signed balance: a [settled trade-off](../../docs/overview/architecture.md#settled-trade-offs). The derivation is in [sequential games built from casino bets](../../docs/games/sequential-games.md).
 
 ### The funding table
 
@@ -82,7 +82,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **Every card is an outcome.** The card drawn at each step is named by that step's verified outcome. You choose an action before its outcome exists, and the same action is always the same bet, so nothing is gained by retrying.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/protocol.md) and [pricing and commission](../../docs/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -120,7 +120,7 @@ The rules file is part of the SDK, so a game that changes them needs its own cop
 
 Never use the SDK's table with different rules: the prices would be wrong for your graph.
 
-You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/economics.md).
+You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 

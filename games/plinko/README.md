@@ -72,7 +72,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **The ball is the outcome.** The path shown is decoded from the verified 64-bit outcome. There is no second random draw that could disagree with the payout.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/protocol.md) and [pricing and commission](../../docs/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -102,7 +102,7 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 - The tables in [src/tables.ts](src/tables.ts). If you change a multiplier, keep `sum(C(rows, j) × multiplier_j)` equal to your target return times `2^rows`, and update the assertion in the first test. Row counts other than 8, 12 and 16 work as long as `rows + 1` is at most 64.
 - The board drawing in [src/board.ts](src/board.ts) and the styles in [src/style.css](src/style.css).
 
-You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/economics.md).
+You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 

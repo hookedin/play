@@ -60,7 +60,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 - **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/protocol.md) and [pricing and commission](../../docs/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -88,7 +88,7 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 - The rules: the `9900n` in [src/rules.ts](src/rules.ts) is the return in basis points, and the `1000`/`9000` bounds are the chance limits. Keep the slider in [src/index.html](src/index.html), the `odds()` display in [src/game.ts](src/game.ts) and [test/dice.test.ts](test/dice.test.ts) in step. A higher return leaves the casino less edge, so it admits smaller stakes.
 - The art: [src/index.html](src/index.html) and [src/style.css](src/style.css). The die is pure CSS.
 
-You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/economics.md).
+You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 

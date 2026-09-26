@@ -46,7 +46,6 @@ function walk(dir: string) {
 for (const root of roots) walk(root);
 files.push(
   'README.md',
-  'architecture.md',
   'package.json',
   'package-lock.json',
   ...fs.readdirSync('.').filter(file => /^tsconfig.*\.json$/.test(file)),
@@ -80,7 +79,7 @@ const manifest = {
   sourceFiles: Object.fromEntries(files.sort().map(file => [file, hash(fs.readFileSync(file))])),
   verification: ['npm run build', 'npm test'],
   verificationReports: Object.fromEntries(reports.map(file => [file, hash(fs.readFileSync(path.join('build', file)))])),
-  architecture: 'architecture.md',
+  architecture: 'docs/overview/architecture.md',
   excludes:
     'Private keys, private databases, signing logs, local environment files and node_modules are never collected.',
 };

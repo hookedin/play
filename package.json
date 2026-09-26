@@ -43,6 +43,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260919.1",
     "@types/node": "24.13.5",
+    "github-slugger": "2.0.0",
     "playwright-core": "1.63.0",
     "prettier": "3.9.8",
     "solc": "0.8.37",

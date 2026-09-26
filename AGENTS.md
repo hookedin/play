@@ -32,10 +32,11 @@ The wallet, the settlement contract, the shared protocol, the game SDK and the h
 advertise correct and testable. Preserve explicitly accepted trust assumptions and manual responsibilities; do not
 expand the protocol merely to offer stronger guarantees. Reuse existing state, validation and recovery paths. A change
 to the contract's compiled code is a new deployment; once a release holds money that matters, the contract stays as it
-is. See [architecture.md](architecture.md).
+is. See [the architecture](docs/overview/architecture.md).
 
 ## Settled decisions
 
-[architecture.md](architecture.md#settled-trade-offs) records trade-offs made on purpose: how commission is set, a
-multi-step game as a sequence of casino bets a player can walk away from, and a developer's solvency left to the trust
-of its players. They are decisions, not open questions. Explain them where it helps; do not propose changing them.
+[The architecture](docs/overview/architecture.md#settled-trade-offs) records trade-offs made on purpose: how commission
+is set, a multi-step game as a sequence of casino bets a player can walk away from, and a developer's solvency left to
+the trust of its players. They are decisions, not open questions. Explain them where it helps; do not propose changing
+them.

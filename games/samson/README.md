@@ -91,7 +91,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **The reels are the outcome.** The stop position is chosen by the verified outcome, from exactly the positions that pay what was settled.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/protocol.md) and [pricing and commission](../../docs/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -121,7 +121,7 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 - The theme: the SVGs in [src/symbols/](src/symbols/), the copy in [src/index.html](src/index.html), the styles, and the tones in [src/sound.ts](src/sound.ts). None of these touch the maths.
 - The maths: `MACHINES` and `PAYS` in [src/math.ts](src/math.ts). Any change to a strip or a pay changes the return, so update the expected fractions in the test. A reel window may show at most one wild or scatter; the counter enforces this. Keep the number of distinct outcomes at 64 or fewer and the distinct payouts small, or spins will be slow to price or will not fit one bet.
 
-You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/economics.md).
+You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 

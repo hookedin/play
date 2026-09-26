@@ -36,9 +36,9 @@ The graph tracks only the number of safe picks so far, because unrevealed tiles 
 
 `RoundClient` from the SDK runs the round. The SDK's engine prices each state with the cash that finances its actions, working backward from the cashouts. A `reveal` becomes one bet: the stake is the state's current cash, the mine's stretch of the outcome space pays nothing, and the gem's stretch pays the cash of the next state. The casino's verified outcome decides gem or mine. `cash-out` leads to a state worth the same cash, so it places no bet at all: the money is already in the player's signed balance. At a stake large for the bankroll, a state can hold more cash than its cash-out pays, because the next reveal needs it, and cashing out then pays the difference to the house.
 
-Each further reveal has its own house edge, which is why the return falls as you go deeper. This is deliberate. A ladder with a constant overall return would make later reveals zero-edge bets, and the casino's admission rule does not accept those at a finite bankroll. The derivation is in [sequential games built from casino bets](../../sdk/docs/sequential-games.md#mines-another-n-move-graph).
+Each further reveal has its own house edge, which is why the return falls as you go deeper. This is deliberate. A ladder with a constant overall return would make later reveals zero-edge bets, and the casino's admission rule does not accept those at a finite bankroll. The derivation is in [sequential games built from casino bets](../../docs/games/sequential-games.md#mines-another-n-move-graph).
 
-The page shows a **continuation value** during the round: the cash the current state is priced at. It is already in the player's balance, and a player who stops keeps it: a [settled trade-off](../../architecture.md#settled-trade-offs).
+The page shows a **continuation value** during the round: the cash the current state is priced at. It is already in the player's balance, and a player who stops keeps it: a [settled trade-off](../../docs/overview/architecture.md#settled-trade-offs).
 
 **Return.** The three fixed-stop returns in the table above are exact. They are proven in the SDK's test suite ([test/sequential-games.test.ts](../../sdk/test/sequential-games.test.ts), "Mines uses the same engine and preserves stopping-policy payouts without payments"), which evaluates each stopping policy over the compiled game with exact fractions.
 
@@ -63,7 +63,7 @@ The game page is untrusted by design. It runs in a sandboxed iframe on its own o
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **No hidden board.** There is nothing to reveal at the end and nothing the game could have rigged in advance: each reveal is decided by its own verified outcome.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/protocol.md) and [pricing and commission](../../docs/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -92,7 +92,7 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 - For different rules altogether, copy [mines.ts](../../sdk/src/engine/mines.ts) (56 lines) into your `src/` and pass your own graph function to `RoundClient`.
 - The art: [src/index.html](src/index.html) and [src/style.css](src/style.css).
 
-You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/economics.md).
+You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 

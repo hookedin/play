@@ -58,9 +58,9 @@ The casino knows nothing of this scheme: it records each bet's group and meta wh
   1. `GET /api/rounds/:round` at the casino gives the seed, the secret, the outcome and the wheel's casino bet with its meta, which the developer signed over the seed's hash and the meta's hash. The secret hashes to the round, the seed to the seed hash, and the number is `pocket(outcome)`.
   2. `GET /api/spins/:round?asset=eth` (or `test`) at the wheel gives the list of bets it covered; its `keccak256`, the hashes one after another, is `meta.covered`.
   3. `GET /api/developer-bets?game=<key>&status=settled&group=<round's 64 hex digits>` at the casino lists the settled bets on the spin, whatever the wheel says, a page at a time (pass `cursor` as `after` while `more` is true), and `status=open` any it has yet to pay. Every covered bet names the seed hash, and each settlement pays its chips on the number, or its stake if the list leaves it off or the spin was declined. A layout on the table's seed left off the list shows here.
-- **A roulette bet is a developer bet: it trusts the wheel's developer to pay.** Its stake is in the developer's bank from the moment it is placed, and it is paid what the wheel settles. The page shows what that falls short of what the wheel's own list says the bet is owed, and what its chips would have won if the list leaves it off; a check of the spin shows the same for every bet. What it is paid is the casino's promise until the wallet collects it: until then it is outside the principal the contract protects, as the [trust model](../../README.md#trust-model) says.
+- **A roulette bet is a developer bet: it trusts the wheel's developer to pay.** Its stake is in the developer's bank from the moment it is placed, and it is paid what the wheel settles. The page shows what that falls short of what the wheel's own list says the bet is owed, and what its chips would have won if the list leaves it off; a check of the spin shows the same for every bet. What it is paid is the casino's promise until the wallet collects it: until then it is outside the principal the contract protects, as the [trust model](../../docs/overview/trust-model.md) says.
 
-Read [developer bets](../../docs/protocol.md#developer-bets) before you build on this.
+Read [developer bets](../../docs/games/developer-bets.md) before you build on this.
 
 ## Run it
 
@@ -84,10 +84,10 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 
 - [src/manifest.json](src/manifest.json): `id`, `name`, `description` and `developer`, the address of the account you publish the game from.
 - [wrangler.jsonc](wrangler.jsonc): `GAME_NAME`, the name you publish the game under.
-- A different shared game is a different [src/table.ts](src/table.ts): what the outcome means and how a player's choices become prizes. A wheel of fortune is one range per segment, and the wheel's server stays as it is; so is a crash game whose players all set their cash-out before the round, each cash-out one prize. A game whose players decide while the round runs cannot be one round. A crash game with cash-out by hand is such a game, even for the cash-outs set before the round: to know when to crash, its server would have to reveal the round at take-off, and a revealed round is public, so every page would know the crash point. Its server keeps the crash point itself and settles every [developer bet](../../sdk/docs/game-sdk.md#developer-bets) on its word.
+- A different shared game is a different [src/table.ts](src/table.ts): what the outcome means and how a player's choices become prizes. A wheel of fortune is one range per segment, and the wheel's server stays as it is; so is a crash game whose players all set their cash-out before the round, each cash-out one prize. A game whose players decide while the round runs cannot be one round. A crash game with cash-out by hand is such a game, even for the cash-outs set before the round: to know when to crash, its server would have to reveal the round at take-off, and a revealed round is public, so every page would know the crash point. Its server keeps the crash point itself and settles every [developer bet](../../docs/games/developer-bets.md) on its word.
 - The betting time is `BETTING_MS` in [server/wheel.ts](server/wheel.ts).
 
-You earn half of the commission on the wheel's casino bets. It accrues to the account you publish the game from; the casino keeps the other half. See [pricing and commission](../../docs/economics.md).
+You earn half of the commission on the wheel's casino bets. It accrues to the account you publish the game from; the casino keeps the other half. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" role="img" aria-labelledby="title desc" font-family="system-ui, sans-serif">
+  <title id="title">How HookedIn fits together</title>
+  <desc id="desc">In your browser, the game runs in a sandboxed iframe beside the wallet and talks to it over a message bridge. The wallet sends signed bets to the casino API and gets signed results back. The wallet sends deposits, closes, challenges and claims to the contract as transactions from your funding account. The casino watches the contract and can close a channel too.</desc>
+  <rect width="760" height="420" rx="12" fill="#121721"/>
+
+  <g fill="none" stroke-width="1.5">
+    <rect x="16" y="16" width="300" height="276" rx="10" stroke="#edf0f5" stroke-opacity="0.4" stroke-dasharray="5 5"/>
+    <rect x="36" y="56" width="260" height="78" rx="8" stroke="#edf0f5"/>
+    <rect x="36" y="186" width="260" height="90" rx="8" stroke="#a68cff" stroke-width="2"/>
+    <rect x="476" y="186" width="268" height="90" rx="8" stroke="#edf0f5"/>
+    <rect x="476" y="318" width="268" height="86" rx="8" stroke="#edf0f5"/>
+  </g>
+
+  <g fill="none" stroke="#a68cff" stroke-width="1.5">
+    <path d="M96 147V173"/>
+    <path d="M300 214H463"/>
+    <path d="M472 248H309"/>
+    <path d="M610 280V305"/>
+    <path d="M166 280V360H463"/>
+  </g>
+  <g fill="#a68cff">
+    <polygon points="96,138 91,147 101,147"/>
+    <polygon points="96,182 91,173 101,173"/>
+    <polygon points="472,214 463,209 463,219"/>
+    <polygon points="300,248 309,243 309,253"/>
+    <polygon points="610,314 605,305 615,305"/>
+    <polygon points="472,360 463,355 463,365"/>
+  </g>
+
+  <g fill="#edf0f5" font-size="12">
+    <text x="32" y="40" fill-opacity="0.75">Your browser</text>
+    <text x="52" y="83" font-size="15" font-weight="600">Game</text>
+    <text x="52" y="104">sandboxed iframe, its own origin</text>
+    <text x="52" y="121">its own rules, pictures and sound</text>
+    <text x="52" y="213" font-size="15" font-weight="600">Wallet</text>
+    <text x="52" y="234">holds your keys and evidence</text>
+    <text x="52" y="252">signs bets, checks every result</text>
+    <text x="492" y="213" font-size="15" font-weight="600">Casino API</text>
+    <text x="492" y="234">names rounds, signs results</text>
+    <text x="492" y="252">backs casino bets from the bankroll</text>
+    <text x="492" y="345" font-size="15" font-weight="600">HookedInCasino contract</text>
+    <text x="492" y="366">holds deposits, settles closes</text>
+    <text x="492" y="384">pays claims</text>
+  </g>
+  <g fill="#a68cff" font-size="11">
+    <text x="108" y="164">bridge: requests and receipts</text>
+    <text x="386" y="206" text-anchor="middle">signed bets</text>
+    <text x="386" y="266" text-anchor="middle">signed results</text>
+    <text x="622" y="301">watches, can close</text>
+    <text x="316" y="352" text-anchor="middle">deposit · close · challenge · claim</text>
+    <text x="316" y="378" text-anchor="middle" fill-opacity="0.8">transactions from your funding account</text>
+  </g>
+</svg>
