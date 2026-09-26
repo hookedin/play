@@ -1,5 +1,4 @@
 {
-  "id": "mines",
   "name": "Mines",
   "description": "Five tiles. One mine. Find up to three gems and choose when to cash out.",
   "entry": "./index.html",

@@ -1,5 +1,4 @@
 {
-  "id": "dice",
   "name": "Dice",
   "description": "Set your odds. Make your roll. A single decision with transparent probabilities.",
   "entry": "./index.html",

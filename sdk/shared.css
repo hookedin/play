@@ -397,8 +397,7 @@ h1 {
   font-size: 11px;
   line-height: 1.5;
 }
-.bank[data-state='empty'] .bank-status,
-.bank[data-state='stopped'] .bank-status {
+.bank[data-state='empty'] .bank-status {
   color: #f0d79a;
 }
 .bank[data-state='pending'] .bank-status {
@@ -424,8 +423,7 @@ h1 {
   font-weight: 700;
   white-space: nowrap;
 }
-.bank[data-state='empty'] .bank-add,
-.bank[data-state='stopped'] .bank-add {
+.bank[data-state='empty'] .bank-add {
   background: var(--accent);
   color: #14201b;
 }

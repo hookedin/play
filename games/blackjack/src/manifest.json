@@ -1,5 +1,4 @@
 {
-  "id": "blackjack",
   "name": "Blackjack",
   "description": "The timeless hit-or-stand table, with exact replacement-deck probabilities.",
   "entry": "./index.html",

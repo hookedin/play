@@ -57,7 +57,7 @@ export function createStaticServer(dir: string, config?: unknown, build?: () => 
         data = `export default ${JSON.stringify(config)};`;
         type = types['.js'];
       } else {
-        // Wallet routes such as /games/dice are client-side.
+        // Wallet routes such as /wallet and /@hookedin/dice are client-side.
         const file = path.join(dir, !path.extname(pathname) ? 'index.html' : pathname);
         if (!(path.extname(file) in types)) throw new Error('Invalid file');
         data = await fs.readFile(file);

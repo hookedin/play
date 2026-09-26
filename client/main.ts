@@ -205,7 +205,7 @@ const showName = (names: { uname?: string | null; alias?: string | null } | null
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
 /** A player's page: everything the casino says about them, as anyone sees it. */
 const profilePath = (name: string) => `/${name}`;
-/** A game's public record: every bet anyone has placed in it, under the hash of its manifest URL. */
+/** A game's public record: every bet anyone has placed in it, under its key. */
 const gameBetsPath = (key: string) => `/games/${key.toLowerCase()}`;
 const PAGE_TITLES: Record<string, string> = {
   library: 'Games',
@@ -2019,7 +2019,7 @@ try {
   renderActivity();
   void refreshActivity();
   if (wallet.pending || wallet.needsOpening)
-    toast('A saved operation needs recovery. Use Recover operation to finish safely.');
+    toast('A saved operation needs recovery. Use Retry same request to finish safely.');
   await loadLibrary();
   await route();
 } catch (error: any) {

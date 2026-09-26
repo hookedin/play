@@ -90,9 +90,9 @@ async function serve(root) {
           }
         }
         const file = path.join(root, 'dist', name);
-        if (!(path.extname(file) in types)) throw new Error();
         const data = fs.readFileSync(file);
-        res.writeHead(200, { ...headers, 'Content-Type': types[path.extname(file)] }).end(data);
+        const type = types[path.extname(file)] ?? 'application/octet-stream';
+        res.writeHead(200, { ...headers, 'Content-Type': type }).end(data);
       } catch {
         res.writeHead(404, headers).end('Not found');
       }

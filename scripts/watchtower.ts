@@ -15,7 +15,7 @@ let provider,
 try {
   if (!args.includes('--deployment') || !args.includes('--journal') || !args.includes('--evidence'))
     throw new Error(
-      'Use --deployment trusted.json --journal private/outbox.json --evidence bundle.json; HOOKEDIN_RELAYER_KEY signs only recovery transactions.',
+      'Use --deployment trusted.json --journal .private/watchtower.json --evidence bundle.json; HOOKEDIN_RELAYER_KEY signs only recovery transactions.',
     );
   const deployment = JSON.parse(fs.readFileSync(arg('--deployment'), 'utf8'));
   if (BigInt(deployment.chainId) !== 31337n) requireIndependentRpc(deployment.rpcUrl, deployment.witnessRpcUrl);

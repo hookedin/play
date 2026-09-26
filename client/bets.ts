@@ -13,7 +13,7 @@ export interface BetRow {
   at: number;
   /** The game the bet was placed in, named as it named itself. */
   game: string;
-  /** The hash of the game's manifest URL, when the reader knows it. */
+  /** The game's key, made from its developer and the name it is published under, when the reader knows it. */
   key?: string | null;
   /** Who placed it, on a public list. This wallet's own rows leave it out. */
   who?: string | null;
