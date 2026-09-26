@@ -6,14 +6,19 @@ export function createSynth(storageKey = 'hookedin:muted') {
   try {
     muted = localStorage.getItem(storageKey) === '1';
   } catch {}
+  /** Sound decorates a game and never stops one: a browser without Web Audio, or one that refuses a context, plays it
+   * silently, since `unlock` runs in the handler of the very click that plays. */
   function unlock() {
-    if (!context) {
-      context = new AudioContext();
-      master = context.createGain();
-      master.gain.value = muted ? 0 : 1;
-      master.connect(context.destination);
-    }
-    if (context.state === 'suspended') void context.resume();
+    try {
+      if (!context) {
+        const created = new AudioContext();
+        master = created.createGain();
+        master.gain.value = muted ? 0 : 1;
+        master.connect(created.destination);
+        context = created;
+      }
+      if (context.state === 'suspended') void context.resume().catch(() => {});
+    } catch {}
   }
   function tone(
     frequency: number,

@@ -141,15 +141,15 @@ Short synthesized sounds, so a game hosts no audio files. `storageKey`, `hookedi
 player's mute choice is kept in `localStorage`; a storage that fails is ignored. Delays and durations are in seconds,
 frequencies in hertz.
 
-| Member                                       | What it does                                                                                                                                                                           |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unlock()`                                   | Creates the audio context on its first call and resumes a suspended one. Call it from the player's gesture, such as a click: until then every sound is silent                          |
-| `tone(frequency, delay, duration, options?)` | A tone that starts after `delay` and fades out over `duration`. `type` is the oscillator's wave, `sine` by default; `gain` its volume, `0.1` by default; `to` a frequency it glides to |
-| `noise(delay, duration, gain, cutoff)`       | A burst of fading noise through a low-pass filter at `cutoff`                                                                                                                          |
-| `melody(notes, step, options?)`              | Each of `notes` as a tone, `step` apart, each lasting 2.2 steps                                                                                                                        |
-| `muted`                                      | Whether sound is muted, as last chosen                                                                                                                                                 |
-| `setMuted(value)`                            | Mutes or unmutes, and keeps the choice                                                                                                                                                 |
-| `output`                                     | `{ context, master }`, for sounds of the game's own that outlast one envelope; `null` before `unlock`                                                                                  |
+| Member                                       | What it does                                                                                                                                                                                                               |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unlock()`                                   | Creates the audio context on its first call and resumes a suspended one. Call it from the player's gesture, such as a click: until then every sound is silent. It never throws: a browser without Web Audio plays silently |
+| `tone(frequency, delay, duration, options?)` | A tone that starts after `delay` and fades out over `duration`. `type` is the oscillator's wave, `sine` by default; `gain` its volume, `0.1` by default; `to` a frequency it glides to                                     |
+| `noise(delay, duration, gain, cutoff)`       | A burst of fading noise through a low-pass filter at `cutoff`                                                                                                                                                              |
+| `melody(notes, step, options?)`              | Each of `notes` as a tone, `step` apart, each lasting 2.2 steps                                                                                                                                                            |
+| `muted`                                      | Whether sound is muted, as last chosen                                                                                                                                                                                     |
+| `setMuted(value)`                            | Mutes or unmutes, and keeps the choice                                                                                                                                                                                     |
+| `output`                                     | `{ context, master }`, for sounds of the game's own that outlast one envelope; `null` before `unlock`                                                                                                                      |
 
 ```ts
 import { createSynth } from '@hookedin/play/sdk/synth';

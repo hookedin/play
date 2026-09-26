@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fraction } from '../src/engine/index.ts';
+import { createSynth } from '../src/synth.ts';
 
 /** An element that keeps its class, text, attributes and children: all of the DOM the bank strip touches. */
 class Element {
@@ -112,5 +113,25 @@ test("the bank strip hears every push, lets a listener go, and follows its round
   } finally {
     delete (globalThis as any).window;
     delete (globalThis as any).document;
+  }
+});
+
+test('a browser without Web Audio, or one that refuses a context, plays silently and never stops the click that plays', () => {
+  // Node has neither localStorage nor AudioContext: a browser with both switched off.
+  const silent = createSynth();
+  assert.doesNotThrow(() => silent.unlock());
+  assert.doesNotThrow(() => silent.melody([440, 880], 0.1));
+  assert.equal(silent.output, null);
+  const refusing = createSynth();
+  (globalThis as any).AudioContext = class {
+    constructor() {
+      throw new Error('No audio device');
+    }
+  };
+  try {
+    assert.doesNotThrow(() => refusing.unlock());
+    assert.equal(refusing.output, null);
+  } finally {
+    delete (globalThis as any).AudioContext;
   }
 });
