@@ -119,8 +119,9 @@ remain, and the [developer kit](../sdk/developer.md) signs one for each request.
 A channel route answers `401` with `unauthorized` to a missing, expired or wrongly signed token and to a channel it does
 not know, before anything else: an unknown channel never answers `404`. `:id` must be the channel ID in lowercase. The
 one route that takes an unknown channel is [activation](channels.md#post-apichannelsidactivate), which checks the token
-against the opening in its body. A developer route refuses a key whose account publishes no game (`401`,
-"This key publishes no game") before it counts against the developer's budget.
+against the opening in its body. Opening a round needs a key whose account publishes a game
+(`401`, "This key publishes no game"). Settling needs only the key of the bets' developer, so a developer who takes their
+last game down still pays the bets placed on it.
 
 The token only says who is asking. What a request commits to is signed in its body: an operation, a `Redeem`, a
 `Withdraw`, a `Close`, a `Settlement` or a `BankCasinoBet`.
@@ -162,15 +163,13 @@ take a `limit` only.
 The casino counts requests in fixed 60-second windows, each starting with a key's first request. A budget tracks at
 most 1,024 keys and drops the oldest to make room. A spent budget answers `429` with `rate-limited`.
 
-| Budget                                         | Per         | Requests a minute |
-| ---------------------------------------------- | ----------- | ----------------- |
-| Every `/api/` request                          | Client IP   | 6,000             |
-| Every `/api/` request                          | All clients | 12,000            |
-| Registering a channel the casino does not know | Client IP   | 60                |
-| Registering a channel the casino does not know | All clients | 120               |
-| Channel requests, after authentication         | Channel     | 6,000             |
-| Developer requests, after authentication       | Developer   | 6,000             |
-| Alias and game changes                         | Channel     | 200               |
+| Budget                                         | Per       | Requests a minute |
+| ---------------------------------------------- | --------- | ----------------- |
+| Every `/api/` request                          | Client IP | 6,000             |
+| Registering a channel the casino does not know | Client IP | 60                |
+| Channel requests, after authentication         | Channel   | 6,000             |
+| Developer requests, after authentication       | Developer | 6,000             |
+| Alias and game changes                         | Channel   | 200               |
 
 `GET /` and `OPTIONS` count against no budget, and the local faucet takes one request a second. The client IP is the
 connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
@@ -201,7 +200,7 @@ A refusal is `{"error": "…", "code": "…"}`: the text is for people, and the 
 | -------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code |
 | `reserved`           | 400    | The alias is one the casino keeps for itself                                                                                                                                                                                                   |
-| `unauthorized`       | 401    | The token is missing, expired, too far ahead or wrongly signed, the channel is unknown, or the developer key publishes no game. The local faucet answers `403` with this code to anything but the local wallet                                 |
+| `unauthorized`       | 401    | The token is missing, expired, too far ahead or wrongly signed, the channel is unknown, or a developer key that publishes no game opens a round. The local faucet answers `403` with this code to anything but the local wallet                |
 | `not-funded`         | 403    | Taking an alias or publishing a game needs an open channel                                                                                                                                                                                     |
 | `not-found`          | 404    | No such path, name, game, round, developer bet or recorded operation, or the faucet is not offered                                                                                                                                             |
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                             |

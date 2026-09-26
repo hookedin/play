@@ -112,8 +112,7 @@ export function attachGameBridge({
   onActivity = () => {},
   target = window,
 }: {
-  iframe: Pick<HTMLIFrameElement, 'contentWindow'> &
-    Partial<Pick<HTMLIFrameElement, 'addEventListener' | 'removeEventListener'>>;
+  iframe: Pick<HTMLIFrameElement, 'contentWindow'>;
   /** The origin of the game's entry page. */
   origin: string;
   isCurrent: () => boolean;
@@ -122,18 +121,14 @@ export function attachGameBridge({
   onActivity?: (type: 'request' | 'response' | 'error', data: any) => void;
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }) {
-  // Request IDs only ever rise, so none is answered twice and nothing has to be remembered. A page
-  // the frame loads afresh counts from the start, and is never sent an answer meant for the page before it.
+  // Request IDs only ever rise within a page, so none is answered twice and nothing has to be remembered. A page
+  // begins by greeting the wallet: a greeting whose ID does not rise is a page the frame loaded afresh, which counts from
+  // the start and is never sent an answer meant for the page before it. Its greeting is the first the wallet can know of
+  // it: the frame's `load` comes after the page has run, and its messages can come before.
   let last = -1,
     waiting = 0,
     turn: Promise<unknown> = Promise.resolve(),
     page = 0;
-  const loaded = () => {
-    page++;
-    last = -1;
-    waiting = 0;
-  };
-  iframe.addEventListener?.('load', loaded);
   const activity = (type: 'request' | 'response' | 'error', data: unknown) => {
     // Diagnostics must never interrupt validation or settlement.
     try {
@@ -174,23 +169,29 @@ export function attachGameBridge({
       else activity('error', { error: error.message });
       return;
     }
-    if (request.id <= last)
-      return fail(request.id, gameError('invalid-request', 'A request ID must be larger than the last.'));
+    if (request.id <= last) {
+      if (request.method !== 'wallet.hello')
+        return fail(request.id, gameError('invalid-request', 'A request ID must be larger than the last.'));
+      page++;
+      waiting = 0;
+    }
     last = request.id;
     const asked = page;
     if (IMMEDIATE.has(request.method)) return answer(request, asked);
     // Whatever signs or asks the player takes its turn, in the order the game asked.
     if (waiting >= MAX_QUEUE) return fail(request.id, gameError('busy', 'Too many game requests are waiting.'));
     waiting++;
+    // A request that waited its turn runs only for the page that asked, while its game is still the one open: the
+    // wallet's game session by then may be another game's.
     return (turn = turn.then(async () => {
-      if (asked !== page) return;
+      if (asked !== page || !isCurrent()) return;
       waiting--;
       await answer(request, asked);
     }));
   };
   target.addEventListener('message', listener);
   return () => {
+    page++;
     target.removeEventListener('message', listener);
-    iframe.removeEventListener?.('load', loaded);
   };
 }

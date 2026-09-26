@@ -18,12 +18,12 @@ A request is a plain object with these keys and no others, posted to `window.par
 window.parent.postMessage({ hookedin: true, id: 1, method: 'wallet.hello', params: {} }, '*');
 ```
 
-| Field      | Type      | Meaning                                                                                                                 |
-| ---------- | --------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `hookedin` | `boolean` | Always `true`                                                                                                           |
-| `id`       | `number`  | The envelope ID: a safe integer, at least 0, above every earlier request's since the frame loaded. The reply carries it |
-| `method`   | `string`  | One of the [methods](#methods)                                                                                          |
-| `params`   | object    | The method's parameters and no others: a plain object, which may be left out when the method takes none                 |
+| Field      | Type      | Meaning                                                                                                      |
+| ---------- | --------- | ------------------------------------------------------------------------------------------------------------ |
+| `hookedin` | `boolean` | Always `true`                                                                                                |
+| `id`       | `number`  | The envelope ID: a safe integer, at least 0, above every earlier request's of the page. The reply carries it |
+| `method`   | `string`  | One of the [methods](#methods)                                                                               |
+| `params`   | object    | The method's parameters and no others: a plain object, which may be left out when the method takes none      |
 
 The wallet answers each request once, with the same `id` and either `result` or `error`. Here `null` is what
 `game.receipt` answers for an operation the wallet has no record of:
@@ -41,8 +41,9 @@ The wallet answers each request once, with the same `id` and either `result` or 
 
 ## IDs
 
-The envelope `id` only routes a reply. It must rise with every request since the frame last loaded a page; a request
-whose ID does not is refused with `invalid-request`, and the SDK counts from 1. A request that fails the checks is
+The envelope `id` only routes a reply. It must rise with every request of a page; a request whose ID does not is
+refused with `invalid-request`, and the SDK counts from 1. A page begins with [`wallet.hello`](#wallethello): a greeting
+whose ID does not rise is a page the frame loaded afresh, and its count starts there. A request that fails the checks is
 refused under its ID when that ID is a safe integer, and dropped unanswered otherwise.
 
 The `id` inside a bet's or a payment's parameters is different: it is the game's own durable name for the operation, 1
@@ -58,9 +59,9 @@ frame's window and that origin, and posts every reply and event to that origin a
 another origin is not the game, and hears nothing. It answers only the open game. A game accepts only messages whose
 `source` is `window.parent`, as the SDK does.
 
-When the frame loads a page, a reload included, the wallet forgets the page before it: IDs count afresh, its queued
-requests are dropped, and replies to its requests are not sent. An operation the wallet already signed stands, and the
-page that follows finds it with [`game.receipt`](#gamereceipt).
+When the frame loads a page, a reload included, the wallet forgets the page before it as soon as the new page greets
+it: its queued requests are dropped, and replies to its requests are not sent. An operation the wallet already signed
+stands, and the page that follows finds it with [`game.receipt`](#gamereceipt).
 
 ## Size
 

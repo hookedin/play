@@ -216,6 +216,8 @@ export function verifyShareStatement(
 }
 export const hashClose = (d: Domain, s: { channelId: string; stateHash: string }) =>
   TypedDataEncoder.hash(d, CLOSE_TYPES, s);
+/** A signature in the one form the contract recovers: 65 bytes, v 27 or 28. ethers recovers a compact one or a v of 0
+ * or 1 as well, and each side keeps the other's signatures as they came, as its evidence. */
 export function assertSignature(
   d: Domain,
   types: Record<string, TypedDataField[]>,
@@ -223,7 +225,8 @@ export function assertSignature(
   signature: string,
   expected: string,
 ) {
-  if (!same(verifyTypedData(d, types, message, signature), expected)) throw new Error('Invalid signature');
+  if (!/^0x[0-9a-f]{128}1[bc]$/i.test(signature) || !same(verifyTypedData(d, types, message, signature), expected))
+    throw new Error('Invalid signature');
 }
 export function initialState(opening: Pick<Opening, 'channelId' | 'deposit'>) {
   return {

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { id, Wallet } from 'ethers';
+import { id, Signature, verifyTypedData, Wallet } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBinary } from '../testing/contract.ts';
-import { hashState, checkpointEvidence, STATE_TYPES } from '../protocol/protocol.ts';
+import { assertSignature, hashState, checkpointEvidence, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 test('shared-pool contract protects principal, retains debts and verifies channel evidence', async t => {
   const env = await anvil();
@@ -115,6 +115,26 @@ test('channel evidence rejects replay across channels and chains', async t => {
   await (await f.contract.finalizeClose(a.state.channelId)).wait();
   assert.equal((await f.contract.claims(a.state.channelId)).amount, 1000n);
 });
+test('a signature is taken only in the form the contract recovers', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    { state, evidence } = await signedIncrease(f, await open(f, env.wallets[1]), 100n),
+    owner = await f.owner.getAddress(),
+    v = parseInt(evidence.casinoSignature.slice(130), 16);
+  await f.contract.supported(evidence);
+  assertSignature(f.d, STATE_TYPES, state, evidence.casinoSignature, owner);
+  // ethers recovers the owner from the compact form and from a v of 0 or 1; the contract recovers nobody.
+  for (const signature of [
+    Signature.from(evidence.casinoSignature).compactSerialized,
+    evidence.casinoSignature.slice(0, 130) + (v - 27).toString(16).padStart(2, '0'),
+  ]) {
+    assert.equal(verifyTypedData(f.d, STATE_TYPES, state, signature), owner);
+    await assert.rejects(f.contract.supported({ ...evidence, casinoSignature: signature }));
+    assert.throws(() => assertSignature(f.d, STATE_TYPES, state, signature, owner), /Invalid signature/);
+  }
+});
+
 test('balances are capped below 2^128 so aggregate debt cannot overflow and block protected-principal finalization', async t => {
   const env = await anvil();
   t.after(() => env.close());

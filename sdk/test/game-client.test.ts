@@ -1042,6 +1042,48 @@ test('an action sent again after its reply was lost is that step, not another fr
   assert.deepEqual([last.events.length, last.terminal, f.settlements()], [2, true, 2]);
 });
 
+test('a button pressed twice plays one step, and the second press bets nothing', async () => {
+  const { fraction } = await import('../src/engine/index.ts');
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity('twice'));
+  await w.setGameLimit('10000');
+  const half = fraction(1n, 2n);
+  const graph = () => ({
+    root: 'start',
+    nodes: [
+      {
+        id: 'start',
+        kind: 'decision' as const,
+        actions: [
+          {
+            id: 'roll',
+            outcomes: [
+              { next: 'won', probability: half },
+              { next: 'lost', probability: half },
+            ],
+          },
+        ],
+      },
+      { id: 'won', kind: 'terminal' as const, payout: 1900n },
+      { id: 'lost', kind: 'terminal' as const, payout: 0n },
+    ],
+  });
+  // The wallet's bridge answers a game's requests one at a time, in the order asked.
+  const bridge = f.bridgeFor(w);
+  let turn: Promise<unknown> = Promise.resolve();
+  const inTurn = {
+    ...bridge,
+    call: (method: string, params?: any) => (turn = turn.catch(() => {}).then(() => bridge.call(method, params))),
+  };
+  const round = new RoundClient(inTurn, graph, undefined, { store: memoryStore() });
+  await round.start({ stake: '1000' });
+  const [first, second] = await Promise.allSettled([round.action('roll'), round.action('roll')]);
+  assert.equal(first.status, 'fulfilled');
+  assert.match(String((second as PromiseRejectedResult).reason), /Wait for the action under way/);
+  assert.deepEqual([(first as PromiseFulfilledResult<any>).value.terminal, f.settlements()], [true, 1]);
+});
+
 test("the stub developer pages a game's bets 100 at a time, as the casino does", async () => {
   const f = await gameWallet(),
     w = f.wallet;

@@ -35,16 +35,9 @@ function harness(
   const errors: any[] = [];
   const activity: any[] = [];
   const child = { postMessage: (message: any, destination: any) => replies.push({ message, destination }) };
-  // The frame tells the bridge when it has loaded a page afresh.
-  let loaded = () => {};
-  const iframe = {
-    contentWindow: child,
-    addEventListener: (_: string, listener: () => void) => (loaded = listener),
-    removeEventListener: () => {},
-  };
   let current = true;
   const detach = attachGameBridge({
-    iframe: iframe as any,
+    iframe: { contentWindow: child } as any,
     origin: ORIGIN,
     target,
     isCurrent: () => current,
@@ -64,9 +57,7 @@ function harness(
     calls,
     errors,
     activity,
-    iframe,
     child,
-    reload: () => loaded(),
     detach,
     setCurrent: (value: any) => {
       current = value;
@@ -184,21 +175,26 @@ test('bridge executes only a request ID larger than the last, whatever action it
   bridge.detach();
 });
 
-test('a page the frame loads afresh counts from the start and never hears an answer meant for the page before it', async () => {
+test('a page the frame loads afresh counts from its greeting and never hears an answer meant for the page before it', async () => {
   const pending = deferred();
   // Only the bet stays open; everything else is answered at once.
   const bridge = harness(method => (method === 'game.casinoBet' ? pending.promise : { cash: '200' }));
-  await bridge.send(request(1));
-  // The wallet reloads the game, for instance to play with another asset, while a request is still open.
+  await bridge.send(request(1, 'wallet.hello'));
   const open = bridge.send(request(7, 'game.casinoBet', params));
-  bridge.reload();
-  await bridge.send(request(1));
+  const queued = bridge.send(request(8, 'game.payment', { id: 'op-2', amount: '10' }));
+  // The wallet reloads the game, for instance to play with the other money, while a bet is open and a payment waits.
+  // The page that follows greets it with its first ID, whenever the frame's load event comes.
+  await bridge.send(request(1, 'wallet.hello'));
   assert.deepEqual(bridge.replies.at(-1).message, { hookedin: true, id: 1, result: { cash: '200' } });
   (pending.resolve! as any)({ cash: '100' });
-  await open;
-  assert.equal(bridge.replies.filter(reply => reply.message.id === 7).length, 0, "the old page's answer is dropped");
+  await Promise.all([open, queued]);
+  assert.equal(bridge.replies.filter(reply => reply.message.id >= 7).length, 0, "the old page's answers are dropped");
+  assert.equal(bridge.calls.filter(call => call.method === 'game.payment').length, 0, 'and its waiting payment too');
   await bridge.send(request(2));
   assert.deepEqual(bridge.replies.at(-1).message.result, { cash: '200' }, 'and did not leave the new page waiting');
+  // Only a greeting starts a page: any other request whose ID does not rise is refused.
+  await bridge.send(request(2));
+  assert.equal(bridge.replies.at(-1).message.error.code, 'invalid-request');
   bridge.detach();
 });
 
@@ -277,6 +273,37 @@ test('detaching a bridge removes its listener and prevents further dispatch', as
   await bridge.send(request());
   assert.equal(bridge.calls.length, 0);
   assert.equal(bridge.replies.length, 0);
+});
+
+test('requests still waiting their turn when their game closes never reach the wallet', async () => {
+  // The wallet detaches the bridge when the player opens another game, and a channel change leaves it current no more.
+  for (const close of ['detach', 'not current'] as const) {
+    const pending = deferred(),
+      started = deferred();
+    let first = true;
+    const bridge = harness(() => {
+      if (!first) return { cash: '1' };
+      first = false;
+      started.resolve();
+      return pending.promise;
+    });
+    const open = bridge.send(request(1, 'game.casinoBet', params));
+    await started.promise;
+    const queued = [
+      bridge.send(request(2, 'game.payment', { id: 'op-2', amount: '10' })),
+      bridge.send(request(3, 'game.requestFunds', {})),
+    ];
+    if (close === 'detach') bridge.detach();
+    else bridge.setCurrent(false);
+    (pending.resolve! as any)({ cash: '100' });
+    await Promise.all([open, ...queued]);
+    assert.deepEqual(
+      bridge.calls.map(call => call.method),
+      ['game.casinoBet'],
+      close,
+    );
+    assert.equal(bridge.replies.length, 0, close);
+  }
 });
 
 test('validation excludes wallet signing and private key methods from the iframe API', () => {

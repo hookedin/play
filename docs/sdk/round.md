@@ -136,6 +136,7 @@ and the `onChange` listeners are called when it ends.
 
 | Throws                                                                                         | When                                                                          | The step afterwards                                                           |
 | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `Wait for the action under way`                                                                | `action` is running already, as when a button is pressed twice                | The running action's                                                          |
 | `Start a round first`                                                                          | No round is saved                                                             | –                                                                             |
 | `Illegal game action`                                                                          | The node does not offer the action                                            | –                                                                             |
 | `Retry the pending action first`                                                               | Another step is pending                                                       | Pending                                                                       |
@@ -192,7 +193,8 @@ the balance the last `restore`, `start` or `action` read, so one of them runs be
 busy: boolean;
 ```
 
-`true` while `action` runs: the wallet's balance holds the step's result before the round does.
+`true` while `action` runs: the wallet's balance holds the step's result before the round does, and another `action`
+throws.
 
 #### `onChange`
 

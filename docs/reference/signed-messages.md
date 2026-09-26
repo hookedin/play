@@ -25,8 +25,9 @@ EIP712Domain(string name,string version,uint256 chainId,address verifyingContrac
 | `verifyingContract` | The address of the HookedInCasino deployment          |
 
 Every structure uses this one domain, including the ones that never reach the contract. A digest is `keccak256(0x1901 ‖
-domainSeparator ‖ hashStruct(message))`. A signature is 65 bytes, `r ‖ s ‖ v`, from an externally owned account; the
-contract accepts only `v` of 27 or 28 and a low `s`.
+domainSeparator ‖ hashStruct(message))`. A signature is 65 bytes, `r ‖ s ‖ v`, from an externally owned account, with
+`v` of 27 or 28 and a low `s`: the only form the contract accepts, and so the only one the casino and the wallet take,
+of any structure.
 
 The hash of a signed structure, wherever HookedIn uses one, is its full digest, never its struct hash: a checkpoint's
 state hash (`previousStateHash`, `Close.stateHash`, the contract's `initialHash` and `closingHash`), an operation's hash

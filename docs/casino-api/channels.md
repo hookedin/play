@@ -204,7 +204,7 @@ returns the recorded reply; see [retries](index.md#operations-and-retries).
 
 | Body field       | Type      | Meaning                                                                                                                                                          |
 | ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `request`        | Operation | The signed [operation](../reference/signed-messages.md#transitions), with exactly its nine fields; `channelId` is `:id`                                          |
+| `request`        | Operation | The signed [operation](../reference/signed-messages.md#transitions), with exactly its fields; `channelId` is `:id`                                               |
 | `details`        | Details   | What it means: [details](../reference/signed-messages.md#details-and-memo) whose hash is `request.memo`                                                          |
 | `signature`      | string    | The channel key's EIP-712 signature of `request`                                                                                                                 |
 | `acknowledgment` | object    | `{stateHash, signature}`: the hash of the channel's latest checkpoint and the channel key's signature of it; required while the previous reply is unacknowledged |
@@ -433,7 +433,7 @@ A developer bet's details, whose `meta` is the game's own JSON:
 }
 ```
 
-`invalid` with `400` answers fields other than the operation's nine, details that do not hash to the memo, a missing
+`invalid` with `400` answers fields other than the operation's, details that do not hash to the memo, a missing
 seed and a debit's unknown counterparty; with `409`, details that break [the details rules](../reference/signed-messages.md#details-and-memo).
 `refused` answers a `request.channelId` other than `:id`, a bad signature or acknowledgment signature, an operation
 that is not the channel's next, an amount above the balance, and a casino bet whose chance or prize breaks the rules.
@@ -649,7 +649,7 @@ rest. Payouts belong to the account, so any of its channels lists and collects t
 | Response field | Type    | Meaning                                                                                                                                                                                                                       |
 | -------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `source`       | bytes32 | `DEVELOPER_ID` for developer earnings; `FUND_ID` for redeemed shares; `BANK_ID` for a bank withdrawal; a developer bet's hash for what its settlement paid ([counterparties](../reference/signed-messages.md#counterparties)) |
-| `index`        | number  | Earnings and developer bets: 0. Redeemed shares: the number of the fund change. A bank withdrawal: its statement's `sequence`                                                                                                 |
+| `index`        | number  | Earnings and developer bets: 0. Redeemed shares: the number of the fund change. A bank withdrawal: the index of the signing-history record that took it out                                                                   |
 | `amount`       | string  | What is owed; for earnings, `earned − collected`, which may be `"0"`                                                                                                                                                          |
 | `earned`       | string  | Earnings only: the commission the account has earned                                                                                                                                                                          |
 | `collected`    | string  | Earnings only: what of it has been collected                                                                                                                                                                                  |
@@ -891,7 +891,8 @@ Takes money out of the account's bank; it is owed at once and collected with a c
 
 The `Withdraw` names the channel's own account, is signed by the channel's key, and its `sequence` is the bank's plus
 one. Nothing in a bank is reserved: any amount up to the balance may leave at any time.
-[`…/payouts`](#get-apichannelsidpayouts) then lists it under `BANK_ID`, with the statement's `sequence` as its index.
+[`…/payouts`](#get-apichannelsidpayouts) then lists it under `BANK_ID`, indexed by its record in the signing history,
+since every bank counts its own `sequence`.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |

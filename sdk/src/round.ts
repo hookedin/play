@@ -313,6 +313,8 @@ export class RoundClient {
     return this.state()!;
   }
   async action(action: string) {
+    // One step at a time: a second press while a step runs would draw and place a bet of its own.
+    if (this.busy) throw new Error('Wait for the action under way');
     this.busy = true;
     try {
       return await this.step(action);
