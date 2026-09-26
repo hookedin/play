@@ -3,7 +3,7 @@ import { activityJSON, createActivityEntry, filterActivity, returnToPlayer } fro
 import { describeBet } from '../protocol/risk.ts';
 
 /** The live developer log for one embedded game. Session-only; the wallet's receipts are the durable record. */
-export type LogKind = 'request' | 'response' | 'error' | 'event' | 'wallet' | 'client';
+export type LogKind = 'request' | 'response' | 'error' | 'event' | 'client';
 export interface LogEntry {
   seq: number;
   kind: LogKind;
@@ -104,9 +104,9 @@ export function createGameLog(elements: GameLogElements) {
     last = 0,
     filter: string = 'all';
   const kinds: Record<string, LogKind[]> = {
-    all: ['request', 'response', 'error', 'event', 'wallet', 'client'],
+    all: ['request', 'response', 'error', 'event', 'client'],
     bridge: ['request', 'response', 'error', 'event'],
-    wallet: ['wallet', 'client'],
+    wallet: ['client'],
     errors: ['error'],
   };
   const apply = () => {
@@ -122,7 +122,6 @@ export function createGameLog(elements: GameLogElements) {
     response: 'Wallet → game',
     error: 'Error',
     event: 'Event',
-    wallet: 'Wallet',
     client: 'Client',
   };
   function log(

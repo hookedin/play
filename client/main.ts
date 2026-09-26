@@ -108,11 +108,9 @@ const wallet = new CasinoWallet({
   trustedDeployment: config.deployment || null,
   onChange: () => renderWallet(),
   onProgress: message => {
-    logGameActivity(message, undefined, 'wallet');
     $('operation-text').textContent = message;
     $('operation-status').classList.remove('hidden');
     clearTimeout(statusTimer);
-    if (!wallet.busy) statusTimer = setTimeout(() => $('operation-status').classList.add('hidden'), 3500);
   },
   // A developer bet's receipt reaches the game that placed it as soon as the wallet has collected what it was paid.
   onGameReceipt: (game, receipt) => {
@@ -378,7 +376,7 @@ function renderMoney() {
     : holding
       ? `Take back what ${active.manifest.name} still holds, or change what it may play with.`
       : `Choose what ${active.manifest.name} may play with.`;
-  button.disabled = uiBusy || wallet.busy;
+  button.disabled = uiBusy;
 }
 /** The play page shows no wallet controls: the game displays its balance and asks for money through the dialog. */
 function renderGameAccount() {

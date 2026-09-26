@@ -326,7 +326,6 @@ export class ChannelClient extends WalletTransactions {
       acknowledgment,
       ...(pending.seed ? { seed: pending.seed } : {}),
     };
-    this.onProgress('Confirming the signed result…');
     const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
     return this.accept(response, pending.operationId, pending.kind);
   }
