@@ -179,19 +179,20 @@ export function receiptSummary(
   const unit = receiptUnit(receipt);
   if (receipt.status === 'rejected')
     return {
-      title:
-        receipt.kind === 'invest'
-          ? 'Investment declined'
-          : receipt.kind === 'developer-bet'
-            ? 'Developer bet rejected'
-            : receipt.kind === 'casino-bet'
-              ? 'Casino bet rejected'
-              : 'Payment rejected',
+      title: (
+        {
+          'casino-bet': 'Casino bet rejected',
+          'developer-bet': 'Developer bet rejected',
+          payment: 'Payment rejected',
+          invest: 'Investment declined',
+          bank: 'Bank deposit declined',
+        } as Record<string, string>
+      )[receipt.kind],
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: receipt.lost ? 'warning' : 'neutral',
       amount: `0 ${unit}`,
       amountLabel: 'Balance change',
-      description: ['invest', 'developer-bet'].includes(receipt.kind)
+      description: ['invest', 'developer-bet', 'bank'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
         : receipt.lost
           ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this casino bet would have paid cannot be checked.'

@@ -346,11 +346,9 @@ export class ChannelClient extends WalletTransactions {
     const details: Details = c.pending!.details;
     let next: Checkpoint;
     if (rejected) {
-      // The casino declined the saved operation with a signed unchanged-balance checkpoint above
-      // it. The wallet countersigns only now, so the casino never holds a player-signed
-      // checkpoint that could supersede a completed result.
-      if (!c.pending?.request || !['casino-bet', 'developer-bet', 'invest', 'payment'].includes(kind))
-        throw new Error('Unexpected rejection');
+      // The casino declined the saved casino bet or debit with a signed unchanged-balance checkpoint above it; a
+      // credit is never declined, and `rejectionCheckpoint` takes none. The wallet countersigns only now, so the casino
+      // never holds a player-signed checkpoint that could supersede a completed result.
       next = rejectionCheckpoint(this.domain, c.state, c.pending.request);
       assertSignature(this.domain, STATE_TYPES, next, response.casinoSignature, this.operator);
     } else {

@@ -1943,7 +1943,8 @@ $<HTMLButtonElement>('bank-deposit').addEventListener('click', () =>
   task(async () => {
     const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
     if (amount <= 0n) throw new Error('Enter how much to put in your bank.');
-    await wallet.depositBank(amount);
+    const receipt = await wallet.depositBank(amount);
+    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
     $<HTMLInputElement>('bank-amount').value = '';
     toast(`Put ${formatEther(amount)} ${units()} in your bank.`);
     await refreshBank();
