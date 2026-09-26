@@ -1,13 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activityJSON, developerBetSummary, receiptSummary, receiptUnit } from '../client/activity.ts';
+import { activityJSON, developerBetSummary, receiptSummary } from '../client/activity.ts';
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
 
 test('a developer bet shows its result apart from its collection, and a zero payout as settled', () => {
   const bet: PlayerDeveloperBet = {
     bet: '0x' + '1'.repeat(64),
     game: '0x' + '2'.repeat(64),
-    asset: 'test',
     status: 'open',
     stake: '10',
     collected: false,
@@ -96,23 +95,4 @@ test('diagnostic JSON handles bigint, malformed payloads and explicit preview tr
   const long = { data: 'x'.repeat(100) };
   assert.match(activityJSON(long, 30), /truncated at 30 characters/);
   assert.deepEqual(JSON.parse(activityJSON(long)), long, 'Saved receipt JSON is never truncated by default');
-});
-
-test('a receipt is read in the asset of the channel that signed it', () => {
-  assert.equal(receiptUnit({ asset: 'test' }), 'TEST');
-  assert.equal(receiptUnit({ asset: 'eth' }), 'ETH');
-  // On-chain rows carry no asset and are always ETH.
-  assert.equal(receiptUnit({}), 'ETH');
-  const bet = {
-    kind: 'casino-bet',
-    status: 'signed',
-    asset: 'test',
-    stake: '2000000000000000000',
-    payout: '0',
-    maxPayout: '19800000000000000000',
-    expectedPayout: String(((1n << 64n) * 2000000000000000000n * 99n) / 100n),
-    balance: '114800000000000000000',
-  };
-  assert.equal(receiptSummary(bet).amount, '−2.0 TEST');
-  assert.match(receiptSummary(bet).description!, /Stake 2.0 TEST · Paid 0.0 TEST/);
 });

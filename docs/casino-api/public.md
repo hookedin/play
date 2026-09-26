@@ -43,8 +43,8 @@ on-chain and uses its own ABI.
   "chainId": "31337",
   "rpcUrl": "http://127.0.0.1:53087",
   "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "protocol": "0x294d7dda3e5627db5c0a15d860bba3ee061ffaac6b8ae8fb32d269c1be4ba634",
-  "developerProtocol": "0x75b43323e570f68fbca2cbc10d55c441fad8a3dd0b000544def7a151a3cbbd67",
+  "protocol": "0x319a7023d2f8ced461cfc7257cce3f82b425e3eb62d55347b87cf0383ce0fe8a",
+  "developerProtocol": "0xf5bd44c475a9e6e0136b45e0fb337e44a37298c63003b0c8f7fd74d6838a6d65",
   "confirmations": 1,
   "operator": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   "clientUrl": "http://127.0.0.1:4184",
@@ -63,8 +63,7 @@ on-chain and uses its own ABI.
 
 ### `GET /api/status`
 
-The casino's health, the books of both assets, what developers have earned, the last observed block and the commit it
-runs.
+The casino's health, its books, what developers have earned, the last observed block and the commit it runs.
 
 **Auth:** none · **Idempotent:** yes
 
@@ -76,37 +75,35 @@ runs.
 | `lastProgress`      | number         | When the chain was last seen to advance, in milliseconds                                                                                                                                                             |
 | `observationError`  | string or null | Why the last observation failed                                                                                                                                                                                      |
 | `disputes`          | object         | `{alerts, pending}`: the casino's defence of closing channels, below                                                                                                                                                 |
-| `channels`          | number         | ETH channels open or closing                                                                                                                                                                                         |
+| `channels`          | number         | Channels open or closing                                                                                                                                                                                             |
 | `signingLogRecords` | number         | Records in the casino's signing history                                                                                                                                                                              |
 | `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                                                                                                           |
 | `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                                                                                              |
 | `chainId`           | string         | The chain                                                                                                                                                                                                            |
 | `casino`            | address        | The contract                                                                                                                                                                                                         |
-| The books           | strings        | The ETH books, below                                                                                                                                                                                                 |
-| `test`              | object         | `{channels, …}`: the number of test channels and the test coins' books                                                                                                                                               |
-| `developers`        | array          | `{developer, asset, earned, collected, outstanding}` for each developer and asset: the commission a developer has earned, collected and still to collect                                                             |
+| The books           | strings        | The books, below                                                                                                                                                                                                     |
+| `developers`        | array          | `{developer, earned, collected, outstanding}` for each developer: the commission a developer has earned, collected and still to collect                                                                              |
 | `block`             | object or null | The last observed confirmed block: `{cash, protectedPrincipal, reservedWinnings, unpaidWinnings, blockNumber, blockHash, timestamp}`, the contract's balances with the block's number, hash and time in Unix seconds |
 | `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                                                                                                     |
 
-The books, in each asset. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they
-make the bankroll.
+The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
 
-| Field                                                      | Meaning                                                                                                                                                  |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cash`                                                     | Pool cash: the contract's balance; for test coins, 10,000,000 TEST plus every coin the faucet minted                                                     |
-| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names; in `test` they are `0` (`protectedPrincipal` and `unpaidWinnings` as numbers) |
-| `activeLiabilities`                                        | The signed balances of open and closing channels                                                                                                         |
-| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                                                                                    |
-| `commissions`                                              | Developer commission earned and not yet collected                                                                                                        |
-| `escrow`                                                   | Payouts awarded and not yet collected                                                                                                                    |
-| `banks`                                                    | Everything in developers' banks                                                                                                                          |
-| `houseFeesEarned`                                          | The casino's own commission, in total                                                                                                                    |
-| `reserved`                                                 | The worst cases of the casino bets being decided                                                                                                         |
-| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                                                                                        |
-| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                                                                                  |
-| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                                                                                       |
-| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`                                                                  |
-| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                            |
+| Field                                                      | Meaning                                                                                       |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `cash`                                                     | Pool cash: the contract's balance                                                             |
+| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                     |
+| `activeLiabilities`                                        | The signed balances of open and closing channels                                              |
+| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                         |
+| `commissions`                                              | Developer commission earned and not yet collected                                             |
+| `escrow`                                                   | Payouts awarded and not yet collected                                                         |
+| `banks`                                                    | Everything in developers' banks                                                               |
+| `houseFeesEarned`                                          | The casino's own commission, in total                                                         |
+| `reserved`                                                 | The worst cases of the casino bets being decided                                              |
+| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                             |
+| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                       |
+| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                            |
+| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`       |
+| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()` |
 
 `disputes.alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining`
 the seconds left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older
@@ -148,29 +145,9 @@ checkpoint than the casino holds, and the casino challenges it), `missed-deadlin
   "bankroll": "100007081496483283177",
   "houseCash": "100000000000001000000",
   "withdrawableHouse": "100000000000001000000",
-  "test": {
-    "channels": 2,
-    "cash": "10000200000000000000000000",
-    "protectedPrincipal": 0,
-    "reservedWinnings": "0",
-    "unpaidWinnings": 0,
-    "activeLiabilities": "200000000000000000000",
-    "finalizedLiabilities": "0",
-    "commissions": "0",
-    "escrow": "0",
-    "banks": "0",
-    "houseFeesEarned": "0",
-    "reserved": "0",
-    "equity": "10000000000000000000000000",
-    "unreservedBankroll": "10000000000000000000000000",
-    "bankroll": "10000000000000000000000000",
-    "houseCash": "10000200000000000000000000",
-    "withdrawableHouse": "10000200000000000000000000"
-  },
   "developers": [
     {
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      "asset": "eth",
       "earned": "18503517716823",
       "collected": "18503517716823",
       "outstanding": "0"
@@ -204,7 +181,7 @@ The casino's health and books: the reply of [`GET /api/status`](#get-apistatus) 
 
 **Auth:** none · **Idempotent:** yes
 
-The wallet reads `bankroll`, or `test.bankroll`, from it as a hint of what the casino can take.
+The wallet reads `bankroll` from it as a hint of what the casino can take.
 
 ```json title="Response"
 {
@@ -238,26 +215,7 @@ The wallet reads `bankroll`, or `test.bankroll`, from it as a hint of what the c
   "unreservedBankroll": "100007081496483283177",
   "bankroll": "100007081496483283177",
   "houseCash": "100000000000001000000",
-  "withdrawableHouse": "100000000000001000000",
-  "test": {
-    "channels": 2,
-    "cash": "10000200000000000000000000",
-    "protectedPrincipal": 0,
-    "reservedWinnings": "0",
-    "unpaidWinnings": 0,
-    "activeLiabilities": "200000000000000000000",
-    "finalizedLiabilities": "0",
-    "commissions": "0",
-    "escrow": "0",
-    "banks": "0",
-    "houseFeesEarned": "0",
-    "reserved": "0",
-    "equity": "10000000000000000000000000",
-    "unreservedBankroll": "10000000000000000000000000",
-    "bankroll": "10000000000000000000000000",
-    "houseCash": "10000200000000000000000000",
-    "withdrawableHouse": "10000200000000000000000000"
-  }
+  "withdrawableHouse": "100000000000001000000"
 }
 ```
 
@@ -308,7 +266,7 @@ Every player's public record, the most played first.
 | ------- | ------ | --------------------------------------------------------------------------------------------------- |
 | `limit` | number | How many, 1 to 500; default 100. Other values are clamped, and one that is not a number counts as 1 |
 
-The order counts plays in both assets together. Each record is a [profile](#get-apiplayersname).
+Each record is a [profile](#get-apiplayersname).
 
 ```text title="Request"
 GET /api/players?limit=10
@@ -321,16 +279,9 @@ GET /api/players?limit=10
     "alias": "alice",
     "since": 1790384229155,
     "stats": {
-      "eth": {
-        "plays": 2,
-        "staked": "2000000000000000",
-        "won": "0"
-      },
-      "test": {
-        "plays": 0,
-        "staked": "0",
-        "won": "0"
-      }
+      "plays": 2,
+      "staked": "2000000000000000",
+      "won": "0"
     },
     "games": []
   },
@@ -339,16 +290,9 @@ GET /api/players?limit=10
     "alias": "hookedin",
     "since": 1790384228471,
     "stats": {
-      "eth": {
-        "plays": 0,
-        "staked": "0",
-        "won": "0"
-      },
-      "test": {
-        "plays": 0,
-        "staked": "0",
-        "won": "0"
-      }
+      "plays": 0,
+      "staked": "0",
+      "won": "0"
     },
     "games": [
       {
@@ -394,16 +338,9 @@ GET /api/players?limit=10
     "alias": "studio",
     "since": 1790384228636,
     "stats": {
-      "eth": {
-        "plays": 0,
-        "staked": "0",
-        "won": "0"
-      },
-      "test": {
-        "plays": 0,
-        "staked": "0",
-        "won": "0"
-      }
+      "plays": 0,
+      "staked": "0",
+      "won": "0"
     },
     "games": [
       {
@@ -434,7 +371,7 @@ One player's public record, their profile.
 | `uname`        | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                |
 | `alias`        | string or null | The alias they took                                                                                                                                                                                     |
 | `since`        | number         | When the casino first knew them, in milliseconds                                                                                                                                                        |
-| `stats`        | object         | `{eth, test}`, each `{plays, staked, won}`: how many bets of theirs have settled (a number), what those bets staked and what they paid                                                                  |
+| `stats`        | object         | `{plays, staked, won}`: how many bets of theirs have settled (a number), what those bets staked and what they paid                                                                                      |
 | `games`        | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the manifest's URL, `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
 
 ```json title="Response"
@@ -443,16 +380,9 @@ One player's public record, their profile.
   "alias": "alice",
   "since": 1790384229155,
   "stats": {
-    "eth": {
-      "plays": 2,
-      "staked": "2000000000000000",
-      "won": "0"
-    },
-    "test": {
-      "plays": 0,
-      "staked": "0",
-      "won": "0"
-    }
+    "plays": 2,
+    "staked": "2000000000000000",
+    "won": "0"
   },
   "games": []
 }
@@ -488,14 +418,14 @@ The reply is the player's names and the game's entry in their profile: `{uname, 
 
 ### `GET /api/games/:key`
 
-A game's public record: its settled bets, newest first, and their totals in each asset.
+A game's public record: its settled bets, newest first, and their totals.
 
 **Auth:** none · **Idempotent:** yes
 
 A bet appears here when it settles: a player's casino bet when the casino carries it out, a developer bet when its
 developer settles it, and a developer's own casino bet from its bank when the bankroll takes it. Declined bets and
-reveals do not appear. Its player is their uname and alias, a developer's casino bet its developer's, never an address, a
-channel or an operation ID. An unknown key answers with no totals and no bets.
+reveals do not appear. Its player is their uname and alias, a developer's casino bet its developer's, never an address,
+a channel or an operation ID. An unknown key answers with totals of zero and no bets.
 
 | Path  | Type    | Meaning                                                   |
 | ----- | ------- | --------------------------------------------------------- |
@@ -510,8 +440,8 @@ channel or an operation ID. An unknown key answers with no totals and no bets.
 | --------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `key`           | bytes32 | The game, lowercase                                                                                                               |
 | `developerBets` | object  | `{open, settled}`: how many of the game's developer bets, of the group if the request names one, are open and settled, as numbers |
-| `totals`        | object  | By asset, each `{bets, players, staked, paid, expected, priced}`, below                                                           |
-| `bets`          | array   | `{index, kind, uname, alias, group?, asset, stake, chance?, prize?, payout, at}`, below                                           |
+| `totals`        | object  | `{bets, players, staked, paid, expected, priced}`, below                                                                          |
+| `bets`          | array   | `{index, kind, uname, alias, group?, stake, chance?, prize?, payout, at}`, below                                                  |
 
 The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. A total's `bets`
 and `players` are numbers; `staked` and `paid` are what the bets staked and paid. `expected` is what the casino bets were
@@ -534,14 +464,12 @@ GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf
     "settled": 1
   },
   "totals": {
-    "eth": {
-      "bets": 2,
-      "players": 1,
-      "staked": "2000000000000000",
-      "paid": "0",
-      "expected": "18262276632972456098000000000000000",
-      "priced": "1000000000000000"
-    }
+    "bets": 2,
+    "players": 1,
+    "staked": "2000000000000000",
+    "paid": "0",
+    "expected": "18262276632972456098000000000000000",
+    "priced": "1000000000000000"
   },
   "bets": [
     {
@@ -550,7 +478,6 @@ GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf
       "uname": "zi26admbshgt8yfa6xfxs97r",
       "alias": "alice",
       "group": "5b1f3d9a0c2e47f6a8d4e1b7c9f0a3d2e6b8c1f4a7d0e3b6c9f2a5d8e1b4c7f0",
-      "asset": "eth",
       "stake": "1000000000000000",
       "payout": "0",
       "at": 1790384229614
@@ -561,7 +488,6 @@ GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf
       "uname": "zi26admbshgt8yfa6xfxs97r",
       "alias": "alice",
       "group": "hand-1",
-      "asset": "eth",
       "stake": "1000000000000000",
       "chance": "9131138316486228049",
       "prize": "2000000000000000",
@@ -594,7 +520,6 @@ how to check one.
 | -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`           | bytes32 | The round                                                                                                                                                                                                                                                                                                                   |
 | `developer`    | address | The developer that opened it, lowercase                                                                                                                                                                                                                                                                                     |
-| `asset`        | string  | `eth` or `test`                                                                                                                                                                                                                                                                                                             |
 | `status`       | string  | `open` or `revealed`                                                                                                                                                                                                                                                                                                        |
 | `seed`         | bytes32 | Revealed: the seed the developer's casino bet brought                                                                                                                                                                                                                                                                       |
 | `secret`       | bytes32 | Revealed: the casino's secret                                                                                                                                                                                                                                                                                               |
@@ -605,7 +530,6 @@ how to check one.
 {
   "id": "0x21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
   "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
-  "asset": "eth",
   "status": "revealed",
   "seed": "0x677a5f560aadfc5627c98b34edd076d53481e76411befe62dd848cbed1fc9ed4",
   "secret": "0x54128284ebebd715b1274a0e304f9653b789d0bfeb013b428a086b1d78b0d725",
@@ -644,7 +568,6 @@ One developer bet, by its hash.
 | `bet`            | bytes32                | The bet's hash                                                                                                                    |
 | `game`           | bytes32                | The game's key                                                                                                                    |
 | `group`          | string                 | The group the game gave it, when it has one                                                                                       |
-| `asset`          | string                 | `eth` or `test`                                                                                                                   |
 | `stake`          | string                 | What the player staked, paid into the developer's bank                                                                            |
 | `placedAt`       | number                 | When the casino took it, in milliseconds                                                                                          |
 | `developer`      | address                | The game's developer when the bet was placed, lowercase: its bank took the stake and its key settles the bet                      |
@@ -659,7 +582,6 @@ One developer bet, by its hash.
   "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
   "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
   "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
-  "asset": "eth",
   "stake": "1000000000000000",
   "placedAt": 1790384229582,
   "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
@@ -710,7 +632,6 @@ GET /api/developer-bets?game=0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae
       "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
       "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
       "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
-      "asset": "eth",
       "stake": "1000000000000000",
       "placedAt": 1790384229582,
       "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",

@@ -38,7 +38,7 @@ export interface RoundBridge {
   call: Bridge;
   balance: () => Promise<GameLimit>;
 }
-/** Where a round lives between reloads: the game's own origin storage, keyed per game, player and asset. */
+/** Where a round lives between reloads: the game's own origin storage, keyed per game, and per player or practice. */
 export interface RoundStore {
   get(key: string): string | null;
   set(key: string, value: string): void;
@@ -118,13 +118,14 @@ export class RoundClient {
   private changed() {
     for (const listener of this.listeners) listener();
   }
-  /** The wallet's asset, asked for until the wallet has answered, so every sentence below names the right money. */
+  /** What the wallet plays with, asked for until the wallet has answered, so every sentence below names the right
+   * money. */
   private async greet() {
     this.hello ??= await this.call('wallet.hello');
     this.units = this.hello?.asset?.symbol ?? '';
     return this.hello;
   }
-  /** An amount in the wallet's own asset. Every HookedIn asset counts in units of 10^-18. */
+  /** An amount in what the wallet plays with. ETH and test coins both count in units of 10^-18. */
   private amount(units: bigint) {
     const whole = units / 10n ** 18n,
       fraction = (units % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '');
@@ -184,7 +185,7 @@ export class RoundClient {
   /** Read the round as this origin's storage holds it. */
   private async load() {
     const [info, hello] = await Promise.all([this.call('wallet.info'), this.greet()]);
-    this.storageKey = `hookedin:round:${this.name}:${playerScope(info, hello?.asset?.id ?? 'eth')}`;
+    this.storageKey = `hookedin:round:${this.name}:${playerScope(info, hello?.practice === true)}`;
     this.account = await this.balance();
     const saved = this.store.get(this.storageKey);
     this.data = saved ? JSON.parse(saved) : null;

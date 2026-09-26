@@ -42,7 +42,7 @@ export interface Details {
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
   /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a settled developer
-   * bet, a developer's earnings or the faucet. A game's payment pays the bankroll and names nothing. */
+   * bet or a developer's earnings. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
   /** A developer bet's meta: the game's own JSON, saying what the bet is, which the casino keeps and never reads. A
    * debit that names its game and carries meta is a developer bet: a bet against the game's developer, whose bank
@@ -55,7 +55,6 @@ export interface PublicDeveloperBet {
   /** The game's key. */
   game: string;
   group?: string;
-  asset: 'eth' | 'test';
   uname: string | null;
   alias: string | null;
   /** The game's developer, whose bank took the stake and whose key settles it. */
@@ -69,14 +68,13 @@ export interface PublicDeveloperBet {
   settlement?: { player: string; casino: string; signature: string };
   settledAt?: number;
 }
-/** An account's developer bet, across its channels in one asset: open, or settled and whether what it paid has been
- * collected into a channel. */
+/** An account's developer bet, across its channels: open, or settled and whether what it paid has been collected into
+ * a channel. */
 export interface PlayerDeveloperBet {
   bet: string;
   /** The game's key. */
   game: string;
   group?: string;
-  asset: 'eth' | 'test';
   status: 'open' | 'settled';
   stake: string;
   payout?: string;
@@ -123,8 +121,6 @@ export interface Evidence {
   step: Step;
 }
 export interface EvidenceBundle {
-  /** Evidence of a test channel proves a balance of test coins to its holder; it settles nowhere. */
-  asset?: 'test';
   /** What the step's operation means, whose hash it signed as its memo. */
   details?: Details;
   chainId: Integer;
@@ -197,13 +193,12 @@ export interface Submission {
   acknowledgment?: { stateHash: string; signature: string };
   seed?: string;
 }
-/** A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer in
- * one asset, for the developer's casino bet. That casino bet reveals it: its seed, the casino's secret and their
- * outcome, and the casino bet itself, which may bet nothing and only reveal the round. */
+/** A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer, for
+ * the developer's casino bet. That casino bet reveals it: its seed, the casino's secret and their outcome, and the
+ * casino bet itself, which may bet nothing and only reveal the round. */
 export interface Round {
   id: string;
   developer: string;
-  asset: 'eth' | 'test';
   /** `open` until the developer's casino bet on it reveals it. */
   status: 'open' | 'revealed';
   seed?: string;
@@ -255,8 +250,6 @@ export interface FundHolder {
 /** The service projection of one channel. Everything financial here is replayable from the signing log. */
 export interface ChannelRow {
   opening: Opening;
-  /** Test coins; an ETH channel leaves it out. */
-  asset?: 'test';
   state: Checkpoint;
   playerSignature: string;
   casinoSignature: string;

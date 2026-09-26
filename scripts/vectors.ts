@@ -4,7 +4,6 @@ import type { Checkpoint, Details, Operation } from '../protocol/types.ts';
 import {
   domain,
   channelId,
-  testOpening,
   initialState,
   hashState,
   operation,
@@ -52,18 +51,15 @@ export function buildVectors() {
     at(100_000_000n, 9_100_000_000n, 9000n),
   ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
-  // The player's ETH channel, and its test channel with the same channel key.
+  // The player's channel.
   const deposit = 1_000_000_000n,
-    channels = {
-      eth: {
-        channelId: channelId(identity.player, identity.signer, deposit),
-        player: identity.player,
-        signer: identity.signer,
-        deposit: String(deposit),
-      },
-      test: testOpening(identity.player, identity.signer),
+    opening = {
+      channelId: channelId(identity.player, identity.signer, deposit),
+      player: identity.player,
+      signer: identity.signer,
+      deposit: String(deposit),
     },
-    genesis = initialState(channels.eth);
+    genesis = initialState(opening);
   // An operation on the checkpoint before it: its details, whose canonical JSON its memo hashes, the operation and its
   // hash, and the checkpoint it leads to with the seed and secret it settles with, zero but for a casino bet.
   const apply = (
@@ -127,13 +123,13 @@ export function buildVectors() {
     { id: `0x${'84'.repeat(32)}`, counterparty: developerBet.hash },
   );
   const rejection = rejectionCheckpoint(d, genesis, bet.operation),
-    close = { channelId: channels.eth.channelId, stateHash: payout.nextHash };
+    close = { channelId: opening.channelId, stateHash: payout.nextHash };
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     identity,
     protocol: PROTOCOL,
     developerProtocol: DEVELOPER_PROTOCOL,
-    channels,
+    opening,
     genesis,
     genesisHash: hashState(d, genesis),
     operations: [bet, developerBet, payout],

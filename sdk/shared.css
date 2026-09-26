@@ -404,12 +404,12 @@ h1 {
   color: #ffa9a2;
 }
 /* Test coins never look like the real thing. */
-.bank[data-test] {
+.bank[data-practice] {
   border-style: dashed;
   border-color: #d9a441;
 }
-.bank[data-test] .bank-label,
-.bank[data-test] .bank-asset {
+.bank[data-practice] .bank-label,
+.bank[data-practice] .bank-asset {
   color: #f0c976;
 }
 .bank-add {

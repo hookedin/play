@@ -152,7 +152,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     return plain({
       id: round.id,
       developer: developerKey.address.toLowerCase(),
-      asset: 'eth' as const,
       status: round.casinoBet ? ('revealed' as const) : ('open' as const),
       ...(round.casinoBet
         ? {
@@ -198,12 +197,12 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       config: { contractAddress: casino },
       verifiedChainId: 31337n,
       reportedBankroll: String(bankroll),
-      currentId: first.opening.channelId,
+      channelId: first.opening.channelId,
       channels: { [first.opening.channelId]: structuredClone(first) },
     });
     wallet.ready = () => {
       wallet.requireDurableState();
-      if (!wallet.current) throw new Error('No channel');
+      if (!wallet.channel) throw new Error('No channel');
     };
     wallet.api = async (path, body) => {
       if (path === '/api/metrics') return { bankroll: String(bankroll) };
@@ -229,7 +228,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
           bets: bets.map(bet => ({
             bet: bet.bet,
             game: bet.game,
-            asset: bet.asset,
             status: bet.status,
             stake: bet.stake,
             collected: settled && bet.settlement?.player !== '0' && !owed.has(bet.bet),
@@ -344,7 +342,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         bet: hash,
         game: details.game,
         ...(details.group ? { group: details.group } : {}),
-        asset: 'eth',
         uname,
         alias: null,
         developer: developerKey.address.toLowerCase(),
@@ -500,11 +497,11 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     secretOf: (round: string) => secrets.get(round.toLowerCase())!,
     /** The player closes their channel and opens another. A game's operation IDs are theirs across both. */
     async replaceChannel(of = wallet) {
-      const old = of.channels[of.currentId!]!,
+      const old = of.channels[of.channelId!]!,
         next = await openChannel();
       of.channels[old.opening.channelId] = { ...old, onchain: { status: '3' } };
       of.channels[next.opening.channelId] = structuredClone(next);
-      of.currentId = next.opening.channelId;
+      of.channelId = next.opening.channelId;
       await of.save();
     },
     reload,

@@ -19,8 +19,8 @@ export interface GameIdentity {
 export interface GameSession {
   key: string;
   identity: GameIdentity;
-  /** What the limit below is in. A game opened before the wallet has one starts with neither. */
-  asset?: 'eth' | 'test';
+  /** Whether the limit below is in test coins, the practice money this tab keeps, or in the channel's ETH. */
+  practice: boolean;
   /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
 }

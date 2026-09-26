@@ -13,10 +13,10 @@ The key is the publishing account's own, so a server that holds it holds everyth
 [`createDeveloper`](../sdk/developer.md#createdeveloper) wraps all of it, and [developer bets](../games/developer-bets.md)
 walks through the order of requests with roulette as the example.
 
-A developer's requests share one budget, and the requests that touch its bank in one asset wait their turn
-([budgets and queues](index.md#budgets-and-queues)). The signed structures, `DeveloperAccess`,
-`BankCasinoBet` and `Settlement`, are on [Signed messages](../reference/signed-messages.md#developer-messages); a
-developer's server checks `developerProtocol` in [`GET /api/config`](public.md#get-apiconfig) before it signs any.
+A developer's requests share one budget, and the requests that touch its bank wait their turn
+([budgets and queues](index.md#budgets-and-queues)). The signed structures, `DeveloperAccess`, `BankCasinoBet` and
+`Settlement`, are on [Signed messages](../reference/signed-messages.md#developer-messages); a developer's server checks
+`developerProtocol` in [`GET /api/config`](public.md#get-apiconfig) before it signs any.
 
 ## Rounds and casino bets
 
@@ -27,31 +27,21 @@ Opens a round for the developer's own casino bet.
 **Auth:** developer access · **Idempotent:** no: every call names another round
 
 The casino picks the round's secret and keeps it; only the developer's casino bet on the round reveals it. The developer
-keeps track of its rounds: one it never bets on stays open.
+keeps track of its rounds: one it never bets on stays open. The request has no fields: its body is `{}`.
 
-| Body field | Type   | Meaning                                                                            |
-| ---------- | ------ | ---------------------------------------------------------------------------------- |
-| `asset`    | string | `"eth"` (the default) or `"test"`: the asset of the casino bet that will reveal it |
-
-The reply is the round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it: `{id, developer, asset,
-status}`, with `status` `open`.
-
-```json title="Request"
-{
-  "asset": "eth"
-}
-```
+The reply is the round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it: `{id, developer, status}`,
+with `status` `open`.
 
 ```json title="Response"
 {
   "id": "0x21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
   "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
-  "asset": "eth",
   "status": "open"
 }
 ```
 
-**Errors:** [`invalid`](index.md#errors) (400), [`unauthorized`](index.md#errors) (401), [`refused`](index.md#errors) (409), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
+**Errors:** [`unauthorized`](index.md#errors) (401), [`refused`](index.md#errors) (409),
+[`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
 
 ### `POST /api/rounds/:round/casino-bet`
 
@@ -110,7 +100,6 @@ round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it.
 {
   "id": "0x21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
   "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
-  "asset": "eth",
   "status": "revealed",
   "seed": "0x677a5f560aadfc5627c98b34edd076d53481e76411befe62dd848cbed1fc9ed4",
   "secret": "0x54128284ebebd715b1274a0e304f9653b789d0bfeb013b428a086b1d78b0d725",
@@ -146,11 +135,10 @@ Settles developer bets on the developer's games, each with its own signed `Settl
 **Auth:** developer access · **Idempotent:** yes: a settled bet answers as it stands
 
 Each `Settlement` says what the player is paid and what the casino is given, both from the developer's bank. The bank
-must hold the sum over every bet in the batch not yet settled, in each asset, or nothing in the batch is settled
-(`bank-short`). A bet already settled is left as it is, and its entry is not checked. A settled bet's payout is owed to
-its player: [`GET /api/channels/:id/payouts`](channels.md#get-apichannelsidpayouts) lists it under the bet's hash, and
-the player's wallet collects it after checking the developer's signature. The casino's part is its commission on the
-bet.
+must hold the sum over every bet in the batch not yet settled, or nothing in the batch is settled (`bank-short`). A bet
+already settled is left as it is, and its entry is not checked. A settled bet's payout is owed to its player:
+[`GET /api/channels/:id/payouts`](channels.md#get-apichannelsidpayouts) lists it under the bet's hash, and the player's
+wallet collects it after checking the developer's signature. The casino's part is its commission on the bet.
 
 | Body field                | Type    | Meaning                                                                 |
 | ------------------------- | ------- | ----------------------------------------------------------------------- |
@@ -182,7 +170,6 @@ shows it.
     "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
-    "asset": "eth",
     "stake": "1000000000000000",
     "placedAt": 1790384229582,
     "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",

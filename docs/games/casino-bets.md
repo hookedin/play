@@ -51,10 +51,10 @@ The page:
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { HEADS, flipBet, wire } from './flip.ts';
 
-await HookedIn.hello(); // the asset, which the storage key below names
+await HookedIn.hello(); // whether the wallet practices, which the storage key below names
 const key = `${HookedIn.storageScope(await HookedIn.info())}:flip`;
 
-/** One flip for `stake`, in the asset's smallest units. */
+/** One flip for `stake`, in smallest units of what the wallet plays with. */
 async function flip(stake: bigint) {
   // The game may risk only its spending limit. The player sets it in the wallet's own dialog.
   const { balance } = await HookedIn.balance();

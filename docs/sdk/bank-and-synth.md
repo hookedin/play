@@ -36,9 +36,9 @@ asset's symbol, a status line, and an **Add funds** button that asks the player 
 then the balance less anything withheld, never below zero.
 
 `root` gets the class `bank` and `aria-live="polite"`. Its `data-state` is `pending` while an operation awaits recovery,
-`empty` at a zero balance and `ready` otherwise, and it carries `data-test` while the wallet plays with test coins. The
-children are `.bank-figure` (holding `.bank-label`, `.bank-amount` and `.bank-asset`), `.bank-status` and `.bank-add`,
-which [`shared.css`](#sharedcss) styles.
+`empty` at a zero balance and `ready` otherwise, and it carries `data-practice` while the wallet practices. The children
+are `.bank-figure` (holding `.bank-label`, `.bank-amount` and `.bank-asset`), `.bank-status` and `.bank-add`, which
+[`shared.css`](#sharedcss) styles.
 
 With `round`, a game's [`RoundClient`](round.md#roundclient), the figure leaves out the cash inside an unfinished round,
 which the round shows, and stands still while a step settles, so it moves once a round: down by what the player put in,

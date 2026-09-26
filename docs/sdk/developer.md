@@ -23,7 +23,7 @@ const developer = await createDeveloper({
   key: process.env.DEVELOPER_KEY!,
   name: 'roulette',
 });
-const round = await developer.openRound('eth');
+const round = await developer.openRound();
 const seedHash = await developer.seedHash(round.id); // commit to both before anybody bets
 ```
 
@@ -69,8 +69,8 @@ export interface Developer {
     meta: number;
     group: number;
   };
-  bankroll(asset: AssetId): Promise<bigint>;
-  openRound(asset: AssetId): Promise<Round>;
+  bankroll(): Promise<bigint>;
+  openRound(): Promise<Round>;
   seedHash(round: string): Promise<string>;
   round(id: string): Promise<Round>;
   casinoBet(bet: BankCasinoBet): Promise<Round>;
@@ -121,20 +121,19 @@ out of, the most a bet's meta takes and the longest group. They are the numbers 
 #### `bankroll`
 
 ```ts
-bankroll(asset: AssetId): Promise<bigint>;
+bankroll(): Promise<bigint>;
 ```
 
-The casino's bankroll in `asset`, as it last reported it in [`GET /api/status`](../casino-api/public.md#get-apistatus):
-what to price casino bets against, such as a shared draw's [binary steps](steps.md#pricesteps), not a promise to admit
-them.
+The casino's bankroll, as it last reported it in [`GET /api/status`](../casino-api/public.md#get-apistatus): what to
+price casino bets against, such as a shared draw's [binary steps](steps.md#pricesteps), not a promise to admit them.
 
 #### `openRound`
 
 ```ts
-openRound(asset: AssetId): Promise<Round>;
+openRound(): Promise<Round>;
 ```
 
-A round in `asset` for the developer's casino bet, named by the casino by the hash of a secret it keeps:
+A round for the developer's casino bet, named by the casino by the hash of a secret it keeps:
 [`POST /api/rounds`](../casino-api/developers.md#post-apirounds). Every call names another round, `open`, so the server
 keeps track of its own.
 
@@ -351,14 +350,6 @@ gameKey({ developer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', name: 'my-gam
 // '0x45a9172eb243e9566aeeb6eee4b57f919819ffee38451b919a98840e747caaed'
 ```
 
-### `AssetId`
-
-```ts
-export type AssetId = 'eth' | 'test';
-```
-
-What a round, a bet or a bank is in: the network's ETH, or the casino's test coins.
-
 ### `PublicDeveloperBet`
 
 ```ts
@@ -366,7 +357,6 @@ export interface PublicDeveloperBet {
   bet: string;
   game: string;
   group?: string;
-  asset: 'eth' | 'test';
   uname: string | null;
   alias: string | null;
   developer: string;
@@ -385,7 +375,6 @@ A developer bet as anyone may read it by its hash.
 | ---------------- | ----------------------------------------------------------------------------------------- |
 | `bet`            | The bet's hash: the hash of the operation that placed it, which signs its meta            |
 | `game`, `group`  | The game's key, and the group the page gave the bet                                       |
-| `asset`          | What it was placed in                                                                     |
 | `uname`, `alias` | The player's names                                                                        |
 | `developer`      | The developer whose bank took the stake and whose key settles it                          |
 | `stake`          | The stake, a decimal string of smallest units                                             |
@@ -401,7 +390,6 @@ A developer bet as anyone may read it by its hash.
 export interface Round {
   id: string;
   developer: string;
-  asset: 'eth' | 'test';
   status: 'open' | 'revealed';
   seed?: string;
   secret?: string;
@@ -410,9 +398,8 @@ export interface Round {
 }
 ```
 
-A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer in one
-asset. It is `open` until the developer's casino bet on it reveals it; a revealed round shows the seed, the secret,
-their 64-bit `outcome` and the casino bet, `{ game, stake, chance, prize, group, meta, signature, accepted, payout? }`:
-the bet as the developer signed it, whether the bankroll took it, and what it paid the bank when it did. A reveal's
-stake, chance and prize are `'0'`. [`outcome`](outcome.md#outcome) and [`betPayout`](outcome.md#betpayout) check a
-revealed round.
+A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer. It is `open`
+until the developer's casino bet on it reveals it; a revealed round shows the seed, the secret, their 64-bit `outcome`
+and the casino bet, `{ game, stake, chance, prize, group, meta, signature, accepted, payout? }`: the bet as the
+developer signed it, whether the bankroll took it, and what it paid the bank when it did. A reveal's stake, chance and
+prize are `'0'`. [`outcome`](outcome.md#outcome) and [`betPayout`](outcome.md#betpayout) check a revealed round.

@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: Channels, rounds, casino and developer bets, the bankroll, closing and test coins, in one pass.
+description: Channels, rounds, casino and developer bets, the bankroll, closing and practice, in one pass.
 sidebar:
   order: 1
 ---
@@ -29,11 +29,11 @@ the casino signs: the channel's sequence number, the hash of the state before it
 it, and the balance after it. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and
 saves it before the game hears anything. There are three kinds of operation, and the contract knows no others:
 
-| Kind         | Effect on the balance       | Used for                                                                                                             |
-| ------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                          |
-| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank                           |
-| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, faucet test coins |
+| Kind         | Effect on the balance       | Used for                                                                                          |
+| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                       |
+| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank        |
+| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in its
 **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino
@@ -139,11 +139,11 @@ Finalizing records a **claim**. Up to your deposit it is protected principal: th
 and paid first in, first out as cash arrives. Collecting is a separate transaction.
 [Closing and claims](../wallet/closing-and-claims.md) walks through each step.
 
-## Test coins
+## Practice
 
-Every wallet also has a channel of **test coins**, the casino's own play money (symbol TEST, 18 decimals). A test
-channel is opened at the casino alone: nothing is deposited, and its ID is a hash the contract can never produce, so
-nothing about it reaches the chain and there is nothing to close. The faucet pays 100 TEST to a test channel that holds
-fewer than 10, as a credit the channel's own key signs. Test coins play the same games at the same odds against the
-casino's test bankroll, with the same receipts. The casino keeps every figure per asset, so ETH and TEST never add up.
-The top bar switches between them ([getting started](../wallet/getting-started.md#switch-between-eth-and-test)).
+A wallet without a funded channel **practices**: it plays with **test coins** (symbol TEST, 18 decimals) that it keeps
+in the tab's memory, 100 at the start and 100 more once it holds fewer than 10. It settles a game's casino bets and
+payments itself, under the casino's own admission rule against a practice bankroll, with an outcome it draws. Nothing
+about practice is signed, sent to the casino or recorded, and a reload starts again at 100. Developer bets are placed
+with ETH only, so games built on them, such as roulette, are watched in practice. The top bar switches between ETH and
+test coins ([getting started](../wallet/getting-started.md#practice)).

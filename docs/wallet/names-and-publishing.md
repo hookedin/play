@@ -11,9 +11,9 @@ can publish games that anyone plays at its name.
 ## Your uname
 
 Every account has a **uname**: 24 characters of `23456789abcdefghijkmnopqrstvwxyz`, written with a tilde, such as
-`~3byt9ocwnnzaxanmiz3stocj`. The casino derives it from your address with a keyed hash whose key it keeps secret, so
-the uname does not reveal the address. It is the same for every channel your address opens, ETH or test, and it does
-not change. The casino first knows it when your wallet opens its test channel.
+`~3byt9ocwnnzaxanmiz3stocj`. The casino derives it from your address with a keyed hash whose key it keeps secret, so the
+uname does not reveal the address. It is the same for every channel your address opens, and it does not change. The
+casino first knows it when your wallet opens its first funded channel; until then a wallet that practices has none.
 
 A uname is what games, developers and other players learn about you: a game gets it from
 [`wallet.info`](../reference/bridge.md#walletinfo), and the casino's public records name players by it.
@@ -37,9 +37,9 @@ Taking another alias replaces the one you had. The casino's refusals are listed 
 ## Your public page
 
 `/@alias` or `/~uname` is a player's public page: their name, their uname under an alias, when the casino first knew
-them, how many bets they have played in each asset with what they staked and won, and the games they publish. It is
-read from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), which anyone can call. **See your
-public profile** on My account opens yours. The casino's list of players is at https://hookedin.com/players/.
+them, how many bets they have played with what they staked and won, and the games they publish. It is read from
+[`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), which anyone can call. **See your public
+profile** on My account opens yours. The casino's list of players is at https://hookedin.com/players/.
 
 ## Publishing a game
 
@@ -62,9 +62,9 @@ a game down, which needs no funded channel.
 
 Publishing makes this account the game's developer. It earns half of each casino bet's commission in the game, its bank
 takes the stakes of the game's developer bets, and its key settles them ([earnings](../games/earnings.md),
-[developer bets](../games/developer-bets.md)). **Your bank**, on My games, is that bank, in the asset the tab plays
-with: **Deposit** moves money into it from your channel, and **Withdraw** takes it back, collected into your channel.
-Your address is public once you publish: the manifest names it, and so does your profile at the casino.
+[developer bets](../games/developer-bets.md)). **Your bank**, on My games, is that bank: **Deposit** moves money into it
+from your channel, and **Withdraw** takes it back, collected into your channel. Your address is public once you publish:
+the manifest names it, and so does your profile at the casino.
 
 The library every wallet shows is what `@hookedin` publishes; [publishing](../games/publishing.md) explains how a game
 joins it.

@@ -46,10 +46,9 @@ The contract reads operations and signatures from calldata, reuses computed hash
 with its player address, and uses a transient reentrancy guard. A claim's beneficiary comes from channel ownership, and
 the claim stores only its current payout recipient.
 
-A channel holds one asset: ETH, or test coins ([test coins](how-it-works.md#test-coins)). A test channel's ID is a hash
-the contract can never produce, so nothing about it reaches the contract. The casino keeps bankroll, equity,
-commissions, developer earnings and liabilities per asset; a round is in one asset only, and the bankroll fund takes ETH
-only.
+A channel holds ETH. A wallet with no funded channel practices with test coins of its own
+([practice](how-it-works.md#practice)): it settles a game's casino bets and payments itself and sends the casino
+nothing, so no test coin is in any channel, book or record.
 
 ## Money and authority
 
@@ -114,8 +113,8 @@ the round's hash, so a round needs no signature and the contract checks nothing 
 A round is a channel's own or a developer's. A channel's own round is named by the casino; the casino bet on it opens
 and closes it in one request, and the reply names the next one. It is revealed whenever it ends, also when its casino
 bet is declined, so the wallet records what a declined bet would have paid. A developer's round is named whenever the
-developer asks, in one asset, and revealed by the developer's own casino bet on it, which may bet nothing and only
-reveal it ([developer bets](../games/developer-bets.md)).
+developer asks, and revealed by the developer's own casino bet on it, which may bet nothing and only reveal it
+([developer bets](../games/developer-bets.md)).
 
 ## Casino bets and developer bets
 
@@ -176,10 +175,11 @@ settings use Web Storage.
 A game's spending limit is a reservation against the signed channel balance, held only in the open tab's memory
 ([games and limits](../wallet/games-and-limits.md#giving-a-game-money)). It signs nothing, so the player can set it
 while an operation is pending, up to the balance less what that operation has committed. A result recovered after a
-reload changes only the channel balance. A game's operation IDs belong to the player, the asset and the game, not to a
-channel, so exact retries and receipt lookups by the game's own IDs work across the player's channels without game
-records in the wallet, and the casino declines an ID its player already used on another channel rather than carry it
-out twice. There is no game account in the contract or at the casino.
+reload changes only the channel balance. In practice the limit is in test coins, which the wallet keeps beside the
+channel and never mixes into it. A game's operation IDs belong to the player and the game, not to a channel, so exact
+retries and receipt lookups by the game's own IDs work across the player's channels without game records in the wallet,
+and the casino declines an ID its player already used on another channel rather than carry it out twice. There is no
+game account in the contract or at the casino.
 
 Encrypted backups hold only the selected account
 ([backups and recovery](../wallet/backups-and-recovery.md#encrypted-backups)); keys alone cannot rebuild signed
@@ -200,14 +200,13 @@ Every bound a game must respect (the size of the outcome space, how large a bet'
 the protocol revision: `wallet.hello` reports them to a game and `GET /api/config` to a developer, so a game reads them
 rather than carrying copies.
 
-A game owns its rules, state transitions and persistence. Its frame keeps its host's origin
-(`allow-scripts allow-same-origin`) and stores its rounds there, keyed by the player's name and the asset in play. The
-wallet never frames its own origin, and its host forbids framing it at all. Each game is its own site, known by its
-key, made from its developer and the name they publish it under in their profile at the casino (`@alias/game` or
-`~uname/game`). The developer is the account that publishes it: it earns the game's commission, its bank takes the
-stakes of the game's developer bets and its key settles them, so a game's server holds everything that account holds.
-The wallet refuses a game whose manifest names another developer. Where a game is served can change while its key
-stays, so a game keeps its history.
+A game owns its rules, state transitions and persistence. Its frame keeps its host's origin (`allow-scripts
+allow-same-origin`) and stores its rounds there, keyed by the player's name, or by practice. The wallet never frames its
+own origin, and its host forbids framing it at all. Each game is its own site, known by its key, made from its developer
+and the name they publish it under in their profile at the casino (`@alias/game` or `~uname/game`). The developer is the
+account that publishes it: it earns the game's commission, its bank takes the stakes of the game's developer bets and
+its key settles them, so a game's server holds everything that account holds. The wallet refuses a game whose manifest
+names another developer. Where a game is served can change while its key stays, so a game keeps its history.
 
 A game places at most [one casino bet per step](#settled-trade-offs), priced with the casino's own admission rule. A
 step with two outcomes is one bet. A single-player game collapses a step with more in the page

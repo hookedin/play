@@ -25,7 +25,7 @@ On **Settings**, enter a passphrase of 12 to 1,024 characters under **Encrypted 
 account:
 
 - its funding key, if the wallet holds it (a connected browser wallet keeps its own);
-- every channel's key, opening, latest evidence, close authorization and pending operation, test channel included;
+- every channel's key, opening, latest evidence, close authorization and pending operation;
 - its bankroll fund statements, developer bets and bank statements;
 - its latest 100 receipts, and the receipt of every developer bet still open.
 
@@ -46,7 +46,7 @@ transaction pending. Before it writes anything, the wallet checks that:
 - it replaces no saved evidence with an older or conflicting checkpoint, and changes no pending operation.
 
 A backup of another account makes that account the funding account; a backup made with a connected browser wallet asks
-you to connect that wallet first. The backup's test channel takes the place of the one in the wallet.
+you to connect that wallet first. Test coins are in no backup: they live in the tab.
 
 ## Recovery bundles
 

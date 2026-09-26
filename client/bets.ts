@@ -17,7 +17,6 @@ export interface BetRow {
   key?: string | null;
   /** Who placed it, on a public list. This wallet's own rows leave it out. */
   who?: string | null;
-  asset: 'eth' | 'test';
   /** The label the game gave it, such as a hand or a match. */
   group?: string;
   stake: bigint;
@@ -36,7 +35,8 @@ export interface BetRow {
   receipt?: any;
 }
 
-export const unitOf = (asset: string) => (asset === 'test' ? 'TEST' : 'ETH');
+/** Every bet this wallet or the casino lists is in ETH: practice is never recorded. */
+const unit = 'ETH';
 /** A return in millionths, written as a percentage with four decimals. */
 export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
 /** What a set of bets was expected to pay back, in millionths of everything staked. */
@@ -68,12 +68,11 @@ export function addBet(totals: BetTotals, row: { stake: bigint; payout: bigint; 
   totals.net += row.payout - row.stake;
   return totals;
 }
-/** Bets of one asset, added up. A wallet plays ETH and test coins in separate channels, so the two
- * are never mixed into one figure. */
-export function totalsByAsset(rows: readonly BetRow[]) {
-  const byAsset = new Map<string, BetTotals>();
-  for (const row of rows) addBet(byAsset.get(row.asset) ?? byAsset.set(row.asset, emptyTotals()).get(row.asset)!, row);
-  return byAsset;
+/** Bets, added up. */
+export function betTotals(rows: readonly BetRow[]) {
+  const totals = emptyTotals();
+  for (const row of rows) addBet(totals, row);
+  return totals;
 }
 
 const element = (tag: string, className: string, text?: string) => {
@@ -91,44 +90,35 @@ const figure = (label: string, value: string, className = '') => {
   return cell;
 };
 
-/** One card per asset: how much went in, how much came back, and both returns side by side. */
-export function totalCards(byAsset: Map<string, BetTotals>) {
-  return [...byAsset]
-    .sort(([a], [b]) => (a === 'eth' ? -1 : b === 'eth' ? 1 : 0))
-    .map(([asset, totals]) => {
-      const unit = unitOf(asset),
-        card = element('div', 'wallet-balance-card'),
-        expected = measuredReturn(totals.priced, totals.expected),
-        realised = realisedReturn(totals.staked, totals.paid);
-      card.append(
-        element(
-          'div',
-          'eyebrow',
-          `${totals.bets.toLocaleString('en-US')} ${unit} ${totals.bets === 1 ? 'BET' : 'BETS'}`,
-        ),
-      );
-      const amount = element('div', 'large-amount');
-      amount.append(element('span', '', expected === null ? '—' : percent(expected)), element('small', '', 'EXPECTED'));
-      card.append(amount);
-      card.append(
-        element(
-          'p',
-          '',
-          `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
-            `They paid back ${realised === null ? '—' : percent(realised)}: ` +
-            `${formatEther(totals.paid)} ${unit} for ${formatEther(totals.staked)} ${unit} staked.`,
-        ),
-      );
-      card.append(element('p', totals.net < 0n ? 'bet-net negative' : 'bet-net positive', signed(totals.net, unit)));
-      return card;
-    });
+/** How much went in, how much came back, and both returns side by side: one card, or none for no bets. */
+export function totalCards(totals: BetTotals) {
+  if (!totals.bets) return [];
+  const card = element('div', 'wallet-balance-card'),
+    expected = measuredReturn(totals.priced, totals.expected),
+    realised = realisedReturn(totals.staked, totals.paid);
+  card.append(
+    element('div', 'eyebrow', `${totals.bets.toLocaleString('en-US')} ${totals.bets === 1 ? 'BET' : 'BETS'}`),
+  );
+  const amount = element('div', 'large-amount');
+  amount.append(element('span', '', expected === null ? '—' : percent(expected)), element('small', '', 'EXPECTED'));
+  card.append(amount);
+  card.append(
+    element(
+      'p',
+      '',
+      `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
+        `They paid back ${realised === null ? '—' : percent(realised)}: ` +
+        `${formatEther(totals.paid)} ${unit} for ${formatEther(totals.staked)} ${unit} staked.`,
+    ),
+  );
+  card.append(element('p', totals.net < 0n ? 'bet-net negative' : 'bet-net positive', signed(totals.net, unit)));
+  return [card];
 }
 
 /** One row per bet. `who` is shown on a public list and left out of a player's own. A row that can
  * be opened is a button: only this wallet's own receipt holds the odds and preimages to show. */
 export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
-  const unit = unitOf(row.asset),
-    net = row.payout - row.stake,
+  const net = row.payout - row.stake,
     tone = `bet-row tone-${net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral'}`,
     item = element(onOpen ? 'button' : 'div', tone);
   if (onOpen) {
@@ -198,7 +188,6 @@ export function groupRows(rows: readonly BetRow[]): BetRow[][] {
  * the same money more than once. */
 export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonly BetRow[]) => void) {
   const last = rows.at(-1)!,
-    unit = unitOf(last.asset),
     net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n),
     item = element(
       onOpen ? 'button' : 'div',
@@ -275,8 +264,7 @@ const factList = (rows: readonly (readonly [string, string | Node] | null | fals
  * the player rather than repeated back from what the casino said.
  */
 export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
-  const unit = unitOf(row.asset),
-    net = row.payout - row.stake,
+  const net = row.payout - row.stake,
     receipt = row.receipt ?? {},
     step = receipt.proof?.step,
     op = step?.operation,

@@ -1,7 +1,6 @@
 import type { Integer, Checkpoint, Operation } from '../protocol/types.ts';
-import type { AssetId } from '../protocol/protocol.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
-import { Wallet, hexlify, randomBytes, ZeroHash, id } from 'ethers';
+import { hexlify, randomBytes, ZeroHash, id } from 'ethers';
 import type { Details, PlayerDeveloperBets, PublicDeveloperBet } from '../protocol/types.ts';
 import {
   canonicalJSON,
@@ -11,7 +10,6 @@ import {
   KIND,
   STATE_TYPES,
   OP_TYPES,
-  ACCESS_TYPES,
   assertSignature,
   hashState,
   hashOperation,
@@ -29,12 +27,6 @@ import {
   hashRedeem,
   FUND_ID,
   DEVELOPER_ID,
-  FAUCET_ID,
-  FAUCET_AMOUNT,
-  FAUCET_BELOW,
-  ASSETS,
-  testOpening,
-  initialState,
   FUND_TYPES,
   REDEEM_TYPES,
   SETTLEMENT_TYPES,
@@ -53,7 +45,7 @@ import { gameError, META } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
 /** Operations that collect what is owed. They commit none of the signed balance. */
-const CREDITS = ['divest', 'earnings', 'faucet', 'developer-bet-payout', 'withdrawn'];
+const CREDITS = ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'];
 const bytes32 = (value: unknown): value is string =>
   typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value) && !same(value, ZeroHash);
 /** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
@@ -75,93 +67,22 @@ export interface DeveloperBetInput {
 /** The off-chain channel protocol: exact signed requests, verified results, rejections, rounds, casino bets,
  * developer bets, banks and recovery of lost replies. */
 export class ChannelClient extends WalletTransactions {
-  /** What the channel in play holds: the network's ETH, or the casino's test coins. */
-  get asset(): { id: AssetId; symbol: string; decimals: number } {
-    const self = this as unknown as CasinoWallet;
-    return self.playing === 'test'
-      ? ASSETS.test
-      : { ...ASSETS.eth, symbol: self.networkName === 'Sepolia' ? 'Sepolia ETH' : 'ETH' };
-  }
-  /** Switch what this tab plays with. The open game's limit was in the other asset, so it is released. */
-  play(this: CasinoWallet, asset: AssetId) {
-    this.preferTest = asset === 'test';
-    // `render` releases the open game's limit whenever what this tab plays with has changed.
-    this.render();
-  }
-  async setPlaying(this: CasinoWallet, asset: AssetId) {
-    await this.exclusive(async () => {
-      if (this.pending) throw gameError('pending-operation', 'Recover the pending operation first');
-      if (asset === 'eth' && (!this.current?.key || Number(this.current.onchain?.status) !== 1))
-        throw gameError('no-channel', 'Deposit ETH to play with it');
-      this.play(asset);
-      if (asset === 'test') await this.ensureTestChannel();
-      if (this.channel?.key) await this.reconcile().catch(() => {});
-    });
-    await this.fillTestChannel();
-    this.render();
-  }
-  /** Every account has a test channel: a key of its own, opened at the casino with no chain involved
-   * and empty until the faucet fills it. The caller holds the wallet's lock. */
-  async ensureTestChannel(this: CasinoWallet) {
-    if (this.recoveryOnly) return;
-    if (!this.channels[this.testId!]) {
-      const key = Wallet.createRandom().privateKey,
-        opening = testOpening(this.address, new Wallet(key).address);
-      this.channels[opening.channelId] = {
-        key,
-        opening,
-        asset: 'test',
-        state: initialState(opening),
-        playerSignature: '0x',
-        casinoSignature: '0x',
-        onchain: { status: '1' },
-      };
-      this.testId = opening.channelId;
-      await this.save();
-    }
-    const test = this.channels[this.testId!];
-    // The funding key says the channel is this player's; nothing on-chain can say it for them.
-    const message = { channelId: this.testId!, expiresAt: String(Math.floor(Date.now() / 1000) + 60) };
-    const owner = { message, signature: await this.signer.signTypedData(this.domain, ACCESS_TYPES, message) };
-    const reply = await this.api(
-      `/api/channels/${this.testId}/activate`,
-      { opening: test.opening, asset: 'test', owner },
-      test,
-    );
-    this.noteNames(reply);
-    if (this.playing === 'test') this.updateBankroll(reply.bankroll);
-  }
-  /** A new test channel is filled at once, so a guest can play straight away. */
-  async fillTestChannel(this: CasinoWallet) {
-    const test = this.channels[this.testId!];
-    if (this.playing === 'test' && test && BigInt(test.state.balance) === 0n && !test.pending && !this.recoveryOnly)
-      await this.claimTestCoins().catch(() => {});
-  }
-  /** Ask the faucet for test coins: it pays a test channel that has run low. */
-  async claimTestCoins(this: CasinoWallet) {
-    if (this.playing !== 'test') throw new Error('Switch to test coins first');
-    if (BigInt(this.channel?.state.balance ?? 0) >= FAUCET_BELOW)
-      throw gameError('not-due', 'The faucet pays once you hold fewer than 10 test coins');
-    return this.perform(
-      'faucet',
-      { amount: FAUCET_AMOUNT, source: FAUCET_ID },
-      `faucet:${this.channelId}:${this.channel!.state.sequence}`,
-    );
-  }
   async balance(this: CasinoWallet) {
     return BigInt(this.channel?.state.balance || 0);
   }
-  /** The signed balance less what a pending operation has already committed: what the player may
-   * still allocate to the open game. A credit collects what is owed and commits nothing. */
+  /** What the player may still allocate to the open game: the test coins this tab practices with, or the signed
+   * balance less what a pending operation has already committed. A credit collects what is owed and commits nothing. */
   playableBalance(this: CasinoWallet) {
+    if (this.practicing) return this.practiceBalance;
     const pending = this.pending,
       committed = pending?.request && !CREDITS.includes(pending.kind) ? BigInt(pending.request.amount) : 0n,
       free = BigInt(this.channel?.state.balance || 0) - committed;
     return free < 0n ? 0n : free;
   }
-  /** The signed balance minus what this tab's open game may still risk; never below zero. */
+  /** The signed balance minus what this tab's open game may still risk of it; never below zero. A practice limit is in
+   * test coins, and holds none of it. */
   availableBalance(this: CasinoWallet) {
-    const limit = this.game ? BigInt(this.game.balance) : 0n,
+    const limit = this.game && !this.game.practice ? BigInt(this.game.balance) : 0n,
       available = BigInt(this.channel?.state.balance || 0) - limit;
     return available < 0n ? 0n : available;
   }
@@ -202,7 +123,6 @@ export class ChannelClient extends WalletTransactions {
             bank: KIND.debit,
             divest: KIND.credit,
             earnings: KIND.credit,
-            faucet: KIND.credit,
             'developer-bet-payout': KIND.credit,
             withdrawn: KIND.credit,
           } as Record<string, number>
@@ -355,9 +275,9 @@ export class ChannelClient extends WalletTransactions {
     if (!same(hashState(this.domain, next), hashState(this.domain, response.state)))
       throw new Error('Result state differs from evidence');
     const game = c.pending?.game as GameIntent | undefined;
-    // The open game's limit follows its verified result. A result recovered after a reload, or
-    // for a game since closed, changes only the channel balance: the limit was already released.
-    if (game && this.game?.key === game.key) {
+    // The open game's limit follows its verified result. A result recovered after a reload, for a game since closed,
+    // or for a game now practicing, changes only the channel balance: the limit was already released.
+    if (game && this.game?.key === game.key && !this.game.practice) {
       const limit = BigInt(this.game.balance) + BigInt(next.balance) - BigInt(c.state.balance);
       this.game.balance = String(limit < 0n ? 0n : limit);
     }
@@ -393,15 +313,11 @@ export class ChannelClient extends WalletTransactions {
     // An investment comes back with the casino's signed statement of the holding it bought.
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null,
       banked =
-        kind === 'bank' && !rejected
-          ? { ...this.bank, [this.playing]: this.bankStatement(response.statement, hashOperation(this.domain, op)) }
-          : null,
+        kind === 'bank' && !rejected ? this.bankStatement(response.statement, hashOperation(this.domain, op)) : null,
       // A developer bet is known by the hash of the operation that placed it.
       developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null;
     const receipt = plain({
       kind,
-      // What this receipt is in: the channel that signed it holds one asset.
-      ...(this.playing === 'test' ? { asset: 'test' } : {}),
       operationId,
       ...(game ? { game: { key: game.key, id: game.id, name: game.name, developer: game.developer } } : {}),
       status: rejected ? 'rejected' : 'signed',
@@ -438,7 +354,7 @@ export class ChannelClient extends WalletTransactions {
         ? {
             developerBets: {
               ...this.developerBets,
-              [developerBet]: { operationId, game: details.game!, asset: this.playing },
+              [developerBet]: { operationId, game: details.game! },
             },
           }
         : {}),
@@ -492,7 +408,7 @@ export class ChannelClient extends WalletTransactions {
   async collectDeveloperBet(this: CasinoWallet, hash: string) {
     const tracked = this.developerBets[hash],
       channelId = this.channelId;
-    if (!tracked || tracked.asset !== this.playing) return null;
+    if (!tracked) return null;
     const receipt = tracked.operationId ? await this.getReceipt(tracked.operationId) : null;
     if (!receipt) throw new Error('The proof of this bet is missing. Restore the wallet backup that holds it.');
     const bet: PublicDeveloperBet = await this.api(`/api/developer-bets/${hash}`);
@@ -500,7 +416,7 @@ export class ChannelClient extends WalletTransactions {
     const paid = this.developerBetPaid(receipt, bet);
     await this.exclusive(
       async () => {
-        if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
+        if (this.channelId !== channelId) throw new Error('Wallet account changed');
         if (!this.developerBets[hash]) return;
         await this.save(undefined, {
           developerBets: {
@@ -512,7 +428,6 @@ export class ChannelClient extends WalletTransactions {
                 bet: hash,
                 game: tracked.game,
                 ...(bet.group ? { group: bet.group } : {}),
-                asset: bet.asset,
                 status: bet.status,
                 stake: bet.stake,
                 payout: String(paid.payout),
@@ -525,7 +440,7 @@ export class ChannelClient extends WalletTransactions {
       },
       { wait: true },
     );
-    if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
+    if (this.channelId !== channelId) throw new Error('Wallet account changed');
     const game = receipt.game;
     if (paid.payout) {
       const credited = await this.perform(
@@ -544,7 +459,7 @@ export class ChannelClient extends WalletTransactions {
     });
     await this.exclusive(
       async () => {
-        if (this.channelId !== channelId) throw new Error('Wallet account or asset changed');
+        if (this.channelId !== channelId) throw new Error('Wallet account changed');
         if (!this.developerBets[hash]) return;
         const { [hash]: _collected, ...rest } = this.developerBets;
         await this.save(settled, { developerBets: rest });
@@ -558,12 +473,11 @@ export class ChannelClient extends WalletTransactions {
   /** Refresh the account's open developer bets and consume its durable feed of settled ones. Save each page with its
    * cursor before attempting collection, so a failed credit cannot hide a settled bet. */
   async refreshDeveloperBets(this: CasinoWallet) {
-    const channelId = this.channelId,
-      asset = this.playing;
+    const channelId = this.channelId;
     if (!channelId) return;
     try {
       for (const status of ['open', 'settled'] as const) {
-        let after = status === 'settled' ? (this.developerBetCursors[asset] ?? '0') : '';
+        let after = status === 'settled' ? this.developerBetCursor : '';
         for (;;) {
           const page: PlayerDeveloperBets = await this.api(
             `/api/channels/${channelId}/developer-bets?status=${status}&after=${encodeURIComponent(after)}`,
@@ -579,10 +493,10 @@ export class ChannelClient extends WalletTransactions {
           await this.exclusive(
             async () => {
               if (this.channelId !== channelId) return;
-              if (status === 'settled' && Number(page.cursor) <= Number(this.developerBetCursors[asset] ?? '0')) return;
+              if (status === 'settled' && Number(page.cursor) <= Number(this.developerBetCursor)) return;
               const developerBets = { ...this.developerBets };
               for (const state of page.bets) {
-                if (state.asset !== asset || state.status !== status) throw new Error('Invalid bet list');
+                if (state.status !== status) throw new Error('Invalid bet list');
                 // A bet this wallet knows has settled, or has collected, is not open again.
                 if (status === 'open' && developerBets[state.bet]?.state?.status === 'settled') continue;
                 if (!developerBets[state.bet] && status === 'settled' && (state.collected || state.payout === '0'))
@@ -592,18 +506,16 @@ export class ChannelClient extends WalletTransactions {
                   this.history.some(receipt => receipt.bet === state.bet && receipt.payout !== undefined)
                 )
                   continue;
-                developerBets[state.bet] = { ...developerBets[state.bet], game: state.game, asset, state };
+                developerBets[state.bet] = { ...developerBets[state.bet], game: state.game, state };
               }
               if (
                 canonicalJSON(developerBets) === canonicalJSON(this.developerBets) &&
-                (status === 'open' || page.cursor === (this.developerBetCursors[asset] ?? '0'))
+                (status === 'open' || page.cursor === this.developerBetCursor)
               )
                 return;
               await this.save(undefined, {
                 developerBets,
-                ...(status === 'settled'
-                  ? { developerBetCursors: { ...this.developerBetCursors, [asset]: page.cursor } }
-                  : {}),
+                ...(status === 'settled' ? { developerBetCursor: page.cursor } : {}),
               });
             },
             { wait: true },
@@ -623,30 +535,28 @@ export class ChannelClient extends WalletTransactions {
 
   // --- A developer's bank ------------------------------------------------------------------------
 
-  /** Put money into this account's bank, in what this tab plays with: a debit answered with the casino's
-   * signed statement of the balance. The bank takes the stakes of the developer bets on this developer's games, and
-   * pays their settlements and this developer's casino bets. */
+  /** Put money into this account's bank: a debit answered with the casino's signed statement of the balance. The bank
+   * takes the stakes of the developer bets on this developer's games, and pays their settlements and this developer's
+   * casino bets. */
   async depositBank(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
     return this.perform('bank', { amount, source: BANK_ID }, operationId);
   }
   /** A statement of this account's bank, for a deposit or withdrawal this wallet signed: the casino's
-   * signature on it, for this account and asset, and caused by `cause`. The balance is the casino's to
-   * state: every developer bet, settlement and casino bet of this developer moves it. */
+   * signature on it, for this account, and caused by `cause`. The balance is the casino's to state: every
+   * developer bet, settlement and casino bet of this developer moves it. */
   bankStatement(this: CasinoWallet, statement: any, cause: string) {
-    const asset = this.playing,
-      held = this.bank[asset] ?? {};
+    const held = this.bank;
     assertSignature(this.domain, BANK_TYPES, statement?.message, statement?.signature, this.operator);
     const { message } = statement;
     if (
       !same(message.developer, this.address) ||
-      message.asset !== asset ||
       !same(message.cause, cause) ||
       Number(message.sequence) <= Number(held.statement?.message.sequence ?? 0)
     )
       throw new Error('The bank statement is not for what this wallet signed');
     return { ...held, statement: plain(statement) };
   }
-  /** This account's bank as the casino has it now, in what this tab plays with. */
+  /** This account's bank as the casino has it now. */
   async bankBalance(this: CasinoWallet) {
     const { balance, sequence } = await this.api(`/api/channels/${this.channelId}/bank`);
     return { balance: String(BigInt(balance)), sequence: Number(sequence) };
@@ -656,15 +566,13 @@ export class ChannelClient extends WalletTransactions {
   async withdrawBank(this: CasinoWallet, amount: Integer) {
     return this.exclusive(async () => {
       this.ready();
-      const asset = this.playing,
-        held = { ...this.bank[asset] };
+      const held = { ...this.bank };
       if (!held.withdrawing) {
         const bank = await this.bankBalance();
         if (BigInt(amount) <= 0n || BigInt(amount) > BigInt(bank.balance))
           throw new Error('Not that much is in the bank');
         const message = {
           developer: this.address,
-          asset,
           amount: String(BigInt(amount)),
           sequence: String(bank.sequence + 1),
         };
@@ -672,7 +580,7 @@ export class ChannelClient extends WalletTransactions {
           message,
           signature: await this.channelSigner().signTypedData(this.domain, WITHDRAW_TYPES, message),
         };
-        await this.save(undefined, { bank: { ...this.bank, [asset]: held } });
+        await this.save(undefined, { bank: held });
       }
       const request = held.withdrawing;
       let statement;
@@ -681,17 +589,14 @@ export class ChannelClient extends WalletTransactions {
       } catch (error: any) {
         // Refused, so never taken: the next withdrawal is signed afresh.
         if (error.status === 409 || error.status === 400)
-          await this.save(undefined, { bank: { ...this.bank, [asset]: { ...held, withdrawing: null } } });
+          await this.save(undefined, { bank: { ...held, withdrawing: null } });
         throw error;
       }
       await this.save(undefined, {
         bank: {
-          ...this.bank,
-          [asset]: {
-            ...this.bankStatement(statement, hashWithdraw(this.domain, request.message)),
-            withdrawing: null,
-            owed: [...(held.owed ?? []), String(request.message.amount)],
-          },
+          ...this.bankStatement(statement, hashWithdraw(this.domain, request.message)),
+          withdrawing: null,
+          owed: [...(held.owed ?? []), String(request.message.amount)],
         },
       });
       return statement;
@@ -857,7 +762,7 @@ export class ChannelClient extends WalletTransactions {
             await this.perform(
               'earnings',
               { amount: payout.amount, source: DEVELOPER_ID },
-              `earnings:${this.playing}:${payout.collected}`,
+              `earnings:${payout.collected}`,
             ),
           );
         continue;
@@ -877,21 +782,14 @@ export class ChannelClient extends WalletTransactions {
       }
       if (same(payout.source, BANK_ID)) {
         // Money this account took out of its bank: signed for only as one of its own statements priced it.
-        const held = this.bank[this.playing],
-          at = (held?.owed ?? []).indexOf(String(payout.amount));
-        if (!held || at < 0) continue;
+        const held = this.bank,
+          at = (held.owed ?? []).indexOf(String(payout.amount));
+        if (at < 0) continue;
         collected.push(
-          await this.perform(
-            'withdrawn',
-            { amount: payout.amount, source: BANK_ID },
-            `bank:${this.playing}:${payout.index}`,
-          ),
+          await this.perform('withdrawn', { amount: payout.amount, source: BANK_ID }, `bank:${payout.index}`),
         );
         await this.exclusive(
-          () =>
-            this.save(undefined, {
-              bank: { ...this.bank, [this.playing]: { ...held, owed: held.owed!.toSpliced(at, 1) } },
-            }),
+          () => this.save(undefined, { bank: { ...this.bank, owed: this.bank.owed!.toSpliced(at, 1) } }),
           { wait: true },
         );
       }
@@ -899,7 +797,7 @@ export class ChannelClient extends WalletTransactions {
     await this.refreshDeveloperBets();
     for (const [hash, bet] of Object.entries(this.developerBets)) {
       if (this.channelId !== channelId || this.busy || this.pending) break;
-      if (bet.asset !== this.playing || bet.state?.status !== 'settled') continue;
+      if (bet.state?.status !== 'settled') continue;
       try {
         const paid = await this.collectDeveloperBet(hash);
         if (paid) collected.push(paid);

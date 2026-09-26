@@ -64,7 +64,7 @@ fetches and checks the manifest as above before it asks.
 | Name         | 1 to 32 lower-case letters, digits or hyphens, not starting with a hyphen: `^[a-z0-9][a-z0-9-]{0,31}$`                 |
 | Manifest URL | At most 300 characters. `https:`, or `http:` only for `localhost`, `127.0.0.1` or `[::1]`. No credentials, no fragment |
 | Manifest     | Its `developer` is the publishing account's address                                                                    |
-| Account      | Has a funded ETH channel that is not closing                                                                           |
+| Account      | Has a funded channel that is not closing                                                                               |
 | Profile      | Holds at most 100 games. Publishing a name again points it at another URL                                              |
 | Removing     | Needs no funded channel and no manifest                                                                                |
 

@@ -56,16 +56,16 @@ try {
     casinoSignature: '0x',
     onchain: { status: '1' },
   };
-  a.currentId = message.channelId;
+  a.channelId = message.channelId;
   await a.save();
   const b = makeWallet();
   b.hydrate(await storage.get(a.storageKey));
   const password = 'browser regression backup password',
     backup = await b.encryptedBackup(password);
   await a.exclusive(async () => {
-    a.current!.state = { ...a.current!.state, sequence: '1', balance: '900' };
-    a.current!.playerSignature = await player.signTypedData(d, STATE_TYPES, a.current!.state);
-    a.current!.casinoSignature = await owner.signTypedData(d, STATE_TYPES, a.current!.state);
+    a.channel!.state = { ...a.channel!.state, sequence: '1', balance: '900' };
+    a.channel!.playerSignature = await player.signTypedData(d, STATE_TYPES, a.channel!.state);
+    a.channel!.casinoSignature = await owner.signTypedData(d, STATE_TYPES, a.channel!.state);
     await a.save();
   });
   const rejects = async (call: any, expected: any) => {
@@ -97,9 +97,9 @@ try {
   let queuedExport;
   await navigator.locks.request('hookedin:channel:' + a.storageKey, async () => {
     queuedExport = stale.exportEvidence();
-    a.current!.state = { ...a.current!.state, sequence: '2', balance: '1100' };
-    a.current!.playerSignature = await player.signTypedData(d, STATE_TYPES, a.current!.state);
-    a.current!.casinoSignature = await owner.signTypedData(d, STATE_TYPES, a.current!.state);
+    a.channel!.state = { ...a.channel!.state, sequence: '2', balance: '1100' };
+    a.channel!.playerSignature = await player.signTypedData(d, STATE_TYPES, a.channel!.state);
+    a.channel!.casinoSignature = await owner.signTypedData(d, STATE_TYPES, a.channel!.state);
     await a.save();
   });
   if (((await queuedExport)! as any).evidence.base.sequence !== '2')
@@ -119,7 +119,7 @@ try {
     accept: async () => {},
     contractRead: async (_: any, method: any) =>
       method === 'activeChannel'
-        ? observing.currentId
+        ? observing.channelId
         : { status: 2n, closingSequence: 0n, closingBalance: 0n, deadline: 9999999999n },
     corroborate: async (_: any, read: any) => read({ getBlock: async () => block }),
   } as any;
@@ -137,15 +137,15 @@ try {
   await observing.refresh();
   await started;
   await observing.exclusive(async () => {
-    observing.current!.closing = true;
+    observing.channel!.closing = true;
     await observing.save();
   });
   releaseDetails!([]);
   await observing.detailsRefreshing;
-  if (!(await storage.get(observing.storageKey)).channels[observing.currentId!].closing)
+  if (!(await storage.get(observing.storageKey)).channels[observing.channelId!].closing)
     throw new Error('Optional activity replaced a newer wallet action');
   const oldChannel = id('slow-historical-browser-channel');
-  observing.channels[oldChannel] = structuredClone(observing.current!);
+  observing.channels[oldChannel] = structuredClone(observing.channel!);
   observing.channels[oldChannel].state.channelId = oldChannel;
   observing.channels[oldChannel].onchain.status = '3';
   await observing.save();
@@ -191,7 +191,7 @@ try {
     commits = [];
   for (let i = 0; i < 1000; i++) {
     const key = id(prefix + ':historical:' + i),
-      c = structuredClone(a.current!);
+      c = structuredClone(a.channel!);
     c.state.channelId = key;
     c.opening.channelId = key;
     c.onchain = { status: '3' };
@@ -213,7 +213,7 @@ try {
     commits: 20,
     commitP95Ms: commits.sort((a, b) => a - b)[18],
   };
-  const proof = checkpointEvidence(a.current!.state, a.current!.playerSignature, a.current!.casinoSignature);
+  const proof = checkpointEvidence(a.channel!.state, a.channel!.playerSignature, a.channel!.casinoSignature);
   const rawReceiptBytes = new TextEncoder().encode(JSON.stringify(proof)).length;
   for (let i = 0; i < 100; i++)
     await a.save({
@@ -233,7 +233,7 @@ try {
   restored.storageKey = prefix + ':restored';
   await restored.restoreBackup(compactBackup, password);
   if (
-    restored.current!.state.sequence !== '2' ||
+    restored.channel!.state.sequence !== '2' ||
     restored.history.length !== 100 ||
     !(await storage.get(restored.storageKey + ':receipt:' + restored.history[0].operationId))
   )

@@ -34,10 +34,9 @@ import {
   MAX_META_BYTES,
   validMeta,
 } from '../../protocol/protocol.ts';
-import type { AssetId } from '../../protocol/protocol.ts';
 import type { PublicDeveloperBet, Round } from '../../protocol/types.ts';
 
-export type { AssetId, PublicDeveloperBet, Round };
+export type { PublicDeveloperBet, Round };
 /** A game's key, as its developer and the name they published it under make it. */
 export { gameKey };
 /** What a casino's `GET /api/config` names for this kit to use it, as `developerProtocol` and `limits`: a stub casino
@@ -80,11 +79,10 @@ export interface Developer {
     meta: number;
     group: number;
   };
-  /** The casino's bankroll in an asset, as it last reported it: what to price casino bets against, not a promise to
-   * admit them. */
-  bankroll(asset: AssetId): Promise<bigint>;
-  /** A new round in an asset, for this developer's casino bet: named by the casino by the hash of a secret it keeps. */
-  openRound(asset: AssetId): Promise<Round>;
+  /** The casino's bankroll, as it last reported it: what to price casino bets against, not a promise to admit them. */
+  bankroll(): Promise<bigint>;
+  /** A new round for this developer's casino bet: named by the casino by the hash of a secret it keeps. */
+  openRound(): Promise<Round>;
   /** The hash of the seed this developer's casino bet on a round brings. Published before anybody bets, it fixes the
    * round's outcome, since the casino fixed its secret first; the seed is derived from this key and the round. */
   seedHash(round: string): Promise<string>;
@@ -194,11 +192,8 @@ export async function createDeveloper({
     address: signer.address,
     game,
     limits: config.limits,
-    bankroll: async asset => {
-      const status = await api('/api/status');
-      return BigInt((asset === 'test' ? status.test : status).bankroll);
-    },
-    openRound: asset => asDeveloper('/api/rounds', { asset }),
+    bankroll: async () => BigInt((await api('/api/status')).bankroll),
+    openRound: () => asDeveloper('/api/rounds', {}),
     seedHash: async round => hashOfSeed(await seedOf(round.toLowerCase())),
     round: id => api(`/api/rounds/${id}`),
     casinoBet: placeCasinoBet,

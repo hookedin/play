@@ -42,7 +42,8 @@ carry trust of their own, set out below.
   receipts; it is not prevented. What the casino has signed, it cannot change.
 - **What it reports.** Commission, the bankroll figure it reports, the fund's share price and each developer's earnings
   tally are the casino's word.
-- **Test coins.** A test channel exists only at the casino. Its balance is the casino's record and settles nowhere.
+- **Practice.** Test coins are the wallet's own, in the tab's memory: nothing about them is signed, sent to the casino
+  or settled anywhere.
 
 ## What you do yourself
 

@@ -12,7 +12,7 @@ Play it at [dice-game.hookedin.com](https://dice-game.hookedin.com/manifest.json
 
 A win pays `99% / win chance` times the stake: 2× at 49.5%, 9.9× at 10%, 1.1× at 90%. A loss pays nothing. The roll shown is the verified outcome on a 0–100 scale: a win falls under the win chance, a loss at or above it.
 
-The wallet plays with the network's ETH or the casino's test coins; the game is the same either way.
+The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
 
 ## How it works
 

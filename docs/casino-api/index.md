@@ -18,21 +18,21 @@ is no WebSocket or event stream: clients poll.
 
 **[Public](public.md)**, no authentication:
 
-| Endpoint                                                             | What it answers                                                                              |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [`GET /api/config`](public.md#get-apiconfig)                         | The deployment, the protocol revision and the limits                                         |
-| [`GET /api/status`](public.md#get-apistatus)                         | Health, the books of both assets, developer earnings, the last observed block and the commit |
-| [`GET /`](public.md#get-)                                            | The same as `GET /api/status`, outside the request budgets                                   |
-| [`GET /api/metrics`](public.md#get-apimetrics)                       | Health and the books                                                                         |
-| [`GET /api/fund`](public.md#get-apifund)                             | The bankroll fund, signed                                                                    |
-| [`GET /api/players`](public.md#get-apiplayers)                       | Every player's public record, the most played first                                          |
-| [`GET /api/players/:name`](public.md#get-apiplayersname)             | One player's public record                                                                   |
-| [`GET /api/players/:name/:game`](public.md#get-apiplayersnamegame)   | A game a player publishes                                                                    |
-| [`GET /api/games/:key`](public.md#get-apigameskey)                   | A game's settled bets and their totals                                                       |
-| [`GET /api/rounds/:round`](public.md#get-apiroundsround)             | A developer's round                                                                          |
-| [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) | One developer bet                                                                            |
-| [`GET /api/developer-bets`](public.md#get-apideveloper-bets)         | A page of one game's developer bets                                                          |
-| [`POST /api/faucet`](public.md#post-apifaucet)                       | Test ETH, on a local Anvil stack only                                                        |
+| Endpoint                                                             | What it answers                                                               |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [`GET /api/config`](public.md#get-apiconfig)                         | The deployment, the protocol revision and the limits                          |
+| [`GET /api/status`](public.md#get-apistatus)                         | Health, the books, developer earnings, the last observed block and the commit |
+| [`GET /`](public.md#get-)                                            | The same as `GET /api/status`, outside the request budgets                    |
+| [`GET /api/metrics`](public.md#get-apimetrics)                       | Health and the books                                                          |
+| [`GET /api/fund`](public.md#get-apifund)                             | The bankroll fund, signed                                                     |
+| [`GET /api/players`](public.md#get-apiplayers)                       | Every player's public record, the most played first                           |
+| [`GET /api/players/:name`](public.md#get-apiplayersname)             | One player's public record                                                    |
+| [`GET /api/players/:name/:game`](public.md#get-apiplayersnamegame)   | A game a player publishes                                                     |
+| [`GET /api/games/:key`](public.md#get-apigameskey)                   | A game's settled bets and their totals                                        |
+| [`GET /api/rounds/:round`](public.md#get-apiroundsround)             | A developer's round                                                           |
+| [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) | One developer bet                                                             |
+| [`GET /api/developer-bets`](public.md#get-apideveloper-bets)         | A page of one game's developer bets                                           |
+| [`POST /api/faucet`](public.md#post-apifaucet)                       | Demo ETH, on a local Anvil stack only                                         |
 
 **[Channels](channels.md)**, with channel access:
 
@@ -94,14 +94,13 @@ casino holds at most 512 connections at once.
 
 | Value                                                   | On the wire                                                                                                                                                 |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Amounts                                                 | Decimal strings of wei, or of test units (10^-18 TEST): `"1000000000000000"` is 0.001                                                                       |
+| Amounts                                                 | Decimal strings of wei: `"1000000000000000"` is 0.001 ETH                                                                                                   |
 | Hashes and IDs                                          | `0x` followed by 64 lowercase hex digits. Path parameters also take upper-case hex, except a channel's `:id` and an `:operationId`, which must be lowercase |
 | Addresses                                               | Checksummed in openings, profiles, statements, `contractAddress`, `operator` and a casino bet's `developer`; lowercase in rounds and developer bets         |
 | Times in milliseconds since the Unix epoch              | `since`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                         |
 | Times in Unix seconds                                   | `expiresAt`, the fund's `at`, the observed block's `timestamp`, a channel's on-chain `deadline` and a claim's `finalizedAt`                                 |
 | Counts, indexes and the `sequence` of a holding or bank | JSON numbers                                                                                                                                                |
 | Signed messages                                         | As signed: every `uint256` a decimal string, except an operation's `kind` and a token's `expiresAt`, which the wallet writes as numbers                     |
-| Assets                                                  | `"eth"` or `"test"`                                                                                                                                         |
 
 ## Authentication
 
@@ -178,8 +177,8 @@ connection's address; behind the production proxy it is the last `X-Forwarded-Fo
 
 The casino does one thing at a time for each channel and for each shared thing a request touches: the bankroll fund, a
 round, a profile, the counterparty of a credit, a developer's bank. Each of these queues holds 8 waiting requests, a
-developer's bank in one asset 1,024, and at most 4,096 queues exist at once. At most four channel registrations run at
-once. A full queue or a fifth registration answers `429` with `busy`.
+developer's bank 1,024, and at most 4,096 queues exist at once. At most four channel registrations run at once. A full
+queue or a fifth registration answers `429` with `busy`.
 
 ## Pauses
 
@@ -198,28 +197,27 @@ A refusal is `{"error": "…", "code": "…"}`: the text is for people, and the 
 { "error": "Unsupported method", "code": "unsupported-method" }
 ```
 
-| Code                 | Status | Meaning                                                                                                                                                                                                                                              |
-| -------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code       |
-| `reserved`           | 400    | The alias is one the casino keeps for itself                                                                                                                                                                                                         |
-| `unauthorized`       | 401    | The token is missing, expired, too far ahead or wrongly signed, the channel is unknown, a test channel's `owner` proof fails, or the developer key publishes no game. The local faucet answers `403` with this code to anything but the local wallet |
-| `not-funded`         | 403    | Taking an alias or publishing a game needs an open ETH channel                                                                                                                                                                                       |
-| `not-found`          | 404    | No such path, name, game, round, developer bet or recorded operation, or the faucet is not offered                                                                                                                                                   |
-| `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                   |
-| `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                      |
-| `channel-closed`     | 409    | The channel is closing or closed                                                                                                                                                                                                                     |
-| `id-conflict`        | 409    | The operation ID is bound to another operation                                                                                                                                                                                                       |
-| `not-due`            | 409    | A credit for money the casino does not owe                                                                                                                                                                                                           |
-| `wrong-asset`        | 409    | The request needs the other asset: redeeming shares and closing are for ETH channels, the faucet for test channels                                                                                                                                   |
-| `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                            |
-| `bank-short`         | 409    | The developer's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                         |
-| `taken`              | 409    | Another player holds the alias, or one that reads the same                                                                                                                                                                                           |
-| `too-many`           | 409    | The profile already publishes 100 games                                                                                                                                                                                                              |
-| `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                             |
-| `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                                     |
-| `rate-limited`       | 429    | A request budget is spent; retry in the next window                                                                                                                                                                                                  |
-| `busy`               | 429    | A queue is full, or four channel registrations are in progress                                                                                                                                                                                       |
-| `paused`             | 503    | The casino has stopped signing                                                                                                                                                                                                                       |
+| Code                 | Status | Meaning                                                                                                                                                                                                                                        |
+| -------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code |
+| `reserved`           | 400    | The alias is one the casino keeps for itself                                                                                                                                                                                                   |
+| `unauthorized`       | 401    | The token is missing, expired, too far ahead or wrongly signed, the channel is unknown, or the developer key publishes no game. The local faucet answers `403` with this code to anything but the local wallet                                 |
+| `not-funded`         | 403    | Taking an alias or publishing a game needs an open channel                                                                                                                                                                                     |
+| `not-found`          | 404    | No such path, name, game, round, developer bet or recorded operation, or the faucet is not offered                                                                                                                                             |
+| `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                             |
+| `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                |
+| `channel-closed`     | 409    | The channel is closing or closed                                                                                                                                                                                                               |
+| `id-conflict`        | 409    | The operation ID is bound to another operation                                                                                                                                                                                                 |
+| `not-due`            | 409    | A credit for money the casino does not owe                                                                                                                                                                                                     |
+| `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                      |
+| `bank-short`         | 409    | The developer's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                   |
+| `taken`              | 409    | Another player holds the alias, or one that reads the same                                                                                                                                                                                     |
+| `too-many`           | 409    | The profile already publishes 100 games                                                                                                                                                                                                        |
+| `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                       |
+| `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                               |
+| `rate-limited`       | 429    | A request budget is spent; retry in the next window                                                                                                                                                                                            |
+| `busy`               | 429    | A queue is full, or four channel registrations are in progress                                                                                                                                                                                 |
+| `paused`             | 503    | The casino has stopped signing                                                                                                                                                                                                                 |
 
 A declined operation is not an error. It is a `200` reply with `status: "rejected"`, a signed rejection checkpoint and
 a `reason`; `used: true` marks a game's operation its player already carried out on another channel.

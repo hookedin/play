@@ -189,7 +189,7 @@ export class WalletTransactions {
   }
   async maxDeposit(this: CasinoWallet) {
     return this.exclusive(async () => {
-      if (this.current) throw new Error('Close the active channel before another deposit');
+      if (this.channel) throw new Error('Close the active channel before another deposit');
       await this.assertNetwork();
       const balance = await this.provider.getBalance(this.address, 'pending'),
         fees = await this.provider.getFeeData();
@@ -209,7 +209,7 @@ export class WalletTransactions {
     return this.exclusive(async () => {
       if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
         throw new Error('Deposit must be a positive uint256 amount');
-      if (this.current || this.pending || this.missingChannel)
+      if (this.channel || this.pending || this.missingChannel)
         throw new Error('Close or recover the existing channel before depositing');
       await this.assertNetwork();
       const key = Wallet.createRandom().privateKey;
@@ -221,7 +221,7 @@ export class WalletTransactions {
         deposit: String(amount),
       };
       const id = opening.channelId;
-      this.currentId = id;
+      this.channelId = id;
       this.channels[id] = {
         key,
         opening,
@@ -257,7 +257,7 @@ export class WalletTransactions {
   async activate(this: CasinoWallet) {
     this.lastChainCheck = 0;
     await this.assertNetwork();
-    const c = this.current!,
+    const c = this.channel!,
       opening = c.opening;
     const value = await this.verifyRegisteredOpening(opening);
     c.onchain = channelRecord(value);
@@ -266,8 +266,8 @@ export class WalletTransactions {
     if (this.recoveryOnly) return;
     const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening }, c);
     this.noteNames(reply);
-    // Money of its own: from here on this account plays with its ETH.
-    this.play('eth');
+    // Money of its own: from here on this tab plays with its ETH.
+    this.preferPractice = false;
     this.updateBankroll(reply.bankroll);
   }
   async setupDemo(this: CasinoWallet) {
@@ -479,10 +479,10 @@ export class WalletTransactions {
   }
   async withdraw(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
-      if (!this.current) throw new Error('No active channel');
-      if (this.current.pending) throw new Error('Recover the pending operation or start unilateral closure');
+      if (!this.channel) throw new Error('No active channel');
+      if (this.channel.pending) throw new Error('Recover the pending operation or start unilateral closure');
       await this.assertNetwork();
-      const c = this.current,
+      const c = this.channel,
         evidence = this.evidence(),
         message = {
           channelId: c.state.channelId,
@@ -502,9 +502,9 @@ export class WalletTransactions {
   }
   async startClose(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
-      if (!this.current) throw new Error('No active channel');
+      if (!this.channel) throw new Error('No active channel');
       await this.assertNetwork();
-      this.current.closing = true;
+      this.channel.closing = true;
       await this.save();
       const tx = await this.sendTransaction('startClose', [this.evidence()]);
       await this.waitTransaction(tx);
@@ -525,7 +525,7 @@ export class WalletTransactions {
     await this.refresh({ channelId });
     return result;
   }
-  async finalizeClose(this: CasinoWallet, channelId = this.currentId) {
+  async finalizeClose(this: CasinoWallet, channelId = this.channelId) {
     const result = await this.exclusive(async () => {
       const tx = await this.sendTransaction('finalizeClose', [channelId]);
       await this.waitTransaction(tx);
@@ -534,7 +534,7 @@ export class WalletTransactions {
     await this.refresh({ channelId });
     return result;
   }
-  async challengeClose(this: CasinoWallet, channelId = this.currentId) {
+  async challengeClose(this: CasinoWallet, channelId = this.channelId) {
     const result = await this.exclusive(async () => {
       const tx = await this.sendTransaction('challengeClose', [this.evidence(this.channels[channelId!])]);
       await this.waitTransaction(tx);

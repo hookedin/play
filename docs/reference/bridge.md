@@ -45,10 +45,11 @@ The envelope `id` only routes a reply. It must rise with every request since the
 whose ID does not is refused with `invalid-request`, and the SDK counts from 1. A request that fails the checks is
 refused under its ID when that ID is a safe integer, and dropped unanswered otherwise.
 
-The `id` inside a bet's or a payment's parameters is different: it is the game's own durable name for the operation,
-1 to 64 letters, digits, `.`, `_`, `:` or `-`. The wallet keeps it for the player, per asset and per game, whichever
-channel the operation is signed on. The same request again returns the saved receipt, and other terms under the same ID
-are refused with `id-conflict`. [State and recovery](../games/state-and-recovery.md) shows how a game uses it.
+The `id` inside a bet's or a payment's parameters is different: it is the game's own durable name for the operation, 1
+to 64 letters, digits, `.`, `_`, `:` or `-`. The wallet keeps it for the player and the game, whichever channel the
+operation is signed on, and apart for practice. The same request again returns the saved receipt, and other terms under
+the same ID are refused with `id-conflict`. [State and recovery](../games/state-and-recovery.md) shows how a game uses
+it.
 
 ## Origins
 
@@ -76,11 +77,22 @@ refused with `busy` too.
 
 ## Amounts
 
-Every amount is a decimal string of whole smallest units of the wallet's asset: digits only, no sign and no leading
-zeros, below 2^256. Both assets count in units of 10^-18, so for ETH the unit is the wei. A stake, a prize and an
-amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters for operations that belong
-together, such as the steps of one hand: the player signs it, and the wallet and the game's public record show a group
-as one.
+Every amount is a decimal string of whole smallest units of what the wallet plays with: digits only, no sign and no
+leading zeros, below 2^256. ETH and test coins both count in units of 10^-18, so for ETH the unit is the wei. A stake, a
+prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters for operations
+that belong together, such as the steps of one hand: the player signs it, and the wallet and the game's public record
+show a group as one.
+
+## Practice
+
+A wallet with no funded channel practices, and so does one whose player chose to: `wallet.hello` says `practice: true`
+and names the money `TEST`. It plays with test coins it keeps in the tab's memory, 100 at the start and 100 more once it
+holds fewer than 10, and a reload starts again at 100. It settles `game.casinoBet` and `game.payment` itself, with the
+same receipts and retry rules, holding a casino bet to the casino's own rule against a practice bankroll of ten million
+coins and drawing its outcome itself. It signs nothing, sends the casino nothing and records nothing. It takes no
+developer bets: a developer's server settles them at the casino, so `game.developerBet` is refused with `practice`. When
+what the wallet plays with changes, because the player switched or a channel opened or closed, the wallet takes back the
+game's balance and loads its page again, so a page is greeted once for each money.
 
 ## Methods
 
@@ -89,12 +101,13 @@ as one.
 What this wallet offers, the money it plays with, and the bounds it holds a bet to. Answered at once. It takes no
 parameters.
 
-| Result field | Type       | Meaning                                                                                                           |
-| ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| `methods`    | `string[]` | The methods this wallet offers, the eight on this page                                                            |
-| `asset`      | object     | `{ id, symbol, decimals }`: `id` is `eth` or `test`; `symbol` is `ETH`, `Sepolia ETH` or `TEST`; `decimals` is 18 |
-| `chainId`    | `string`   | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil                  |
-| `limits`     | object     | The bounds a bet is held to: see [limits](#limits)                                                                |
+| Result field | Type       | Meaning                                                                                                        |
+| ------------ | ---------- | -------------------------------------------------------------------------------------------------------------- |
+| `methods`    | `string[]` | The methods this wallet offers: the eight on this page, and in practice all but `game.developerBet`            |
+| `asset`      | object     | `{ symbol, decimals }`: `symbol` is `ETH` or `Sepolia ETH`, or `TEST` in practice; `decimals` is 18            |
+| `practice`   | `boolean`  | The wallet [practices](#practice): it plays with test coins of its own, and nothing it does reaches the casino |
+| `chainId`    | `string`   | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil               |
+| `limits`     | object     | The bounds a bet is held to: see [limits](#limits)                                                             |
 
 ```json title="Request"
 { "hookedin": true, "id": 1, "method": "wallet.hello", "params": {} }
@@ -115,7 +128,8 @@ parameters.
       "game.payment",
       "game.requestFunds"
     ],
-    "asset": { "id": "eth", "symbol": "Sepolia ETH", "decimals": 18 },
+    "asset": { "symbol": "Sepolia ETH", "decimals": 18 },
+    "practice": false,
     "chainId": "11155111",
     "limits": { "outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64 }
   }
@@ -127,13 +141,13 @@ parameters.
 Everything a game learns about the player, and what to price bets against. Answered at once. It takes no parameters.
 The player's address, channel and balances are not a game's to know.
 
-| Result field       | Type               | Meaning                                                                                                                                     |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. `null` until a casino has answered the wallet. A game keys anything of its own by it |
-| `alias`            | `string` or `null` | The name the player is shown by, written `@alias`; `null` unless they took one                                                              |
-| `chainId`          | `string`           | As in `wallet.hello`                                                                                                                        |
-| `bankroll`         | decimal string     | The casino's bankroll in the wallet's asset, as last reported: what to price bets against, not a promise to admit them                      |
-| `recommendedStake` | decimal string     | A stake to start the stake field at: 10^12 wei on Sepolia, 10^15 on a local Anvil, one coin in test coins                                   |
+| Result field       | Type               | Meaning                                                                                                                                                                        |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. `null` until the casino knows the player, which it does once they fund a channel. A game keys anything of its own by it |
+| `alias`            | `string` or `null` | The name the player is shown by, written `@alias`; `null` unless they took one                                                                                                 |
+| `chainId`          | `string`           | As in `wallet.hello`                                                                                                                                                           |
+| `bankroll`         | decimal string     | The casino's bankroll as last reported, or in practice the practice bankroll: what to price bets against, not a promise to admit them                                          |
+| `recommendedStake` | decimal string     | A stake to start the stake field at: 10^12 wei on Sepolia, 10^15 on a local Anvil, one coin in practice                                                                        |
 
 ```json title="Request"
 { "hookedin": true, "id": 2, "method": "wallet.info", "params": {} }
@@ -162,7 +176,7 @@ A developer's round, as the casino shows it to anyone at
 | ----- | ------------- | --------------------------------- |
 | `id`  | `bytes32` hex | The round, `0x` and 64 hex digits |
 
-The result is the casino's reply as it came: `{ id, developer, asset, status }`, and once the developer's casino bet has
+The result is the casino's reply as it came: `{ id, developer, status }`, and once the developer's casino bet has
 revealed the round, its `seed`, `secret`, `outcome` and `casinoBet`. The wallet checks none of it. A game whose players
 share one draw, such as roulette, checks its developer's rounds with it: each secret hashes to its round, each seed to
 the seed hash its bet signed, and the outcomes lead where the game says. A round the casino does not know is refused
@@ -218,7 +232,7 @@ A casino bet: settled against the casino's bankroll in the one request, on the p
 round before the wallet picks the seed, so neither knows the outcome before both are out. The game's balance drops by
 the stake, and rises by the prize when the round's 64-bit outcome is below the chance; the casino's commission is not
 charged to the player. The casino may decline the bet instead, with a signed checkpoint that leaves the balance
-unchanged.
+unchanged. In [practice](#practice) the wallet settles it itself, by the same rules.
 
 | Param    | Type           | Meaning                                          |
 | -------- | -------------- | ------------------------------------------------ |
@@ -271,7 +285,7 @@ win gains `prize − stake`, and a prize below the stake is a partial loss. The 
 
 A developer bet: a bet against the game's developer. Its stake leaves the game's balance and goes into the developer's
 bank at once, and the bet is final. The developer settles it when it chooses, on its word, and the player trusts it to
-pay.
+pay. In [practice](#practice) it is refused with `practice`.
 
 | Param   | Type           | Meaning                                                                                                                                |
 | ------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -322,7 +336,8 @@ developer bets: `invalid-request`. The developer's side is the [developer kit](.
 
 ### `game.payment`
 
-A payment to the bankroll: the balance drops by `amount`, with no chance involved and no commission.
+A payment to the bankroll: the balance drops by `amount`, with no chance involved and no commission. In
+[practice](#practice) the wallet settles it itself.
 
 | Param    | Type           | Meaning                                    |
 | -------- | -------------- | ------------------------------------------ |
@@ -353,8 +368,8 @@ The result is the payment's receipt, `settled` or `rejected`. It carries no amou
 
 Asks the player for money. The wallet opens its own dialog, in its own words, where the player sets how much of their
 playing balance the game may risk, or declines. The game passes it an amount and nothing else, and only the player's
-confirmation there grants a game money. The reply comes once the player has decided. Without an open channel the dialog
-offers the player test coins or their wallet in place of an amount, and the reply says `funded: false`.
+confirmation there grants a game money. The reply comes once the player has decided. In [practice](#practice) the amount
+is in test coins, and the dialog also shows the player the way to ETH.
 
 | Param    | Type           | Meaning                                                                                                                  |
 | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -392,10 +407,10 @@ The game's balance: what it may still risk in this tab, including its winnings. 
 loaded and whenever the balance or `pending` changes, so there is nothing to poll. The balance lives in the tab's memory
 only: leaving the game, reloading or closing the tab releases it, and the money never left the channel.
 
-| Field     | Type           | Meaning                                                                                                         |
-| --------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `balance` | decimal string | What the game may still risk; `0` without an open channel                                                       |
-| `pending` | `boolean`      | A signed operation of this game awaits recovery in the wallet. While it does, no other bet or payment is signed |
+| Field     | Type           | Meaning                                                                                                                                     |
+| --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `balance` | decimal string | What the game may still risk, in what the wallet plays with                                                                                 |
+| `pending` | `boolean`      | A signed operation of this game awaits recovery in the wallet. While it does, no other bet or payment is signed. Always `false` in practice |
 
 ```json
 { "hookedin": true, "event": "game.balance", "balance": "5980000000000", "pending": false }
@@ -434,11 +449,11 @@ Every reply about an operation, whichever method asked, is one receipt under the
 never the signed evidence. The evidence, the channel and its balance stay in the wallet, and every receipt a game gets
 is one the wallet checked.
 
-| `kind`          | `status`                                                                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `casino-bet`    | `settled`: done, and what it paid is in the channel. `rejected`: declined with a signed checkpoint the wallet checked, the balance unchanged                      |
-| `payment`       | `settled` or `rejected`, as for a casino bet                                                                                                                      |
-| `developer-bet` | `open`: its stake is in the developer's bank. `settled`: its developer settled it and the wallet collected what that pays. `rejected`: the casino did not take it |
+| `kind`          | `status`                                                                                                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `casino-bet`    | `settled`: done, and what it paid is in the channel, or in practice in the wallet's test coins. `rejected`: declined, the balance unchanged, with a signed checkpoint the wallet checked, or in practice by the casino's rule |
+| `payment`       | `settled` or `rejected`, as for a casino bet                                                                                                                                                                                  |
+| `developer-bet` | `open`: its stake is in the developer's bank. `settled`: its developer settled it and the wallet collected what that pays. `rejected`: the casino did not take it                                                             |
 
 | Field     | Type           | Present                                                                                                                    |
 | --------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -496,12 +511,12 @@ A refusal is `{ code, message }`. The wallet's codes:
 | `invalid-request`    | The envelope or its parameters break a rule on this page, the envelope ID did not rise, or the request asks a developer bet of a game published nowhere | Fixes the request: sent again unchanged, it fails again                                                                                                                    |
 | `unknown-method`     | The wallet offers no such method                                                                                                                        | Keeps to the `methods` of `wallet.hello`                                                                                                                                   |
 | `busy`               | The wallet is carrying out another operation, its own or the player's, or 32 requests already wait                                                      | Sends the same request again shortly                                                                                                                                       |
-| `no-channel`         | The wallet has no open channel in the asset it plays with                                                                                               | Keeps rendering, and calls `game.requestFunds`: the wallet's dialog shows the player the way to a channel                                                                  |
 | `insufficient-funds` | The stake or amount exceeds the game's balance                                                                                                          | Calls `game.requestFunds`, then sends the same request again                                                                                                               |
 | `pending-operation`  | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the player recovers it from the wallet's banner. When the pushed `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |
 | `id-conflict`        | The ID is bound to other terms or another game, or a pending request under it differs                                                                   | Sends the terms saved with the ID, or a fresh ID for a fresh operation                                                                                                     |
 | `id-used`            | The operation was carried out on another channel, and this wallet has no receipt of it                                                                  | Does not place it again under another ID without asking the player                                                                                                         |
 | `game-closed`        | The game is not the open one: the player left it, or closed it while its request waited                                                                 | Stops: the page is leaving                                                                                                                                                 |
+| `practice`           | The wallet practices, and takes no developer bets                                                                                                       | Lets the player watch, and says that the game plays with ETH                                                                                                               |
 | `failed`             | Anything else, such as a casino that did not answer or chain observations that are out of date                                                          | Sends the same request again under the same ID: nothing proves it was not signed, and the wallet resumes it if it was                                                      |
 
 A casino bet the casino declines is no error: it is a `rejected` receipt.

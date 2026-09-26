@@ -109,45 +109,7 @@ export const hashState = (d: Domain, s: Checkpoint) => TypedDataEncoder.hash(d, 
 export const hashOperation = (d: Domain, s: Operation) => TypedDataEncoder.hash(d, OP_TYPES, s);
 export const channelId = (player: string, signer: string, deposit: Integer) =>
   keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'address', 'uint256'], [player, signer, deposit]));
-/** What a channel holds. ETH channels are opened and settled on-chain. Test coins are the casino's
- * own play money: a test channel is opened at the casino alone, starts empty and is filled from the
- * faucet, and nothing about it ever reaches the contract. Both count in units of 10^-18. */
-export type AssetId = 'eth' | 'test';
-export const ASSETS = {
-  eth: { id: 'eth', symbol: 'ETH', decimals: 18 },
-  test: { id: 'test', symbol: 'TEST', decimals: 18 },
-} as const;
-const COIN = 10n ** 18n;
-/** The test-coin bankroll the casino starts with. */
-export const TEST_BANKROLL = 10_000_000n * COIN;
-/** The faucet pays this much to a test channel that holds less than `FAUCET_BELOW`: a credit that names
- * `FAUCET_ID`, signed by the channel's key like any other payout. */
-export const FAUCET_ID = id('HOOKEDIN/FAUCET');
-export const FAUCET_AMOUNT = 100n * COIN;
-export const FAUCET_BELOW = 10n * COIN;
-/** A test channel's ID. Its first word is a hash, never an address, so it cannot be the ID of a
- * channel the contract knows: nothing signed for a test channel settles on-chain. */
-export const testChannelId = (player: string, signer: string) =>
-  keccak256(
-    AbiCoder.defaultAbiCoder().encode(['bytes32', 'address', 'address'], [id('HOOKEDIN/TESTCOINS'), player, signer]),
-  );
-export const testOpening = (player: string, signer: string): Opening => ({
-  channelId: testChannelId(player, signer),
-  player: getAddress(player),
-  signer: getAddress(signer),
-  deposit: '0',
-});
-export function validateOpening(opening: Opening, asset: AssetId = 'eth') {
-  if (asset === 'test') {
-    if (
-      opening.channelId !== testChannelId(opening.player, opening.signer) ||
-      same(opening.signer, ZeroAddress) ||
-      same(opening.player, ZeroAddress) ||
-      BigInt(opening.deposit) !== 0n
-    )
-      throw new Error('Invalid channel opening');
-    return;
-  }
+export function validateOpening(opening: Opening) {
   if (
     opening.channelId !== channelId(opening.player, opening.signer, opening.deposit) ||
     same(opening.signer, ZeroAddress) ||
@@ -186,21 +148,21 @@ export const REDEEM_TYPES = {
 };
 export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, REDEEM_TYPES, s);
-/** A developer's bank: the developer's money at the casino, per asset. Every developer bet on the developer's games
- * pays its stake into it, and it pays the settlements and the casino bets the developer's key signs. A deposit is a
- * debit that names it, from the developer's own channel, answered with a statement of the balance; money leaves it
- * only by the developer's own signed `Withdraw`, settlement or casino bet. */
+/** A developer's bank: the developer's money at the casino. Every developer bet on the developer's games pays its
+ * stake into it, and it pays the settlements and the casino bets the developer's key signs. A deposit is a debit that
+ * names it, from the developer's own channel, answered with a statement of the balance; money leaves it only by the
+ * developer's own signed `Withdraw`, settlement or casino bet. */
 export const BANK_ID = id('HOOKEDIN/BANK');
-/** The casino signs the balance of a developer's bank in one asset after every deposit and withdrawal.
- * `cause` is the hash of the developer's signed deposit or `Withdraw`. */
+/** The casino signs the balance of a developer's bank after every deposit and withdrawal. `cause` is the hash of the
+ * developer's signed deposit or `Withdraw`. */
 export const BANK_TYPES = {
-  BankStatement: fields('address developer,string asset,uint256 sequence,uint256 balance,bytes32 cause'),
+  BankStatement: fields('address developer,uint256 sequence,uint256 balance,bytes32 cause'),
 };
 /** A developer takes money out of their bank. `sequence` is the statement it will produce, so it works once. */
 export const WITHDRAW_TYPES = {
-  Withdraw: fields('address developer,string asset,uint256 amount,uint256 sequence'),
+  Withdraw: fields('address developer,uint256 amount,uint256 sequence'),
 };
-export const hashWithdraw = (d: Domain, s: { developer: string; asset: string; amount: Integer; sequence: Integer }) =>
+export const hashWithdraw = (d: Domain, s: { developer: string; amount: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, WITHDRAW_TYPES, s);
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
@@ -498,7 +460,7 @@ export function verifyEvidence(bundle: EvidenceBundle): {
 } {
   const d = domain(bundle.chainId, bundle.casino),
     { opening, operator, evidence } = bundle;
-  validateOpening(opening, bundle.asset ?? 'eth');
+  validateOpening(opening);
   if (!same(evidence.base.channelId, opening.channelId)) throw new Error('Evidence channel differs');
   if (!same(hashState(d, evidence.base), hashState(d, initialState(opening)))) {
     assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, opening.signer);
@@ -548,7 +510,7 @@ export const PROTOCOL = id(
     canonicalJSON({
       kinds: KIND,
       outcome: OUTCOME_TAG,
-      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID, faucet: FAUCET_ID },
+      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID },
       limits: LIMITS,
     }),
 );

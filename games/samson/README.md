@@ -31,7 +31,7 @@ Pays per way, in bets:
 
 Bonus spins are prepaid, not free. The triggering spin adds eight bets of cash to its payout, and the game offers to spend that on eight bonus spins at the triggering bet. You may keep the cash instead. **Buy bonus** is the same eight spins without waiting for a trigger.
 
-The wallet plays with the network's ETH or the casino's test coins; the game is the same either way.
+The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
 
 ## How it works
 

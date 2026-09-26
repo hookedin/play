@@ -10,7 +10,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { CasinoWallet } from '../client/wallet.ts';
 import type { GameReceipt } from '../protocol/game-types.ts';
-import type { AssetId } from '../protocol/protocol.ts';
 import { betPayout, outcome, seedHash } from '../protocol/protocol.ts';
 import type { Developer } from '../sdk/src/developer.ts';
 import type { TestBridge } from './game-wallet.ts';
@@ -24,11 +23,9 @@ export interface Casino {
   /** The wallet, with its channel funded, the game open and its spending limit set. */
   wallet: CasinoWallet;
   bridge: TestBridge;
-  /** What the wallet plays with. */
-  asset: AssetId;
   /** The game's developer, as its server creates it on starting. */
   developer(): Promise<Developer>;
-  /** The player's channel is replaced by a new one of the same asset, funded, with the game still open. */
+  /** The player's channel is replaced by a new one, funded, with the game still open. */
   replaceChannel(): Promise<void>;
   /** The same player's wallet, started afresh without the receipts this one kept, with the game open. */
   forget(): Promise<{ wallet: CasinoWallet; bridge: TestBridge }>;
@@ -157,7 +154,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
   test(`${name}: a developer that restarts places the same casino bet, on the seed it published before the bet`, async t => {
     const x = await open(t),
       developer = await x.developer(),
-      round = await developer.openRound(x.asset),
+      round = await developer.openRound(),
       committed = await developer.seedHash(round.id),
       meta = { round: round.id, seedHash: committed, chance: x.within.chance, prize: x.within.prize },
       placed = await x.bridge.call('game.developerBet', { id: 'spin', stake: x.within.stake, group: 'spin', meta });
@@ -190,7 +187,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
   test(`${name}: a casino bet of the developer's the bankroll declines reveals its round and moves no money`, async t => {
     const x = await open(t),
       developer = await x.developer(),
-      round = await developer.openRound(x.asset),
+      round = await developer.openRound(),
       placed = await x.bridge.call('game.developerBet', {
         id: 'unbacked',
         stake: x.beyond.stake,
@@ -217,7 +214,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
   test(`${name}: a round revealed without a bet shows its outcome in its group and moves no money`, async t => {
     const x = await open(t),
       developer = await x.developer(),
-      round = await developer.openRound(x.asset),
+      round = await developer.openRound(),
       revealed = await developer.reveal({ round: round.id, group: 'draw', meta: { step: 0 } });
     assert.deepEqual(
       [revealed.status, revealed.casinoBet?.stake, revealed.casinoBet?.group, revealed.casinoBet?.accepted],

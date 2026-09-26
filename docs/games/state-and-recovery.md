@@ -13,8 +13,8 @@ happens exactly once whatever is lost on the way: a reply, a page, a tab.
 Every casino bet, developer bet and payment carries an `id` the game chooses: 1 to 64 letters, digits, `.`, `_`, `:`
 or `-`. `crypto.randomUUID()` fits. It is the game's durable name for the operation.
 
-- The wallet scopes it by player, asset and game, as `game:<asset>:<game key>:<id>`, so another game, or the same
-  player's play in the other asset, never collides with it.
+- The wallet scopes it by player and game, as `game:<game key>:<id>`, so another game never collides with it. Practice
+  keeps its own receipts, apart from the player's.
 - It is the player's, not a channel's: on the player's next channel the same `id` finds the operation instead of
   placing another.
 - The same `id` with the same terms returns the operation's receipt, so an operation is placed once however often it
@@ -83,17 +83,19 @@ another `id` without asking them.
 
 ## Storage
 
-Keep state at your own origin, in `localStorage` or IndexedDB. Key it by page, chain, asset and player, so that games
-sharing a host, accounts sharing a browser, and one player's ETH and test-coin play never read each other's state.
+Keep state at your own origin, in `localStorage` or IndexedDB. Key it by page, chain and player, or practice, so that
+games sharing a host, accounts sharing a browser, and practice beside play never read each other's state.
 `HookedIn.storageScope(info)` builds such a key:
 
 ```text
-hookedin:<page path>:<chainId>:<asset>:<uname>
+hookedin:<page path>:<chainId>:<uname>
+hookedin:<page path>:<chainId>:practice
 ```
 
-Call it once `HookedIn.hello()` has resolved, since the asset comes from the greeting. It keys on the uname, which is
-the player's for good; never key by the alias, which the player can change. `RoundClient` saves its round under
-`hookedin:round:<name>:<chainId>:<asset>:<uname>`, where `name` is the page's path unless you pass one.
+Call it once `HookedIn.hello()` has resolved, since whether the wallet practices comes from the greeting. It keys on the
+uname, which is the player's for good; never key by the alias, which the player can change. `RoundClient` saves its
+round under `hookedin:round:<name>:<chainId>:<uname>`, or `...:practice`, where `name` is the page's path unless you
+pass one.
 
 ## Reloads and tabs
 
@@ -110,6 +112,6 @@ the player's for good; never key by the alias, which the player can change. `Rou
 ## Errors
 
 A refusal rejects with a `HookedInError`: act on its `code`, show its `message`. Besides the codes above,
-`insufficient-funds` and `no-channel` ask for [funds](how-a-game-works.md#the-spending-limit), and `busy` means the
-player is doing something in the wallet or 32 requests already wait. Every code is under
-[bridge errors](../reference/bridge.md#errors).
+`insufficient-funds` asks for [funds](how-a-game-works.md#the-spending-limit), `practice` means the wallet practices and
+places no developer bet, and `busy` means the player is doing something in the wallet or 32 requests already wait. Every
+code is under [bridge errors](../reference/bridge.md#errors).

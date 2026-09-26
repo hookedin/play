@@ -10,7 +10,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     const { HookedIn, HookedInError } = await import('../src/sdk.ts');
     const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
     // The page greets the wallet as it loads. No balance reaches the game until the wallet answers,
-    // but an amount can be read and written meanwhile: every asset counts in units of 10^-18.
+    // but an amount can be read and written meanwhile: ETH and test coins both count in units of 10^-18.
     assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
     assert.equal(HookedIn.formatAmount('1500000000000000000'), '1.5');
     assert.equal(HookedIn.parseAmount('1.5'), '1500000000000000000');
@@ -20,14 +20,14 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     assert.deepEqual(early, []);
     const hello = {
       methods: ['wallet.hello'],
-      asset: { id: 'test', symbol: 'USDX', decimals: 6 },
+      asset: { symbol: 'USDX', decimals: 6 },
       chainId: '31337',
     };
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
     assert.deepEqual(early, [{ balance: '3', pending: false }], 'the held balance follows the greeting');
     stopEarly();
-    // Once the wallet has said what it plays with, amounts follow that asset's own decimals.
+    // Once the wallet has said what it plays with, amounts follow its own decimals.
     assert.equal(HookedIn.parseAmount('1.5'), '1500000');
     assert.equal(HookedIn.formatAmount('1500000'), '1.5');
     assert.equal(HookedIn.formatAmount('1', 2), '<0.01');
@@ -133,7 +133,7 @@ test('balance() refuses outside a frame as call does, a greeting that failed is 
       posted.map(message => message.method),
       ['wallet.hello', 'wallet.hello'],
     );
-    const hello = { methods: ['wallet.hello'], asset: { id: 'eth', symbol: 'ETH', decimals: 18 }, chainId: '31337' };
+    const hello = { methods: ['wallet.hello'], asset: { symbol: 'ETH', decimals: 18 }, chainId: '31337' };
     deliver({ hookedin: true, id: posted.at(-1).id, result: hello });
     assert.deepEqual(await greeting, hello);
     // Greeted, with nothing pushed: balance() waits as long as a request would, then gives up.

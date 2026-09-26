@@ -25,14 +25,10 @@ Kelly condition for its two outcomes. See [economics](economics.md).
 A name a player may take from a funded ETH channel, written `@Bob`, and be shown by instead of their uname. See
 [names and publishing](../wallet/names-and-publishing.md).
 
-### Asset
-
-What a channel holds: ETH, or test coins (TEST). Every figure is kept per asset, and the two never add up.
-
 ### Bank
 
-A developer's balance at the casino, per asset, that takes the stakes of its games' developer bets and pays their
-settlements and its casino bets. It reserves nothing. See [developer bets](../games/developer-bets.md).
+A developer's balance at the casino that takes the stakes of its games' developer bets and pays their settlements and
+its casino bets. It reserves nothing. See [developer bets](../games/developer-bets.md).
 
 ### Bankroll
 
@@ -70,7 +66,7 @@ How many of the 2^64 outcomes win a casino bet, from 1 to 2^64 − 1: the bet wi
 
 ### Channel
 
-A running balance between a player and the casino, in one asset, backed on-chain by a deposit for ETH. See
+A running balance between a player and the casino, backed on-chain by a deposit of ETH. See
 [channels](../overview/how-it-works.md#channels).
 
 ### Channel key
@@ -101,8 +97,8 @@ casino. It is accounting, never a second debit. See [earnings](../games/earnings
 
 ### Counterparty
 
-What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, the developer earnings, the
-faucet, or a developer bet. See [counterparties](signed-messages.md#counterparties).
+What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, the developer earnings, or a
+developer bet. See [counterparties](signed-messages.md#counterparties).
 
 ### Details
 
@@ -128,10 +124,6 @@ its own. See [earnings](../games/earnings.md).
 
 The signed proof of a channel's state that settles it on-chain: a jointly signed checkpoint, or one and a step after it.
 See [evidence](signed-messages.md#evidence).
-
-### Faucet
-
-The casino's source of test coins: it pays 100 TEST to a test channel holding fewer than 10.
 
 ### Funding account
 
@@ -163,8 +155,8 @@ A signed change to a channel's balance: a casino bet, a debit or a credit. See
 
 ### Operation ID
 
-The name an operation is known by, from which a retry finds it again; a game's is scoped to its player, asset and
-game. See [operation IDs](signed-messages.md#operation-ids).
+The name an operation is known by, from which a retry finds it again; a game's is scoped to its player and game. See
+[operation IDs](signed-messages.md#operation-ids).
 
 ### Outcome
 
@@ -225,8 +217,8 @@ What a bet pays to enter.
 
 ### Test coins
 
-The casino's own play money, TEST: a channel of them needs no deposit and never reaches the chain. See
-[test coins](../overview/how-it-works.md#test-coins).
+The money a wallet practices with, TEST, kept in the tab's memory: the wallet settles a game's casino bets and payments
+in them itself and sends the casino nothing. See [practice](../overview/how-it-works.md#practice).
 
 ### Uname
 

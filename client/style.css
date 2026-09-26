@@ -231,8 +231,8 @@ h3 {
   background: #29223e;
   color: #c6b6ff;
 }
-/* Play money looks different from money. */
-.asset-switch button[data-play='test'][aria-pressed='true'] {
+/* Test coins look different from money. */
+.asset-switch button[data-play='practice'][aria-pressed='true'] {
   background: #3a2c11;
   color: #f0c976;
 }
@@ -2077,10 +2077,6 @@ html:has(dialog[open]) {
   border-radius: 0 8px 8px 0;
   color: #cdd3e2;
 }
-.fund-dialog:not([data-mode='channel']) .mode-channel,
-.fund-dialog:not([data-mode='fund']) .mode-fund {
-  display: none;
-}
 .fund-note {
   font-size: 12px;
   line-height: 1.7;
@@ -2387,25 +2383,19 @@ html:has(dialog[open]) {
 }
 .played-figures {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 14px;
-  margin-top: 16px;
-}
-.played-asset {
-  display: grid;
   grid-template-columns: repeat(5, auto);
   gap: 4px 18px;
-  margin: 0;
+  margin: 16px 0 0;
   justify-content: start;
 }
-.played-asset dt {
+.played-figures dt {
   grid-row: 2;
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #7d8494;
 }
-.played-asset dd {
+.played-figures dd {
   grid-row: 1;
   margin: 0;
   font-size: 13px;
@@ -2775,12 +2765,12 @@ button.bet-row:hover {
     grid-template-columns: 1fr;
     gap: 12px;
   }
-  .played-asset {
+  .played-figures {
     grid-template-columns: repeat(3, auto);
     gap: 10px 14px;
   }
-  .played-asset dt,
-  .played-asset dd {
+  .played-figures dt,
+  .played-figures dd {
     grid-row: auto;
   }
   .fund-change-rest {

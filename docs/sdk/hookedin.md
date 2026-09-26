@@ -72,7 +72,7 @@ export const HookedIn: Readonly<{
     wallet: WalletInfo;
     state: GameBalance;
     asset: string;
-    assetId: 'eth' | 'test';
+    practice: boolean;
     scope: string;
   }>;
 }>;
@@ -107,10 +107,10 @@ const receipt = await HookedIn.call('game.receipt', { id: 'coin-17' });
 hello: () => Promise<WalletHello>;
 ```
 
-The wallet's greeting, [`wallet.hello`](../reference/bridge.md#wallethello): the methods it offers, its asset, its
-chain and its limits. The module sends it as it loads inside a frame, and every call returns that one promise while it
-is pending or once it has resolved. A greeting that failed is forgotten, so the next call asks the wallet again. It
-rejects as [`call`](#call) does.
+The wallet's greeting, [`wallet.hello`](../reference/bridge.md#wallethello): the methods it offers, what it plays with,
+whether it practices, its chain and its limits. The module sends it as it loads inside a frame, and every call returns
+that one promise while it is pending or once it has resolved. A greeting that failed is forgotten, so the next call asks
+the wallet again. It rejects as [`call`](#call) does.
 
 #### `limits`
 
@@ -244,10 +244,11 @@ Resolves with the receipt, `settled` or `rejected`; a payment's receipt carries 
 storageScope: (wallet: WalletInfo | null | undefined) => string;
 ```
 
-A storage key for this page, chain, asset and player: `hookedin:<pathname>:<chainId>:<asset>:<uname>`, from
-`location.pathname`, a `wallet.info` result and the greeted asset (`eth` before the greeting). A missing chain reads
-`chain` and a missing uname `anonymous`. It keys on the uname, so taking or dropping an alias keeps what the player had.
-[`playerScope`](wire.md#playerscope) builds the part after the path.
+A storage key for this page, chain and player: `hookedin:<pathname>:<chainId>:<uname>`, from `location.pathname` and a
+`wallet.info` result, or `hookedin:<pathname>:<chainId>:practice` once the wallet has greeted the page in
+[practice](../reference/bridge.md#practice). A missing chain reads `chain` and a missing uname `anonymous`. It keys on
+the uname, so taking or dropping an alias keeps what the player had. [`playerScope`](wire.md#playerscope) builds the
+part after the path.
 
 ```ts
 HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:eth:3byt9ocwnnzaxanmiz3stocj'
@@ -318,16 +319,16 @@ initializeGame: ({ stakeInput, assetLabels }: { stakeInput: HTMLInputElement; as
     wallet: WalletInfo;
     state: GameBalance;
     asset: string;
-    assetId: 'eth' | 'test';
+    practice: boolean;
     scope: string;
   }>;
 ```
 
-A page's start: it waits for the greeting, `wallet.info` and the first balance, then writes the asset's symbol into
+A page's start: it waits for the greeting, `wallet.info` and the first balance, then writes the money's symbol into
 every element of `assetLabels`, labels `stakeInput` `Stake in <symbol>`, and fills `stakeInput` with the recommended
 stake unless the player edited it meanwhile. It resolves with the player's `wallet.info`, the balance as `state`, the
-symbol as `asset`, the asset's `assetId` and `scope`, the page's [`storageScope`](#storagescope). It signs nothing and
-asks the player nothing.
+symbol as `asset`, whether the wallet practices as `practice`, and `scope`, the page's [`storageScope`](#storagescope).
+It signs nothing and asks the player nothing.
 
 ```ts
 const startup = await HookedIn.initializeGame({
@@ -379,22 +380,21 @@ export interface GameBalance {
 ```
 
 What the wallet pushes as [`game.balance`](../reference/bridge.md#gamebalance). `balance` is what the game may still
-risk in this tab, including its winnings, in the asset's smallest units; the wallet releases it when the player leaves
-the game. `pending` is `true` while a signed operation of this game awaits recovery in the wallet, and no bet or
-payment is possible.
+risk in this tab, including its winnings, in smallest units of what the wallet plays with; the wallet releases it when
+the player leaves the game. `pending` is `true` while a signed operation of this game awaits recovery in the wallet, and
+no bet or payment is possible.
 
 ### `Asset`
 
 ```ts
 export interface Asset {
-  id: 'eth' | 'test';
   symbol: string;
   decimals: number;
 }
 ```
 
-What the wallet plays with: the network's ETH (`eth`, symbol `ETH` or `Sepolia ETH`) or the casino's test coins
-(`test`, symbol `TEST`). Both count in units of 10^-18: `decimals` is 18.
+What the wallet plays with, as a player reads it: the network's ETH (symbol `ETH` or `Sepolia ETH`), or in
+[practice](../reference/bridge.md#practice) test coins (symbol `TEST`). Both count in units of 10^-18: `decimals` is 18.
 
 ### `WalletLimits`
 
@@ -416,12 +416,14 @@ wallet and its casino share; the [bridge's limits](../reference/bridge.md#limits
 export interface WalletHello {
   methods: string[];
   asset: Asset;
+  practice: boolean;
   chainId: string;
   limits: WalletLimits;
 }
 ```
 
-The result of [`wallet.hello`](../reference/bridge.md#wallethello).
+The result of [`wallet.hello`](../reference/bridge.md#wallethello). `practice` is `true` while the wallet practices: it
+settles casino bets and payments itself in test coins, and takes no developer bets.
 
 ### `WalletInfo`
 

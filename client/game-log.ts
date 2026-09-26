@@ -19,7 +19,7 @@ export interface LogEntry {
 }
 const LIMIT = 500;
 const PAYLOAD_LIMIT = 70000;
-/** The asset the log's amounts are in: whatever the wallet plays with while this game is open. */
+/** What the log's amounts are in: test coins or ETH, whatever the wallet plays with while this game is open. */
 let symbol = 'ETH';
 export const logAsset = (value: string) => (symbol = value);
 const eth = (wei: unknown) => {
@@ -67,7 +67,7 @@ export function describeResult(method: string, result: any) {
   const limit = (state: any) => `balance ${eth(state.balance)}${state.pending ? ' · pending operation' : ''}`;
   switch (method) {
     case 'wallet.hello':
-      return `${result.methods?.length ?? 0} methods · ${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
+      return `${result.methods?.length ?? 0} methods · ${result.practice ? 'practice in ' : ''}${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
     case 'wallet.info':
       return `${result.alias ? '@' + result.alias : '~' + (result.uname ?? 'unknown')} · bankroll ${eth(result.bankroll)}`;
     case 'wallet.round':

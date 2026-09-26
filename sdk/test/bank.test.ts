@@ -40,7 +40,7 @@ test("the bank strip hears every push, lets a listener go, and follows its round
     const deliver = (data: any) => listeners.forEach(listener => listener({ source: parent, data }));
     const push = (balance: string) => deliver({ hookedin: true, event: 'game.balance', balance, pending: false });
     const settled = () => new Promise(resolve => setImmediate(resolve));
-    const asset = { id: 'eth', symbol: 'ETH', decimals: 18 },
+    const asset = { symbol: 'ETH', decimals: 18 },
       saved = new Map<string, string>();
     const round = new RoundClient(
       {

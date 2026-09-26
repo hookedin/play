@@ -70,13 +70,13 @@ rules and generate a table of your own. [Sequential games](sequential-games.md) 
 
 ## Roulette
 
-One wheel per asset, shared by every player at the table: each player's layout is one developer bet, and the wheel
-backs them all with its own casino bets, one binary step per round down a tree of the 37 pockets.
+One wheel, shared by every player at the table, with ETH: each player's layout is one developer bet, and the wheel backs
+them all with its own casino bets, one binary step per round down a tree of the 37 pockets.
 [src/table.ts](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into what each pocket pays
 and is shared by page and server; [server/wheel.ts](https://github.com/hookedin/game-roulette/blob/main/server/wheel.ts)
-is the developer, and [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) the Worker
-and its Durable Object. Its repository is a GitHub template that tests and deploys itself: start from it with **Use this
-template** for any game where many players share one outcome ([developer bets](developer-bets.md)).
+is the developer, and [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) the
+Worker and its Durable Object. Its repository is a GitHub template that tests and deploys itself: start from it with
+**Use this template** for any game where many players share one outcome ([developer bets](developer-bets.md)).
 
 ## Running a house game
 

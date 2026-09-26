@@ -11,7 +11,7 @@ test('confirmed transaction receipts report actual claim payment and preserve ol
   wallet.channels = {
     old: { claim: { amount: '15', paid: '10', winningsRemaining: '5' } } as any,
   };
-  wallet.currentId = 'new';
+  wallet.channelId = 'new';
   wallet.reader = {
     interface: {
       parseLog: () => ({
@@ -44,7 +44,7 @@ test('durable wallet state survives reload and refuses signing after persistence
     wallet = new CasinoWallet({ network: 'local', storage });
   wallet.storageKey = 'wallet:test';
   wallet.render = (() => {}) as any;
-  wallet.currentId = 'channel';
+  wallet.channelId = 'channel';
   // A funded account: it plays on its on-chain channel.
   wallet.channels.channel = { key: 'unused', onchain: { status: '1' } } as any;
   wallet.pending = { request: { operationId: 'saved' }, signature: 'signed' };

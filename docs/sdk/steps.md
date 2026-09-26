@@ -30,7 +30,7 @@ import { levels, next, priceSteps, stepBet, stepsCash } from '@hookedin/play/sdk
 
 // Before anybody bets: a round for each level of the walk.
 const rounds: string[] = [];
-for (let level = 0; level < levels(37); level++) rounds.push((await developer.openRound('eth')).id);
+for (let level = 0; level < levels(37); level++) rounds.push((await developer.openRound()).id);
 
 // Once the spin's bets are in: what the wheel owes on each of its 37 pockets.
 const plan = priceSteps(owed, (await developer.bankroll('eth')) / 2n);

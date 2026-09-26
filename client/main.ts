@@ -1,6 +1,8 @@
 interface ActiveGame {
   /** The channel this game is bound to; null until a channel is open. */
   channelId: string | null;
+  /** What the page was greeted with: test coins to practice with, or ETH. It restarts when that changes. */
+  practice: boolean;
   identity: GameIdentity;
   manifest: { name: string; developer: string };
   manifestURL: string;
@@ -20,19 +22,12 @@ type GameRoute = { owner: string; name: string } | { manifest: string };
 type Published = { key: string; developer: string };
 import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
-import { gameReceipt } from './wallet-games.ts';
+import { gameReceipt, PRACTICE_REFILL_BELOW } from './wallet-games.ts';
 import { developerBetStatus } from './game-account.ts';
 import { withLock } from './storage.ts';
-import { json, verifyEvidence, gameKey, same, FAUCET_BELOW } from '../protocol/protocol.ts';
+import { json, verifyEvidence, gameKey, same } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
-import {
-  activityJSON,
-  createActivityEntry,
-  filterActivity,
-  receiptSummary,
-  developerBetSummary,
-  receiptUnit,
-} from './activity.ts';
+import { activityJSON, createActivityEntry, filterActivity, receiptSummary, developerBetSummary } from './activity.ts';
 import type { BetRow } from './bets.ts';
 import {
   betDetail,
@@ -43,11 +38,11 @@ import {
   percent,
   measuredReturn,
   totalCards,
-  totalsByAsset,
-  unitOf,
+  betTotals,
 } from './bets.ts';
 import { createGameLog, describeReceipt, logAsset } from './game-log.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
+import type { PlayerDeveloperBet } from '../protocol/types.ts';
 import type { LogKind } from './game-log.ts';
 import config from './config.ts';
 
@@ -253,7 +248,7 @@ async function refreshFund() {
 }
 function renderFund() {
   const f = fundStatus,
-    open = channelOpen() && !wallet.recoveryOnly,
+    open = wallet.funded && !wallet.recoveryOnly,
     shares = BigInt(wallet.fund?.shares || 0);
   $('fund-value').textContent = f ? eth(f.value, 6) : '—';
   $('fund-equity').textContent = f ? eth(f.equity) : '—';
@@ -336,31 +331,29 @@ async function route(push = false) {
   }
 }
 
-/** Is there a channel to play on: the on-chain one, or the test-coin one? */
-const channelOpen = () => Boolean(wallet.channel) && Number(wallet.channel!.onchain?.status) === 1;
-const ethOpen = () => Boolean(wallet.current?.key) && Number(wallet.current!.onchain?.status) === 1;
 /** Amounts of whatever this tab plays with. */
 const units = () => wallet.asset.symbol;
 /**
  * The top bar's money: the balance this tab plays with, which opens the wallet, and the choice of
- * what that balance is — the network's ETH, or the casino's test coins. An open game takes the
+ * what that balance is — the network's ETH, or test coins to practice with. An open game takes the
  * balance's place: a player reading one figure in the game and another above it cannot tell which
  * money a bet is about to spend, and the one above was never the game's to spend anyway. What
  * stands there instead is the authority itself — the way to take back what the game holds, or to
  * give it some — and it opens the wallet's own dialog, the only place that authority is granted or
- * withdrawn. The asset stays named either way: test coins must never be mistaken for money.
+ * withdrawn. What it is stays named either way: test coins must never be mistaken for money.
  */
 function renderMoney() {
   const button = $<HTMLButtonElement>('game-funds'),
-    test = wallet.playing === 'test',
+    practice = wallet.practicing,
     holding = Boolean(active) && BigInt(wallet.game?.balance || '0') > 0n;
   // Truncated like every other amount here, so it is a prefix of the digits shown for the same money.
-  $('balance-amount').textContent = eth(wallet.publicState?.playBalance, test ? 2 : networkDefaults.precision);
+  $('balance-amount').textContent = eth(wallet.publicState?.playBalance, practice ? 2 : networkDefaults.precision);
   $('balance-link').classList.toggle('hidden', Boolean(active));
   for (const option of document.querySelectorAll<HTMLButtonElement>('#asset-switch button')) {
-    const needsChannel = option.dataset.play === 'eth' && !ethOpen();
-    option.setAttribute('aria-pressed', String(option.dataset.play === wallet.playing));
-    // A limit granted in one asset answers this question until the game gives the money back.
+    const ether = option.dataset.play === 'eth',
+      needsChannel = ether && !wallet.funded;
+    option.setAttribute('aria-pressed', String(ether !== practice));
+    // A limit granted in one money answers this question until the game gives it back.
     option.disabled = uiBusy || wallet.busy || holding || needsChannel;
     option.title = holding
       ? `Take back what ${active!.manifest.name} holds to play with something else.`
@@ -383,7 +376,14 @@ function renderGameAccount() {
   renderMoney();
   if (!active || !wallet.game) return;
   // A game opened before a channel adopts the first one; a game bound to a channel closes with it.
-  if (active.channelId === null && wallet.currentId) active.channelId = wallet.currentId;
+  if (active.channelId === null && wallet.channelId) active.channelId = wallet.channelId;
+  // The page was greeted with the other money: it restarts to greet this one, whatever changed it.
+  if (wallet.game.practice !== active.practice) {
+    active.practice = wallet.game.practice;
+    logAsset(units());
+    logGameActivity(active.practice ? 'Practicing with test coins' : 'Playing with ETH');
+    reloadGame();
+  }
   if ($<HTMLDialogElement>('fund-dialog').open) renderFundDialog();
   // The game's own balance view follows the wallet: top-ups and recoveries push without polling.
   const balance = wallet.gameLimit();
@@ -408,24 +408,20 @@ function reloadGame() {
 const SLIDER_STEPS = 100n;
 const sliderAmount = (total: bigint, value: string) => (total * BigInt(value)) / SLIDER_STEPS;
 // The last limit the player chose for a game is only the next suggestion; authority comes from the dialog alone.
-const limitSetting = () => `hookedin:v1:${network}:${wallet.playing}:game-limit:${active?.key}`;
+const limitSetting = () => `hookedin:v1:${network}:${wallet.practicing ? 'practice' : 'eth'}:game-limit:${active?.key}`;
 /** The wallet's own dialog: the sole grant of spending authority, and where the player chooses ETH
  * or test coins. It opens saying what the game holds now, what it would hold, and what stays out of
  * its reach, because those three numbers are the whole of what is being authorized. */
 function renderFundDialog() {
   if (!active) return;
-  const dialog = $<HTMLDialogElement>('fund-dialog'),
-    name = active.manifest.name;
-  const test = wallet.playing === 'test';
-  dialog.dataset.mode = channelOpen() ? 'fund' : 'channel';
-  $('fund-eyebrow').textContent = test ? 'YOU ARE AUTHORIZING · TEST COINS' : 'YOU ARE AUTHORIZING';
+  const name = active.manifest.name,
+    practice = wallet.practicing;
+  $('fund-eyebrow').textContent = practice ? 'YOU ARE AUTHORIZING · TEST COINS' : 'YOU ARE AUTHORIZING';
   const limit = BigInt(wallet.game?.balance || '0');
-  $('fund-title').textContent = !channelOpen()
-    ? `${name} needs money to play`
-    : limit > 0n
+  $('fund-title').textContent =
+    limit > 0n
       ? `Change what ${name} may play with`
-      : `Let ${name} play with your money?`;
-  if (dialog.dataset.mode !== 'fund') return;
+      : `Let ${name} play with your ${practice ? 'test coins' : 'money'}?`;
   $('fund-asset').textContent = units();
   const total = wallet.playableBalance(),
     slider = $<HTMLInputElement>('fund-slider');
@@ -441,13 +437,18 @@ function renderFundDialog() {
   $('fund-next').textContent = valid ? `${formatEther(amount)} ${units()}` : '—';
   $('fund-rest').textContent = valid ? `${formatEther(total - amount)} ${units()}` : '—';
   $('fund-next').classList.toggle('fund-change-up', valid && amount > limit);
-  $('fund-test-note').classList.toggle('hidden', !test);
+  $('fund-test-note').classList.toggle('hidden', !practice);
   $<HTMLButtonElement>('fund-take-all').classList.toggle('hidden', limit === 0n);
-  // The faucet pays a test channel that has run low.
-  $('fund-faucet').classList.toggle('hidden', !test || total >= FAUCET_BELOW);
-  // Changing what the game plays with is offered before the game holds money, not in the middle of play.
-  $('fund-switch').classList.toggle('hidden', limit > 0n || (test && !ethOpen()));
-  $('fund-switch').textContent = test ? 'Or play with your ETH' : 'Or play with test coins';
+  // More test coins, once they run low.
+  $('fund-faucet').classList.toggle('hidden', !practice || total >= PRACTICE_REFILL_BELOW);
+  // Changing what the game plays with is offered before the game holds money, not in the middle of play. Practicing
+  // without a channel, the way to ETH is setting up the wallet.
+  $('fund-switch').classList.toggle('hidden', limit > 0n);
+  $('fund-switch').textContent = !practice
+    ? 'Or practice with test coins'
+    : wallet.funded
+      ? 'Or play with your ETH'
+      : 'Or set up your wallet to play with ETH';
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
   $('fund-help').textContent = !valid
     ? amount > total
@@ -481,25 +482,20 @@ function openFundDialog({ amount, asked = false, take = false }: { amount?: bigi
     (active.identity.slug === undefined
       ? 'Nobody publishes it, so no developer earns from it.'
       : `Its developer, ${active.manifest.developer}, earns half of each casino bet’s fee, and takes and settles its developer bets.`);
-  $('fund-channel-note').textContent =
-    wallet.playing === 'eth'
-      ? 'Your channel is not open for play yet. Play with test coins meanwhile, or check the channel in My wallet.'
-      : 'Your test coins are not ready: the casino could not be reached. Try again in a moment, or set up your wallet to play with ETH.';
-  if (channelOpen()) {
-    const total = wallet.playableBalance(),
-      test = wallet.playing === 'test',
-      limit = BigInt(wallet.game?.balance || '0'),
-      requested = amount && amount > 0n ? limit + amount : 0n,
-      // Ten test coins is a fair first limit; ETH follows the network's default.
-      remembered = BigInt(localStorage.getItem(limitSetting()) || (test ? 10n ** 19n : networkDefaults.total)),
-      // The player's own visit shows the limit as it is, or what they last chose; a game's request
-      // suggests exactly what it asked for, never more; asking for it back suggests nothing at all.
-      suggested = take ? 0n : asked && requested ? requested : limit > 0n ? limit : remembered;
-    $<HTMLInputElement>('fund-amount').value = formatEther(suggested > total ? total : suggested);
-  }
+  const total = wallet.playableBalance(),
+    limit = BigInt(wallet.game?.balance || '0'),
+    requested = amount && amount > 0n ? limit + amount : 0n,
+    // Ten test coins is a fair first limit; ETH follows the network's default.
+    remembered = BigInt(
+      localStorage.getItem(limitSetting()) || (wallet.practicing ? 10n ** 19n : networkDefaults.total),
+    ),
+    // The player's own visit shows the limit as it is, or what they last chose; a game's request
+    // suggests exactly what it asked for, never more; asking for it back suggests nothing at all.
+    suggested = take ? 0n : asked && requested ? requested : limit > 0n ? limit : remembered;
+  $<HTMLInputElement>('fund-amount').value = formatEther(suggested > total ? total : suggested);
   renderFundDialog();
   if (!dialog.open) dialog.showModal();
-  if (dialog.dataset.mode === 'fund') $<HTMLInputElement>('fund-amount').select();
+  $<HTMLInputElement>('fund-amount').select();
   return new Promise<bigint | null>(resolve => {
     fundRequest = { resolve };
   });
@@ -509,32 +505,23 @@ function renderWallet() {
   renderProfile();
   if (!wallet.address) return;
   const state = wallet.publicState;
-  if (active?.channelId && active.channelId !== wallet.currentId) abandonGame();
+  if (active?.channelId && active.channelId !== wallet.channelId) abandonGame();
   renderMoney();
   $('casino-balance').textContent = eth(state.balance, networkDefaults.precision);
-  // Test coins: every wallet has them. The faucet pays once they run low.
-  const testBalance = BigInt(state.testBalance || 0);
-  $('test-balance').textContent = eth(state.testBalance || '0', 2);
-  $<HTMLButtonElement>('test-faucet').disabled =
-    uiBusy || wallet.busy || wallet.playing !== 'test' || testBalance >= FAUCET_BELOW;
+  // Test coins: this tab's practice money. More come once they run low.
+  $('test-balance').textContent = eth(wallet.practiceBalance, 2);
+  $<HTMLButtonElement>('test-faucet').disabled = uiBusy || wallet.practiceBalance >= PRACTICE_REFILL_BELOW;
   // A disabled control is the hardest kind to act on, so each one says what it is waiting for.
   $('test-faucet').title =
-    wallet.playing !== 'test'
-      ? 'Play with test coins to claim more.'
-      : testBalance >= FAUCET_BELOW
-        ? `The faucet pays once you are under ${eth(String(FAUCET_BELOW), 2)} test coins.`
-        : '';
-  const earnings = state.developerEarnings,
-    earningsUnit = wallet.playing === 'test' ? 'TEST' : 'ETH';
-  // The tally is the one for what this tab plays with, and it is collected into that channel.
-  for (const id of ['developer-earnings', 'test-earnings']) {
-    const shown = (id === 'test-earnings') === (wallet.playing === 'test');
-    $(id).classList.toggle('hidden', !shown || !BigInt(earnings?.earned || 0));
-    $(id).textContent =
-      shown && earnings
-        ? `Your games have earned ${formatEther(earnings.earned)} ${earningsUnit} in commission; ${formatEther(earnings.collected)} ${earningsUnit} of it is collected into this balance.`
-        : '';
-  }
+    wallet.practiceBalance >= PRACTICE_REFILL_BELOW
+      ? `More come once you hold fewer than ${eth(PRACTICE_REFILL_BELOW, 2)} test coins.`
+      : '';
+  const earnings = state.developerEarnings;
+  // The tally the casino keeps for this account, collected into its channel.
+  $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
+  $('developer-earnings').textContent = earnings
+    ? `Your games have earned ${formatEther(earnings.earned)} ETH in commission; ${formatEther(earnings.collected)} ETH of it is collected into this balance.`
+    : '';
   $('native-balance').textContent = eth(state.nativeBalance, networkDefaults.precision);
   $('wallet-address').textContent = wallet.address;
   $('wallet-mode').textContent =
@@ -606,8 +593,8 @@ function renderWallet() {
       : 'Your signed operation is saved. Retry the same operation, or close the channel and preserve its evidence.';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
   $<HTMLButtonElement>('speed-up-transaction').disabled = busy || !wallet.transactionIntent;
-  $<HTMLButtonElement>('export-evidence').disabled = busy || !wallet.current;
-  $<HTMLButtonElement>('start-close').disabled = busy || !wallet.current || Number(state.channelStatus) !== 1;
+  $<HTMLButtonElement>('export-evidence').disabled = busy || !wallet.channel;
+  $<HTMLButtonElement>('start-close').disabled = busy || !wallet.channel || Number(state.channelStatus) !== 1;
   for (const id of ['setup-wallet', 'deposit', 'withdraw', 'connect-browser', 'import-wallet', 'recover-wallet'])
     $<HTMLButtonElement>(id).disabled = busy;
   $<HTMLButtonElement>('deposit').disabled =
@@ -615,15 +602,15 @@ function renderWallet() {
     !ready ||
     !observed ||
     Boolean(wallet.pending) ||
-    Boolean(wallet.current) ||
+    Boolean(wallet.channel) ||
     !aboveReserve ||
     depositTooLarge ||
     depositAmount <= 0n;
   $<HTMLButtonElement>('max-deposit').disabled =
-    busy || !ready || !observed || Boolean(wallet.pending) || Boolean(wallet.current) || !aboveReserve;
+    busy || !ready || !observed || Boolean(wallet.pending) || Boolean(wallet.channel) || !aboveReserve;
   $<HTMLInputElement>('deposit-amount').disabled = busy;
   $<HTMLButtonElement>('withdraw').disabled =
-    busy || !ready || Boolean(wallet.pending) || !wallet.current || Number(state.channelStatus) !== 1;
+    busy || !ready || Boolean(wallet.pending) || !wallet.channel || Number(state.channelStatus) !== 1;
   if (wallet.recoveryOnly) $<HTMLButtonElement>('withdraw').disabled = true;
   const accounts = $<HTMLSelectElement>('saved-wallets');
   if (accounts) {
@@ -671,29 +658,23 @@ function renderDeveloperBets() {
   list.replaceChildren(
     ...developerBets.map(([hash, tracked]) => {
       const receipt = tracked.operationId ? receiptsById.get(tracked.operationId) : undefined;
-      const state = tracked.state ?? {
+      const state: PlayerDeveloperBet = tracked.state ?? {
         bet: hash,
         game: tracked.game,
-        asset: tracked.asset,
-        status: 'open' as const,
+        status: 'open',
         stake: String(receipt?.stake ?? 0),
         collected: false,
       };
       const presentation = developerBetSummary(state, receipt?.game?.name);
       const payload = activityJSON({ ...state, error: tracked.error }),
         previous = existing.get(hash);
-      if (
-        previous?.dataset.playing === wallet.playing &&
-        previous.querySelector('.activity-payload')?.textContent === payload
-      )
-        return previous;
+      if (previous?.querySelector('.activity-payload')?.textContent === payload) return previous;
       const item = createActivityEntry({
         ...presentation,
         timestamp: state.settledAt ? new Date(state.settledAt).toISOString() : (receipt?.createdAt ?? ''),
         description: [
           tracked.state ? presentation.description : 'Waiting for the casino to report this bet.',
           tracked.error,
-          tracked.asset !== wallet.playing ? `Switch to ${receiptUnit(state)} to check and collect.` : '',
         ]
           .filter(Boolean)
           .join(' '),
@@ -701,7 +682,6 @@ function renderDeveloperBets() {
         facts: [['Bet', hash], ...(state.group ? [['Group', state.group] as [string, string]] : [])],
       });
       item.dataset.bet = hash;
-      item.dataset.playing = wallet.playing;
       (item as HTMLDetailsElement).open = previous?.open ?? false;
       return item;
     }),
@@ -738,8 +718,7 @@ function renderActivity() {
       const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
       if (channelId) facts.push(['Channel', channelId]);
       if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
-      if (receipt.commission !== undefined)
-        facts.push(['Commission', `${formatEther(receipt.commission)} ${receiptUnit(receipt)}`]);
+      if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
       if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
       item = createActivityEntry({
@@ -779,9 +758,9 @@ function renderClaims() {
       : 'Claims below hold what a closed channel is owed. Collect them whenever you like; unpaid winnings stay claimable.';
   $('channel-observation').textContent =
     `Last verified: ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'unavailable — refresh before acting'} · Saved sequence ${state.savedSequence || '0'} · Proposed sequence ${state.closingSequence || '0'} · Balance at risk ${eth(state.balanceAtRisk || '0', networkDefaults.precision)} ETH${state.challengePending ? ' · Challenge transaction pending' : ''}`;
-  $<HTMLButtonElement>('channel-export').disabled = !wallet.current || uiBusy || wallet.busy;
+  $<HTMLButtonElement>('channel-export').disabled = !wallet.channel || uiBusy || wallet.busy;
   $<HTMLButtonElement>('channel-start-close').disabled =
-    !wallet.current || Number(state.channelStatus) !== 1 || uiBusy || wallet.busy;
+    !wallet.channel || Number(state.channelStatus) !== 1 || uiBusy || wallet.busy;
   $<HTMLButtonElement>('channel-challenge').disabled =
     !state.needsChallenge || Date.now() / 1000 >= Number(state.deadline) || uiBusy || wallet.busy;
   $<HTMLButtonElement>('channel-finalize').disabled =
@@ -1036,12 +1015,13 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   const isCurrent = () =>
     active?.generation === currentGeneration &&
     active.frame === frame &&
-    (active.channelId === null || active.channelId === wallet.currentId);
+    (active.channelId === null || active.channelId === wallet.channelId);
   const path = gamePath(gameRoute);
   await walletStarted;
   const key = wallet.openGame(identity);
   active = {
-    channelId: wallet.currentId,
+    channelId: wallet.channelId,
+    practice: wallet.practicing,
     identity,
     manifest: { ...manifest, developer },
     manifestURL: manifestURL.href,
@@ -1082,14 +1062,15 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       if (method === 'wallet.info') return wallet.gameInfo();
       if (method === 'wallet.round') return wallet.gameRound(params.id);
       if (method === 'game.receipt') return wallet.gameReceipt(params.id);
-      if (uiBusy || wallet.busy) throw gameError('busy', 'The wallet is processing another operation.');
+      // Practice is the wallet's own arithmetic: nothing the channel is busy with holds up a bet.
+      if ((method === 'game.requestFunds' || !wallet.practicing) && (uiBusy || wallet.busy))
+        throw gameError('busy', 'The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
         const requested = params.amount === undefined ? undefined : BigInt(params.amount);
         const amount = await openFundDialog({ amount: requested, asked: true });
         if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
         return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
       }
-      if (!channelOpen()) throw gameError('no-channel', 'Add money to this game to play.');
       if (method === 'game.casinoBet') return wallet.gameCasinoBet(params);
       if (method === 'game.developerBet') return wallet.gameDeveloperBet(params);
       return wallet.gamePayment(params);
@@ -1196,23 +1177,18 @@ async function openProfile(name: string, push = true) {
     $('profile-uname').textContent = profile.alias ? '~' + profile.uname : '';
     document.title = `${showName(profile)} — HookedIn`;
     $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
-    $('profile-stats').replaceChildren(
-      ...(['eth', 'test'] as const).map(asset => {
-        const card = document.createElement('div'),
-          label = document.createElement('div'),
-          amount = document.createElement('div'),
-          note = document.createElement('p');
-        const stats = profile.stats[asset];
-        card.className = 'wallet-balance-card';
-        label.className = 'eyebrow';
-        label.textContent = asset === 'eth' ? 'ETH PLAYS' : 'TEST COIN PLAYS';
-        amount.className = 'large-amount';
-        amount.textContent = String(stats.plays);
-        note.textContent = `Staked ${eth(stats.staked, 4)} · won ${eth(stats.won, 4)}`;
-        card.append(label, amount, note);
-        return card;
-      }),
-    );
+    const card = document.createElement('div'),
+      label = document.createElement('div'),
+      amount = document.createElement('div'),
+      note = document.createElement('p');
+    card.className = 'wallet-balance-card';
+    label.className = 'eyebrow';
+    label.textContent = 'PLAYS';
+    amount.className = 'large-amount';
+    amount.textContent = String(profile.stats.plays);
+    note.textContent = `Staked ${eth(profile.stats.staked, 4)} ETH · won ${eth(profile.stats.won, 4)} ETH`;
+    card.append(label, amount, note);
+    $('profile-stats').replaceChildren(card);
     const cards = await profileCards(showName(profile), profile.games);
     if (cards.length) games.replaceChildren(...cards);
     else games.textContent = `${showName(profile)} publishes no games.`;
@@ -1230,7 +1206,7 @@ let shownAccount: string | null = null;
 /** The account's own profile: the names it answers to, and the games it publishes. */
 function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
-    funded = ethOpen() && !wallet.recoveryOnly;
+    funded = wallet.funded && !wallet.recoveryOnly;
   $('wallet-name').textContent = name ?? '—';
   $<HTMLAnchorElement>('wallet-name-link').href = name ? profilePath(name) : '/';
   renderAccount(name);
@@ -1242,7 +1218,7 @@ function renderProfile() {
   $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !funded;
   $('clear-alias').classList.toggle('hidden', !wallet.alias);
   $('alias-note').textContent = !funded
-    ? 'Open a funded ETH channel to take an alias or publish games.'
+    ? 'Open a funded channel to take an alias or publish games.'
     : 'An alias is unique, and two aliases that read alike are the same alias. Your uname stays whatever you are called.';
   const games = wallet.profile?.games ?? [];
   $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
@@ -1274,11 +1250,11 @@ function renderProfile() {
     }),
   );
 }
-/** This account's bank as a developer, in what the wallet plays with, as the casino has it now. */
+/** This account's bank as a developer, as the casino has it now. */
 async function refreshBank() {
   if (!wallet.channel?.key) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();
-  $('bank-balance').textContent = `${formatEther(balance)} ${units()}`;
+  $('bank-balance').textContent = `${formatEther(balance)} ETH`;
 }
 /** The account: the name this wallet answers to, in the top bar and at the head of its own page,
  * and one line under each card saying what is behind it. No balance is named here — that is the
@@ -1295,16 +1271,14 @@ function renderAccount(name: string | null) {
   $<HTMLAnchorElement>('account-public').href = name ? profilePath(name) : '/';
   $('account-public').classList.toggle('hidden', !name);
   const rows = ownBets(),
-    counted = totalsByAsset(rows),
-    unit = wallet.playing === 'test' ? 'test' : 'eth',
-    mine = counted.get(unit),
+    mine = betTotals(rows),
     games = new Set(rows.map(row => row.key || row.game));
-  $('account-wallet-note').textContent = channelOpen()
+  $('account-wallet-note').textContent = wallet.funded
     ? `Channel open · ${eth(wallet.publicState.balance, networkDefaults.precision)} ETH signed`
     : 'No channel open yet';
   $('account-games-note').textContent = `${games.size} played · ${wallet.profile?.games?.length ?? 0} published`;
-  $('account-bets-note').textContent = mine
-    ? `${mine.bets} ${unitOf(unit)} bets · ${mine.priced ? percent(measuredReturn(mine.priced, mine.expected)!) : '—'} expected`
+  $('account-bets-note').textContent = mine.bets
+    ? `${mine.bets} bets · ${mine.priced ? percent(measuredReturn(mine.priced, mine.expected)!) : '—'} expected`
     : 'No bets yet';
   $('account-bankroll-note').textContent = BigInt(wallet.fund?.shares || 0)
     ? `${formatEther(BigInt(wallet.fund!.shares))} shares held`
@@ -1337,7 +1311,8 @@ function toggleFavourite(key: string) {
   renderMyGames();
 }
 /** Every settled bet this wallet signed. A rejected request never became a bet, so it stays in
- * Activity; only a bet whose odds the wallet recorded can say what it was worth. */
+ * Activity; only a bet whose odds the wallet recorded can say what it was worth. Practice signs nothing, so none of
+ * its bets is here. */
 function ownBets(): BetRow[] {
   return wallet.history
     .filter(
@@ -1351,7 +1326,6 @@ function ownBets(): BetRow[] {
       at: Date.parse(receipt.createdAt),
       game: receipt.game?.name || 'Unnamed game',
       key: receipt.game?.key ?? null,
-      asset: receipt.asset === 'test' ? 'test' : 'eth',
       ...(receipt.details?.group ? { group: receipt.details.group } : {}),
       stake: BigInt(receipt.stake),
       payout: BigInt(receipt.payout ?? 0),
@@ -1442,7 +1416,7 @@ function renderMyGames() {
     return difference > 0n ? 1 : difference < 0n ? -1 : b.last - a.last;
   });
   $('played-count').textContent = String(list.length);
-  $('games-totals').replaceChildren(...totalCards(totalsByAsset(all)));
+  $('games-totals').replaceChildren(...totalCards(betTotals(all)));
   $('played-games').replaceChildren(
     ...list.map(entry => {
       const card = document.createElement('div');
@@ -1468,32 +1442,24 @@ function renderMyGames() {
       when.textContent = `Last played ${new Date(entry.last).toLocaleDateString()}`;
       heading.append(star, title, when);
       card.append(heading);
-      const figures = document.createElement('div');
+      const totals = betTotals(entry.rows),
+        expected = measuredReturn(totals.priced, totals.expected),
+        figures = document.createElement('dl');
       figures.className = 'played-figures';
-      for (const [asset, totals] of totalsByAsset(entry.rows)) {
-        const unit = unitOf(asset),
-          expected = measuredReturn(totals.priced, totals.expected),
-          cell = document.createElement('dl');
-        cell.className = 'played-asset';
-        for (const [label, value] of [
-          [`${unit} bets`, String(totals.bets)],
-          ['Staked', `${formatEther(totals.staked)} ${unit}`],
-          ['Paid back', `${formatEther(totals.paid)} ${unit}`],
-          [
-            'Your result',
-            `${totals.net < 0n ? '−' : '+'}${formatEther(totals.net < 0n ? -totals.net : totals.net)} ${unit}`,
-          ],
-          ['Return of your bets', expected === null ? '—' : percent(expected)],
-        ] as [string, string][]) {
-          const term = document.createElement('dt'),
-            detail = document.createElement('dd');
-          term.textContent = label;
-          detail.textContent = value;
-          if (label === 'Your result')
-            detail.className = totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : '';
-          cell.append(term, detail);
-        }
-        figures.append(cell);
+      for (const [label, value] of [
+        ['Bets', String(totals.bets)],
+        ['Staked', `${formatEther(totals.staked)} ETH`],
+        ['Paid back', `${formatEther(totals.paid)} ETH`],
+        ['Your result', `${totals.net < 0n ? '−' : '+'}${formatEther(totals.net < 0n ? -totals.net : totals.net)} ETH`],
+        ['Return of your bets', expected === null ? '—' : percent(expected)],
+      ] as [string, string][]) {
+        const term = document.createElement('dt'),
+          detail = document.createElement('dd');
+        term.textContent = label;
+        detail.textContent = value;
+        if (label === 'Your result')
+          detail.className = totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : '';
+        figures.append(term, detail);
       }
       card.append(figures);
       const actions = document.createElement('div');
@@ -1548,7 +1514,6 @@ async function openGameRecord(key: string, push = true) {
         game: name,
         // A developer's casino bet from its bank is listed beside its players' bets, and counted in no total.
         who: bet.kind === 'bank' ? `${who}'s bank` : who,
-        asset: bet.asset === 'test' ? 'test' : 'eth',
         ...(bet.group === undefined ? {} : { group: bet.group }),
         stake: BigInt(bet.stake),
         payout: BigInt(bet.payout),
@@ -1557,22 +1522,16 @@ async function openGameRecord(key: string, push = true) {
         index: Number(bet.index),
       };
     });
+    const totals = record.totals;
     $('gamebets-totals').replaceChildren(
-      ...totalCards(
-        new Map(
-          Object.entries(record.totals as Record<string, any>).map(([asset, totals]) => [
-            asset,
-            {
-              bets: Number(totals.bets),
-              staked: BigInt(totals.staked || 0),
-              paid: BigInt(totals.paid || 0),
-              expected: BigInt(totals.expected || 0),
-              priced: BigInt(totals.priced || 0),
-              net: BigInt(totals.paid || 0) - BigInt(totals.staked || 0),
-            },
-          ]),
-        ),
-      ),
+      ...totalCards({
+        bets: Number(totals.bets),
+        staked: BigInt(totals.staked),
+        paid: BigInt(totals.paid),
+        expected: BigInt(totals.expected),
+        priced: BigInt(totals.priced),
+        net: BigInt(totals.paid) - BigInt(totals.staked),
+      }),
     );
     // How the game's developer bets stand: a developer that leaves bets unsettled shows here.
     const developerBets: { open: number; settled: number } = record.developerBets;
@@ -1655,7 +1614,8 @@ $<HTMLFormElement>('fund-form').addEventListener('submit', event => {
     if (!active) return;
     const amount = parseEther($<HTMLInputElement>('fund-amount').value.trim() || '0');
     logGameActivity('Spending limit requested', { amount: String(amount) });
-    await holdGameLimit();
+    // Test coins are this tab's own: only a limit on the channel's money is held against other tabs.
+    if (!wallet.practicing) await holdGameLimit();
     await wallet.setGameLimit(String(amount));
     localStorage.setItem(limitSetting(), String(amount));
     logGameActivity('Spending limit set; the game may risk it until you leave', wallet.game);
@@ -1674,52 +1634,40 @@ $<HTMLDialogElement>('fund-dialog').addEventListener('close', () => {
 $<HTMLButtonElement>('bet-detail-close').addEventListener('click', () => $<HTMLDialogElement>('bet-dialog').close());
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-fund-cancel]'))
   button.addEventListener('click', () => $<HTMLDialogElement>('fund-dialog').close(''));
-$<HTMLButtonElement>('fund-open-wallet').addEventListener('click', () => {
+/** Change what this tab plays with: test coins to practice with, or the channel's ETH. An open game restarts to
+ * greet the other money (`renderGameAccount`). */
+function playWith(practice: boolean) {
   $<HTMLDialogElement>('fund-dialog').close('');
-  navigate('wallet');
-  $('receive-title').scrollIntoView({ block: 'center' });
-});
-/** Change what this tab plays with. An open game restarts to greet a wallet holding another asset. */
-async function playWith(asset: 'eth' | 'test') {
-  $<HTMLDialogElement>('fund-dialog').close('');
-  await task(async () => {
-    await wallet.setPlaying(asset);
-    if (active) {
-      logAsset(units());
-      logGameActivity(asset === 'test' ? 'Playing with test coins' : 'Playing with ETH');
-      reloadGame();
-    }
-    // Play money and money look alike; say which one is now in play.
+  void task(() => {
+    wallet.setPractice(practice);
+    // Test coins and money look alike; say which one is now in play.
     toast(
-      asset === 'test'
-        ? 'Test coins: the same games at the same odds, nothing real won or lost.'
+      practice
+        ? 'Test coins: practice kept in this tab, at the same odds, with nothing real won or lost.'
         : 'Playing with your ETH.',
     );
   });
 }
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-play]'))
   button.addEventListener('click', () => {
-    // A segment showing the asset already in play has nothing to change; the dialog's button, which
-    // shows no such state, asks again for the asset whose channel is not ready yet.
-    if (button.getAttribute('aria-pressed') !== 'true') void playWith(button.dataset.play as 'eth' | 'test');
+    // A segment showing the money already in play has nothing to change.
+    if (button.getAttribute('aria-pressed') !== 'true') playWith(button.dataset.play === 'practice');
   });
-$<HTMLButtonElement>('fund-switch').addEventListener(
-  'click',
-  () => void playWith(wallet.playing === 'test' ? 'eth' : 'test'),
-);
-$<HTMLButtonElement>('test-faucet').addEventListener('click', () =>
-  task(async () => {
-    await wallet.claimTestCoins();
-    toast('100 test coins claimed.');
-  }),
-);
-$<HTMLButtonElement>('fund-faucet').addEventListener('click', () =>
-  task(async () => {
-    await wallet.claimTestCoins();
-    toast('100 test coins claimed.');
-    renderFundDialog();
-  }),
-);
+$<HTMLButtonElement>('fund-switch').addEventListener('click', () => {
+  if (!wallet.practicing || wallet.funded) return playWith(!wallet.practicing);
+  // Practicing with no channel: ETH starts with setting up the wallet.
+  $<HTMLDialogElement>('fund-dialog').close('');
+  navigate('wallet');
+  $('receive-title').scrollIntoView({ block: 'center' });
+});
+for (const id of ['test-faucet', 'fund-faucet'])
+  $<HTMLButtonElement>(id).addEventListener('click', () =>
+    task(() => {
+      wallet.refillPractice();
+      toast('100 test coins added.');
+      if ($<HTMLDialogElement>('fund-dialog').open) renderFundDialog();
+    }),
+  );
 $<HTMLInputElement>('fund-slider').addEventListener('input', () => {
   $<HTMLInputElement>('fund-amount').value = formatEther(
     sliderAmount(wallet.playableBalance(), $<HTMLInputElement>('fund-slider').value),
@@ -1951,7 +1899,7 @@ $<HTMLButtonElement>('bank-deposit').addEventListener('click', () =>
     const receipt = await wallet.depositBank(amount);
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
     $<HTMLInputElement>('bank-amount').value = '';
-    toast(`Put ${formatEther(amount)} ${units()} in your bank.`);
+    toast(`Put ${formatEther(amount)} ETH in your bank.`);
     await refreshBank();
   }),
 );
@@ -1960,7 +1908,7 @@ $<HTMLButtonElement>('bank-withdraw').addEventListener('click', () =>
     const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
     await wallet.withdrawBank(amount);
     $<HTMLInputElement>('bank-amount').value = '';
-    toast(`Took ${formatEther(amount)} ${units()} out of your bank. Collecting it now.`);
+    toast(`Took ${formatEther(amount)} ETH out of your bank. Collecting it now.`);
     await wallet.collectPayouts();
     await refreshBank();
   }),

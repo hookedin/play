@@ -6,8 +6,7 @@ sidebar:
 ---
 
 Closing a channel turns its signed balance into a claim on the contract, and collecting the claim pays it out. You close
-with the casino's signature in one transaction, or alone with your latest evidence and a 24-hour window. A test channel
-has nothing to close.
+with the casino's signature in one transaction, or alone with your latest evidence and a 24-hour window.
 
 ## What My wallet shows
 
@@ -15,7 +14,7 @@ has nothing to close.
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Wallet funds               | The ETH at your funding account's address. It pays deposits and network fees, and collected claims arrive here unless you send them elsewhere |
 | ETH balance                | Your channel's signed balance while it is open, the limits of games included. The top bar shows it while you play with ETH                    |
-| Test coins                 | Your test channel's balance, which exists only at the casino                                                                                  |
+| Test coins                 | What this tab practices with, kept in its memory and never sent to the casino                                                                 |
 | Original protected deposit | What you deposited. The contract keeps all of it aside while the channel is open, whatever the balance                                        |
 | Developer bets             | Stakes with developers, and payouts not yet collected, which are outside the signed balance                                                   |
 | Claims                     | What each finalized channel is owed, and what has been paid                                                                                   |

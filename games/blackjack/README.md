@@ -22,7 +22,7 @@ Add funds, set a stake and deal. The table rules follow Stake Originals Blackjac
 
 The stake must be an even number of wei. Doubles, splits and insurance need enough additional money in the game balance; the game asks the wallet for more when they do not fit.
 
-The wallet plays with the network's ETH or the casino's test coins; the game is the same either way.
+The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
 
 ## How it works
 

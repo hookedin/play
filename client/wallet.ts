@@ -2,7 +2,6 @@
 import type { JsonRpcProvider, Signer } from 'ethers';
 import type { Store } from './storage.ts';
 import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerDeveloperBet } from '../protocol/types.ts';
-import type { AssetId } from '../protocol/protocol.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
 export interface WalletOptions {
@@ -18,8 +17,6 @@ export interface WalletOptions {
 export interface WalletChannel {
   key?: string;
   opening: Opening;
-  /** Test coins: a channel the casino opened by itself, with nothing on-chain. An ETH channel leaves it out. */
-  asset?: 'test';
   state: Checkpoint;
   playerSignature: string;
   casinoSignature: string;
@@ -111,22 +108,18 @@ export class CasinoWallet extends GameSessions {
    * and what the casino last said of it. */
   declare developerBets: Record<
     string,
-    { operationId?: string; game: string; asset: AssetId; state?: PlayerDeveloperBet; error?: string }
+    { operationId?: string; game: string; state?: PlayerDeveloperBet; error?: string }
   >;
-  declare developerBetCursors: Partial<Record<AssetId, string>>;
+  /** Where the feed of this account's settled developer bets was read up to. */
+  declare developerBetCursor: string;
   developerBetError: string | null = null;
-  /** This account's bank as a developer, per asset: the casino's statement for its latest deposit or
-   * withdrawal, a withdrawal signed and not yet answered, and withdrawn money not yet collected. */
-  declare bank: Partial<
-    Record<
-      AssetId,
-      {
-        statement?: { message: any; signature: string };
-        withdrawing?: { message: any; signature: string } | null;
-        owed?: string[];
-      }
-    >
-  >;
+  /** This account's bank as a developer: the casino's statement for its latest deposit or withdrawal, a withdrawal
+   * signed and not yet answered, and withdrawn money not yet collected. */
+  declare bank: {
+    statement?: { message: any; signature: string };
+    withdrawing?: { message: any; signature: string } | null;
+    owed?: string[];
+  };
   /** What the casino says this account's games have earned and what it has collected; shown, never relied on. */
   declare developerEarnings: { earned: string; collected: string } | null;
   declare channels: Record<string, WalletChannel>;
@@ -151,11 +144,10 @@ export class CasinoWallet extends GameSessions {
   declare operator: string;
   declare domain: Domain;
   declare lastChainCheck: number;
-  declare currentId: string | null;
-  /** This account's test-coin channel. Every account has one, funded or not. */
-  declare testId: string | null;
-  /** The player chose test coins in this tab although the account has ETH to play with. */
-  declare preferTest: boolean;
+  /** The account's channel: what deposits, play, closes and recovery are about. */
+  declare channelId: string | null;
+  /** The player chose to practice in this tab although the account has ETH to play with. */
+  declare preferPractice: boolean;
   declare storageFailed: boolean | undefined;
   declare refreshing: Promise<any> | null;
   declare nativeBalance: string;
@@ -211,11 +203,10 @@ export class CasinoWallet extends GameSessions {
       profile: null,
       fund: { sequence: 0, shares: '0', statement: null },
       developerBets: {},
-      developerBetCursors: {},
+      developerBetCursor: '0',
       bank: {},
       developerEarnings: null,
-      testId: null,
-      preferTest: false,
+      preferPractice: false,
       history: [],
       channels: {},
       busy: false,
@@ -387,7 +378,6 @@ export class CasinoWallet extends GameSessions {
         });
         this.hydrate(await this.storage.get(storageKey));
         await this.refreshLocked();
-        await this.ensureTestChannel().catch(() => {});
         if (this.channel?.key) await this.reconcile().catch(() => {});
       };
       await withLock('hookedin:channel:' + storageKey, true, run);
@@ -395,41 +385,42 @@ export class CasinoWallet extends GameSessions {
       this.busy = false;
       this.render();
     }
-    await this.fillTestChannel();
   }
   hydrate(saved: any) {
     if (saved && saved.schema !== 'HOOKEDIN/WALLET-STATE/1') throw new Error('Unsupported wallet state');
     Object.assign(this, {
       channels: saved?.channels || {},
-      currentId: saved?.currentId || null,
-      testId: saved?.testId || null,
+      channelId: saved?.channelId || null,
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
       // Bankroll shares, developer bets and a developer's bank belong to the account, not to any one channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
       developerBets: saved?.developerBets || {},
-      developerBetCursors: saved?.developerBetCursors || {},
+      developerBetCursor: saved?.developerBetCursor || '0',
       developerBetError: null,
       bank: saved?.bank || {},
     });
   }
-  /** The on-chain channel: what deposits, closes and recovery are about. */
-  get current(): WalletChannel | null {
-    return this.channels[this.currentId!] || null;
-  }
-  /** What games play with in this tab: a funded account plays with its channel's ETH unless the player
-   * chose test coins; a guest, or an account whose channel is not open, plays with test coins. */
-  get playing(): AssetId {
-    const funded = Boolean(this.current?.key) && Number(this.current!.onchain?.status) === 1;
-    return funded && !this.preferTest ? 'eth' : 'test';
-  }
-  /** The channel in play: the on-chain one, or the test-coin one. Everything signed off-chain happens here. */
-  get channelId(): string | null {
-    return this.playing === 'test' ? this.testId : this.currentId;
-  }
   get channel(): WalletChannel | null {
     return this.channels[this.channelId!] || null;
+  }
+  /** Whether this account can play with ETH: its channel has its key, is open and is not closing. */
+  get funded() {
+    const c = this.channel;
+    return Boolean(c?.key) && Number(c!.onchain?.status) === 1 && !c!.closing;
+  }
+  /** What games play with in this tab: test coins, the practice money it keeps, unless the account can play with
+   * ETH and the player has not chosen to practice. */
+  get practicing() {
+    return !this.funded || this.preferPractice;
+  }
+  /** What games play with, as a game is told it: test coins, or the network's ETH. Both count in units of 10^-18. */
+  get asset() {
+    return {
+      symbol: this.practicing ? 'TEST' : this.networkName === 'Sepolia' ? 'Sepolia ETH' : 'ETH',
+      decimals: 18,
+    };
   }
   get pending() {
     return this.channel?.pending || null;
@@ -439,7 +430,7 @@ export class CasinoWallet extends GameSessions {
     this.channel.pending = value;
   }
   get needsOpening() {
-    return Boolean(this.current && Number(this.current.onchain?.status || 0) === 0);
+    return Boolean(this.channel && Number(this.channel.onchain?.status || 0) === 0);
   }
   requireDurableState() {
     if (this.storageFailed) throw new Error('Wallet storage needs recovery; reload from durable state');
@@ -462,13 +453,12 @@ export class CasinoWallet extends GameSessions {
       record = plain({
         schema: 'HOOKEDIN/WALLET-STATE/1',
         channels: this.channels,
-        currentId: this.currentId,
-        testId: this.testId,
+        channelId: this.channelId,
         history,
         transactionIntent: this.transactionIntent,
         fund: this.fund,
         developerBets: this.developerBets,
-        developerBetCursors: this.developerBetCursors,
+        developerBetCursor: this.developerBetCursor,
         bank: this.bank,
         ...changes,
         revision,
@@ -510,8 +500,8 @@ export class CasinoWallet extends GameSessions {
   }
   /** Take the alias this account is shown by, or give it up. Only from a funded channel. */
   async pickAlias(this: CasinoWallet, alias: string | null) {
-    const c = this.current;
-    if (!c?.key || Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel before taking an alias');
+    const c = this.channel;
+    if (!c?.key || Number(c.onchain?.status) !== 1) throw new Error('Open a funded channel before taking an alias');
     this.profile = await this.api(`/api/channels/${c.state.channelId}/alias`, { alias: alias?.trim() ?? null }, c);
     this.uname = this.profile!.uname;
     this.alias = this.profile!.alias;
@@ -524,27 +514,19 @@ export class CasinoWallet extends GameSessions {
    * developer who has closed their channel can still withdraw a game that turned out to be broken.
    */
   async publishGame(this: CasinoWallet, name: string, url: string | null) {
-    // Publishing speaks from the open channel. Taking a game down speaks from any ETH channel this
-    // account still holds a key for, including one already closed, because a broken game has to come
-    // down whether or not its developer still has money at stake.
-    const c = url
-      ? this.current
-      : (this.current ?? Object.values(this.channels).find(row => row.key && row.state.channelId !== this.testId));
+    // Publishing speaks from the open channel. Taking a game down speaks from any channel this account
+    // still holds a key for, including one already closed, because a broken game has to come down
+    // whether or not its developer still has money at stake.
+    const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.key));
     if (!c?.key) throw new Error('This account has no channel to publish from');
-    if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded ETH channel to publish games');
+    if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded channel to publish games');
     this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }, c);
     this.render();
     return this.profile;
   }
   render() {
-    // A spending limit belongs to the asset it was granted in: if what this tab plays with has
-    // changed under it, the game's money goes back to the channel it came from.
-    if (this.game && this.game.asset !== this.playing) {
-      this.game.asset = this.playing;
-      this.game.balance = '0';
-      this.reportedBankroll = '0';
-    }
-    const c = this.current;
+    this.syncSession();
+    const c = this.channel;
     this.publicState = {
       address: this.address,
       balance: c && Number(c.onchain?.status) === 1 ? c.state.balance : '0',
@@ -572,10 +554,9 @@ export class CasinoWallet extends GameSessions {
         .filter(v => v.claim)
         .map(v => ({ channelId: v.state.channelId, observedAt: v.observedAt, ...v.claim })),
       chainId: String(this.expectedChainId),
-      // What games play with in this tab, and the test coins every account has.
-      playing: this.playing,
-      playBalance: this.channel && Number(this.channel.onchain?.status) === 1 ? this.channel.state.balance : '0',
-      testBalance: this.channels[this.testId!]?.state.balance ?? '0',
+      // What games play with in this tab: the test coins it practices with, or the channel's ETH.
+      playBalance: this.practicing ? String(this.practiceBalance) : c!.state.balance,
+      practiceBalance: String(this.practiceBalance),
       // Commission this account's games have earned, as the casino reports it to this channel.
       developerEarnings: this.developerEarnings,
     };
@@ -653,7 +634,7 @@ export class CasinoWallet extends GameSessions {
       this.channels[key].observedAt = Date.now();
     }
   }
-  async refreshLocked({ channelId }: { channelId?: string | null } = {}) {
+  async refreshLocked({ channelId: also }: { channelId?: string | null } = {}) {
     this.requireDurableState();
     // Both must pass before anything is read; together their requests share a round trip.
     const [, observation] = await Promise.all([this.assertNetwork(), this.observer.observe()]);
@@ -662,7 +643,7 @@ export class CasinoWallet extends GameSessions {
       this.observer.contractRead(this.reader, 'activeChannel', [this.address], observation.block),
     ]);
     // Only current recovery state belongs inside the action lock.
-    const selected = [...new Set([active, this.currentId, channelId])].filter(key => this.channels[key]);
+    const selected = [...new Set([active, this.channelId, also])].filter(key => this.channels[key]);
     const before = this.durable();
     const records = await this.observeChannels(selected, observation.block);
     await this.observer.accept(observation);
@@ -670,16 +651,15 @@ export class CasinoWallet extends GameSessions {
     this.lastChainCheck = Date.now();
     this.missingChannel = active !== ZeroHash && !this.channels[active] ? active : null;
     this.applyChannelObservations(records);
-    if (this.current && Number(this.current.onchain?.status) === 3) this.currentId = null;
-    if (active !== ZeroHash && this.channels[active]) this.currentId = active;
+    if (this.channel && Number(this.channel.onchain?.status) === 3) this.channelId = null;
+    if (active !== ZeroHash && this.channels[active]) this.channelId = active;
     await this.saveChanges(before);
     return this.publicState;
   }
   /** The record contents that warrant a new durable revision; observation times are display only. */
   durable() {
     return json([
-      this.currentId,
-      this.testId,
+      this.channelId,
       this.transactionIntent,
       this.history,
       Object.entries(this.channels).map(([key, c]) => [key, { ...c, observedAt: undefined }]),
@@ -730,7 +710,7 @@ export class CasinoWallet extends GameSessions {
           try {
             const observation = await observer.observe();
             if (!current()) return;
-            const keys = Object.keys(this.channels).filter(key => key !== this.currentId && !this.channels[key].asset);
+            const keys = Object.keys(this.channels).filter(key => key !== this.channelId);
             const cursor = (this.monitorCursor || 0) % (keys.length || 1);
             const selected = Array.from(
               { length: Math.min(keys.length, HISTORICAL_CHANNEL_BATCH) },
@@ -753,7 +733,7 @@ export class CasinoWallet extends GameSessions {
             });
             await commit(() => {
               this.applyChannelObservations(
-                records.filter(([key]) => key !== this.currentId && before.get(key) === json(this.channels[key])),
+                records.filter(([key]) => key !== this.channelId && before.get(key) === json(this.channels[key])),
               );
               this.history = this.history.map(entry =>
                 activity.has(entry.operationId) && historyBefore.get(entry.operationId) === json(entry)
@@ -780,8 +760,7 @@ export class CasinoWallet extends GameSessions {
         (async () => {
           if (this.recoveryOnly) return;
           try {
-            const metrics = await this.api('/api/metrics'),
-              bankroll = this.playing === 'test' ? metrics.test.bankroll : metrics.bankroll;
+            const { bankroll } = await this.api('/api/metrics');
             gameAmount(bankroll, false);
             await commit(() => {
               if (this.reportedBankroll === bankrollBefore) this.reportedBankroll = bankroll;
@@ -949,7 +928,6 @@ export class CasinoWallet extends GameSessions {
       if (!same(c.opening.player, value.address) || (c.key && !same(new Wallet(c.key!).address, c.opening.signer)))
         throw new Error('Backup channel identity differs');
       verifyEvidence({
-        ...(c.asset ? { asset: c.asset } : {}),
         chainId: value.chainId,
         casino: value.casino,
         operator: this.operator,
@@ -970,8 +948,6 @@ export class CasinoWallet extends GameSessions {
         throw new Error('Recover the current operation before restoring a wallet');
       // exclusive reloads the persisted revision while holding the shared lock.
       for (const [id, old] of Object.entries(this.channels)) {
-        // Test coins are play money: the backup's test channel simply takes the place of this one.
-        if (old.asset) continue;
         const next = value.record.channels[id];
         if (
           !next ||
@@ -1004,7 +980,7 @@ export class CasinoWallet extends GameSessions {
     const result = await this.exclusive(async () => {
       if (this.transactionIntent) await this.recoverTransaction();
       if (this.needsOpening) {
-        const c = this.current!,
+        const c = this.channel!,
           value = await this.reader.channels(c.state.channelId);
         if (Number(value.status) === 0) {
           const tx = await this.sendTransaction('openChannel', [c.opening.signer], {
@@ -1015,9 +991,9 @@ export class CasinoWallet extends GameSessions {
         return this.activate();
       }
       if (this.pending?.request) return this.resume();
-      if (this.current)
+      if (this.channel)
         this.noteNames(
-          await this.api(`/api/channels/${this.currentId}/activate`, { opening: this.current.opening }, this.current),
+          await this.api(`/api/channels/${this.channelId}/activate`, { opening: this.channel.opening }, this.channel),
         );
       await this.reconcile();
     });
@@ -1029,7 +1005,7 @@ export class CasinoWallet extends GameSessions {
     else await this.refresh();
     return result;
   }
-  evidence(channel = this.current!) {
+  evidence(channel = this.channel!) {
     if (channel.playerSignature && channel.playerSignature !== '0x')
       return checkpointEvidence(channel.state, channel.playerSignature, channel.casinoSignature);
     return channel.lastResponse?.evidence || checkpointEvidence(channel.state);
@@ -1051,7 +1027,7 @@ export class CasinoWallet extends GameSessions {
   }
   async exportEvidence(channelId?: string | null) {
     return this.withSavedRecord(async record => {
-      const c = record.channels[channelId ?? record.currentId];
+      const c = record.channels[channelId ?? record.channelId];
       if (!c) throw new Error('No channel evidence saved');
       return plain({
         chainId: String(this.expectedChainId),
@@ -1113,7 +1089,7 @@ export class CasinoWallet extends GameSessions {
           checked.state,
         );
       }
-      if (!this.currentId || this.currentId === channelId) this.currentId = channelId;
+      if (!this.channelId || this.channelId === channelId) this.channelId = channelId;
       await this.save();
     });
     await this.refresh();

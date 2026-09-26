@@ -68,21 +68,22 @@ The limit caps what the game may risk; it moves no money:
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
   has already committed.
 
-If no channel is open for the asset you play with, the dialog offers **Play with test coins** or **Set up my wallet**
-instead of an amount.
+While the tab [practices](getting-started.md#practice), the limit is in test coins, and the dialog offers the way to
+ETH: **Or play with your ETH** once your channel is open, **Or set up your wallet to play with ETH** before.
 
 ## One funded game at a time
 
 One game per account holds a limit at a time, across every tab of the browser. Once you have given a game money, a game
-in another tab is refused at the dialog until you leave the first game or close its tab. Switching between ETH and TEST
-is offered in the dialog while the game holds nothing, and the game then reloads to play with the other asset.
+in another tab is refused at the dialog until you leave the first game or close its tab; test coins are each tab's own,
+so practice is not held to this. Switching between ETH and TEST is offered in the dialog while the game holds nothing,
+and the game then reloads to play with the other money.
 
 ## What a game sees
 
 A game learns:
 
-- what the wallet offers and the asset it plays with: the methods, the asset's symbol and decimals, the chain ID and
-  the protocol's limits on a bet ([`wallet.hello`](../reference/bridge.md#wallethello));
+- what the wallet offers and what it plays with: the methods, whether it practices, the money's symbol and decimals, the
+  chain ID and the protocol's limits on a bet ([`wallet.hello`](../reference/bridge.md#wallethello));
 - your uname and alias, the bankroll figure the casino reports and a suggested stake
   ([`wallet.info`](../reference/bridge.md#walletinfo));
 - its own limit, and whether one of its operations is pending ([`game.balance`](../reference/bridge.md#gamebalance));

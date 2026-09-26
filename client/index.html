@@ -45,7 +45,7 @@
               ><span id="balance-amount">—</span></a
             >
             <div id="asset-switch" class="asset-switch" role="group" aria-label="What you play with">
-              <button type="button" data-play="eth">ETH</button><button type="button" data-play="test">TEST</button>
+              <button type="button" data-play="eth">ETH</button><button type="button" data-play="practice">TEST</button>
             </div>
           </div>
           <button id="game-funds" class="button secondary compact hidden" type="button">Take money back</button
@@ -178,7 +178,8 @@
           <div class="eyebrow">YOURS TO CONTROL</div>
           <h1>My wallet<span class="heading-dot">.</span></h1>
           <p class="intro wallet-intro">
-            Every wallet starts with test coins and can play at once. Receive ETH here to play with real money.
+            Every wallet can practice at once with test coins kept in this tab. Receive ETH here to play with real
+            money.
           </p>
           <div class="funding-balances">
             <div class="wallet-balance-card wallet-cash-card">
@@ -196,13 +197,12 @@
               <div class="eyebrow">TEST COINS</div>
               <div class="large-amount"><span id="test-balance">—</span><small>TEST</small></div>
               <p>
-                The casino's play money: the same games at the same odds, nothing real won or lost. Every wallet has
-                some, funded or not.
+                Practice money this tab keeps: the same games at the same odds, with nothing sent to the casino and
+                nothing real won or lost. A reload starts again at 100. Games with developer bets need ETH.
               </p>
               <p class="text-button-row">
-                <button id="test-faucet" class="text-button" type="button">Claim 100 test coins</button>
+                <button id="test-faucet" class="text-button" type="button">Add 100 test coins</button>
               </p>
-              <p id="test-earnings" class="hidden"></p>
             </div>
           </div>
           <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
@@ -708,13 +708,8 @@
       <form id="fund-form">
         <div id="fund-eyebrow" class="eyebrow">YOU ARE AUTHORIZING</div>
         <h2 id="fund-title">How much may this game play with?</h2>
-        <p id="fund-who" class="fund-who mode-fund"></p>
-        <p id="fund-channel-note" class="fund-note mode-channel"></p>
-        <div class="fund-actions mode-channel">
-          <button id="fund-open-wallet" class="button secondary" type="button">Set up my wallet</button
-          ><button class="button primary" type="button" data-play="test" autofocus>Play with test coins</button>
-        </div>
-        <div class="fund-change mode-fund" role="group" aria-label="What this changes">
+        <p id="fund-who" class="fund-who"></p>
+        <div class="fund-change" role="group" aria-label="What this changes">
           <div><span class="fund-change-label">It holds now</span><strong id="fund-now">—</strong></div>
           <span class="fund-change-arrow" aria-hidden="true">→</span>
           <div><span class="fund-change-label">It would hold</span><strong id="fund-next">—</strong></div>
@@ -722,31 +717,24 @@
             <span class="fund-change-label">Stays in your wallet</span><strong id="fund-rest">—</strong>
           </div>
         </div>
-        <div class="funding-amount-label mode-fund">
+        <div class="funding-amount-label">
           <label for="fund-amount">Set the limit to</label
           ><button id="fund-take-all" class="text-button" type="button">Take it all back</button>
         </div>
-        <div class="amount-input mode-fund">
+        <div class="amount-input">
           <input id="fund-amount" inputmode="decimal" autocomplete="off" aria-describedby="fund-help" /><span
             id="fund-asset"
             >ETH</span
           >
         </div>
-        <input
-          id="fund-slider"
-          class="fund-slider mode-fund"
-          type="range"
-          min="0"
-          step="1"
-          aria-label="Spending limit"
-        />
-        <div class="fund-scale mode-fund"><span>0</span><span id="fund-total"></span></div>
-        <p id="fund-help" class="funding-help mode-fund"></p>
-        <div class="fund-actions mode-fund">
+        <input id="fund-slider" class="fund-slider" type="range" min="0" step="1" aria-label="Spending limit" />
+        <div class="fund-scale"><span>0</span><span id="fund-total"></span></div>
+        <p id="fund-help" class="funding-help"></p>
+        <div class="fund-actions">
           <button class="button secondary" type="button" data-fund-cancel>Not now</button
           ><button id="fund-confirm" class="button primary" type="submit">Allow</button>
         </div>
-        <ul class="fund-terms mode-fund">
+        <ul class="fund-terms">
           <li>The money never leaves your wallet. This sets the most the game may put at risk.</li>
           <li>
             It can lose all of it — including anything it wins — on its bets and payments. It cannot touch a wei more.
@@ -757,12 +745,12 @@
             your bet history shows what this game has really paid you.
           </li>
         </ul>
-        <p id="fund-test-note" class="fund-note mode-fund">
-          Test coins are the casino's play money: the same games and the same odds, against the casino's test bankroll,
-          with nothing real won or lost.
+        <p id="fund-test-note" class="fund-note">
+          Test coins are practice money this tab keeps: the same games at the same odds, with nothing sent to the casino
+          and nothing real won or lost.
         </p>
-        <button id="fund-faucet" class="text-button fund-aside mode-fund" type="button">Claim 100 test coins</button>
-        <button id="fund-switch" class="text-button fund-aside mode-fund" type="button"></button>
+        <button id="fund-faucet" class="text-button fund-aside" type="button">Add 100 test coins</button>
+        <button id="fund-switch" class="text-button fund-aside" type="button"></button>
       </form>
     </dialog>
     <dialog id="bet-dialog" class="bet-dialog" aria-labelledby="bet-detail-title">

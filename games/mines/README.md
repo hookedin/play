@@ -18,7 +18,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 Which tile you pick is a visual choice. No hidden board is generated in advance: each reveal is a fresh bet at the exact remaining odds.
 
-The wallet plays with the network's ETH or the casino's test coins; the game is the same either way.
+The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
 
 ## How it works
 

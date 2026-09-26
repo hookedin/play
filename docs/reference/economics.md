@@ -5,11 +5,11 @@ sidebar:
   order: 6
 ---
 
-All amounts are integers in wei, or test units of 10^-18. A player's wallet chooses a stake, a chance and a prize. The
-casino admits the casino bet against its current unreserved bankroll and sets its commission in the same decision,
-before it reads the round's secret. The wallet and the contract check the exact terms and the balance arithmetic.
-Commission is the casino's accounting: it is never a debit from the player, the signed operation does not carry it, and
-the wallet shows it on the receipt without verifying it.
+All amounts are integers in wei. A player's wallet chooses a stake, a chance and a prize. The casino admits the casino
+bet against its current unreserved bankroll and sets its commission in the same decision, before it reads the round's
+secret. The wallet and the contract check the exact terms and the balance arithmetic. Commission is the casino's
+accounting: it is never a debit from the player, the signed operation does not carry it, and the wallet shows it on the
+receipt without verifying it.
 
 A casino bet is a stake paid to enter and a prize it pays when the round's 64-bit outcome is below its chance. For the
 bankroll it is one wager with two outcomes, and the casino's rule, the Kelly condition for that wager, has a closed
@@ -172,17 +172,13 @@ collected: money that has left the bankroll for a player who has not yet signed 
 developers' own money, the stakes of their developer bets among it. [`GET /api/status`](../casino-api/public.md#get-apistatus)
 reports every term.
 
-The casino keeps one set of these books per asset; ETH and test coins never add up. Test coins have no chain: their
-pool cash is ten million test coins plus every coin the faucet has minted, and a faucet claim credits a channel the
-same amount, so the test bankroll does not move.
-
-Anyone with an ETH channel may add to this capital. An [investment](../wallet/bankroll-fund.md) is a debit from a
-channel into the bankroll that mints shares at `equity / totalShares`, where equity is the reported bankroll before
+Anyone with a channel may add to this capital. An [investment](../wallet/bankroll-fund.md) is a debit from a channel
+into the bankroll that mints shares at `equity / totalShares`, where equity is the reported bankroll before
 reservations; a redemption burns them at the same price and owes the player their worth, which counts as escrow until
-collected. Both leave every other share's price unchanged, so holders gain and lose only what the bankroll does:
-losses add to equity, and wins and developer commission take from it, pro rata. Investors widen what the Kelly rule
-admits exactly as the owner's funding does, and the owner's funding and withdrawals buy and sell house shares at the
-going price. A redemption never takes money a casino bet has reserved.
+collected. Both leave every other share's price unchanged, so holders gain and lose only what the bankroll does: losses
+add to equity, and wins and developer commission take from it, pro rata. Investors widen what the Kelly rule admits
+exactly as the owner's funding does, and the owner's funding and withdrawals buy and sell house shares at the going
+price. A redemption never takes money a casino bet has reserved.
 
 An open channel's full original deposit stays protected on-chain even after signed losses. On closure the protection
 becomes `min(original deposit, final balance)`, and the rest of a loss is released. A finalized unpaid claim takes the

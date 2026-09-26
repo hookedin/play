@@ -151,7 +151,7 @@ test('chain 31337 without the explicit server development flag cannot use the au
 
 test('stale independent observations pause off-chain play', () => {
   const { wallet } = fixture();
-  wallet.currentId = 'test';
+  wallet.channelId = 'test';
   wallet.channels = { test: { state: { balance: '1' }, onchain: { status: 1 }, key: 'unused' } as any };
   wallet.lastChainCheck = Date.now() - 61000;
   assert.throws(() => wallet.ready(), /stale/);

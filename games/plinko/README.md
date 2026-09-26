@@ -12,7 +12,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 The ball bounces left or right at each peg with equal chance and lands in a bucket. The bucket's multiplier times the bet is paid. Outer buckets pay the most and are the rarest. Under the buckets, bars show where this session's balls landed and white marks show the exact expectation.
 
-The wallet plays with the network's ETH or the casino's test coins; the game is the same either way.
+The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
 
 ## How it works
 
@@ -53,7 +53,7 @@ Each bet's own return, which the wallet measures and keeps, is lower. A drop sta
 `DropClient` does four things, in this order:
 
 1. **Price the board.** `RoundClient` prices it against half the casino's reported bankroll with the casino's own admission rule (`admits` from the SDK). A board the casino cannot back is reported in the player's terms before anything is saved.
-2. **Save first.** The page draws the drop's bet and saves it, with a fresh operation `id`, in the game's `localStorage`, scoped by page, chain, asset and player, before `game.casinoBet` is called.
+2. **Save first.** The page draws the drop's bet and saves it, with a fresh operation `id`, in the game's `localStorage`, scoped by page, chain and player, or practice, before `game.casinoBet` is called.
 3. **Settle.** One `game.casinoBet` request per ball. If the reply is lost, the next `restore()` or drop finds the result through `game.receipt` under the same `id`. A rejection keeps the same bet and gives it a fresh `id`.
 4. **Land.** Only a settled receipt moves the ball. `RoundClient` refuses one whose payout is not the bet's, and `DropClient` lands each finished drop once.
 

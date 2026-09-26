@@ -105,7 +105,7 @@ test("a developer bet carries its game's meta, and reaches the game settled once
   await w.setGameLimit('1000');
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
-  const round = await f.developer.openRound('eth'),
+  const round = await f.developer.openRound(),
     request = {
       id: 'spin-1',
       stake: '10',
@@ -169,7 +169,7 @@ test("the developer's casino bet is taken against the bankroll whole, and one it
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameLimit('1000');
-  const round = await f.developer.openRound('eth'),
+  const round = await f.developer.openRound(),
     // Pocket 3 of 37 pays 36 times: a net 3,500 wei a win, which this bankroll can back once and not twice.
     pocket = { chance: String((1n << 64n) / 37n), prize: '3600' };
   const first = await w.gameDeveloperBet({ id: 'first', stake: '100', meta: { pocket: 3 } }),
@@ -201,7 +201,7 @@ test("the developer's casino bet is taken against the bankroll whole, and one it
   await w.collectPayouts();
   assert.equal(w.gameLimit().balance, '1000');
   // One of them alone, on a round of its own, is a bet the bankroll backs.
-  const next = await f.developer.openRound('eth');
+  const next = await f.developer.openRound();
   const taken = await f.developer.casinoBet({ round: next.id, stake: '100', ...pocket, group: 'spin', meta: {} });
   assert.equal(taken.casinoBet!.accepted, true);
 });
@@ -304,9 +304,9 @@ test('settled developer bets are found through the account feed, zero payouts ar
   assert.equal(w.developerBets[returned]!.error, 'Credit unavailable');
   assert.equal(await w.balance(), 999970n);
   const restored = await f.reload(),
-    cursor = restored.developerBetCursors.eth;
+    cursor = restored.developerBetCursor;
   await restored.collectPayouts();
-  assert.equal(restored.developerBetCursors.eth, cursor, 'retry uses saved settlements even with an empty feed');
+  assert.equal(restored.developerBetCursor, cursor, 'retry uses saved settlements even with an empty feed');
   assert.deepEqual(Object.keys(restored.developerBets), [waiting]);
   assert.equal(await restored.balance(), 999980n);
   restored.openGame(game);
@@ -329,7 +329,7 @@ test('encrypted backups retain every open developer bet beyond recent history', 
   const restored = await f.reload();
   restored.storage = new MemoryStore();
   restored.channels = {};
-  restored.currentId = null;
+  restored.channelId = null;
   restored.revision = 0;
   restored.refresh = async () => ({});
   await restored.restoreBackup(backup, password);
@@ -381,7 +381,7 @@ test('a game learns how its operations ended and never whose they were', async (
       [],
       `${r.id} ${r.status}`,
     );
-  const player = [w.channelId!, f.player.address, w.current!.opening.signer].map(hex => hex.slice(2).toLowerCase());
+  const player = [w.channelId!, f.player.address, w.channel!.opening.signer].map(hex => hex.slice(2).toLowerCase());
   for (const r of replies)
     for (const secret of player) assert.doesNotMatch(JSON.stringify(r).toLowerCase(), new RegExp(secret));
   const statuses = replies.filter(r => r.status).map(r => `${r.id} ${r.kind} ${r.status} ${r.payout ?? ''}`);
@@ -452,7 +452,7 @@ test('a result recovered in the same tab updates the open game; a closed game ch
   assert.equal(w.availableBalance(), await w.balance());
 });
 
-test('saved round state belongs to one player and one asset', async () => {
+test('saved round state belongs to one player, and practice to nobody', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('a'));
@@ -467,7 +467,7 @@ test('saved round state belongs to one player and one asset', async () => {
   // account sharing one.
   assert.equal(mine.includes('undefined'), false, mine);
   assert.ok(w.uname && mine.includes(w.uname.toLowerCase()), mine);
-  // Another account, and the same account's test coins, are somewhere else entirely.
+  // Another account is somewhere else entirely.
   const other = {
     ...bridgeFor(f, w),
     call: async (method: string, params: any = {}) => {
@@ -489,6 +489,9 @@ test('saved round state belongs to one player and one asset', async () => {
   const after = new RoundClient(renamed, createMines, undefined, { store, name: 'mines' });
   await after.restore();
   assert.equal(after['storageKey'], mine);
+  // Practice is kept apart from play, and is nobody's in particular.
+  w.setPractice(true);
+  assert.equal(await keyFor(w), 'hookedin:round:mines:31337:practice');
 });
 
 test('the bridge validates game requests without revisions or checkpoints', () => {
@@ -592,8 +595,8 @@ for (const name of ['mines', 'blackjack'])
     assert.equal(round.inHand(), 0n);
     assert.equal(await w.balance(), before - BigInt(state.contributed) + BigInt(state.cash));
     assert.equal(w.gameLimit().balance, String(BigInt(allocation) - BigInt(state.contributed) + BigInt(state.cash)));
-    assert.equal(store.map.size, 1, 'the round lives under one key per player and asset');
-    assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:eth:${w.uname}`);
+    assert.equal(store.map.size, 1, 'the round lives under one key per player');
+    assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
   });
 
 test('encrypted backups carry no game state and restore the channel evidence alone', async () => {
@@ -612,7 +615,7 @@ test('encrypted backups carry no game state and restore the channel evidence alo
   const restored = await f.reload();
   restored.storage = new MemoryStore();
   restored.channels = {};
-  restored.currentId = null;
+  restored.channelId = null;
   restored.revision = 0;
   restored.refresh = async () => ({});
   await restored.restoreBackup(backup, password);
@@ -638,11 +641,11 @@ test('importing newer financial evidence needs no game bookkeeping', async () =>
   restored.hydrate(before);
   await restored.storage.put(w.storageKey, before);
   restored.reader = {
-    channels: async () => ({ status: 1, initialHash: hashState(w.domain, initialState(w.current!.opening)) }),
+    channels: async () => ({ status: 1, initialHash: hashState(w.domain, initialState(w.channel!.opening)) }),
   } as any;
   restored.refresh = async () => ({});
   await restored.importEvidence(bundle);
-  assert.equal(restored.current!.state.balance, w.current!.state.balance);
+  assert.equal(restored.channel!.state.balance, w.channel!.state.balance);
   assert.equal(restored.availableBalance(), await w.balance());
 });
 
@@ -756,7 +759,7 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
   assert.equal(requests.length, 3);
 });
 
-test("every sentence the round helper writes names the wallet's own asset, asked again after a greeting that failed", async () => {
+test('every sentence the round helper writes names what the wallet plays with, asked again after a greeting that failed', async () => {
   const { fraction } = await import('../src/engine/index.ts');
   const requests: any[] = [];
   let limit = '0',
@@ -768,7 +771,7 @@ test("every sentence the round helper writes names the wallet's own asset, asked
         return { funded: false, amount: null, balance: limit, pending: false };
       }
       if (method === 'wallet.hello' && ++greetings === 1) throw new Error('The wallet did not respond.');
-      return { bankroll: '5000000000000000', chainId: '1', asset: { id: 'test', symbol: 'TEST', decimals: 18 } };
+      return { bankroll: '5000000000000000', chainId: '1', asset: { symbol: 'TEST', decimals: 18 }, practice: true };
     },
     balance: async () => ({ balance: limit, pending: false }),
   };
@@ -810,7 +813,7 @@ test('a stake the casino cannot back fails with a plain capacity message, not a 
     call: async () => ({
       bankroll: '5000000000000000',
       chainId: '1',
-      asset: { id: 'eth', symbol: 'ETH', decimals: 18 },
+      asset: { symbol: 'ETH', decimals: 18 },
     }),
     balance: async () => ({ balance: '100000000000000000', pending: false }),
   };
@@ -852,7 +855,7 @@ test('a supported plan is reused across rounds and recomputed when the bankroll 
     call: async () => ({
       bankroll: String(bankroll),
       chainId: '1',
-      asset: { id: 'eth', symbol: 'ETH', decimals: 18 },
+      asset: { symbol: 'ETH', decimals: 18 },
     }),
     balance: async () => ({ balance: '10000', pending: false }),
   };
@@ -899,7 +902,7 @@ test('a rejected game action survives a lost reply and reload without resampling
     if (url.endsWith('/operations')) {
       attempts.push(body.request);
       if (attempts.length === 1) {
-        const state = rejectionCheckpoint(w.domain, w.current!.state, body.request);
+        const state = rejectionCheckpoint(w.domain, w.channel!.state, body.request);
         const signature = await f.owner.signTypedData(w.domain, STATE_TYPES, state);
         return {
           status: 'rejected',
@@ -911,7 +914,7 @@ test('a rejected game action survives a lost reply and reload without resampling
           operationId: body.request.operationId,
           developer: null,
           casinoSignature: signature,
-          evidence: checkpointEvidence(w.current!.state, w.current!.playerSignature, w.current!.casinoSignature),
+          evidence: checkpointEvidence(w.channel!.state, w.channel!.playerSignature, w.channel!.casinoSignature),
         };
       }
     }

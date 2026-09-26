@@ -145,8 +145,8 @@ export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
 /** What a developer bet asks of the player, said as plainly as the docs say it. */
 const DEVELOPER_BET =
   'Its stake went to the game’s developer when you placed it, and the developer settles it: what it pays is their word, and you trust them to pay it. Your wallet collects what they pay.';
-/** A receipt is in the asset of the channel that signed it; an on-chain transaction is always ETH. */
-export const receiptUnit = (receipt: { asset?: string }) => (receipt.asset === 'test' ? 'TEST' : 'ETH');
+/** Every receipt this wallet keeps is in ETH: practice keeps none. */
+const unit = 'ETH';
 /** A developer bet can have settled while what it was paid still waits to enter the channel balance. Its game goes by
  * the name its receipt kept, when this wallet has the receipt. */
 export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer bet') {
@@ -161,7 +161,7 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
         : bet.collected
           ? 'Payout collected'
           : 'Payout ready',
-    amount: `${formatEther(amount)} ${receiptUnit(bet)}`,
+    amount: `${formatEther(amount)} ${unit}`,
     amountLabel: !settled
       ? 'Stake with the developer'
       : bet.payout === '0'
@@ -176,7 +176,6 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
 export function receiptSummary(
   receipt: any,
 ): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
-  const unit = receiptUnit(receipt);
   if (receipt.status === 'rejected')
     return {
       title: (
@@ -240,7 +239,6 @@ export function receiptSummary(
               redeem: 'Shares redeemed',
               divest: 'Bankroll payout',
               earnings: 'Developer earnings',
-              faucet: 'Test coins claimed',
               transaction: 'Transaction',
             } as Record<string, string>
           )[receipt.kind] || receipt.kind;
@@ -249,7 +247,7 @@ export function receiptSummary(
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
       ? 'Deposited'
-      : ['withdrawal', 'divest', 'earnings', 'faucet', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
+      : ['withdrawal', 'divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
         ? 'Received'
         : receipt.kind === 'invest'
           ? 'Invested'
@@ -273,7 +271,7 @@ export function receiptSummary(
     }${receipt.kind === 'casino-bet' ? ` · Balance ${formatEther(receipt.balance)} ${unit}` : ''}`;
   } else if (
     settled &&
-    ['withdrawal', 'divest', 'earnings', 'faucet', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind) &&
+    ['withdrawal', 'divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind) &&
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
@@ -297,8 +295,6 @@ export function receiptSummary(
     description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'withdrawn')
     description = `Taken from your bank and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
-  if (receipt.kind === 'faucet')
-    description = `The casino's faucet paid this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'earnings')
     description = `Commission your games earned, collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
   const notice =

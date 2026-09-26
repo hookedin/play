@@ -48,16 +48,18 @@ export const playerScope: (
       })
     | null
     | undefined,
-  asset: string,
+  practice: boolean,
 ) => string;
 ```
 
-What tells one player's saved state from another's: `<chainId>:<asset>:<uname>`, with `chain` for a missing chain ID
-and `anonymous` for a missing uname, the uname in lower case. Games that share a host, accounts that share a browser,
-and one player's ETH and test-coin play must not read each other's state, and an alias never changes the scope.
-[`HookedIn.storageScope`](hookedin.md#storagescope) and [`RoundClient`](round.md#roundclient) key their storage with it.
+What tells one player's saved state from another's: `<chainId>:<uname>`, with `chain` for a missing chain ID and
+`anonymous` for a missing uname, the uname in lower case, or `<chainId>:practice` while the wallet practices. Games that
+share a host, accounts that share a browser, and practice beside play must not read each other's state, and an alias
+never changes the scope. [`HookedIn.storageScope`](hookedin.md#storagescope) and [`RoundClient`](round.md#roundclient)
+key their storage with it.
 
 ```ts
-playerScope({ uname: '3byt9ocwnnzaxanmiz3stocj', chainId: '11155111' }, 'eth'); // '11155111:eth:3byt9ocwnnzaxanmiz3stocj'
-playerScope(null, 'test'); // 'chain:test:anonymous'
+playerScope({ uname: '3byt9ocwnnzaxanmiz3stocj', chainId: '11155111' }, false); // '11155111:3byt9ocwnnzaxanmiz3stocj'
+playerScope({ uname: '3byt9ocwnnzaxanmiz3stocj', chainId: '11155111' }, true); // '11155111:practice'
+playerScope(null, false); // 'chain:anonymous'
 ```

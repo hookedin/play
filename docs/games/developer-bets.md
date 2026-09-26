@@ -21,10 +21,13 @@ Your server signs with the key of the account you publish the game from, the add
 The server therefore holds everything the account holds: its games, their commission and its bank. A developer who
 wants the server to hold less publishes the game from an account of its own.
 
-Your **bank** is a balance at the casino, one per asset. The stakes of your developer bets go in as they are placed;
-your settlements and your casino bets are paid from it, and an accepted casino bet's payout goes back in. Nothing in it
-is reserved. Deposit into it and withdraw from it on the wallet's **My games** page, from the account's own channel in
-the asset the wallet plays with. A batch of settlements the bank cannot pay in full is refused whole, with `bank-short`.
+Your **bank** is a balance at the casino. The stakes of your developer bets go in as they are placed; your settlements
+and your casino bets are paid from it, and an accepted casino bet's payout goes back in. Nothing in it is reserved.
+Deposit into it and withdraw from it on the wallet's **My games** page, from the account's own channel. A batch of
+settlements the bank cannot pay in full is refused whole, with `bank-short`.
+
+Developer bets are placed with ETH. A wallet that [practices](../reference/bridge.md#practice) refuses them with
+`practice`, so a page built on them shows its table in practice and says that it plays with ETH.
 
 ## Placing a bet from the page
 
@@ -148,8 +151,8 @@ bet your own casino bets back has paid its share already, as their commission: s
 A game whose players share one outcome can make it checkable by anyone, with two things the casino gives you: rounds,
 and your casino bets on them.
 
-- [`developer.openRound(asset)`](../sdk/developer.md#openround) asks the casino for a round in an asset, named by the
-  hash of a secret the casino keeps. Every call names another round; keep track of yours.
+- [`developer.openRound()`](../sdk/developer.md#openround) asks the casino for a round, named by the hash of a secret
+  the casino keeps. Every call names another round; keep track of yours.
 - [`developer.seedHash(round.id)`](../sdk/developer.md#seedhash) is the hash of the seed your casino bet on that round
   will bring. The seed is derived from your key and the round, so it is the same on every call, and nobody without the
   key can know it.
@@ -211,7 +214,7 @@ import type { StepNode } from '@hookedin/play/sdk/steps';
 
 // Before anybody bets: the draw's rounds and seed hashes, and its ID, which its players' bets carry as their group.
 const rounds: string[] = [];
-for (let level = 0; level < levels(n); level++) rounds.push((await developer.openRound('eth')).id);
+for (let level = 0; level < levels(n); level++) rounds.push((await developer.openRound()).id);
 const seedHashes = await Promise.all(rounds.map(round => developer.seedHash(round))),
   group = keccak256(concat([...rounds, ...seedHashes])).slice(2);
 await save({ group, rounds, seedHashes }); // before anybody is told of it
@@ -255,19 +258,19 @@ await developer.settle(bets.map(bet => ({ bet: bet.bet, player: pays(bet, node.l
 
 `n` is how many outcomes the draw has. `save`, `owedOn` and `pays` are your game's own:
 [roulette's `src/table.ts`](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into what each
-pocket pays. [`developer.bankroll`](../sdk/developer.md#bankroll) is the casino's reported bankroll in the asset;
-pricing at half of it, as roulette does, leaves room for ordinary movement. After a restart, finish the walk from what
-you saved: a level's round, revealed already, is the step as it was placed. `ethers` comes with `@hookedin/play`; add it
-to your own dependencies to import it.
+pocket pays. [`developer.bankroll`](../sdk/developer.md#bankroll) is the casino's reported bankroll; pricing at half of
+it, as roulette does, leaves room for ordinary movement. After a restart, finish the walk from what you saved: a level's
+round, revealed already, is the step as it was placed. `ethers` comes with `@hookedin/play`; add it to your own
+dependencies to import it.
 
 ## The order of requests
 
 One draw of a provably fair game, from the first request to the players' money, and who signs what:
 
-1. **The server opens the draw.** `developer.openRound(asset)` sends
+1. **The server opens the draw.** `developer.openRound()` sends
    [`POST /api/rounds`](../casino-api/developers.md#post-apirounds) once per level, authorized by a `DeveloperAccess`
-   token your key signs: the casino picks a secret for each, keeps it, and names the round by its hash. The server
-   works out each round's seed hash and publishes the draw's ID, which commits to both.
+   token your key signs: the casino picks a secret for each, keeps it, and names the round by its hash. The server works
+   out each round's seed hash and publishes the draw's ID, which commits to both.
 2. **Players bet.** Each page calls [`game.developerBet`](../reference/bridge.md#gamedeveloperbet) with the draw's ID
    in its `group`. The player's wallet signs a debit with its channel key and sends it to
    [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations); the casino signs the
@@ -298,7 +301,7 @@ through its player's wallet with [`HookedIn.round`](../sdk/hookedin.md#hookedin)
 
 ## Roulette, the worked example
 
-[Roulette](https://github.com/hookedin/game-roulette) runs this scheme with one wheel per asset.
+[Roulette](https://github.com/hookedin/game-roulette) runs this scheme with one wheel for everybody.
 
 - Each spin opens its six rounds before anybody bets, and its ID is the hash of the rounds and then their seed hashes,
   which the table publishes. The page places a player's whole layout as one developer bet, with the spin as its `group`

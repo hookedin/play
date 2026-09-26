@@ -40,8 +40,6 @@ test('every error a game can be given is in the table, and nothing else', () => 
   const raised = new Set(['failed']);
   for (const file of fs.readdirSync(path.join(root, 'client')).filter(name => name.endsWith('.ts')))
     for (const [, code] of read(`client/${file}`).matchAll(/gameError\(\s*'([a-z-]+)'/g)) raised.add(code);
-  // The faucet's, which no game can ask for.
-  raised.delete('not-due');
   for (const [, code] of read('sdk/src/sdk.ts').matchAll(/new HookedInError\('([a-z-]+)'/g)) raised.add(code);
   assert.deepEqual(documented.sort(), [...raised].sort());
 });

@@ -11,8 +11,9 @@ bet: you run the template's bridge probe on your machine and play it from the pu
 ## What you need
 
 - Node 24.4 or later.
-- A HookedIn wallet: open [play.hookedin.com](https://play.hookedin.com). A wallet with no deposit plays with test
-  coins, which the faucet fills ([getting started](../wallet/getting-started.md)).
+- A HookedIn wallet: open [play.hookedin.com](https://play.hookedin.com). A wallet with no deposit practices with test
+  coins of its own, which settle casino bets and payments but no developer bets
+  ([getting started](../wallet/getting-started.md#practice)).
 
 ## Create the game
 

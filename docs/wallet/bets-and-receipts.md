@@ -49,15 +49,15 @@ shows the return in millionths of the stake, rounded to the nearest, as a percen
 a basis point. The coin flip in [how it works](../overview/how-it-works.md#casino-bets) returns 98.0000%. A developer
 bet has no odds, and so no return.
 
-**My games**, `/games`, adds up your bets of each asset, overall and game by game, two ways:
+**My games**, `/games`, adds up your bets, overall and game by game, two ways:
 
 - **Expected**: what the bets were worth, the sum of their expected payouts over the sum of their stakes, counting only
   casino bets.
 - **Paid back**: what the bets paid, the sum of their payouts over the sum of their stakes.
 
-Over a handful of bets the second figure is luck, and over many it follows the first. ETH and TEST are separate channels
-and never add up to one figure. The wallet records the return of every casino bet and does not refuse a bet that
-returns little ([trust model](../overview/trust-model.md#what-a-game-can-and-cannot-do)).
+Over a handful of bets the second figure is luck, and over many it follows the first. Practice bets are in neither: the
+wallet keeps no record of them. The wallet records the return of every casino bet and does not refuse a bet that returns
+little ([trust model](../overview/trust-model.md#what-a-game-can-and-cannot-do)).
 
 These figures measure the bets a game placed, not the game. A step with two outcomes, as in Dice and Mines, is one bet
 whose return is the step's. A step with more, as in Plinko or a slot, is collapsed: the page draws one bet between two
@@ -101,7 +101,7 @@ then answers the game with `id-used`, so that it does not place the same bet aga
 [`GET /api/games/:key`](../casino-api/public.md#get-apigameskey). `key` is the game's key
 ([publishing a game](names-and-publishing.md#publishing-a-game)). The page shows:
 
-- the totals of each asset, expected and paid back, as on My games;
+- the totals, expected and paid back, as on My games;
 - how many of the game's developer bets are open, and how many its developer has settled;
 - the latest 200 bets, newest first, each naming its player by alias or uname and never by address or channel, with
   its stake, payout, result and return.
@@ -122,10 +122,9 @@ bets under **Developer bets** until what each was paid has been collected:
 
 Every 4 seconds while the wallet is open, and when you press **Check results and collect payouts**, the wallet asks the
 casino for your settled bets. For each, it checks the developer's signed `Settlement` against the bet you signed (its
-hash, its stake and its developer) and signs a credit for exactly what the settlement pays you. It collects in the asset
-the tab plays with; a bet in the other asset says which to switch to. If the game that placed the bet is open, the
-wallet sends it the settled receipt, and the payout raises the game's limit. A collected developer bet then appears in
-bet history.
+hash, its stake and its developer) and signs a credit for exactly what the settlement pays you, into your channel. If
+the game that placed the bet is open with ETH, the wallet sends it the settled receipt, and the payout raises the game's
+limit. A collected developer bet then appears in bet history.
 
 Stakes with developers and payouts not yet collected are apart from your signed balance: they are not in the channel,
 and the contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).
@@ -133,8 +132,8 @@ and the contract protects neither ([trust model](../overview/trust-model.md#deve
 ## Activity
 
 **Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, deposits,
-closes, collected claims, test coins, and bankroll and bank movements. A row expands to its operation ID, channel,
-sequence and commission, and for a transaction its hash (linked to Sepolia Etherscan) and block, with the raw JSON
-behind it. An off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**, **Reverted**,
-**Replaced** or **Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100 receipts, and
-the receipt of every developer bet still open.
+closes, collected claims, and bankroll and bank movements. A row expands to its operation ID, channel, sequence and
+commission, and for a transaction its hash (linked to Sepolia Etherscan) and block, with the raw JSON behind it. An
+off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**, **Reverted**, **Replaced** or
+**Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100 receipts, and the receipt of
+every developer bet still open.

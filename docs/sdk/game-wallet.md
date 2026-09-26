@@ -111,9 +111,8 @@ envelope ID above the last, and on to the wallet's own methods. The player agree
 rises by the amount asked, or by the whole playable balance when none is, up to the playable balance, and the reply says
 `funded: true`. Every receipt the wallet pushes reaches the `onReceipt` listeners of every bridge to that wallet.
 
-It leaves out what only a wallet page does: the queue, the player's dialog, and the `busy` and `no-channel` refusals.
-A refusal is the wallet's own `Error`, whose `code` is set wherever the wallet sets one; a page's bridge reports the rest
-as `failed`.
+It leaves out what only a wallet page does: the queue, the player's dialog, and the `busy` refusal. A refusal is the
+wallet's own `Error`, whose `code` is set wherever the wallet sets one; a page's bridge reports the rest as `failed`.
 
 ### `TestBridge`
 

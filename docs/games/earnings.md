@@ -37,16 +37,15 @@ after admission admits the largest bets and charges only the surplus: a
 
 ## Collecting
 
-The tally is kept per address and per asset. Open a HookedIn wallet whose account is the `developer` address: import
-its key, or connect the browser wallet that holds it ([open the wallet](../wallet/getting-started.md#open-the-wallet)).
-With a channel open in an asset, the wallet collects what that asset's tally owes by itself, as a credit its own channel
-key signs, into that channel. Nobody at the casino approves or sends anything, and the wallet page shows what your
-games have earned and how much of it is collected.
+The tally is kept per address. Open a HookedIn wallet whose account is the `developer` address: import its key, or
+connect the browser wallet that holds it ([open the wallet](../wallet/getting-started.md#open-the-wallet)). With a
+channel open, the wallet collects what the tally owes by itself, as a credit its own channel key signs, into that
+channel. Nobody at the casino approves or sends anything, and the wallet page shows what your games have earned and how
+much of it is collected.
 
-Commission in ETH is collected into the ETH channel, and commission in test coins into the test channel. Nothing moves
-on-chain and the bankroll does not change: money the casino owed you becomes your signed balance, which settles like any
-other ([closing and claims](../wallet/closing-and-claims.md)). Commission owed to an address that never opens a channel
-is never collected, so name an address you can open a wallet from.
+Nothing moves on-chain and the bankroll does not change: money the casino owed you becomes your signed balance, which
+settles like any other ([closing and claims](../wallet/closing-and-claims.md)). Commission owed to an address that never
+opens a channel is never collected, so name an address you can open a wallet from.
 
 The casino also lists what each game earned, by its published name, with the tally in your channel's
 [payouts](../casino-api/channels.md#get-apichannelsidpayouts).
@@ -54,7 +53,7 @@ The casino also lists what each game earned, by its published name, with the tal
 ## The public tally
 
 Every developer's totals are public: [`GET /api/status`](../casino-api/public.md#get-apistatus) lists them under
-`developers`, one entry per address and asset with `earned`, `collected` and `outstanding`, and
+`developers`, one entry per address with `earned`, `collected` and `outstanding`, and
 [hookedin.com/bankroll](https://hookedin.com/bankroll/) shows them. The tally is the casino's word: casino bets are
 private to their channels, so nobody can check that it counted every one. Each player's receipts show the commission of
 their own bets.

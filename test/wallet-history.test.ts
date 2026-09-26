@@ -44,7 +44,7 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
   } as any;
   await wallet.refresh();
   await wallet.refreshDetails();
-  assert.equal(wallet.currentId, active);
+  assert.equal(wallet.channelId, active);
   assert.equal(wallet.publicState.needsChallenge, true);
   assert.ok(reads.includes(active));
   for (let i = 0; i < Math.ceil(keys.length / HISTORICAL_CHANNEL_BATCH); i++) {

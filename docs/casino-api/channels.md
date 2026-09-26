@@ -5,10 +5,10 @@ sidebar:
   order: 2
 ---
 
-Every route here concerns one channel, `:id`, and needs [channel access](index.md#authentication): a token signed by
-the channel's key. The checkpoints, operations and statements they carry are specified on
-[Signed messages](../reference/signed-messages.md). The examples come from one session: a player, `@alice`, plays
-the game `wheel` of a developer, `@studio`, which also holds a developer bank and a test channel.
+Every route here concerns one channel, `:id`, and needs [channel access](index.md#authentication): a token signed by the
+channel's key. The checkpoints, operations and statements they carry are specified on
+[Signed messages](../reference/signed-messages.md). The examples come from one session: a player, `@alice`, plays the
+game `wheel` of a developer, `@studio`, which also holds a developer bank.
 
 ## Opening and reading a channel
 
@@ -18,40 +18,28 @@ Registers a channel with the casino, or returns it if the casino already knows i
 
 **Auth:** channel access · **Idempotent:** yes: a known channel is returned as it stands
 
-An ETH channel is opened on-chain first, and its deposit must be confirmed (2 blocks on Sepolia, 1 on Anvil). The casino
+A channel is opened on-chain first, and its deposit must be confirmed (2 blocks on Sepolia, 1 on Anvil). The casino
 reads it at its last observed block and requires the same funding account, channel key, deposit and genesis hash as the
-opening. A test channel exists at the casino alone: there is no deposit to show whose it is, so the body adds `owner`,
-an `Access` for the channel signed by the funding account. The token is the channel key's, for `:id`. A channel the
-casino knows is authenticated and returned with no chain read. Registering a channel counts against
-[budgets](index.md#budgets-and-queues) of its own.
+opening. The token is the channel key's, for `:id`. A channel the casino knows is authenticated and returned with no
+chain read. Registering a channel counts against [budgets](index.md#budgets-and-queues) of its own.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field | Type   | Meaning                                                                                                                                                                |
-| ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opening`  | object | `{channelId, player, signer, deposit}`: [the opening](../reference/signed-messages.md#channel-ids), whose `channelId` is `:id`                                         |
-| `asset`    | string | `"test"` for a test channel; absent or `"eth"` for ETH                                                                                                                 |
-| `owner`    | object | A test channel's proof: `{message: {channelId, expiresAt}, signature}`, an `Access` for the channel signed by `opening.player`, within the same time window as a token |
+| Body field | Type   | Meaning                                                                                                                        |
+| ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `opening`  | object | `{channelId, player, signer, deposit}`: [the opening](../reference/signed-messages.md#channel-ids), whose `channelId` is `:id` |
 
 The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows it.
 
 ```json title="Request"
 {
   "opening": {
-    "channelId": "0x8decb5798a4b46d1cdb76b091f2f013426083eb0925fb14c4b332974ac6fdf55",
+    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0x03Bf6094F9A94a4002935554C3a7355643524223",
-    "deposit": "0"
-  },
-  "asset": "test",
-  "owner": {
-    "message": {
-      "channelId": "0x8decb5798a4b46d1cdb76b091f2f013426083eb0925fb14c4b332974ac6fdf55",
-      "expiresAt": "1790384288"
-    },
-    "signature": "0x5bab60ac61cd765d74f5a5a4b3267f9870ad23085adc88690c417a428b7af8ec10cb96a5b42f58c6c8f6e0bba04f00f2a7b7535373f2fa33ddd2761415d6f60f1b"
+    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
+    "deposit": "1000000000000000000"
   }
 }
 ```
@@ -59,20 +47,19 @@ The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows 
 ```json title="Response"
 {
   "opening": {
-    "channelId": "0x8decb5798a4b46d1cdb76b091f2f013426083eb0925fb14c4b332974ac6fdf55",
+    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0x03Bf6094F9A94a4002935554C3a7355643524223",
-    "deposit": "0"
+    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
+    "deposit": "1000000000000000000"
   },
-  "asset": "test",
   "uname": "biop5et6ov6i5sn3c6p7vxhx",
   "alias": null,
   "state": {
-    "channelId": "0x8decb5798a4b46d1cdb76b091f2f013426083eb0925fb14c4b332974ac6fdf55",
+    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "0"
+    "balance": "1000000000000000000"
   },
   "playerSignature": "0x",
   "casinoSignature": "0x",
@@ -80,9 +67,9 @@ The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows 
   "lastResponse": null,
   "onchain": {
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0x03Bf6094F9A94a4002935554C3a7355643524223",
-    "deposit": "0",
-    "initialHash": "0xee1eddd8597bcd974063431069ffb1c769853a92be4f3f366e45e23b386dbc7a",
+    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
+    "deposit": "1000000000000000000",
+    "initialHash": "0xe490968fbbb7134715e45020d1212e2c868cb89808c64e62954bb541e812a14b",
     "status": "1",
     "deadline": "0",
     "closingSequence": "0",
@@ -90,15 +77,16 @@ The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows 
     "closingBalance": "0"
   },
   "closing": false,
-  "bankroll": "10000000000000000000000000"
+  "bankroll": "100000000000001000000"
 }
 ```
 
-`invalid` answers an unknown `asset`. `refused` answers an opening whose `channelId` is not `:id` or does not fit its
-fields, an ETH channel that is not confirmed or differs on-chain, and a chain that moved on during the check ("Chain
-observation advanced; retry activation").
+`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel that is not confirmed
+or differs on-chain, and a chain that moved on during the check ("Chain observation advanced; retry activation").
 
-**Errors:** [`unauthorized`](index.md#errors) (401), [`invalid`](index.md#errors) (400), [`refused`](index.md#errors) (409), [`rate-limited`](index.md#errors) (429), [`busy`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
+**Errors:** [`unauthorized`](index.md#errors) (401), [`refused`](index.md#errors) (409),
+[`rate-limited`](index.md#errors) (429), [`busy`](index.md#errors) (429), [`paused`](index.md#errors) (503),
+[`too-large`](index.md#errors) (413)
 
 ### `GET /api/channels/:id`
 
@@ -113,38 +101,36 @@ evidence.
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Response field    | Type                   | Meaning                                                                                                                                                                                                                                                           |
-| ----------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opening`         | object                 | `{channelId, player, signer, deposit}`                                                                                                                                                                                                                            |
-| `asset`           | string                 | `eth` or `test`                                                                                                                                                                                                                                                   |
-| `uname`, `alias`  | string, string or null | The player's names                                                                                                                                                                                                                                                |
-| `state`           | Checkpoint             | The latest checkpoint                                                                                                                                                                                                                                             |
-| `playerSignature` | string                 | The channel key's countersignature of `state`; `0x` until given                                                                                                                                                                                                   |
-| `casinoSignature` | string                 | The casino's signature of `state`; `0x` for the genesis                                                                                                                                                                                                           |
-| `acknowledged`    | boolean                | Whether `state` is countersigned                                                                                                                                                                                                                                  |
-| `lastResponse`    | object or null         | The reply that produced `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `bankroll` and `nextRound`                                                                                                                          |
-| `onchain`         | object or null         | The contract's record of the channel, `{player, signer, deposit, initialHash, status, deadline, closingSequence, closingHash, closingBalance}`, in decimal strings (see [`channels`](../reference/contract.md#storage)); a test channel shows a fixed open record |
-| `claim`           | object or null         | A finalized channel's claim, `{beneficiary, stateHash, amount, paid, protectedRemaining, winningsRemaining, finalizedAt}` (see [`claims`](../reference/contract.md#views)); absent or `null` before                                                               |
-| `closing`         | boolean                | Whether the casino has signed a `Close` for the channel; it takes no more operations                                                                                                                                                                              |
-| `bankroll`        | string                 | The bankroll of the channel's asset, a hint                                                                                                                                                                                                                       |
+| Response field    | Type                   | Meaning                                                                                                                                                                                                                 |
+| ----------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opening`         | object                 | `{channelId, player, signer, deposit}`                                                                                                                                                                                  |
+| `uname`, `alias`  | string, string or null | The player's names                                                                                                                                                                                                      |
+| `state`           | Checkpoint             | The latest checkpoint                                                                                                                                                                                                   |
+| `playerSignature` | string                 | The channel key's countersignature of `state`; `0x` until given                                                                                                                                                         |
+| `casinoSignature` | string                 | The casino's signature of `state`; `0x` for the genesis                                                                                                                                                                 |
+| `acknowledged`    | boolean                | Whether `state` is countersigned                                                                                                                                                                                        |
+| `lastResponse`    | object or null         | The reply that produced `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `bankroll` and `nextRound`                                                                                |
+| `onchain`         | object or null         | The contract's record of the channel, `{player, signer, deposit, initialHash, status, deadline, closingSequence, closingHash, closingBalance}`, in decimal strings (see [`channels`](../reference/contract.md#storage)) |
+| `claim`           | object or null         | A finalized channel's claim, `{beneficiary, stateHash, amount, paid, protectedRemaining, winningsRemaining, finalizedAt}` (see [`claims`](../reference/contract.md#views)); absent or `null` before                     |
+| `closing`         | boolean                | Whether the casino has signed a `Close` for the channel; it takes no more operations                                                                                                                                    |
+| `bankroll`        | string                 | The bankroll, a hint                                                                                                                                                                                                    |
 
 ```json title="Response"
 {
   "opening": {
-    "channelId": "0x8decb5798a4b46d1cdb76b091f2f013426083eb0925fb14c4b332974ac6fdf55",
+    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0x03Bf6094F9A94a4002935554C3a7355643524223",
-    "deposit": "0"
+    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
+    "deposit": "1000000000000000000"
   },
-  "asset": "test",
   "uname": "biop5et6ov6i5sn3c6p7vxhx",
   "alias": null,
   "state": {
-    "channelId": "0x8decb5798a4b46d1cdb76b091f2f013426083eb0925fb14c4b332974ac6fdf55",
+    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "0"
+    "balance": "1000000000000000000"
   },
   "playerSignature": "0x",
   "casinoSignature": "0x",
@@ -152,9 +138,9 @@ evidence.
   "lastResponse": null,
   "onchain": {
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0x03Bf6094F9A94a4002935554C3a7355643524223",
-    "deposit": "0",
-    "initialHash": "0xee1eddd8597bcd974063431069ffb1c769853a92be4f3f366e45e23b386dbc7a",
+    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
+    "deposit": "1000000000000000000",
+    "initialHash": "0xe490968fbbb7134715e45020d1212e2c868cb89808c64e62954bb541e812a14b",
     "status": "1",
     "deadline": "0",
     "closingSequence": "0",
@@ -162,7 +148,7 @@ evidence.
     "closingBalance": "0"
   },
   "closing": false,
-  "bankroll": "10000000000000000000000000"
+  "bankroll": "100000000000001000000"
 }
 ```
 
@@ -231,9 +217,8 @@ What the casino checks and answers, by operation:
 | Casino bet, kind 1          | `{id, game, group?}`                                     | Needs `seed` when the bet is on the channel's own open round (`400` `invalid` without it); declines a bet on any other round. Admits the bet by [the Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager) before it reads the round's secret, and declines what the bankroll cannot take | `commission`; `developer` when the game is published; `nextRound`; when declined, `secret` or `lost` |
 | Payment, kind 2             | `{id, game, group?}`                                     | Moves the amount into the bankroll                                                                                                                                                                                                                                                                   | –                                                                                                    |
 | Developer bet, kind 2       | `{id, game, group?, meta}`                               | Moves the stake into the bank of the game's developer; declines a bet on a game nobody publishes                                                                                                                                                                                                     | –                                                                                                    |
-| Investment, kind 2          | `{id, counterparty: FUND_ID}`                            | Mints shares to the channel's player at the current price; declines one from a test channel, one too small to buy a share, and one while shares are in issue and the fund's equity is not positive                                                                                                   | `statement`: the `ShareStatement`                                                                    |
+| Investment, kind 2          | `{id, counterparty: FUND_ID}`                            | Mints shares to the channel's player at the current price; declines one too small to buy a share, and one while shares are in issue and the fund's equity is not positive                                                                                                                            | `statement`: the `ShareStatement`                                                                    |
 | Bank deposit, kind 2        | `{id, counterparty: BANK_ID}`                            | Moves the amount into the bank of the channel's own account                                                                                                                                                                                                                                          | `statement`: the `BankStatement`                                                                     |
-| Test coins, kind 3          | `{id, counterparty: FAUCET_ID}`                          | Pays exactly 100 TEST to a test channel holding less than 10 TEST; `wrong-asset` on an ETH channel, `not-due` otherwise                                                                                                                                                                              | –                                                                                                    |
 | Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                       | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                      | –                                                                                                    |
 | Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID or the bet's hash}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                       | –                                                                                                    |
 
@@ -257,7 +242,7 @@ operation, which [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-bet
 | `secret`          | bytes32    | A declined casino bet: its round's secret, to compute what the bet would have paid                                                                  |
 | `lost`            | boolean    | A declined casino bet whose round the casino cannot reveal: `true`                                                                                  |
 | `used`            | boolean    | A game's operation declined because its player carried it out on another channel: `true`                                                            |
-| `bankroll`        | string     | The bankroll of the channel's asset, a hint; not recorded                                                                                           |
+| `bankroll`        | string     | The bankroll, a hint; not recorded                                                                                                                  |
 | `nextRound`       | bytes32    | After a casino bet, settled or declined: the channel's next round; not recorded                                                                     |
 
 A casino bet, and its signed result:
@@ -453,7 +438,11 @@ seed and a debit's unknown counterparty; with `409`, details that break [the det
 `refused` answers a `request.channelId` other than `:id`, a bad signature or acknowledgment signature, an operation
 that is not the channel's next, an amount above the balance, and a casino bet whose chance or prize breaks the rules.
 
-**Errors:** [`unauthorized`](index.md#errors) (401), [`invalid`](index.md#errors) (400), [`invalid`](index.md#errors) (409), [`unacknowledged`](index.md#errors) (409), [`channel-closed`](index.md#errors) (409), [`id-conflict`](index.md#errors) (409), [`not-due`](index.md#errors) (409), [`wrong-asset`](index.md#errors) (409), [`refused`](index.md#errors) (409), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
+**Errors:** [`unauthorized`](index.md#errors) (401), [`invalid`](index.md#errors) (400), [`invalid`](index.md#errors)
+(409), [`unacknowledged`](index.md#errors) (409), [`channel-closed`](index.md#errors) (409),
+[`id-conflict`](index.md#errors) (409), [`not-due`](index.md#errors) (409), [`refused`](index.md#errors) (409),
+[`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503),
+[`too-large`](index.md#errors) (413)
 
 ### `GET /api/channels/:id/operations/:operationId`
 
@@ -574,7 +563,6 @@ signed checkpoint with the empty step, and the funding account's [`Close`](../re
 signature of the channel and that checkpoint's hash. The casino checks that the evidence yields its latest checkpoint
 and that the funding account signed, records the channel as closing, so that it takes no more operations, and signs.
 The wallet then calls [`cooperativeClose`](../reference/contract.md#functions-that-change-state) with both signatures.
-ETH channels only: a test channel has nothing on-chain to close.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
@@ -638,20 +626,21 @@ ETH channels only: a test channel has nothing on-chain to close.
 `refused` answers evidence of any other checkpoint ("Recover the latest checkpoint before closing") and a signature
 that is not the funding account's.
 
-**Errors:** [`wrong-asset`](index.md#errors) (409), [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
+**Errors:** [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors)
+(429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
 
 ## Payouts and developer bets
 
 ### `GET /api/channels/:id/payouts`
 
-What the casino owes the channel's account in this asset, for the wallet to collect with credits.
+What the casino owes the channel's account, for the wallet to collect with credits.
 
 **Auth:** channel access · **Idempotent:** yes
 
-The list holds at most 256 entries. First comes the account's developer earnings, if it has ever earned any in this
-asset; then every payout not yet collected, ordered by source and index. The wallet collects each with a credit whose
-details name `source` as their `counterparty`, for exactly `amount` (for earnings, at most `amount`), and the next reply
-lists the rest. Payouts belong to the account, so any of its channels in the asset lists and collects them.
+The list holds at most 256 entries. First comes the account's developer earnings, if it has ever earned any; then every
+payout not yet collected, ordered by source and index. The wallet collects each with a credit whose details name
+`source` as their `counterparty`, for exactly `amount` (for earnings, at most `amount`), and the next reply lists the
+rest. Payouts belong to the account, so any of its channels lists and collects them.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
@@ -662,12 +651,12 @@ lists the rest. Payouts belong to the account, so any of its channels in the ass
 | `source`       | bytes32 | `DEVELOPER_ID` for developer earnings; `FUND_ID` for redeemed shares; `BANK_ID` for a bank withdrawal; a developer bet's hash for what its settlement paid ([counterparties](../reference/signed-messages.md#counterparties)) |
 | `index`        | number  | Earnings and developer bets: 0. Redeemed shares: the number of the fund change. A bank withdrawal: its statement's `sequence`                                                                                                 |
 | `amount`       | string  | What is owed; for earnings, `earned − collected`, which may be `"0"`                                                                                                                                                          |
-| `earned`       | string  | Earnings only: the commission the account has earned in this asset                                                                                                                                                            |
+| `earned`       | string  | Earnings only: the commission the account has earned                                                                                                                                                                          |
 | `collected`    | string  | Earnings only: what of it has been collected                                                                                                                                                                                  |
 | `games`        | array   | Earnings only: `{game, earned, name}` for each game that earned it, the most first; `name` is the name the game is published under, or `null`                                                                                 |
 
 ```text title="Request"
-GET /api/channels/0x39dce1a0c5bccc3b0eddbcefe952e49579a457f0bec73657675fbf0c4e041da7/payouts
+GET /api/channels/0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000/payouts
 ```
 
 ```json title="Response"
@@ -698,7 +687,7 @@ GET /api/channels/0x39dce1a0c5bccc3b0eddbcefe952e49579a457f0bec73657675fbf0c4e04
 
 ### `GET /api/channels/:id/developer-bets`
 
-The account's developer bets in this channel's asset, across all its channels.
+The account's developer bets, across all its channels.
 
 **Auth:** channel access · **Idempotent:** yes
 
@@ -712,10 +701,9 @@ The account's developer bets in this channel's asset, across all its channels.
 | `after`  | string | The `cursor` of the previous page: a lowercase bet hash for open bets, a decimal position for settled ones |
 | `limit`  | number | How many, a whole number from 1 to 100; default 50                                                         |
 
-The reply is `{bets, cursor, more}` ([pages](index.md#pages)). A bet is `{bet, game, group?, asset, status, stake,
-collected}`, and a settled one adds `payout`, what its settlement pays the player, and `settledAt`, in milliseconds.
-`collected` is `true` once a positive payout has been credited to a channel; a payout of `"0"` needs no collecting and
-stays `false`.
+The reply is `{bets, cursor, more}` ([pages](index.md#pages)). A bet is `{bet, game, group?, status, stake, collected}`,
+and a settled one adds `payout`, what its settlement pays the player, and `settledAt`, in milliseconds. `collected` is
+`true` once a positive payout has been credited to a channel; a payout of `"0"` needs no collecting and stays `false`.
 
 ```text title="Request"
 GET /api/channels/0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78/developer-bets?status=settled&after=0
@@ -728,7 +716,6 @@ GET /api/channels/0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283
       "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
       "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
       "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
-      "asset": "eth",
       "status": "settled",
       "stake": "1000000000000000",
       "collected": false,
@@ -797,9 +784,9 @@ Burns shares at the current price; what they are worth leaves the bankroll and i
 
 **Auth:** channel access · **Idempotent:** yes, by statement: the same `Redeem` again returns its statement while it is the holding's latest
 
-The `Redeem` is signed by the key of an open ETH channel of the holder, and its `sequence` is the holding's plus one.
-The amount must be more than zero and within the unreserved bankroll; a larger redemption is refused until the casino
-bets counting on that money settle. The amount is owed at once: [`…/payouts`](#get-apichannelsidpayouts) lists it under
+The `Redeem` is signed by the key of an open channel of the holder, and its `sequence` is the holding's plus one. The
+amount must be more than zero and within the unreserved bankroll; a larger redemption is refused until the casino bets
+counting on that money settle. The amount is owed at once: [`…/payouts`](#get-apichannelsidpayouts) lists it under
 `FUND_ID`, to be collected with a credit.
 
 | Path | Type    | Meaning     |
@@ -846,17 +833,19 @@ bets counting on that money settle. The amount is owed at once: [`…/payouts`](
 `refused` answers another holder, a bad signature, a `sequence` that does not follow the latest statement, more shares
 than are held, shares worth nothing, and an amount the bankroll cannot release yet.
 
-**Errors:** [`channel-closed`](index.md#errors) (409), [`wrong-asset`](index.md#errors) (409), [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
+**Errors:** [`channel-closed`](index.md#errors) (409), [`refused`](index.md#errors) (409),
+[`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429),
+[`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
 
 ## The developer bank
 
-A developer's bank holds its money at the casino in one asset: the stakes of its games' developer bets go in, its
-settlements and casino bets are paid from it. It belongs to the channel's funding account. A deposit is an
+A developer's bank holds its money at the casino: the stakes of its games' developer bets go in, its settlements and
+casino bets are paid from it. It belongs to the channel's funding account. A deposit is an
 [operation](#post-apichannelsidoperations).
 
 ### `GET /api/channels/:id/bank`
 
-The account's bank in this channel's asset, with the casino's latest statement.
+The account's bank, with the casino's latest statement.
 
 **Auth:** channel access · **Idempotent:** yes
 
@@ -871,7 +860,6 @@ The casino answers this while paused.
 | Response field | Type           | Meaning                                                                                                       |
 | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------- |
 | `developer`    | address        | The account                                                                                                   |
-| `asset`        | string         | `eth` or `test`                                                                                               |
 | `balance`      | string         | What the bank holds                                                                                           |
 | `sequence`     | number         | The number of the latest statement; 0 before any                                                              |
 | `statement`    | object or null | The latest [`BankStatement`](../reference/signed-messages.md#developer-bank-messages), `{message, signature}` |
@@ -879,18 +867,16 @@ The casino answers this while paused.
 ```json title="Response"
 {
   "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "asset": "eth",
   "balance": "101000000000000000",
   "sequence": 1,
   "statement": {
     "message": {
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      "asset": "eth",
       "sequence": "1",
       "balance": "100000000000000000",
       "cause": "0x8fe78efba9627ab4d3cefcf345599b103c587beb5e0455d56de0132a295ec5d2"
     },
-    "signature": "0x8364e85d90368fdce35f5ee65643adfe87765e90033787a8dad6659eb89fa0880fed2af897cf175b2b3735833b5a4f65e228aa1c77a9a99695d787b93e354ea61b"
+    "signature": "0x25239399c0f84b32c13664d2d2ce0b2f1d0b18167b7248e9fe63622977bead1069c9680ac630aa83f8572609f9d419a06838bc5ec0bf33c7a19e032ebb104f381b"
   }
 }
 ```
@@ -903,18 +889,18 @@ Takes money out of the account's bank; it is owed at once and collected with a c
 
 **Auth:** channel access · **Idempotent:** yes, by statement: the same `Withdraw` again returns its statement while it is the bank's latest
 
-The `Withdraw` names the channel's own account and asset, is signed by the channel's key, and its `sequence` is the
-bank's plus one. Nothing in a bank is reserved: any amount up to the balance may leave at any time.
+The `Withdraw` names the channel's own account, is signed by the channel's key, and its `sequence` is the bank's plus
+one. Nothing in a bank is reserved: any amount up to the balance may leave at any time.
 [`…/payouts`](#get-apichannelsidpayouts) then lists it under `BANK_ID`, with the statement's `sequence` as its index.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field  | Type   | Meaning                                                                                                           |
-| ----------- | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| `message`   | object | The [`Withdraw`](../reference/signed-messages.md#developer-bank-messages): `{developer, asset, amount, sequence}` |
-| `signature` | string | The channel key's EIP-712 signature of `message`                                                                  |
+| Body field  | Type   | Meaning                                                                                                    |
+| ----------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| `message`   | object | The [`Withdraw`](../reference/signed-messages.md#developer-bank-messages): `{developer, amount, sequence}` |
+| `signature` | string | The channel key's EIP-712 signature of `message`                                                           |
 
 | Response field | Type   | Meaning                                                                                     |
 | -------------- | ------ | ------------------------------------------------------------------------------------------- |
@@ -924,11 +910,10 @@ bank's plus one. Nothing in a bank is reserved: any amount up to the balance may
 {
   "message": {
     "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "asset": "eth",
     "amount": "10000000000000000",
     "sequence": "2"
   },
-  "signature": "0x6d5490a00dced1f8d647315f6174b964d75e1ff947152e19ef282a349d2cf41633e49e1066d406400643a38e38f29ad226e659efc0eeca65a356de5b1fc8fe5f1c"
+  "signature": "0xfd79e48a771efe536c51d4a9c5846d7f114fb391bf23f84dc72dbbdb50337b7577573ff27e7e54e4a2aa70e1f7a0aa345440c39f8c7fad4da1c934699e8270771b"
 }
 ```
 
@@ -937,18 +922,17 @@ bank's plus one. Nothing in a bank is reserved: any amount up to the balance may
   "statement": {
     "message": {
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      "asset": "eth",
       "sequence": "2",
       "balance": "91000000000000000",
-      "cause": "0x1a37ef55cd1a3c35801b76e8a7de2fbac131cc34f0cf15081d896786f65d348a"
+      "cause": "0xe11342a24d1be99ed677a164fc5a73cdc2c6266e826a7e934ed548c530b25c53"
     },
-    "signature": "0xf45ea30ef2edd877933fca1499c5f01f3bbd3a72ff7e5c12db299ec3769528d257377c1fda0b038b953038494d684055ac8ac4f18b20fd4bb57529fc4056195d1c"
+    "signature": "0x35884abb79a8f16a3931d1c95cb4fe689414cf86bc5fe05b16456b49e8823303781ad7b33fa4cc15df1ebc50086177b01809d837064911fbeae5b3b4763054661b"
   }
 }
 ```
 
-`invalid` answers another account's or another asset's bank ("This is another bank"). `refused` answers a bad
-signature, a `sequence` that does not follow the latest statement, and an amount of zero or above the balance.
+`invalid` answers another account's bank ("This is another bank"). `refused` answers a bad signature, a `sequence` that
+does not follow the latest statement, and an amount of zero or above the balance.
 
 **Errors:** [`invalid`](index.md#errors) (400), [`channel-closed`](index.md#errors) (409), [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
 
@@ -963,11 +947,11 @@ Takes an alias for the channel's player, or gives it up.
 
 **Auth:** channel access · **Idempotent:** yes
 
-An alias is 3 to 20 ASCII letters, digits and underscores, starting with a letter. It is taken from an open ETH
-channel: a test channel costs nothing to open, and an alias is one of a kind. Two aliases that read alike, compared in
-lower case with `l` and `1` read as `i` and `0` as `o`, are the same alias. `hookedin`, `casino`, `house`, `bankroll`,
-`operator`, `admin`, `support`, `system`, `faucet` and `custom` are reserved, and so is anything that reads like them.
-A `null` alias gives it up, and the player is shown by their uname again.
+An alias is 3 to 20 ASCII letters, digits and underscores, starting with a letter. It is taken from an open channel: an
+alias is one of a kind. Two aliases that read alike, compared in lower case with `l` and `1` read as `i` and `0` as `o`,
+are the same alias. `hookedin`, `casino`, `house`, `bankroll`, `operator`, `admin`, `support`, `system`, `faucet` and
+`custom` are reserved, and so is anything that reads like them. A `null` alias gives it up, and the player is shown by
+their uname again.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
@@ -991,16 +975,9 @@ The reply is the player's [profile](public.md#get-apiplayersname).
   "alias": "studio",
   "since": 1790384228636,
   "stats": {
-    "eth": {
-      "plays": 0,
-      "staked": "0",
-      "won": "0"
-    },
-    "test": {
-      "plays": 0,
-      "staked": "0",
-      "won": "0"
-    }
+    "plays": 0,
+    "staked": "0",
+    "won": "0"
   },
   "games": []
 }
@@ -1014,11 +991,11 @@ Publishes a game under the channel's player, or takes it down.
 
 **Auth:** channel access · **Idempotent:** yes
 
-The player becomes the game's developer: it earns the game's commission and settles its developer bets, and the
-game's key is [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with
-another URL moves the game and keeps its key. Publishing takes an open ETH channel; taking a game down, with a `null`
-`url`, works from any channel. A profile holds at most 100 games. The wallet opens the game only if its manifest names
-this developer ([the manifest](../reference/manifest.md)).
+The player becomes the game's developer: it earns the game's commission and settles its developer bets, and the game's
+key is [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with another URL
+moves the game and keeps its key. Publishing takes an open channel; taking a game down, with a `null` `url`, works from
+any channel. A profile holds at most 100 games. The wallet opens the game only if its manifest names this developer
+([the manifest](../reference/manifest.md)).
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
@@ -1044,16 +1021,9 @@ The reply is the player's [profile](public.md#get-apiplayersname).
   "alias": "studio",
   "since": 1790384228636,
   "stats": {
-    "eth": {
-      "plays": 0,
-      "staked": "0",
-      "won": "0"
-    },
-    "test": {
-      "plays": 0,
-      "staked": "0",
-      "won": "0"
-    }
+    "plays": 0,
+    "staked": "0",
+    "won": "0"
   },
   "games": [
     {

@@ -58,14 +58,14 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     };
     render();
   }
-  /** The asset the wallet plays with, once it has greeted the page. */
+  /** What the wallet plays with, once it has greeted the page. */
   function greet() {
     HookedIn.hello()
       .then(hello => {
         greeted = true;
         asset.textContent = hello.asset.symbol;
         // Test coins look different from money.
-        root.toggleAttribute('data-test', hello.asset.id === 'test');
+        root.toggleAttribute('data-practice', hello.practice === true);
         render();
       })
       .catch(() => {});
