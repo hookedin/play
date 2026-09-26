@@ -40,7 +40,7 @@ export const channelRecord = (value: Record<string, any>) =>
 
 /** Everything that signs or recovers an on-chain transaction: deposits, closes, claims,
  * challenges, fee limits, nonce recovery and confirmed-receipt bookkeeping. The wallet
- * class is a chain: `CasinoWallet` extends `GameAllocations` extends `ChannelClient`
+ * class is a chain: `CasinoWallet` extends `GameSessions` extends `ChannelClient`
  * extends this, so each method declares `this: CasinoWallet`. */
 export class WalletTransactions {
   async sendTransaction(this: CasinoWallet, method: string, args: any[] = [], overrides: TransactionRequest = {}) {
@@ -491,13 +491,9 @@ export class WalletTransactions {
       c.closing = true;
       await this.save();
       const signature = await this.signer.signTypedData(this.domain, CLOSE_TYPES, message);
-      c.closeSignature = signature;
-      await this.save();
       const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature }, c);
       assertSignature(this.domain, CLOSE_TYPES, message, casino.signature, this.operator);
       const tx = await this.sendTransaction('cooperativeClose', [evidence, signature, casino.signature]);
-      c.closeTx = tx.hash;
-      await this.save();
       await this.waitTransaction(tx);
       return tx.hash;
     });

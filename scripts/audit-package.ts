@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import artifact from '../client/contract-artifact.ts';
 const compiled = JSON.parse(fs.readFileSync('build/contracts.json', 'utf8'));
 const compilerInput = JSON.parse(fs.readFileSync('build/compile-input.json', 'utf8'));
@@ -19,50 +20,16 @@ const target = path.resolve(
 if (fs.existsSync(target) && fs.readdirSync(target).length)
   throw new Error('Use a fresh release directory; previous packages are immutable');
 fs.mkdirSync(target, { recursive: true });
-const files = [];
-const roots = [
-  'contracts',
-  'protocol',
-  'client',
-  'scripts',
-  'testing',
-  'test',
-  'types',
-  'docs',
-  'vectors',
-  'brand',
-  'sdk',
-  'games',
-];
-function walk(dir: string) {
-  for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (item.name.startsWith('.') || ['node_modules', 'dist'].includes(item.name)) continue;
-    const file = path.join(dir, item.name);
-    if (item.isDirectory()) walk(file);
-    else if (item.isFile() && /(\.(ts|js|sol|md|json|jsonc|html|css|svg)|\/_(headers|redirects))$/.test(file))
-      files.push(file);
-  }
-}
-for (const root of roots) walk(root);
-files.push(
-  'README.md',
-  'package.json',
-  'package-lock.json',
-  ...fs.readdirSync('.').filter(file => /^tsconfig.*\.json$/.test(file)),
-);
+// The sources are every file git tracks, as the working tree holds them.
+const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
 for (const file of files) {
   const destination = path.join(target, 'sources', file);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.copyFileSync(file, destination);
 }
 const hash = (value: Uint8Array | string) => createHash('sha256').update(value).digest('hex');
-const reports = [
-  'validation.json',
-  'channel-acceptance.json',
-  'settlement-gas.json',
-  'history-volume.json',
-  'browser-validation.json',
-].filter(file => fs.existsSync(path.join('build', file)));
+// The report `npm test` writes: the gas each settlement path used.
+const reports = ['settlement-gas.json'].filter(file => fs.existsSync(path.join('build', file)));
 for (const file of reports) {
   fs.mkdirSync(path.join(target, 'verification'), { recursive: true });
   fs.copyFileSync(path.join('build', file), path.join(target, 'verification', file));
@@ -76,12 +43,12 @@ const manifest = {
   runtimeTemplateSha256: hash(artifact.runtime),
   validationNotice:
     'Reports retain their own dates and scope. Packaging hashes are provenance, not proof of independent review or infrastructure readiness.',
-  sourceFiles: Object.fromEntries(files.sort().map(file => [file, hash(fs.readFileSync(file))])),
+  sourceFiles: Object.fromEntries(files.map(file => [file, hash(fs.readFileSync(file))])),
   verification: ['npm run build', 'npm test'],
   verificationReports: Object.fromEntries(reports.map(file => [file, hash(fs.readFileSync(path.join('build', file)))])),
   architecture: 'docs/overview/architecture.md',
   excludes:
-    'Private keys, private databases, signing logs, local environment files and node_modules are never collected.',
+    'Only the files git tracks are collected, so private keys, private databases, signing logs, local environment files and node_modules never are.',
 };
 const manifestBytes = JSON.stringify(manifest, null, 2) + '\n';
 fs.writeFileSync(path.join(target, 'source-manifest.json'), manifestBytes);

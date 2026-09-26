@@ -226,16 +226,14 @@ What the casino checks for each, and what it answers, is under
 - An `undefined` value is refused.
 - The result is at most 1,000,000 bytes of UTF-8.
 
-The operation in the [test vectors](#test-vectors) signs these details:
+The developer bet in the [test vectors](#test-vectors) signs these details, in canonical JSON:
 
-```json
-{
-  "game": "0xd7ff723a88e5ae9c9c9b5f853c262b41c6c8f7a2a674a16ada58cef3377edab4",
-  "id": "0x8282828282828282828282828282828282828282828282828282828282828282"
-}
+```text
+{"game":"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d","group":"spin-1","id":"0x8383838383838383838383838383838383838383838383838383838383838383","meta":{"chips":{"17":"20000000","9":"10000000","red":"30000000"}}}
 ```
 
-Their keccak-256 is its `memo`, `0x2ba67c28a63be7426f9a28b4062dc2399c463999191fc01581ab0db7f0c3908a`.
+Their keccak-256 is its `memo`, `0x88456920b0dce4c103868f21a4ecdcad753a3d3bfa56f2cdfb16a7a2c9d0b370`. The keys sort as
+strings, so `"17"` comes before `"9"`.
 
 ### Operation IDs
 
@@ -276,8 +274,8 @@ gameKey = keccak256(abi.encode(address developer, string name))
 `developer` is the account that publishes the game and `name` the name it is published under (1 to 32 of `a-z`, `0-9`
 and `-`, starting with a letter or digit). A game opened straight from its manifest takes the manifest's `developer`
 and, as `name`, the manifest's URL as the URL parser normalises it, so no published game shares its key. The key is
-lowercase hex in details and in the API. The vectors' game, developer `0x2222222222222222222222222222222222222222` and
-name `roulette`, has the key `0xd7ff723a88e5ae9c9c9b5f853c262b41c6c8f7a2a674a16ada58cef3377edab4`.
+lowercase hex in details and in the API. The vectors' game, developer `0x4444444444444444444444444444444444444444` and
+name `roulette`, has the key `0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d`.
 
 ### Rounds
 
@@ -419,33 +417,46 @@ throws `protocol-mismatch`). A change to a structure only wallets sign moves `PR
 
 ## Test vectors
 
-[vectors/bets.json](../../vectors/bets.json), written by [scripts/vectors.ts](../../scripts/vectors.ts), fixes the
-hashing and pricing rules in numbers.
+[vectors/protocol.json](../../vectors/protocol.json), written by [scripts/vectors.ts](../../scripts/vectors.ts), fixes
+the hashing and pricing rules in numbers.
 
-| Key           | Contents                                                                                                                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`    | Chain `31337`, contract `0x1111111111111111111111111111111111111111`, player `0x2222222222222222222222222222222222222222`: the domain of every hash below                                                        |
-| `state`       | The genesis checkpoint of channel `0x5353…53`, balance `1000000000`                                                                                                                                              |
-| `request`     | A casino bet on it: the three chips of `tables[1]`, round `keccak256(secrets[0])`, seed hash `keccak256(seed)`, memo of the [details above](#canonical-json) (ID `0x8282…82`, the game `roulette` of the player) |
-| `requestHash` | The EIP-712 hash of `request`                                                                                                                                                                                    |
-| `seed`        | `0x7272…72`                                                                                                                                                                                                      |
-| `outcome`     | `{randomHash, value, payout}` of `request.prizes` with `seed` and `secrets[0]`                                                                                                                                   |
-| `secrets`     | Four round secrets, `keccak256("HOOKEDIN/VECTOR/SECRET/1")` to `…/4`                                                                                                                                             |
-| `cases`       | Four one-prize bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                 |
-| `tables`      | Roulette at the same bankroll, pocket width `floor(2^64 / 37)`: a lone chip on 18 pockets, and one player's three overlapping chips, each with `risk`                                                            |
-| `warning`     | Text saying these seeds are public                                                                                                                                                                               |
+| Key                             | Contents                                                                                                                                                                                                                                            |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, its channel key `0x3333…33` and the developer `0x4444…44`                                                                                           |
+| `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#limits-and-the-protocol-revision)                                                                                                                                                                            |
+| `channels`                      | The openings of the player's ETH channel, with a deposit of `1000000000`, and of its test channel, both with that channel key                                                                                                                       |
+| `genesis`, `genesisHash`        | The ETH channel's genesis checkpoint, and its hash                                                                                                                                                                                                  |
+| `operations`                    | Three operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |
+| `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                     |
+| `rejection`, `rejectionHash`    | The checkpoint that declines the casino bet instead, and its hash                                                                                                                                                                                   |
+| `close`, `closeHash`            | The `Close` of the ETH channel on its last checkpoint, and its hash                                                                                                                                                                                 |
+| `cases`                         | Four one-prize bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                    |
+| `tables`                        | Roulette at the same bankroll, pocket width `floor(2^64 / 37)`: a lone chip on 18 pockets, and one player's three overlapping chips, each with `risk`                                                                                               |
+| `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                  |
+
+The operations are of the developer's game `roulette`:
+
+1. A casino bet of the three chips of `tables[1]`, with the seed `0x7272…72`. Its secret is the first
+   `keccak256("HOOKEDIN/VECTOR/SECRET/<n>")` whose outcome lands in pocket 17, where all three chips pay.
+2. A developer bet: a debit with a group, and a layout of chips as its meta.
+3. The credit that collects what the developer paid for that bet, naming its `hash` as the counterparty.
 
 An independent implementation checks, with the domain of `identity`:
 
-1. `hashState(state)` equals `request.previousStateHash` (`0x9ff168ac…f625`).
-2. `hashOperation(request)` equals `requestHash` (`0x0773c374…8842`).
-3. `keccak256(secrets[0])` equals `request.round`, and `keccak256(seed)` equals `request.seedHash`.
-4. The memo of `{id: 0x8282…82, game: gameKey(identity.player, "roulette")}` equals `request.memo`.
-5. `keccak256(abi.encode(OUTCOME_DOMAIN, seed, secrets[0]))` equals `outcome.randomHash`, its low 64 bits
-   `outcome.value`, and the prizes it falls in `outcome.payout`.
-6. The rejection checkpoint of `request` is `{sequence: "2", previousStateHash: request.previousStateHash, transitionHash:
-requestHash, balance: "1000000000"}`.
-7. The [admission rule](economics.md#a-casino-bet-is-one-wager) gives each case's and each table's `risk` from its
+1. `PROTOCOL` and `DEVELOPER_PROTOCOL`, built as [above](#limits-and-the-protocol-revision), equal `protocol` and
+   `developerProtocol`.
+2. Each channel's ID, by [its asset's rule](#channel-ids), equals its `channelId`.
+3. `hashState(genesis)` equals `genesisHash`.
+4. For each operation, `canonicalJSON(details)` equals `canonical`, whose keccak-256 is `operation.memo`, and
+   `hashOperation(operation)` equals `hash`.
+5. Each operation, applied with its `seed` and `secret` to the checkpoint before it, the genesis for the first, gives
+   its `next`, whose `transitionHash` is `keccak256(abi.encode(hash, secret))` and whose hash is `nextHash`.
+6. For the casino bet, `keccak256(secret)` equals its `round` and `keccak256(seed)` its `seedHash`;
+   `keccak256(abi.encode(OUTCOME_DOMAIN, seed, secret))` equals `outcome.randomHash`, its low 64 bits `outcome.value`,
+   and the payouts of the prizes it falls in `outcome.payout`.
+7. The rejection checkpoint of the casino bet equals `rejection`, and its hash `rejectionHash`.
+8. `close.stateHash` is the last `nextHash`, and `hashClose(close)` equals `closeHash`.
+9. The [admission rule](economics.md#a-casino-bet-is-one-wager) gives each case's and each table's `risk` from its
    `bankroll` and `bet`.
 
 `node scripts/vectors.ts --check`, part of `npm test`, fails when the file differs from what the code computes, and

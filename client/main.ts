@@ -1,5 +1,5 @@
 interface ActiveGame {
-  /** The channel whose allocation this game uses; null until a channel is open. */
+  /** The channel this game is bound to; null until a channel is open. */
   channelId: string | null;
   identity: GameIdentity;
   manifest: { name: string; developer: string };
@@ -539,7 +539,7 @@ function renderWallet() {
   $('wallet-address').textContent = wallet.address;
   $('wallet-mode').textContent =
     `${wallet.mode === 'demo' ? 'GENERATED BROWSER WALLET' : 'CONNECTED BROWSER WALLET'} · ${wallet.networkName.toUpperCase()}`;
-  $('chain-id').textContent = state.chainId || wallet.config.chainId;
+  $('chain-id').textContent = state.chainId;
   $('activity-count').textContent = String(wallet.history.length);
   $('bets-count').textContent = String(ownBets().length);
   if (!$('page-bets').classList.contains('hidden')) renderBets();
@@ -738,7 +738,6 @@ function renderActivity() {
       const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
       if (channelId) facts.push(['Channel', channelId]);
       if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
-      if (receipt.game?.revision !== undefined) facts.push(['Game revision', String(receipt.game.revision)]);
       if (receipt.commission !== undefined)
         facts.push(['Commission', `${formatEther(receipt.commission)} ${receiptUnit(receipt)}`]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
@@ -2005,7 +2004,7 @@ if (settingsWarning) toast(settingsWarning, true);
 const initialRoute = parseRoute(new URL(location.href));
 showPage(typeof initialRoute === 'string' ? initialRoute : 'library');
 const startup = Promise.withResolvers<void>();
-/** Games opened by an early click wait here, so their allocation is created against the started wallet. */
+/** Games opened by an early click wait here, so their session opens against the started wallet. */
 const walletStarted = startup.promise;
 
 try {

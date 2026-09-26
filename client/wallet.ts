@@ -30,10 +30,7 @@ export interface WalletChannel {
   /** This channel's next own round, named by the casino's reply to the last bet or asked for. */
   round?: string;
   pending?: any;
-  closeAuthorization?: any;
   closing?: boolean;
-  closeSignature?: string;
-  closeTx?: string;
 }
 /** The game an operation belongs to, saved with the pending request so a reload can attribute its receipt. */
 export interface GameIntent {
@@ -141,7 +138,6 @@ export class CasinoWallet extends GameSessions {
   declare transactionIntent: any;
   declare config: any;
   declare recoveryOnly: boolean;
-  declare serviceError: string | null;
   declare provider: JsonRpcProvider;
   declare witnessProvider: JsonRpcProvider | undefined;
   declare observer: ChainObserver;
@@ -307,7 +303,6 @@ export class CasinoWallet extends GameSessions {
       this.config = advertised;
     }
     this.recoveryOnly = Boolean(serviceError);
-    this.serviceError = serviceError || null;
     this.validateConfiguredNetwork();
     this.config.confirmations = this.expectedChainId === 11155111n ? 2 : 1;
     this.provider = createRpcProvider(this.config.rpcUrl);
@@ -552,18 +547,8 @@ export class CasinoWallet extends GameSessions {
     const c = this.current;
     this.publicState = {
       address: this.address,
-      uname: this.uname,
-      alias: this.alias,
-      profile: this.profile,
       balance: c && Number(c.onchain?.status) === 1 ? c.state.balance : '0',
-      availableBalance:
-        c && Number(c.onchain?.status) === 1
-          ? this.playing === 'eth'
-            ? String(this.availableBalance())
-            : c.state.balance
-          : '0',
       nativeBalance: this.nativeBalance || '0',
-      bankroll: this.reportedBankroll,
       channelId: c?.state.channelId || null,
       channelStatus: c?.onchain?.status || '0',
       protectedDeposit: c && Number(c.onchain?.status) !== 3 ? c.opening.deposit : '0',
@@ -580,7 +565,6 @@ export class CasinoWallet extends GameSessions {
                 : 0n,
             )
           : '0',
-
       needsChallenge: Boolean(
         c && Number(c.onchain?.status) === 2 && BigInt(c.state.sequence) > BigInt(c.onchain.closingSequence),
       ),
@@ -588,23 +572,12 @@ export class CasinoWallet extends GameSessions {
         .filter(v => v.claim)
         .map(v => ({ channelId: v.state.channelId, observedAt: v.observedAt, ...v.claim })),
       chainId: String(this.expectedChainId),
-      networkName: this.networkName,
-      isLocalDevelopment: this.isLocalDevelopment,
-      recommendedStake: this.recommendedStake,
-      contract: this.config?.contractAddress,
-      mode: this.mode,
-      recoveryOnly: Boolean(this.recoveryOnly),
-      // Bankroll shares held by this account; what they are worth is the casino's quote, asked for separately.
-      fund: { shares: this.fund.shares, sequence: this.fund.sequence, alert: this.fund.alert ?? null },
       // What games play with in this tab, and the test coins every account has.
       playing: this.playing,
-      asset: this.asset,
       playBalance: this.channel && Number(this.channel.onchain?.status) === 1 ? this.channel.state.balance : '0',
-      playAvailable: String(this.availableBalance()),
       testBalance: this.channels[this.testId!]?.state.balance ?? '0',
       // Commission this account's games have earned, as the casino reports it to this channel.
       developerEarnings: this.developerEarnings,
-      activeBetId: '0',
     };
     this.onChange(this);
     return this.publicState;
@@ -1009,11 +982,8 @@ export class CasinoWallet extends GameSessions {
           throw new Error('Backup would discard newer or conflicting saved evidence');
         if (old.pending && canonicalJSON(old.pending) !== canonicalJSON(next.pending ?? null))
           throw new Error('Backup would discard or change a saved pending operation');
-        // A previously released close signature remains usable after a reorg.
-        if (old.closing) {
-          next.closing = true;
-          next.closeSignature ||= old.closeSignature;
-        }
+        // A close signature this wallet has released stays usable to the casino, even after a reorg.
+        if (old.closing) next.closing = true;
       }
       const record = { ...value.record, revision: this.revision + 1 };
       try {

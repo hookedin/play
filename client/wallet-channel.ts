@@ -162,9 +162,6 @@ export class ChannelClient extends WalletTransactions {
       available = BigInt(this.channel?.state.balance || 0) - limit;
     return available < 0n ? 0n : available;
   }
-  async freeBankroll(this: CasinoWallet) {
-    return BigInt(this.reportedBankroll);
-  }
   updateBankroll(this: CasinoWallet, value: unknown) {
     // An informational hint must never prevent accepting valid settlement evidence.
     try {

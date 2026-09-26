@@ -75,16 +75,16 @@ shasum -a 256 dist/main.js
 ## Package the sources
 
 After `npm run build`, `npm run audit:package` checks the pin against the compiled runtime and the compiler input
-against the current sources. It then copies the sources, the lockfile, the compiler input and output, and any test
-reports in `build/`, into a fresh directory: `build/releases/<version>-<time>/` by default, or the directory given after
-`--`. Its `source-manifest.json` holds the SHA-256 of every source file, of the compiler input and output, and of the
-runtime pin, so a package records exactly what a release was made from.
+against the current sources. It then copies every file git tracks, the compiler input and output, and the gas report
+`npm test` writes to `build/` if there is one, into a fresh directory: `build/releases/<version>-<time>/` by default, or
+the directory given after `--`. Its `source-manifest.json` holds the SHA-256 of every source file, of the compiler input
+and output, of the runtime pin and of the report, so a package records exactly what a release was made from.
 
 ## Run the tests
 
 `npm test` needs Node 24.4 or later, Foundry's `anvil` on `PATH` (or named by `ANVIL_BIN`) and an installed Google
 Chrome. It builds everything, type-checks every TypeScript source and test, checks the committed
-[test vectors](../../vectors/bets.json) and the blackjack funding table, and runs every suite in [test/](../../test/),
+[test vectors](../../vectors/protocol.json) and the blackjack funding table, and runs every suite in [test/](../../test/),
 [sdk/test/](../../sdk/test/) and each game's `test/`. Chain-writing tests start disposable Anvil
 deployments with [testing/contract.ts](../../testing/contract.ts), which signs evidence by hand, so the contract is
 tested with no casino at all. The main suites:

@@ -90,7 +90,7 @@ share the capacity one chip would have had (`sum of same-side net wins / B ≤ e
 on **disjoint** ranges hedge: what red wins, black loses, and the pair earns capacity no two independent bets could.
 Whose chips they are makes no difference: a developer's casino bet that backs one player on red and another on black
 is priced exactly like one player with a chip on each, and overlapping chips priced as they stand equal the same chips
-flattened to one payout per pocket. [The vectors](../../vectors/bets.json) record a lone red and one player's
+flattened to one payout per pocket. [The vectors](../../vectors/protocol.json) record a lone red and one player's
 overlapping chips at the same bankroll. That is how a table of [developer bets](../games/developer-bets.md) gets the
 bankroll behind it: its developer places one casino bet that adds up the prizes of the bets it backs, and the bankroll
 prices the table as a whole. A casino bet holds at most 64 prizes, so at most 128 distinct cells, which bounds the
@@ -121,7 +121,7 @@ the bankroll could take; setting `F` afterwards admits every one of them and cha
 advertised edge percentages is not generally correct: it ignores how an outcome-independent commission changes the
 bankroll's exposure.
 
-The integer examples in [the vectors](../../vectors/bets.json) (`cases`), in six-decimal illustrative units:
+The integer examples in [the vectors](../../vectors/protocol.json) (`cases`), in six-decimal illustrative units:
 
 | Available bankroll | Stake | Net win | Edge | Total commission | Each account |
 | ------------------ | ----- | ------- | ---- | ---------------- | ------------ |

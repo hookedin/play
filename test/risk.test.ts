@@ -5,9 +5,7 @@ import { domain, hashOperation, outcome, seedHash } from '../protocol/protocol.t
 import { buildVectors } from '../scripts/vectors.ts';
 import { OUTCOME_SPACE, UINT256_MAX, assessBet, describeBet, MAX_PRIZES } from '../protocol/risk.ts';
 
-const zero32 = `0x${'00'.repeat(32)}`;
 const secret0 = `0x${'cd'.repeat(32)}`;
-const casino = '0x0000000000000000000000000000000000000001';
 const player = '0x0000000000000000000000000000000000000002';
 const units = 1_000_000n;
 const terms = { bankroll: 10_000n * units, stake: 1_000n * units, netWin: 100n * units };
@@ -156,46 +154,43 @@ test('invalid odds, unbacked bets, excessive fees, and uint256 overflow are reje
 test('signed operation binds every field and deployment domain', () => {
   const v = buildVectors(),
     d = domain(v.identity.chainId, v.identity.casino),
-    digest = hashOperation(d, v.request);
-  for (const [field, value] of Object.entries(v.request)) {
+    request = v.operations[0].operation,
+    digest = hashOperation(d, request);
+  for (const [field, value] of Object.entries(request)) {
     if (field === 'prizes') continue;
     const changed =
-      field === 'developer'
-        ? casino
-        : typeof value === 'string' && value.startsWith('0x')
-          ? secret0
-          : String(BigInt(value as string) + 1n);
-    assert.notEqual(hashOperation(d, { ...v.request, [field]: changed }), digest, field);
+      typeof value === 'string' && value.startsWith('0x') ? secret0 : String(BigInt(value as string) + 1n);
+    assert.notEqual(hashOperation(d, { ...request, [field]: changed }), digest, field);
   }
   // Every field of every prize is signed, and so are their number and order.
-  const prizes = v.request.prizes;
+  const prizes = request.prizes;
   for (const [i, prize] of prizes.entries())
     for (const field of ['rangeStart', 'rangeEnd', 'payout'] as const) {
       const changed = prizes.map((p, j) => (i === j ? { ...p, [field]: String(BigInt(prize[field]) + 1n) } : p));
-      assert.notEqual(hashOperation(d, { ...v.request, prizes: changed }), digest, `prizes[${i}].${field}`);
+      assert.notEqual(hashOperation(d, { ...request, prizes: changed }), digest, `prizes[${i}].${field}`);
     }
-  assert.notEqual(hashOperation(d, { ...v.request, prizes: prizes.slice(1) }), digest);
-  assert.notEqual(hashOperation(d, { ...v.request, prizes: [...prizes, prizes[0]] }), digest);
-  assert.notEqual(hashOperation(d, { ...v.request, prizes: [...prizes].reverse() }), digest);
-  assert.notEqual(hashOperation({ ...d, chainId: '1' }, v.request), digest);
-  assert.notEqual(hashOperation({ ...d, verifyingContract: player }, v.request), digest);
+  assert.notEqual(hashOperation(d, { ...request, prizes: prizes.slice(1) }), digest);
+  assert.notEqual(hashOperation(d, { ...request, prizes: [...prizes, prizes[0]] }), digest);
+  assert.notEqual(hashOperation(d, { ...request, prizes: [...prizes].reverse() }), digest);
+  assert.notEqual(hashOperation({ ...d, chainId: '1' }, request), digest);
+  assert.notEqual(hashOperation({ ...d, verifyingContract: player }, request), digest);
 });
 test('outcome depends only on the round: every prize holding it pays, and overlapping prizes add', () => {
-  const v = buildVectors(),
-    result = outcome(v.request.prizes, v.seed, secret0);
+  const { operation: request, seed } = buildVectors().operations[0],
+    result = outcome(request.prizes, seed, secret0);
   const expected = keccak256(
-    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), v.seed, secret0]),
+    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), seed, secret0]),
   );
   const value = BigInt(expected) & (OUTCOME_SPACE - 1n);
   assert.equal(result.randomHash, expected);
   assert.equal(result.value, value);
   // Another channel's bet on the same round and seed sees the same outcome; another seed does not.
-  assert.equal(outcome([], v.seed, secret0).value, value);
-  assert.notEqual(outcome(v.request.prizes, id('other'), secret0).randomHash, expected);
-  assert.equal(seedHash(v.seed), v.request.seedHash, 'the bet names its seed by its hash');
-  const paid = (prizes: any[], secret: string) => outcome(prizes, v.seed, secret).payout;
-  for (const secret of v.secrets) {
-    const u = outcome(v.request.prizes, v.seed, secret).value,
+  assert.equal(outcome([], seed, secret0).value, value);
+  assert.notEqual(outcome(request.prizes, id('other'), secret0).randomHash, expected);
+  assert.equal(seedHash(seed), request.seedHash, 'the bet names its seed by its hash');
+  const paid = (prizes: any[], secret: string) => outcome(prizes, seed, secret).payout;
+  for (const secret of [1, 2, 3, 4].map(n => id(`secret ${n}`))) {
+    const u = outcome(request.prizes, seed, secret).value,
       half = OUTCOME_SPACE / 2n;
     // Complementary ranges split every outcome between them: exactly one pays.
     const low = { rangeStart: 0n, rangeEnd: half, payout: 5n },

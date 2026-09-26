@@ -287,8 +287,8 @@ changes nothing that is deployed. Recovery runs the archived artifact without co
 
 `npm run build` writes the wallet to `dist/` as one readable `main.js` with its source map, `vendor/ethers.js`
 byte-identical to the npm release of ethers, and `config.js` with the deployment's settings, so each can be checked on
-its own. `npm run audit:package` archives the sources, the lockfile, the compiler input and output, the runtime pin, a
-hashed manifest and any test reports together ([verify a release](../wallet/verify-a-release.md)).
+its own. `npm run audit:package` archives every file git tracks, the compiler input and output and the tests' gas
+report, with a manifest of their hashes ([verify a release](../wallet/verify-a-release.md)).
 
 Wallet release credentials are kept apart from the casino's hosting: the wallet is a static site that shares nothing
 with the service but the public protocol. Fencing hosts, and drills for lost storage, stale restores, nonces, RPCs and

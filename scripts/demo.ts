@@ -6,7 +6,8 @@ const v = buildVectors(),
     bankroll,
     bet: { stake, prizes },
     risk,
-  } = v.cases[1];
+  } = v.cases[1],
+  [casinoBet] = v.operations;
 const decimal = (value: bigint) => `${value / 1_000_000n}.${(value % 1_000_000n).toString().padStart(6, '0')}`;
 console.log('Dice as one casino bet (illustrative units with six decimals; no transactions sent).');
 console.log(
@@ -14,8 +15,8 @@ console.log(
 );
 console.log(`Commission ${decimal(risk.fee)}, split equally between the developer and the casino.`);
 console.log(`Maximum bankroll loss ${decimal(risk.liability)}.`);
-console.log(`The casino bet names round ${v.request.round}`);
-console.log(`Its revealed secret verifies: ${roundId(v.secrets[0]) === v.request.round}`);
+console.log(`The casino bet names round ${casinoBet.operation.round}`);
+console.log(`Its revealed secret verifies: ${roundId(casinoBet.secret) === casinoBet.operation.round}`);
 console.log(
   `Deterministic fixture outcome ${v.outcome.value} pays ${decimal(v.outcome.payout)} on the overlapping-chips bet. Production client and server seeds must be private random bytes.`,
 );
