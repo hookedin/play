@@ -100,9 +100,9 @@ test('rounds use the table when supported and preserve the ordinary fallback and
     };
     const round = new RoundClient(call, make, funding, { store: memory }),
       started = await round.start({ stake: String(stake) });
-    assert.equal(round.plan!.bankrollFloor, floor);
+    assert.equal(round['plan']!.bankrollFloor, floor);
     const reloaded = new RoundClient(call, make, funding, { store: memory });
     assert.deepEqual(await reloaded.restore(), started);
-    assert.equal(reloaded.plan!.bankrollFloor, round.plan!.bankrollFloor);
+    assert.equal(reloaded['plan']!.bankrollFloor, round['plan']!.bankrollFloor);
   }
 });

@@ -25,7 +25,7 @@ export function mountBank(
   setBusy(value: boolean): void;
   hold(value: boolean): void;
   withhold(change: bigint): void;
-  onChange(listener: (balance: GameBalance) => void): void;
+  onChange(listener: (balance: GameBalance) => void): () => void;
 };
 ```
 
@@ -42,8 +42,8 @@ which [`shared.css`](#sharedcss) styles.
 
 With `round`, a game's [`RoundClient`](round.md#roundclient), the figure leaves out the cash inside an unfinished round,
 which the round shows, and stands still while a step settles, so it moves once a round: down by what the player put in,
-up by what the round finally pays. `mountBank` sets `round.changed` to redraw the strip. The cash it leaves out is the
-player's all the same.
+up by what the round finally pays. `mountBank` redraws the strip on [`round.onChange`](round.md#onchange). The cash it
+leaves out is the player's all the same.
 
 ```ts
 import { mountBank } from '@hookedin/play/sdk/bank';
@@ -98,11 +98,12 @@ negative `change` gives back what was left out.
 #### `onChange`
 
 ```ts
-onChange(listener: (balance: GameBalance) => void): void;
+onChange(listener: (balance: GameBalance) => void): () => void;
 ```
 
-Calls `listener` with every `game.balance` push, after the strip has taken it in, such as when the player adds money in
-the wallet or a recovery settles outside the game. A listener cannot be removed.
+Calls `listener` with every `game.balance` push, after the strip has taken it in: the game's own bets and payments,
+money the player adds in the wallet and a recovery that settles outside the game alike. Returns a function that stops
+it.
 
 ## Sound
 

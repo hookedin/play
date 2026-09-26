@@ -66,8 +66,9 @@ Each action of a round is one operation, whose [group](../reference/bridge.md#ga
 4. The receipt's outcome names the next state. The verified payout must equal that state's cash less the cash the step
    retained, or the step throws.
 
-A declined step stays saved under a fresh operation ID, for the player to retry or leave, and a lost reply is resolved
-through `game.receipt` by the saved ID.
+A declined step stays saved under a fresh operation ID, for the player to retry or leave. A step whose reply was lost
+stays saved under its own: `restore` finds its receipt through `game.receipt`, and `action` sends it again, which the
+wallet answers with the same receipt.
 
 **Saving.** The store key is `hookedin:round:<name>:<chainId>:<asset>:<uname>`, from [`playerScope`](wire.md#playerscope).
 A saved round records its format, `HOOKEDIN/ROUND/4`, and its rules: the SHA-256 hash of the graph its setup builds, as
@@ -89,10 +90,12 @@ restore(): Promise<RoundState | null>;
 ```
 
 Reads the saved round for this game, player and asset, and applies any result the wallet settled meanwhile: for a
-pending step it asks `game.receipt` by the step's operation ID and applies the receipt it finds. It resolves with the
-round's state, or `null` when none is saved. It asks the wallet for `wallet.info`, `wallet.hello` (once per helper)
+pending step it asks `game.receipt` by the step's operation ID and applies the receipt it finds. It is the only method
+that looks a result up; `start` and `action` take the saved round as it stands. It resolves with the round's state, or
+`null` when none is saved. It asks the wallet for `wallet.info`, `wallet.hello` (until the wallet has answered it once)
 and the game's balance. It throws for a round saved under other rules (see saving above), when a receipt does not
-match the saved step, and with the bridge's errors. It calls `changed` when it ends, whether or not it threw.
+match the saved step, and with the bridge's errors. Its `onChange` listeners are called when it ends, whether or not it
+threw.
 
 #### `start`
 
@@ -105,12 +108,12 @@ start(setup: {
 
 Starts a round at the graph's root, with `setup.stake`, a decimal string of smallest units, as its cash. The setup goes
 to `graph` and is saved, as JSON, with the round. `start` reads the saved round first and throws
-`Recover the pending action first` while a step is pending. It makes sure the game's balance covers the stake, prices the
-graph, and saves the round under a fresh `id`. It places no bet; the first `action` does. A saved unfinished round is
-replaced, and its cash is in the game's balance already.
+`Recover the pending action first` while a step is pending, which `restore` resolves. It makes sure the game's balance
+covers the stake, prices the graph, and saves the round under a fresh `id`. It places no bet; the first `action` does.
+A saved unfinished round is replaced, and its cash is in the game's balance already.
 
 It throws the pricing error above, `Add enough money to this game to continue` when the player does not give the game
-enough, and the bridge's errors. It calls `changed` when it ends.
+enough, and the bridge's errors. Its `onChange` listeners are called when it ends.
 
 #### `action`
 
@@ -118,12 +121,13 @@ enough, and the bridge's errors. It calls `changed` when it ends.
 action(action: string): Promise<RoundState>;
 ```
 
-Plays one step, `action` being one of `state().actions`, and resolves with the state it leads to. It reads the round
-first, as `restore` does, so a pending step the wallet already settled is applied before the action is taken, from the
-state that follows. With no step pending, it makes sure the balance covers the round's cash plus the action's
+Plays one step, `action` being one of `state().actions`, and resolves with the state it leads to. It reads the saved
+round first, as it stands. With no step pending, it makes sure the balance covers the round's cash plus the action's
 `additionalCash`, prepares the step at the bankroll `wallet.info` reports, saves it and sends it. With a step pending,
-only that step's action is accepted, and the step is sent again. A finished round resolves with its state unchanged.
-`busy` is `true` while it runs, and `changed` is called when it ends.
+only that step's action is accepted, and the step is sent again under its saved operation ID. The wallet answers an
+operation it has carried out with its receipt, so a step whose reply was lost is played once, and `action` resolves
+with the state it led to. A finished round resolves with its state unchanged. `busy` is `true` while it runs, and the
+`onChange` listeners are called when it ends.
 
 | Throws                                                                                         | When                                                                     | The step afterwards                                                           |
 | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
@@ -185,14 +189,15 @@ busy: boolean;
 
 `true` while `action` runs: the wallet's balance holds the step's result before the round does.
 
-#### `changed`
+#### `onChange`
 
 ```ts
-changed: () => void;
+onChange(listener: () => void): () => void;
 ```
 
-Called after every `restore`, `start` and `action`, whether it resolved or threw. It does nothing by default;
-`mountBank(root, { round })` sets it to redraw the strip.
+Calls `listener` after every `restore`, `start` and `action`, whether it resolved or threw: whenever the round's cash
+or `busy` may have changed. Returns a function that stops it. [`mountBank(root, { round })`](bank-and-synth.md#mountbank)
+redraws the strip with it.
 
 #### `name`
 
@@ -209,7 +214,7 @@ units: string;
 ```
 
 The wallet's asset symbol from `wallet.hello`, used in the sentences the helper writes to the player. It is `''` until
-the first `restore`, `start` or `action`.
+a `restore`, `start` or `action` has had the wallet's answer.
 
 ## Types
 
@@ -218,9 +223,9 @@ the first `restore`, `start` or `action`.
 ```ts
 export interface RoundState {
   id: string;
+  setup: { stake: string; [key: string]: unknown };
   nodeId: string;
   cash: string;
-  initialCash: string;
   contributed: string;
   balance: string;
   terminal: boolean;
@@ -235,9 +240,9 @@ export interface RoundState {
 | Field         | Meaning                                                                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`          | The round's own ID, a UUID fixed at `start`. It is the group of each step, and lets a game apply a finished round to its own state exactly once |
+| `setup`       | The setup `start` was given, as JSON: its `stake`, and whatever else the game's graph is built from, such as Samson's `mode`                    |
 | `nodeId`      | The graph node the round is at                                                                                                                  |
 | `cash`        | The round's cash at this node, a decimal string of smallest units. At a terminal node, what the round paid                                      |
-| `initialCash` | The setup's stake                                                                                                                               |
 | `contributed` | The stake plus the `additionalCash` of every step taken                                                                                         |
 | `balance`     | The game's balance as last read from the wallet                                                                                                 |
 | `terminal`    | The round is finished                                                                                                                           |

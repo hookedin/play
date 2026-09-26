@@ -106,8 +106,9 @@ hello: () => Promise<WalletHello>;
 ```
 
 The wallet's greeting, [`wallet.hello`](../reference/bridge.md#wallethello): the methods it offers, its asset, its
-chain and its limits. The module sends it as it loads inside a frame, and every call returns that one promise, so a
-greeting that failed stays failed until the page reloads.
+chain and its limits. The module sends it as it loads inside a frame, and every call returns that one promise while it
+is pending or once it has resolved. A greeting that failed is forgotten, so the next call asks the wallet again. It
+rejects as [`call`](#call) does.
 
 #### `limits`
 
@@ -132,8 +133,9 @@ bankroll and a recommended stake.
 balance: () => Promise<GameBalance>;
 ```
 
-The game's balance as the wallet last pushed it. Before the wallet has greeted the page, it waits for the greeting and a
-push. Outside a frame it rejects with a plain `Error`. It has no timeout.
+The game's balance as the wallet last pushed it. It greets the wallet first, with [`hello`](#hello), and rejects as
+that does: with `HookedInError('no-wallet')` outside a frame, for one. When nothing has been pushed yet, it waits for the
+first push, and rejects with `HookedInError('timeout')` if none arrives within 180,000 ms.
 
 #### `onBalance`
 

@@ -88,7 +88,7 @@ function render() {
     const amount = document.createElement('div');
     amount.className = 'hand-kind';
     amount.textContent = session
-      ? `${HookedIn.formatAmount(BigInt(session.initialCash) * (table.doubled[index] ? 2n : 1n))} ${asset}${table.doubled[index] ? ' · DOUBLED' : ''}`
+      ? `${HookedIn.formatAmount(BigInt(session.setup.stake) * (table.doubled[index] ? 2n : 1n))} ${asset}${table.doubled[index] ? ' · DOUBLED' : ''}`
       : '';
     if (session?.terminal && total) {
       const natural = !table.split && hand.length === 2 && total.total === 21;
@@ -123,7 +123,7 @@ function render() {
       `${table.dealerBlackjack ? 'Dealer blackjack' : natural ? 'Blackjack' : net > 0n ? 'You win' : net === 0n ? 'Break even' : 'Net loss'} · ${HookedIn.formatAmount(session.cash)} ${asset} returned`;
   }
   $('insurance-note').textContent = table.insured
-    ? `Insurance ${table.dealerBlackjack ? 'wins' : active && state?.phase === 'insurance' ? 'pending' : 'loses'} · ${HookedIn.formatAmount(BigInt(session!.initialCash) / 2n)} ${asset}`
+    ? `Insurance ${table.dealerBlackjack ? 'wins' : active && state?.phase === 'insurance' ? 'pending' : 'loses'} · ${HookedIn.formatAmount(BigInt(session!.setup.stake) / 2n)} ${asset}`
     : '';
   document.querySelector('.table')!.classList.toggle('busy', busy);
 }
@@ -166,7 +166,6 @@ async function play(action?: string) {
     message(error.message, true);
   } finally {
     busy = false;
-    bank.update(round.account);
     render();
   }
 }

@@ -58,10 +58,24 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     };
     render();
   }
-  if (options.round) options.round.changed = render;
+  /** The asset the wallet plays with, once it has greeted the page. */
+  function greet() {
+    HookedIn.hello()
+      .then(hello => {
+        greeted = true;
+        asset.textContent = hello.asset.symbol;
+        // Test coins look different from money.
+        root.toggleAttribute('data-test', hello.asset.id === 'test');
+        render();
+      })
+      .catch(() => {});
+  }
+  options.round?.onChange(render);
   const listeners = new Set<(balance: GameBalance) => void>();
   HookedIn.onBalance(balance => {
     update(balance);
+    // A push comes only once the wallet has greeted the page, however many tries that took.
+    if (!greeted) greet();
     for (const listener of listeners) listener(balance);
   });
   button.addEventListener('click', async () => {
@@ -77,15 +91,7 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
       render();
     }
   });
-  HookedIn.hello()
-    .then(hello => {
-      greeted = true;
-      asset.textContent = hello.asset.symbol;
-      // Test coins look different from money.
-      root.toggleAttribute('data-test', hello.asset.id === 'test');
-      render();
-    })
-    .catch(() => {});
+  greet();
   render();
   return {
     update,
@@ -107,9 +113,13 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
       withheld += change;
       render();
     },
-    /** Wallet-side changes only: the player added money or a recovery settled outside the iframe. */
+    /** Every balance the wallet pushes, once the strip has taken it in: the game's own bets, money the player
+     * added and recoveries alike. Returns a function that stops it. */
     onChange(listener: (balance: GameBalance) => void) {
       listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }

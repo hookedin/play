@@ -66,7 +66,7 @@ settles a casino bet on the channel's round against its bankroll, holding it to 
 charging the casino's commission; a bet the rule refuses is declined with its round revealed, as the casino declines it,
 so a table the stub takes is one the casino takes. It takes a developer bet on a published game into the developer's
 bank and owes the player what the developer settles until the wallet collects it. It declines an operation its player
-already carried out on another channel. Its developer's `bets()` pages hold 50 bets by default, where the casino's hold 100.
+already carried out on another channel.
 
 | Member                       | Type                    | What it is                                                                                                                                                                                              |
 | ---------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

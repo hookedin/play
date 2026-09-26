@@ -105,3 +105,47 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     delete (globalThis as any).window;
   }
 });
+
+test('balance() refuses outside a frame as call does, a greeting that failed is asked again, and a silent wallet times out', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const posted: any[] = [],
+    listeners: ((event: any) => void)[] = [];
+  const parent = { postMessage: (message: any) => posted.push(message) };
+  // A page on its own, with no wallet around it.
+  const page: any = { addEventListener: (_: string, fn: any) => listeners.push(fn) };
+  page.parent = page;
+  (globalThis as any).window = page;
+  try {
+    // A module of its own: the test above has greeted the one this file imported.
+    const fresh = '../src/sdk.ts?again';
+    const { HookedIn, HookedInError }: typeof import('../src/sdk.ts') = await import(fresh);
+    const refused = (code: string) => (error: any) => error instanceof HookedInError && error.code === code;
+    await assert.rejects(HookedIn.balance(), refused('no-wallet'));
+    assert.equal(posted.length, 0);
+    // In a wallet's frame, a greeting the wallet refused is forgotten, and the next call asks again.
+    page.parent = parent;
+    const deliver = (data: any) => listeners.forEach(listener => listener({ source: parent, data }));
+    const refusedGreeting = HookedIn.hello();
+    deliver({ hookedin: true, id: posted.at(-1).id, error: { code: 'game-closed', message: 'No game is open' } });
+    await assert.rejects(refusedGreeting, refused('game-closed'));
+    const greeting = HookedIn.hello();
+    assert.deepEqual(
+      posted.map(message => message.method),
+      ['wallet.hello', 'wallet.hello'],
+    );
+    const hello = { methods: ['wallet.hello'], asset: { id: 'eth', symbol: 'ETH', decimals: 18 }, chainId: '31337' };
+    deliver({ hookedin: true, id: posted.at(-1).id, result: hello });
+    assert.deepEqual(await greeting, hello);
+    // Greeted, with nothing pushed: balance() waits as long as a request would, then gives up.
+    const silent = HookedIn.balance();
+    await new Promise(resolve => setImmediate(resolve));
+    t.mock.timers.tick(180000);
+    await assert.rejects(silent, refused('timeout'));
+    // A push ends the wait.
+    const pushed = HookedIn.balance();
+    deliver({ hookedin: true, event: 'game.balance', balance: '5', pending: false });
+    assert.deepEqual(await pushed, { balance: '5', pending: false });
+  } finally {
+    delete (globalThis as any).window;
+  }
+});

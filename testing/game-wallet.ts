@@ -442,7 +442,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         settled.push(...(await settleBatch(settlements.slice(i, i + MAX_DEVELOPER_BETS))));
       return settled;
     },
-    bets: async ({ status = 'open', group, after = '', limit = 50 } = {}) => {
+    bets: async ({ status = 'open', group, after = '', limit = 100 } = {}) => {
       const { bets, cursor, more } = page(
         [...developerBets.values()].filter(
           bet => bet.game === game.key && (group === undefined || bet.group === group),

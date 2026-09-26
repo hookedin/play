@@ -117,7 +117,6 @@ const round = new RoundClient(HookedIn, diceGraph);
       } catch {}
       message(error.message, true);
     } finally {
-      bank.update(round.account);
       setBusy(false);
     }
   });

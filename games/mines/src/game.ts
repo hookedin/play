@@ -96,7 +96,6 @@ const round = new RoundClient(HookedIn, minesGraph);
       message(error.message, true);
     } finally {
       busy = false;
-      bank.update(round.account);
       tiles.forEach(tile => tile.classList.remove('pending'));
       render();
     }
@@ -124,7 +123,6 @@ const round = new RoundClient(HookedIn, minesGraph);
       message(error.message, true);
     } finally {
       busy = false;
-      bank.update(round.account);
       render();
     }
   });

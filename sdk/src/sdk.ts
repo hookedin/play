@@ -107,19 +107,9 @@ export const HookedIn = (() => {
     else request.reject(new Error('The wallet returned an invalid response.'));
   });
 
-  /** The last pushed balance, or the first one once the wallet has attached. */
-  const balance = () =>
-    new Promise<GameBalance>((resolve, reject) => {
-      if (window.parent === window) {
-        reject(new Error('Open this game in the HookedIn client to connect your wallet.'));
-        return;
-      }
-      if (latest && greeted) return resolve(latest);
-      const stop = onBalance(value => {
-        stop();
-        resolve(value);
-      });
-    });
+  /** How long the page waits for the wallet: for a reply, or for the first balance it pushes. */
+  const timeout = 180000;
+  const timedOut = () => new HookedInError('timeout', 'The wallet did not respond. Check the client, then reconnect.');
   const call = (method: string, params: Record<string, unknown> = {}) =>
     new Promise<any>((resolve, reject) => {
       if (window.parent === window) {
@@ -129,20 +119,27 @@ export const HookedIn = (() => {
       const id = ++nextId;
       const timer = setTimeout(() => {
         pending.delete(id);
-        reject(new HookedInError('timeout', 'The wallet did not respond. Check the client, then reconnect.'));
-      }, 180000);
+        reject(timedOut());
+      }, timeout);
       pending.set(id, { resolve, reject, timer });
       window.parent.postMessage({ hookedin: true, id, method, params }, '*');
     });
 
-  /** The first thing a page asks: which methods this wallet offers, and the asset it plays with. */
+  /** The first thing a page asks: which methods this wallet offers, and the asset it plays with. A greeting that
+   * failed is forgotten, so the next call asks again. */
   let greeting: Promise<WalletHello> | null = null;
   const hello = () =>
-    (greeting ??= call('wallet.hello').then((value: WalletHello) => {
-      greeted = value;
-      if (latest) for (const listener of balanceListeners) listener(latest);
-      return value;
-    }));
+    (greeting ??= call('wallet.hello').then(
+      (value: WalletHello) => {
+        greeted = value;
+        if (latest) for (const listener of balanceListeners) listener(latest);
+        return value;
+      },
+      error => {
+        greeting = null;
+        throw error;
+      },
+    ));
   if (window.parent !== window) hello().catch(() => {});
   /** Every HookedIn asset counts in units of 10^-18, so an amount can be read and written before the
    * wallet has said which one this is; only its name has to wait for the greeting. */
@@ -154,6 +151,24 @@ export const HookedIn = (() => {
     return () => {
       balanceListeners.delete(listener);
     };
+  };
+  /** The last pushed balance, once the wallet has greeted the page; the first push if none has come yet. */
+  const balance = async (): Promise<GameBalance> => {
+    await hello();
+    return (
+      latest ??
+      new Promise((resolve, reject) => {
+        const stop = onBalance(value => {
+          clearTimeout(timer);
+          stop();
+          resolve(value);
+        });
+        const timer = setTimeout(() => {
+          stop();
+          reject(timedOut());
+        }, timeout);
+      })
+    );
   };
 
   /**

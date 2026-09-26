@@ -141,7 +141,7 @@ const round = new RoundClient(HookedIn, slotGraph);
       if (outcome.machine.name === 'bonus' && bonus)
         bonus = { ...bonus, left: bonus.left - 1, played: bonus.played + 1, won: bonus.won + pay };
       if (triggered)
-        bonus = { played: 0, won: 0, stake: state.initialCash, ...bonus, left: (bonus?.left ?? 0) + BONUS_SPINS };
+        bonus = { played: 0, won: 0, stake: state.setup.stake, ...bonus, left: (bonus?.left ?? 0) + BONUS_SPINS };
       saved = {
         applied: state.id,
         shown: { mode: outcome.machine.name, stops: sampleStops(outcome.machine, outcome.key, within(state)) },
@@ -326,10 +326,10 @@ const round = new RoundClient(HookedIn, slotGraph);
         session = await round.start({ stake, mode: mode() });
       } else {
         await round.restore();
-        await round.ensureFunds(BigInt(session.cash), BigInt(session.initialCash));
+        await round.ensureFunds(BigInt(session.cash), BigInt(session.setup.stake));
       }
-      const stake = session.initialCash,
-        machine = MACHINES[round.data.setup.mode === 'bonus' ? 'bonus' : 'base'];
+      const stake = session.setup.stake,
+        machine = MACHINES[session.setup.mode === 'bonus' ? 'bonus' : 'base'];
       if (saved.bonus) rolling = true;
       message(machine.name === 'bonus' ? 'Bonus spin…' : 'Good luck.');
       // The wallet settles while the reels turn; the balance waits for the reels before it moves.
@@ -396,7 +396,6 @@ const round = new RoundClient(HookedIn, slotGraph);
     } finally {
       closing = null;
       bank.hold(false);
-      bank.update(round.account);
       phase = 'idle';
       render();
     }
