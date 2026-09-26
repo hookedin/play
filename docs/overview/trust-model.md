@@ -73,9 +73,15 @@ A game cannot:
 - ask the wallet for any signature but its own bets and payments;
 - spend a wei beyond its limit, or change who earns its commission.
 
-The wallet verifies each casino bet as a whole prize table and records its return, but it does not refuse a bet for
-paying back little. It does not check a game's advertised rules, how a game's steps combine, or the files a game
-serves. Playing a game trusts its developer for its tables ([games and limits](../wallet/games-and-limits.md)).
+The wallet verifies each casino bet completely (its odds, its outcome and what it pays) and records its return, but it
+does not refuse a bet for paying back little. It does not check a game's advertised rules, how a game's steps combine,
+or the files a game serves. Playing a game trusts its developer for its tables
+([games and limits](../wallet/games-and-limits.md)).
+
+A single-player step with more than two outcomes is one casino bet that the page draws with its own randomness
+([collapsing bets](../games/collapsing-bets.md)). The wallet knows nothing of the distribution it was drawn from:
+which bet the page draws, and so the odds of the game, are the developer's word. A modified page could choose its bet
+outright; each bet is admitted by itself, so that cannot harm the bankroll, only misrepresent the game to its player.
 
 ## Developer bets trust their developer
 
@@ -89,6 +95,11 @@ casino publishes; [roulette](https://github.com/hookedin/game-roulette#fairness-
 is paid is the casino's promise until your wallet collects it, and until then it is outside the principal the contract
 protects. A developer's bank reserves nothing: whether a developer can pay its bets is between the developer and its
 players ([settled trade-offs](architecture.md#settled-trade-offs)).
+
+**Roulette.** Neither the casino nor the wheel alone can choose the pocket. The wheel walks to it in binary steps, each
+a casino bet on its own round, and signs which side each step backs in its meta before that round is revealed. The
+casino does not know the wheel's seed, and the wheel does not know the casino's secret. A step the bankroll declines
+still reveals its round: it changes only whether the bankroll or the wheel's bank backs that level, never the pocket.
 
 ## Fund shares are the casino's promise
 
@@ -105,12 +116,12 @@ The wallet checks:
   ([verify a release](../wallet/verify-a-release.md#what-the-wallet-checks-on-start));
 - the chain, through two independent RPCs on Sepolia, at blocks both agree on;
 - every result: that the operation is the one it signed, that it follows the saved checkpoint, the revealed secret and
-  seed, the balance arithmetic, and the casino's signature;
+  seed, the outcome and what the bet pays on it, the balance arithmetic, and the casino's signature;
 - every rejection, and the round it reveals;
 - developer settlements, share statements, bank statements and the fund's quote, by their signatures and what they
   refer to;
 - game manifests and every bridge request.
 
 It takes on the casino's word: commission, the bankroll figure, the fund's equity and total shares, the developer
-earnings tally and a developer bank's balance. It takes on the developer's word what a developer bet pays, and on the
-game's word everything a game shows.
+earnings tally and a developer bank's balance. It takes on the developer's word what a developer bet pays and which bet
+a collapsed step draws, and on the game's word everything a game shows.

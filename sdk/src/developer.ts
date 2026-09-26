@@ -6,11 +6,11 @@
  * Players' wallets place developer bets by themselves: each pays its stake into this developer's bank at once, and the
  * developer settles it, on its word. A bet's meta is the game's own JSON: the casino keeps it and never reads it.
  *
- * A game that wants its developer bets provably fair makes them so itself, on a round: the casino names the round by
- * the hash of a secret it keeps, the game publishes the hash of the seed this kit derives for it before anybody bets,
- * and the developer's casino bet on the round, from its bank against the bankroll, reveals the outcome. What the game
- * commits to before that, such as which bets the casino bet backs, goes in the casino bet's meta, which the casino
- * keeps with the reveal. Roulette is the reference.
+ * A game that wants its developer bets provably fair makes them so itself, on rounds: the casino names each round by
+ * the hash of a secret it keeps, this kit derives the seed from its key and the round, and the developer's casino bet
+ * on the round, from its bank against the bankroll, reveals the outcome. What the game commits to before that, such as
+ * which bets its casino bets back, goes in a casino bet's meta, which the casino keeps with the reveal. Roulette is the
+ * reference: each spin is a few binary casino bets, one per round, walked down `@hookedin/play/sdk/steps`.
  *
  * Everything here uses the casino's public API and runs wherever `fetch` does: Node, or a Cloudflare Worker.
  */
@@ -20,6 +20,7 @@ import {
   domain,
   gameKey,
   hashJSON,
+  outcome,
   roundId,
   same,
   seedHash as hashOfSeed,
@@ -34,9 +35,9 @@ import {
   validMeta,
 } from '../../protocol/protocol.ts';
 import type { AssetId } from '../../protocol/protocol.ts';
-import type { PublicDeveloperBet, Round, WirePrizes } from '../../protocol/types.ts';
+import type { PublicDeveloperBet, Round } from '../../protocol/types.ts';
 
-export type { AssetId, PublicDeveloperBet, Round, WirePrizes };
+export type { AssetId, PublicDeveloperBet, Round };
 /** A game's key, as its developer and the name they published it under make it. */
 export { gameKey };
 /** What a casino's `GET /api/config` names for this kit to use it, as `developerProtocol` and `limits`: a stub casino
@@ -50,12 +51,16 @@ export interface Settlement {
   player: string | bigint;
   casino: string | bigint;
 }
-/** The developer's casino bet on one of its rounds: its stake and prizes against the bankroll, from the developer's
- * bank, and its meta, the developer's own JSON, which the casino keeps with the reveal and never reads. */
+/** The developer's casino bet on one of its rounds, from the developer's bank against the bankroll: its stake pays
+ * `prize` when the round's outcome is below `chance`, counted in outcomes out of 2^64. `group` is the label its game
+ * gives the bets that belong together, and `meta` the developer's own JSON, which the casino keeps with the reveal and
+ * never reads. */
 export interface BankCasinoBet {
   round: string;
   stake: string | bigint;
-  prizes: WirePrizes;
+  chance: string | bigint;
+  prize: string | bigint;
+  group: string;
   meta: Record<string, unknown>;
 }
 /** A page of a game's developer bets, and the cursor for the next. */
@@ -68,14 +73,16 @@ export interface Developer {
   address: string;
   /** The key of the game this kit serves. */
   game: string;
-  /** Every bound a bet is held to: the most prizes one bet holds, the size of the space a prize range lies in, the
-   * most a bet's meta takes, the longest group. */
+  /** Every bound a bet is held to: the size of the space a round's outcome and a bet's chance are counted in, the most
+   * a bet's meta takes, the longest group. */
   limits: {
-    prizes: number;
     outcomeSpace: string;
     meta: number;
     group: number;
   };
+  /** The casino's bankroll in an asset, as it last reported it: what to price casino bets against, not a promise to
+   * admit them. */
+  bankroll(asset: AssetId): Promise<bigint>;
   /** A new round in an asset, for this developer's casino bet: named by the casino by the hash of a secret it keeps. */
   openRound(asset: AssetId): Promise<Round>;
   /** The hash of the seed this developer's casino bet on a round brings. Published before anybody bets, it fixes the
@@ -83,11 +90,14 @@ export interface Developer {
   seedHash(round: string): Promise<string>;
   /** A round as anyone may read it, revealed or not. */
   round(id: string): Promise<Round>;
-  /** Place this developer's casino bet on one of its rounds, from its bank: `stake` and `prizes` against the
-   * bankroll, and `meta`, which the casino keeps with the reveal. It reveals the round; declined by the bankroll, it
-   * moves no money. The seed is derived from this key and the round, so placing it again after a lost reply is the
-   * same bet, and gets the same answer. */
+  /** Place this developer's casino bet on one of its rounds, from its bank against the bankroll, with `meta`, which
+   * the casino keeps with the reveal. It reveals the round; declined by the bankroll, it moves no money. The seed is
+   * derived from this key and the round, so placing it again after a lost reply is the same bet, and gets the same
+   * answer. */
   casinoBet(bet: BankCasinoBet): Promise<Round>;
+  /** Reveal one of this developer's rounds without betting anything, in a group and with meta like a casino bet: a
+   * casino bet of stake, chance and prize zero. */
+  reveal(bet: { round: string; group: string; meta: Record<string, unknown> }): Promise<Round>;
   /** Settle developer bets, each with a settlement signed here, paid from this developer's bank. They go to the casino
    * `MAX_DEVELOPER_BETS` at a time, and it takes each batch whole or, if the bank cannot pay it, not at all. A bet
    * settled before answers with what settled it. */
@@ -143,35 +153,56 @@ export async function createDeveloper({
   // The seed of the developer's casino bet on a round: this key's signature of the round, hashed. Nobody without the
   // key can know it before the bet, and the same round always gets the same seed.
   const seedOf = async (round: string) => keccak256(await signer.signMessage(getBytes(round)));
+  const placeCasinoBet = async ({ round, stake, chance, prize, group, meta }: BankCasinoBet) => {
+    if (!validMeta(meta))
+      throw Object.assign(new Error(`A casino bet's meta is a JSON object of up to ${MAX_META_BYTES} bytes`), {
+        status: 400,
+        code: 'invalid',
+      });
+    const bet = {
+        round: round.toLowerCase(),
+        game,
+        stake: String(stake),
+        chance: String(chance),
+        prize: String(prize),
+        group,
+      },
+      seed = await seedOf(bet.round),
+      signature = await signer.signTypedData(d, BANK_CASINO_BET_TYPES, {
+        ...bet,
+        seedHash: hashOfSeed(seed),
+        meta: hashJSON(meta),
+      });
+    const revealed: Round = await asDeveloper(`/api/rounds/${bet.round}/casino-bet`, {
+      ...bet,
+      meta,
+      seed,
+      signature,
+    });
+    // The reveal is the round's: its secret, this bet's seed and signature, and the outcome of the two.
+    if (
+      !revealed.secret ||
+      !same(roundId(revealed.secret), bet.round) ||
+      !same(revealed.seed ?? '', seed) ||
+      revealed.casinoBet?.signature !== signature ||
+      revealed.outcome !== String(outcome(seed, revealed.secret).value)
+    )
+      throw new Error('The casino revealed another round or bet than this one');
+    return revealed;
+  };
   return {
     address: signer.address,
     game,
     limits: config.limits,
+    bankroll: async asset => {
+      const status = await api('/api/status');
+      return BigInt((asset === 'test' ? status.test : status).bankroll);
+    },
     openRound: asset => asDeveloper('/api/rounds', { asset }),
     seedHash: async round => hashOfSeed(await seedOf(round.toLowerCase())),
     round: id => api(`/api/rounds/${id}`),
-    async casinoBet({ round, stake, prizes, meta }) {
-      if (!validMeta(meta))
-        throw Object.assign(new Error(`A casino bet's meta is a JSON object of up to ${MAX_META_BYTES} bytes`), {
-          status: 400,
-          code: 'invalid',
-        });
-      const bet = { round: round.toLowerCase(), game, stake: String(stake), prizes },
-        seed = await seedOf(bet.round);
-      const revealed: Round = await asDeveloper(`/api/rounds/${bet.round}/casino-bet`, {
-        ...bet,
-        meta,
-        seed,
-        signature: await signer.signTypedData(d, BANK_CASINO_BET_TYPES, {
-          ...bet,
-          seedHash: hashOfSeed(seed),
-          meta: hashJSON(meta),
-        }),
-      });
-      if (!revealed.secret || !same(roundId(revealed.secret), bet.round))
-        throw new Error("The casino revealed a secret that is not the round's");
-      return revealed;
-    },
+    casinoBet: placeCasinoBet,
+    reveal: ({ round, group, meta }) => placeCasinoBet({ round, stake: 0n, chance: 0n, prize: 0n, group, meta }),
     async settle(settlements) {
       const settled: PublicDeveloperBet[] = [];
       for (let i = 0; i < settlements.length; i += MAX_DEVELOPER_BETS) {

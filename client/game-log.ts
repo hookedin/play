@@ -1,6 +1,7 @@
 import { formatEther } from 'ethers';
 import { activityJSON, createActivityEntry, filterActivity, returnToPlayer } from './activity.ts';
-import { describeBet } from '../protocol/risk.ts';
+import { OUTCOME_SPACE, describeBet } from '../protocol/risk.ts';
+import { percent } from './bets.ts';
 
 /** The live developer log for one embedded game. Session-only; the wallet's receipts are the durable record. */
 export type LogKind = 'request' | 'response' | 'error' | 'event' | 'client';
@@ -28,21 +29,16 @@ const eth = (wei: unknown) => {
     return String(wei);
   }
 };
-/** The whole bet at a glance: how many prizes, the most they can pay together, and the exact return. */
+/** A chance out of 2^64, as a percentage with four decimals. */
+const chanceOf = (chance: bigint) => percent((chance * 1_000_000n) / OUTCOME_SPACE);
+/** The whole bet at a glance: what it pays, how likely that is, and the exact return. */
 const betSummary = (params: any) => {
   try {
     const stake = BigInt(params.stake),
-      table = describeBet({
-        stake,
-        prizes: params.prizes.map((prize: any) => ({
-          rangeStart: BigInt(prize.rangeStart),
-          rangeEnd: BigInt(prize.rangeEnd),
-          payout: BigInt(prize.payout),
-        })),
-      });
-    return `${params.prizes.length} prize${params.prizes.length === 1 ? '' : 's'} · pays up to ${eth(table.maxPayout)} · ${returnToPlayer(stake, table.expectedPayout)}`;
+      table = describeBet({ stake, chance: BigInt(params.chance), prize: BigInt(params.prize) });
+    return `pays ${eth(table.maxPayout)} on ${chanceOf(BigInt(params.chance))} · ${returnToPlayer(stake, table.expectedPayout)}`;
   } catch {
-    return 'unreadable prizes';
+    return 'unreadable odds';
   }
 };
 const quote = (text: unknown) => (typeof text === 'string' && text ? ` · “${text.slice(0, 140)}”` : '');
@@ -58,6 +54,7 @@ export function describeRequest(method: string, params: any = {}) {
     case 'game.payment':
       return `amount ${eth(params.amount)}${named}`;
     case 'game.receipt':
+    case 'wallet.round':
       return `id ${params.id}`;
     case 'game.requestFunds':
       return params.amount === undefined ? 'no suggested amount' : `suggests ${eth(params.amount)}`;
@@ -73,6 +70,8 @@ export function describeResult(method: string, result: any) {
       return `${result.methods?.length ?? 0} methods · ${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
     case 'wallet.info':
       return `${result.alias ? '@' + result.alias : '~' + (result.uname ?? 'unknown')} · bankroll ${eth(result.bankroll)}`;
+    case 'wallet.round':
+      return `round ${result.status}${result.outcome === undefined ? '' : ` · outcome ${result.outcome}`}`;
     case 'game.requestFunds':
       return `${result.funded ? `limit set to ${eth(result.amount)}` : 'unchanged'} · ${limit(result)}`;
     case 'game.receipt':

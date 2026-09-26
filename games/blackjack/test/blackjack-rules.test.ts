@@ -15,8 +15,7 @@ import {
 import type { GameAction, GameNode, Rational } from '@hookedin/play/sdk/engine';
 import { loadFundedGame } from '@hookedin/play/sdk/engine';
 import { blackjackFunding } from '@hookedin/play/sdk/generated/blackjack-funding';
-import { admits } from '@hookedin/play/sdk/admits';
-import { describeBet, returnParts, RETURN_SCALE } from '@hookedin/play/sdk/admits';
+import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
 import { blackjackTable, cardHand } from '../src/view.ts';
 const ZERO = fraction(0n),
   ONE = fraction(1n),
@@ -327,11 +326,11 @@ test('naturals pay 3:2 and an ordinary 21 pushes against dealer 21', () => {
 });
 
 /**
- * A hand is played as one bet per step, and a step's stake is the cash the hand already holds, so
- * what a single bet pays back is not what the hand pays back: a double can be a bet that seldom
- * pays, and standing charges the retained cash with no prize at all. A player reading the measured
- * return of one step is therefore reading that step, never the hand. This test pins how far apart
- * the two can be.
+ * A hand is played as one bet per step, and a step stakes the cash the hand holds above the class of
+ * outcomes it can fall to, so what a single bet pays back is not what the hand pays back: a double
+ * can be a bet that seldom pays, and standing charges the retained cash with no prize at all. A
+ * player reading the measured return of one step is therefore reading that step, never the hand.
+ * This test pins how far apart the two can be.
  */
 test('a hand is not one bet: a step can pay back almost nothing', () => {
   const scale = 10n ** 15n / blackjackFunding.initialCash;
@@ -346,8 +345,8 @@ test('a hand is not one bet: a step can pay back almost nothing', () => {
         if (step.amount > 0n) payments++;
         continue;
       }
-      const parts = returnParts(step.bet.stake, describeBet(step.bet).expectedPayout);
-      if (parts < worst) worst = parts;
+      for (const branch of step.branches)
+        if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
     }
   }
   assert.ok(payments > 0, 'standing charges the hand with no prize: a debit that pays nothing back');

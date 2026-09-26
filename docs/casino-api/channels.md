@@ -270,13 +270,8 @@ A casino bet, and its signed result:
     "sequence": "1",
     "kind": 1,
     "amount": "1000000000000000",
-    "prizes": [
-      {
-        "rangeStart": "0",
-        "rangeEnd": "9131138316486228049",
-        "payout": "2000000000000000"
-      }
-    ],
+    "chance": "9131138316486228049",
+    "prize": "2000000000000000",
     "round": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9",
     "seedHash": "0xf95f7e3bc56f388acb608f28410489b3ae466f494521a2de7dee7e01247166bc",
     "memo": "0xfa22ab1e93a122f6bbaf309a0bc12974a1d6e3fccf6c61eec46f2ab580bb7916"
@@ -319,13 +314,8 @@ A casino bet, and its signed result:
         "sequence": "1",
         "kind": 1,
         "amount": "1000000000000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "9131138316486228049",
-            "payout": "2000000000000000"
-          }
-        ],
+        "chance": "9131138316486228049",
+        "prize": "2000000000000000",
         "round": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9",
         "seedHash": "0xf95f7e3bc56f388acb608f28410489b3ae466f494521a2de7dee7e01247166bc",
         "memo": "0xfa22ab1e93a122f6bbaf309a0bc12974a1d6e3fccf6c61eec46f2ab580bb7916"
@@ -360,13 +350,8 @@ rejection reveals the round's secret and names the next round.
     "sequence": "2",
     "kind": 1,
     "amount": "1000000000000000",
-    "prizes": [
-      {
-        "rangeStart": "0",
-        "rangeEnd": "9223372036854775808",
-        "payout": "2000000000000000"
-      }
-    ],
+    "chance": "9223372036854775808",
+    "prize": "2000000000000000",
     "round": "0x8c3264f83c5bbb9fe48be555ccd793f911ef663066971bf495f7f9e019d19139",
     "seedHash": "0x809e5c713fe8d387a697f4f5d7442819d190cc11da9432171db7ffa0850918d0",
     "memo": "0xe874f410e33de0333b90435bb72d380da6f9cb76d2dd2816d5f6ab0f4df709ec"
@@ -394,13 +379,8 @@ rejection reveals the round's secret and names the next round.
     "sequence": "2",
     "kind": 1,
     "amount": "1000000000000000",
-    "prizes": [
-      {
-        "rangeStart": "0",
-        "rangeEnd": "9223372036854775808",
-        "payout": "2000000000000000"
-      }
-    ],
+    "chance": "9223372036854775808",
+    "prize": "2000000000000000",
     "round": "0x8c3264f83c5bbb9fe48be555ccd793f911ef663066971bf495f7f9e019d19139",
     "seedHash": "0x809e5c713fe8d387a697f4f5d7442819d190cc11da9432171db7ffa0850918d0",
     "memo": "0xe874f410e33de0333b90435bb72d380da6f9cb76d2dd2816d5f6ab0f4df709ec"
@@ -436,7 +416,8 @@ rejection reveals the round's secret and names the next round.
         "sequence": 0,
         "kind": 0,
         "amount": 0,
-        "prizes": [],
+        "chance": "0",
+        "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -470,7 +451,7 @@ A developer bet's details, whose `meta` is the game's own JSON:
 `invalid` with `400` answers fields other than the operation's nine, details that do not hash to the memo, a missing
 seed and a debit's unknown counterparty; with `409`, details that break [the details rules](../reference/signed-messages.md#details-and-memo).
 `refused` answers a `request.channelId` other than `:id`, a bad signature or acknowledgment signature, an operation
-that is not the channel's next, an amount above the balance, and a casino bet whose prizes break the rules.
+that is not the channel's next, an amount above the balance, and a casino bet whose chance or prize breaks the rules.
 
 **Errors:** [`unauthorized`](index.md#errors) (401), [`invalid`](index.md#errors) (400), [`invalid`](index.md#errors) (409), [`unacknowledged`](index.md#errors) (409), [`channel-closed`](index.md#errors) (409), [`id-conflict`](index.md#errors) (409), [`not-due`](index.md#errors) (409), [`wrong-asset`](index.md#errors) (409), [`refused`](index.md#errors) (409), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
 
@@ -517,13 +498,8 @@ The reply is the operation's reply as recorded, without `bankroll` and `nextRoun
         "sequence": "1",
         "kind": 1,
         "amount": "1000000000000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "9131138316486228049",
-            "payout": "2000000000000000"
-          }
-        ],
+        "chance": "9131138316486228049",
+        "prize": "2000000000000000",
         "round": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9",
         "seedHash": "0xf95f7e3bc56f388acb608f28410489b3ae466f494521a2de7dee7e01247166bc",
         "memo": "0xfa22ab1e93a122f6bbaf309a0bc12974a1d6e3fccf6c61eec46f2ab580bb7916"
@@ -633,7 +609,8 @@ ETH channels only: a test channel has nothing on-chain to close.
         "sequence": 0,
         "kind": 0,
         "amount": 0,
-        "prizes": [],
+        "chance": "0",
+        "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x0000000000000000000000000000000000000000000000000000000000000000"

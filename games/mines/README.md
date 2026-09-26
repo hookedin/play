@@ -34,13 +34,13 @@ The graph tracks only the number of safe picks so far, because unrevealed tiles 
 
 ### Every reveal is one bet
 
-`RoundClient` from the SDK runs the round. The SDK's engine prices each state with the cash that finances its actions, working backward from the cashouts. A `reveal` becomes one bet: the stake is the state's current cash, the mine's stretch of the outcome space pays nothing, and the gem's stretch pays the cash of the next state. The casino's verified outcome decides gem or mine. `cash-out` leads to a state worth the same cash, so it places no bet at all: the money is already in the player's signed balance. At a stake large for the bankroll, a state can hold more cash than its cash-out pays, because the next reveal needs it, and cashing out then pays the difference to the house.
+`RoundClient` from the SDK runs the round. The SDK's engine prices each state with the cash that finances its actions, working backward from the cashouts. A `reveal` has two outcomes, so it is one bet: the stake is the state's current cash, the chance is the gem's share of the 2^64 outcomes, and the prize is the cash of the next state. The casino's verified outcome decides gem or mine. `cash-out` leads to a state worth the same cash, so it places no bet at all: the money is already in the player's signed balance. At a stake large for the bankroll, a state can hold more cash than its cash-out pays, because the next reveal needs it, and cashing out then pays the difference to the house.
 
 Each further reveal has its own house edge, which is why the return falls as you go deeper. This is deliberate. A ladder with a constant overall return would make later reveals zero-edge bets, and the casino's admission rule does not accept those at a finite bankroll. The derivation is in [sequential games built from casino bets](../../docs/games/sequential-games.md#mines-another-n-move-graph).
 
 The page shows a **continuation value** during the round: the cash the current state is priced at. It is already in the player's balance, and a player who stops keeps it: a [settled trade-off](../../docs/overview/architecture.md#settled-trade-offs).
 
-**Return.** The three fixed-stop returns in the table above are exact. They are proven in the SDK's test suite ([test/sequential-games.test.ts](../../sdk/test/sequential-games.test.ts), "Mines uses the same engine and preserves stopping-policy payouts without payments"), which evaluates each stopping policy over the compiled game with exact fractions.
+**Return.** The three fixed-stop returns in the table above are exact. They are proven in the SDK's test suite ([test/sequential-games.test.ts](../../sdk/test/sequential-games.test.ts), "Mines uses the same engine and preserves stopping-policy payouts without payments"), which evaluates each stopping policy over the compiled game with exact fractions. The return the wallet measures is each reveal's own: at a bankroll far above the stake, 96%, 97.5% and 97.44% for the first, second and third reveal, whose products are the table's returns.
 
 | File                                                             | What it holds                                                        |
 | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -57,9 +57,9 @@ The page shows a **continuation value** during the round: the cash the current s
 
 The game page is untrusted by design. It runs in a sandboxed iframe on its own origin and talks to the wallet only through `postMessage`.
 
-- **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
+- **The game never holds keys.** It sends the wallet a bet: a stake, a chance and a prize. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every casino bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet picks its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
-- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
+- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, pays the prize itself if the outcome is below the chance, and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 - **No hidden board.** There is nothing to reveal at the end and nothing the game could have rigged in advance: each reveal is decided by its own verified outcome.
 
@@ -114,7 +114,7 @@ From play's root:
 node --test games/mines/test/*.test.ts
 ```
 
-This runs [test/mines.test.ts](test/mines.test.ts): the board and its cash-outs, rounds settled through the real wallet, and that every step pays back at least the game's floor. `npm test` at play's root type-checks and runs it with every other test. The Mines rules, their returns and the round handling are tested in the [game SDK](../../sdk).
+This runs [test/mines.test.ts](test/mines.test.ts): the board and its cash-outs, rounds settled through the real wallet, and that every bet it can place pays back at least the game's floor. `npm test` at play's root type-checks and runs it with every other test. The Mines rules, their returns and the round handling are tested in the [game SDK](../../sdk).
 
 ## License
 

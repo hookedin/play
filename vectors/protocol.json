@@ -7,8 +7,8 @@
     "signer": "0x3333333333333333333333333333333333333333",
     "developer": "0x4444444444444444444444444444444444444444"
   },
-  "protocol": "0x294d7dda3e5627db5c0a15d860bba3ee061ffaac6b8ae8fb32d269c1be4ba634",
-  "developerProtocol": "0x75b43323e570f68fbca2cbc10d55c441fad8a3dd0b000544def7a151a3cbbd67",
+  "protocol": "0xb25c8550d4fb9fcb973944d662188ca2a8aa40b6d7189ec8f55a243d1a2c6cc6",
+  "developerProtocol": "0xf5bd44c475a9e6e0136b45e0fb337e44a37298c63003b0c8f7fd74d6838a6d65",
   "channels": {
     "eth": {
       "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
@@ -43,39 +43,24 @@
         "previousStateHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
         "sequence": "1",
         "kind": 1,
-        "amount": "160000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "8974091711534376456",
-            "payout": "200000000"
-          },
-          {
-            "rangeStart": "2991363903844792152",
-            "rangeEnd": "8974091711534376456",
-            "payout": "150000000"
-          },
-          {
-            "rangeStart": "8475531060893577764",
-            "rangeEnd": "8974091711534376456",
-            "payout": "360000000"
-          }
-        ],
-        "round": "0x0a2413c33a573e0885a6c9a202e26068ea7e5bcce76f87168b69a8b06450ca1a",
+        "amount": "100000000",
+        "chance": "8974091711534376456",
+        "prize": "200000000",
+        "round": "0xb3fa07cb7a86b16de4cb4c7161c65a7ed9988fc7fbc49598623d49d0bd6cbc11",
         "seedHash": "0x93eebcc6bf46d8794e5dceae4f639f506d51617f75530350bae4a57914135fb3",
         "memo": "0x3b9bec2484aa9c100236c93793cbe6b414ff93c5734aee5f66316d4e68bee492"
       },
-      "hash": "0xd09305320c57458b9757af51f783787e6ce98c754130003ea0935bf8ce3c31c4",
+      "hash": "0xa9f21e5667b2b230c81b616282d0d3e74f5e43c4a4984012841db1b9ddf8c1c3",
       "seed": "0x7272727272727272727272727272727272727272727272727272727272727272",
-      "secret": "0xb0a0c95aca6af99a47525600b6e7ea29e803410aba2da1f2166391a6a1ef955c",
+      "secret": "0xb4601af5d75712b9c5a4903508c1dc68220290927397da8657d119178cf34cc6",
       "next": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
         "sequence": "1",
         "previousStateHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
-        "transitionHash": "0x503183a1c9ce61d612bf5a4922a421de2233cc52075d8e03383c95242665c24f",
-        "balance": "1550000000"
+        "transitionHash": "0x1d60a04af89d57809d25b3faf1920a24381f75e9b1b42c25525b74a41988979c",
+        "balance": "1100000000"
       },
-      "nextHash": "0xa97d4632af149f4bf49e456d59b06c5683d4dada7c840271dc8485aa0b820dc2"
+      "nextHash": "0x7c6409d4d9aa7173cb31f53a5c3e24cd7cfbb24eca0f6337a233442bfa83aa36"
     },
     {
       "details": {
@@ -93,87 +78,84 @@
       "canonical": "{\"game\":\"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d\",\"group\":\"spin-1\",\"id\":\"0x8383838383838383838383838383838383838383838383838383838383838383\",\"meta\":{\"chips\":{\"17\":\"20000000\",\"9\":\"10000000\",\"red\":\"30000000\"}}}",
       "operation": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-        "previousStateHash": "0xa97d4632af149f4bf49e456d59b06c5683d4dada7c840271dc8485aa0b820dc2",
+        "previousStateHash": "0x7c6409d4d9aa7173cb31f53a5c3e24cd7cfbb24eca0f6337a233442bfa83aa36",
         "sequence": "2",
         "kind": 2,
         "amount": "60000000",
-        "prizes": [],
+        "chance": "0",
+        "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x88456920b0dce4c103868f21a4ecdcad753a3d3bfa56f2cdfb16a7a2c9d0b370"
       },
-      "hash": "0x775932743b8af2490419949677aaf204bed012ad9a402fc6c2c1af016dc7f4ef",
+      "hash": "0xf5aacc780b5cae72dcfd5041b2f55341940bfe2e09f423edf896f2811e864ac1",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
         "sequence": "2",
-        "previousStateHash": "0xa97d4632af149f4bf49e456d59b06c5683d4dada7c840271dc8485aa0b820dc2",
-        "transitionHash": "0xeedf38dd2803174298ae2a4edb3d4414782689cbc5cf4b3ccb6ec5502ed15869",
-        "balance": "1490000000"
+        "previousStateHash": "0x7c6409d4d9aa7173cb31f53a5c3e24cd7cfbb24eca0f6337a233442bfa83aa36",
+        "transitionHash": "0x6fc1f4652998ec6493b900d00d9d13a5be00b064a204bb1de27f8aeaa62da000",
+        "balance": "1040000000"
       },
-      "nextHash": "0x864e12ab9c147f86066bc2736f5c9c3dd65693ffec1bafc2595a1c1a3f9e1ac6"
+      "nextHash": "0x0289beac6f6a29baaaa365afb8e56f53d03c75e5461dac06f64076f06be9329b"
     },
     {
       "details": {
         "id": "0x8484848484848484848484848484848484848484848484848484848484848484",
-        "counterparty": "0x775932743b8af2490419949677aaf204bed012ad9a402fc6c2c1af016dc7f4ef"
+        "counterparty": "0xf5aacc780b5cae72dcfd5041b2f55341940bfe2e09f423edf896f2811e864ac1"
       },
-      "canonical": "{\"counterparty\":\"0x775932743b8af2490419949677aaf204bed012ad9a402fc6c2c1af016dc7f4ef\",\"id\":\"0x8484848484848484848484848484848484848484848484848484848484848484\"}",
+      "canonical": "{\"counterparty\":\"0xf5aacc780b5cae72dcfd5041b2f55341940bfe2e09f423edf896f2811e864ac1\",\"id\":\"0x8484848484848484848484848484848484848484848484848484848484848484\"}",
       "operation": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-        "previousStateHash": "0x864e12ab9c147f86066bc2736f5c9c3dd65693ffec1bafc2595a1c1a3f9e1ac6",
+        "previousStateHash": "0x0289beac6f6a29baaaa365afb8e56f53d03c75e5461dac06f64076f06be9329b",
         "sequence": "3",
         "kind": 3,
         "amount": "120000000",
-        "prizes": [],
+        "chance": "0",
+        "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "memo": "0xc32e5f33bee0f4b0c41398014df352871d5657e8590d3d25801a29b4fb660656"
+        "memo": "0xd668bfcf137558f8fb91dda8730b8283ee8ab7ea905d4f31a7197d67e6ad1438"
       },
-      "hash": "0x07c9fdd1bbf521456bc330a646afd446c82ca3f5b5919be8ee95e12546830ddd",
+      "hash": "0x5b0e3790f46b8f79d545efb713bbf8dfd03a2c01e5ad816e2b27acc5d08272e4",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
         "sequence": "3",
-        "previousStateHash": "0x864e12ab9c147f86066bc2736f5c9c3dd65693ffec1bafc2595a1c1a3f9e1ac6",
-        "transitionHash": "0x509a24ed1ea9cbffcf1cb9cac4182cde730ae31905a40142b1f359b3cc00ce28",
-        "balance": "1610000000"
+        "previousStateHash": "0x0289beac6f6a29baaaa365afb8e56f53d03c75e5461dac06f64076f06be9329b",
+        "transitionHash": "0xada2cb772ff86076861ad949bc76ffe88a4f6d4fc208d9810b49f03a9e6e1f9f",
+        "balance": "1160000000"
       },
-      "nextHash": "0x378edd0efcc3be6e85abe4d1dad4feb6f89a986a3d5acb86fd99e858fa89effb"
+      "nextHash": "0x90dc352f7f1d7b3d15c826d4da5e90d2d60a156bb2dddf6cfa80da10b012e2f2"
     }
   ],
   "outcome": {
-    "randomHash": "0x82b3996b70bd87b42c9bc5f948a1306604316bbee6120125790678c1db474d46",
-    "value": "8720790502452448582",
-    "payout": "710000000"
+    "randomHash": "0xc1945dd40d9db5fab1d0fc0ef6aa93397987a642aca4d7fe028b12ce94b950ce",
+    "value": "183260888306372814",
+    "payout": "200000000"
   },
   "rejection": {
     "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
     "sequence": "2",
     "previousStateHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
-    "transitionHash": "0xd09305320c57458b9757af51f783787e6ce98c754130003ea0935bf8ce3c31c4",
+    "transitionHash": "0xa9f21e5667b2b230c81b616282d0d3e74f5e43c4a4984012841db1b9ddf8c1c3",
     "balance": "1000000000"
   },
-  "rejectionHash": "0xb3c2be0197f8b543ad014d14adc389e9e9b7af69ef29859945a1c2c9a8a0d06b",
+  "rejectionHash": "0x61cbe6c08172ad30a70f484862d90a4dcb42e4ce50f8612f28d21d6d75a0a0cd",
   "close": {
     "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-    "stateHash": "0x378edd0efcc3be6e85abe4d1dad4feb6f89a986a3d5acb86fd99e858fa89effb"
+    "stateHash": "0x90dc352f7f1d7b3d15c826d4da5e90d2d60a156bb2dddf6cfa80da10b012e2f2"
   },
-  "closeHash": "0x07a2bedaa8d524caa5ea0c8121f0fb7a58cf02443577b05c482f6e51fc86f3cd",
+  "closeHash": "0xa05b3705e5a62cf82ae2691e57bf7aa2d6a7dc98e1df0c49048ac695e9be8e25",
   "cases": [
     {
       "bankroll": "10000000000",
       "bet": {
         "stake": "100000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "9131138316486228049",
-            "payout": "200000000"
-          }
-        ]
+        "chance": "9131138316486228049",
+        "prize": "200000000"
       },
       "risk": {
         "maxFee": "0",
@@ -185,13 +167,8 @@
       "bankroll": "10000000000",
       "bet": {
         "stake": "100000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "9038904596117680291",
-            "payout": "200000000"
-          }
-        ]
+        "chance": "9038904596117680291",
+        "prize": "200000000"
       },
       "risk": {
         "maxFee": "1000100",
@@ -203,13 +180,8 @@
       "bankroll": "10000000000",
       "bet": {
         "stake": "1000000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "16434371992941236894",
-            "payout": "1100000000"
-          }
-        ]
+        "chance": "16434371992941236894",
+        "prize": "1100000000"
       },
       "risk": {
         "maxFee": "9182046",
@@ -221,66 +193,13 @@
       "bankroll": "10000000000",
       "bet": {
         "stake": "100000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "20271147333746760",
-            "payout": "9100000000"
-          }
-        ]
+        "chance": "20271147333746760",
+        "prize": "9100000000"
       },
       "risk": {
         "maxFee": "0",
         "fee": "0",
         "liability": "9000000000"
-      }
-    }
-  ],
-  "tables": [
-    {
-      "bankroll": "10000000000",
-      "bet": {
-        "stake": "100000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "8974091711534376456",
-            "payout": "200000000"
-          }
-        ]
-      },
-      "risk": {
-        "maxFee": "1702992",
-        "fee": "1702992",
-        "liability": "101702992"
-      }
-    },
-    {
-      "bankroll": "10000000000",
-      "bet": {
-        "stake": "160000000",
-        "prizes": [
-          {
-            "rangeStart": "0",
-            "rangeEnd": "8974091711534376456",
-            "payout": "200000000"
-          },
-          {
-            "rangeStart": "2991363903844792152",
-            "rangeEnd": "8974091711534376456",
-            "payout": "150000000"
-          },
-          {
-            "rangeStart": "8475531060893577764",
-            "rangeEnd": "8974091711534376456",
-            "payout": "360000000"
-          }
-        ]
-      },
-      "risk": {
-        "maxFee": "1044962",
-        "fee": "1044962",
-        "liability": "551044962"
       }
     }
   ]

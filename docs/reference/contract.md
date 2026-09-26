@@ -27,11 +27,9 @@ holds a transient reentrancy guard.
 
 | Getter               | Type      | Value                                                                                                 |
 | -------------------- | --------- | ----------------------------------------------------------------------------------------------------- |
-| `OUTCOME_SPACE()`    | `uint256` | 2^64: a round's outcome is below it                                                                   |
 | `CHALLENGE_PERIOD()` | `uint256` | 86,400: the challenge window, in seconds                                                              |
-| `MAX_BALANCE()`      | `uint256` | 2^128: every deposit, amount, payout and balance is below it                                          |
+| `MAX_BALANCE()`      | `uint256` | 2^128: every deposit, amount, prize and balance is below it                                           |
 | `OUTCOME_DOMAIN()`   | `bytes32` | `keccak256("HOOKEDIN/OUTCOME")`, `0xede2fdd26760847d3c92bb2ebf4da0fdbdf441ed687b86dc1257f1962e3857ff` |
-| `MAX_PRIZES()`       | `uint256` | 64: the most prizes in one casino bet                                                                 |
 
 A channel's `status` is 0 unopened, 1 open, 2 closing or 3 finalized. Operation kinds are 0 none, 1 casino bet,
 2 debit and 3 credit.
@@ -85,17 +83,19 @@ unless `claimTo` changed it, and zero before finalization.
 
 ### `derive`
 
-Applies one step to `base` without checking who signed `base`. It reverts:
+Applies one step to `base` without checking who signed `base`. A casino bet takes `amount` from the balance and adds
+`prize` when the step's [outcome](signed-messages.md#the-outcome) is below `chance`; a debit takes `amount` and a credit
+adds it. It reverts:
 
 - `InvalidState` when the operation does not follow `base`: another `channelId`, a `previousStateHash` that is not
   `hashState(base)`, or a `sequence` that is not the base's plus one.
 - `Unauthorized` when the channel was never opened, or `authorization` is not the channel key's signature of the
   operation. A signature that is not 65 bytes, has a high `s` or a `v` other than 27 or 28 is refused the same way.
 - `InvalidTerms` when the operation breaks [the transition rules](signed-messages.md#transitions): `amount` 0 or at
-  least 2^128; a casino bet with no prizes or more than 64, a zero `round` or `seedHash`, a secret or seed that does not
-  hash to them, or a prize with `rangeStart ≥ rangeEnd`, `rangeEnd > 2^64`, or a payout of 0 or at least 2^128; a debit
-  or credit with prizes, or a nonzero `round`, `seedHash`, seed or secret; a casino bet or debit above the balance; a
-  kind other than 1, 2 or 3; a next balance of at least 2^128.
+  least 2^128; a casino bet with a `chance` of 0, a `prize` of 0 or at least 2^128, a zero `round` or `seedHash`, or a
+  secret or seed that does not hash to them; a debit or credit with a nonzero `chance`, `prize`, `round`, `seedHash`,
+  seed or secret; a casino bet or debit above the balance; a kind other than 1, 2 or 3; a next balance of at least
+  2^128. A `chance` is a `uint64`, so its type keeps it below 2^64.
 - `InvalidState` when `casinoSignature` is not the owner's signature of the next checkpoint (`Unauthorized` when it is
   malformed).
 

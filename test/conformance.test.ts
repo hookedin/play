@@ -24,7 +24,7 @@ behaviour('the test casino', async () => {
       const wallet = await playing(await f.forget());
       return { wallet, bridge: f.bridgeFor(wallet) };
     },
-    within: { stake: '10', prizes: [{ rangeStart: '0', rangeEnd: '9000000000000000000', payout: '20' }] },
-    beyond: { stake: '10', prizes: [{ rangeStart: '0', rangeEnd: String(1n << 63n), payout: String(10n ** 13n) }] },
+    within: { stake: '10', chance: '9000000000000000000', prize: '20' },
+    beyond: { stake: '10', chance: String(1n << 63n), prize: String(10n ** 13n) },
   };
 });

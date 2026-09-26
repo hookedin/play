@@ -20,7 +20,7 @@ after admission admits the largest bets and charges only the surplus: a
 
 - It depends on the bet's edge and on the casino's bankroll. A bet with no more edge than the bankroll needs earns
   nothing, and a bet with no edge is declined.
-- It is never an extra debit to the player: the stake and prizes are exactly what the player signed.
+- It is never an extra debit to the player: the stake, chance and prize are exactly what the player signed.
 - No fee protects a player from a game. A game can spend its whole spending limit on bets that pay back little, and the
   wallet records each bet's [measured return](casino-bets.md#measured-return) without refusing it: the limit the player
   sets is their protection.
@@ -29,8 +29,8 @@ after admission admits the largest bets and charges only the surplus: a
 
 - Every settled casino bet in a game you publish, won or lost, your own casino bets on your rounds included. It is owed
   to whoever publishes the game when the bet settles.
-- A rejected bet earns nothing. A game nobody publishes earns no developer anything: all its commission is the
-  casino's.
+- A rejected bet earns nothing, nor does a reveal, which bets nothing. A game nobody publishes earns no developer
+  anything: all its commission is the casino's.
 - A developer bet earns no commission, because the bankroll does not back it. Its casino part is what your settlement
   gives the casino ([the casino's share](developer-bets.md#the-casinos-share)). A casino bet of yours that backs
   developer bets earns you half its commission, as any other does.

@@ -16,9 +16,7 @@ export interface Asset {
 /** Every bound a bet is held to, as the wallet reports them. They are part of the protocol revision the wallet
  * and its casino share, so read them rather than carrying copies of your own. */
 export interface WalletLimits {
-  /** The most prizes one bet holds. */
-  prizes: number;
-  /** The size of the outcome space, as a decimal string: a prize range lies within [0, this). */
+  /** The size of the outcome space, as a decimal string: a bet's chance counts outcomes out of this. */
   outcomeSpace: string;
   /** The most a developer bet's meta takes, as canonical JSON, and the longest group label. */
   meta: number;
@@ -56,14 +54,9 @@ export class HookedInError extends Error {
     this.code = code;
   }
 }
-/** A prize on the wire: decimal strings. */
-export interface WirePrize {
-  rangeStart: string;
-  rangeEnd: string;
-  payout: string;
-}
 export type { CasinoBetRequest, DeveloperBetRequest, GameReceipt } from '../../protocol/game-types.ts';
 import type { CasinoBetRequest, DeveloperBetRequest, GameReceipt } from '../../protocol/game-types.ts';
+import type { Round } from '../../protocol/types.ts';
 import { playerScope, showName } from './wire.ts';
 export const HookedIn = (() => {
   'use strict';
@@ -233,8 +226,8 @@ export const HookedIn = (() => {
    * hears. */
   const receipt = (id: string): Promise<GameReceipt | null> => call('game.receipt', { id });
   /** A casino bet: settled at once against the casino's bankroll, on the player's own round. `stake` is paid to
-   * enter, and every prize whose range holds the outcome pays. `group` labels bets that belong together, such as
-   * the steps of one hand. */
+   * enter, and `prize` pays when the round's outcome is below `chance`, counted in outcomes out of 2^64. `group`
+   * labels bets that belong together, such as the steps of one hand. */
   const casinoBet = (request: CasinoBetRequest): Promise<GameReceipt> => call('game.casinoBet', { ...request });
   /** A developer bet: a bet against your game's developer, whose bank takes the stake at once and who settles it,
    * paying what its settlement says. `meta` is your game's own JSON, saying what the bet is: the casino keeps it with
@@ -302,6 +295,10 @@ export const HookedIn = (() => {
     limits,
     /** Who is playing and what to price bets against. */
     info: (): Promise<WalletInfo> => call('wallet.info'),
+    /** A developer's round as the casino shows it to anyone, read through the player's wallet: open, or revealed with
+     * its seed, its secret, its outcome and the developer's casino bet on it. A game whose players share a draw checks
+     * its rounds here. */
+    round: (id: string): Promise<Round> => call('wallet.round', { id }),
     balance,
     onBalance,
     requestFunds,

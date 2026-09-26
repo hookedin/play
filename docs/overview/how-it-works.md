@@ -29,11 +29,11 @@ the casino signs: the channel's sequence number, the hash of the state before it
 it, and the balance after it. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and
 saves it before the game hears anything. There are three kinds of operation, and the contract knows no others:
 
-| Kind         | Effect on the balance           | Used for                                                                                                             |
-| ------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1 casino bet | − stake + every prize that pays | Casino bets                                                                                                          |
-| 2 debit      | − amount                        | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank                           |
-| 3 credit     | + amount                        | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, faucet test coins |
+| Kind         | Effect on the balance       | Used for                                                                                                             |
+| ------------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                          |
+| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank                           |
+| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, faucet test coins |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in its
 **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino
@@ -62,27 +62,33 @@ declines its bet, so the wallet records at once what the declined bet would have
 their outcome would show it on its players' receipts.
 
 A game with a server of its own can also have the casino name rounds for it and place casino bets on them, so that many
-players share one outcome; see [developer bets](../games/developer-bets.md).
+players share one draw; see [developer bets](../games/developer-bets.md).
 
 ## Casino bets
 
-A casino bet is a stake paid to enter and up to 64 **prizes**, each a range of outcomes and what it pays. A prize pays
-when `rangeStart ≤ outcome < rangeEnd`. Prizes may overlap, and then every prize that holds the outcome pays. One signed
-bet is therefore a whole prize table: a coin flip, a Plinko board, one step of blackjack.
+A casino bet is three numbers: a **stake** paid to enter, a **chance** and a **prize**. It wins when the round's outcome
+is below its chance, so the chance counts the winning outcomes out of 2^64, and a win pays the prize. One signed bet is
+one wager with two outcomes: a coin flip, a roll of the dice, one tile of Mines.
 
 A coin flip that pays 1.96 times the stake:
 
-| Term                  | Value                                                    |
-| --------------------- | -------------------------------------------------------- |
-| Stake                 | 0.001 ETH (`1000000000000000` wei)                       |
-| Prize                 | `[0, 2^63)`, paying 0.00196 ETH (`1960000000000000` wei) |
-| Chance the prize pays | 2^63 of 2^64 outcomes: 50%                               |
-| Expected payout       | 0.00098 ETH                                              |
-| Return                | 98.0000% of the stake                                    |
+| Term            | Value                                              |
+| --------------- | -------------------------------------------------- |
+| Stake           | 0.001 ETH (`1000000000000000` wei)                 |
+| Chance          | 2^63 (`9223372036854775808`) of 2^64 outcomes: 50% |
+| Prize           | 0.00196 ETH (`1960000000000000` wei)               |
+| Expected payout | 0.00098 ETH                                        |
+| Return          | 98.0000% of the stake                              |
 
 If the outcome is below 2^63 the balance moves by −0.001 + 0.00196 = +0.00096 ETH; otherwise by −0.001 ETH. The wallet
-works out the return of every casino bet from its own prize table before signing it, and keeps it on the receipt
+works out the return of every casino bet from its chance and prize before signing it, and keeps it on the receipt
 ([measured return](../wallet/bets-and-receipts.md#measured-return)).
+
+A game with more outcomes than two plays them with bets like this one. A single-player game, such as Plinko, draws in
+the page, with its own randomness, which bet to place, so that every outcome is reached exactly as often as the game's
+rules say ([collapsing bets](../games/collapsing-bets.md)); the round's outcome settles the bet and picks the result
+within the side it lands on. A game whose players share one draw, such as roulette, has its developer walk to the result
+in binary steps, one casino bet per round ([developer bets](../games/developer-bets.md)).
 
 A casino bet settles against the casino's bankroll in the request that places it. The casino may decline it instead:
 it then signs a **rejection**, a checkpoint that leaves the balance unchanged, and the bet costs nothing.
@@ -95,13 +101,13 @@ the game's own JSON saying what the bet is. Its stake leaves your balance at onc
 that signature and collects what it pays with a credit. There is no escrow, no deadline and no refund: what a developer
 bet is paid is its developer's word ([trust model](trust-model.md#developer-bets-trust-their-developer)).
 
-|              | Casino bet                                  | Developer bet                                |
-| ------------ | ------------------------------------------- | -------------------------------------------- |
-| Against      | The casino's bankroll                       | The game's developer                         |
-| Settled      | In the request that places it, by its round | When the developer signs a settlement        |
-| What it pays | Its prize table on the round's outcome      | What the developer's settlement says         |
-| Its return   | Measured from its prize table               | None: it has no prize table                  |
-| Games        | Any game                                    | A published game, whose developer settles it |
+|              | Casino bet                                              | Developer bet                                |
+| ------------ | ------------------------------------------------------- | -------------------------------------------- |
+| Against      | The casino's bankroll                                   | The game's developer                         |
+| Settled      | In the request that places it, by its round             | When the developer signs a settlement        |
+| What it pays | Its prize, when the round's outcome is below its chance | What the developer's settlement says         |
+| Its return   | Measured from its chance and prize                      | None: it has no odds                         |
+| Games        | Any game                                                | A published game, whose developer settles it |
 
 ## Payments
 
@@ -111,7 +117,7 @@ round and earns no commission. A game uses it for a charge that does not depend 
 ## The bankroll and commission
 
 The casino's **bankroll** backs every casino bet. The casino admits a bet only when the bankroll could take it with no
-commission at all, by an exact Kelly condition over the bet's prize table. Its **commission** is then the edge the
+commission at all, by the exact Kelly condition for its two outcomes. Its **commission** is then the edge the
 bankroll does not need, split equally between the game's developer and the casino. Commission is the casino's
 accounting, not a second debit from your balance; a bet's receipt reports it. [Economics](../reference/economics.md)
 derives the rule, and [earnings](../games/earnings.md) explains what a developer collects.

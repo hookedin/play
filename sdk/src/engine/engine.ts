@@ -1,10 +1,10 @@
 import { add, compare, divide, fraction, multiply } from './rational.ts';
 import type { Rational } from './rational.ts';
 import type { GameGraph, GameNode } from './model.ts';
-import { apportion, compileTransition, priceTransition, UINT256_MAX, OUTCOME_SPACE } from './transition.ts';
-import type { Admits, Bet, CashOutcome, Successor, TransitionPlan } from './transition.ts';
+import { cashClasses, compileTransition, priceTransition, UINT256_MAX, OUTCOME_SPACE } from './transition.ts';
+import type { Admits, Bet, CashClass, CashOutcome, TransitionPlan } from './transition.ts';
 
-/** A uniform integer in [0, limit). Only a step that moves no money ever draws from it. */
+/** A uniform integer in [0, limit): the page's own randomness, which draws each step's branch. */
 export type RandomBelow = (limit: bigint) => bigint;
 
 const ZERO = fraction(0n);
@@ -40,7 +40,7 @@ export interface GamePlan {
   readonly nodes: readonly PricedNode[];
 }
 export interface CompileOptions {
-  /** The casino's admission rule. Every step is priced as the least cash whose bet it admits. */
+  /** The casino's admission rule. Every bet a step can place is checked against it at the planning bankroll. */
   readonly admits: Admits;
   readonly bankrollFloor: bigint;
   readonly cashQuantum: bigint;
@@ -121,11 +121,11 @@ function* compileSteps(
   const visiting = new Set<string>();
   const priced = new Map<string, PricedNode>();
   if (typeof options.admits !== 'function') throw new TypeError('the casino admission rule is required');
-  // Many public card states lay the same cash along the outcome space. Reuse their exact price.
+  // Many public card states need the same cash with the same probabilities. Reuse their exact price.
   const prices = new Map<string, bigint>();
   const cashKey = (outcomes: readonly CashOutcome[]): string =>
-    apportion(outcomes)
-      .map(s => `${s.cash}:${s.rangeEnd - s.rangeStart}`)
+    cashClasses(outcomes)
+      .map(c => `${c.cash}:${c.probability.n}/${c.probability.d}`)
       .join(';');
   const transition = (cash: bigint, outcomes: readonly CashOutcome[]): TransitionPlan =>
     compileTransition({ admits: options.admits, bankroll: options.bankrollFloor, cash, outcomes });
@@ -190,12 +190,7 @@ function* compileSteps(
           key = cashKey(outcomes);
           let needed = prices.get(key);
           if (needed === undefined) {
-            needed = priceTransition({
-              admits: options.admits,
-              bankroll: options.bankrollFloor,
-              outcomes,
-              quantum: options.cashQuantum,
-            });
+            needed = priceTransition({ bankroll: options.bankrollFloor, outcomes, quantum: options.cashQuantum });
             prices.set(key, needed);
           }
           required = needed > additionalCash ? needed - additionalCash : 0n;
@@ -218,7 +213,8 @@ function* compileSteps(
         depth,
         actions: Object.freeze(
           actions.map(action => {
-            let cached = table ? undefined : transition(cash + action.additionalCash, action.outcomes);
+            // Built when first read: compiling needs only the prices, and a game plays few of its steps.
+            let cached: TransitionPlan | undefined;
             return Object.freeze({
               id: action.id,
               requiredCash: action.requiredCash,
@@ -299,7 +295,7 @@ export function evaluatePolicy(plan: GamePlan, policy: Policy): PolicyEvaluation
     let bets = ZERO;
     let payments = ZERO;
     let additional = fraction(action.additionalCash);
-    if (action.transition.kind === 'casino-bet') bets = ONE;
+    if (action.transition.kind === 'casino-bet') bets = action.transition.betMass;
     if (action.transition.kind === 'payment') payments = ONE;
     for (const outcome of action.transition.outcomes) {
       const child = evaluate(outcome.next);
@@ -403,12 +399,11 @@ interface PreparedBase {
 export type PreparedTransition =
   | (PreparedBase & {
       readonly kind: 'casino-bet';
-      /** Exactly what the wallet signs: the stake and the prizes it can pay. */
+      /** Exactly what the wallet signs: the stake, its chance and its prize. */
       readonly bet: Bet;
-      /** The cash kept whatever the outcome. */
-      readonly retained: bigint;
-      /** Where each stretch of the outcome space leads: the round's outcome names the next state. */
-      readonly successors: readonly Successor[];
+      /** Where the step leads when the round's outcome is below the chance, and where it leads otherwise. */
+      readonly win: CashClass;
+      readonly lose: CashClass;
     })
   | (PreparedBase & {
       readonly kind: 'noop' | 'payment';
@@ -419,9 +414,9 @@ export type PreparedTransition =
     });
 const preparedTransitions = new WeakSet<object>();
 
-/** Choose an action FIRST. The bet it returns is the whole step: nothing is sampled, so there is
- * no ticket to protect. Only a step that moves no money and still has several successors draws
- * from `random`, and no cash rides on that draw. */
+/** Choose an action FIRST. `random`, the page's own randomness, then draws the step's branch: one casino bet, or
+ * none. Save what this returns before the wallet signs anything, and never draw again for the same step: a redraw
+ * would change the game's odds. A step without a bet draws its successor here too. */
 export function prepareAction(
   plan: GamePlan,
   state: RuntimeState,
@@ -440,16 +435,34 @@ export function prepareAction(
     before = Object.freeze({ ...state });
   let prepared: PreparedTransition;
   if (step.kind === 'casino-bet') {
-    if (!plan.admits(state.bankroll, step.bet)) throw new RangeError('the live bankroll does not admit this step');
-    prepared = Object.freeze({
-      kind: 'casino-bet',
-      before,
-      actionId,
-      additionalCash: action.additionalCash,
-      bet: step.bet,
-      retained: step.retained,
-      successors: step.successors,
-    });
+    if (typeof random !== 'function') throw new TypeError('this step draws its branch: an injected RNG is required');
+    const branch = selectWeighted(step.branches, b => b.weight, random);
+    if (branch.kind === 'bet') {
+      if (!plan.admits(state.bankroll, branch.bet)) throw new RangeError('the live bankroll does not admit this step');
+      prepared = Object.freeze({
+        kind: 'casino-bet',
+        before,
+        actionId,
+        additionalCash: action.additionalCash,
+        bet: branch.bet,
+        win: step.classes[branch.win]!,
+        lose: step.classes[branch.lose]!,
+      });
+    } else {
+      // The branch that keeps the cash: no bet, and one of the states that need exactly this cash.
+      const kept = step.classes[branch.class]!,
+        next = kept.outcomes.length > 1 ? selectWeighted(kept.outcomes, o => o.probability, random) : kept.outcomes[0]!;
+      prepared = Object.freeze({
+        kind: 'noop',
+        before,
+        actionId,
+        additionalCash: action.additionalCash,
+        next: next.next,
+        label: next.label,
+        cash: kept.cash,
+        amount: 0n,
+      });
+    }
   } else {
     money(state.bankroll + step.amount, 'bankroll after payment', true);
     if (step.outcomes.length > 1 && typeof random !== 'function')
@@ -474,9 +487,16 @@ export function prepareAction(
 export interface Resolution {
   readonly state: RuntimeState;
   readonly label?: string | undefined;
-  /** What the bet's prizes paid, or zero. */
+  /** What the bet paid: its prize, or zero. */
   readonly payout: bigint;
   readonly payment: bigint;
+}
+/** Where a settled bet lands: which of the states that need its class's cash it reaches, and a 64-bit value to show
+ * the result with, drawn in turn from one generator seeded with the round's verified outcome. The same outcome always
+ * lands the same way, and what the page shows is drawn apart from which state it shows. */
+export function landing(side: CashClass, outcome: bigint): { next: CashOutcome; draw: bigint } {
+  const random = seededRandom(outcome);
+  return { next: selectWeighted(side.outcomes, o => o.probability, random), draw: random(OUTCOME_SPACE) };
 }
 /** Pure reference accounting, NOT a transaction or proof of casino settlement/payment. The bankroll
  * it reports ignores the casino's commission, which only ever lowers it further. */
@@ -485,9 +505,9 @@ export function resolveTransition(prepared: PreparedTransition, outcome?: bigint
   if (prepared.kind === 'casino-bet') {
     if (typeof outcome !== 'bigint' || outcome < 0n || outcome >= OUTCOME_SPACE)
       throw new TypeError("the round's verified 64-bit outcome is required for a bet");
-    const next = prepared.successors.find(s => outcome >= s.rangeStart && outcome < s.rangeEnd);
-    if (!next) throw new Error('outcome has no successor');
-    const payout = next.cash - prepared.retained;
+    const won = outcome < prepared.bet.chance,
+      { next } = landing(won ? prepared.win : prepared.lose, outcome),
+      payout = won ? prepared.bet.prize : 0n;
     return Object.freeze({
       state: Object.freeze({
         nodeId: next.next,
@@ -517,6 +537,24 @@ export function simulateServerResult(prepared: PreparedTransition, random: Rando
   if (prepared.kind !== 'casino-bet') throw new Error('not a bet');
   if (typeof random !== 'function') throw new TypeError('an independent server RNG is required');
   return draw(random, OUTCOME_SPACE);
+}
+
+/** A RandomBelow drawn from a 64-bit seed, such as a round's verified outcome: the SplitMix64 stream from the seed,
+ * rejection-sampled, so the same seed always draws the same values. For showing a result, never for drawing one. */
+export function seededRandom(seed: bigint): RandomBelow {
+  let state = BigInt.asUintN(64, seed);
+  const next = () => {
+    state = BigInt.asUintN(64, state + 0x9e3779b97f4a7c15n);
+    let z = BigInt.asUintN(64, (state ^ (state >> 30n)) * 0xbf58476d1ce4e5b9n);
+    z = BigInt.asUintN(64, (z ^ (z >> 27n)) * 0x94d049bb133111ebn);
+    return z ^ (z >> 31n);
+  };
+  return rngFromBytes(bytes => {
+    for (let offset = 0; offset < bytes.length; offset += 8) {
+      let word = next();
+      for (let i = offset; i < Math.min(offset + 8, bytes.length); i++, word >>= 8n) bytes[i] = Number(word & 0xffn);
+    }
+  });
 }
 
 /** Adapt a secure byte source (crypto.getRandomValues) into an unbiased RandomBelow by rejection sampling. */

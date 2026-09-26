@@ -1,125 +1,146 @@
 ---
 title: Collapsing bets
-description: Playing a prize table too large for one bet, by drawing in the client which small bet to place.
+description: How the SDK plays a step with more than two outcomes as one casino bet, drawn in the page.
 sidebar:
   order: 6
 ---
 
-A casino bet is a stake and up to 64 prizes, each paying when the round's outcome falls in its range
-([casino bets](casino-bets.md#prizes)). That covers almost every game directly: a Plinko board is at most 17 prizes, a
-roulette layout at most 37, a 243-ways slot a few dozen distinct pays, and the wallet signs the whole distribution. No
-house game needs the technique below, and the SDK does not implement it.
-
-Some prize tables do not fit: a slot with millions of distinct payouts, a lottery with a prize per ticket number, or a
-table whose entries are rarer than one outcome in 2^64. Such a game can still be played on the same primitive by
-**collapsing** its table: the client draws, with its own randomness, which small bet to place, so that placing that bet
-and letting the casino settle it reproduces the full table exactly.
+A casino bet has two outcomes: it pays its prize when the round's outcome is below its chance, and nothing otherwise
+([casino bets](casino-bets.md)). A step of a game can have many: the buckets of a Plinko board, the pays of a slot, the
+cards of a hand. The SDK plays such a step with one casino bet all the same, by **collapsing** it: the page draws, with
+its own randomness, which bet to place, so that placing that bet and letting the casino settle it reaches every outcome
+exactly as often as the rules say. [`RoundClient`](../sdk/round.md#roundclient) does this for every step it plays;
+[`collapse`](../sdk/engine.md#collapse), in [transition.ts](../../sdk/src/engine/transition.ts), is the construction
+below.
 
 ## The idea
 
-Let the game have nominal stake `S` and gross payouts `G_i` with probabilities `π_i`. The client holds a set of
-**branches**. A branch is one simple bet between a low payout `L` and a high payout `H`, with `L < S < H`:
+The engine groups a step's successors by the cash they need into **cash classes**
+([`cashClasses`](../sdk/engine.md#cashclasses)), each with its exact probability. A step with one class moves no money,
+or pays what is left over to the bankroll. With current cash `c`, any other step is collapsed into **branches**. A bet
+branch is one casino bet between a lower class `j`, at cash `L_j < c`, and a higher class `i`, at cash `H_i > c`:
 
 ```text
-stake   s = S − L            the part of the nominal stake actually at risk
-prize   [0, t) pays H − L    so the player ends on L or on H
-kept    L                    never staked, never debited
+stake   a_j = c − L_j      the part of the cash at risk
+prize   H_i − L_j          so the player ends on L_j or on H_i
+kept    L_j                never staked, never debited
 ```
 
-The client selects branch `b` with probability `a_b` and submits only that bet. If its win probability is
-`p_b = t_b / 2^64`, the branch contributes:
+The page draws each branch with its weight `w` and places only its bet. If that bet wins with probability `q`, its
+chance over 2^64, the branch reaches:
 
 ```text
-probability mass at H = a_b × p_b
-probability mass at L = a_b × (1 − p_b)
+the higher class with probability   w × q
+the lower class with probability    w × (1 − q)
 ```
 
-The collapse is correct when, summed over every branch, those masses equal the table's `π_i` for every payout.
-Preserving every probability preserves the whole payout distribution, and so the return; preserving only the average
-would not.
+The collapse is correct when, summed over every branch, those equal each class's probability. Preserving every class's
+probability preserves the whole distribution of the step's cash, and so its return; preserving only the average would
+not.
 
 ## Every branch must stand alone
 
-The casino sees one branch, never the table, so each branch must pass [admission](../reference/economics.md) by itself
-against the planning bankroll `B`. Without commission, a branch with stake `s` and net win `W = H − S` is admitted only
-if:
+The casino sees one bet, never the step, so each bet must pass [admission](../reference/economics.md) by itself against
+the planning bankroll `B`. A bet between lower class `j` and higher class `i` gains the bankroll `a_j` when it loses and
+costs it `b_i = H_i − c` when it wins. At zero commission the casino admits it when it is a Kelly wager for the
+bankroll:
 
 ```text
-p <= pMax = s × (1 − W/B) / (s + W)
+(1 − q) × a_j/(B + a_j)  >=  q × b_i/(B − b_i)
 ```
 
-A bigger prize needs more edge. That is the constraint that shapes the construction: a client that could pick any `a`
-and `p` with `a × p = π` must also keep `p <= pMax` for that branch.
+A bigger prize needs more edge. That is the constraint that shapes the construction.
 
-## Payouts of zero and above the stake
+## The construction
 
-When the only low payout is zero, every branch stakes `S`. For each positive payout take the Kelly cap as its
-conditional win probability, scaled by one common factor `A`:
+With `ℓ_j` the probability of lower class `j` and `h_i` that of higher class `i`, let:
 
 ```text
-pMax_i = S × (1 − W_i/B) / G_i
-A      = sum(π_i / pMax_i)
-a_i    = (π_i / pMax_i) / A          selection probability
-p_i    = A × pMax_i                  conditional win probability
+C   = Σ_j ℓ_j × a_j/(B + a_j)      what the lower classes are worth to the bankroll
+D   = Σ_i h_i × b_i/(B − b_i)      what the higher classes cost it
+A_j = (a_j/(B + a_j)) / C
+U_i = (b_i/(B − b_i)) / D
 ```
 
-If `A <= 1` the selection weights sum to one and `a_i × p_i = π_i` for every prize. Every losing branch produces zero,
-so the full table is reproduced with no losing branch of the client's own. The conditional edge of branch `i` is
-`1 − A + A × W_i/B`: larger prizes carry more edge and are selected often enough to compensate. These edges are
-components of the table's overall edge, not extra deductions. If `A > 1` the table does not fit this bankroll: lower
-the stake or wait for more capital. Raising edges cannot repair a fixed table.
+Every lower class is paired with every higher class. Pair `j/i` is drawn with weight `h_i × ℓ_j × (A_j + U_i)` and wins
+with probability `q = A_j / (A_j + U_i)`. Then:
 
-## Payouts between zero and the stake
+- Class `i` is reached with probability `Σ_j h_i × ℓ_j × A_j = h_i`, and class `j` with `Σ_i h_i × ℓ_j × U_i = ℓ_j`:
+  every class exactly as often as the rules say.
+- Every pair has `q/(1 − q) = (D/C) × (a_j/(B + a_j)) / (b_i/(B − b_i))`: its odds are the same fraction, `D/C`, of the
+  most the casino admits for it. Every pair is admissible exactly when `D <= C`, the Kelly condition for the whole step
+  as one wager, so each bet is as sound for the bankroll as the step.
 
-Pair low payouts `L_j` (probability `ℓ_j`) with high payouts `H_i` (probability `h_i`). With `a_j = S − L_j`,
-`b_i = H_i − S`, `v_j = (B + a_j)/a_j` and `u_i = b_i/(B − b_i)`, the least loss-to-win mass ratio a pair can carry is
-`u_i × v_j`. Let `D = sum(h_i × u_i)` and `C = sum(ℓ_j / v_j)`. If `D > C` there is not enough low mass to support the
-high mass at Kelly-safe odds, and no pairing exists. Otherwise, for a parameter `0 < t <= 1`:
+In whole numbers `q = X/(X + Y)`, with `X = a_j × (B − b_i) × D.n × C.d` and `Y = b_i × (B + a_j) × C.n × D.d`, where
+`.n` and `.d` are the numerator and denominator of `C` and `D`.
+
+A class at exactly `c` is a branch of its own, drawn with its probability, with no bet: the player keeps `c`, which is
+that class's cash. When no class is above `c`, because the state holds more than this action needs, every other class
+is paired with the highest one, the class at `c` if there is one: pair `j` is drawn with weight `ℓ_j × (s + h)/s` and
+wins with probability `h/(s + h)`, `h` being the highest class's probability and `s` the others' together. Its prize,
+`H − L_j`, is at most its stake, so the bankroll cannot lose it.
+
+## Exact odds on whole outcomes
+
+A chance is whole outcomes, and `q × 2^64` rarely is. With `k = ⌊q × 2^64⌋` and `δ = q × 2^64 − k`, a pair's branch
+is two: chance `k` with `1 − δ` of its weight, and chance `k + 1` with `δ` of it. The mean chance is exactly
+`q × 2^64`, so every class is still reached exactly as often as the rules say. A step that would need a chance below
+one outcome, or of every outcome, has odds finer than one outcome in 2^64 and is refused.
+
+## Pricing
+
+The engine prices every state backward from the end of the game
+([sequential games](sequential-games.md#cash-continuation-values-not-expected-values)). A step's price is the least
+cash `c` on the cash grid at which [`tableAdmits`](../sdk/engine.md#tableadmits) holds: the Kelly condition for the
+whole step as one wager for the bankroll,
 
 ```text
-z_j  = ℓ_j / ((1 − t) × sum(h) + v_j × D)
-x_ji = h_i × z_j / sum(z)                       win mass of pair j/i
-y_ji = h_i × z_j × ((1 − t) + u_i × v_j)        loss mass of pair j/i
+Σ p × X/(B + X)  >=  0        X = c − (a class's cash): what the bankroll gains when that class is reached
 ```
 
-Pair `j/i` is selected with probability `x_ji + y_ji` and wins with conditional probability `x_ji / (x_ji + y_ji)`. For
-every `t` the win masses sum to `h_i` and the loss masses to `ℓ_j`, so no candidate changes the table; `t` is searched,
-by bisection toward `t × sum(z) = 1`, until every pair's actual integer range passes admission. A payout exactly equal
-to the stake has no bet to make: it is a branch that places nothing.
+with the bankroll's losses weighed one part in 2^32 heavier. Without that margin it is exactly `D <= C`, the condition
+under which every pair above is admissible; the margin leaves each bet room for the one outcome more its chance may
+round to, when its prize is under about 4·10^9 times its stake. More cash is never less safe for the bankroll, and the
+highest class's cash always suffices, so [`priceTransition`](../sdk/engine.md#pricetransition) finds the price by
+bisection. [`compileTransition`](../sdk/engine.md#compiletransition) then checks every bet the step can place with the
+casino's own rule, [`admits`](../sdk/admits.md#admits), at the planning bankroll, and
+[`prepareAction`](../sdk/engine.md#prepareaction) checks the bet it draws again at the live bankroll.
 
-## Exact probabilities on an integer outcome space
+## Never redraw
 
-A conditional probability is rarely a whole number of outcomes. Write the ideal width as `k + δ`, with integer `k` and
-`0 <= δ < 1`, and have the client submit the range `[0, k + 1)` with probability `δ` and `[0, k)` otherwise. The mean
-width is exact, so `a × E[width] / 2^64 = π` holds with no rounding. Both widths must pass admission.
+The page draws the branch with its own randomness, uniformly over the exact weights, before the wallet picks the
+round's seed, so the draw is independent of the outcome. Draw it once, save it before the wallet signs, and offer the
+same bet again after a verified rejection. Redrawing until a cheaper branch is admitted, or dropping the rare expensive
+ones, silently changes the game's odds. `RoundClient` saves the drawn step with its operation ID before the wallet
+signs anything, and keeps it until it settles: across a reload, and under a fresh operation ID after a rejection. Keep
+declined, cancelled and withheld attempts apart from outcomes in any claim about returns.
 
-## Collapsing only part of a table
+## What the player sees
 
-The two extremes are not the only choices. A game can keep its common outcomes as native prizes and collapse only a
-rare tail: reserve one range for the tail, and let the client draw which tail prize that range pays before signing. The
-same invariant applies to the tail alone. Prefer this whenever it fits: everything left native is signed and verified
-by the wallet.
+The round's outcome decides the bet, and so the class. Which state of the class, when several need its cash, is
+[`landing(class, outcome)`](../sdk/engine.md#landing): drawn from the outcome with
+[`seededRandom`](../sdk/engine.md#seededrandom), a deterministic generator, so the verified outcome names the card and a
+reload lands on the same one. What the page shows, such as the ball's path or the reel stops, is drawn the same way
+from `state.settlement.draw`
+([draw the presentation from the outcome](casino-bets.md#draw-the-presentation-from-the-outcome)). A branch without a
+bet has no outcome: its state and its `draw` come from the page's own randomness, saved with the step.
 
 ## What is given up
 
-A native prize table is a fact the player signs: the wallet computes its exact return and largest payout, the round's
-outcome alone decides the result, and even the presentation can be read from the outcome. A collapsed table trades
-that away:
+A casino bet is a fact the player signs: the wallet computes its exact return and largest payout, and the round's
+outcome alone decides it. A collapsed step keeps that for the bet it places, and gives up the rest:
 
-- **The wallet sees one branch, not the game.** It verifies that branch completely and knows nothing of the
-  distribution it was drawn from. The table the game advertises is the game's word.
-- **The client's randomness matters.** The selection must be uniform over exact integer weights, independent of the
-  round's outcome and of the seed the wallet signs. A biased or replayed source changes the game. A modified client can
-  choose its branch outright, which is why every branch must be admissible alone; it cannot harm the bankroll, only
-  misrepresent the game to its player.
-- **Never redraw.** Draw the branch once, save it before the wallet signs, and offer the same branch again after a
-  verified rejection. Redrawing until a cheap branch is admitted, or dropping the rare expensive ones, silently changes
-  the distribution. Keep declined, cancelled and withheld attempts apart from outcomes in any claim about returns.
+- **The wallet sees one bet, not the step.** It verifies that bet completely (its odds, its outcome and its payout) and
+  knows nothing of the distribution it was drawn from. Which bet the page draws, or whether it draws none, is the
+  developer's word.
+- **A modified page can choose its branch outright.** Every branch is admissible alone, so it cannot harm the bankroll,
+  only misrepresent the game to its player.
+- **Each bet's measured return is its own.** A step bets only what it can lose, and the bets for the largest prizes
+  carry more of the step's edge than the rest, so a collapsed game's bets pay back less of what they stake than the game
+  does of its stake. At a bankroll far above the stake, Plinko's bets pay back from about 93% to over 99%, while each
+  board returns exactly 99% of the ball; Samson's Gold's lowest is the whole stake against the jackpot, at 95.1%. When
+  the bankroll is small beside a prize, the bet for it must carry more edge still for the bankroll to take it: at
+  the least bankroll that backs Plinko's 16-row low board, its rarest bet pays back about 22%. A step whose outcomes are
+  nothing or one win, as in Dice and Mines, is one bet whose return is the step's.
 - **The kept amount was never debited.** When showing a gross result, the player ends with `L` or `H`; do not add `L`
   again.
-- **It costs more to price.** Finding selection weights and widths that are all admissible is a search over the whole
-  table, growing roughly with the cube of its distinct payouts. Native prizes are priced by the casino's rule in one
-  pass.
-
-The identities above are algebraic consequences of the pair masses. The bankroll criterion and commission they rely on
-are in [pricing and commission](../reference/economics.md).

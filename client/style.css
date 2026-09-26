@@ -2440,7 +2440,7 @@ html:has(dialog[open]) {
 .bet-group {
   grid-column: span 2;
 }
-/* Only your own bets open: their receipt is the one that holds the prizes and the preimages. */
+/* Only your own bets open: their receipt is the one that holds the odds and the preimages. */
 button.bet-row:hover {
   border-color: #3b3752;
   background: #171d29;
@@ -2624,24 +2624,11 @@ button.bet-row:hover {
 .bet-detail-check.bad {
   color: #e2748c;
 }
-/* The whole 64-bit outcome space, once: one lane per prize, so prizes that overlap show it. */
+/* The whole 64-bit outcome space: the stretch below the bet's chance, and where the round landed. */
 .bet-space {
-  margin-top: 14px;
-}
-.bet-space-lanes {
-  position: relative;
-  display: grid;
-  gap: 3px;
-  max-height: 260px;
-  overflow: auto;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #0e121b;
-}
-.bet-space-lane {
   position: relative;
   height: 12px;
+  margin-top: 14px;
   border-radius: 3px;
   background: #171d29;
 }
@@ -2649,18 +2636,18 @@ button.bet-row:hover {
   position: absolute;
   top: 0;
   bottom: 0;
+  left: 0;
   min-width: 2px;
   border-radius: 3px;
   background: #4a4470;
 }
-.bet-space-lane.hit .bet-space-band {
+.bet-space.hit .bet-space-band {
   background: var(--purple);
 }
-/* Where the round landed: one line across every lane. */
 .bet-space-mark {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: -4px;
+  bottom: -4px;
   width: 2px;
   margin-left: -1px;
   border-radius: 2px;
@@ -2672,36 +2659,6 @@ button.bet-row:hover {
   margin-top: 5px;
   font-size: 10px;
   color: #7d8494;
-}
-.bet-prizes {
-  display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
-  gap: 0 14px;
-  margin-top: 12px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-.bet-prizes-head {
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #7d8494;
-  padding-bottom: 6px;
-}
-.bet-prizes-cell {
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-  color: #9ba7bd;
-}
-.bet-prizes-cell.hit {
-  color: var(--mint);
-}
-.bet-prizes-cell.range {
-  font:
-    10px/1.7 ui-monospace,
-    SFMono-Regular,
-    monospace;
-  overflow-wrap: anywhere;
 }
 .bet-detail-raw {
   margin-top: 18px;

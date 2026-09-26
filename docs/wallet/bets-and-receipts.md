@@ -1,6 +1,6 @@
 ---
 title: Bets and receipts
-description: Your bet history, the return measured from each bet's own prize table, rejected bets, a game's public record and developer bets.
+description: Your bet history, the return measured from each bet's own chance and prize, rejected bets, a game's public record and developer bets.
 sidebar:
   order: 3
 ---
@@ -12,8 +12,8 @@ back: every figure here is measured from bets that really happened.
 
 **Bets** in the top bar, `/bets`, lists every settled bet this wallet signed, newest first: each casino bet, and each
 developer bet once what it was paid has been collected. A row shows the game, the time, the stake, what the bet paid
-(for a casino bet, of the most it could pay), the result, and the **return of this bet**. Search finds bets by game,
-amount or operation ID.
+(for a casino bet, of its prize), the result, and the **return of this bet**. Search finds bets by game, amount or
+operation ID.
 
 The list is read from the latest 100 receipts the wallet keeps, which hold every kind of operation; the receipts of
 developer bets still open are kept beyond those 100. Rejected requests and payments are not bets, and are listed in
@@ -25,39 +25,49 @@ Opening a casino bet shows everything its receipt holds:
 
 | Section                    | What it shows                                                                                                                                              |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where the round landed     | Each prize as a band across the outcome space, the outcome marked on it, and the prizes that held it                                                       |
-| The prize table you signed | Every prize: what it pays, its chance, and the outcomes it holds                                                                                           |
+| Where the round landed     | A bar across the outcome space: the band of outcomes that win, below the bet's chance, and a mark where the round's outcome landed                         |
+| The bet you signed         | Its prize, its chance, and what it was worth: its return                                                                                                   |
 | How the outcome was fixed  | Your seed and the casino's secret, each checked against the hash your bet signed, and the outcome worked out again from the two                            |
 | The record you both signed | The operation, channel, sequence, game key, memo, expected payout, the balance after it, its commission and both signatures, and the whole receipt as JSON |
 
 The checks under **How the outcome was fixed** are made again when you open the bet, from the receipt's own seed and
-secret; a tick means the value matches what the bet signed. A developer bet shows **How it settled** instead: its
-developer, the meta you signed, what the developer's signed settlement paid you and gave the casino, and the
-developer's signature.
+secret; a tick means the value matches what the bet signed or, for the outcome, what the bet paid. A developer bet
+shows **How it settled** instead: its developer, the meta you signed, what the developer's signed settlement paid you
+and gave the casino, and the developer's signature.
 
 ## Measured return
 
-A casino bet's **return** is what its prize table pays back on average, as a share of its stake:
+A casino bet's **return** is what it pays back on average, as a share of its stake:
 
 ```text
-expected payout = Σ payout × (rangeEnd − rangeStart) / 2^64    over every prize
+expected payout = prize × chance / 2^64
 return          = expected payout / stake
 ```
 
-The wallet works it out from the prizes it signs, before signing, and never from anything a game says. It shows the
-return in millionths of the stake, rounded to the nearest, as a percentage with four decimals: a hundredth of a basis
-point. The coin flip in [how it works](../overview/how-it-works.md#casino-bets) returns 98.0000%. A developer bet has no
-prize table, and so no return.
+The wallet works it out from the chance and prize it signs, before signing, and never from anything a game says. It
+shows the return in millionths of the stake, rounded to the nearest, as a percentage with four decimals: a hundredth of
+a basis point. The coin flip in [how it works](../overview/how-it-works.md#casino-bets) returns 98.0000%. A developer
+bet has no odds, and so no return.
 
 **My games**, `/games`, adds up your bets of each asset, overall and game by game, two ways:
 
-- **Expected**: what the bets' prize tables were worth, the sum of their expected payouts over the sum of their stakes,
-  counting only bets that have a prize table.
+- **Expected**: what the bets were worth, the sum of their expected payouts over the sum of their stakes, counting only
+  casino bets.
 - **Paid back**: what the bets paid, the sum of their payouts over the sum of their stakes.
 
 Over a handful of bets the second figure is luck, and over many it follows the first. ETH and TEST are separate channels
 and never add up to one figure. The wallet records the return of every casino bet and does not refuse a bet that
 returns little ([trust model](../overview/trust-model.md#what-a-game-can-and-cannot-do)).
+
+These figures measure the bets a game placed, not the game. A step with two outcomes, as in Dice and Mines, is one bet
+whose return is the step's. A step with more, as in Plinko or a slot, is collapsed: the page draws one bet between two
+of its outcomes ([collapsing bets](../games/collapsing-bets.md)). That bet stakes only what the step can lose, never the
+part of the stake it keeps either way, and the bets for the largest prizes carry more of the step's edge than the rest.
+So a collapsed game's bets pay back less of what they stake than the game does of its stake. Measured at a bankroll far
+above the stake, each Plinko board returns exactly 99% of the ball, and its bets pay back from about 93% to over 99%;
+Samson's Gold's lowest, the whole stake against the jackpot, pays back 95.1%. When the casino's bankroll is small beside
+a prize, the bet for it must carry more edge still for the bankroll to take it: at the least bankroll that backs
+Plinko's 16-row low board, its rarest bet pays back about 22%.
 
 My games lists the games you have played, your favourites first and then the most staked. A favourite is a note in this
 browser, never signed or sent anywhere. Each game links to its public record, and **Play again** reopens a game the
@@ -65,10 +75,10 @@ library has shown.
 
 ## Groups
 
-A game can give its bets and payments a **group**, a label of up to 64 characters such as one hand or one match. Bet
-history shows the bets of one group in one game as a single row, with how many bets it holds and their net result;
-opening it lists each bet. Only the net is added up: a multi-step game stakes again what its last step paid, so adding
-its stakes or its payouts would count the same money more than once.
+A game can give its bets and payments a **group**, a label of up to 64 characters that ties them together: the steps of
+one hand, the bets of one spin, one match. Bet history shows the bets of one group in one game as a single row, with
+how many bets it holds and their net result; opening it lists each bet. Only the net is added up: a multi-step game
+stakes again what its last step paid, so adding its stakes or its payouts would count the same money more than once.
 
 ## Rejected bets
 

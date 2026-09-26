@@ -5,7 +5,7 @@ description: How a game installs @hookedin/play, the import paths the SDK offers
 
 The SDK is part of the `@hookedin/play` package, the repository that also holds the wallet, the contract and the
 house's games. It is the wallet bridge, a helper for multi-step rounds, an exact pricing engine, a balance strip, sound,
-the kit a game's server settles developer bets with, and a test wallet.
+the kit a game's server settles developer bets with, binary steps for a draw its players share, and a test wallet.
 
 ## Install
 
@@ -45,8 +45,9 @@ it in Node throws; a Node-safe module imports anywhere.
 | `@hookedin/play/sdk/engine`                      | [The pricing engine](engine.md), with the blackjack and mines rules                | Node-safe                             |
 | `@hookedin/play/sdk/generated/blackjack-funding` | [`blackjackFunding`](engine.md#blackjackfunding), precomputed blackjack prices     | Node-safe                             |
 | `@hookedin/play/sdk/developer`                   | [`createDeveloper`](developer.md), for a game's own server                         | Node-safe; runs wherever `fetch` does |
+| `@hookedin/play/sdk/steps`                       | [Binary steps](steps.md), a shared draw backed with binary casino bets             | Node-safe                             |
 | `@hookedin/play/sdk/admits`                      | [The casino's admission rule](admits.md), and a bet's measured return              | Node-safe                             |
-| `@hookedin/play/sdk/outcome`                     | [`outcome`, `roundId`, `seedHash`](outcome.md), the rule a round's outcome follows | Node-safe                             |
+| `@hookedin/play/sdk/outcome`                     | [The rule a round's outcome follows](outcome.md), and what a casino bet pays on it | Node-safe                             |
 | `@hookedin/play/sdk/wire`                        | [How a player is named](wire.md), shared by page and server                        | Node-safe                             |
 | `@hookedin/play/sdk/bank`                        | [`mountBank`](bank-and-synth.md#mountbank), the balance strip                      | Browser only                          |
 | `@hookedin/play/sdk/synth`                       | [`createSynth`](bank-and-synth.md#createsynth), synthesized sound                  | Node-safe; sound plays in a browser   |
@@ -61,8 +62,8 @@ stylesheet [`shared.css`](bank-and-synth.md#sharedcss) reaches a game through th
 
 `@hookedin/play/sdk` re-exports [sdk](hookedin.md), [round](round.md), [bank](bank-and-synth.md#mountbank),
 [synth](bank-and-synth.md#createsynth), [admits](admits.md), [outcome](outcome.md) and [engine](engine.md). It leaves
-out [developer](developer.md), [wire](wire.md) and the blackjack funding table. It is browser-only, because the bridge
-is.
+out [developer](developer.md), [steps](steps.md), [wire](wire.md) and the blackjack funding table. It is browser-only,
+because the bridge is.
 
 ```ts
 import { HookedIn, RoundClient, mountBank, createMines } from '@hookedin/play/sdk';

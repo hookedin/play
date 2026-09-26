@@ -2,7 +2,7 @@
 title: Player names
 description: Reference for @hookedin/play/sdk/wire, how a game page and its server write a player's names and scope saved state to one player.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 `import { showName, playerScope } from '@hookedin/play/sdk/wire';` is what a game page and its own server share about a

@@ -37,8 +37,8 @@ which the wallet and the casino check and keep and the contract never reads. A j
 any balance both sides accept; one transition the channel key authorized and the casino signed extends it without a
 final acknowledgment from the player. The EIP-712 domain binds the name `HookedIn`, version `1`, the chain and the
 deployment. Risk admission and commission belong to the casino, and what a game means by its bets to the game. The
-wallet and the contract check a casino bet's stake, every prize, the round's secret, the sequence and the arithmetic
-bounds, and the wallet records the exact return and largest payout of what the player signed. A bet and a payment sign
+wallet and the contract check a casino bet's stake, chance and prize, the round's secret, the sequence and the
+arithmetic bounds, and the wallet records the exact return of what the player signed. A bet and a payment sign
 the game that asked for them, by its key, and any group the game gave them, so the game a player's money went to is part
 of the signed record and the casino tallies commission per game. Commission is not in the signed operation.
 
@@ -114,8 +114,8 @@ the round's hash, so a round needs no signature and the contract checks nothing 
 A round is a channel's own or a developer's. A channel's own round is named by the casino; the casino bet on it opens
 and closes it in one request, and the reply names the next one. It is revealed whenever it ends, also when its casino
 bet is declined, so the wallet records what a declined bet would have paid. A developer's round is named whenever the
-developer asks, in one asset, and revealed by the developer's own casino bet on it
-([developer bets](../games/developer-bets.md)).
+developer asks, in one asset, and revealed by the developer's own casino bet on it, which may bet nothing and only
+reveal it ([developer bets](../games/developer-bets.md)).
 
 ## Casino bets and developer bets
 
@@ -132,12 +132,12 @@ never reads it. A game can make its developer bets provably fair with a scheme o
 the developer's casino bet on a round is backed by the bankroll and reveals the round, and its meta, kept with the
 reveal, commits to whatever the developer chose before the outcome was revealed, such as the bets it backs. The wallet
 checks only that the developer signed what it paid; anyone can check a game's scheme against what the casino publishes.
-The bankroll sees a developer's hedge as what it is: one casino bet with many prizes.
+A table whose players share one draw is backed with binary steps: the developer walks a balanced tree over the draw's
+outcomes, one casino bet on each level, each on its own round and admitted by itself, in the group of the players' bets.
 
 ## Risk admission
 
-Risk admission treats a casino bet as one wager: the exact Kelly condition over the cells its prize ranges cut from the
-outcome space, which for one stake and one prize is the closed-form Kelly inequality
+Risk admission treats a casino bet as one wager with two outcomes, admitted by the closed-form Kelly inequality
 ([economics](../reference/economics.md)). The casino reserves the bet's worst-case cash decrease plus commission across
 the operations in flight, and makes its capacity decision before it reads the round's secret, so no rejection depends on
 the outcome. A developer's casino bet is admitted the same way; developer bets are not admitted at all, because the
@@ -193,12 +193,12 @@ journal latches a failed write and keeps only the pending transaction and the la
 
 A manifest states what the wallet holds a game to, and nothing about what a game pays back: a figure a game promised
 would be unverifiable, because nothing bounds how often a game wagers the money it holds. What a player gets instead is
-measured: the wallet computes the exact return of every casino bet it signs from that bet's own prize table, and the
-casino publishes the same figure for every casino bet placed in a game
-([measured return](../wallet/bets-and-receipts.md#measured-return)). A developer bet has no prize table and so no such
-figure. Every bound a game must respect (the prizes one bet holds, the size of the outcome space, how large a bet's meta
-and a group may be) is part of the protocol revision: `wallet.hello` reports them to a game and `GET /api/config` to a
-developer, so a game reads them rather than carrying copies.
+measured: the wallet computes the exact return of every casino bet it signs from that bet's own chance and prize, and
+the casino publishes the same figure for every casino bet placed in a game
+([measured return](../wallet/bets-and-receipts.md#measured-return)). A developer bet has no odds and so no such figure.
+Every bound a game must respect (the size of the outcome space, how large a bet's meta and a group may be) is part of
+the protocol revision: `wallet.hello` reports them to a game and `GET /api/config` to a developer, so a game reads them
+rather than carrying copies.
 
 A game owns its rules, state transitions and persistence. Its frame keeps its host's origin
 (`allow-scripts allow-same-origin`) and stores its rounds there, keyed by the player's name and the asset in play. The
@@ -209,13 +209,17 @@ stakes of the game's developer bets and its key settles them, so a game's server
 The wallet refuses a game whose manifest names another developer. Where a game is served can change while its key
 stays, so a game keeps its history.
 
-A one-shot game places its whole prize table as one casino bet, and a multi-step game places
-[one casino bet per step](#settled-trade-offs), priced with the casino's own admission rule. The wallet signs and
-verifies each bet whole, and a game reads what to show from its receipt; developers stay responsible for how steps
-combine into their advertised game. A game with a server ships page and server as one Cloudflare Worker on one origin:
-static assets, and a Durable Object under `/api/`. The casino deployment runs no game servers. A game learns one thing
-about who is playing: their uname, derived from an address the casino never discloses, with their alias beside it; the
-player's address, channel and balances never cross the bridge.
+A game places at most [one casino bet per step](#settled-trade-offs), priced with the casino's own admission rule. A
+step with two outcomes is one bet. A single-player game collapses a step with more in the page
+([collapsing bets](../games/collapsing-bets.md)): it draws, with its own randomness, a bet between two of the step's
+outcomes, or no bet, so that each outcome is reached exactly as often as its rules say; the round's outcome settles the
+bet and picks the result within the side it lands on. A game whose players share one draw, such as roulette, is backed
+by its developer's [binary steps](#casino-bets-and-developer-bets). The wallet signs and verifies each bet whole, and a
+game reads what to show from its receipt; developers stay responsible for which bet a collapsed step draws and how
+steps combine into their advertised game. A game with a server ships page and server as one Cloudflare Worker on one
+origin: static assets, and a Durable Object under `/api/`. The casino deployment runs no game servers. A game learns
+one thing about who is playing: their uname, derived from an address the casino never discloses, with their alias
+beside it; the player's address, channel and balances never cross the bridge.
 
 Game developers test against [testing/game-wallet.ts](../../testing/game-wallet.ts), a real wallet wired to an
 in-memory casino stub that holds every casino bet to the casino's own admission rule.

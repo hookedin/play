@@ -53,7 +53,7 @@ for (const node of plan.nodes) {
   console.log(`  Hard ${hand.total} vs ${hand.dealerUpcard}: funded cash ${amount(node.cash)}; policy ${policy(node)}`);
   for (const action of node.actions) {
     console.log(
-      `    ${action.id}: required ${amount(action.requiredCash)}; ${action.transition.kind === 'casino-bet' ? `${action.transition.bet.prizes.length} prizes over ${action.transition.successors.length} successors` : action.transition.kind}`,
+      `    ${action.id}: required ${amount(action.requiredCash)}; ${action.transition.kind === 'casino-bet' ? `${action.transition.branches.length} branches over ${action.transition.classes.length} cash classes` : action.transition.kind}`,
     );
   }
 }

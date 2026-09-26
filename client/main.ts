@@ -1080,6 +1080,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     onRequest: async (method, params) => {
       if (method === 'wallet.hello') return wallet.gameHello();
       if (method === 'wallet.info') return wallet.gameInfo();
+      if (method === 'wallet.round') return wallet.gameRound(params.id);
       if (method === 'game.receipt') return wallet.gameReceipt(params.id);
       if (uiBusy || wallet.busy) throw gameError('busy', 'The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
@@ -1336,7 +1337,7 @@ function toggleFavourite(key: string) {
   renderMyGames();
 }
 /** Every settled bet this wallet signed. A rejected request never became a bet, so it stays in
- * Activity; only a bet whose prize table the wallet recorded can say what it was worth. */
+ * Activity; only a bet whose odds the wallet recorded can say what it was worth. */
 function ownBets(): BetRow[] {
   return wallet.history
     .filter(
@@ -1364,7 +1365,7 @@ function ownBets(): BetRow[] {
 const showGameRecord = (row: { key?: string | null }) => {
   if (row.key) void openGameRecord(row.key);
 };
-/** One bet in full: the prize table it rode, where its round landed, and the preimages that fixed
+/** One bet in full: the odds it rode, where its round landed, and the preimages that fixed
  * it. Everything shown comes out of the receipt this wallet kept. */
 function showBet(row: BetRow) {
   $('bet-detail-eyebrow').textContent = 'ONE BET, IN FULL';
@@ -1540,17 +1541,22 @@ async function openGameRecord(key: string, push = true) {
   try {
     const record = await wallet.api(`/api/games/${key}?limit=200`);
     if (location.pathname !== gameBetsPath(key)) return;
-    const rows: BetRow[] = record.bets.map((bet: any) => ({
-      at: Number(bet.at),
-      game: name,
-      who: bet.alias ? '@' + bet.alias : bet.uname ? '~' + bet.uname : 'a player',
-      asset: bet.asset === 'test' ? 'test' : 'eth',
-      ...(bet.group === undefined ? {} : { group: bet.group }),
-      stake: BigInt(bet.stake),
-      payout: BigInt(bet.payout),
-      expected: bet.expected === null ? null : BigInt(bet.expected),
-      index: Number(bet.index),
-    }));
+    const rows: BetRow[] = record.bets.map((bet: any) => {
+      const who = bet.alias ? '@' + bet.alias : bet.uname ? '~' + bet.uname : 'a player';
+      return {
+        at: Number(bet.at),
+        game: name,
+        // A developer's casino bet from its bank is listed beside its players' bets, and counted in no total.
+        who: bet.kind === 'bank' ? `${who}'s bank` : who,
+        asset: bet.asset === 'test' ? 'test' : 'eth',
+        ...(bet.group === undefined ? {} : { group: bet.group }),
+        stake: BigInt(bet.stake),
+        payout: BigInt(bet.payout),
+        expected: bet.chance === undefined ? null : BigInt(bet.prize) * BigInt(bet.chance),
+        maxPayout: bet.prize === undefined ? null : BigInt(bet.prize),
+        index: Number(bet.index),
+      };
+    });
     $('gamebets-totals').replaceChildren(
       ...totalCards(
         new Map(

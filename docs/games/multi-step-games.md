@@ -93,36 +93,41 @@ round.watch(() => render(round.state())); // another tab moved the round
 - `start(setup)` starts a round. `setup.stake` is the stake as a decimal string, and any other field is yours for the
   graph function, such as Dice's `chanceBps`. It asks the wallet for money if the limit is short, prices the graph and
   saves the round; no money moves until the first action.
-- `action(id)` plays one step. It saves the action and a fresh operation ID, asks for money if the step needs more than
-  the limit holds, places the step as one `game.casinoBet` (or a `game.payment`, or nothing), checks the wallet's
-  verified payout against the state the outcome names, and advances.
+- `action(id)` plays one step. It asks for money if the step needs more than the limit holds, draws which bet the step
+  places with the page's own randomness and saves it with a fresh operation ID before anything is signed, places it as
+  one `game.casinoBet` (or a `game.payment`, or nothing), checks the wallet's verified payout against the bet, and
+  advances to the state the outcome reaches.
 - The state says where the round stands: `nodeId`, `cash` (what the round holds, which the player keeps if they stop),
   `terminal`, `actions` (what is legal from here), `events` (each step's action and label, to redraw the round after a
-  reload) and `settlement` (the last step's outcome, payout and the range that led to it). Every field is in
-  [`RoundState`](../sdk/round.md#roundstate).
+  reload) and `settlement` (the last step's result: whether its bet won and at what chance, its payout and outcome, and
+  `draw`, the value to show it with). Every field is in [`RoundState`](../sdk/round.md#roundstate).
 
 ## One step is one bet
 
-When the player acts, `RoundClient` places the whole step as one casino bet:
+When the player acts, the engine groups the step's successors by the cash they need into **cash classes**. A step with
+one class places no bet, and any cash above that class's is paid to the bankroll as a `game.payment`. Any other step
+places at most one casino bet, between a lower class and a higher one:
 
 ```text
-stake    = current cash − the cheapest successor's cash
-prize_i  = [start_i, end_i) pays (successor i's cash − the cheapest), for every better successor
+stake  = current cash − the lower class's cash
+prize  = the higher class's cash − the lower class's cash
 ```
 
-Each successor's stretch of the outcome space is as wide as its probability, to the nearest outcome in 2^64, and keeps
-its own stretch even when two successors need the same cash, so the verified outcome names the state, the card, as well
-as the money. Whatever the outcome, the player's cash after the bet is exactly the reached state's. A step whose
-successors all need the same cash places no bet, and any cash above it is paid to the bankroll as a `game.payment`.
+Whatever the outcome, the player's cash after the bet is exactly the reached class's. A step of two classes, one on
+each side of the current cash, is always that one bet. A step of more is collapsed: the page draws, with its own
+randomness and before anything is signed, which pair of classes to bet between, in proportions that reach every class
+exactly as often as the rules say, and a class at exactly the current cash is reached with no bet
+([collapsing bets](collapsing-bets.md)). Which state of a class, when several need its cash, is drawn from the round's
+outcome, so the verified outcome names the card as well as the money.
 
-In Double up, `flip` from `start` stakes the stake against one prize of 1.9 stakes on half the outcomes, and `take`
+In Double up, `flip` from `start` stakes the stake for a prize of 1.9 stakes that wins on half the outcomes, and `take`
 moves no money: the 1.9 stakes are already in the player's balance. [Sequential games](sequential-games.md) derives all
 of it.
 
 ## Pricing
 
 The engine works backward from the terminal payouts and gives every state its **cash**: the least that finances each
-of its actions as one bet the casino's rule admits. That is more than the state's expected value, by a
+of its actions with bets the casino's rule admits. That is more than the state's expected value, by a
 [risk premium](sequential-games.md#why-the-price-exceeds-the-expected-value) that shrinks as the bankroll grows.
 
 `RoundClient` prices against half the bankroll `wallet.info` reports, on a grid of a billionth of the stake, and starts
@@ -177,5 +182,7 @@ The cash it leaves out is the player's all the same ([`mountBank`](../sdk/bank-a
 - [Blackjack](../../games/blackjack/): `createBlackjack({ stake })` with the precomputed table; doubles, splits and
   insurance through `additionalCash`, and the cards redrawn from `state.events`.
 - [Dice](../../games/dice/): one decision with two outcomes, [src/rules.ts](../../games/dice/src/rules.ts).
-- [Samson's Gold](../../games/samson/): one decision with dozens of outcomes, and a bonus counter that applies each
-  finished round once, by `state.id`.
+- [Plinko](../../games/plinko/): one decision whose outcomes are the buckets,
+  [src/tables.ts](../../games/plinko/src/tables.ts), with the ball's path drawn from `state.settlement.draw`.
+- [Samson's Gold](../../games/samson/): one decision with dozens of outcomes, reel stops drawn from
+  `state.settlement.draw`, and a bonus counter that applies each finished round once, by `state.id`.

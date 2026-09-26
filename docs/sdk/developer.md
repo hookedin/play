@@ -8,7 +8,8 @@ sidebar:
 `import { createDeveloper } from '@hookedin/play/sdk/developer';` is the server side of a game with developer bets. The
 module is Node-safe and runs wherever `fetch` does: Node, a Cloudflare Worker, a browser. Every call goes to the
 casino's public API. [Developer bets](../games/developer-bets.md) is the guide, with the order of requests and
-[roulette](https://github.com/hookedin/game-roulette/tree/main/server) as the worked example.
+[roulette](https://github.com/hookedin/game-roulette/tree/main/server) as the worked example; roulette walks each spin
+with [binary steps](steps.md).
 
 The kit signs with the developer's key: the key of the account the game is published from, whose address the manifest
 names as its `developer`. A server holding it holds everything that account holds: its games, their commission and its
@@ -23,7 +24,7 @@ const developer = await createDeveloper({
   name: 'roulette',
 });
 const round = await developer.openRound('eth');
-const seedHash = await developer.seedHash(round.id); // publish both before anybody bets
+const seedHash = await developer.seedHash(round.id); // commit to both before anybody bets
 ```
 
 ## The developer
@@ -64,15 +65,16 @@ export interface Developer {
   address: string;
   game: string;
   limits: {
-    prizes: number;
     outcomeSpace: string;
     meta: number;
     group: number;
   };
+  bankroll(asset: AssetId): Promise<bigint>;
   openRound(asset: AssetId): Promise<Round>;
   seedHash(round: string): Promise<string>;
   round(id: string): Promise<Round>;
   casinoBet(bet: BankCasinoBet): Promise<Round>;
+  reveal(bet: { round: string; group: string; meta: Record<string, unknown> }): Promise<Round>;
   settle(settlements: Settlement[]): Promise<PublicDeveloperBet[]>;
   bets(query?: {
     status?: 'open' | 'settled';
@@ -106,16 +108,25 @@ The key of the game this kit serves, in lower case: [`gameKey`](#gamekey) of `ad
 
 ```ts
 limits: {
-  prizes: number;
   outcomeSpace: string;
   meta: number;
   group: number;
 }
 ```
 
-Every bound a bet is held to, from the casino's config: the most prizes one bet holds, the size of the outcome space,
-the most a bet's meta takes and the longest group. They are the numbers a wallet reports to a game as its
+Every bound a bet is held to, from the casino's config: the size of the outcome space a bet's chance counts outcomes
+out of, the most a bet's meta takes and the longest group. They are the numbers a wallet reports to a game as its
 [limits](../reference/bridge.md#limits).
+
+#### `bankroll`
+
+```ts
+bankroll(asset: AssetId): Promise<bigint>;
+```
+
+The casino's bankroll in `asset`, as it last reported it in [`GET /api/status`](../casino-api/public.md#get-apistatus):
+what to price casino bets against, such as a shared draw's [binary steps](steps.md#pricesteps), not a promise to admit
+them.
 
 #### `openRound`
 
@@ -154,27 +165,41 @@ casinoBet(bet: BankCasinoBet): Promise<Round>;
 
 Places the developer's casino bet on one of its rounds, from its bank, and resolves with the revealed round:
 [`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet). It signs a
-`BankCasinoBet` over the round, the game, the stake, the prizes, the hash of the seed and the hash of `meta`, and sends
-the seed with it. The casino admits it against the bankroll like any casino bet. Accepted, its stake leaves the bank and
-what its prizes pay on the outcome goes back in; declined, it moves no money. Either way the round is revealed, and
-`round.casinoBet.accepted` says which. The seed comes from the key and the round, so placing it again after a lost reply
-is the same bet and gets the same answer; a different casino bet on a revealed round is refused with `round-revealed`,
-and one the bank cannot pay with `bank-short`.
+`BankCasinoBet` over the round, the game, the stake, the chance, the prize, the group, the hash of the seed and the hash
+of `meta`, and sends the seed with it. The casino admits it against the bankroll like any casino bet. Accepted, its
+stake leaves the bank and, when the round's outcome is below its chance, its prize goes back in; declined, it moves no
+money. Either way the round is revealed, and `round.casinoBet.accepted` says which. The seed comes from the key and the
+round, so placing it again after a lost reply is the same bet and gets the same answer; a different casino bet on a
+revealed round is refused with `round-revealed`, and one the bank cannot pay with `bank-short`.
 
 It throws an `Error` with `status` 400 and code `invalid` before sending when `meta` is not a JSON object of up to
-4,096 bytes of canonical JSON with whole numbers, and an `Error` when the secret the casino reveals is not the round's.
+4,096 bytes of canonical JSON with whole numbers. It throws an `Error` when the reply is not this bet's reveal: the
+secret must hash to the round, the seed and the signature must be this bet's, and the outcome must be their
+[`outcome`](outcome.md#outcome).
 
 ```ts
-// Back the round's bets with one casino bet of their prizes together, committing to the bets it covers.
+// Back the round's bets with one casino bet, committing to the bets it covers.
 const revealed = await developer.casinoBet({
   round: round.id,
   stake: 1000000000000n,
-  prizes: [{ rangeStart: '0', rangeEnd: '9223372036854775808', payout: '1980000000000' }],
+  chance: 1n << 63n,
+  prize: 1980000000000n,
+  group: 'match-812',
   meta: { covered: ['0x9ef313d092ad9d9f5f2ac313d77b5be958fdab15452b07fe9c2b5fc71fb804b0'] },
 });
 revealed.outcome; // the round's 64-bit outcome
 revealed.casinoBet!.accepted; // whether the bankroll took it
 ```
+
+#### `reveal`
+
+```ts
+reveal(bet: { round: string; group: string; meta: Record<string, unknown> }): Promise<Round>;
+```
+
+Reveals one of the developer's rounds without betting anything: [`casinoBet`](#casinobet) with a stake, chance and prize
+of zero, signed, grouped and kept like any other. It moves no money, and `round.casinoBet.accepted` is `false`. It
+throws as `casinoBet` does. A level of a [binary walk](steps.md) that bets nothing reveals its round this way.
 
 #### `settle`
 
@@ -254,7 +279,6 @@ the outcome rule and `LIMITS`. A change to what only a wallet signs leaves it al
 
 ```ts
 export const LIMITS: {
-  prizes: number;
   outcomeSpace: string;
   meta: number;
   group: number;
@@ -287,14 +311,18 @@ bet's hash.
 export interface BankCasinoBet {
   round: string;
   stake: string | bigint;
-  prizes: WirePrizes;
+  chance: string | bigint;
+  prize: string | bigint;
+  group: string;
   meta: Record<string, unknown>;
 }
 ```
 
-The developer's casino bet on one of its rounds: its stake and prizes against the bankroll, and `meta`, the developer's
-own JSON, which the casino keeps with the reveal and never reads. Whatever the developer commits to there, such as the
-hash of the bets it backs, it committed to before the outcome was revealed.
+The developer's casino bet on one of its rounds, from its bank against the bankroll: its `stake` pays `prize` when the
+round's outcome is below `chance`, which counts winning outcomes out of 2^64. `group`, 1 to 64 characters, labels the
+bets that belong together, such as a spin's steps. `meta` is the developer's own JSON, which the casino keeps with the
+reveal and never reads: whatever the developer commits to there, such as the side a step backs or the bets it covers, it
+committed to before the outcome was revealed. A stake, chance and prize all zero is a [reveal](#reveal).
 
 ### `DeveloperBetPage`
 
@@ -384,14 +412,7 @@ export interface Round {
 
 A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer in one
 asset. It is `open` until the developer's casino bet on it reveals it; a revealed round shows the seed, the secret,
-their 64-bit `outcome` and the casino bet, `{ game, stake, prizes, meta, signature, accepted, payout? }`: the bet as
-the developer signed it, whether the bankroll took it, and what it paid the bank when it did.
-[`outcome`](outcome.md#outcome) checks a revealed round.
-
-### `WirePrizes`
-
-```ts
-export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string }[];
-```
-
-Prizes on the wire, in decimal strings.
+their 64-bit `outcome` and the casino bet, `{ game, stake, chance, prize, group, meta, signature, accepted, payout? }`:
+the bet as the developer signed it, whether the bankroll took it, and what it paid the bank when it did. A reveal's
+stake, chance and prize are `'0'`. [`outcome`](outcome.md#outcome) and [`betPayout`](outcome.md#betpayout) check a
+revealed round.

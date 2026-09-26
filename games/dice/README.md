@@ -28,15 +28,15 @@ actions: [{ id: 'roll', outcomes: [
 { id: 'dice:lose', kind: 'terminal', payout: 0n },
 ```
 
-`chance` is in basis points. `RoundClient` turns the `roll` action into one bet:
+`chance` is the win chance in basis points. `RoundClient` turns the `roll` action into one bet:
 
 - the **stake** is the player's stake;
-- one **prize** covers the first `chance / 10000` of the 64-bit outcome space and pays `stake × 9900 / chance`;
-- every other outcome pays nothing.
+- its **chance** is `chance / 10000` of the 2^64 outcomes;
+- its **prize**, `stake × 9900 / chance`, is paid when the round's outcome is below the chance.
 
-The win range is laid out to the nearest whole outcome in 2^64 ([transition.ts](../../sdk/src/engine/transition.ts) in the SDK). The wallet signs that bet, the casino settles it, and the game shows `dice:win` or `dice:lose` according to where the verified outcome fell.
+Where `chance / 10000` of 2^64 is not a whole number of outcomes, the bet's chance is rounded down or one outcome more, drawn in the page so that the odds are exact on average ([transition.ts](../../sdk/src/engine/transition.ts) in the SDK). The wallet signs that bet, the casino settles it, and the game shows `dice:win` or `dice:lose` according to whether the verified outcome fell below the chance.
 
-**Return.** The nominal return is 99%: `chance/10000 × 9900/chance = 0.99`. The payout is rounded down to a whole number of wei, so the exact figure can be below 99% by less than one wei per roll. [test/dice.test.ts](test/dice.test.ts) checks this at every chance on the slider.
+**Return.** The nominal return is 99%: `chance/10000 × 9900/chance = 0.99`. The payout is rounded down to a whole number of wei, so the exact figure can be below 99% by less than one wei per roll. [test/dice.test.ts](test/dice.test.ts) checks this at every chance on the slider. A roll has two outcomes, so the return the wallet measures of its bet is the roll's.
 
 **Limits.** Before a roll, `RoundClient` prices the bet with the casino's own admission rule against half the reported bankroll. A stake the casino could not back, which happens sooner at low win chances, is refused with a message before anything is signed.
 
@@ -55,9 +55,9 @@ Recovery is `RoundClient`'s job. It saves the roll and its operation `id` in `lo
 
 The game page is untrusted by design. It runs in a sandboxed iframe on its own origin and talks to the wallet only through `postMessage`.
 
-- **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
+- **The game never holds keys.** It sends the wallet a bet: a stake, a chance and a prize. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every casino bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet picks its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
-- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
+- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, pays the prize itself if the outcome is below the chance, and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
 
 The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
@@ -110,7 +110,7 @@ From play's root:
 node --test games/dice/test/*.test.ts
 ```
 
-This runs [test/dice.test.ts](test/dice.test.ts): the return at every chance on the slider, the chance limits, rolls settled through the real wallet, and that every step pays back at least the game's floor. `npm test` at play's root type-checks and runs it with every other test. The pricing and round handling it relies on are tested in the [game SDK](../../sdk).
+This runs [test/dice.test.ts](test/dice.test.ts): the return at every chance on the slider, the chance limits, rolls settled through the real wallet, and that every bet it can place pays back at least the game's floor. `npm test` at play's root type-checks and runs it with every other test. The pricing and round handling it relies on are tested in the [game SDK](../../sdk).
 
 ## License
 

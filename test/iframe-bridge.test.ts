@@ -4,8 +4,7 @@ import { attachGameBridge, validateRequest } from '../client/bridge.ts';
 import { checkDetails, KIND } from '../protocol/protocol.ts';
 
 const request = (id = 1, method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
-const prize = { rangeStart: '0', rangeEnd: '100', payout: '20' };
-const params = { id: 'op-1', stake: '10', prizes: [prize] };
+const params = { id: 'op-1', stake: '10', chance: '100', prize: '20' };
 const bet = (overrides: any = {}) => request(1, 'game.casinoBet', { ...params, ...overrides });
 
 class FakeEventTarget {
@@ -324,6 +323,11 @@ test('validation rejects developer and wallet-field injection before dispatch', 
   assert.throws(() => validateRequest({ ...request(), developer: 'attacker' }), /Invalid HookedIn request/);
   assert.throws(() => validateRequest(request(1, 'wallet.info', { privateKey: true })), /takes no parameters/);
   assert.throws(() => validateRequest(request(1, 'wallet.hello', { privateKey: true })), /takes no parameters/);
+  // A round is read by its hash, and by nothing else.
+  const round = '0x' + 'ab'.repeat(32);
+  assert.deepEqual(validateRequest(request(1, 'wallet.round', { id: round })).params, { id: round });
+  for (const params of [{}, { id: round.slice(0, 65) }, { id: 7 }, { id: round, asset: 'eth' }])
+    assert.throws(() => validateRequest(request(1, 'wallet.round', params)), /32-byte hash/);
   assert.throws(
     () => validateRequest(bet({ options: { chanceBps: 4950, developer: 'attacker' } })),
     /Unexpected game request field/,
@@ -389,22 +393,15 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   assert.throws(() => validateRequest(request(1, 'game.receipt', {})), /operation ID/);
   assert.throws(() => validateRequest(bet({ outcome: 'win' })), /Unexpected/);
   assert.equal(validateRequest(bet()).params.stake, '10');
-  // The stake is paid to enter; up to 64 prizes, which may overlap, each pay within [0, 2^64).
-  const whole = { rangeStart: '0', rangeEnd: String(1n << 64n), payout: '1' };
-  assert.equal(validateRequest(bet({ prizes: [prize, prize, whole] })).params.prizes.length, 3);
-  assert.equal(validateRequest(bet({ prizes: Array(64).fill(prize) })).params.prizes.length, 64);
-  for (const prizes of [undefined, [], Array(65).fill(prize), 'prizes', [null], [[0, 100, 20]]])
-    assert.throws(() => validateRequest(bet({ prizes })), /prize/i);
-  for (const bad of [
-    { rangeStart: '100' },
-    { rangeEnd: String((1n << 64n) + 1n) },
-    { payout: '0' },
-    { payout: 20 },
-    { rangeStart: '-1' },
-    { netWin: '5' },
-  ])
-    assert.throws(() => validateRequest(bet({ prizes: [{ ...prize, ...bad }] })));
-  assert.throws(() => validateRequest(bet({ winThreshold: '5' })), /Unexpected/, 'one way to state the odds');
+  // The stake is paid to enter, and the prize comes back when the outcome is below the chance: 1 to 2^64 − 1 of the 2^64.
+  assert.equal(validateRequest(bet({ chance: String((1n << 64n) - 1n) })).params.chance, String((1n << 64n) - 1n));
+  for (const chance of [undefined, '0', String(1n << 64n), '-1', 5, 'half'])
+    assert.throws(() => validateRequest(bet({ chance })));
+  assert.throws(() => validateRequest(bet({ chance: String(1n << 64n) })), /chance/);
+  for (const prize of [undefined, '0', 20, '-1']) assert.throws(() => validateRequest(bet({ prize })));
+  assert.throws(() => validateRequest(bet({ prize: String(1n << 128n) })), /prize is below 2\^128/);
+  for (const bad of [{ odds: '5' }, { probability: '0.5' }, { payouts: [] }])
+    assert.throws(() => validateRequest(bet(bad)), /Unexpected/, 'one way to state the odds');
   // A casino bet settles now, on the wallet's own round. A developer bet is its developer's to settle, on its word, and
   // its meta is the game's own. A group labels any of them.
   assert.throws(() => validateRequest(bet({ round: '0x' + '22'.repeat(32) })), /Unexpected/);
@@ -412,7 +409,7 @@ test('validation accepts only plain parameter records and bounded exact terms', 
   const onWord = (overrides: any) =>
     request(1, 'game.developerBet', { id: 'hand-1', stake: '10', meta: { pick: 'home' }, ...overrides });
   assert.deepEqual(validateRequest(onWord({})).params.meta, { pick: 'home' });
-  for (const bad of [{ prizes: [prize] }, { round: '0x' + '22'.repeat(32) }, { terms: {} }])
+  for (const bad of [{ chance: '100' }, { round: '0x' + '22'.repeat(32) }, { terms: {} }])
     assert.throws(() => validateRequest(onWord(bad)), /Unexpected/);
   // Its meta is held to the rule the casino holds it to: a JSON object, whole numbers, 4,096 bytes at most.
   for (const bad of [

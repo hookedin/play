@@ -6,6 +6,7 @@ import type {
   GameReceipt,
   GameSession,
 } from '../protocol/game-types.ts';
+import type { Round } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress } from 'ethers';
 import { LIMITS } from '../protocol/protocol.ts';
@@ -32,7 +33,7 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
     kind,
     status,
     ...(kind !== 'payment' ? { stake: op.amount } : {}),
-    ...(kind === 'casino-bet' ? { prizes: op.prizes } : {}),
+    ...(kind === 'casino-bet' ? { chance: op.chance, prize: op.prize } : {}),
     ...(receipt.details?.meta ? { meta: receipt.details.meta } : {}),
     ...(receipt.details?.group ? { group: receipt.details.group } : {}),
     ...(receipt.bet ? { bet: receipt.bet } : {}),
@@ -101,6 +102,12 @@ export class GameSessions extends ChannelClient {
       recommendedStake: this.playing === 'test' ? String(10n ** 18n) : this.recommendedStake,
     };
   }
+  /** A developer's round as the casino shows it to anyone, read through this wallet: a game whose players share a
+   * draw checks the rounds its developer walked it with here, since its page talks to nobody but its own origin. */
+  gameRound(this: CasinoWallet, id: string): Promise<Round> {
+    this.requireGame();
+    return this.api(`/api/rounds/${id.toLowerCase()}`);
+  }
   /** A game's name for an operation, for its player: the same in every channel they open, and apart for each
    * asset and each game, so a retry after a new channel finds the operation instead of repeating it. */
   gameOperationId(this: CasinoWallet, id: string) {
@@ -140,15 +147,15 @@ export class GameSessions extends ChannelClient {
   /** A casino bet of the open game: settled at once against the bankroll, on the player's own round. The same
    * request again returns its receipt. */
   async gameCasinoBet(this: CasinoWallet, request: CasinoBetRequest) {
-    const prizes = request.prizes.map(prize => ({
-      rangeStart: gameAmount(prize.rangeStart, false),
-      rangeEnd: gameAmount(prize.rangeEnd),
-      payout: gameAmount(prize.payout),
-    }));
     return gameReceipt(
       request.id,
       await this.executeCasinoBet(
-        { stake: gameAmount(request.stake), prizes, ...(request.group === undefined ? {} : { group: request.group }) },
+        {
+          stake: gameAmount(request.stake),
+          chance: gameAmount(request.chance),
+          prize: gameAmount(request.prize),
+          ...(request.group === undefined ? {} : { group: request.group }),
+        },
         this.gameOperationId(request.id),
         this.gameIntent(request.id),
       ),

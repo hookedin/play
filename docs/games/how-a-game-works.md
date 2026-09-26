@@ -13,7 +13,7 @@ of it.
 
 | The game                                              | The wallet                                                                                                          |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Its rules, prize tables and presentation              | The player's keys and signed channel balance                                                                        |
+| Its rules, its bets and presentation                  | The player's keys and signed channel balance                                                                        |
 | Its own saved state, at its own origin                | Checking each bet against the game's spending limit, and signing it whole                                           |
 | An ID for each operation, saved before it asks        | Sending the bet to the casino and verifying the result: signatures, the round's secret and seed, the balance change |
 | What the player sees, drawn from the verified outcome | Keeping the evidence, and settling on-chain                                                                         |

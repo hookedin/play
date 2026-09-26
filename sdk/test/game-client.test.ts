@@ -17,8 +17,8 @@ import type { GameReceipt } from '../../protocol/game-types.ts';
 import { createBlackjack, createMines } from '../src/engine/index.ts';
 import { blackjackFunding } from '../src/generated/blackjack-funding.ts';
 
-const prize = { rangeStart: '0', rangeEnd: '9000000000000000000', payout: '20' };
-const terms = (id = 'op-0') => ({ id, stake: '10', prizes: [prize] });
+const odds = { chance: '9000000000000000000', prize: '20' };
+const terms = (id = 'op-0') => ({ id, stake: '10', ...odds });
 /** A game's own origin storage, shared by every RoundClient of one test like localStorage would be. */
 const memoryStore = (): RoundStore & { map: Map<string, string> } => {
   const map = new Map<string, string>();
@@ -81,13 +81,13 @@ test('verified gains and losses move the limit; exact retries by ID never charge
       kind: 'casino-bet',
       status: 'settled',
       stake: '10',
-      prizes: [prize],
+      ...odds,
       outcome: receipt.outcome,
       payout: receipt.payout,
     });
     assert.deepEqual(await w.gameCasinoBet(request), receipt);
     assert.deepEqual(await w.gameReceipt(request.id), receipt);
-    await assert.rejects(w.gameCasinoBet({ ...request, prizes: [{ ...prize, payout: '21' }] }), /different intent/);
+    await assert.rejects(w.gameCasinoBet({ ...request, prize: '21' }), /different intent/);
   }
   assert.equal(f.settlements(), 20);
   assert.equal(await w.gameReceipt('never-played'), null);
@@ -133,7 +133,9 @@ test("a developer bet carries its game's meta, and reaches the game settled once
   const revealed = await f.developer.casinoBet({
     round: round.id,
     stake: '20',
-    prizes: [{ ...prize, payout: '40' }],
+    chance: odds.chance,
+    prize: '40',
+    group: 'spin',
     meta: { covered: [placed.bet!, other.bet!] },
   });
   assert.deepEqual(
@@ -169,11 +171,7 @@ test("the developer's casino bet is taken against the bankroll whole, and one it
   await w.setGameLimit('1000');
   const round = await f.developer.openRound('eth'),
     // Pocket 3 of 37 pays 36 times: a net 3,500 wei a win, which this bankroll can back once and not twice.
-    pocket = {
-      rangeStart: String(((1n << 64n) / 37n) * 3n),
-      rangeEnd: String(((1n << 64n) / 37n) * 4n),
-      payout: '3600',
-    };
+    pocket = { chance: String((1n << 64n) / 37n), prize: '3600' };
   const first = await w.gameDeveloperBet({ id: 'first', stake: '100', meta: { pocket: 3 } }),
     second = await w.gameDeveloperBet({ id: 'second', stake: '100', meta: { pocket: 3 } });
   assert.deepEqual(
@@ -185,7 +183,9 @@ test("the developer's casino bet is taken against the bankroll whole, and one it
   const both = await f.developer.casinoBet({
     round: round.id,
     stake: '200',
-    prizes: [{ ...pocket, payout: '7200' }],
+    chance: pocket.chance,
+    prize: '7200',
+    group: 'spin',
     meta: {},
   });
   assert.deepEqual(
@@ -202,7 +202,7 @@ test("the developer's casino bet is taken against the bankroll whole, and one it
   assert.equal(w.gameLimit().balance, '1000');
   // One of them alone, on a round of its own, is a bet the bankroll backs.
   const next = await f.developer.openRound('eth');
-  const taken = await f.developer.casinoBet({ round: next.id, stake: '100', prizes: [pocket], meta: {} });
+  const taken = await f.developer.casinoBet({ round: next.id, stake: '100', ...pocket, group: 'spin', meta: {} });
   assert.equal(taken.casinoBet!.accepted, true);
 });
 
@@ -361,7 +361,20 @@ test('a game learns how its operations ended and never whose they were', async (
   await w.collectPayouts();
   await reply(w.gamePayment({ id: 'pay', amount: '1' }));
   for (const id of ['own', 'seat', 'pay']) await reply(w.gameReceipt(id));
-  const fields = ['id', 'kind', 'status', 'stake', 'prizes', 'group', 'meta', 'bet', 'outcome', 'payout', 'reason'];
+  const fields = [
+    'id',
+    'kind',
+    'status',
+    'stake',
+    'chance',
+    'prize',
+    'group',
+    'meta',
+    'bet',
+    'outcome',
+    'payout',
+    'reason',
+  ];
   for (const r of replies.filter(r => r.status))
     assert.deepEqual(
       Object.keys(r).filter(key => !fields.includes(key)),
@@ -486,9 +499,9 @@ test('the bridge validates game requests without revisions or checkpoints', () =
     { ...terms(), seed: '0x00' },
     { ...terms(), revision: 0 },
     { ...terms(), data: {} },
-    { ...terms(), prizes: [{ ...prize, rangeEnd: String((1n << 64n) + 1n) }] },
-    { ...terms(), winThreshold: '5' },
-    { ...terms(), prizes: [] },
+    { ...terms(), chance: String(1n << 64n) },
+    { ...terms(), odds: '5' },
+    { ...terms(), payouts: [] },
     { ...terms(), group: '' },
     { ...terms(), group: 'x'.repeat(65) },
     { ...terms(), round },
@@ -947,7 +960,7 @@ test('a rejected game action survives a lost reply and reload without resampling
   const result = await round.action('roll');
   assert.equal(result.terminal, true);
   assert.equal(result.events.length, 1);
-  for (const field of ['amount', 'prizes']) assert.deepEqual(attempts[1][field], attempts[0][field]);
+  for (const field of ['amount', 'chance', 'prize']) assert.deepEqual(attempts[1][field], attempts[0][field]);
   assert.notEqual(attempts[1].memo, attempts[0].memo);
   assert.equal(attempts[0].sequence, '1');
   assert.equal(attempts[1].sequence, '3');

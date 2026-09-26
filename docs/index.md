@@ -17,7 +17,7 @@ without depositing. HookedIn runs on Sepolia (chain 11155111).
 | Wallet         | Holds your keys, signs exact bets, verifies every result, keeps the evidence and sends every on-chain transaction            | [client/](../client/), served at https://play.hookedin.com      |
 | Protocol       | The signed structures, hashes, state derivation, admission rule and recovery code the wallet and the casino share            | [protocol/](../protocol/)                                       |
 | Casino         | Names rounds, admits bets against its bankroll, signs results and keeps the books. The service is private; its API is public | [Casino API](casino-api/index.md)                               |
-| Games          | Sites of their own, run in a sandboxed frame inside the wallet. The six house games are in this repository                   | [games/](../games/)                                             |
+| Games          | Sites of their own, run in a sandboxed frame inside the wallet. The house's static games are in this repository              | [games/](../games/)                                             |
 | SDK            | `@hookedin/play/sdk`: the wallet bridge, a round helper, exact step pricing, a developer kit and the build tool              | [Packages and imports](sdk/index.md)                            |
 | Recovery tools | A recovery CLI and a watchtower that settle and defend a channel from its exported evidence                                  | [scripts/](../scripts/)                                         |
 

@@ -5,7 +5,8 @@ import { gameWallet } from '../testing/game-wallet.ts';
 const terms = (id: string) => ({
   id,
   stake: '1000',
-  prizes: [{ rangeStart: '0', rangeEnd: String((1n << 64n) / 2n), payout: '1900' }],
+  chance: String((1n << 64n) / 2n),
+  prize: '1900',
 });
 
 test('a receipt keeps the name of the game it was placed in, after that game is closed', async () => {

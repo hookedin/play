@@ -66,14 +66,15 @@ Every member is in [`gameWallet`](../sdk/game-wallet.md#gamewallet).
 ## What the stub holds you to
 
 - Every casino bet passes the casino's own admission rule against `bankroll`, and the stub charges its commission. A
-  table it declines, a zero-edge one for instance, the casino declines too. A declined bet comes back `rejected` with
-  its round revealed and the balance unchanged.
+  bet it declines, a zero-edge one for instance, the casino declines too. A declined bet comes back `rejected` with its
+  round revealed and the balance unchanged.
 - Operation IDs behave as the casino's do: the same `id` returns the same receipt, on the player's next channel too,
   and a wallet that has lost the receipt is refused with `id-used`.
-- Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`,
-  and the developer's casino bet is admitted like any other and reveals its round.
-- The stub's `developer.bets()` returns 50 bets a page by default and the casino 100; page with `after` and `more` and
-  the size never matters.
+- Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`.
+- The developer's casino bet names a group, is admitted like any other and reveals its round, once: the same bet again
+  gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
+- `developer.bets()` pages as the casino does, 100 bets by default: page with `after` and `more`, and the size never
+  matters.
 
 ## Testing a multi-step game
 
@@ -124,17 +125,17 @@ after a reload.
 ## Testing a server
 
 Hand `f.developer` to your server's code in place of the one `createDeveloper` makes: it opens rounds, derives seed
-hashes, places the developer's casino bet and settles bets, against the stub's bankroll and bank. `f.secretOf(round)` is
-a round's secret, which the stub reveals only with the casino bet. The template's
-[test/developer-bet.test.ts](https://github.com/hookedin/game-template/blob/main/test/developer-bet.test.ts) backs a
-developer bet with a casino bet on a round and settles it by the outcome. Roulette's wheel takes everything outside it
-as arguments, so its tests run it against a casino and a clock of their own
+hashes, places the developer's casino bets and reveals, and settles bets, against the stub's bankroll and bank.
+`f.secretOf(round)` is a round's secret, which the stub reveals only with the round's casino bet or reveal. The
+template's [test/developer-bet.test.ts](https://github.com/hookedin/game-template/blob/main/test/developer-bet.test.ts)
+backs a developer bet with a casino bet on a round and settles it by the outcome. Roulette's wheel takes everything
+outside it as arguments, so its tests run it against a casino and a clock of their own
 ([test/wheel.test.ts](https://github.com/hookedin/game-roulette/blob/main/test/wheel.test.ts)).
 
-## Proving a table's floor
+## Proving a game's floor
 
-A test is where a game proves the least it pays back, from the prize tables it signs: see
-[measured return](casino-bets.md#measured-return).
+A test is where a game proves the least any bet it can place pays back: every branch of every step, at every stake it
+takes. The house games' tests pin it as `FLOOR`; see [measured return](casino-bets.md#measured-return).
 
 ## The conformance suite
 
@@ -149,6 +150,7 @@ service runs it against itself, so the stub behaves as the casino does wherever 
 5. A developer bet is paid what its developer signs, and the game hears.
 6. A developer that restarts places the same casino bet, on the seed it published before the bet.
 7. A developer's casino bet the bankroll declines reveals its round and moves no money.
-8. A round saved under rules the game does not play is let go once, and the next one plays.
+8. A round revealed without a bet shows its outcome in its group and moves no money.
+9. A round saved under rules the game does not play is let go once, and the next one plays.
 
 The suite is not part of the package's exports. It runs in play's `npm test`, on every push.

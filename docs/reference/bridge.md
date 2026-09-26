@@ -23,7 +23,7 @@ window.parent.postMessage({ hookedin: true, id: 1, method: 'wallet.hello', param
 | `hookedin` | `boolean` | Always `true`                                                                                                           |
 | `id`       | `number`  | The envelope ID: a safe integer, at least 0, above every earlier request's since the frame loaded. The reply carries it |
 | `method`   | `string`  | One of the [methods](#methods)                                                                                          |
-| `params`   | object    | The method's parameters: a plain object, which may be left out when the method takes none                               |
+| `params`   | object    | The method's parameters and no others: a plain object, which may be left out when the method takes none                 |
 
 The wallet answers each request once, with the same `id` and either `result` or `error`. Here `null` is what
 `game.receipt` answers for an operation the wallet has no record of:
@@ -68,17 +68,17 @@ deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [l
 
 ## Queueing
 
-`wallet.hello`, `wallet.info` and `game.receipt` are answered at once, also while a bet or the player's dialog is open.
-`game.casinoBet`, `game.developerBet`, `game.payment` and `game.requestFunds` sign something or ask the player, so they
-take their turn one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`. A
-request whose turn comes while the wallet is busy with another operation, its own or the player's, is refused with
-`busy` too.
+`wallet.hello`, `wallet.info`, `wallet.round` and `game.receipt` are answered at once, also while a bet or the player's
+dialog is open. `game.casinoBet`, `game.developerBet`, `game.payment` and `game.requestFunds` sign something or ask the
+player, so they take their turn one at a time, in the order the game sent them. At most 32 wait; one more is refused
+with `busy`. A request whose turn comes while the wallet is busy with another operation, its own or the player's, is
+refused with `busy` too.
 
 ## Amounts
 
 Every amount is a decimal string of whole smallest units of the wallet's asset: digits only, no sign and no leading
-zeros, below 2^256. Both assets count in units of 10^-18, so for ETH the unit is the wei. A stake, an amount and a
-payout are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters for operations that belong
+zeros, below 2^256. Both assets count in units of 10^-18, so for ETH the unit is the wei. A stake, a prize and an
+amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters for operations that belong
 together, such as the steps of one hand: the player signs it, and the wallet and the game's public record show a group
 as one.
 
@@ -91,7 +91,7 @@ parameters.
 
 | Result field | Type       | Meaning                                                                                                           |
 | ------------ | ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| `methods`    | `string[]` | The methods this wallet offers, the seven on this page                                                            |
+| `methods`    | `string[]` | The methods this wallet offers, the eight on this page                                                            |
 | `asset`      | object     | `{ id, symbol, decimals }`: `id` is `eth` or `test`; `symbol` is `ETH`, `Sepolia ETH` or `TEST`; `decimals` is 18 |
 | `chainId`    | `string`   | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil                  |
 | `limits`     | object     | The bounds a bet is held to: see [limits](#limits)                                                                |
@@ -108,6 +108,7 @@ parameters.
     "methods": [
       "wallet.hello",
       "wallet.info",
+      "wallet.round",
       "game.receipt",
       "game.casinoBet",
       "game.developerBet",
@@ -116,7 +117,7 @@ parameters.
     ],
     "asset": { "id": "eth", "symbol": "Sepolia ETH", "decimals": 18 },
     "chainId": "11155111",
-    "limits": { "prizes": 64, "outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64 }
+    "limits": { "outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64 }
   }
 }
 ```
@@ -152,6 +153,30 @@ The player's address, channel and balances are not a game's to know.
 }
 ```
 
+### `wallet.round`
+
+A developer's round, as the casino shows it to anyone at
+[`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), read through the wallet. Answered at once.
+
+| Param | Type          | Meaning                           |
+| ----- | ------------- | --------------------------------- |
+| `id`  | `bytes32` hex | The round, `0x` and 64 hex digits |
+
+The result is the casino's reply as it came: `{ id, developer, asset, status }`, and once the developer's casino bet has
+revealed the round, its `seed`, `secret`, `outcome` and `casinoBet`. The wallet checks none of it. A game whose players
+share one draw, such as roulette, checks its developer's rounds with it: each secret hashes to its round, each seed to
+the seed hash its bet signed, and the outcomes lead where the game says. A round the casino does not know is refused
+with the casino's `not-found`.
+
+```json title="Request"
+{
+  "hookedin": true,
+  "id": 9,
+  "method": "wallet.round",
+  "params": { "id": "0x21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c" }
+}
+```
+
 ### `game.receipt`
 
 The receipt of an earlier operation of this game, by the game's own ID. Answered at once.
@@ -178,7 +203,8 @@ settled receipt as a [`game.receipt`](#gamereceipt-1) event.
     "kind": "casino-bet",
     "status": "settled",
     "stake": "1000000000000",
-    "prizes": [{ "rangeStart": "0", "rangeEnd": "9223372036854775808", "payout": "1980000000000" }],
+    "chance": "9223372036854775808",
+    "prize": "1980000000000",
     "group": "session-3",
     "outcome": "4417924718259038112",
     "payout": "1980000000000"
@@ -190,20 +216,23 @@ settled receipt as a [`game.receipt`](#gamereceipt-1) event.
 
 A casino bet: settled against the casino's bankroll in the one request, on the player's own round. The casino names the
 round before the wallet picks the seed, so neither knows the outcome before both are out. The game's balance drops by
-the stake and rises by the payout of every prize whose range holds the round's 64-bit outcome; the casino's commission
-is not charged to the player. The casino may decline the bet instead, with a signed checkpoint that leaves the balance
+the stake, and rises by the prize when the round's 64-bit outcome is below the chance; the casino's commission is not
+charged to the player. The casino may decline the bet instead, with a signed checkpoint that leaves the balance
 unchanged.
 
-| Param    | Type           | Meaning                                                         |
-| -------- | -------------- | --------------------------------------------------------------- |
-| `id`     | `string`       | The game's ID for the operation                                 |
-| `stake`  | decimal string | Paid to enter; at most the game's balance                       |
-| `prizes` | `Prize[]`      | 1 to 64 prizes, each exactly `{ rangeStart, rangeEnd, payout }` |
-| `group`  | `string`       | Optional: the group the bet belongs to                          |
+| Param    | Type           | Meaning                                          |
+| -------- | -------------- | ------------------------------------------------ |
+| `id`     | `string`       | The game's ID for the operation                  |
+| `stake`  | decimal string | Paid to enter; at most the game's balance        |
+| `chance` | decimal string | How many of the 2^64 outcomes win: 1 to 2^64 − 1 |
+| `prize`  | decimal string | What the bet pays when it wins; below 2^128      |
+| `group`  | `string`       | Optional: the group the bet belongs to           |
 
-A prize pays `payout` when the outcome, a uniform integer below 2^64, falls in `[rangeStart, rangeEnd)`, with
-`rangeStart < rangeEnd ≤ 2^64`. Overlapping prizes add, an outcome no prize holds pays nothing, and a prize smaller than
-the stake is a partial loss. The result is the bet's receipt, `settled` or `rejected`.
+The outcome is a uniform integer below 2^64, so the bet wins with probability `chance / 2^64`. A chance of 0, or of
+2^64 or more, is refused with `invalid-request`: a sure loss or a sure win is no bet. So is a prize of 2^128 or more,
+which no balance can hold. The stake was paid to enter, so a
+win gains `prize − stake`, and a prize below the stake is a partial loss. The result is the bet's receipt, `settled` or
+`rejected`.
 
 ```json title="Request"
 {
@@ -213,7 +242,8 @@ the stake is a partial loss. The result is the bet's receipt, `settled` or `reje
   "params": {
     "id": "coin-17",
     "stake": "1000000000000",
-    "prizes": [{ "rangeStart": "0", "rangeEnd": "9223372036854775808", "payout": "1980000000000" }],
+    "chance": "9223372036854775808",
+    "prize": "1980000000000",
     "group": "session-3"
   }
 }
@@ -228,7 +258,8 @@ the stake is a partial loss. The result is the bet's receipt, `settled` or `reje
     "kind": "casino-bet",
     "status": "settled",
     "stake": "1000000000000",
-    "prizes": [{ "rangeStart": "0", "rangeEnd": "9223372036854775808", "payout": "1980000000000" }],
+    "chance": "9223372036854775808",
+    "prize": "1980000000000",
     "group": "session-3",
     "outcome": "4417924718259038112",
     "payout": "1980000000000"
@@ -409,19 +440,20 @@ is one the wallet checked.
 | `payment`       | `settled` or `rejected`, as for a casino bet                                                                                                                      |
 | `developer-bet` | `open`: its stake is in the developer's bank. `settled`: its developer settled it and the wallet collected what that pays. `rejected`: the casino did not take it |
 
-| Field     | Type           | Present                                                                                                                        |
-| --------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `id`      | `string`       | Always: the game's ID for the operation                                                                                        |
-| `kind`    | `string`       | Always: `casino-bet`, `developer-bet` or `payment`                                                                             |
-| `status`  | `string`       | Always: `settled`, `rejected` or `open`                                                                                        |
-| `stake`   | decimal string | For a casino bet and a developer bet, as placed                                                                                |
-| `prizes`  | `Prize[]`      | For a casino bet, as placed                                                                                                    |
-| `meta`    | object         | For a developer bet, as placed                                                                                                 |
-| `group`   | `string`       | When the operation had one                                                                                                     |
-| `bet`     | `bytes32` hex  | For a developer bet the casino took: the hash that names it at the casino and to its developer                                 |
-| `outcome` | decimal string | For a settled casino bet: its round's 64-bit outcome                                                                           |
-| `payout`  | decimal string | For a settled casino bet, what its prizes paid, `0` included; for a settled developer bet, what its settlement paid the player |
-| `reason`  | `string`       | For a rejection, when the casino gave one: a message for people                                                                |
+| Field     | Type           | Present                                                                                                                    |
+| --------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `id`      | `string`       | Always: the game's ID for the operation                                                                                    |
+| `kind`    | `string`       | Always: `casino-bet`, `developer-bet` or `payment`                                                                         |
+| `status`  | `string`       | Always: `settled`, `rejected` or `open`                                                                                    |
+| `stake`   | decimal string | For a casino bet and a developer bet, as placed                                                                            |
+| `chance`  | decimal string | For a casino bet, as placed                                                                                                |
+| `prize`   | decimal string | For a casino bet, as placed                                                                                                |
+| `meta`    | object         | For a developer bet, as placed                                                                                             |
+| `group`   | `string`       | When the operation had one                                                                                                 |
+| `bet`     | `bytes32` hex  | For a developer bet the casino took: the hash that names it at the casino and to its developer                             |
+| `outcome` | decimal string | For a settled casino bet: its round's 64-bit outcome                                                                       |
+| `payout`  | decimal string | For a settled casino bet, what it paid: its prize or `0`; for a settled developer bet, what its settlement paid the player |
+| `reason`  | `string`       | For a rejection, when the casino gave one: a message for people                                                            |
 
 A casino bet's payout rests on its round's revealed secret and seed, which the wallet checked against the hashes the bet
 signed. A game draws its presentation from `outcome`: which bucket, which card, which reel stops. A developer bet's
@@ -434,7 +466,8 @@ and its ID keeps returning the rejection:
   "kind": "casino-bet",
   "status": "rejected",
   "stake": "1000000000000",
-  "prizes": [{ "rangeStart": "0", "rangeEnd": "9223372036854775808", "payout": "2000000000000" }],
+  "chance": "9223372036854775808",
+  "prize": "2000000000000",
   "reason": "The bankroll cannot take this casino bet"
 }
 ```
@@ -443,12 +476,11 @@ and its ID keeps returning the rejection:
 
 `wallet.hello` reports `limits`, every bound the wallet holds a bet to:
 
-| Field          | Value                    | Meaning                                                       |
-| -------------- | ------------------------ | ------------------------------------------------------------- |
-| `prizes`       | `64`                     | The most prizes one casino bet holds                          |
-| `outcomeSpace` | `"18446744073709551616"` | 2^64: every prize range lies within `[0, outcomeSpace)`       |
-| `meta`         | `4096`                   | The most bytes a developer bet's meta takes as canonical JSON |
-| `group`        | `64`                     | The longest group label, in characters                        |
+| Field          | Value                    | Meaning                                                                     |
+| -------------- | ------------------------ | --------------------------------------------------------------------------- |
+| `outcomeSpace` | `"18446744073709551616"` | 2^64: a round's outcome is below it, and a chance counts outcomes out of it |
+| `meta`         | `4096`                   | The most bytes a developer bet's meta takes as canonical JSON               |
+| `group`        | `64`                     | The longest group label, in characters                                      |
 
 They are part of the protocol revision the wallet and its casino share, the same numbers the casino reports as
 `limits` in [`GET /api/config`](../casino-api/public.md#get-apiconfig) and the [developer kit](../sdk/developer.md#limits)

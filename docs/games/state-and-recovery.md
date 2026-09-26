@@ -22,8 +22,9 @@ or `-`. `crypto.randomUUID()` fits. It is the game's durable name for the operat
 
 ## Save before you send
 
-Choose the action and its `id`, and save both at your origin, before you ask the wallet. The wallet saves the signed
-request before it leaves, so the game's record and the wallet's meet by `id` after any crash.
+Choose the action and its `id`, and save both at your origin, before you ask the wallet; a page that draws which bet to
+place saves the bet it drew with them. The wallet saves the signed request before it leaves, so the game's record and
+the wallet's meet by `id` after any crash.
 [A coin flip](casino-bets.md#a-coin-flip) saves `{ id, stake }` under its storage key and clears it once the receipt
 arrives.
 
@@ -69,8 +70,9 @@ if (saved) {
 A receipt with `status: 'rejected'` is a checkpoint the casino signed one step above the operation, which the wallet
 checked: the operation is cancelled, with no outcome, no balance change and no commission, and `reason` says why. The
 `id` keeps returning that rejection. To try again, send the same terms under a fresh `id`; `RoundClient` keeps the
-pending action and does so. A declined casino bet's round is revealed with its rejection, and the wallet records what
-the bet would have paid ([bets and receipts](../wallet/bets-and-receipts.md)).
+pending step and the bet it drew, and does so: drawing again would change the game's odds. A declined casino bet's
+round is revealed with its rejection, and the wallet records what the bet would have paid
+([bets and receipts](../wallet/bets-and-receipts.md)).
 
 ## When a wallet has lost receipts
 

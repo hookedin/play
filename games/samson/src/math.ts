@@ -2,9 +2,11 @@
  * Samson's Gold: a five-reel, three-row, 243-ways slot whose whole payout distribution is counted
  * exactly from its reel strips. Pure rules and arithmetic; no DOM, wallet or ambient randomness.
  *
- * A spin settles as one casino bet with a prize for each distinct outcome, and a bet holds at most 64
- * prizes. The rules keep that set small: only the best win on the screen pays, every pay is a whole
- * number of stakes of the form 2^a·3^b, and ways and wild multipliers are products of 2s and 3s.
+ * A spin settles as at most one casino bet of two outcomes, the whole stake against one pay, drawn in the
+ * page so that spins reach every distinct pay exactly as often as the reels do; a spin that pays back
+ * exactly its stake places none. The rules keep those pays few:
+ * only the best win on the screen pays, every pay is a whole number of stakes of the form 2^a·3^b, and
+ * ways and wild multipliers are products of 2s and 3s.
  * No win is smaller than the stake, so a spin never celebrates a net loss.
  */
 import { fraction } from '@hookedin/play/sdk/engine';
@@ -205,8 +207,7 @@ export function distribution(machine: Machine): { counts: ReadonlyMap<number, nu
 /**
  * Pick reel stops uniformly from exactly those combinations that produce the settled outcome. The
  * joint distribution of reels and money is then the same as spinning the physical strips. The game
- * feeds it the position of the round's outcome inside the prize it hit, so the reels shown are a
- * function of the verified outcome, not of anything the page drew.
+ * feeds it a generator seeded from the settled spin, so a reload shows the same reels.
  */
 export function sampleStops(machine: Machine, key: number, random: RandomBelow): number[] {
   const { prefixes, factors, scatter, counts } = count(machine);

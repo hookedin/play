@@ -1,6 +1,6 @@
 ---
 title: Engine
-description: Reference for @hookedin/play/sdk/engine, which prices finite multi-step games exactly and plays each step as one casino bet, and for the precomputed blackjack table.
+description: Reference for @hookedin/play/sdk/engine, which prices finite multi-step games exactly and plays each step as at most one casino bet, and for the precomputed blackjack table.
 sidebar:
   order: 3
 ---
@@ -8,9 +8,10 @@ sidebar:
 `import { compileGame, createMines } from '@hookedin/play/sdk/engine';` prices games of several steps. The module is
 Node-safe: it has no dependencies and touches no browser API, so it runs in a game page, a test and a build script
 alike. A game is a finite acyclic graph of public states with exact probabilities. The engine works backward from the
-terminal payouts and gives every state the least cash that finances each of its actions as one casino bet the casino's
-admission rule accepts. It uses bigint arithmetic and exact fractions throughout, and draws randomness only for a step
-that moves no money. [`RoundClient`](round.md) plays a priced game through the wallet, and
+terminal payouts and gives every state the least cash with which each of its actions is one wager the planning bankroll
+takes. A step is played as at most one casino bet: the page draws, with its own randomness, which bet to place, or
+none, so that every successor is reached exactly as often as the rules say. It uses bigint arithmetic and exact
+fractions throughout. [`RoundClient`](round.md) plays a priced game through the wallet, and
 [sequential games](../games/sequential-games.md) derives the method.
 
 ```ts
@@ -166,8 +167,9 @@ const coin = (stake: bigint): GameGraph => ({
 
 ## transition.ts
 
-One step of a game as one casino bet. The round's outcome picks the successor: the player stakes the cash the step
-could cost them, and each better successor is a prize, so the cash after the bet is exactly the successor's.
+One step of a game. Its successors are grouped by the cash they need into classes. A step with one class moves no
+money. Any other is collapsed into branches the page draws from before it signs anything: each branch is one casino bet
+between two classes, or no bet, and every class is reached exactly as often as the rules say.
 
 ### `UINT256_MAX`
 
@@ -185,36 +187,18 @@ export const OUTCOME_SPACE = 1n << 64n;
 
 A round's outcome is a uniform integer below this, 2^64.
 
-### `MAX_PRIZES`
-
-```ts
-export const MAX_PRIZES = 64;
-```
-
-The most prizes one casino bet holds.
-
-### `Prize`
-
-```ts
-export interface Prize {
-  readonly rangeStart: bigint;
-  readonly rangeEnd: bigint;
-  readonly payout: bigint;
-}
-```
-
-Pays `payout` when the round's outcome falls in `[rangeStart, rangeEnd)`. The bigint form of the bridge's prize.
-
 ### `Bet`
 
 ```ts
 export interface Bet {
   readonly stake: bigint;
-  readonly prizes: readonly Prize[];
+  readonly chance: bigint;
+  readonly prize: bigint;
 }
 ```
 
-A casino bet: a stake paid to enter, and the prizes it can pay.
+A casino bet: a stake paid to enter, and a prize it pays when the round's outcome is below `chance`, counted in outcomes
+out of 2^64. The bigint form of the bridge's [`CasinoBetRequest`](hookedin.md#casinobetrequest).
 
 ### `Admits`
 
@@ -222,8 +206,8 @@ A casino bet: a stake paid to enter, and the prizes it can pay.
 export type Admits = (bankroll: bigint, bet: Bet) => boolean;
 ```
 
-The casino's admission rule, which the caller supplies: would a bankroll of this size take this bet? The engine prices
-against it and never assumes what it is. Pass the casino's own, [`admits`](admits.md#admits).
+The casino's admission rule, which the caller supplies: would a bankroll of this size take this bet? The engine checks
+every bet it builds against it and never assumes what it is. Pass the casino's own, [`admits`](admits.md#admits).
 
 ### `CashOutcome`
 
@@ -238,16 +222,30 @@ export interface CashOutcome {
 
 A successor state and the cash needed to continue from it.
 
-### `Successor`
+### `CashClass`
 
 ```ts
-export interface Successor extends CashOutcome {
-  readonly rangeStart: bigint;
-  readonly rangeEnd: bigint;
+export interface CashClass {
+  readonly cash: bigint;
+  readonly probability: Rational;
+  readonly outcomes: readonly CashOutcome[];
 }
 ```
 
-A successor with the stretch of the outcome space that leads to it.
+The successors of a step that need the same `cash`, in their stated order, and how likely they are together.
+
+### `Branch`
+
+```ts
+export type Branch =
+  | { readonly kind: 'bet'; readonly weight: Rational; readonly bet: Bet; readonly win: number; readonly lose: number }
+  | { readonly kind: 'none'; readonly weight: Rational; readonly class: number };
+```
+
+One way a step can go, drawn with probability `weight`. A `bet` branch is one casino bet between two of the step's
+classes, named by their index: it keeps the cash of class `lose`, stakes the rest, and its prize brings the cash to
+class `win`'s when the round's outcome is below its chance. A `none` branch places no bet and lands on `class`, the one
+that needs exactly the step's cash.
 
 ### `TransitionInput`
 
@@ -270,9 +268,9 @@ export type TransitionPlan =
   | {
       readonly kind: 'casino-bet';
       readonly cash: bigint;
-      readonly retained: bigint;
-      readonly bet: Bet;
-      readonly successors: readonly Successor[];
+      readonly classes: readonly CashClass[];
+      readonly branches: readonly Branch[];
+      readonly betMass: Rational;
       readonly outcomes: readonly CashOutcome[];
     }
   | {
@@ -284,15 +282,15 @@ export type TransitionPlan =
     };
 ```
 
-A step as it is played. A `casino-bet` keeps `retained`, the cheapest successor's cash, whatever happens, and stakes the
-rest of `cash` on `bet`. A step whose successors all need the same cash, `successorCash`, moves no money on chance: it
-is a `noop` when `cash` equals it, or a `payment` of `amount`, the cash left over, to the bankroll.
+A step as it is played. A `casino-bet` step holds its `classes`, cheapest first, and the `branches` it collapses into;
+`betMass` is how likely it is to place a bet, the weight of every branch but the one that keeps the cash. A step whose
+successors all need the same cash, `successorCash`, moves no money on chance: it is a `noop` when `cash` equals it, or a
+`payment` of `amount`, the cash left over, to the bankroll. `outcomes` lists every successor of positive probability.
 
 ### `TransitionPriceInput`
 
 ```ts
 export interface TransitionPriceInput {
-  readonly admits: Admits;
   readonly bankroll: bigint;
   readonly outcomes: readonly CashOutcome[];
   readonly quantum: bigint;
@@ -302,25 +300,63 @@ export interface TransitionPriceInput {
 What [`priceTransition`](#pricetransition) takes. `quantum` is the grid prices are searched on, in the same units as
 every cash value.
 
-### `apportion`
+### `cashClasses`
 
 ```ts
-export function apportion(outcomes: readonly CashOutcome[]): Successor[];
+export function cashClasses(outcomes: readonly CashOutcome[]): CashClass[];
 ```
 
-Lays the successors along `[0, 2^64)` in their stated order. Each is as wide as its probability, in whole outcomes: the
-floor of its share, with the few outcomes left over going one each to the largest remainders. A probability that divides
-2^64 is exact; any other is within 2^-64. Successors of zero probability are dropped. Throws a `RangeError` when there
-are no outcomes, a probability is negative, the probabilities do not sum to one, a successor is rarer than one outcome
-in 2^64, or a cash value is not a uint256, and an `Error` for an outcome with no `next`.
+The successors of positive probability, grouped by the cash they need, cheapest first. Throws a `RangeError` when there
+are no outcomes, a probability is negative, the probabilities do not sum to one, or a cash value is not a uint256, and
+an `Error` for an outcome with no `next`.
+
+### `tableAdmits`
 
 ```ts
-import { apportion, fraction } from '@hookedin/play/sdk/engine';
+export function tableAdmits(bankroll: bigint, cash: bigint, classes: readonly CashClass[]): boolean;
+```
 
-apportion([
+Whether a bankroll B of `bankroll` takes the whole step, taken with `cash`, as one wager: the Kelly condition
+E[X / (B + X)] ≥ 0 over the classes, with B + X > 0 for each, where X = cash − a class's cash is what the bankroll
+gains when that class is reached. Every loss is weighed one part in 2^32 heavier. Without that margin, the condition
+holds exactly when every bet of the step's [`collapse`](#collapse) is admissible; the margin leaves each bet room to
+round its chance to whole outcomes when its prize is under about 4·10^9 times its stake.
+
+### `collapse`
+
+```ts
+export function collapse(bankroll: bigint, cash: bigint, classes: readonly CashClass[]): Branch[];
+```
+
+The branches of a step taken with `cash`, c, against `bankroll`, B. A class below c, of probability ℓ_j and cash L_j,
+gains the bankroll a_j = c − L_j when it is reached, and a class above c, of probability h_i and cash H_i, costs it
+b_i = H_i − c. With C = Σ ℓ_j·a_j/(B + a_j) and D = Σ h_i·b_i/(B − b_i), every lower class j is paired with every
+higher class i. The pair is drawn with weight h_i·ℓ_j·(A_j + U_i), where A_j = (a_j/(B + a_j))/C and
+U_i = (b_i/(B − b_i))/D, and its bet stakes a_j, keeps L_j and pays H_i − L_j with probability q = A_j/(A_j + U_i),
+in whole numbers X/(X + Y) with X = a_j·(B − b_i)·D.n·C.d and Y = b_i·(B + a_j)·C.n·D.d. A class exactly at c is a
+`none` branch. Every class is then reached exactly as often as its probability says. When no class is above c, every
+other class is paired with the highest one, in a bet the bankroll cannot lose.
+
+A bet's chance is ⌊q·2^64⌋. When q·2^64 is not whole, a second branch with one outcome more carries the share of the
+pair's weight that makes the mean chance exact. Throws a `RangeError` when a chance would fall below one outcome or
+reach 2^64, and when no class is below c.
+
+The wallet checks each bet completely, its odds, outcome and payout, and knows nothing of the branches it was drawn
+from: for a step with more than two classes, which bet the page draws is the game's word. Every branch is admissible
+alone, so a page that chooses its branch cannot harm the bankroll, only misrepresent the game to its player. A bet
+stakes only what its step can lose, and the bets for the largest prizes carry more of the step's edge, so a collapsed
+game's bets return less of their stakes than the game does of its own.
+
+```ts
+import { cashClasses, collapse, fraction } from '@hookedin/play/sdk/engine';
+
+const classes = cashClasses([
   { next: 'win', cash: 2000n, probability: fraction(99n, 200n) },
   { next: 'lose', cash: 0n, probability: fraction(101n, 200n) },
-]); // win: [0, 9131138316486228050); lose: [9131138316486228050, 2^64)
+]);
+collapse(10n ** 12n, 991n, classes);
+// Two branches, each a bet of stake 991n and prize 2000n: chance 9131138316486228049n with weight 2/25, and one
+// outcome more with weight 23/25, so the chance is exactly 99/200 of 2^64 on average.
 ```
 
 ### `compileTransition`
@@ -329,28 +365,27 @@ apportion([
 export function compileTransition({ admits, bankroll, cash, outcomes }: TransitionInput): TransitionPlan;
 ```
 
-The exact step for `cash`. Every successor other than the cheapest is a prize paying its cash less `retained`, over its
-stretch of the outcome space; neighbouring successors that need the same cash make one prize. The bet stakes
-`cash - retained`. Without prizes the step is a `noop` or a `payment`. Throws a `RangeError` when `cash` does not cover
-the step, the step has more than 64 distinct prizes, the bet is not admitted at `bankroll`, or `bankroll` is not a
-positive uint256.
+The step for `cash`: its classes and the branches [`collapse`](#collapse) gives, each bet checked with `admits` at
+`bankroll`; or, when every successor needs the same cash, a `noop` or a `payment`. Throws as `cashClasses` and
+`collapse` do, and a `RangeError` when `cash` does not cover the step, a bet is not admitted at `bankroll`, or
+`bankroll` is not a positive uint256. A step with several classes needs more cash than the cheapest one; a step with
+one needs at least its cash.
 
 ### `priceTransition`
 
 ```ts
-export function priceTransition({ admits, bankroll, outcomes, quantum }: TransitionPriceInput): bigint;
+export function priceTransition({ bankroll, outcomes, quantum }: TransitionPriceInput): bigint;
 ```
 
-The least cash on the `quantum` grid whose bet `admits` accepts at `bankroll`. A larger stake is never less safe for the
-bankroll, so the search is a bisection. A step that moves no money costs exactly its successors' cash. Throws a
-`RangeError` when even the dearest successor's cash is not admitted.
+The least cash on the `quantum` grid, above the cheapest successor's cash, at which [`tableAdmits`](#tableadmits) holds
+at `bankroll`. More cash is never less safe for the bankroll, so the search is a bisection, and the dearest successor's
+cash always suffices. A step that moves no money costs exactly its successors' cash. Throws as `cashClasses` does, and a
+`RangeError` when `bankroll` or `quantum` is not a positive uint256.
 
 ```ts
 import { fraction, priceTransition } from '@hookedin/play/sdk/engine';
-import { admits } from '@hookedin/play/sdk/admits';
 
 priceTransition({
-  admits,
   bankroll: 10n ** 12n,
   quantum: 1n,
   outcomes: [
@@ -370,7 +405,8 @@ Pricing a whole graph, and playing it one step at a time.
 export type RandomBelow = (limit: bigint) => bigint;
 ```
 
-A uniform integer in `[0, limit)`. Only a step that moves no money and has several successors draws from it.
+A uniform integer in `[0, limit)`: the page's own randomness, which draws each step's branch, and the successor of a
+step without a bet when several need its cash.
 
 ### `PricedAction`
 
@@ -384,8 +420,7 @@ export interface PricedAction {
 ```
 
 An action of a priced node. `requiredCash` is the node cash it needs besides its own `additionalCash`. `transition` is
-the step it plays from the node's cash plus `additionalCash`; a plan from `loadFundedGame` builds it the first time it is
-read.
+the step it plays from the node's cash plus `additionalCash`, built the first time it is read.
 
 ### `PricedNode`
 
@@ -444,9 +479,10 @@ export interface CompileOptions {
 }
 ```
 
-`admits` is the casino's rule; every step is priced as the least cash whose bet it admits at `bankrollFloor`, on a grid
-of `cashQuantum`. `initialCash`, when given, is the cash the round starts with, such as the stake, and must cover the
-root's price.
+`admits` is the casino's rule, which every bet a step can place is checked against at `bankrollFloor`. Every step is
+priced as the least cash, on a grid of `cashQuantum`, at which it is one wager `bankrollFloor` takes
+([`priceTransition`](#pricetransition)). `initialCash`, when given, is the cash the round starts with, such as the
+stake, and must cover the root's price.
 
 ### `FundingTable`
 
@@ -473,9 +509,10 @@ export function compileGame(graph: GameGraph, options: CompileOptions): GamePlan
 Prices every legal action before any outcome exists, with no network or wallet access. A decision node's price is the
 most any of its actions needs less that action's `additionalCash`. Throws an `Error` for a cyclic graph, a missing or
 duplicate node, a decision node without actions, an action without outcomes, or a duplicate or empty action ID; a
-`TypeError` without `admits`; and a `RangeError` for a negative probability, an amount outside uint256, a step with more
-than 64 distinct prizes or one the planning bankroll cannot cover, or an `initialCash` below the root's price. A
-terminal root's `initialCash` must equal its payout.
+`TypeError` without `admits`; and a `RangeError` for a negative probability, probabilities that do not sum to one, an
+amount outside uint256, or an `initialCash` below the root's price. A terminal root's `initialCash` must equal its
+payout. A step is built the first time its `transition` is read, and throws then as
+[`compileTransition`](#compiletransition) does.
 
 ### `loadFundedGame`
 
@@ -484,9 +521,9 @@ export function loadFundedGame(graph: GameGraph, table: FundingTable, scale: big
 ```
 
 A plan from a funding table, every amount multiplied by `scale`, a positive integer: the graph must be the one built for
-a stake of `table.initialCash × scale`. It builds each step the first time it is played and keeps every runtime check.
-Throws `Funding table is missing actions at <node>` or `Funding table does not match the game` when the table was not
-made for this graph, and a `RangeError` when `scale` is not a positive uint256.
+a stake of `table.initialCash × scale`. It keeps every runtime check. Throws `Funding table is missing actions at <node>`
+or `Funding table does not match the game` when the table was not made for this graph, and a `RangeError` when `scale`
+is not a positive uint256.
 
 ```ts
 import { createBlackjack, loadFundedGame } from '@hookedin/play/sdk/engine';
@@ -594,8 +631,8 @@ export type PreparedTransition =
   | (PreparedBase & {
       readonly kind: 'casino-bet';
       readonly bet: Bet;
-      readonly retained: bigint;
-      readonly successors: readonly Successor[];
+      readonly win: CashClass;
+      readonly lose: CashClass;
     })
   | (PreparedBase & {
       readonly kind: 'noop' | 'payment';
@@ -607,9 +644,9 @@ export type PreparedTransition =
 ```
 
 A step ready to play. Both kinds carry `before`, the `RuntimeState` it was prepared from, `actionId` and
-`additionalCash`. A `casino-bet` carries exactly what the wallet signs, `bet`, and where each stretch of the outcome
-space leads, `successors`. A `noop` or `payment` has already chosen its successor, `next`, and pays `amount` to the
-bankroll.
+`additionalCash`. A `casino-bet` carries exactly what the wallet signs, `bet`, and the class the step reaches when the
+round's outcome is below the bet's chance, `win`, or otherwise, `lose`. A `noop` or `payment` has already chosen its
+successor, `next`, and pays `amount` to the bankroll; a branch without a bet is a `noop`.
 
 ### `prepareAction`
 
@@ -622,11 +659,13 @@ export function prepareAction(
 ): PreparedTransition;
 ```
 
-Takes an action before its round's outcome exists. The same action is always the same bet, so there is nothing to
-protect from a redraw. It checks the step again at the live bankroll. Only a step that moves no money and has several
-successors draws its successor from `random`, and no cash rides on that draw. Throws an `Error` for a terminal node, a
-`state.cash` other than the node's cash, or an action the node does not offer; a `RangeError` when the live bankroll is
-below the plan's floor or does not admit the bet; and a `TypeError` when the step needs `random` and has none.
+Takes an action before its round's outcome exists. A step with branches draws one with `random`, the page's own
+randomness: a bet branch is a `casino-bet`, whose bet it checks again at the live bankroll, and the branch without a
+bet a `noop` to a successor of its class, drawn with `random` too. Save what it returns before the wallet signs
+anything, and never draw again for the same step: a redraw would change the game's odds. A step that moves no money and
+has several successors draws its successor from `random`. Throws an `Error` for a terminal node, a `state.cash` other
+than the node's cash, or an action the node does not offer; a `RangeError` when the live bankroll is below the plan's
+floor or does not admit the bet; and a `TypeError` when the step needs `random` and has none.
 
 ```ts
 import { prepareAction, resolveTransition, rngFromBytes, simulateServerResult } from '@hookedin/play/sdk/engine';
@@ -650,8 +689,18 @@ export interface Resolution {
 }
 ```
 
-The state a step leads to, its outcome's label, what the bet's prizes paid (or `0n`), and what the step paid the
-bankroll (or `0n`).
+The state a step leads to, its outcome's label, what the bet paid, its prize or `0n`, and what the step paid the bankroll
+(or `0n`).
+
+### `landing`
+
+```ts
+export function landing(side: CashClass, outcome: bigint): { next: CashOutcome; draw: bigint };
+```
+
+Where a settled bet lands within the class it reached: `next`, the successor, drawn by probability, and `draw`, a 64-bit
+value to show the result with, both in turn from one [`seededRandom(outcome)`](#seededrandom). The same outcome always
+lands the same way, and what the page shows is drawn apart from which state it shows.
 
 ### `resolveTransition`
 
@@ -659,8 +708,9 @@ bankroll (or `0n`).
 export function resolveTransition(prepared: PreparedTransition, outcome?: bigint): Resolution;
 ```
 
-Applies a step. A casino bet needs the round's verified 64-bit `outcome`, which names its successor; a step without a
-bet takes none. The bankroll it reports is reference accounting: it ignores the casino's commission, which only lowers
+Applies a step. A casino bet needs the round's verified 64-bit `outcome`: below the bet's chance the bet wins and the
+step reaches `win`, otherwise `lose`, and [`landing`](#landing) picks the state within the class. A step without a bet
+takes no outcome. The bankroll it reports is reference accounting: it ignores the casino's commission, which only lowers
 it further. It proves no settlement and sends nothing. Throws a `TypeError` for a step `prepareAction` did not return,
 a bet without a valid outcome, or a step without a bet given one.
 
@@ -672,6 +722,18 @@ export function simulateServerResult(prepared: PreparedTransition, random: Rando
 
 A uniform outcome below 2^64 for a prepared casino bet, for demonstrations and tests. A live game takes its outcome from
 the verified receipt. Throws an `Error` for a step that is not a bet.
+
+### `seededRandom`
+
+```ts
+export function seededRandom(seed: bigint): RandomBelow;
+```
+
+A `RandomBelow` drawn from a 64-bit seed, such as a round's verified outcome: the SplitMix64 stream from the seed's low
+64 bits, rejection-sampled, so the same seed always draws the same values. It is for showing a result, never for
+drawing one: Plinko draws its ball's path with `seededRandom(BigInt(state.settlement.draw))`
+([`RoundState`](round.md#roundstate)), so a reload shows the same path into the same bucket. The function it returns
+throws as `rngFromBytes`'s does.
 
 ### `rngFromBytes`
 

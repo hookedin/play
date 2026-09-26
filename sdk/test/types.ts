@@ -14,7 +14,7 @@ import type { Admits, GameGraph, RuntimeState } from '../src/engine/index.ts';
 
 const unit = 10n ** 18n;
 // The library takes the casino's admission rule as a function and never assumes what it is.
-const admits: Admits = (bankroll, bet) => bet.prizes.every(prize => prize.payout < bankroll);
+const admits: Admits = (bankroll, bet) => bet.prize < bankroll;
 const graph: GameGraph = createBlackjack({ stake: unit });
 const plan = compileGame(graph, {
   admits,

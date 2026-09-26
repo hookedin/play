@@ -26,12 +26,6 @@ export interface Checkpoint {
   transitionHash: string;
   balance: Integer;
 }
-/** A bet pays `payout` when its round's 64-bit outcome falls in [rangeStart, rangeEnd). Prizes may overlap. */
-export interface Prize {
-  rangeStart: Integer;
-  rangeEnd: Integer;
-  payout: Integer;
-}
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
  * under; or, for a game loaded straight from its manifest, that manifest's developer and URL. */
 export interface GameName {
@@ -55,8 +49,6 @@ export interface Details {
    * takes the stake at once and who settles it when they choose. */
   meta?: Record<string, unknown>;
 }
-/** Prizes on the wire: decimal strings. */
-export type WirePrizes = { rangeStart: string; rangeEnd: string; payout: string }[];
 /** A developer bet, as anyone may read it by its hash (the hash of the operation that placed it). */
 export interface PublicDeveloperBet {
   bet: string;
@@ -105,7 +97,10 @@ export interface Operation {
   kind: Integer;
   /** A casino bet's stake, paid to enter; otherwise the amount debited or credited. */
   amount: Integer;
-  prizes: Prize[];
+  /** A casino bet's probability, counted in outcomes out of 2^64: it wins when its round's outcome is below this. */
+  chance: Integer;
+  /** What a casino bet pays when it wins. */
+  prize: Integer;
   /** A casino bet's round: the hash of the secret that settles it. */
   round: string;
   /** A casino bet's seed, named by its hash. */
@@ -204,7 +199,7 @@ export interface Submission {
 }
 /** A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer in
  * one asset, for the developer's casino bet. That casino bet reveals it: its seed, the casino's secret and their
- * outcome, and the casino bet itself. */
+ * outcome, and the casino bet itself, which may bet nothing and only reveal the round. */
 export interface Round {
   id: string;
   developer: string;
@@ -218,12 +213,17 @@ export interface Round {
   casinoBet?: DeveloperCasinoBet;
 }
 /** The developer's casino bet on its round, as it signed it (`BankCasinoBet`, with the round's id and the hash of its
- * meta), and whether the bankroll took it. */
+ * meta), and whether the bankroll took it. A stake, chance and prize of zero bet nothing and only reveal the round. */
 export interface DeveloperCasinoBet {
   /** The game whose commission it earns. */
   game: string;
   stake: string;
-  prizes: WirePrizes;
+  /** Its probability, counted in outcomes out of 2^64: it wins when the round's outcome is below this. */
+  chance: string;
+  /** What it pays when it wins. */
+  prize: string;
+  /** The label its game gives the bets that belong together. */
+  group: string;
   /** The developer's own JSON, which the casino keeps with the reveal and never reads. */
   meta: Record<string, unknown>;
   signature: string;

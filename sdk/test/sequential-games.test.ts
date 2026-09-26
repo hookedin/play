@@ -4,6 +4,7 @@ import {
   add,
   divide,
   fraction,
+  multiply,
   OUTCOME_SPACE,
   compileGame,
   compileGameAsync,
@@ -14,8 +15,10 @@ import {
   optimalExpectedValuePolicy,
   prepareAction,
   resolveTransition,
+  seededRandom,
   simulateServerResult,
 } from '../src/engine/index.ts';
+import type { CashClass } from '../src/engine/index.ts';
 import { admits } from '../src/admits.ts';
 import { assessBet } from '../../protocol/risk.ts';
 import { blackjackFunding } from '../src/generated/blackjack-funding.ts';
@@ -47,8 +50,8 @@ test('the committed blackjack funding table is what the current rules and compil
   assert.equal(plan.conservativeBankroll, blackjackFunding.conservativeBankroll * scale);
 });
 
-test('every blackjack action is one admitted bet whose ranges name each successor state at its stated odds', () => {
-  let bets = 0,
+test('every blackjack action collapses into admitted bets that reach each successor state at its stated odds', () => {
+  let steps = 0,
     most = 0;
   for (const source of graph.nodes) {
     if (source.kind !== 'decision') continue;
@@ -58,32 +61,39 @@ test('every blackjack action is one admitted bet whose ranges name each successo
       const pricedAction: any = (priced as any).actions.find((value: any) => value.id === action.id);
       const step: import('../src/engine/index.ts').TransitionPlan = pricedAction.transition;
       assert.deepEqual(
-        step.outcomes.map(o => [o.next, o.label, o.probability]),
-        action.outcomes.filter(o => o.probability.n > 0n).map(o => [o.next, o.label, o.probability]),
-        'every original successor and card label survives, in order',
+        [...step.outcomes].map(o => [o.next, o.label, o.probability]).sort(),
+        action.outcomes
+          .filter(o => o.probability.n > 0n)
+          .map(o => [o.next, o.label, o.probability])
+          .sort(),
+        'every original successor and card label survives',
       );
       if (step.kind !== 'casino-bet') continue;
-      let edge = 0n;
-      for (const s of step.successors) {
-        // A card's share of the outcome space is its probability to within one outcome in 2^64.
-        const exact = (s.probability.n * OUTCOME_SPACE) / s.probability.d,
-          width = s.rangeEnd - s.rangeStart;
-        assert.ok(s.rangeStart === edge && (width === exact || width === exact + 1n));
-        edge = s.rangeEnd;
-        assert.equal(s.cash, getNode(plan, s.next).cash);
+      // Every class is reached exactly as often as its cards say, and every bet the page can draw is one the
+      // casino's own rule admits at the planning floor, and costs the bankroll less than the most any state holds.
+      const reached = step.classes.map(() => ZERO);
+      for (const branch of step.branches) {
+        if (branch.kind === 'none') {
+          reached[branch.class] = add(reached[branch.class]!, branch.weight);
+          continue;
+        }
+        const q = fraction(branch.bet.chance, OUTCOME_SPACE);
+        reached[branch.win] = add(reached[branch.win]!, multiply(branch.weight, q));
+        reached[branch.lose] = add(reached[branch.lose]!, multiply(branch.weight, add(ONE, fraction(-q.n, q.d))));
+        assert.equal(branch.bet.stake, priced.cash + pricedAction.additionalCash - step.classes[branch.lose]!.cash);
+        const risk = assessBet({ bankroll: plan.bankrollFloor, bet: branch.bet });
+        assert.ok(risk.liability - risk.fee < plan.maximumCash);
       }
-      assert.equal(edge, OUTCOME_SPACE);
-      assert.equal(step.bet.stake, priced.cash + pricedAction.additionalCash - step.retained);
-      // The casino's own rule admits the step at the planning floor, and no step can cost the
-      // bankroll more than the conservative starting bound allows for.
-      const risk = assessBet({ bankroll: plan.bankrollFloor, bet: step.bet });
-      assert.ok(risk.liability - risk.fee < plan.maximumCash);
-      most = Math.max(most, step.bet.prizes.length);
-      bets++;
+      for (const [i, c] of step.classes.entries()) {
+        assert.deepEqual(reached[i], c.probability);
+        for (const o of c.outcomes) assert.equal(o.cash, getNode(plan, o.next).cash);
+      }
+      most = Math.max(most, step.branches.length);
+      steps++;
     }
   }
-  assert.ok(bets > 1000);
-  assert.ok(most <= 64, `at most ${most} prizes in one step`);
+  assert.ok(steps > 1000);
+  assert.ok(most <= 100, `at most ${most} branches in one step`);
 });
 
 test('backward funding covers all choices while exact terminal EV depends on the player policy', () => {
@@ -139,20 +149,24 @@ test('state labels with equal funding retain distinct subsequent choices', () =>
   assert.equal(right.kind, 'noop');
   assert.equal(resolveTransition(left).state.nodeId, 'left');
   assert.equal(resolveTransition(right).state.nodeId, 'right');
-  // No money rides on that choice, which is the only one the library ever draws for itself.
+  // No money rides on that choice; the page's own randomness makes it, as it draws every step's branch.
   assert.throws(() => prepareAction(equal, state, 'draw'), /injected RNG is required/);
 });
 
-test('a step needs no randomness of its own, fails before it is built, and is immutable', () => {
+test("a step's branch is drawn by the page's randomness before anything is built, and is immutable", () => {
   const state = { nodeId: plan.root, cash: plan.initialCash, bankroll: plan.conservativeBankroll };
-  assert.throws(() => prepareAction(plan, state, 'double'), /illegal action/);
-  assert.throws(() => prepareAction(plan, { ...state, cash: state.cash - 1n }, 'deal'), /funded/);
-  assert.throws(() => prepareAction(plan, { ...state, bankroll: plan.bankrollFloor - 1n }, 'deal'), /planning floor/);
-  const step = prepareAction(plan, state, 'deal');
+  assert.throws(() => prepareAction(plan, state, 'double', seededRandom(1n)), /illegal action/);
+  assert.throws(() => prepareAction(plan, { ...state, cash: state.cash - 1n }, 'deal', seededRandom(1n)), /funded/);
+  assert.throws(
+    () => prepareAction(plan, { ...state, bankroll: plan.bankrollFloor - 1n }, 'deal', seededRandom(1n)),
+    /planning floor/,
+  );
+  assert.throws(() => prepareAction(plan, state, 'deal'), /injected RNG is required/);
+  const step = prepareAction(plan, state, 'deal', seededRandom(1n));
   assert(Object.isFrozen(step) && Object.isFrozen(step.before));
   assert.equal(step.kind, 'casino-bet');
-  // The same action is always the same bet: there is no ticket to protect or to redraw.
-  assert.deepEqual(prepareAction(plan, state, 'deal'), step);
+  // The same draw is the same bet: what the page saves before signing is the whole step.
+  assert.deepEqual(prepareAction(plan, state, 'deal', seededRandom(1n)), step);
   assert.throws(() => resolveTransition(step), /64-bit outcome/);
   assert.throws(() => resolveTransition(step, OUTCOME_SPACE), /64-bit outcome/);
   assert.throws(() => resolveTransition({ ...step }, 0n), /returned by prepareAction/);
@@ -185,24 +199,34 @@ test('a step needs no randomness of its own, fails before it is built, and is im
       admits: (b, bet) => b !== live && admits(b, bet),
     });
   const ready = { nodeId: 'flip', cash: refusing.initialCash, bankroll: refusing.conservativeBankroll };
-  assert.equal(prepareAction(refusing, ready, 'toss').kind, 'casino-bet');
-  assert.throws(() => prepareAction(refusing, { ...ready, bankroll: live }, 'toss'), /does not admit/);
+  assert.equal(prepareAction(refusing, ready, 'toss', seededRandom(1n)).kind, 'casino-bet');
+  assert.throws(
+    () => prepareAction(refusing, { ...ready, bankroll: live }, 'toss', seededRandom(1n)),
+    /does not admit/,
+  );
 });
 
-test('every outcome lands on a funded state and moves exactly its prize between player and bankroll', () => {
+test('a settled bet lands on a funded state of the class it reached and moves exactly its prize', () => {
   const state = { nodeId: plan.root, cash: plan.initialCash, bankroll: 2n * plan.conservativeBankroll };
-  const step = prepareAction(plan, state, 'deal');
-  assert.equal(step.kind, 'casino-bet');
-  if (step.kind !== 'casino-bet') return;
-  for (const s of step.successors)
-    for (const outcome of [s.rangeStart, s.rangeEnd - 1n]) {
+  for (let seed = 0n; seed < 20n; seed++) {
+    const step = prepareAction(plan, state, 'deal', seededRandom(seed));
+    if (step.kind !== 'casino-bet') continue;
+    for (const [outcome, won] of [
+      [0n, true],
+      [step.bet.chance - 1n, true],
+      [step.bet.chance, false],
+      [OUTCOME_SPACE - 1n, false],
+    ] as const) {
       const result = resolveTransition(step, outcome);
-      assert.deepEqual([result.state.nodeId, result.label], [s.next, s.label]);
-      assert.equal(result.state.cash, getNode(plan, s.next).cash);
-      assert.equal(result.payout, s.cash - step.retained);
+      const side: CashClass = won ? step.win : step.lose;
+      assert.ok(side.outcomes.some(o => o.next === result.state.nodeId));
+      assert.equal(result.state.cash, side.cash);
+      assert.equal(result.state.cash, getNode(plan, result.state.nodeId).cash);
+      assert.equal(result.payout, won ? step.bet.prize : 0n);
       assert.equal(result.state.cash + result.state.bankroll, state.cash + state.bankroll, 'commission aside');
       assert(result.state.bankroll >= plan.bankrollFloor);
     }
+  }
 });
 
 test('the extreme outcomes of every round complete funded blackjack paths', () => {

@@ -114,10 +114,11 @@ for (const initialSeed of [1, 17, 913, 9127, 65537, 741231, 123456789, 429496729
               bankroll: 1000000n,
               stake: amount,
               netWin: amount,
-              winThreshold: OUTCOME_SPACE / 4n,
+              chance: OUTCOME_SPACE / 4n,
             });
             await transition(f, ch, 1, amount, {
-              prizes: q.prizes,
+              chance: q.chance,
+              prize: q.prize,
               seed: id('seed:' + initialSeed + ':' + i),
             });
           } else await transition(f, ch, 'checkpoint', BigInt(1 + random(500)));
@@ -229,11 +230,12 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
   const { operation, OP_TYPES, deriveState, roundId, seedHash } = await import('../protocol/protocol.ts');
   const secret = id('wide secret'),
     seed = id('wide entropy');
-  const q = assessBinary({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, winThreshold: OUTCOME_SPACE / 4n });
+  const q = assessBinary({ bankroll: max / 2n, stake: max / 8n, netWin: max / 64n, chance: OUTCOME_SPACE / 4n });
   const op = operation(f.d, base, {
     kind: 1,
     amount: q.stake,
-    prizes: q.prizes,
+    chance: q.chance,
+    prize: q.prize,
     seedHash: seedHash(seed),
     round: roundId(secret),
     memo: id('wide operation'),

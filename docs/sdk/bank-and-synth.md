@@ -2,7 +2,7 @@
 title: Bank strip and sound
 description: Reference for @hookedin/play/sdk/bank, the balance strip a game shows, @hookedin/play/sdk/synth, synthesized sound, and the shared stylesheet.
 sidebar:
-  order: 8
+  order: 9
 ---
 
 `import { mountBank } from '@hookedin/play/sdk/bank';` and `import { createSynth } from '@hookedin/play/sdk/synth';`

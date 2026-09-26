@@ -1,30 +1,28 @@
 ---
 title: Casino bets
-description: Prize tables, a one-shot game, the casino's edge, measured return and payments.
+description: The stake, chance and prize of a casino bet, a one-shot game, games of more outcomes, the casino's edge, measured return and payments.
 sidebar:
   order: 3
 ---
 
-A casino bet is a stake and 1 to 64 prizes, settled against the casino's bankroll in the one request that places it.
-Anything written as prize ranges over one 64-bit outcome is a game: a coin flip is one prize, a Plinko board a prize
-per bucket, a slot a prize per distinct payout, and a hand of blackjack
+A casino bet is three numbers, a stake, a chance and a prize, settled against the casino's bankroll in the one request
+that places it. A coin flip is one casino bet. A game with more outcomes, such as a Plinko board or a slot, draws which
+of several such bets to place ([more than two outcomes](#more-than-two-outcomes)), and a hand of blackjack is
 [one casino bet per step](multi-step-games.md).
 
-## Prizes
+## The bet
 
 Every casino bet is on a round. Its outcome is a uniform integer in `[0, 2^64)`, fixed by a secret the casino committed
 to by its hash before the bet and a seed the player's wallet picked; the wallet checks both before the game sees a
 result ([rounds](../overview/how-it-works.md#rounds)).
 
-A prize is `{ rangeStart, rangeEnd, payout }`. It pays `payout` when `rangeStart <= outcome < rangeEnd`, so it pays
-with probability `(rangeEnd − rangeStart) / 2^64`.
+The bet pays `prize` when the outcome is below `chance`, so it wins with probability `chance / 2^64`.
 
-- `payout` is gross: a prize of twice the stake is an even-money win. A prize below the stake is a partial loss.
-- Prizes may overlap, and then they add. An outcome in no prize pays nothing.
-- The bet moves the balance by `−stake` plus every payout whose range holds the outcome. Commission is never an extra
-  debit.
-- Amounts are decimal strings of whole smallest units, `rangeStart < rangeEnd <= 2^64`, and the stake and every payout
-  are above zero. `wallet.hello` reports the most prizes a bet holds as `limits.prizes`.
+- `chance` counts winning outcomes out of 2^64, from 1 to 2^64 − 1: a sure win or a sure loss is not a bet.
+- `prize` is gross, what a winning bet pays: twice the stake is an even-money win, and a prize below the stake is a
+  partial loss.
+- The bet moves the balance by `−stake`, and by `+prize` when it wins. Commission is never an extra debit.
+- Amounts are decimal strings of whole smallest units. The stake and the prize are above zero and below 2^128.
 
 The exact field rules are under [`game.casinoBet`](../reference/bridge.md#gamecasinobet).
 
@@ -33,23 +31,17 @@ The exact field rules are under [`game.casinoBet`](../reference/bridge.md#gameca
 A one-shot game is its rules, as pure arithmetic, and a page that places them. The rules:
 
 ```ts title="src/flip.ts"
-/** A coin flip: twice the stake on the first 49.5% of outcomes, a 99% return. */
+/** A coin flip: twice the stake on 49.5% of outcomes, a 99% return. */
 export const SPACE = 1n << 64n;
 export const HEADS = (SPACE * 495n) / 1000n;
 
-export const flipBet = (stake: bigint) => ({
-  stake,
-  prizes: [{ rangeStart: 0n, rangeEnd: HEADS, payout: 2n * stake }],
-});
+export const flipBet = (stake: bigint) => ({ stake, chance: HEADS, prize: 2n * stake });
 
 /** A bet as the bridge takes it: every amount a decimal string. */
 export const wire = (bet: ReturnType<typeof flipBet>) => ({
   stake: String(bet.stake),
-  prizes: bet.prizes.map(prize => ({
-    rangeStart: String(prize.rangeStart),
-    rangeEnd: String(prize.rangeEnd),
-    payout: String(prize.payout),
-  })),
+  chance: String(bet.chance),
+  prize: String(bet.prize),
 });
 ```
 
@@ -83,18 +75,31 @@ if (receipt.status === 'settled') show(BigInt(receipt.outcome!) < HEADS ? 'Heads
 else show(`Declined: ${receipt.reason}`); // the balance is unchanged
 ```
 
-`show` is your page's own. A `settled` receipt carries the round's `outcome` and the `payout`; a `rejected` one is a
-bet the casino declined, with the balance unchanged: offer the same bet again under a fresh `id`. The saved `id` is
-what finds the result after a lost reply or a reload ([state and recovery](state-and-recovery.md)).
-[Plinko's `drop.ts`](../../games/plinko/src/drop.ts) is the complete pattern, about 150 lines.
+`show` is your page's own. A `settled` receipt carries the round's `outcome` and the `payout`, the prize or 0; a
+`rejected` one is a bet the casino declined, with the balance unchanged: offer the same bet again under a fresh `id`.
+The saved `id` is what finds the result after a lost reply or a reload ([state and recovery](state-and-recovery.md)).
+
+## More than two outcomes
+
+One casino bet has two outcomes. A game with more plays them as casino bets all the same:
+
+- A game one player plays is a graph, which [`RoundClient`](../sdk/round.md#roundclient) plays step by step. For a
+  step whose outcomes leave the player more than two different amounts, the page draws, with its own randomness, which
+  bet to place, so that every outcome is reached exactly as often as the rules say
+  ([collapsing bets](collapsing-bets.md)). Plinko and Samson's Gold are one such step each; blackjack and Mines are
+  [a sequence of steps](multi-step-games.md).
+- A game whose players share one draw, such as a roulette table, has its developer walk a tree of casino bets from its
+  bank, one per round, each halving the outcomes left ([binary steps](developer-bets.md#shared-games-binary-steps)).
+
+The wallet verifies the bet a page places, not the draw that chose it
+([what is given up](collapsing-bets.md#what-is-given-up)).
 
 ## Leave the casino an edge
 
-The casino admits a casino bet when its bankroll can take it as one wager by the Kelly criterion, with no commission at
-all ([pricing and commission](../reference/economics.md)). For one prize, with net win `W = payout − stake`, bankroll
-`B` and the house edge `e = 1 − p × payout / stake`, it admits the bet only if `W / B <= e`. A net prize of 1% of the
-bankroll needs at least a 1% edge, and a bet with no edge is never admitted. Bigger prizes need more edge; prizes on
-disjoint ranges hedge each other, and prizes on the same range stack.
+The casino admits a casino bet when its bankroll can take it by the Kelly criterion, with no commission at all
+([pricing and commission](../reference/economics.md)). With net win `W = prize − stake`, bankroll `B` and the house
+edge `e = 1 − chance × prize / (2^64 × stake)`, it admits the bet only if `W / B <= e`. A net win of 1% of the bankroll
+needs at least a 1% edge, and a bet with no edge is never admitted. Bigger prizes need more edge.
 
 Check a bet before offering it, with the casino's own rule:
 
@@ -118,18 +123,20 @@ declined bet comes back `rejected`.
 
 No game states what it pays back, and the manifest has no field for it: nothing bounds how often a game wagers the
 money it holds, so a stated return would read as a guarantee it is not. What a player gets is measured. The wallet
-works out the exact return of every casino bet from its prize table before it signs, and keeps the figure with the bet
-in the player's history. The casino publishes the same figure for every casino bet in your game
-([`GET /api/games/:key`](../casino-api/public.md#get-apigameskey)), which the wallet shows as the game's public record
-([bets and receipts](../wallet/bets-and-receipts.md)).
+works out the exact return of every casino bet from its terms before it signs, `prize × chance / (2^64 × stake)`, and
+keeps the figure with the bet in the player's history. The casino publishes the same figure for every casino bet in
+your game ([`GET /api/games/:key`](../casino-api/public.md#get-apigameskey)), which the wallet shows as the game's
+public record ([bets and receipts](../wallet/bets-and-receipts.md)).
 
 [`betReturn(bet)`](../sdk/admits.md#betreturn) is that computation: the expected payout in millionths of the stake,
 rounded to the nearest. [`describeBet(bet)`](../sdk/admits.md#describebet) gives the most a bet can pay and its
 expected payout.
 
-Two things round against a table: ranges are whole outcomes and payouts are whole units. At dust stakes they dominate:
-Plinko's 8-row low-risk board returns 99% at a 1,000-wei stake and 38% at 1 wei. Prove your floor in a test, over every
-table at every stake you take:
+A game whose steps the SDK collapses is measured by the bets it places, and together they pay back less of what they
+stake than the game does of its stake ([what is given up](collapsing-bets.md#what-is-given-up)).
+
+A chance rounds to whole outcomes and a prize to whole units; at dust stakes the units can move a return far. Prove
+your floor in a test, over every bet at every stake you take:
 
 ```ts title="test/flip.test.ts"
 import test from 'node:test';
@@ -142,21 +149,22 @@ test('every flip pays back at least 99%, at every stake', () => {
 });
 ```
 
-The flip keeps its edge in the range and pays a whole multiple of the stake, so its return is the same at every stake.
-[Plinko's test](../../games/plinko/test/plinko.test.ts) proves its floor over all nine boards.
+The flip keeps its edge in its chance and pays a whole multiple of the stake, so its return is the same at every stake.
+[Plinko's test](../../games/plinko/test/plinko.test.ts) proves a floor for every bet a drop can place, over all nine
+boards.
 
 ## Draw the presentation from the outcome
 
 A settled receipt carries `outcome`, the round's 64-bit value as a decimal string. Compute what the player sees from
-it: which bucket, which card, which reel stops. The picture and the money then cannot disagree, and the page draws no
-randomness of its own. Check that the receipt's `payout` is what your table pays for that outcome, and show nothing
-that disagrees.
+it: which bucket, which card, which reel stops. The picture and the money then cannot disagree. Check that the
+receipt's `payout` is what your bet pays on that outcome, and show nothing that disagrees.
 
-- [Plinko](../../games/plinko/src/tables.ts) reads the ball's whole path from the outcome's top bits.
-- [Samson's Gold](../../games/samson/src/math.ts) picks reel stops from where the outcome fell inside the winning
-  prize's range, among exactly the stops that pay what was settled.
-- `RoundClient` keeps the outcome and the range that led to the last step in `state.settlement`, for a game that
-  shows one of several equal results.
+- `RoundClient` keeps the value to draw from in `state.settlement.draw`: for a bet, drawn from the round's outcome apart
+  from the state the step reached, and for a step without one, drawn by the page. [`seededRandom(BigInt(draw))`](../sdk/engine.md#seededrandom) reads it as a
+  deterministic generator, so a reload shows the same result.
+- [Plinko](../../games/plinko/src/tables.ts) draws the ball's path inside its bucket with it.
+- [Samson's Gold](../../games/samson/src/math.ts) picks reel stops with it, among exactly the stops that pay what was
+  settled.
 
 ## Payments
 

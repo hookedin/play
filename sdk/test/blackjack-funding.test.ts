@@ -46,15 +46,15 @@ test('loaded integer-scaled plans preserve exact bets, successors, labels and ad
       initialCash: table.initialCash * scale,
     });
     assert.deepEqual(loaded, compiled);
-    // The step a loaded plan builds lazily is the step a full compile builds: one bet, one prize.
+    // The step a loaded plan builds lazily is the step a full compile builds: a coin's two cards are one bet.
     const [step] = (loaded.nodes.find(n => n.id === 'start') as any).actions.map((a: any) => a.transition);
-    assert.deepEqual(step.bet, {
-      stake: 4n * scale,
-      prizes: [{ rangeStart: 0n, rangeEnd: 1n << 63n, payout: 6n * scale }],
-    });
     assert.deepEqual(
-      step.successors.map((s: any) => s.label),
-      ['card', 'other card'],
+      step.branches.map((b: any) => b.bet),
+      [{ stake: 4n * scale, chance: 1n << 63n, prize: 6n * scale }],
+    );
+    assert.deepEqual(
+      step.outcomes.map((s: any) => s.label),
+      ['other card', 'card'],
     );
   }
   assert.throws(() => loadFundedGame(graph(1n), table, 0n, admits), /funding scale/);

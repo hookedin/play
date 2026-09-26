@@ -1,6 +1,6 @@
 # HookedIn Blackjack
 
-Blackjack with hit, stand, double, split and insurance, dealt from an unlimited deck. A reference game for [HookedIn](https://play.hookedin.com), and the example of a multi-step game: every card is its own bet, signed and verified by the player's wallet.
+Blackjack with hit, stand, double, split and insurance, dealt from an unlimited deck. A reference game for [HookedIn](https://play.hookedin.com), and the example of a multi-step game: every step is at most one casino bet, signed and verified by the player's wallet.
 
 Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) and choose Blackjack. It is hosted at `blackjack-game.hookedin.com`.
 
@@ -30,16 +30,20 @@ The wallet plays with the network's ETH or the casino's test coins; the game is 
 
 The rules live in the game SDK: [src/engine/blackjack.ts](../../sdk/src/engine/blackjack.ts). `createBlackjack({ stake })` builds a finite graph of public states. Each decision node lists the legal actions (`deal`, `hit`, `stand`, `double`, `split`, `insurance`, and the dealer's automatic steps). Each action lists its successor states with exact rational probabilities, one per card, and each terminal node has its gross payout.
 
-### Every step is one bet
+### Every step is one bet at most
 
-`RoundClient` from the SDK runs the hand. The SDK's engine works backward through the graph and gives every state a cash value: the least money that finances each action from that state as a bet the casino's admission rule accepts. When you act, the step becomes one bet:
+`RoundClient` from the SDK runs the hand. The SDK's engine works backward through the graph and gives every state a cash value: the least money that finances each action from that state as bets the casino's admission rule accepts. When you act, the successors that need the same cash make one class, and the step becomes:
+
+- nothing, when every successor needs the state's cash;
+- a payment of the difference to the bankroll, when every successor needs the same smaller cash, as standing often does;
+- otherwise one casino bet between a lower and a higher class, drawn by the page with its own randomness:
 
 ```text
-stake    = current cash − cash of the cheapest successor
-prize_i  = [start_i, end_i) pays (cash of successor i − cheapest), for every better successor
+stake  = current cash − cash of the lower class
+prize  = cash of the higher class − cash of the lower class
 ```
 
-Each successor's range is as wide as its probability, to the nearest outcome in 2^64. Every card keeps its own stretch of the outcome space, even when two cards lead to the same cash, so the casino's verified outcome names the card as well as what it paid. Whatever the outcome, the player's cash after the bet is exactly the cash of the state reached. A step that moves no money places no bet. Extra wagers (double, split, insurance) add existing player money through the action's `additionalCash`.
+The page keeps the lower class's cash, which the step cannot lose, and the draw and each bet's chance are weighted so that every class is reached exactly as often as the rules say ([collapsing bets](../../docs/games/collapsing-bets.md)). When one class needs exactly the state's cash and another more, the page can also draw that class with no bet at all. Whatever the outcome, the player's cash after the step is exactly the cash of the class reached. When several cards need that cash, the card dealt is drawn from the round's outcome, so a reload deals the same card. Extra wagers (double, split, insurance) add existing player money through the action's `additionalCash`.
 
 A hand is therefore a short sequence of casino bets. Nothing reserves a whole hand, and stopping between steps leaves the player holding the current signed balance: a [settled trade-off](../../docs/overview/architecture.md#settled-trade-offs). The derivation is in [sequential games built from casino bets](../../docs/games/sequential-games.md).
 
@@ -59,6 +63,8 @@ of the initial bet, a return of 99.4296119877264%. Insurance is declined under o
 
 [test/blackjack-rules.test.ts](test/blackjack-rules.test.ts) proves it. The test computes the optimal value of the game graph and compares it with an independent oracle that calculates dealer probabilities and stand, hit, double and split values from raw totals, without using the graph, the pricing engine or any commission code. Both must equal the exact fraction `7016161098045143337706614398 / 7056410014866816666030739693`. The same file checks each table rule above against the graph.
 
+The wallet measures each bet of a hand on its own, and one bet's return is not the hand's: the same file pins that a step's bet can pay back less than half its stake, and that standing can pay the bankroll with nothing back.
+
 ### Files
 
 | File                                                                            | What it holds                                                                                                         |
@@ -76,13 +82,14 @@ The cards on screen are replayed from the labels of settled steps, which `RoundC
 
 The game page is untrusted by design. It runs in a sandboxed iframe on its own origin and talks to the wallet only through `postMessage`.
 
-- **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
+- **The game never holds keys.** It sends the wallet a bet: a stake, a chance and a prize. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every casino bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet picks its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
-- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
+- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, pays the prize itself if the outcome is below the chance, and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
-- **Every card is an outcome.** The card drawn at each step is named by that step's verified outcome. You choose an action before its outcome exists, and the same action is always the same bet, so nothing is gained by retrying.
+- **Which bet a step places is this game's word.** The wallet verifies the bet it signs completely, and knows nothing of the draw that chose it: that cards come as often as an unlimited deck deals them is this page's claim, open source here. A modified page could choose its bets outright; each is one the casino takes on its own, so such a page could misrepresent the game to its player but never harm the bankroll ([what is given up](../../docs/games/collapsing-bets.md#what-is-given-up)).
+- **The cards follow the bets.** A step's verified outcome decides the class it reaches and the card within it; a step drawn with no bet deals its card from the page's own draw. You choose an action before its bet is drawn, and the drawn bet is saved before it is signed and kept through a rejection, so nothing is gained by retrying.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is drawn from the settled result. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -142,7 +149,7 @@ From play's root:
 node --test games/blackjack/test/*.test.ts
 ```
 
-This runs [test/blackjack-rules.test.ts](test/blackjack-rules.test.ts): the exact edge against the independent oracle, that every state is reachable, acyclic and normalized, that all 52 cards are equiprobable, and one test per table rule (double, split, split aces, insurance, the dealer's check, naturals). `npm test` at play's root type-checks and runs it with every other test.
+This runs [test/blackjack-rules.test.ts](test/blackjack-rules.test.ts): the exact edge against the independent oracle, that every state is reachable, acyclic and normalized, that all 52 cards are equiprobable, one test per table rule (double, split, split aces, insurance, the dealer's check, naturals), and how far one step's bet can pay back from the hand's return. `npm test` at play's root type-checks and runs it with every other test.
 
 Pricing, the funding table and wallet settlement of blackjack rounds are tested in the [game SDK](../../sdk).
 

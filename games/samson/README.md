@@ -1,6 +1,6 @@
 # Samson's Gold
 
-A five-reel, three-row, 243-ways slot for [HookedIn](https://play.hookedin.com). Jawbone wilds, honeycomb scatters, and a bonus on its own reels where the wilds multiply. It is the showcase reference game: the whole payout distribution is counted exactly from the reel strips, and every spin is one bet the wallet signs whole.
+A five-reel, three-row, 243-ways slot for [HookedIn](https://play.hookedin.com). Jawbone wilds, honeycomb scatters, and a bonus on its own reels where the wilds multiply. It is the showcase reference game: the whole payout distribution is counted exactly from the reel strips, and a spin is at most one bet, the whole stake against one pay, drawn so that spins pay exactly as the reels do.
 
 Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) and choose Samson's Gold. It is hosted at `samson-game.hookedin.com`.
 
@@ -35,23 +35,27 @@ The wallet plays with the network's ETH or the casino's test coins; the game is 
 
 ## How it works
 
-### One spin is one bet
+### One spin is one decision
 
-[src/math.ts](src/math.ts) holds the reel strips, the paytable and every rule. It has no DOM, no wallet and no randomness.
+[src/math.ts](src/math.ts) holds the reel strips, the paytable and every rule. It has no DOM, no wallet and no randomness of its own.
 
 An **outcome** of a spin is the pair (best pay, bonus triggered). `distribution(machine)` counts, exactly, how many of the machine's stop combinations produce each outcome. It does not simulate. A win depends on the first three reels only through the running product of ways and multipliers for each symbol still alive, so the counter groups the first three reels by that state and then crosses each group with reels four and five. The main reels have 509,358,726 stop combinations and the bonus reels 714,125,160; each is counted in a fraction of a second.
 
-`slotGraph` turns that count into a one-decision graph: a single `spin` action whose outcomes are the distinct results, each with probability `count / total` as an exact fraction, and each a terminal paying `stake × (pay + 8 if the bonus triggered)`. `RoundClient` from the [game SDK](../../sdk) compiles the `spin` into one bet: the stake, and prizes for the outcomes that pay, laid end to end across the 64-bit outcome space (neighbouring outcomes that pay the same share one prize). The main game has 44 outcomes and the bonus 54, so both fit the 64 prizes a bet may hold. The wallet signs the whole table.
+`slotGraph` turns that count into a one-decision graph: a single `spin` action whose outcomes are the distinct results, each with probability `count / total` as an exact fraction, and each a terminal paying `stake × (pay + 8 if the bonus triggered)`. The main game has 44 outcomes and the bonus 54.
 
-Reel odds do not divide 2^64, so each outcome's width is rounded to the nearest whole outcome. The played probability is within one part in 2^64 of the counted one.
+### A spin bets the whole stake against one pay
 
-### The reels shown come from the outcome
+`RoundClient` from the [game SDK](../../sdk) plays the `spin`. A casino bet has two outcomes, so the SDK collapses the spin ([collapsing bets](../../docs/games/collapsing-bets.md)). No win is smaller than the stake, so the only payout below it is nothing: each spin, the page draws with its own randomness one pay above the stake, and bets the whole stake against it. The draw is weighted so that spins reach every pay exactly as often as the reels do. A spin that pays the stake back exactly is drawn the same way and places no bet: about one main spin in thirteen, and one bonus spin in eight. Where two outcomes pay the same, such as 8 bets without the bonus and nothing with it, the round's outcome decides which one the spin reached.
 
-After settlement the game knows which prize the verified outcome hit, and where inside that prize's range it fell. `sampleStops` uses that position as an index into exactly those stop combinations that produce the settled result, and returns one of them. The reels stop there. Reels and money are therefore jointly distributed as if the physical strips had been spun, and the page draws no randomness of its own. [src/game.ts](src/game.ts) re-evaluates the chosen window and refuses to show it if it does not pay what was settled.
+Reel odds do not divide 2^64, so a bet's chance is rounded down to whole outcomes, and the page adds one outcome just often enough that the odds are exact.
+
+### The reels shown come from the result
+
+After settlement the game knows which outcome the spin reached. `sampleStops` picks one of exactly the stop combinations that produce it, with a generator seeded by the settled spin's `draw`: the round's outcome for a bet, and for a spin without one a value the page drew when it prepared the spin. The reels stop there, and a reload shows the same reels. [src/game.ts](src/game.ts) re-evaluates the chosen window and refuses to show it if it does not pay what was settled.
 
 ### Why the rules look the way they do
 
-Pricing one bet with the SDK's exact compiler costs roughly the cube of the number of distinct payouts. The rules keep that set small: only the best win pays, every pay is a whole number of bets of the form 2^a·3^b, and way counts and wild multipliers are products of 2s and 3s. The main game has 38 distinct payouts and the bonus 48. A side effect is that a win is never smaller than the bet, so the game never presents a net loss as a win.
+Pricing one spin with the SDK's exact compiler costs roughly the cube of the number of distinct payouts. The rules keep that set small: only the best win pays, every pay is a whole number of bets of the form 2^a·3^b, and way counts and wild multipliers are products of 2s and 3s. The main game has 38 distinct payouts and the bonus 48. A side effect is that a win is never smaller than the bet, so the game never presents a net loss as a win, and every bet it places stakes the whole bet.
 
 Bonus spins are prepaid because the casino has no notion of free credit: every spin must be a real bet with a real stake. The bonus reels carry their own house edge, so each bonus spin passes the casino's admission rule like any other. The game keeps its bonus counter and last window in its own `localStorage` next to the round, and applies each finished round exactly once, by the round's `id`.
 
@@ -67,7 +71,9 @@ wallet's bet history and in this game's public record at the casino.
 | Main  | 490253039/509358726 = 96.2491% | 1 in 4.95  | 1 in 156.1    | 1,152×     | 38               |
 | Bonus | 3735679/3881115 = 96.2527%     | 1 in 4.25  | 1 in 127.7    | 6,912×     | 48               |
 
-The main-game return counts the eight bets of bonus cash at face value. [test/samson.test.ts](test/samson.test.ts) pins both return fractions and both top payouts exactly, from the counted distribution. It also checks the counter against brute-force evaluation of every window on a small machine, outcome by outcome, and checks that the signed bet's expected payout matches what the reels pay to within the 2^64 rounding. The other columns are computed from the same `distribution`.
+The main-game return counts the eight bets of bonus cash at face value. [test/samson.test.ts](test/samson.test.ts) pins both return fractions and both top payouts exactly, from the counted distribution. It also checks the counter against brute-force evaluation of every window on a small machine, outcome by outcome, and that the compiled spin reaches every pay exactly as often as the reels do and pays back exactly what they pay. The other columns are computed from the same `distribution`.
+
+Each bet's own return, which the wallet measures and keeps, is lower than the machine's, because the bets for the largest pays carry more of its edge than the rest. With the casino's bankroll far above the stake, the main game's bets pay back from 95.3%, the whole stake against the 1,152× pay, to 97.6%, and the bonus game's from 95.1%, against 6,912×, to 97.5%; the test holds every bet to at least 95.1%. When the bankroll is small beside a pay, its bet must carry more edge still for the casino to take it: at a planning bankroll of 25,000 bets, the bonus game's bet against 6,912× pays back 69.2%.
 
 ### Files
 
@@ -85,13 +91,14 @@ The main-game return counts the eight bets of bonus cash at face value. [test/sa
 
 The game page is untrusted by design. It runs in a sandboxed iframe on its own origin and talks to the wallet only through `postMessage`.
 
-- **The game never holds keys.** It sends the wallet a stake and a list of prizes. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
+- **The game never holds keys.** It sends the wallet a bet: a stake, a chance and a prize. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every casino bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet picks its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
-- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, applies the signed prizes itself and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
+- **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, pays the prize itself if the outcome is below the chance, and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
-- **The reels are the outcome.** The stop position is chosen by the verified outcome, from exactly the positions that pay what was settled.
+- **Which bet a spin places is this game's word.** The wallet verifies the bet it signs completely, and knows nothing of the draw that chose it: that spins reach every pay as often as the reels do is this page's claim, open source here. A modified page could choose its bets outright; each is one the casino takes on its own, so such a page could misrepresent the game to its player but never harm the bankroll ([what is given up](../../docs/games/collapsing-bets.md#what-is-given-up)).
+- **The reels follow the bet.** The stops shown are drawn from the settled result, among exactly the positions that pay what was settled. A spin that pays the stake back places no bet, and its reels are drawn by the page.
 
-The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is computed from the verified outcome. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
+The wallet verifies each bet. It does not certify a game's advertised rules or animations, which is why the rules here are open source and the presentation is drawn from the settled result. See the [protocol](../../docs/overview/how-it-works.md) and [pricing and commission](../../docs/reference/economics.md).
 
 ## Run it
 
@@ -119,7 +126,7 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 
 - [src/manifest.json](src/manifest.json): `id`, `name`, `description`, and `developer` (your address).
 - The theme: the SVGs in [src/symbols/](src/symbols/), the copy in [src/index.html](src/index.html), the styles, and the tones in [src/sound.ts](src/sound.ts). None of these touch the maths.
-- The maths: `MACHINES` and `PAYS` in [src/math.ts](src/math.ts). Any change to a strip or a pay changes the return, so update the expected fractions in the test. A reel window may show at most one wild or scatter; the counter enforces this. Keep the number of distinct outcomes at 64 or fewer and the distinct payouts small, or spins will be slow to price or will not fit one bet.
+- The maths: `MACHINES` and `PAYS` in [src/math.ts](src/math.ts). Any change to a strip or a pay changes the return, so update the expected fractions and `FLOOR` in the test. A reel window may show at most one wild or scatter; the counter enforces this. Keep the distinct payouts few, or spins will be slow to price.
 
 You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
@@ -146,9 +153,9 @@ In this repository's root, `npm test` type-checks everything and runs every test
 - the grouped counter agrees with evaluating every window, outcome by outcome;
 - `sampleStops` returns every matching combination exactly once;
 - the published machines return exactly the fractions above, with wilds and scatters on the stated reels;
-- a spin prices as one bet at the stake, against a bankroll of 25,000 bets, with 30 to 64 prizes;
+- a spin prices at the stake against a bankroll of 25,000 bets, reaches every pay exactly as often as the reels do, and pays back exactly what they pay;
 - spins settle through a real wallet in both modes and survive a reload;
-- every step pays back at least the floor this game is built to.
+- every bet this game can place pays back at least the floor it is built to, 95.1% of its stake.
 
 The fifth test uses `@hookedin/play/testing/game-wallet.ts`: the real wallet code with an in-memory casino, not a mock.
 

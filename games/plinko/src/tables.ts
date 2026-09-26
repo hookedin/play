@@ -1,8 +1,11 @@
 /**
- * Plinko rules: boards of independent 50/50 pegs and their prize tables. Pure arithmetic: a drop is one
- * casino bet whose prizes are the buckets, and the ball's whole path is read from the round's outcome.
- * No DOM, wallet or randomness of its own.
+ * Plinko rules: boards of independent 50/50 pegs and their multipliers. Pure arithmetic: a drop is a game of one
+ * decision whose outcomes are the buckets, which the SDK collapses into the one casino bet a drop places, and the
+ * ball's path inside its bucket is drawn from the settled result. No DOM or wallet.
  */
+import { fraction } from '@hookedin/play/sdk/engine';
+import type { GameGraph, RandomBelow } from '@hookedin/play/sdk/engine';
+
 export const ROWS = [8, 12, 16] as const;
 export const RISKS = ['low', 'medium', 'high'] as const;
 export type Rows = (typeof ROWS)[number];
@@ -42,36 +45,47 @@ export function paths(rows: number, bucket: number): bigint {
 }
 export const payout = (stake: bigint, hundredths: number) => (stake * BigInt(hundredths)) / 100n;
 
-const WORD_BITS = 64n;
-/** Where a bucket sits in the outcome space. A path is one of 2^rows equally likely stretches of
- * 2^(64 - rows) outcomes, and a bucket holds its C(rows, bucket) paths side by side, so every width
- * is exact: the board played is the board of fair pegs, to the last outcome. */
-function bucketStart(rows: number, bucket: number): bigint {
-  let before = 0n;
-  for (let b = 0; b < bucket; b++) before += paths(rows, b);
-  return before << (WORD_BITS - BigInt(rows));
-}
-/** One drop as a casino bet: the stake, and a prize for every bucket that pays. */
-export function dropBet(rows: Rows, risk: Risk, stake: bigint) {
+/**
+ * One drop as a game: a single decision whose outcomes are the buckets, each exactly as likely as the fair pegs make
+ * it, each paying its multiplier of the stake. A stake too small for a multiplier to pay a whole unit is refused, so
+ * the board played is the board shown.
+ */
+export function dropGraph(setup: { stake: string; rows: Rows; risk: Risk }): GameGraph {
+  const { rows, risk } = setup,
+    stake = BigInt(setup.stake),
+    table = multipliers(rows, risk);
+  if (table.some(hundredths => payout(stake, hundredths) === 0n))
+    throw new Error('This bet is too small for these multipliers. Raise it and drop again.');
   return {
-    stake,
-    prizes: multipliers(rows, risk).flatMap((hundredths, bucket) => {
-      const prize = payout(stake, hundredths);
-      return prize > 0n
-        ? [{ rangeStart: bucketStart(rows, bucket), rangeEnd: bucketStart(rows, bucket + 1), payout: prize }]
-        : [];
-    }),
+    root: 'board',
+    nodes: [
+      {
+        id: 'board',
+        kind: 'decision',
+        actions: [
+          {
+            id: 'drop',
+            outcomes: table.map((_, bucket) => ({
+              next: `bucket:${bucket}`,
+              probability: fraction(paths(rows, bucket), 1n << BigInt(rows)),
+            })),
+          },
+        ],
+      },
+      ...table.map((hundredths, bucket) => ({
+        id: `bucket:${bucket}`,
+        kind: 'terminal' as const,
+        payout: payout(stake, hundredths),
+      })),
+    ],
   };
 }
-/**
- * The ball a round's outcome drops. The outcome names one of the 2^rows paths: its bucket, and which
- * of the bucket's arrangements of right turns it is. Ball and money are the same fact.
- */
-export function landing(rows: Rows, outcome: bigint): { bucket: number; turns: boolean[] } {
-  const path = outcome >> (WORD_BITS - BigInt(rows));
-  let bucket = 0,
-    index = path;
-  while (index >= paths(rows, bucket)) index -= paths(rows, bucket++);
+/** The bucket a finished drop landed in. */
+export const bucketOf = (nodeId: string) => Number(nodeId.slice('bucket:'.length));
+/** The ball that lands in `bucket`: one of the bucket's arrangements of right turns, all equally likely, drawn from
+ * `random`. */
+export function path(rows: Rows, bucket: number, random: RandomBelow): boolean[] {
+  let index = random(paths(rows, bucket));
   // Unrank: arrangements that turn left here come first.
   const turns: boolean[] = [];
   for (let row = 0, rights = bucket; row < rows; row++) {
@@ -83,5 +97,5 @@ export function landing(rows: Rows, outcome: bigint): { bucket: number; turns: b
     }
     turns.push(right);
   }
-  return { bucket, turns };
+  return turns;
 }

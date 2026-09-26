@@ -2,7 +2,7 @@
 title: Test wallet
 description: Reference for @hookedin/play/testing/game-wallet.ts, the real wallet against an in-memory casino stub that a game's tests run on.
 sidebar:
-  order: 9
+  order: 10
 ---
 
 `import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';` is what a game's tests run on: the real wallet,
@@ -24,8 +24,9 @@ test('a casino bet settles through the real wallet', async () => {
   const receipt = await f.bridge.call('game.casinoBet', {
     id: 'first-bet',
     stake: '1000',
-    // Half the outcome space paying 1.9 times the stake: a 95% return, which the casino admits.
-    prizes: [{ rangeStart: '0', rangeEnd: String(HALF), payout: '1900' }],
+    // Half the outcomes win 1.9 times the stake: a 95% return, which the casino admits.
+    chance: String(HALF),
+    prize: '1900',
   });
   assert.equal(receipt.status, 'settled');
   assert.equal(receipt.payout, BigInt(receipt.outcome) < HALF ? '1900' : '0');
@@ -64,9 +65,10 @@ its stake in.
 The stub casino signs every state as the protocol derives it, with `owner`'s key. It names each channel's rounds and
 settles a casino bet on the channel's round against its bankroll, holding it to the casino's own admission rule and
 charging the casino's commission; a bet the rule refuses is declined with its round revealed, as the casino declines it,
-so a table the stub takes is one the casino takes. It takes a developer bet on a published game into the developer's
-bank and owes the player what the developer settles until the wallet collects it. It declines an operation its player
-already carried out on another channel.
+so a bet the stub takes is one the casino takes. It takes a developer bet on a published game into the developer's
+bank and owes the player what the developer settles until the wallet collects it. It settles the developer's casino bets
+on its rounds between its bank and the bankroll, reveals included, as the casino does. It declines an operation its
+player already carried out on another channel.
 
 | Member                       | Type                    | What it is                                                                                                                                                                                              |
 | ---------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

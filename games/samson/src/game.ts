@@ -2,6 +2,7 @@ import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import type { RoundState } from '@hookedin/play/sdk/round';
 import { mountBank } from '@hookedin/play/sdk/bank';
+import { seededRandom } from '@hookedin/play/sdk/engine';
 import {
   BONUS_SPINS,
   MACHINES,
@@ -125,12 +126,6 @@ const round = new RoundClient(HookedIn, slotGraph);
     $('win-amount').textContent = stakes ? money(stakes, stake) : '';
   }
 
-  /** Where the round's verified outcome fell inside the prize it hit, scaled to any number of choices. */
-  const within = (state: RoundState) => (limit: bigint) => {
-    const { outcome, rangeStart, rangeEnd } = state.settlement ?? {};
-    if (outcome == null || rangeStart == null) return 0n;
-    return ((BigInt(outcome) - BigInt(rangeStart)) * limit) / (BigInt(rangeEnd) - BigInt(rangeStart));
-  };
   /** Apply a finished round to the game's own state exactly once, and read the reel stops that show it. */
   function settle(state: RoundState) {
     const outcome = nodeOutcome(state.nodeId);
@@ -144,7 +139,10 @@ const round = new RoundClient(HookedIn, slotGraph);
         bonus = { played: 0, won: 0, stake: state.setup.stake, ...bonus, left: (bonus?.left ?? 0) + BONUS_SPINS };
       saved = {
         applied: state.id,
-        shown: { mode: outcome.machine.name, stops: sampleStops(outcome.machine, outcome.key, within(state)) },
+        shown: {
+          mode: outcome.machine.name,
+          stops: sampleStops(outcome.machine, outcome.key, seededRandom(BigInt(state.settlement.draw))),
+        },
         bonus,
       };
       persist();

@@ -1,6 +1,6 @@
 import { formatEther } from 'ethers';
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
-import { outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
+import { betPayout, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
 import { activityJSON } from './activity.ts';
 
 /**
@@ -22,8 +22,8 @@ export interface BetRow {
   group?: string;
   stake: bigint;
   payout: bigint;
-  /** The bet's expected payout, out of 2^64 stakes: what its own prize table was worth. A developer bet
-   * has no prize table, so nothing says what it was worth. */
+  /** The bet's expected payout, out of 2^64 stakes: what its own odds were worth. A developer bet has no
+   * odds, so nothing says what it was worth. */
   expected: bigint | null;
   /** The most the bet could pay, when the reader knows it. */
   maxPayout?: bigint | null;
@@ -31,7 +31,7 @@ export interface BetRow {
   operation?: string;
   /** A public row's number in the casino's record of every bet. */
   index?: number;
-  /** This wallet's own receipt, whole: the prizes, the preimages and the signatures it kept. A
+  /** This wallet's own receipt, whole: the odds, the preimages and the signatures it kept. A
    * public row has none, because the casino's list is only what anyone may read. */
   receipt?: any;
 }
@@ -43,7 +43,7 @@ export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10
 export const measuredReturn = (staked: bigint, expected: bigint) =>
   staked > 0n ? returnParts(staked, expected) : null;
 /** What a set of bets did pay back. Over a handful of bets this is luck; over thousands it is the
- * table. Both are shown, because a player deserves to see which one they are reading. */
+ * odds. Both are shown, because a player deserves to see which one they are reading. */
 export const realisedReturn = (staked: bigint, paid: bigint) =>
   staked > 0n ? (paid * 1_000_000n + staked / 2n) / staked : null;
 
@@ -51,7 +51,7 @@ export interface BetTotals {
   bets: number;
   staked: bigint;
   paid: bigint;
-  /** What the bets with a prize table were expected to pay, and what they staked. */
+  /** What the bets with odds were expected to pay, and what they staked. */
   expected: bigint;
   priced: bigint;
   net: bigint;
@@ -114,7 +114,7 @@ export function totalCards(byAsset: Map<string, BetTotals>) {
         element(
           'p',
           '',
-          `What these bets' own prize tables were worth${totals.priced < totals.staked ? ', where a bet had one: a developer bet has none' : ''}. ` +
+          `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
             `They paid back ${realised === null ? '—' : percent(realised)}: ` +
             `${formatEther(totals.paid)} ${unit} for ${formatEther(totals.staked)} ${unit} staked.`,
         ),
@@ -125,7 +125,7 @@ export function totalCards(byAsset: Map<string, BetTotals>) {
 }
 
 /** One row per bet. `who` is shown on a public list and left out of a player's own. A row that can
- * be opened is a button: only this wallet's own receipt holds the prizes and preimages to show. */
+ * be opened is a button: only this wallet's own receipt holds the odds and preimages to show. */
 export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const unit = unitOf(row.asset),
     net = row.payout - row.stake,
@@ -269,10 +269,10 @@ const factList = (rows: readonly (readonly [string, string | Node] | null | fals
 };
 
 /**
- * One of this wallet's own bets, whole: for a casino bet, the prize table it rode drawn across the outcome space,
- * where its round landed in that space, and the seed and secret that fixed it; for a developer bet, what it was and
- * how its developer settled it. Every derived figure is worked out here from the receipt's own preimages, so it is
- * checked in front of the player rather than repeated back from what the casino said.
+ * One of this wallet's own bets, whole: for a casino bet, its chance drawn across the outcome space, where its round
+ * landed in that space, and the seed and secret that fixed it; for a developer bet, what it was and how its developer
+ * settled it. Every derived figure is worked out here from the receipt's own preimages, so it is checked in front of
+ * the player rather than repeated back from what the casino said.
  */
 export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
   const unit = unitOf(row.asset),
@@ -281,22 +281,23 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     step = receipt.proof?.step,
     op = step?.operation,
     developerBet = receipt.kind === 'developer-bet',
-    // A casino bet keeps its prizes, its round and the hash of its seed in its operation, and the seed and secret
-    // that settled it in its step.
+    // A casino bet keeps its chance, its prize, its round and the hash of its seed in its operation, and the seed and
+    // secret that settled it in its step.
     revealed =
       op && step && !developerBet
-        ? { prizes: op.prizes, seed: step.seed, secret: step.secret, round: op.round, seedHash: op.seedHash }
+        ? {
+            chance: BigInt(op.chance),
+            prize: BigInt(op.prize),
+            seed: step.seed,
+            secret: step.secret,
+            round: op.round,
+            seedHash: op.seedHash,
+          }
         : null,
-    prizes: { start: bigint; end: bigint; payout: bigint }[] = (
-      Array.isArray(revealed?.prizes) ? revealed!.prizes : []
-    ).map((prize: any) => ({
-      start: BigInt(prize.rangeStart),
-      end: BigInt(prize.rangeEnd),
-      payout: BigInt(prize.payout),
-    })),
-    // Both preimages are here, so the round's outcome is worked out again from nothing but them.
-    result = revealed?.seed && revealed.secret ? outcome(revealed.prizes, revealed.seed, revealed.secret) : null,
+    // Both preimages are here, so the round's outcome and what the bet paid are worked out again from nothing but them.
+    result = revealed?.seed && revealed.secret ? outcome(revealed.seed, revealed.secret) : null,
     landed = result ? result.value : null,
+    paid = revealed && landed !== null ? betPayout(revealed, landed) : null,
     body = document.createDocumentFragment();
 
   const when = new Date(row.at);
@@ -339,79 +340,54 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     body.append(settled);
   }
   if (developerBet) {
-    // A developer bet has no prize table and no round.
-  } else if (!prizes.length || landed === null) {
+    // A developer bet has no odds and no round.
+  } else if (!revealed || landed === null) {
     body.append(
       element(
         'p',
         'bet-detail-note',
-        'This receipt keeps no prize table, so there is nothing to draw: only the amounts above are known.',
+        'This receipt keeps no revealed round, so there is nothing to draw: only the amounts above are known.',
       ),
     );
   } else {
-    const won = prizes.filter(prize => landed >= prize.start && landed < prize.end);
-    // Every prize gets its own lane, so prizes that overlap are seen to overlap.
+    const won = landed < revealed.chance;
+    // The whole outcome space, the stretch below the bet's chance and where the round landed in it.
     const where = detailSection('Where the round landed');
-    const space = element('div', 'bet-space'),
-      lanes = element('div', 'bet-space-lanes');
-    for (const prize of prizes) {
-      const hit = landed >= prize.start && landed < prize.end,
-        lane = element('div', `bet-space-lane${hit ? ' hit' : ''}`),
-        band = element('div', 'bet-space-band');
-      band.style.left = `${across(prize.start)}%`;
-      band.style.width = `${across(prize.end - prize.start)}%`;
-      band.title = `Pays ${formatEther(prize.payout)} ${unit} on ${chance(prize.end - prize.start)} of outcomes`;
-      lane.append(band);
-      lanes.append(lane);
-    }
-    const mark = element('div', 'bet-space-mark');
+    const space = element('div', `bet-space${won ? ' hit' : ''}`),
+      band = element('div', 'bet-space-band'),
+      mark = element('div', 'bet-space-mark');
+    band.style.width = `${across(revealed.chance)}%`;
+    band.title = `Pays ${formatEther(revealed.prize)} ${unit} on ${chance(revealed.chance)} of outcomes`;
     mark.style.left = `${across(landed)}%`;
     mark.title = `The outcome, ${landed}`;
-    lanes.append(mark);
-    space.append(lanes);
+    space.append(band, mark);
     const scale = element('div', 'bet-space-scale');
     scale.append(element('span', '', '0'), element('span', '', '2⁶⁴'));
-    space.append(scale);
-    where.append(space);
+    where.append(space, scale);
     where.append(
       element(
         'p',
         'bet-detail-note',
         `The round drew ${landed}, ${across(landed).toFixed(3)}% of the way across the space. ` +
-          (won.length
-            ? `${won.length} of ${prizes.length} prize${prizes.length === 1 ? '' : 's'} held it, so its prizes pay ${formatEther(result!.payout)} ${unit}.`
-            : `No prize held it, so its prizes pay nothing of the ${formatEther(row.maxPayout ?? 0n)} ${unit} they could have.`),
+          (won
+            ? `That is below the bet’s chance, so it pays its prize, ${formatEther(revealed.prize)} ${unit}.`
+            : `That is not below the bet’s chance, so it pays nothing of the ${formatEther(revealed.prize)} ${unit} it could have.`),
       ),
     );
     body.append(where);
 
-    const table = detailSection(
-      'The prize table you signed',
-      'A prize pays when the outcome falls in its range, the end never included. Prizes may overlap, and every one that holds the outcome pays.',
+    const terms = detailSection(
+      'The bet you signed',
+      'It pays its prize when the round’s outcome falls below its chance, counted in outcomes out of 2⁶⁴.',
     );
-    const grid = element('div', 'bet-prizes');
-    for (const head of ['Prize', 'Pays', 'Chance', 'Outcomes it holds', ''])
-      grid.append(element('span', 'bet-prizes-head', head));
-    prizes.forEach((prize, index) => {
-      const hit = landed >= prize.start && landed < prize.end;
-      grid.append(
-        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, `#${index + 1}`),
-        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, `${formatEther(prize.payout)} ${unit}`),
-        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, chance(prize.end - prize.start)),
-        element('span', `bet-prizes-cell range${hit ? ' hit' : ''}`, `${prize.start} … ${prize.end}`),
-        element('span', `bet-prizes-cell${hit ? ' hit' : ''}`, hit ? 'held it' : ''),
-      );
-    });
-    table.append(grid);
-    table.append(
-      element(
-        'p',
-        'bet-detail-note',
-        `Together they were worth ${percent(returnParts(row.stake, row.expected ?? 0n))} of the stake, and could have paid ` +
-          `at most ${formatEther(row.maxPayout ?? 0n)} ${unit}.`,
-      ),
+    terms.append(
+      factList([
+        ['Prize', `${formatEther(revealed.prize)} ${unit}`],
+        ['Chance', `${chance(revealed.chance)} · ${revealed.chance} of 2⁶⁴ outcomes`],
+        ['Worth', `${percent(returnParts(row.stake, row.expected ?? 0n))} of the stake`],
+      ]),
     );
-    body.append(table);
+    body.append(terms);
   }
 
   if (step && op) {
@@ -453,8 +429,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
             'Its lowest 64 bits are the outcome',
             rederived(
               `${result!.value} · 0x${result!.value.toString(16)}`,
-              receipt.payout === undefined || result!.payout === BigInt(receipt.payout),
-              'The outcome the prizes were read against, and what they pay on it',
+              receipt.payout === undefined || paid === BigInt(receipt.payout),
+              'The outcome the bet was read against, and what it pays on it',
             ),
           ],
         ]),

@@ -36,7 +36,7 @@ on-chain and uses its own ABI.
 | `networkName`        | string         | `"Sepolia"` or `"Anvil test chain"`                                                                                                     |
 | `isLocalDevelopment` | boolean        | `true` only on a local Anvil stack that offers [the faucet](#post-apifaucet)                                                            |
 | `explorerUrl`        | string or null | `"https://sepolia.etherscan.io"` on Sepolia, `null` otherwise                                                                           |
-| `limits`             | object         | `{prizes, outcomeSpace, meta, group}`: [the limits](../reference/signed-messages.md#limits-and-the-protocol-revision) a bet is held to  |
+| `limits`             | object         | `{outcomeSpace, meta, group}`: [the limits](../reference/signed-messages.md#limits-and-the-protocol-revision) a bet is held to          |
 
 ```json title="Response"
 {
@@ -52,7 +52,6 @@ on-chain and uses its own ABI.
   "isLocalDevelopment": false,
   "explorerUrl": null,
   "limits": {
-    "prizes": 64,
     "outcomeSpace": "18446744073709551616",
     "meta": 4096,
     "group": 64
@@ -493,8 +492,9 @@ A game's public record: its settled bets, newest first, and their totals in each
 **Auth:** none · **Idempotent:** yes
 
 A bet appears here when it settles: a player's casino bet when the casino carries it out, a developer bet when its
-developer settles it. Declined bets and a developer's own casino bets do not appear. Its player is their uname and
-alias, never an address, a channel or an operation ID. An unknown key answers with no totals and no bets.
+developer settles it, and a developer's own casino bet from its bank when the bankroll takes it. Declined bets and
+reveals do not appear. Its player is their uname and alias, a developer's casino bet its developer's, never an address, a
+channel or an operation ID. An unknown key answers with no totals and no bets.
 
 | Path  | Type    | Meaning                                                   |
 | ----- | ------- | --------------------------------------------------------- |
@@ -505,21 +505,21 @@ alias, never an address, a channel or an operation ID. An unknown key answers wi
 | `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players`             |
 | `group` | string | Only the bets of this group, matched exactly; the totals then cover the group alone |
 
-| Response field  | Type    | Meaning                                                                                   |
-| --------------- | ------- | ----------------------------------------------------------------------------------------- |
-| `key`           | bytes32 | The game, lowercase                                                                       |
-| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled, as numbers |
-| `totals`        | object  | By asset, each `{bets, players, staked, paid, expected, priced}`, below                   |
-| `bets`          | array   | `{index, uname, alias, group?, asset, stake, payout, expected, at}`, below                |
+| Response field  | Type    | Meaning                                                                                                                           |
+| --------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `key`           | bytes32 | The game, lowercase                                                                                                               |
+| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets, of the group if the request names one, are open and settled, as numbers |
+| `totals`        | object  | By asset, each `{bets, players, staked, paid, expected, priced}`, below                                                           |
+| `bets`          | array   | `{index, kind, uname, alias, group?, asset, stake, chance?, prize?, payout, at}`, below                                           |
 
-A total's `bets` and `players` are numbers; `staked` and `paid` are what the bets staked and paid. `expected` is what
-the bets with a prize table were expected to pay, times 2^64 (the sum over their prizes of payout × range width), and
-`priced` is what those bets staked, so their return is `expected / (priced × 2^64)`. A developer bet has no prize table
-and counts in neither.
+The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. A total's `bets`
+and `players` are numbers; `staked` and `paid` are what the bets staked and paid. `expected` is what the casino bets were
+expected to pay, times 2^64 (the sum of their prizes times their chances), and `priced` is what those bets staked, so
+their return is `expected / (priced × 2^64)`. A developer bet has no odds and counts in neither.
 
-A bet's `index` is its number in the casino's record of every settled bet, `stake` and `payout` are what it staked and
-paid, `expected` its prize table's expected payout times 2^64, or `null` for a developer bet, and `at` when it
-settled, in milliseconds.
+A bet's `index` is its number in the casino's record of every settled bet. `kind` is `casino`, `developer`, or `bank`
+for a developer's casino bet from its bank. `stake` and `payout` are what it staked and paid, a casino bet's `chance`
+and `prize` are its odds, which a developer bet has none of, and `at` is when it settled, in milliseconds.
 
 ```text title="Request"
 GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3?limit=10
@@ -545,24 +545,26 @@ GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf
   "bets": [
     {
       "index": 2,
+      "kind": "developer",
       "uname": "zi26admbshgt8yfa6xfxs97r",
       "alias": "alice",
-      "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
+      "group": "5b1f3d9a0c2e47f6a8d4e1b7c9f0a3d2e6b8c1f4a7d0e3b6c9f2a5d8e1b4c7f0",
       "asset": "eth",
       "stake": "1000000000000000",
       "payout": "0",
-      "expected": null,
       "at": 1790384229614
     },
     {
       "index": 1,
+      "kind": "casino",
       "uname": "zi26admbshgt8yfa6xfxs97r",
       "alias": "alice",
       "group": "hand-1",
       "asset": "eth",
       "stake": "1000000000000000",
+      "chance": "9131138316486228049",
+      "prize": "2000000000000000",
       "payout": "0",
-      "expected": "18262276632972456098000000000000000",
       "at": 1790384229511
     }
   ]
@@ -587,16 +589,16 @@ how to check one.
 | ------- | ------- | ----------------------------------- |
 | `round` | bytes32 | The round's ID, `keccak256(secret)` |
 
-| Response field | Type    | Meaning                                                                                                                                                                                                                                         |
-| -------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`           | bytes32 | The round                                                                                                                                                                                                                                       |
-| `developer`    | address | The developer that opened it, lowercase                                                                                                                                                                                                         |
-| `asset`        | string  | `eth` or `test`                                                                                                                                                                                                                                 |
-| `status`       | string  | `open` or `revealed`                                                                                                                                                                                                                            |
-| `seed`         | bytes32 | Revealed: the seed the developer's casino bet brought                                                                                                                                                                                           |
-| `secret`       | bytes32 | Revealed: the casino's secret                                                                                                                                                                                                                   |
-| `outcome`      | string  | Revealed: the 64-bit [outcome](../reference/signed-messages.md#the-outcome) of the seed and the secret, a decimal string                                                                                                                        |
-| `casinoBet`    | object  | Revealed: `{game, stake, prizes, meta, signature, accepted, payout?}`, the developer's casino bet as it signed it (`signature` is its `BankCasinoBet`), whether the bankroll `accepted` it, and what it paid the developer's bank when accepted |
+| Response field | Type    | Meaning                                                                                                                                                                                                                                                                                                                     |
+| -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | bytes32 | The round                                                                                                                                                                                                                                                                                                                   |
+| `developer`    | address | The developer that opened it, lowercase                                                                                                                                                                                                                                                                                     |
+| `asset`        | string  | `eth` or `test`                                                                                                                                                                                                                                                                                                             |
+| `status`       | string  | `open` or `revealed`                                                                                                                                                                                                                                                                                                        |
+| `seed`         | bytes32 | Revealed: the seed the developer's casino bet brought                                                                                                                                                                                                                                                                       |
+| `secret`       | bytes32 | Revealed: the casino's secret                                                                                                                                                                                                                                                                                               |
+| `outcome`      | string  | Revealed: the 64-bit [outcome](../reference/signed-messages.md#the-outcome) of the seed and the secret, a decimal string                                                                                                                                                                                                    |
+| `casinoBet`    | object  | Revealed: `{game, stake, chance, prize, group, meta, signature, accepted, payout?}`, the developer's casino bet as it signed it (`signature` is its `BankCasinoBet`), whether the bankroll `accepted` it, and what it paid the developer's bank when accepted. A stake, chance and prize of `0` is a reveal, never accepted |
 
 ```json title="Response"
 {
@@ -610,15 +612,12 @@ how to check one.
   "casinoBet": {
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "stake": "1000000000000000",
-    "prizes": [
-      {
-        "rangeStart": "0",
-        "rangeEnd": "8974091711534376461",
-        "payout": "2000000000000000"
-      }
-    ],
+    "chance": "8974091711534376461",
+    "prize": "2000000000000000",
+    "group": "5b1f3d9a0c2e47f6a8d4e1b7c9f0a3d2e6b8c1f4a7d0e3b6c9f2a5d8e1b4c7f0",
     "meta": {
-      "covered": ["0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67"]
+      "covered": "0x2b9e0f3c7a1d5e8b4f6a9c2d0e7b3f1a8c5d9e2b6f0a4c7d1e3b8f5a9c2d6e0b",
+      "side": "left"
     },
     "signature": "0xc589853547d41893c31690f5479d2e15b6cb5ef43f5bf3e3c3de8e81cc3931d62ea510476f8041050c592144a95a4f4b99f604cee4793b0fbff84aa4261d6a491b",
     "accepted": true,

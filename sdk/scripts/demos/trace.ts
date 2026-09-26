@@ -41,7 +41,7 @@ export function traceGame(plan: GamePlan, policy: Policy): void {
       const outcome = simulateServerResult(step, random),
         result = resolveTransition(step, outcome);
       console.log(
-        `  stake ${amount(step.bet.stake)}; ${step.bet.prizes.length} prize${step.bet.prizes.length === 1 ? '' : 's'} up to ${amount(step.bet.prizes.reduce((most, p) => (p.payout > most ? p.payout : most), 0n))}; ${amount(step.retained)} kept aside`,
+        `  stake ${amount(step.bet.stake)}; ${amount(step.bet.prize)} on ${step.bet.chance} of 18446744073709551616 outcomes; ${amount(step.lose.cash)} kept aside`,
       );
       console.log(
         `  outcome ${outcome} of 18446744073709551616 pays ${amount(result.payout)}${result.label ? `: ${result.label}` : ''}`,

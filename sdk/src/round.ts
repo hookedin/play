@@ -1,6 +1,14 @@
 /** Optional sample-game library. This runs entirely inside the game's iframe. */
-import { compileGameAsync, getNode, loadFundedGame, prepareAction, rngFromBytes } from './engine/index.ts';
-import type { FundingTable, GameGraph, GamePlan } from './engine/index.ts';
+import {
+  compileGameAsync,
+  fraction,
+  getNode,
+  landing,
+  loadFundedGame,
+  prepareAction,
+  rngFromBytes,
+} from './engine/index.ts';
+import type { CashClass, FundingTable, GameGraph, GamePlan } from './engine/index.ts';
 import { admits } from './admits.ts';
 import { playerScope } from './wire.ts';
 import type { GameLimit } from '../../protocol/game-types.ts';
@@ -38,8 +46,19 @@ export interface RoundStore {
 }
 const text = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 const plain = (value: unknown) => JSON.parse(text(value));
+/** A class of successors as a saved step keeps it, back as the engine reads it. */
+const revive = (side: any): CashClass => ({
+  cash: BigInt(side.cash),
+  probability: fraction(BigInt(side.probability.n), BigInt(side.probability.d)),
+  outcomes: side.outcomes.map((o: any) => ({
+    next: o.next,
+    ...(o.label === undefined ? {} : { label: o.label }),
+    cash: BigInt(o.cash),
+    probability: fraction(BigInt(o.probability.n), BigInt(o.probability.d)),
+  })),
+});
 /** What a saved round is played under: its format, and a hash of the graph the page builds for its setup. */
-const SCHEMA = 'HOOKEDIN/ROUND/4';
+const SCHEMA = 'HOOKEDIN/ROUND/5';
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 const browserStore: RoundStore = {
   get: key => localStorage.getItem(key),
@@ -312,15 +331,20 @@ export class RoundClient {
       const selected = node.kind === 'decision' ? node.actions.find(a => a.id === action) : undefined;
       if (!selected) throw new Error('Illegal game action');
       await this.ensureFunds(BigInt(this.data.cash) + selected.additionalCash, BigInt(this.data.setup.stake));
-      const info = await this.call('wallet.info');
+      const info = await this.call('wallet.info'),
+        random = rngFromBytes(bytes => crypto.getRandomValues(bytes));
+      // The page draws the step's branch now, and a step without a bet its successor. Both are saved with the step's
+      // operation ID before anything is signed, so a lost reply or a rejection offers the same bet again: drawing
+      // again would change the game's odds.
       const ticket = prepareAction(
         this.plan,
         { nodeId: this.data.nodeId, cash: BigInt(this.data.cash), bankroll: BigInt(info.bankroll) },
         action,
-        rngFromBytes(bytes => crypto.getRandomValues(bytes)),
+        random,
       );
-      // Save the step and its operation ID first, so a lost reply is recovered under the same ID.
-      this.data.pending = { id: crypto.randomUUID(), ticket: plain(ticket) };
+      // What a step without a bet shows its result with, in place of a round's outcome.
+      const draw = ticket.kind === 'casino-bet' ? null : String(random(1n << 64n));
+      this.data.pending = { id: crypto.randomUUID(), ticket: plain(ticket), draw };
       this.save();
     }
     const { ticket, id } = this.data.pending;
@@ -329,8 +353,14 @@ export class RoundClient {
     const group = this.data.id;
     let receipt;
     if (ticket.kind === 'casino-bet')
-      // The whole step is one bet: the stake at risk, and a prize for every better successor.
-      receipt = await this.call('game.casinoBet', { id, stake: ticket.bet.stake, prizes: ticket.bet.prizes, group });
+      // The branch drawn is one bet: the stake at risk, and the prize it pays below its chance.
+      receipt = await this.call('game.casinoBet', {
+        id,
+        stake: ticket.bet.stake,
+        chance: ticket.bet.chance,
+        prize: ticket.bet.prize,
+        group,
+      });
     else if (ticket.kind === 'payment') receipt = await this.call('game.payment', { id, amount: ticket.amount, group });
     else receipt = { kind: 'noop' };
     this.account = await this.balance();
@@ -340,7 +370,7 @@ export class RoundClient {
     return this.state()!;
   }
   private async resolve(receipt: any) {
-    const ticket = this.data.pending.ticket;
+    const { ticket, draw } = this.data.pending;
     if (receipt.status === 'rejected') {
       // A rejection is a signed checkpoint the wallet checked: the balance is unchanged. Keep the same action
       // under a fresh operation ID for the next attempt.
@@ -350,19 +380,24 @@ export class RoundClient {
       return;
     }
     let label,
-      landed: { rangeStart: string; rangeEnd: string } | null = null;
+      won: boolean | null = null,
+      shown = draw;
     if (ticket.kind === 'casino-bet') {
       if (receipt.status !== 'settled' || !/^[0-9]+$/.test(String(receipt.outcome)))
         throw new Error('A settled casino bet is required');
-      // The round's outcome names the next state; the wallet's verified payout must agree with it.
-      const outcome = BigInt(receipt.outcome),
-        next = ticket.successors.find((s: any) => outcome >= BigInt(s.rangeStart) && outcome < BigInt(s.rangeEnd));
-      if (!next || BigInt(next.cash) - BigInt(ticket.retained) !== BigInt(receipt.payout))
+      // The round's outcome decides the bet, and with it which class of successors the step reached; the wallet's
+      // verified payout must agree. Which state of that class, when several need its cash, is drawn from the outcome,
+      // and so is what the page shows it with.
+      const outcome = BigInt(receipt.outcome);
+      won = outcome < BigInt(ticket.bet.chance);
+      if ((won ? BigInt(ticket.bet.prize) : 0n) !== BigInt(receipt.payout))
         throw new Error('The verified payout differs from this step');
-      this.data.nodeId = next.next;
-      this.data.cash = next.cash;
-      label = next.label;
-      landed = { rangeStart: next.rangeStart, rangeEnd: next.rangeEnd };
+      const side = won ? ticket.win : ticket.lose,
+        landed = landing(revive(side), outcome);
+      this.data.nodeId = landed.next.next;
+      this.data.cash = side.cash;
+      label = landed.next.label;
+      shown = String(landed.draw);
     } else {
       if (ticket.kind === 'payment' && receipt.status !== 'settled') throw new Error('A settled payment is required');
       this.data.nodeId = ticket.next;
@@ -374,11 +409,14 @@ export class RoundClient {
     this.data.pending = null;
     this.data.settlement = {
       kind: receipt.kind,
+      // A bet: whether it won, and the chance it was placed at, out of 2^64.
+      ...(won === null ? {} : { won, chance: ticket.bet.chance }),
       payout: receipt.payout ?? null,
       outcome: receipt.outcome ?? null,
-      // The stretch of outcomes that led to this state: where in it the outcome fell is free,
-      // verifiable entropy for showing the result (which reel stops, which of several equal cards).
-      ...landed,
+      // What the page shows the result with (which reel stops, which path), drawn apart from which state the step
+      // reached: from the round's outcome for a bet, and when it was prepared for a step without one.
+      // `seededRandom(BigInt(draw))` reads it.
+      draw: shown,
     };
     this.save();
   }

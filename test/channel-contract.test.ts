@@ -47,10 +47,11 @@ test('shared-pool contract protects principal, retains debts and verifies channe
     bankroll: 1000000n,
     stake: 100n,
     netWin: 100n,
-    winThreshold: (OUTCOME_SPACE * 49n) / 100n,
+    chance: (OUTCOME_SPACE * 49n) / 100n,
   });
   const bet = await step(f, cc, 1, 100n, {
-    prizes: q.prizes,
+    chance: q.chance,
+    prize: q.prize,
     seed: id('fresh'),
   });
   assert.equal((await f.contract.supported(bet.evidence)).balance, BigInt(bet.state.balance));

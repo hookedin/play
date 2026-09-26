@@ -17,8 +17,8 @@ operation until it has the last one acknowledged.
 
 ### Admission
 
-The casino's decision to take a casino bet: the bankroll must be able to take it with no commission at all, by an exact
-Kelly condition over its prize table. See [economics](economics.md).
+The casino's decision to take a casino bet: the bankroll must be able to take it with no commission at all, by the exact
+Kelly condition for its two outcomes. See [economics](economics.md).
 
 ### Alias
 
@@ -44,19 +44,29 @@ The casino's money for backing casino bets, after every obligation. See
 Shares of the bankroll that anyone with an ETH channel can buy and sell back at the bankroll's own price. A share is a
 statement the casino signs. See [the bankroll fund](../wallet/bankroll-fund.md).
 
+### Binary steps
+
+How the bankroll backs a game whose players share one draw, such as roulette: its developer walks a balanced tree over
+the draw's outcomes, one casino bet from its bank on each level, each on its own round. See
+[developer bets](../games/developer-bets.md).
+
 ### Bridge
 
 The `postMessage` protocol between a game's frame and the wallet. See [the game bridge](bridge.md).
 
 ### Casino bet
 
-A stake and up to 64 prizes, settled against the bankroll by a round's outcome in the request that places it. See
-[casino bets](../games/casino-bets.md).
+A stake, a chance and a prize: the bet pays its prize when its round's outcome is below its chance. It is settled
+against the bankroll in the request that places it. See [casino bets](../games/casino-bets.md).
 
 ### Challenge
 
 Replacing a closing channel's state with strictly newer evidence before the fixed 24-hour deadline. See
 [closing and claims](../wallet/closing-and-claims.md).
+
+### Chance
+
+How many of the 2^64 outcomes win a casino bet, from 1 to 2^64 − 1: the bet wins when the outcome is below it.
 
 ### Channel
 
@@ -77,6 +87,12 @@ The casino signs each; the player countersigns.
 
 What a finalized channel is owed on-chain: protected principal up to the deposit, and winnings above it, paid first in,
 first out. See [closing and claims](../wallet/closing-and-claims.md).
+
+### Collapse
+
+How a single-player game plays a step with more than two outcomes: the page draws, with its own randomness, one of the
+step's _branches_, a casino bet between two of its outcomes or no bet, so that every outcome is reached exactly as often
+as the game's rules say. See [collapsing bets](../games/collapsing-bets.md).
 
 ### Commission
 
@@ -128,7 +144,8 @@ A game's identity, `keccak256(abi.encode(developer, name))`, the same wherever t
 
 ### Group
 
-A label of up to 64 characters that a game gives bets and payments that belong together, such as one hand.
+A label of up to 64 characters that ties a game's bets and payments together, such as the steps of one hand or the bets
+of one spin. The player signs it, and bet history shows a group as one row.
 
 ### Manifest
 
@@ -136,7 +153,8 @@ The JSON file that tells the wallet a game's name, entry page and developer. See
 
 ### Meta
 
-A developer bet's own JSON object, saying what the bet is. The player signs it; the casino keeps it and never reads it.
+A developer bet's own JSON object, saying what the bet is, or a developer's casino bet's. Whoever places the bet signs
+it; the casino keeps it and never reads it.
 
 ### Operation
 
@@ -150,8 +168,8 @@ game. See [operation IDs](signed-messages.md#operation-ids).
 
 ### Outcome
 
-A round's 64-bit number, from its secret and its seed. Every prize whose range holds it pays. See
-[the outcome](signed-messages.md#the-outcome).
+A round's 64-bit number, from its secret and its seed. A casino bet on the round wins when the outcome is below its
+chance. See [the outcome](signed-messages.md#the-outcome).
 
 ### Payment
 
@@ -160,7 +178,7 @@ A debit a game asks for to the bankroll: a fixed amount, on no round, with no co
 
 ### Prize
 
-A range of outcomes and what it pays: `{rangeStart, rangeEnd, payout}`. Prizes may overlap, and then add.
+What a casino bet pays when it wins. The stake was paid to enter, so a win gains the prize less the stake.
 
 ### Receipt
 
@@ -171,6 +189,11 @@ See [the receipt](bridge.md#receipt).
 
 The casino's signed refusal of an operation: a checkpoint two above its base with the balance unchanged. A declined
 casino bet's round is revealed with it. See [rejection checkpoints](signed-messages.md#rejection-checkpoints).
+
+### Reveal
+
+A developer's casino bet whose stake, chance and prize are all zero: it bets nothing and only reveals its round, and is
+signed, grouped and kept like any other. See [developer messages](signed-messages.md#developer-messages).
 
 ### Round
 

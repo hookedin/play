@@ -4,8 +4,6 @@ pragma solidity ^0.8.28;
 /// @notice One trusted casino owner signs balances and controls the shared bankroll.
 /// Players must challenge stale closures within 24 hours to protect their latest balance.
 contract HookedInCasino {
-    // A round's outcome is a uniform integer below this.
-    uint256 public constant OUTCOME_SPACE = 1 << 64;
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
     // Every deposit and signed balance is below 2^128 wei, so no realistic number of
     // finalized claims can overflow the uint256 aggregate debt and block finalization.
@@ -24,13 +22,11 @@ contract HookedInCasino {
         "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance)"
     );
     bytes32 constant OP_TYPEHASH = keccak256(
-        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 round,bytes32 seedHash,bytes32 memo)Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)"
+        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo)"
     );
-    bytes32 constant PRIZE_TYPEHASH = keccak256("Prize(uint256 rangeStart,uint256 rangeEnd,uint256 payout)");
-    uint256 public constant MAX_PRIZES = 64;
     // The struct hash of the all-zero operation: the one encoding of "no step".
     bytes32 constant EMPTY_OPERATION =
-        keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, keccak256(""), bytes32(0), bytes32(0), bytes32(0)));
+        keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, 0, 0, bytes32(0), bytes32(0), bytes32(0)));
     bytes32 constant CLOSE_TYPEHASH = keccak256("Close(bytes32 channelId,bytes32 stateHash)");
     // The same authority signs settlement evidence and withdraws house funds.
     // It can create winnings claims; no separate key can make those promises safe.
@@ -49,14 +45,6 @@ contract HookedInCasino {
         uint256 balance;
     }
 
-    /// A casino bet pays `payout` when its round's outcome falls in [rangeStart, rangeEnd).
-    /// Prizes may overlap: every prize that contains the outcome pays.
-    struct Prize {
-        uint256 rangeStart;
-        uint256 rangeEnd;
-        uint256 payout;
-    }
-
     /// The contract settles money: a casino bet, a debit or a credit. What an operation means to the wallet and
     /// the casino (its name, its game, what it pays into or collects from) is the hash `memo`, which the
     /// contract does not read.
@@ -66,7 +54,9 @@ contract HookedInCasino {
         uint256 sequence;
         uint256 kind;
         uint256 amount;
-        Prize[] prizes;
+        // A casino bet pays `prize` when its round's 64-bit outcome is below `chance`.
+        uint64 chance;
+        uint256 prize;
         bytes32 round;
         bytes32 seedHash;
         bytes32 memo;
@@ -168,16 +158,7 @@ contract HookedInCasino {
     }
 
     function _operationStruct(Operation calldata v) private pure returns (bytes32) {
-        bytes32[] memory prizes = new bytes32[](v.prizes.length);
-        for (uint256 i = 0; i < prizes.length; i++) {
-            prizes[i] = keccak256(abi.encode(PRIZE_TYPEHASH, v.prizes[i]));
-        }
-        return keccak256(
-            abi.encode(
-                OP_TYPEHASH, v.channelId, v.previousStateHash, v.sequence, v.kind, v.amount,
-                keccak256(abi.encodePacked(prizes)), v.round, v.seedHash, v.memo
-            )
-        );
+        return keccak256(abi.encode(OP_TYPEHASH, v));
     }
 
     function hashOperation(Operation calldata v) public view returns (bytes32) {
@@ -280,11 +261,11 @@ contract HookedInCasino {
         // shares one outcome. Whoever holds one of the two cannot know the outcome before both are out.
         // Every field a debit or a credit does not use must be zero.
         if (
-            (casinoBet ? op.prizes.length == 0 || op.prizes.length > MAX_PRIZES || op.seedHash == bytes32(0)
+            (casinoBet ? op.chance == 0 || op.prize == 0 || op.prize >= MAX_BALANCE || op.seedHash == bytes32(0)
                     || op.round == bytes32(0)
                     || keccak256(abi.encodePacked(step.secret)) != op.round
                     || keccak256(abi.encodePacked(step.seed)) != op.seedHash
-                : op.prizes.length != 0 || op.seedHash != bytes32(0) || op.round != bytes32(0)
+                : op.chance != 0 || op.prize != 0 || op.seedHash != bytes32(0) || op.round != bytes32(0)
                     || step.secret != bytes32(0) || step.seed != bytes32(0))
                 || op.amount == 0 || op.amount >= MAX_BALANCE
         ) revert InvalidTerms();
@@ -292,19 +273,11 @@ contract HookedInCasino {
             // The casino attests what the credit collects. Principal and liquidity do not move.
             next.balance += op.amount;
         } else if (casinoBet || op.kind == KIND_DEBIT) {
-            // The stake is paid to enter; every prize whose range holds the outcome pays out.
+            // The stake is paid to enter; a casino bet pays its prize when the outcome is below its chance.
             if (op.amount > base.balance) revert InvalidTerms();
             next.balance -= op.amount;
-            if (casinoBet) {
-                uint256 outcome = uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, step.seed, step.secret))));
-                for (uint256 i = 0; i < op.prizes.length; i++) {
-                    Prize calldata prize = op.prizes[i];
-                    if (
-                        prize.rangeStart >= prize.rangeEnd || prize.rangeEnd > OUTCOME_SPACE || prize.payout == 0
-                            || prize.payout >= MAX_BALANCE
-                    ) revert InvalidTerms();
-                    if (outcome >= prize.rangeStart && outcome < prize.rangeEnd) next.balance += prize.payout;
-                }
+            if (casinoBet && uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, step.seed, step.secret)))) < op.chance) {
+                next.balance += op.prize;
             }
         } else {
             revert InvalidTerms();

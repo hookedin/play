@@ -14,11 +14,11 @@ complete: start from the one closest to your game.
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | [Game template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand                            | The whole repository: build, tests, deployment                                                     |
 | [Dice](../../games/dice/)                                  | The smallest `RoundClient` game: one decision, two outcomes                  | [src/rules.ts](../../games/dice/src/rules.ts), [src/game.ts](../../games/dice/src/game.ts)         |
-| [Plinko](../../games/plinko/)                              | A one-shot prize table written by hand, with no round helper                 | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts)   |
-| [Samson's Gold](../../games/samson/)                       | A 243-ways slot whose prize table is counted exactly from its reels          | [src/math.ts](../../games/samson/src/math.ts)                                                      |
+| [Plinko](../../games/plinko/)                              | One decision of many outcomes, collapsed into one bet per drop               | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts)   |
+| [Samson's Gold](../../games/samson/)                       | A 243-ways slot whose odds are counted exactly from its reels                | [src/math.ts](../../games/samson/src/math.ts)                                                      |
 | [Mines](../../games/mines/)                                | Reveal or cash out: the simplest multi-step graph                            | [src/rules.ts](../../games/mines/src/rules.ts)                                                     |
 | [Blackjack](../../games/blackjack/)                        | A multi-step game with doubles, splits and insurance, and precomputed prices | [src/game.ts](../../games/blackjack/src/game.ts), [src/view.ts](../../games/blackjack/src/view.ts) |
-| [Roulette](https://github.com/hookedin/game-roulette)      | Many players' developer bets on one spin, backed by the wheel's casino bet   | The whole repository: page, server, tests, deployment                                              |
+| [Roulette](https://github.com/hookedin/game-roulette)      | Many players' developer bets on one spin, backed by the wheel's casino bets  | The whole repository: page, server, tests, deployment                                              |
 
 ## Game template
 
@@ -32,25 +32,27 @@ once you replace it: it reproduces any wallet reply you did not expect.
 
 One decision with two outcomes: a win chance from 10% to 90% and a payout of 99% divided by it.
 [src/rules.ts](../../games/dice/src/rules.ts) is the whole graph, and [src/game.ts](../../games/dice/src/game.ts) the
-page around `RoundClient`, including the startup that restores a roll whose reply was lost. The roll shown is where the
-verified outcome fell in the signed range. Copy it for any game of one decision.
+page around `RoundClient`, including the startup that restores a roll whose reply was lost. The roll shown is the
+verified outcome against the signed chance. Copy it for a game of one decision and two outcomes.
 
 ## Plinko
 
-One drop is one casino bet: a prize per bucket, each as wide as its binomial odds, which divide 2^64 exactly.
-[src/tables.ts](../../games/plinko/src/tables.ts) is pure arithmetic, with `dropBet` building the bet and `landing`
-reading the ball's path back from the outcome. [src/drop.ts](../../games/plinko/src/drop.ts) is the money path without
-the round helper: check the table with `admits`, save the drop and its ID, place the bet, recover a lost reply, and
-refuse a payout that differs from the board. Its [test](../../games/plinko/test/plinko.test.ts) proves every board's
-return from the signed prizes, and its floor at stakes from 1,000 wei to 10^18. Copy it for any one-shot game.
+One drop is a decision whose outcomes are the buckets, each at its binomial odds.
+[src/tables.ts](../../games/plinko/src/tables.ts) is pure arithmetic: `dropGraph` builds the graph, and `path` draws the
+ball's path into its bucket. [src/drop.ts](../../games/plinko/src/drop.ts) plays each drop through `RoundClient`, which
+collapses the board into bets between two of its multipliers and draws one in the page; a drop saved before a reload
+lands after it, once. Its [test](../../games/plinko/test/plinko.test.ts) proves every board's return, that the casino
+takes every bet the page can draw, and the floor those bets pay back at stakes from 1,000 wei to 10^18. Copy it for a
+one-shot game of many outcomes.
 
 ## Samson's Gold
 
-A five-reel slot whose outcome distribution is counted exactly from its reel strips, then played as one bet of up to 64
-prizes through `RoundClient`. [src/math.ts](../../games/samson/src/math.ts) holds the strips, the paytable, the exact
-counter and `sampleStops`, which picks reel stops from where the verified outcome fell, among exactly the stops that
-pay what was settled. Its bonus spins are prepaid bets, applied once by the round's `id`, and its sound is synthesized
-with `createSynth`. Copy it for a game with many outcomes and presentation drawn from the outcome.
+A five-reel slot whose outcome distribution is counted exactly from its reel strips, then played through `RoundClient`
+as at most one bet per spin: the whole stake against one pay, drawn in the page so that spins reach every pay exactly as
+often as the reels do. [src/math.ts](../../games/samson/src/math.ts) holds the strips, the paytable, the exact counter
+and `sampleStops`, which picks reel stops from the settled result, among exactly the stops that pay what was settled.
+Its bonus spins are prepaid bets, applied once by the round's `id`, and its sound is synthesized with `createSynth`.
+Copy it for a game with many outcomes and presentation drawn from the result.
 
 ## Mines
 
@@ -61,7 +63,7 @@ places no bet. Copy it for a game where the player decides when to stop; for oth
 
 ## Blackjack
 
-Hit, stand, double, split and insurance from an unlimited deck, each card its own bet. `createBlackjack` builds the
+Hit, stand, double, split and insurance from an unlimited deck, each step at most one bet. `createBlackjack` builds the
 graph and `blackjackFunding` prices it without compiling 14,065 states in the browser; the cards on screen are rebuilt
 from the round's saved labels ([src/view.ts](../../games/blackjack/src/view.ts)). Its README says how to change the
 rules and generate a table of your own. [Sequential games](sequential-games.md) derives its exact edge.
@@ -69,11 +71,11 @@ rules and generate a table of your own. [Sequential games](sequential-games.md) 
 ## Roulette
 
 One wheel per asset, shared by every player at the table: each player's layout is one developer bet, and the wheel
-backs them all with one casino bet on its own round.
-[src/table.ts](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into prizes and is shared
-by page and server; [server/wheel.ts](https://github.com/hookedin/game-roulette/blob/main/server/wheel.ts) is the
-developer, and [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) the Worker and
-its Durable Object. Its repository is a GitHub template that tests and deploys itself: start from it with **Use this
+backs them all with its own casino bets, one binary step per round down a tree of the 37 pockets.
+[src/table.ts](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into what each pocket pays
+and is shared by page and server; [server/wheel.ts](https://github.com/hookedin/game-roulette/blob/main/server/wheel.ts)
+is the developer, and [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) the Worker
+and its Durable Object. Its repository is a GitHub template that tests and deploys itself: start from it with **Use this
 template** for any game where many players share one outcome ([developer bets](developer-bets.md)).
 
 ## Running a house game

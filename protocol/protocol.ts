@@ -2,7 +2,6 @@ import type { TypedDataField } from 'ethers';
 import type {
   Details,
   GameName,
-  WirePrizes,
   Domain,
   Opening,
   Checkpoint,
@@ -12,7 +11,6 @@ import type {
   EvidenceBundle,
   Integer,
   Json,
-  Prize,
 } from './types.ts';
 import {
   AbiCoder,
@@ -25,7 +23,7 @@ import {
   ZeroAddress,
   toUtf8Bytes,
 } from 'ethers';
-import { OUTCOME_SPACE, MAX_BALANCE, MAX_PRIZES, uint256 } from './risk.ts';
+import { OUTCOME_SPACE, MAX_BALANCE, uint256 } from './risk.ts';
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 export const plain = <T>(value: T): Json<T> => JSON.parse(json(value));
 export const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -67,9 +65,8 @@ export const STATE_TYPES = {
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,Prize[] prizes,bytes32 round,bytes32 seedHash,bytes32 memo',
+    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
   ),
-  Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
 };
 export const CLOSE_TYPES = {
   Close: fields('bytes32 channelId,bytes32 stateHash'),
@@ -89,13 +86,15 @@ export const SETTLEMENT_TYPES = {
   Settlement: fields('bytes32 bet,uint256 player,uint256 casino'),
 };
 /** A developer's casino bet from its bank, on one of its rounds: settled against the bankroll at once, it reveals the
- * round. Like every casino bet it signs the hash of the seed it brings, so only that seed settles it. `meta` is the
- * hash of its meta, the developer's own JSON, which the casino keeps with the reveal and never reads: whatever the
- * developer commits to there, it committed to before the outcome was revealed. `game` is the one whose commission it
- * earns. */
+ * round. Like every casino bet it signs the hash of the seed it brings, so only that seed settles it. `group` is the
+ * label its game gives the bets that belong together, and `meta` the hash of its meta, the developer's own JSON,
+ * which the casino keeps with the reveal and never reads: whatever the developer commits to there, it committed to
+ * before the outcome was revealed. `game` is the one whose commission it earns. A stake, chance and prize of zero
+ * bet nothing and only reveal the round. */
 export const BANK_CASINO_BET_TYPES = {
-  BankCasinoBet: fields('bytes32 round,bytes32 game,uint256 stake,Prize[] prizes,bytes32 seedHash,bytes32 meta'),
-  Prize: fields('uint256 rangeStart,uint256 rangeEnd,uint256 payout'),
+  BankCasinoBet: fields(
+    'bytes32 round,bytes32 game,uint256 stake,uint64 chance,uint256 prize,string group,bytes32 seedHash,bytes32 meta',
+  ),
 };
 /** The `authorization` header carrying a signed `Access` or `DeveloperAccess` message. */
 export const authorization = (message: unknown, signature: string) =>
@@ -158,14 +157,11 @@ export function validateOpening(opening: Opening, asset: AssetId = 'eth') {
   )
     throw new Error('Invalid channel opening');
 }
-/** Wire terms as exact integers: a stake and the prizes it can pay. */
-export const betTerms = (stake: Integer, prizes: Prize[]) => ({
+/** Wire terms as exact integers: a stake, the bet's chance out of 2^64 and the prize it pays. */
+export const betTerms = (stake: Integer, chance: Integer, prize: Integer) => ({
   stake: BigInt(stake),
-  prizes: (Array.isArray(prizes) ? prizes : []).map(prize => ({
-    rangeStart: BigInt(prize.rangeStart),
-    rangeEnd: BigInt(prize.rangeEnd),
-    payout: BigInt(prize.payout),
-  })),
+  chance: BigInt(chance),
+  prize: BigInt(prize),
 });
 /** The bankroll fund. Investing is a debit that names it as its counterparty, and divesting a credit
  * from it. An investor trusts the casino completely: a share is its promise of a part of the
@@ -283,7 +279,8 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     sequence: BigInt(base.sequence) + 1n,
     kind: 0,
     amount: 0,
-    prizes: [],
+    chance: 0n,
+    prize: 0n,
     round: ZeroHash,
     seedHash: ZeroHash,
     memo: ZeroHash,
@@ -308,9 +305,7 @@ export const MAX_PAYOUTS = 256;
 /** Every bound a bet is held to, as the wallet reports it to a game and the casino to a developer. They are part
  * of the protocol revision, so a wallet or a developer that holds other ones stops before it signs anything. */
 export const LIMITS = {
-  /** The most prizes one bet holds. */
-  prizes: MAX_PRIZES,
-  /** The size of the space a prize range lies in, as a decimal string. */
+  /** The size of the space a round's outcome and a bet's chance are counted in, as a decimal string. */
   outcomeSpace: String(OUTCOME_SPACE),
   /** The most a bet's meta takes as canonical JSON, and the longest group label. */
   meta: MAX_META_BYTES,
@@ -342,27 +337,17 @@ export function checkDetails(kind: number, details: Details) {
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
 const decimal = (value: unknown) => typeof value === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(value);
-const only = (value: any, keys: string[]) =>
-  value !== null &&
-  typeof value === 'object' &&
-  !Array.isArray(value) &&
-  Object.keys(value).length === keys.length &&
-  keys.every(key => key in value);
-/** Prizes in their one form: decimal strings, 1 to `MAX_PRIZES` well-formed ranges. */
-export function validPrizes(prizes: unknown): prizes is WirePrizes {
+/** A casino bet's terms in their one form: decimal strings, a stake and a prize below 2^128 and a chance of 1 to
+ * 2^64 − 1 outcomes. */
+export function validBet(stake: unknown, chance: unknown, prize: unknown) {
   return (
-    Array.isArray(prizes) &&
-    prizes.length > 0 &&
-    prizes.length <= MAX_PRIZES &&
-    prizes.every(
-      prize =>
-        only(prize, ['rangeStart', 'rangeEnd', 'payout']) &&
-        [prize.rangeStart, prize.rangeEnd, prize.payout].every(decimal) &&
-        BigInt(prize.rangeStart) < BigInt(prize.rangeEnd) &&
-        BigInt(prize.rangeEnd) <= OUTCOME_SPACE &&
-        BigInt(prize.payout) > 0n &&
-        BigInt(prize.payout) < MAX_BALANCE,
-    )
+    [stake, chance, prize].every(decimal) &&
+    BigInt(stake as string) > 0n &&
+    BigInt(stake as string) < MAX_BALANCE &&
+    BigInt(chance as string) > 0n &&
+    BigInt(chance as string) < OUTCOME_SPACE &&
+    BigInt(prize as string) > 0n &&
+    BigInt(prize as string) < MAX_BALANCE
   );
 }
 /** Meta in its one form, a developer bet's and a developer's casino bet's alike: a JSON object of up to
@@ -380,21 +365,18 @@ export const roundId = (secret: string) => keccak256(secret);
 /** A bet names its seed by its hash, so whoever knows the round's secret cannot know the outcome
  * before the seed is out. */
 export const seedHash = (seed: string) => keccak256(seed);
-/** Every bet on one round and seed sees the same 64-bit outcome, whoever signed it. The stake is paid to enter;
- * every prize whose range holds the outcome pays, so overlapping prizes add. */
+/** Every bet on one round and seed sees the same 64-bit outcome, whoever signed it. */
 const OUTCOME_TAG = 'HOOKEDIN/OUTCOME';
-export function outcome(prizes: readonly Prize[], seed: string, secret: string) {
+export function outcome(seed: string, secret: string) {
   const randomHash = keccak256(
     AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id(OUTCOME_TAG), seed, secret]),
   );
-  const value = BigInt(randomHash) & (OUTCOME_SPACE - 1n);
-  const payout = prizes.reduce(
-    (sum, prize) =>
-      value >= BigInt(prize.rangeStart) && value < BigInt(prize.rangeEnd) ? sum + BigInt(prize.payout) : sum,
-    0n,
-  );
-  return { randomHash, value, payout };
+  return { randomHash, value: BigInt(randomHash) & (OUTCOME_SPACE - 1n) };
 }
+/** What a casino bet pays on an outcome: its prize when the outcome is below its chance, and nothing otherwise. The
+ * stake was paid to enter. */
+export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigint) =>
+  value < BigInt(bet.chance) ? BigInt(bet.prize) : 0n;
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
  * the operation itself; a developer bet is a debit that pays its stake to its developer's bank. */
 export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3 } as const;
@@ -421,24 +403,20 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
   if (![KIND.casinoBet, KIND.debit, KIND.credit].includes(kind as 1)) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A casino bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
+  const chance = BigInt(op.chance),
+    prize = BigInt(op.prize);
   if (
-    !Array.isArray(op.prizes) ||
     (casinoBet
-      ? !op.prizes.length ||
-        op.prizes.length > MAX_PRIZES ||
-        op.prizes.some(
-          prize =>
-            BigInt(prize.rangeStart) < 0n ||
-            BigInt(prize.rangeStart) >= BigInt(prize.rangeEnd) ||
-            BigInt(prize.rangeEnd) > OUTCOME_SPACE ||
-            BigInt(prize.payout) <= 0n ||
-            BigInt(prize.payout) >= MAX_BALANCE,
-        ) ||
+      ? chance <= 0n ||
+        chance >= OUTCOME_SPACE ||
+        prize <= 0n ||
+        prize >= MAX_BALANCE ||
         same(op.seedHash, ZeroHash) ||
         same(op.round, ZeroHash) ||
         !same(roundId(secret), op.round) ||
         !same(seedHash(seed), op.seedHash)
-      : op.prizes.length !== 0 ||
+      : chance !== 0n ||
+        prize !== 0n ||
         !same(op.seedHash, ZeroHash) ||
         !same(op.round, ZeroHash) ||
         !same(secret, ZeroHash) ||
@@ -453,7 +431,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
   else {
     if (amount > balance)
       throw new Error(casinoBet ? 'Invalid casino bet commitment or balance' : 'Insufficient balance');
-    next.balance = String(balance - amount + (casinoBet ? outcome(op.prizes, seed, secret).payout : 0n));
+    next.balance = String(balance - amount + (casinoBet ? betPayout(op, outcome(seed, secret).value) : 0n));
   }
   if (BigInt(next.balance) >= MAX_BALANCE) throw new Error('Balance exceeds the protocol maximum');
   return next;
@@ -492,7 +470,8 @@ export const emptyStep = (): Step => ({
     sequence: 0,
     kind: 0,
     amount: 0,
-    prizes: [],
+    chance: 0,
+    prize: 0,
     round: ZeroHash,
     seedHash: ZeroHash,
     memo: ZeroHash,

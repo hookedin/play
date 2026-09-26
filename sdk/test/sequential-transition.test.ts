@@ -2,106 +2,113 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   add,
-  apportion,
+  cashClasses,
   compare,
   compileTransition,
   fraction,
+  landing,
   multiply,
   priceTransition,
+  seededRandom,
+  tableAdmits,
   UINT256_MAX,
   OUTCOME_SPACE,
 } from '../src/engine/index.ts';
+import type { Rational } from '../src/engine/index.ts';
 import { admits } from '../src/admits.ts';
-import { assessBet, describeBet } from '../../protocol/risk.ts';
+import { assessBet } from '../../protocol/risk.ts';
 
 const ZERO = fraction(0n);
+const ONE = fraction(1n);
 const labeled = (cash: any, probability: any, next = `cash-${cash}`, label?: string) => ({
   cash,
   probability,
   next,
   ...(label === undefined ? {} : { label }),
 });
-const width = (s: any): bigint => BigInt(s.rangeEnd) - BigInt(s.rangeStart);
+const minus = (a: Rational, b: Rational) => add(a, fraction(-b.n, b.d));
 
-/** A step is one bet: check the bet against the successors it was built from, outcome by outcome. */
+/** A collapsed step, checked against the successors it was built from: every class is reached exactly as often as
+ * its probability says, every bet keeps the cash of the class it can fall to and pays up to the class it can reach,
+ * and the casino's own rule admits every bet. */
 function verifyStep(step: any, bankroll: bigint) {
   assert.equal(step.kind, 'casino-bet');
-  const { bet, successors, retained, cash } = step;
-  // The successors tile the outcome space in their stated order.
-  let edge = 0n;
-  for (const s of successors) {
-    assert.equal(s.rangeStart, edge);
-    assert.ok(width(s) > 0n);
-    edge = s.rangeEnd;
-    // Each successor's share of the space is its probability to within one outcome in 2^64.
-    const exact = (s.probability.n * OUTCOME_SPACE) / s.probability.d;
-    assert.ok(width(s) === exact || width(s) === exact + 1n, `${s.next} width`);
-  }
-  assert.equal(edge, OUTCOME_SPACE);
-  // The stake is the cash that can be lost, and the cash after the bet is exactly the successor's.
-  assert.equal(bet.stake, cash - retained);
-  assert.equal(
-    retained,
-    successors.reduce((low: bigint, s: any) => (s.cash < low ? s.cash : low), successors[0].cash),
-  );
-  for (const s of successors)
-    for (const outcome of [s.rangeStart, s.rangeEnd - 1n]) {
-      const paid = bet.prizes.reduce(
-        (sum: bigint, p: any) => (outcome >= p.rangeStart && outcome < p.rangeEnd ? sum + p.payout : sum),
-        0n,
-      );
-      assert.equal(cash - bet.stake + paid, s.cash, `${s.next} at ${outcome}`);
+  const reached = step.classes.map(() => ZERO);
+  let total = ZERO;
+  for (const branch of step.branches) {
+    total = add(total, branch.weight);
+    if (branch.kind === 'none') {
+      assert.equal(step.classes[branch.class].cash, step.cash, 'only the cash already held is kept without a bet');
+      reached[branch.class] = add(reached[branch.class], branch.weight);
+      continue;
     }
-  // Prizes never overlap here and never pay nothing.
-  for (const [i, prize] of bet.prizes.entries()) {
-    assert.ok(prize.payout > 0n);
-    if (i) assert.ok(prize.rangeStart >= bet.prizes[i - 1].rangeEnd);
+    const { bet, win, lose } = branch,
+      q = fraction(bet.chance, OUTCOME_SPACE);
+    assert.equal(bet.stake, step.cash - step.classes[lose].cash, 'what can be lost is staked, the rest kept');
+    assert.equal(bet.prize, step.classes[win].cash - step.classes[lose].cash, 'a win lands on the higher class');
+    assert.ok(bet.chance > 0n && bet.chance < OUTCOME_SPACE);
+    assert.ok(assessBet({ bankroll, bet }).fee >= 0n, 'the casino admits every bet');
+    reached[win] = add(reached[win], multiply(branch.weight, q));
+    reached[lose] = add(reached[lose], multiply(branch.weight, minus(ONE, q)));
   }
-  // The casino's own rule admits it, and the expected cash after the bet is the successors' mean.
-  assert.ok(assessBet({ bankroll, bet }).fee >= 0n);
-  const mean = successors.reduce((sum: bigint, s: any) => sum + s.cash * width(s), 0n);
-  assert.equal(describeBet(bet).expectedPayout + retained * OUTCOME_SPACE, mean);
+  assert.deepEqual(total, ONE, 'the branches are every way the step can go');
+  for (const [i, c] of step.classes.entries()) assert.deepEqual(reached[i], c.probability, `class ${c.cash}`);
+}
+/** The whole step as one wager, E[X / (B + X)] >= 0, checked independently of the engine. */
+function kelly(bankroll: bigint, cash: bigint, outcomes: any[]) {
+  let sum = ZERO;
+  for (const { cash: needed, probability } of outcomes) {
+    const gain = cash - needed;
+    if (bankroll + gain <= 0n) return false;
+    sum = add(sum, multiply(probability, fraction(gain, bankroll + gain)));
+  }
+  return compare(sum, ZERO) >= 0;
 }
 
-test('a step is one bet whose prizes put the player on exactly the successor cash', () => {
+test('a step collapses into binary bets that reach every successor exactly as often as the rules say', () => {
   const outcomes = [
     labeled(0n, fraction(1n, 2n)),
     labeled(90n, fraction(1n, 8n)),
     labeled(150n, fraction(1n, 4n)),
     labeled(400n, fraction(1n, 8n)),
   ];
-  const cash = priceTransition({ admits, bankroll: 100000n, outcomes, quantum: 1n });
-  const step = compileTransition({ admits, bankroll: 100000n, cash, outcomes });
+  const cash = priceTransition({ bankroll: 100000n, outcomes, quantum: 1n });
+  const step = compileTransition({ admits, bankroll: 100000n, cash, outcomes }) as any;
   verifyStep(step, 100000n);
-  assert.equal((step as any).bet.prizes.length, 3, 'the cheapest successor is the absence of a prize');
-  // These probabilities divide 2^64, so the step is exact: its expected cash is the rules' own.
+  // Two classes below the cash, two above: every lower class paired with every higher one.
+  assert.equal(step.classes.length, 4);
+  assert.ok(step.branches.every((b: any) => b.kind === 'bet'));
+  // The price is the least cash at which the step is one Kelly wager with room to round, and it exceeds the mean.
   const expected = outcomes.reduce((sum, o) => add(sum, multiply(fraction(o.cash), o.probability)), ZERO);
-  assert.deepEqual(fraction(describeBet((step as any).bet).expectedPayout, OUTCOME_SPACE), expected);
-  // The price is the least cash the casino's rule admits: one unit less is refused, and it exceeds the mean.
-  assert.throws(() => compileTransition({ admits, bankroll: 100000n, cash: cash - 1n, outcomes }), /does not finance/);
+  assert.ok(kelly(100000n, cash, outcomes) && !tableAdmits(100000n, cash - 1n, cashClasses(outcomes)));
   assert.ok(compare(fraction(cash), expected) > 0, 'a finite bankroll prices risk above the expected value');
-  // More cash than the price is the same prizes behind a larger stake.
-  const rich = compileTransition({ admits, bankroll: 100000n, cash: cash + 50n, outcomes }) as any;
-  assert.deepEqual(rich.bet.prizes, (step as any).bet.prizes);
-  assert.equal(rich.bet.stake, (step as any).bet.stake + 50n);
+  // More cash than the price stakes more in every bet, and reaches the same classes as often.
+  verifyStep(compileTransition({ admits, bankroll: 100000n, cash: cash + 50n, outcomes }), 100000n);
 });
 
-test('cash kept in every outcome is never staked: only what can be lost is at risk', () => {
-  // A push returns the stake and the worst case keeps 40: the bet is 60 to win up to 160 more.
+test('cash kept in every outcome is never staked, and the class at the cash already held needs no bet', () => {
+  // A push keeps the cash; the worst case keeps 40: a bet stakes 60 to win up to 160 more.
   const outcomes = [labeled(40n, fraction(1n, 2n)), labeled(100n, fraction(1n, 4n)), labeled(200n, fraction(1n, 4n))];
   const step = compileTransition({ admits, bankroll: 10n ** 9n, cash: 100n, outcomes }) as any;
   verifyStep(step, 10n ** 9n);
-  assert.equal(step.retained, 40n);
-  assert.deepEqual(step.bet, {
-    stake: 60n,
-    prizes: [
-      { rangeStart: OUTCOME_SPACE / 2n, rangeEnd: (OUTCOME_SPACE * 3n) / 4n, payout: 60n },
-      { rangeStart: (OUTCOME_SPACE * 3n) / 4n, rangeEnd: OUTCOME_SPACE, payout: 160n },
-    ],
-  });
+  assert.deepEqual(
+    step.branches.map((b: any) => (b.kind === 'none' ? ['none', b.weight] : [b.bet.stake, b.bet.prize])),
+    [['none', fraction(1n, 4n)], ...step.branches.filter((b: any) => b.kind === 'bet').map(() => [60n, 160n])],
+  );
+  assert.deepEqual(step.betMass, fraction(3n, 4n), 'a bet is placed three times in four');
 });
 
-test("equal-cash successors keep their own stretch of the outcome space: the round's outcome names the state", () => {
+test('a step with nothing above its cash pairs every other class with the highest, and cannot cost the bankroll', () => {
+  const outcomes = [labeled(10n, fraction(1n, 3n)), labeled(20n, fraction(1n, 3n)), labeled(50n, fraction(1n, 3n))];
+  for (const cash of [50n, 80n]) {
+    const step = compileTransition({ admits, bankroll: 1000n, cash, outcomes }) as any;
+    verifyStep(step, 1000n);
+    for (const branch of step.branches)
+      assert.ok(branch.bet.prize <= branch.bet.stake, 'a win never pays more than the stake');
+  }
+});
+
+test("successors that need the same cash share a class, and a settled bet's outcome picks among them", () => {
   const outcomes = [
     labeled(0n, fraction(1n, 4n), 'bust', 'king'),
     labeled(300n, fraction(1n, 4n), 'seventeen', 'seven of hearts'),
@@ -110,50 +117,32 @@ test("equal-cash successors keep their own stretch of the outcome space: the rou
   ];
   const step = compileTransition({ admits, bankroll: 10n ** 9n, cash: 200n, outcomes }) as any;
   verifyStep(step, 10n ** 9n);
-  assert.equal(step.bet.prizes.length, 1, 'neighbours that need the same cash are one prize');
   assert.deepEqual(
-    step.successors.map((s: any) => [s.next, s.label, s.rangeStart / (OUTCOME_SPACE / 4n)]),
+    step.classes.map((c: any) => [c.cash, c.outcomes.map((o: any) => o.next)]),
     [
-      ['bust', 'king', 0n],
-      ['seventeen', 'seven of hearts', 1n],
-      ['soft-seventeen', 'six of spades', 2n],
-      ['bust-again', 'queen', 3n],
+      [0n, ['bust', 'bust-again']],
+      [300n, ['seventeen', 'soft-seventeen']],
     ],
   );
-  assert.deepEqual(step.outcomes, outcomes);
-});
-
-test('probabilities that do not divide 2^64 are laid out to the nearest outcome, largest remainders first', () => {
-  const thirteenths = Array.from({ length: 13 }, (_, i) => labeled(BigInt(i), fraction(1n, 13n), `rank-${i}`));
-  const laid = apportion(thirteenths);
-  assert.equal(laid.at(-1)!.rangeEnd, OUTCOME_SPACE);
-  const widths = laid.map(width),
-    floor = OUTCOME_SPACE / 13n;
-  assert.deepEqual(new Set(widths), new Set([floor, floor + 1n]));
-  assert.equal(
-    BigInt(widths.filter(w => w === floor + 1n).length),
-    OUTCOME_SPACE % 13n,
-    'exactly the leftover outcomes',
-  );
-  assert.deepEqual(widths.slice(0, Number(OUTCOME_SPACE % 13n)), Array(Number(OUTCOME_SPACE % 13n)).fill(floor + 1n));
-  // Unequal remainders: the largest remainder takes the spare outcome.
-  const uneven = apportion([labeled(1n, fraction(1n, 3n), 'a'), labeled(2n, fraction(2n, 3n), 'b')]);
-  assert.deepEqual(uneven.map(width), [OUTCOME_SPACE / 3n, (OUTCOME_SPACE * 2n) / 3n + 1n]);
-  // A zero-probability successor takes no space; one rarer than a single outcome cannot be played.
-  assert.equal(apportion([labeled(1n, ZERO, 'never'), labeled(2n, fraction(1n), 'always')]).length, 1);
-  assert.throws(
-    () =>
-      apportion([
-        labeled(1n, fraction(1n, OUTCOME_SPACE * 4n), 'rare'),
-        labeled(2n, fraction(OUTCOME_SPACE * 4n - 1n, OUTCOME_SPACE * 4n)),
-      ]),
-    /rarer than one outcome/,
-  );
+  // The same outcome always lands on the same state, each state of a class is reachable, and what the page shows it
+  // with is drawn apart from which state it is.
+  const win = step.classes[1],
+    seen = new Map<string, number>(),
+    shown = new Map<string, Set<bigint>>();
+  for (let outcome = 0n; outcome < 2000n; outcome++) {
+    const { next, draw } = landing(win, outcome * 0x9e3779b97f4a7c15n);
+    assert.deepEqual(landing(win, outcome * 0x9e3779b97f4a7c15n), { next, draw });
+    seen.set(next.next, (seen.get(next.next) ?? 0) + 1);
+    shown.set(next.next, (shown.get(next.next) ?? new Set()).add(seededRandom(draw)(8n)));
+  }
+  assert.deepEqual([...seen.keys()].sort(), ['seventeen', 'soft-seventeen']);
+  for (const count of seen.values()) assert.ok(count > 850 && count < 1150, 'about as often as its probability');
+  for (const values of shown.values()) assert.equal(values.size, 8, 'every view of every state');
 });
 
 test('a step that moves no money bets nothing: what is left over is an explicit payment', () => {
   const same = [labeled(70n, fraction(1n, 2n), 'left'), labeled(70n, fraction(1n, 2n), 'right')];
-  assert.equal(priceTransition({ admits, bankroll: 1000n, outcomes: same, quantum: 7n }), 70n, 'exactly, off the grid');
+  assert.equal(priceTransition({ bankroll: 1000n, outcomes: same, quantum: 7n }), 70n, 'exactly, off the grid');
   const noop = compileTransition({ admits, bankroll: 1000n, cash: 70n, outcomes: same }) as any;
   assert.deepEqual([noop.kind, noop.amount, noop.successorCash], ['noop', 0n, 70n]);
   const payment = compileTransition({ admits, bankroll: 1000n, cash: 100n, outcomes: same }) as any;
@@ -161,47 +150,49 @@ test('a step that moves no money bets nothing: what is left over is an explicit 
   assert.throws(() => compileTransition({ admits, bankroll: 1000n, cash: 69n, outcomes: same }), /does not cover/);
 });
 
-test('the price follows the casino rule it is given, respects the cash grid and falls as the bankroll grows', () => {
+test('the price respects the cash grid and falls toward the expected value as the bankroll grows', () => {
   const outcomes = [labeled(0n, fraction(9n, 10n)), labeled(5000n, fraction(1n, 10n))];
   let previous = UINT256_MAX;
   for (const bankroll of [6000n, 20000n, 10n ** 6n, 10n ** 12n]) {
-    const price = priceTransition({ admits, bankroll, outcomes, quantum: 1n });
+    const price = priceTransition({ bankroll, outcomes, quantum: 1n });
     assert.ok(price >= 500n, 'never below the expected value');
     assert.ok(price <= previous, 'a larger bankroll prices the same risk lower');
     previous = price;
-    // Exactly at the boundary of the rule: the price is admitted, one less is not.
-    assert.ok(
-      admits(bankroll, {
-        stake: price,
-        prizes: [{ rangeStart: (OUTCOME_SPACE * 9n) / 10n + 1n, rangeEnd: OUTCOME_SPACE, payout: 5000n }],
-      }),
-    );
-    const gridded = priceTransition({ admits, bankroll, outcomes, quantum: 64n });
+    verifyStep(compileTransition({ admits, bankroll, cash: price, outcomes }), bankroll);
+    const gridded = priceTransition({ bankroll, outcomes, quantum: 64n });
     assert.equal(gridded % 64n, 0n);
     assert.ok(gridded >= price && gridded < price + 64n);
   }
   assert.ok(previous < 510n, 'and approaches the expected value');
-  // Another casino, another price: the library only ever asks the rule.
-  const asked: bigint[] = [];
-  const strict = (bankroll: bigint, bet: any) => (asked.push(bet.stake), bet.stake >= 4000n);
-  assert.equal(priceTransition({ admits: strict, bankroll: 1n, outcomes, quantum: 1n }), 4000n);
-  assert.ok(asked.length < 20, 'by bisection');
 });
 
-test('small generated distributions are priced, built and verified exactly, never by Monte Carlo tolerance', () => {
-  let steps = 0;
-  for (let seed = 1n; seed <= 60n; seed++) {
-    const parts = [1n + (seed % 5n), 1n + ((seed * 7n) % 6n), 1n + ((seed * 11n) % 4n), 1n + ((seed * 13n) % 7n)],
+test('generated tables, with partial losses and rare jackpots, are priced, collapsed and verified exactly', () => {
+  let steps = 0,
+    seed = 12345n;
+  const random = (limit: bigint) => {
+    seed = (seed * 6364136223846793005n + 1442695040888963407n) % (1n << 64n);
+    return seed % limit;
+  };
+  for (let trial = 0; trial < 120; trial++) {
+    // Every third table has a jackpot about a hundred thousand times rarer than its other outcomes.
+    const n = 2 + Number(random(9n)),
+      rare = trial % 3 === 0,
+      parts = Array.from({ length: n }, (_, i) =>
+        rare && i === 1 ? 1n : (1n + random(1000n)) * (rare ? 100000n : 1n),
+      ),
       total = parts.reduce((a, b) => a + b, 0n),
-      outcomes = parts.map((n, i) => labeled((BigInt(i) * seed * 37n) % 500n, fraction(n, total), `s${i}`));
-    const bankroll = 5000n + seed * 1000n,
-      cash = priceTransition({ admits, bankroll, outcomes, quantum: 1n }),
-      step = compileTransition({ admits, bankroll, cash, outcomes });
+      outcomes = parts.map((part, i) =>
+        labeled(i === 1 ? 1000n * (1n + random(10000n)) : random(4000n), fraction(part, total), `s${i}`),
+      );
+    const bankroll = 10n ** 9n * (1n + random(1000n)),
+      cash = priceTransition({ bankroll, outcomes, quantum: 1n });
+    assert.ok(kelly(bankroll, cash, outcomes), 'a priced step is a Kelly wager as a whole');
+    const step = compileTransition({ admits, bankroll, cash, outcomes });
     if (step.kind !== 'casino-bet') continue;
     verifyStep(step, bankroll);
     steps++;
   }
-  assert.ok(steps > 50);
+  assert.ok(steps > 80);
 });
 
 test('invalid, underfunded and unplayable steps fail explicitly', () => {
@@ -226,17 +217,16 @@ test('invalid, underfunded and unplayable steps fail explicitly', () => {
     () => compileTransition({ admits, bankroll: 1000n, cash: 0n, outcomes: ok }),
     /does not cover the step/,
   );
-  assert.throws(() => compileTransition({ admits, bankroll: 1000n, cash: 2n, outcomes: ok }), /does not finance/);
-  assert.throws(() => priceTransition({ admits, bankroll: 1000n, outcomes: ok, quantum: 0n }), /quantum/);
-  // Staking the whole prize is always safe for the bankroll, so the casino's own rule always has a
-  // price; a rule that admits nothing has none.
+  assert.throws(() => compileTransition({ admits: () => false, bankroll: 1000n, cash: 6n, outcomes: ok }), /finance/);
+  assert.throws(() => priceTransition({ bankroll: 1000n, outcomes: ok, quantum: 0n }), /quantum/);
+  // Staking the whole top prize cannot cost the bankroll anything, so every step has a price.
   const huge = [labeled(0n, fraction(1n, 2n)), labeled(5000n, fraction(1n, 2n))];
-  assert.ok(priceTransition({ admits, bankroll: 1000n, outcomes: huge, quantum: 1n }) <= 5000n);
-  assert.throws(
-    () => priceTransition({ admits: () => false, bankroll: 1000n, outcomes: huge, quantum: 1n }),
-    /cannot cover/,
-  );
-  // A bet holds at most 64 prizes; a step with more distinct, separated prizes cannot be one bet.
-  const many = Array.from({ length: 130 }, (_, i) => labeled(i % 2 ? BigInt(i) : 0n, fraction(1n, 130n), `s${i}`));
-  assert.throws(() => priceTransition({ admits, bankroll: 10n ** 9n, outcomes: many, quantum: 1n }), /at most 64/);
+  assert.ok(priceTransition({ bankroll: 1000n, outcomes: huge, quantum: 1n }) <= 5000n);
+  // A successor rarer than one outcome in 2^64 cannot be reached by a bet's chance.
+  const rare = [
+    labeled(0n, fraction(OUTCOME_SPACE * 4n - 1n, OUTCOME_SPACE * 4n)),
+    labeled(10n, fraction(1n, OUTCOME_SPACE * 4n), 'rare'),
+  ];
+  assert.throws(() => compileTransition({ admits, bankroll: 10n ** 30n, cash: 1n, outcomes: rare }), /finer than one/);
+  assert.equal(seededRandom(7n)(1000n), seededRandom(7n)(1000n), 'a seed draws the same value every time');
 });

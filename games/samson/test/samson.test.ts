@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compileGame } from '@hookedin/play/sdk/engine';
-import { admits } from '@hookedin/play/sdk/admits';
-import { describeBet } from '@hookedin/play/sdk/admits';
-import { betReturn } from '@hookedin/play/sdk/admits';
+import { add, compileGame, fraction, multiply } from '@hookedin/play/sdk/engine';
+import type { Rational } from '@hookedin/play/sdk/engine';
+import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
 import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import {
@@ -121,19 +120,22 @@ test('a spin prices as one casino bet at the stake, even against a modest bankro
     });
     assert.ok(plan.requiredCash <= stake, `${mode} needs ${plan.requiredCash}`);
     assert.equal(plan.maximumDepth, 1);
-    // The spin is one bet the player signs whole: a prize per paying outcome, and its exact return.
+    // The spin is collapsed into binary bets the page draws from, each staking the whole stake against one pay, and
+    // together they reach every pay exactly as often as the reels do.
     const [{ transition: step }] = (plan.nodes.find(n => n.id === plan.root) as any).actions;
     assert.equal(step.kind, 'casino-bet');
-    assert.equal(step.bet.stake, stake);
-    assert.ok(step.bet.prizes.length <= 64 && step.bet.prizes.length >= 30, `${step.bet.prizes.length} prizes`);
-    const { counts, total } = distribution(mode === 'bonus' ? MACHINES.bonus : MACHINES.base),
-      fromReels = [...counts].reduce((sum, [key, ways]) => sum + BigInt(ways) * BigInt(payoutStakes(key)), 0n),
-      signed = describeBet(step.bet).expectedPayout;
-    // Reel odds do not divide 2^64; each outcome is off by less than one part in 2^64 of the space.
-    const gap = signed * BigInt(total) - fromReels * stake * (1n << 64n);
-    assert.ok(
-      (gap < 0n ? -gap : gap) < BigInt(total) * BigInt(counts.size) * 6912n * stake,
-      'the signed prize table is what the reels pay',
+    const { counts, total } = distribution(mode === 'bonus' ? MACHINES.bonus : MACHINES.base);
+    for (const branch of step.branches)
+      if (branch.kind === 'bet') assert.equal(branch.bet.stake, stake - step.classes[branch.lose].cash);
+    for (const c of step.classes) {
+      const ways = c.outcomes.reduce((sum: bigint, o: any) => sum + BigInt(counts.get(nodeOutcome(o.next)!.key)!), 0n);
+      assert.deepEqual(c.probability, fraction(ways, BigInt(total)), 'each pay as often as the reels make it');
+    }
+    const fromReels = [...counts].reduce((sum, [key, ways]) => sum + BigInt(ways) * BigInt(payoutStakes(key)), 0n);
+    assert.deepEqual(
+      step.classes.reduce((sum: Rational, c: any) => add(sum, multiply(c.probability, fraction(c.cash))), fraction(0n)),
+      fraction(fromReels * stake, BigInt(total)),
+      'the spin pays back what the reels do',
     );
     console.log(
       `${mode}: priced in ${Math.round(performance.now() - started)} ms, needs ${plan.requiredCash} of ${stake}`,
@@ -193,13 +195,15 @@ const GRAPHS = (stake: bigint) => ['base', 'bonus'].map(mode => slotGraph({ stak
 
 /** Every step this game can ever place, at every stake it takes: the floor holds for each one, so it
  * is checked against all of them and not against a sample. */
-/** The least any one bet of this game pays back, in millionths of its stake. The game publishes no
- * such figure — a promise nobody can verify is worth nothing, because no game bounds how often it
- * wagers what it holds — but its own table is held to it here, and every player sees the measured
- * return of each bet they actually signed. */
-const FLOOR = 962400n;
+/** The least any one bet of this game pays back, in millionths of its stake, when the casino's bankroll is far above
+ * the stake. The bets for the largest pays carry more of the machine's edge than the rest, so the jackpot's pays back
+ * less than the machine does. The game publishes no such figure — a promise nobody can verify is worth nothing,
+ * because no game bounds how often it wagers what it holds — but its own table is held to it here, and every player
+ * sees the measured return of each bet they actually signed. */
+const FLOOR = 951000n;
 
-test('every step pays back at least the floor this game is built to', () => {
+test('every bet this game can place pays back at least the floor it is built to', t => {
+  let worst = RETURN_SCALE;
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
     for (const graph of GRAPHS(stake)) {
       const plan = compileGame(graph, {
@@ -215,11 +219,10 @@ test('every step pays back at least the floor this game is built to', () => {
           // Every step is a bet that pays something back: this game never charges for nothing.
           assert.ok(step.kind === 'casino-bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
           if (step.kind !== 'casino-bet') continue;
-          assert.ok(
-            betReturn(step.bet) >= FLOOR,
-            `${node.id}/${action.id} at ${stake} wei pays back less than this game's floor`,
-          );
+          for (const branch of step.branches)
+            if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
         }
       }
     }
+  assert.ok(worst >= FLOOR, `a bet pays back ${worst} millionths, below this game's floor`);
 });

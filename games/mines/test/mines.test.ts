@@ -4,8 +4,7 @@ import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import { CASHOUTS, MINES, TILES, minesGraph } from '../src/rules.ts';
 import { compileGame } from '@hookedin/play/sdk/engine';
-import { admits } from '@hookedin/play/sdk/admits';
-import { betReturn } from '@hookedin/play/sdk/admits';
+import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
 
 const memoryStore = () => {
   const map = new Map<string, string>();
@@ -80,7 +79,8 @@ const GRAPHS = (stake: bigint) => [minesGraph({ stake: String(stake) })];
  * return of each bet they actually signed. */
 const FLOOR = 960000n;
 
-test('every step pays back at least the floor this game is built to', () => {
+test('every bet this game can place pays back at least the floor it is built to', t => {
+  let worst = RETURN_SCALE;
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
     for (const graph of GRAPHS(stake)) {
       const plan = compileGame(graph, {
@@ -96,11 +96,10 @@ test('every step pays back at least the floor this game is built to', () => {
           // Every step is a bet that pays something back: this game never charges for nothing.
           assert.ok(step.kind === 'casino-bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
           if (step.kind !== 'casino-bet') continue;
-          assert.ok(
-            betReturn(step.bet) >= FLOOR,
-            `${node.id}/${action.id} at ${stake} wei pays back less than this game's floor`,
-          );
+          for (const branch of step.branches)
+            if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
         }
       }
     }
+  assert.ok(worst >= FLOOR, `a bet pays back ${worst} millionths, below this game's floor`);
 });

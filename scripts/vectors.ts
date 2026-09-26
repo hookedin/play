@@ -16,6 +16,7 @@ import {
   memo,
   gameKey,
   outcome,
+  betPayout,
   roundId,
   seedHash,
   KIND,
@@ -34,39 +35,23 @@ export function buildVectors() {
     developer: '0x4444444444444444444444444444444444444444',
   };
   const Q = OUTCOME_SPACE,
-    priced = (
-      bankroll: bigint,
-      bet: { stake: bigint; prizes: { rangeStart: bigint; rangeEnd: bigint; payout: bigint }[] },
-    ) => {
+    priced = (bankroll: bigint, bet: { stake: bigint; chance: bigint; prize: bigint }) => {
       const { maxFee, fee, liability } = assessBet({ bankroll, bet });
       return { bankroll, bet, risk: { maxFee, fee, liability } };
     };
-  // One stake with one prize below a threshold, at a stated edge: the binary casino bet.
-  const below = (stake: bigint, payout: bigint, edgeBps: bigint) => ({
+  // A casino bet at a stated edge: its chance is the most outcomes that leave the house that edge.
+  const at = (stake: bigint, prize: bigint, edgeBps: bigint) => ({
     stake,
-    prizes: [{ rangeStart: 0n, rangeEnd: (Q * stake * (10_000n - edgeBps)) / (10_000n * payout), payout }],
+    chance: (Q * stake * (10_000n - edgeBps)) / (10_000n * prize),
+    prize,
   });
   const cases = [
-    below(100_000_000n, 200_000_000n, 100n),
-    below(100_000_000n, 200_000_000n, 200n),
-    below(1_000_000_000n, 1_100_000_000n, 200n),
-    below(100_000_000n, 9_100_000_000n, 9000n),
+    at(100_000_000n, 200_000_000n, 100n),
+    at(100_000_000n, 200_000_000n, 200n),
+    at(1_000_000_000n, 1_100_000_000n, 200n),
+    at(100_000_000n, 9_100_000_000n, 9000n),
   ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
-  // Roulette as one casino bet each: a lone red, and one player whose overlapping chips (red, a dozen, a number)
-  // pay together.
-  const pocket = Q / 37n,
-    chip = (from: number, to: number, payout: bigint) => ({
-      rangeStart: pocket * BigInt(from),
-      rangeEnd: pocket * BigInt(to),
-      payout,
-    }),
-    red = { stake: 100_000_000n, prizes: [chip(0, 18, 200_000_000n)] },
-    chips = {
-      stake: 160_000_000n,
-      prizes: [chip(0, 18, 200_000_000n), chip(6, 18, 150_000_000n), chip(17, 18, 360_000_000n)],
-    };
-  const tables = [red, chips].map(bet => priced(10_000_000_000n, bet));
   // The player's ETH channel, and its test channel with the same channel key.
   const deposit = 1_000_000_000n,
     channels = {
@@ -102,19 +87,21 @@ export function buildVectors() {
     };
   };
   const game = gameKey({ developer: identity.developer, name: 'roulette' });
-  // A casino bet of the three chips. The round's secret is the first of these whose outcome, with the bettor's seed,
-  // lands in pocket 17, where all three chips pay.
-  const seed = `0x${'72'.repeat(32)}`;
+  // A casino bet on red: twice the stake on 18 of the 37 pockets. The round's secret is the first of these whose
+  // outcome, with the bettor's seed, is below the bet's chance, so it pays.
+  const red = { stake: 100_000_000n, chance: (Q / 37n) * 18n, prize: 200_000_000n },
+    seed = `0x${'72'.repeat(32)}`;
   let n = 0,
     secret: string;
   do secret = id(`HOOKEDIN/VECTOR/SECRET/${++n}`);
-  while (outcome(chips.prizes, seed, secret).value / pocket !== 17n);
+  while (outcome(seed, secret).value >= red.chance);
   const bet = apply(
     genesis,
     {
       kind: KIND.casinoBet,
-      amount: chips.stake,
-      prizes: chips.prizes,
+      amount: red.stake,
+      chance: red.chance,
+      prize: red.prize,
       round: roundId(secret),
       seedHash: seedHash(seed),
     },
@@ -150,13 +137,12 @@ export function buildVectors() {
     genesis,
     genesisHash: hashState(d, genesis),
     operations: [bet, developerBet, payout],
-    outcome: outcome(chips.prizes, seed, secret),
+    outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),
     close,
     closeHash: hashClose(d, close),
     cases,
-    tables,
   };
 }
 

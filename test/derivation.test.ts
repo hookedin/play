@@ -56,7 +56,7 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     await assert.rejects(f.contract.supported(evidence));
   };
   // Valid transitions: a bet, a debit and a credit. The memo means nothing to either verifier.
-  const bet = await step(f, a, 1, 100n, { prizes: below(1n << 62n, 150n), seed: id('seed') });
+  const bet = await step(f, a, 1, 100n, { ...below(1n << 62n, 150n), seed: id('seed') });
   await agree(a, bet.evidence);
   const debit = await step(f, a, 2, 10n);
   await agree(a, debit.evidence);
@@ -72,68 +72,40 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     await disagreeNever(await craft(a, { kind, amount: 10n }, id('not zero')), reason);
     await disagreeNever(await craft(a, { kind, amount: 10n }, ZeroHash, id('not zero')), reason);
     await disagreeNever(await craft(a, { kind, amount: 0n }), reason);
-    await disagreeNever(
-      await craft(a, { kind, amount: 10n, prizes: [{ rangeStart: 0n, rangeEnd: 1n, payout: 1n }] }),
-      reason,
-    );
+    await disagreeNever(await craft(a, { kind, amount: 10n, chance: 1n }), reason);
+    await disagreeNever(await craft(a, { kind, amount: 10n, prize: 1n }), reason);
   }
-  // Only the secret of the round a bet signed, and the seed it named, settle it; every prize is well formed.
+  // Only the secret of the round a bet signed, and the seed it named, settle it; its odds are well formed.
   const secret = id('a secret'),
     seed = id('s'),
-    prize = { rangeStart: 0n, rangeEnd: 1n << 62n, payout: 150n },
-    casinoBet = {
-      kind: 1,
-      amount: 100n,
-      prizes: [prize],
-      seedHash: seedHash(seed),
-    };
+    casinoBet = { kind: 1, amount: 100n, ...below(1n << 62n, 150n), seedHash: seedHash(seed) };
   const round = { ...casinoBet, round: roundId(secret) };
   await disagreeNever(await craft(a, { ...casinoBet, round: id('another round') }, secret, seed), /Invalid casino bet/);
   await disagreeNever(await craft(a, round, id('another secret'), seed), /Invalid casino bet/);
   await disagreeNever(await craft(a, round, secret, id('another seed')), /Invalid casino bet/);
   await disagreeNever(await craft(a, round, secret), /Invalid casino bet/);
-  for (const bad of [{ rangeStart: 1n << 62n }, { rangeEnd: (1n << 64n) + 1n }, { payout: 0n }, { payout: 1n << 128n }])
-    await disagreeNever(
-      await craft(a, { ...round, prizes: [prize, { ...prize, ...bad }] }, secret, seed),
-      /Invalid casino bet/,
-    );
-  await disagreeNever(await craft(a, { ...round, prizes: [] }, secret, seed), /Invalid casino bet/);
-  await disagreeNever(await craft(a, { ...round, prizes: Array(65).fill(prize) }, secret, seed), /Invalid casino bet/);
+  for (const bad of [{ chance: 0n }, { prize: 0n }, { prize: 1n << 128n }])
+    await disagreeNever(await craft(a, { ...round, ...bad }, secret, seed), /Invalid casino bet/);
   await disagreeNever(await craft(a, { ...round, seedHash: ZeroHash }, secret, ZeroHash), /Invalid casino bet/);
   await disagreeNever(await craft(a, { ...round, amount: 5000n }, secret, seed), /Invalid casino bet/);
-  // The stake is paid to enter and every prize holding the outcome pays: a full table of 64 overlapping
-  // prizes, a prize over the whole outcome space and a prize below the stake all agree on-chain.
-  const everything = { rangeStart: 0n, rangeEnd: 1n << 64n, payout: 3n };
-  const paytable = await step(f, a, 1, 100n, {
-    prizes: [
-      everything,
-      ...Array.from({ length: 63 }, (_, i) => ({
-        rangeStart: 0n,
-        rangeEnd: (1n << 64n) >> BigInt(i % 8),
-        payout: BigInt(i + 1),
-      })),
-    ],
-    seed: id('paytable'),
-  });
-  const before = BigInt(a.state.balance);
-  await agree(a, paytable.evidence);
-  assert.ok(
-    BigInt(a.state.balance) >= before - 100n + 3n + 8n * 9n,
-    'the stake left, and every prize over the whole space came back',
-  );
-  // Two channels betting complementary ranges on one round and seed: exactly one of them is paid.
+  // A chance counts outcomes out of 2^64 in 64 bits: one past the space cannot even be signed.
+  await assert.rejects(craft(a, { ...round, chance: 1n << 64n }, secret, seed));
+  // The stake is paid to enter and the prize comes back below the chance: a bet on all but one outcome and a prize
+  // below the stake both agree on-chain.
+  const before = BigInt(a.state.balance),
+    nearlySure = await step(f, a, 1, 100n, { ...below((1n << 64n) - 1n, 3n), seed: id('nearly sure') });
+  await agree(a, nearlySure.evidence);
+  assert.ok([before - 100n, before - 97n].includes(BigInt(a.state.balance)), 'the stake left, and 3 came back or not');
+  // Two channels betting on one round and seed see one outcome: they win or lose together.
   const shared = { seed: id('one seed'), secret: id('one secret') };
-  const low = await step(f, a, 1, 100n, { ...shared, prizes: [{ rangeStart: 0n, rangeEnd: 1n << 63n, payout: 150n }] }),
-    high = await step(f, b, 1, 100n, {
-      ...shared,
-      prizes: [{ rangeStart: 1n << 63n, rangeEnd: 1n << 64n, payout: 150n }],
-    });
-  assert.deepEqual(
-    [BigInt(low.state.balance) > BigInt(a.state.balance), BigInt(high.state.balance) > BigInt(b.state.balance)].sort(),
-    [false, true],
-    'complementary ranges split one outcome',
+  const first = await step(f, a, 1, 100n, { ...shared, ...below(1n << 63n, 150n) }),
+    second = await step(f, b, 1, 100n, { ...shared, ...below(1n << 63n, 150n) });
+  assert.equal(
+    BigInt(first.state.balance) > BigInt(a.state.balance),
+    BigInt(second.state.balance) > BigInt(b.state.balance),
+    'one outcome settles both',
   );
-  for (const bet of [low, high])
+  for (const bet of [first, second])
     assert.equal(
       (await f.contract.supported(bet.evidence)).balance,
       BigInt(bet.state.balance),

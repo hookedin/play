@@ -6,8 +6,9 @@ sidebar:
 ---
 
 `import { RoundClient } from '@hookedin/play/sdk/round';` plays a game of several steps, such as a hand of blackjack, as
-one casino bet per step, priced by the [engine](engine.md). The module is Node-safe: it reaches `localStorage` only
-through its default store and `window` only in `watch`, so a test runs it in Node with a store of its own.
+a sequence of casino bets, priced by the [engine](engine.md): each step is one casino bet, a payment or nothing. The
+module is Node-safe: it reaches `localStorage` only through its default store and `window` only in `watch`, so a test
+runs it in Node with a store of its own.
 [Multi-step games](../games/multi-step-games.md) is the guide, and [sequential games](../games/sequential-games.md)
 derives the pricing.
 
@@ -57,21 +58,25 @@ export class RoundClient {
 | `store`   | `RoundStore`                | Where the round is saved. `localStorage` by default                                                           |
 | `name`    | `string`                    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
 
-Each action of a round is one operation, whose [group](../reference/bridge.md#gamecasinobet) is the round's `id`:
+Each action of a round is at most one operation, whose [group](../reference/bridge.md#gamecasinobet) is the round's
+`id`:
 
-1. The round saves the step it chose and a fresh operation ID in its store before it sends anything.
-2. If the game's balance is short of the step's cash, it asks the player for the shortfall plus four stakes.
-3. It sends the step as one `game.casinoBet` (a stake, and a prize for every better successor), as a `game.payment`,
-   or not at all when the step moves no money.
-4. The receipt's outcome names the next state. The verified payout must equal that state's cash less the cash the step
-   retained, or the step throws.
+1. If the game's balance is short of the step's cash, the round asks the player for the shortfall plus four stakes.
+2. It draws the step's branch with the page's own randomness ([`prepareAction`](engine.md#prepareaction)) and saves it
+   with a fresh operation ID in its store before it sends anything.
+3. It sends a bet as one `game.casinoBet` (its stake, chance and prize), a payment as `game.payment`, and nothing for a
+   step without either.
+4. A bet wins when the receipt's outcome is below its chance, which fixes the class of states it reaches, and
+   [`landing`](engine.md#landing) the state within it. The verified payout must be the prize when the bet won and `0`
+   otherwise, or the step throws.
 
-A declined step stays saved under a fresh operation ID, for the player to retry or leave. A step whose reply was lost
-stays saved under its own: `restore` finds its receipt through `game.receipt`, and `action` sends it again, which the
-wallet answers with the same receipt.
+A declined step stays saved under a fresh operation ID, for the player to retry or leave: the same bet, never drawn
+again, since a redraw would change the game's odds. A step whose reply was lost stays saved under its own: `restore`
+finds its receipt through `game.receipt`, and `action` sends it again, which the wallet answers with the same
+receipt.
 
 **Saving.** The store key is `hookedin:round:<name>:<chainId>:<asset>:<uname>`, from [`playerScope`](wire.md#playerscope).
-A saved round records its format, `HOOKEDIN/ROUND/4`, and its rules: the SHA-256 hash of the graph its setup builds, as
+A saved round records its format, `HOOKEDIN/ROUND/5`, and its rules: the SHA-256 hash of the graph its setup builds, as
 JSON. A page cannot finish a round saved in another format or under other rules. The next `restore`, `start` or `action`
 removes it and throws `This round was started under rules this game does not play. What it held is in your balance.`
 
@@ -123,21 +128,21 @@ action(action: string): Promise<RoundState>;
 
 Plays one step, `action` being one of `state().actions`, and resolves with the state it leads to. It reads the saved
 round first, as it stands. With no step pending, it makes sure the balance covers the round's cash plus the action's
-`additionalCash`, prepares the step at the bankroll `wallet.info` reports, saves it and sends it. With a step pending,
-only that step's action is accepted, and the step is sent again under its saved operation ID. The wallet answers an
-operation it has carried out with its receipt, so a step whose reply was lost is played once, and `action` resolves
-with the state it led to. A finished round resolves with its state unchanged. `busy` is `true` while it runs, and the
-`onChange` listeners are called when it ends.
+`additionalCash`, draws the step's branch at the bankroll `wallet.info` reports, saves it and sends it. With a step
+pending, only that step's action is accepted, and the step is sent again under its saved operation ID. The wallet
+answers an operation it has carried out with its receipt, so a step whose reply was lost is played once, and `action`
+resolves with the state it led to. A finished round resolves with its state unchanged. `busy` is `true` while it runs,
+and the `onChange` listeners are called when it ends.
 
-| Throws                                                                                         | When                                                                     | The step afterwards                                                           |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `Start a round first`                                                                          | No round is saved                                                        | –                                                                             |
-| `Illegal game action`                                                                          | The node does not offer the action                                       | –                                                                             |
-| `Retry the pending action first`                                                               | Another step is pending                                                  | Pending                                                                       |
-| A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The live bankroll is below the planning floor or does not admit the step | –                                                                             |
-| `Add enough money to this game to continue`                                                    | The player did not give the game enough                                  | –                                                                             |
-| The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                             | Pending, under a fresh operation ID                                           |
-| The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                   | Pending, under the same operation ID, so sending it again is the same request |
+| Throws                                                                                         | When                                                                          | The step afterwards                                                           |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `Start a round first`                                                                          | No round is saved                                                             | –                                                                             |
+| `Illegal game action`                                                                          | The node does not offer the action                                            | –                                                                             |
+| `Retry the pending action first`                                                               | Another step is pending                                                       | Pending                                                                       |
+| A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The live bankroll is below the planning floor or does not admit the bet drawn | –                                                                             |
+| `Add enough money to this game to continue`                                                    | The player did not give the game enough                                       | –                                                                             |
+| The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                  | Pending, under a fresh operation ID                                           |
+| The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                        | Pending, under the same operation ID, so sending it again is the same request |
 
 After an error, `restore()` gives the state to show: a pending step shows `pending: true`, with its action alone in
 `actions`.
@@ -252,11 +257,14 @@ export interface RoundState {
 | `pending`     | A step is saved and its result not applied                                                                                                      |
 | `settlement`  | The last step's result, or `null` before the first                                                                                              |
 
-A settled step's `settlement` is `{ kind, payout, outcome, rangeStart?, rangeEnd? }`. `kind` is `casino-bet`, `payment`
-or `noop`. A casino bet's `payout` and `outcome` are the receipt's decimal strings, and `rangeStart` and `rangeEnd` bound
-the stretch of the outcome space that led to this node: where the outcome fell inside it is verifiable entropy for
-choosing among equivalent presentations, such as which reel stops or which of several equal cards. A payment's or a
-no-op's `payout` and `outcome` are `null`. A declined step's `settlement` is `{ kind: 'rejected', reason }`.
+A settled step's `settlement` is `{ kind, won?, chance?, payout, outcome, draw }`. `kind` is `casino-bet`, `payment` or
+`noop`. A casino bet's `won` says whether its outcome was below its `chance`, and its `payout` and `outcome` are the
+receipt's decimal strings; a payment's or a no-op's `payout` and `outcome` are `null`. `draw` is what the page shows the
+result with, such as which reel stops or which path a ball takes, drawn apart from which state the step reached: for a
+bet, from the round's outcome by [`landing`](engine.md#landing), and for a step without one by the page when it
+prepared the step, a 64-bit value as a decimal string either way.
+[`seededRandom(BigInt(draw))`](engine.md#seededrandom) reads it. A declined step's `settlement` is
+`{ kind: 'rejected', reason }`.
 
 ### `RoundEvent`
 

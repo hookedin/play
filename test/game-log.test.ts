@@ -5,16 +5,17 @@ import { describeRequest, describeResult } from '../client/game-log.ts';
 test('bridge requests summarize their financial terms in one line', () => {
   const bet = describeRequest('game.casinoBet', {
     stake: '1000000000000000',
-    prizes: [
-      { rangeStart: '0', rangeEnd: String((1n << 64n) / 2n), payout: '1990000000000000' },
-      { rangeStart: '0', rangeEnd: String((1n << 64n) / 4n), payout: '10000000000000' },
-    ],
+    chance: String((1n << 64n) / 2n),
+    prize: '1990000000000000',
     id: 'round-7',
   });
   assert.match(bet, /stake 0\.001 ETH/);
-  assert.match(bet, /2 prizes · pays up to 0\.002 ETH/, 'overlapping prizes add');
-  assert.match(bet, /RTP 99\.7500%/);
-  assert.match(describeRequest('game.casinoBet', { stake: '1', prizes: 'nonsense', id: 'x' }), /unreadable prizes/);
+  assert.match(bet, /pays 0\.00199 ETH on 50\.0000%/);
+  assert.match(bet, /RTP 99\.5000%/);
+  assert.match(
+    describeRequest('game.casinoBet', { stake: '1', chance: 'nonsense', prize: '2', id: 'x' }),
+    /unreadable odds/,
+  );
   assert.match(bet, /id round-7/);
   assert.match(bet, /^casino bet · /);
   assert.equal(

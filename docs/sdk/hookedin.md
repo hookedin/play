@@ -24,10 +24,11 @@ if (funding.funded) {
   const receipt = await HookedIn.casinoBet({
     id,
     stake,
-    // Half the outcome space pays 1.98 times the stake: a 99% return.
-    prizes: [{ rangeStart: '0', rangeEnd: String(1n << 63n), payout: String((BigInt(stake) * 198n) / 100n) }],
+    // Half the outcomes win 1.98 times the stake: a 99% return.
+    chance: String(1n << 63n),
+    prize: String((BigInt(stake) * 198n) / 100n),
   });
-  // receipt.outcome is the round's 64-bit outcome; receipt.payout is what the prizes paid.
+  // receipt.payout is the prize when receipt.outcome, the round's 64-bit outcome, is below the chance, or '0'.
 }
 ```
 
@@ -41,6 +42,7 @@ export const HookedIn: Readonly<{
   hello: () => Promise<WalletHello>;
   limits: () => Promise<WalletLimits>;
   info: () => Promise<WalletInfo>;
+  round: (id: string) => Promise<Round>;
   balance: () => Promise<GameBalance>;
   onBalance: (listener: (balance: GameBalance) => void) => () => void;
   requestFunds: (options?: { amount?: bigint | string }) => Promise<
@@ -126,6 +128,19 @@ info: () => Promise<WalletInfo>;
 
 [`wallet.info`](../reference/bridge.md#walletinfo), asked afresh on every call: the player's names, the casino's
 bankroll and a recommended stake.
+
+#### `round`
+
+```ts
+round: (id: string) => Promise<Round>;
+```
+
+A developer's round as the casino shows it to anyone, a [`Round`](developer.md#round), read through the player's wallet
+with [`wallet.round`](../reference/bridge.md#walletround), since a game page talks to nobody but its own origin. `id` is
+the round's 32-byte hash. The round is `open`, or revealed with its seed, its secret, its outcome and the developer's
+casino bet on it. The wallet passes the casino's answer on as it is: a game checks it as
+[checking a round](outcome.md#checking-a-round) shows, and walks a shared draw's rounds with
+[`stepOutcome`](steps.md#stepoutcome). It rejects as [`call`](#call) does.
 
 #### `balance`
 
@@ -385,15 +400,15 @@ What the wallet plays with: the network's ETH (`eth`, symbol `ETH` or `Sepolia E
 
 ```ts
 export interface WalletLimits {
-  prizes: number;
   outcomeSpace: string;
   meta: number;
   group: number;
 }
 ```
 
-Every bound the wallet holds a bet to. They are part of the protocol revision the wallet and its casino share; the
-[bridge's limits](../reference/bridge.md#limits) give their values.
+Every bound the wallet holds a bet to: the size of the outcome space a bet's chance counts outcomes out of, the most a
+developer bet's meta takes as canonical JSON, and the longest group label. They are part of the protocol revision the
+wallet and its casino share; the [bridge's limits](../reference/bridge.md#limits) give their values.
 
 ### `WalletHello`
 
@@ -425,32 +440,22 @@ theirs for good and `null` until a casino has answered the wallet; a game keys a
 name they are shown by, `null` unless they took one. `bankroll` is the casino's bankroll as last reported, what to price bets
 against rather than a promise to admit them.
 
-### `WirePrize`
-
-```ts
-export interface WirePrize {
-  rangeStart: string;
-  rangeEnd: string;
-  payout: string;
-}
-```
-
-A prize on the wire, in decimal strings: one entry of `CasinoBetRequest.prizes` and `GameReceipt.prizes`.
-
 ### `CasinoBetRequest`
 
 ```ts
 export interface CasinoBetRequest {
   id: string;
   stake: string;
-  prizes: { rangeStart: string; rangeEnd: string; payout: string }[];
+  chance: string;
+  prize: string;
   group?: string;
 }
 ```
 
 The parameters of [`game.casinoBet`](../reference/bridge.md#gamecasinobet). `id` is the game's own name for the
-operation; each prize pays `payout` when the round's 64-bit outcome falls in `[rangeStart, rangeEnd)`, and overlapping
-prizes add; `group` labels bets that belong together.
+operation. The bet pays `prize` when the round's 64-bit outcome is below `chance`, which counts winning outcomes out of
+2^64, from 1 to 2^64 − 1. `stake` and `prize` are positive and below 2^128, and all three are decimal strings. `group`
+labels bets that belong together.
 
 ### `DeveloperBetRequest`
 
@@ -474,7 +479,8 @@ export interface GameReceipt {
   kind: 'casino-bet' | 'developer-bet' | 'payment';
   status: 'settled' | 'rejected' | 'open';
   stake?: string;
-  prizes?: { rangeStart: string; rangeEnd: string; payout: string }[];
+  chance?: string;
+  prize?: string;
   meta?: Record<string, unknown>;
   group?: string;
   bet?: string;

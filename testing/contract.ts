@@ -85,18 +85,18 @@ export async function accessFor(d: any, opening: any, signer: any) {
   const message = { channelId: opening.channelId, expiresAt: Math.floor(Date.now() / 1000) + 120 };
   return { message, signature: await signer.signTypedData(d, ACCESS_TYPES, message) };
 }
-/** One prize: `payout` when the round's outcome falls below `threshold`. */
-export const below = (threshold: any, payout: any) => [{ rangeStart: 0, rangeEnd: threshold, payout }];
-/** The simplest casino bet, a stake that wins `netWin` below a threshold, priced by the casino's admission rule. */
-export function assessBinary({ bankroll, stake, netWin, winThreshold }: Record<string, bigint>) {
-  const prizes = [{ rangeStart: 0n, rangeEnd: winThreshold, payout: stake + netWin }],
-    risk = assessBet({ bankroll, bet: { stake, prizes } });
+/** A casino bet's odds: it pays `prize` when the round's outcome falls below `chance`. */
+export const below = (chance: any, prize: any) => ({ chance, prize });
+/** A casino bet that wins `netWin` when the outcome falls below `chance`, priced by the casino's admission rule. */
+export function assessBinary({ bankroll, stake, netWin, chance }: Record<string, bigint>) {
+  const prize = stake + netWin,
+    risk = assessBet({ bankroll, bet: { stake, chance, prize } });
   return {
     ...risk,
     stake,
     netWin,
-    winThreshold,
-    prizes,
+    chance,
+    prize,
     developerFee: risk.fee / 2n,
     casinoFee: risk.fee / 2n,
   };

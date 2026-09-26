@@ -1,9 +1,11 @@
 import { gameAmount, gameOperationKey } from './game-account.ts';
 import { LIMITS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
+import { MAX_BALANCE } from '../protocol/risk.ts';
 /** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
 export const METHODS = [
   'wallet.hello',
   'wallet.info',
+  'wallet.round',
   'game.receipt',
   'game.casinoBet',
   'game.developerBet',
@@ -12,7 +14,7 @@ export const METHODS = [
 ];
 const methods = new Set(METHODS);
 /** Questions the wallet answers at once. Everything else signs or asks the player, and waits its turn. */
-const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'game.receipt']);
+const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'wallet.round', 'game.receipt']);
 /** Requests a game may have waiting for their turn. */
 const MAX_QUEUE = 32;
 /** An error a game can act on: `code` is stable, the message is for people. */
@@ -29,20 +31,11 @@ const object = (value: unknown) =>
   !Array.isArray(value) &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
-/** The stake is paid to enter; every prize whose range holds the outcome pays. Prizes may overlap. */
-function validatePrizes(prizes: unknown) {
-  if (!Array.isArray(prizes) || !prizes.length || prizes.length > LIMITS.prizes)
-    throw new Error(`A bet holds 1 to ${LIMITS.prizes} prizes.`);
-  for (const prize of prizes) {
-    if (!object(prize) || !only(prize, ['rangeStart', 'rangeEnd', 'payout']))
-      throw new Error('A prize is {rangeStart, rangeEnd, payout}.');
-    gameAmount(prize.payout);
-    if (
-      gameAmount(prize.rangeStart, false) >= gameAmount(prize.rangeEnd) ||
-      BigInt(prize.rangeEnd) > BigInt(LIMITS.outcomeSpace)
-    )
-      throw new Error('A prize range lies within [0, 2^64).');
-  }
+/** The stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance. */
+function validateOdds(chance: unknown, prize: unknown) {
+  if (gameAmount(prize) >= MAX_BALANCE) throw new Error('A prize is below 2^128.');
+  if (gameAmount(chance) >= BigInt(LIMITS.outcomeSpace))
+    throw new Error('A chance counts winning outcomes out of 2^64, from 1 to 2^64 − 1.');
 }
 /** A bounded estimate of the serialized size that stops early, so an oversized message is never stringified. */
 function withinSize(value: unknown, limit: number) {
@@ -78,13 +71,16 @@ function validate(data: any) {
   const params = data.params ?? {};
   if (data.method === 'wallet.hello' || data.method === 'wallet.info') {
     if (Object.keys(params).length) throw new Error('This method takes no parameters.');
+  } else if (data.method === 'wallet.round') {
+    if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.id))
+      throw new Error('A round is named by its 32-byte hash, as 0x and 64 hex digits.');
   } else if (data.method === 'game.requestFunds') {
     // The wallet's modal decides, and every word in it is the wallet's: a game suggests an amount.
     if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
   } else {
     const fields = {
-      'game.casinoBet': ['id', 'stake', 'prizes', 'group'],
+      'game.casinoBet': ['id', 'stake', 'chance', 'prize', 'group'],
       'game.developerBet': ['id', 'stake', 'meta', 'group'],
       'game.payment': ['id', 'amount', 'group'],
       'game.receipt': ['id'],
@@ -99,7 +95,7 @@ function validate(data: any) {
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
     // A casino bet settles now against the bankroll, on the player's own round. A developer bet is its developer's
     // to settle, on its developer's word: its meta is the game's own, which the casino keeps and never reads.
-    if (data.method === 'game.casinoBet') validatePrizes(params.prizes);
+    if (data.method === 'game.casinoBet') validateOdds(params.chance, params.prize);
     if (data.method === 'game.developerBet' && !validMeta(params.meta)) throw new Error(META);
   }
   return { ...data, params };

@@ -1,4 +1,4 @@
-import type { Integer, Checkpoint, Operation, Prize } from '../protocol/types.ts';
+import type { Integer, Checkpoint, Operation } from '../protocol/types.ts';
 import type { AssetId } from '../protocol/protocol.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { Wallet, hexlify, randomBytes, ZeroHash, id } from 'ethers';
@@ -20,6 +20,7 @@ import {
   rejectionCheckpoint,
   operation,
   outcome,
+  betPayout,
   roundId,
   seedHash,
   verifyShareStatement,
@@ -55,10 +56,12 @@ const random = () => hexlify(randomBytes(32));
 const CREDITS = ['divest', 'earnings', 'faucet', 'developer-bet-payout', 'withdrawn'];
 const bytes32 = (value: unknown): value is string =>
   typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value) && !same(value, ZeroHash);
-/** A casino bet: the stake is paid to enter; every prize whose range holds the round's outcome pays. */
+/** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
+ * counted in outcomes out of 2^64. */
 export interface CasinoBetInput {
   stake: Integer;
-  prizes: Prize[];
+  chance: Integer;
+  prize: Integer;
   group?: string;
 }
 /** A developer bet: its stake goes to the bank of the game's developer, who settles it on its word. Its meta is the
@@ -205,14 +208,8 @@ export class ChannelClient extends WalletTransactions {
           } as Record<string, number>
         )[kind] || 0,
       amount: BigInt(kind === 'casino-bet' ? input.stake : input.amount),
-      prizes:
-        kind === 'casino-bet'
-          ? (input.prizes as Prize[]).map(prize => ({
-              rangeStart: BigInt(prize.rangeStart),
-              rangeEnd: BigInt(prize.rangeEnd),
-              payout: BigInt(prize.payout),
-            }))
-          : [],
+      chance: kind === 'casino-bet' ? BigInt(input.chance) : 0n,
+      prize: kind === 'casino-bet' ? BigInt(input.prize) : 0n,
     };
     if (!intent.kind) throw new Error('Unknown wallet operation');
     // What the operation means, signed as its memo. A casino bet, a developer bet and a payment are always the open
@@ -229,8 +226,7 @@ export class ChannelClient extends WalletTransactions {
     });
     const matches = (operation: Operation, signed: Details) => {
       if (
-        (['kind', 'amount'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
-        canonicalJSON(plain(operation.prizes)) !== canonicalJSON(plain(intent.prizes)) ||
+        (['kind', 'amount', 'chance', 'prize'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
         canonicalJSON(signed) !== canonicalJSON(details)
       )
         throw gameError('id-conflict', 'Operation ID is bound to a different intent (terms or game)');
@@ -244,7 +240,7 @@ export class ChannelClient extends WalletTransactions {
       return cached;
     }
     /** What every operation this wallet signs must satisfy: it fits the money the player allowed, and
-     * a bet's prizes are a table the casino's own rule can read. */
+     * a bet's terms are ones the casino's own rule can read. */
     const allowed = (debit: bigint) => {
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
@@ -252,9 +248,9 @@ export class ChannelClient extends WalletTransactions {
       } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
       if (kind === 'casino-bet')
         try {
-          describeBet(betTerms(intent.amount, intent.prizes));
+          describeBet(betTerms(intent.amount, intent.chance, intent.prize));
         } catch {
-          throw new Error('Invalid bet prizes');
+          throw new Error('Invalid bet terms');
         }
       try {
         checkDetails(intent.kind, details);
@@ -272,7 +268,8 @@ export class ChannelClient extends WalletTransactions {
       const request = operation(this.domain, this.channel!.state, {
         kind: intent.kind,
         amount: intent.amount,
-        prizes: intent.prizes,
+        chance: intent.chance,
+        prize: intent.prize,
         round,
         seedHash: seed ? seedHash(seed) : ZeroHash,
         memo: memo(details),
@@ -376,16 +373,17 @@ export class ChannelClient extends WalletTransactions {
     if (rejected && casinoBet && !lost && (!bytes32(response.secret) || !same(roundId(response.secret), op.round)))
       throw new Error('The casino declined this casino bet without revealing its round');
     const wouldHavePaid =
-      rejected && casinoBet && !lost ? outcome(op.prizes, c.pending.seed, response.secret).payout : null;
+      rejected && casinoBet && !lost ? betPayout(op, outcome(c.pending.seed, response.secret).value) : null;
     c.state = next;
     c.casinoSignature = rejected ? response.casinoSignature : step.casinoSignature;
     c.playerSignature = await this.channelSigner().signTypedData(this.domain, STATE_TYPES, next);
     c.lastResponse = rejected
       ? { ...response, evidence: checkpointEvidence(next, c.playerSignature, c.casinoSignature) }
       : { ...response, evidence: { ...response.evidence, step } };
-    const settled = !rejected && casinoBet ? outcome(step.operation.prizes, step.seed, step.secret) : null,
+    const drawn = !rejected && casinoBet ? outcome(step.seed, step.secret) : null,
+      settled = drawn ? { ...drawn, payout: betPayout(op, drawn.value) } : null,
       // What the player signed, exactly: the most the bet could pay and its return out of 2^64 stakes.
-      table = casinoBet ? describeBet(betTerms(op.amount, op.prizes)) : null;
+      table = casinoBet ? describeBet(betTerms(op.amount, op.chance, op.prize)) : null;
     let commission: string | undefined;
     try {
       commission = String(gameAmount(String(rejected ? 0 : response.commission), false));
@@ -416,7 +414,7 @@ export class ChannelClient extends WalletTransactions {
       ...(lost ? { lost: true } : {}),
       verified: true,
       proof: c.lastResponse!.evidence,
-      // The round's 64-bit outcome, and what the prizes holding it paid in total.
+      // The round's 64-bit outcome, and what the bet paid on it: its prize, or nothing.
       outcome: settled?.value,
       payout: settled?.payout,
       randomHash: settled?.randomHash,

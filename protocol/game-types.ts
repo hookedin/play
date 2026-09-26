@@ -24,15 +24,16 @@ export interface GameSession {
   /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
 }
-type Prizes = { rangeStart: string; rangeEnd: string; payout: string }[];
 /** A casino bet: settled against the casino's bankroll in the request that places it, on the player's own round.
- * The stake is paid to enter, and every prize whose range holds the round's 64-bit outcome pays. */
+ * The stake is paid to enter, and the bet pays `prize` when the round's 64-bit outcome is below `chance`. */
 export interface CasinoBetRequest {
   /** The game's own name for the operation: the same request again returns the saved receipt. */
   id: string;
   stake: string;
-  /** Each prize pays `payout` when the round's 64-bit outcome falls in [rangeStart, rangeEnd); overlapping prizes add. */
-  prizes: Prizes;
+  /** The bet's probability, counted in outcomes out of 2^64, from 1 to 2^64 − 1. */
+  chance: string;
+  /** What the bet pays when it wins. */
+  prize: string;
   /** A label for bets that belong together, such as the steps of one hand. */
   group?: string;
 }
@@ -49,15 +50,16 @@ export interface DeveloperBetRequest {
  * A casino bet or a payment is `settled` (done, and what it paid is in the channel) or `rejected` (declined with
  * a signed checkpoint that leaves the balance unchanged). A developer bet is `rejected` (the casino did not take it),
  * `open` (its stake is with the developer) or `settled` (its developer settled it, and the wallet collected what
- * that pays). A casino bet's payout is its prizes on an outcome the wallet checked; a developer bet's is its
+ * that pays). A casino bet's payout is its prize or nothing, on an outcome the wallet checked; a developer bet's is its
  * developer's word. */
 export interface GameReceipt {
   id: string;
   kind: 'casino-bet' | 'developer-bet' | 'payment';
   status: 'settled' | 'rejected' | 'open';
-  /** A bet as it was placed: its stake, and a casino bet's prizes or a developer bet's meta. */
+  /** A bet as it was placed: its stake, and a casino bet's chance and prize or a developer bet's meta. */
   stake?: string;
-  prizes?: Prizes;
+  chance?: string;
+  prize?: string;
   meta?: Record<string, unknown>;
   group?: string;
   /** A developer bet: the hash that names it at the casino and to its developer. */

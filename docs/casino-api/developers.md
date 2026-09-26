@@ -60,27 +60,31 @@ reveals the round.
 
 **Auth:** developer access · **Idempotent:** yes, by round: the same bet again returns the round as it stands
 
-The bet is the developer's `BankCasinoBet`, signed over the round, the game, the stake, the prizes, the hash of the seed
-it brings and the hash of its meta. The casino checks the fields and the signature, that the round is the developer's
-and not yet revealed, and that the bank holds the stake. It then admits the bet like any casino bet, by
-[the Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager), before it reads the round's secret, and records
-the reveal: the seed, the secret and the bet, `accepted` or not. Accepted, the bank pays the stake and receives what the
-prizes pay on the outcome, and the bet's commission accrues, half of it to the developer, as for any casino bet of its
-game. Declined, no money moves. Either way the round is revealed; the same signature again returns it, and any other
-bet on it is refused with `round-revealed`.
+The bet is the developer's `BankCasinoBet`, signed over the round, the game, the stake, the chance, the prize, the
+group, the hash of the seed it brings and the hash of its meta. The casino checks the fields and the signature, that the
+round is the developer's and not yet revealed, and that the bank holds the stake. It then admits the bet like any casino
+bet, by [the Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager), before it reads the round's secret, and
+records the reveal: the seed, the secret and the bet, `accepted` or not. Accepted, the bank pays the stake and receives
+the prize when the round's outcome is below the chance, and the bet's commission accrues, half of it to the developer,
+as for any casino bet of its game; it is then listed in its game's public record, in its group. Declined, no money
+moves. A stake, chance and prize of zero bet nothing: they only reveal the round, with no bank check and no admission,
+and `accepted` is false. Either way the round is revealed; the same signature again returns it, and any other bet on it
+is refused with `round-revealed`.
 
 | Path    | Type    | Meaning                                                                 |
 | ------- | ------- | ----------------------------------------------------------------------- |
 | `round` | bytes32 | A round the developer opened with [`POST /api/rounds`](#post-apirounds) |
 
-| Body field  | Type    | Meaning                                                                                                                                                  |
-| ----------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `game`      | bytes32 | The key of a game the developer publishes: the game whose commission the bet earns                                                                       |
-| `stake`     | string  | Decimal, 1 to 2^128 − 1, without leading zeros                                                                                                           |
-| `prizes`    | array   | 1 to 64 prizes, `{rangeStart, rangeEnd, payout}` in decimal strings, with `rangeStart < rangeEnd ≤ 2^64` and `0 < payout < 2^128`                        |
-| `meta`      | object  | The developer's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers. The casino keeps it with the reveal and never reads it |
-| `seed`      | bytes32 | The bet's seed                                                                                                                                           |
-| `signature` | string  | The developer's EIP-712 `BankCasinoBet` over `{round, game, stake, prizes, seedHash: keccak256(seed), meta: keccak256(canonicalJSON(meta))}`             |
+| Body field  | Type    | Meaning                                                                                                                                                    |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `game`      | bytes32 | The key of a game the developer publishes: the game whose commission the bet earns                                                                         |
+| `stake`     | string  | Decimal, 1 to 2^128 − 1, without leading zeros; `0` to reveal                                                                                              |
+| `chance`    | string  | Decimal: how many of the 2^64 outcomes win, 1 to 2^64 − 1; `0` to reveal                                                                                   |
+| `prize`     | string  | Decimal: what the bet pays when it wins, 1 to 2^128 − 1; `0` to reveal                                                                                     |
+| `group`     | string  | 1 to 64 characters: the label the game gives the bets that belong together                                                                                 |
+| `meta`      | object  | The developer's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers. The casino keeps it with the reveal and never reads it   |
+| `seed`      | bytes32 | The bet's seed                                                                                                                                             |
+| `signature` | string  | The developer's EIP-712 `BankCasinoBet` over `{round, game, stake, chance, prize, group, seedHash: keccak256(seed), meta: keccak256(canonicalJSON(meta))}` |
 
 The path names the round: a `round` in the body, as the developer kit sends it, is ignored. The reply is the revealed
 round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it.
@@ -90,15 +94,12 @@ round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it.
   "round": "0x21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
   "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
   "stake": "1000000000000000",
-  "prizes": [
-    {
-      "rangeStart": "0",
-      "rangeEnd": "8974091711534376461",
-      "payout": "2000000000000000"
-    }
-  ],
+  "chance": "8974091711534376461",
+  "prize": "2000000000000000",
+  "group": "5b1f3d9a0c2e47f6a8d4e1b7c9f0a3d2e6b8c1f4a7d0e3b6c9f2a5d8e1b4c7f0",
   "meta": {
-    "covered": ["0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67"]
+    "covered": "0x2b9e0f3c7a1d5e8b4f6a9c2d0e7b3f1a8c5d9e2b6f0a4c7d1e3b8f5a9c2d6e0b",
+    "side": "left"
   },
   "seed": "0x677a5f560aadfc5627c98b34edd076d53481e76411befe62dd848cbed1fc9ed4",
   "signature": "0xc589853547d41893c31690f5479d2e15b6cb5ef43f5bf3e3c3de8e81cc3931d62ea510476f8041050c592144a95a4f4b99f604cee4793b0fbff84aa4261d6a491b"
@@ -117,15 +118,12 @@ round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it.
   "casinoBet": {
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "stake": "1000000000000000",
-    "prizes": [
-      {
-        "rangeStart": "0",
-        "rangeEnd": "8974091711534376461",
-        "payout": "2000000000000000"
-      }
-    ],
+    "chance": "8974091711534376461",
+    "prize": "2000000000000000",
+    "group": "5b1f3d9a0c2e47f6a8d4e1b7c9f0a3d2e6b8c1f4a7d0e3b6c9f2a5d8e1b4c7f0",
     "meta": {
-      "covered": ["0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67"]
+      "covered": "0x2b9e0f3c7a1d5e8b4f6a9c2d0e7b3f1a8c5d9e2b6f0a4c7d1e3b8f5a9c2d6e0b",
+      "side": "left"
     },
     "signature": "0xc589853547d41893c31690f5479d2e15b6cb5ef43f5bf3e3c3de8e81cc3931d62ea510476f8041050c592144a95a4f4b99f604cee4793b0fbff84aa4261d6a491b",
     "accepted": true,

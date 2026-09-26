@@ -42,16 +42,12 @@ const round = new RoundClient(HookedIn, diceGraph);
           : 'Roll dice ↗';
   }
   // The roll is the verified outcome read on a 0–100 scale: wins fall under the target, losses at or above it.
-  // The target is the width of the signed winning range, so a restored round shows the odds it was played at.
-  function rolled(won: boolean, settlement: any) {
-    if (!settlement || !/^[0-9]+$/.test(String(settlement.outcome)) || settlement.rangeStart === undefined) return '';
+  // The target is the signed bet's chance, so a restored round shows the odds it was played at.
+  function rolled(settlement: any) {
+    if (!settlement || !/^[0-9]+$/.test(String(settlement.outcome)) || settlement.chance === undefined) return '';
     const span = 2n ** 64n,
-      start = BigInt(settlement.rangeStart),
-      width = BigInt(settlement.rangeEnd) - start,
-      offset = BigInt(settlement.outcome) - start,
-      target = won ? width : span - width,
       hundredths = (n: bigint) => (Number((n * 10000n) / span) / 100).toFixed(2);
-    return `Rolled ${hundredths(won ? offset : target + offset)} · wins under ${hundredths(target)}`;
+    return `Rolled ${hundredths(BigInt(settlement.outcome))} · wins under ${hundredths(BigInt(settlement.chance))}`;
   }
   function render() {
     if (!session) return;
@@ -60,7 +56,7 @@ const round = new RoundClient(HookedIn, diceGraph);
       const amount = won
         ? `Won ${HookedIn.formatAmount(session.cash)} ${asset}`
         : `Lost ${HookedIn.formatAmount(session.contributed)} ${asset}`;
-      const roll = rolled(won, session.settlement);
+      const roll = rolled(session.settlement);
       $('die').classList.toggle('lost', !won);
       $('result-label').textContent = won ? 'A beautiful roll.' : 'The odds went the other way.';
       $('result-value').textContent = roll ? `${roll} · ${amount}` : amount;
