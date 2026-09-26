@@ -108,11 +108,12 @@ make the bankroll.
 | `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`                                                                  |
 | `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                            |
 
-`disputes.alerts` lists `{channelId?, severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`,
-`remaining` the seconds left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an
-older checkpoint than the casino holds, and the casino challenges it), `missed-deadline`, `conflicting-sequence`,
-`finalized-state-differs`, `invalid-evidence`, `channel-defense-failed` or `recovery-transaction-failed`.
-`disputes.pending` is the hash of the casino's challenge transaction in flight, or `null`.
+`disputes.alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining`
+the seconds left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older
+checkpoint than the casino holds, and the casino challenges it), `missed-deadline`, `conflicting-sequence`,
+`finalized-state-differs`, `invalid-evidence`, `channel-defense-failed` or `recovery-transaction-failed`. An alert, like
+`observationError`, names no channel. `disputes.pending` is the hash of the casino's challenge transaction in flight, or
+`null`.
 
 ```json title="Response"
 {
