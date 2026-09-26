@@ -85,10 +85,10 @@ no refund. The wallet checks that the developer signed the settlement, and nothi
 A developer can keep a stake by never settling; the game's public record then shows the bet as open.
 
 A game can make its developer bets provably fair with a scheme of its own, which anyone can check against what the
-casino publishes; [roulette](../../games/roulette/README.md#fairness-and-trust) does. What a developer bet is paid is
-the casino's promise until your wallet collects it, and until then it is outside the principal the contract protects.
-A developer's bank reserves nothing: whether a developer can pay its bets is between the developer and its players
-([settled trade-offs](architecture.md#settled-trade-offs)).
+casino publishes; [roulette](https://github.com/hookedin/game-roulette#fairness-and-trust) does. What a developer bet
+is paid is the casino's promise until your wallet collects it, and until then it is outside the principal the contract
+protects. A developer's bank reserves nothing: whether a developer can pay its bets is between the developer and its
+players ([settled trade-offs](architecture.md#settled-trade-offs)).
 
 ## Fund shares are the casino's promise
 

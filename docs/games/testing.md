@@ -129,7 +129,7 @@ a round's secret, which the stub reveals only with the casino bet. The template'
 [test/developer-bet.test.ts](https://github.com/hookedin/game-template/blob/main/test/developer-bet.test.ts) backs a
 developer bet with a casino bet on a round and settles it by the outcome. Roulette's wheel takes everything outside it
 as arguments, so its tests run it against a casino and a clock of their own
-([test/wheel.test.ts](../../games/roulette/test/wheel.test.ts)).
+([test/wheel.test.ts](https://github.com/hookedin/game-roulette/blob/main/test/wheel.test.ts)).
 
 ## Proving a table's floor
 

@@ -199,9 +199,10 @@ await developer.settle(
 );
 ```
 
-`save`, `together` and `prizesOf` are your game's own: [roulette's `together`](../../games/roulette/src/table.ts) adds
-layouts up pocket by pocket. The group is the round's 64 hex digits, which fits a group's 64 characters. `ethers` comes
-with `@hookedin/play`; add it to your own dependencies to import it.
+`save`, `together` and `prizesOf` are your game's own:
+[roulette's `together`](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) adds layouts up pocket by
+pocket. The group is the round's 64 hex digits, which fits a group's 64 characters. `ethers` comes with
+`@hookedin/play`; add it to your own dependencies to import it.
 
 ## The order of requests
 
@@ -240,14 +241,14 @@ seed, its secret, the outcome and your casino bet with its meta, and [`outcome`]
 
 ## Roulette, the worked example
 
-[Roulette](../../games/roulette/) runs this scheme with one wheel per asset.
+[Roulette](https://github.com/hookedin/game-roulette) runs this scheme with one wheel per asset.
 
-- The wheel, [server/wheel.ts](../../games/roulette/server/wheel.ts), keeps one round open and serves
-  `GET /api/table`: `{ round, seedHash, closesAt, now, players, staked }`.
-- The page, [src/game.ts](../../games/roulette/src/game.ts), places a player's whole layout as one developer bet: its
-  `group` is the round's 64 hex digits and its meta `{ seedHash, chips }`, each chip a spot and its amount as a decimal
-  string. It then posts `POST /api/table/placed`. The wheel believes the casino, not the page, and reads the open bets
-  itself.
+- The wheel, [server/wheel.ts](https://github.com/hookedin/game-roulette/blob/main/server/wheel.ts), keeps one round
+  open and serves `GET /api/table`: `{ round, seedHash, closesAt, now, players, staked }`.
+- The page, [src/game.ts](https://github.com/hookedin/game-roulette/blob/main/src/game.ts), places a player's whole
+  layout as one developer bet: its `group` is the round's 64 hex digits and its meta `{ seedHash, chips }`, each chip a
+  spot and its amount as a decimal string. It then posts `POST /api/table/placed`. The wheel believes the casino, not
+  the page, and reads the open bets itself.
 - Twenty seconds after the first bet, by the casino's clock, the wheel saves the list of bets it covers, every open bet
   in the group that names the seed hash and is a layout of known spots adding up to its stake, and places one casino
   bet of all their chips together, at most one prize per pocket, with meta `{ covered }`: the `keccak256` of the
@@ -258,7 +259,8 @@ seed, its secret, the outcome and your casino bet with its meta, and [`outcome`]
 - The page reads the spin, checks the secret against the round and the seed against the seed hash its bet named, and
   works out the number itself.
 
-Its README's [fairness and trust](../../games/roulette/README.md#fairness-and-trust) says how anyone checks a spin.
+Its README's [fairness and trust](https://github.com/hookedin/game-roulette#fairness-and-trust) says how anyone checks
+a spin.
 
 ## Crash games
 
@@ -271,7 +273,8 @@ every page would know the crash point. Such a game keeps its crash point to itse
 
 A game with a server ships page and server as one Cloudflare Worker: `dist/` as static assets, and `server/worker.ts`
 answering `/api/`, with a Durable Object holding its state. Page and server share an origin, so the build's
-`connect-src 'self'` holds. Roulette's `wrangler.jsonc`, for a copy of it:
+`connect-src 'self'` holds. [Roulette's repository](https://github.com/hookedin/game-roulette) is a GitHub template with
+all of this in place, tested and deployed on every push; its `wrangler.jsonc`, for a game of your own:
 
 ```json
 {
@@ -292,7 +295,8 @@ answering `/api/`, with a Durable Object holding its state. Page and server shar
 - `DEVELOPER_KEY`, the private key of the account you publish from, is a secret: set it once with
   `npx wrangler secret put DEVELOPER_KEY`. Locally, pass it to `npx wrangler dev --var DEVELOPER_KEY:0x…`, or put it in
   a `.dev.vars` file that git ignores.
-- The Durable Object creates its developer once, as [server/worker.ts](../../games/roulette/server/worker.ts) does:
+- The Durable Object creates its developer once, as
+  [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) does:
 
   ```ts
   const developer = await createDeveloper({ casinoURL: env.CASINO_URL, key: env.DEVELOPER_KEY, name: env.GAME_NAME });

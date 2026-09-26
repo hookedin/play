@@ -8,7 +8,7 @@ sidebar:
 `import { createDeveloper } from '@hookedin/play/sdk/developer';` is the server side of a game with developer bets. The
 module is Node-safe and runs wherever `fetch` does: Node, a Cloudflare Worker, a browser. Every call goes to the
 casino's public API. [Developer bets](../games/developer-bets.md) is the guide, with the order of requests and
-[roulette](../../games/roulette/server/) as the worked example.
+[roulette](https://github.com/hookedin/game-roulette/tree/main/server) as the worked example.
 
 The kit signs with the developer's key: the key of the account the game is published from, whose address the manifest
 names as its `developer`. A server holding it holds everything that account holds: its games, their commission and its
@@ -235,6 +235,34 @@ bet(hash: string): Promise<PublicDeveloperBet | null>;
 
 A developer bet as anyone may read it, or `null` for one the casino does not know:
 [`GET /api/developer-bets/:bet`](../casino-api/public.md#get-apideveloper-betsbet).
+
+## The protocol
+
+What a casino's [`GET /api/config`](../casino-api/public.md#get-apiconfig) names, as `developerProtocol` and `limits`,
+for [`createDeveloper`](#createdeveloper) to take it. A stub casino in your server's tests answers with these two.
+
+### `DEVELOPER_PROTOCOL`
+
+```ts
+export const DEVELOPER_PROTOCOL: string;
+```
+
+The revision of the protocol a developer's server shares with the casino: the hash of the three structures it signs,
+the outcome rule and `LIMITS`. A change to what only a wallet signs leaves it alone.
+
+### `LIMITS`
+
+```ts
+export const LIMITS: {
+  prizes: number;
+  outcomeSpace: string;
+  meta: number;
+  group: number;
+};
+```
+
+Every bound a bet is held to, as the casino's config gives them in `limits` and a developer holds them in
+[`limits`](#limits).
 
 ## Types
 

@@ -25,6 +25,8 @@ import {
   seedHash as hashOfSeed,
   assertProtocol,
   DEVELOPER_ACCESS_TYPES,
+  DEVELOPER_PROTOCOL,
+  LIMITS,
   SETTLEMENT_TYPES,
   BANK_CASINO_BET_TYPES,
   MAX_DEVELOPER_BETS,
@@ -37,6 +39,9 @@ import type { PublicDeveloperBet, Round, WirePrizes } from '../../protocol/types
 export type { AssetId, PublicDeveloperBet, Round, WirePrizes };
 /** A game's key, as its developer and the name they published it under make it. */
 export { gameKey };
+/** What a casino's `GET /api/config` names for this kit to use it, as `developerProtocol` and `limits`: a stub casino
+ * in a server's test answers with them. */
+export { DEVELOPER_PROTOCOL, LIMITS };
 /** What one developer bet is paid: `player` to its player and `casino` to the casino, both from the developer's bank,
  * which took the stake when the bet was placed. Give the casino about half of what the bet was expected to earn
  * you: that is the casino's policy, and nothing enforces it. */

@@ -85,7 +85,7 @@ runtime pin, so a package records exactly what a release was made from.
 `npm test` needs Node 24.4 or later, Foundry's `anvil` on `PATH` (or named by `ANVIL_BIN`) and an installed Google
 Chrome. It builds everything, type-checks every TypeScript source and test, checks the committed
 [test vectors](../../vectors/bets.json) and the blackjack funding table, and runs every suite in [test/](../../test/),
-[sdk/test/](../../sdk/test/), each game's `test/` and roulette's server. Chain-writing tests start disposable Anvil
+[sdk/test/](../../sdk/test/) and each game's `test/`. Chain-writing tests start disposable Anvil
 deployments with [testing/contract.ts](../../testing/contract.ts), which signs evidence by hand, so the contract is
 tested with no casino at all. The main suites:
 

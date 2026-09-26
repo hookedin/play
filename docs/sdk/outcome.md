@@ -36,7 +36,8 @@ The outcome of a round's `secret` with a bet's `seed`, both 32-byte hex strings,
 | `payout`     | The sum of the payouts of every prize whose `[rangeStart, rangeEnd)` holds `value`           |
 
 A prize's fields may be decimal strings, numbers or bigints, so the wire's prizes go in as they are. With no prizes it
-gives the outcome alone, as [roulette](../../games/roulette/) reads its pocket from `outcome([], seed, secret).value`.
+gives the outcome alone, as [roulette](https://github.com/hookedin/game-roulette) reads its pocket from
+`outcome([], seed, secret).value`.
 
 ### `roundId`
 

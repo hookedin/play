@@ -35,7 +35,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-        # A game's wrangler runs from its own folder, where its build command expects to be.
         run: |
           npx wrangler deploy
           for game in games/*/; do (cd "$game" && npx wrangler deploy); done

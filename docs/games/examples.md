@@ -5,9 +5,10 @@ sidebar:
   order: 12
 ---
 
-The house's games live in play's [games/](../../games/) folder, each with its README, its tests and a Cloudflare
-deployment; they are what `@hookedin` publishes. The template is a repository of its own. Every one of them is complete:
-start from the one closest to your game.
+The house's games are what `@hookedin` publishes, each with its README, its tests and a Cloudflare deployment. The five
+static ones live in play's [games/](../../games/) folder. Roulette, the one with a server, is a repository of its own,
+[hookedin/game-roulette](https://github.com/hookedin/game-roulette), and so is the template. Every one of them is
+complete: start from the one closest to your game.
 
 | Game                                                       | What it shows                                                                | Copy                                                                                               |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -17,7 +18,7 @@ start from the one closest to your game.
 | [Samson's Gold](../../games/samson/)                       | A 243-ways slot whose prize table is counted exactly from its reels          | [src/math.ts](../../games/samson/src/math.ts)                                                      |
 | [Mines](../../games/mines/)                                | Reveal or cash out: the simplest multi-step graph                            | [src/rules.ts](../../games/mines/src/rules.ts)                                                     |
 | [Blackjack](../../games/blackjack/)                        | A multi-step game with doubles, splits and insurance, and precomputed prices | [src/game.ts](../../games/blackjack/src/game.ts), [src/view.ts](../../games/blackjack/src/view.ts) |
-| [Roulette](../../games/roulette/)                          | Many players' developer bets on one spin, backed by the wheel's casino bet   | [src/table.ts](../../games/roulette/src/table.ts), [server/](../../games/roulette/server/)         |
+| [Roulette](https://github.com/hookedin/game-roulette)      | Many players' developer bets on one spin, backed by the wheel's casino bet   | The whole repository: page, server, tests, deployment                                              |
 
 ## Game template
 
@@ -68,10 +69,12 @@ rules and generate a table of your own. [Sequential games](sequential-games.md) 
 ## Roulette
 
 One wheel per asset, shared by every player at the table: each player's layout is one developer bet, and the wheel
-backs them all with one casino bet on its own round. [src/table.ts](../../games/roulette/src/table.ts) turns chips into
-prizes and is shared by page and server; [server/wheel.ts](../../games/roulette/server/wheel.ts) is the developer, and
-[server/worker.ts](../../games/roulette/server/worker.ts) the Worker and its Durable Object. Copy it, with
-`wrangler.jsonc`, for any game where many players share one outcome ([developer bets](developer-bets.md)).
+backs them all with one casino bet on its own round.
+[src/table.ts](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into prizes and is shared
+by page and server; [server/wheel.ts](https://github.com/hookedin/game-roulette/blob/main/server/wheel.ts) is the
+developer, and [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) the Worker and
+its Durable Object. Its repository is a GitHub template that tests and deploys itself: start from it with **Use this
+template** for any game where many players share one outcome ([developer bets](developer-bets.md)).
 
 ## Running a house game
 
@@ -82,8 +85,7 @@ npm ci
 node sdk/bin/hookedin-game.js serve games/dice
 ```
 
-Then add `http://127.0.0.1:4185/manifest.json` as a custom game in the wallet. Roulette runs with its server under
-`npx wrangler dev` instead ([its README](../../games/roulette/README.md#run-it)). To make one your own, start a
-repository from the template and copy the game's `src/` and `test/` over it (and, for roulette, `server/` and
-`wrangler.jsonc`, with its build command set to `npm run build`), then set `developer` in `src/manifest.json` to your
-address.
+Then add `http://127.0.0.1:4185/manifest.json` as a custom game in the wallet. To make one your own, start a repository
+from the template and copy the game's `src/` and `test/` over it, then set `developer` in `src/manifest.json` to your
+address. Roulette runs with its server under `npm run dev` in its own repository
+([its README](https://github.com/hookedin/game-roulette#run-it)).

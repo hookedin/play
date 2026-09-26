@@ -23,12 +23,12 @@ chain needs one.
 
 ## Services
 
-| Service    | Address                          | What it is                                                                                                              |
-| ---------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Website    | https://hookedin.com             | The public site, with the [bankroll](https://hookedin.com/bankroll/) and [players](https://hookedin.com/players/) pages |
-| Wallet     | https://play.hookedin.com        | A static site built from this repository, served by a Cloudflare Worker ([wrangler.jsonc](../../wrangler.jsonc))        |
-| Casino API | https://casino.hookedin.com      | The casino service, one process behind a TLS proxy: the [Casino API](../casino-api/index.md)                            |
-| Games      | `https://<id>-game.hookedin.com` | Each house game in [games/](../../games/), a Cloudflare Worker of its own; roulette's carries its server                |
+| Service    | Address                          | What it is                                                                                                                                                                                     |
+| ---------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Website    | https://hookedin.com             | The public site, with the [bankroll](https://hookedin.com/bankroll/) and [players](https://hookedin.com/players/) pages                                                                        |
+| Wallet     | https://play.hookedin.com        | A static site built from this repository, served by a Cloudflare Worker ([wrangler.jsonc](../../wrangler.jsonc))                                                                               |
+| Casino API | https://casino.hookedin.com      | The casino service, one process behind a TLS proxy: the [Casino API](../casino-api/index.md)                                                                                                   |
+| Games      | `https://<id>-game.hookedin.com` | Each house game, a Cloudflare Worker of its own: the static ones from [games/](../../games/), roulette and its server from [hookedin/game-roulette](https://github.com/hookedin/game-roulette) |
 
 A local stack runs the same services on `127.0.0.1`: an Anvil chain on port 8545, the casino on 4183, the wallet on
 4184 (`npm run dev` serves the wallet alone) and the house games on 4185.
