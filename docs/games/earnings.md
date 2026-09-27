@@ -39,8 +39,8 @@ after admission admits the largest bets and charges only the surplus: a
 
 The tally is kept per address. Open a HookedIn wallet whose account is the one that publishes the game: import its key,
 or connect the browser wallet that holds it ([open the wallet](../wallet/getting-started.md#open-the-wallet)). With a
-channel open, the wallet collects what the tally owes by itself, as a credit its own channel key signs, into that
-channel. Nobody at the casino approves or sends anything, and the wallet page shows what your games have earned and how
+balance open, the wallet collects what the tally owes by itself, as a credit its own channel key signs, into that
+balance. Nobody at the casino approves or sends anything, and the Wallet page shows what your games have earned and how
 much of it is collected.
 
 Nothing moves on-chain and the bankroll does not change: money the casino owed you becomes your signed balance, which

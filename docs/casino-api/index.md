@@ -144,10 +144,10 @@ refused with `id-conflict`.
 After a timeout or a dropped connection the outcome is unknown. Ask
 [`GET /api/channels/:id/operations/:operationId`](channels.md#get-apichannelsidoperationsoperationid) with the
 operation's `details.id`: `200` is the recorded reply, and `404` means none is recorded, so the exact request can go
-again. An error reply means no result was recorded: `429` and `503` are temporary, so send the same request later; any
-other code says what to change, and a request with other terms is another operation, under another ID. A wallet keeps a signed
-operation until it holds a reply: it never signs a different operation at the same sequence in the meantime. The
-casino answers an exact retry of a recorded operation even while its chain observation is stale.
+again. An error reply means no result was recorded: `429`, `503` and `unconfirmed` are temporary, so send the same
+request later; any other code says what to change, and a request with other terms is another operation, under another
+ID. A wallet keeps a signed operation until it holds a reply: it never signs a different operation at the same sequence
+in the meantime. The casino answers an exact retry of a recorded operation even while its chain observation is stale.
 
 ## Pages
 
@@ -207,6 +207,7 @@ A refusal is `{"error": "…", "code": "…"}`: the text is for people, and the 
 | `channel-closed`     | 409    | The channel is closing or closed                                                                                                                                                                                                               |
 | `id-conflict`        | 409    | The operation ID is bound to another operation                                                                                                                                                                                                 |
 | `not-due`            | 409    | A credit for money the casino does not owe                                                                                                                                                                                                     |
+| `unconfirmed`        | 409    | A deposit operation for money the casino has not seen confirmed on-chain yet; the same request can go again later                                                                                                                              |
 | `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                      |
 | `bank-short`         | 409    | The developer's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                   |
 | `taken`              | 409    | Another player holds the alias, or one that reads the same                                                                                                                                                                                     |

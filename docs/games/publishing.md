@@ -28,8 +28,8 @@ send the same headers yourself. Their Content-Security-Policy keeps the page to 
 it.
 
 The game's URL is the address of `dist/index.html`, such as `https://game.example.com/`
-([game URL](../reference/game-url.md)). Once hosted, anyone can play it by that URL, with **Open a game by URL** in the
-library or through `https://play.hookedin.com/games/custom?url=<encoded game URL>`.
+([game URL](../reference/game-url.md)). Once hosted, anyone can play it by that URL, with **Open a game by its URL** in
+the library or through `https://play.hookedin.com/games/custom?url=<encoded game URL>`.
 
 ## Deploy to Cloudflare
 
@@ -63,10 +63,10 @@ push deploys it.
 ## Publish it in My games
 
 Publish from the wallet of the account that is to be the game's developer, and a game with a server from the account
-whose key the server holds. On **My account → My games**, under **Games you publish**, enter the game's name and its
-URL, and choose **Publish**. The wallet fetches nothing first.
+whose key the server holds. On **My games**, in the account menu, under **Publish a game**, enter the game's name and
+its URL, and choose **Publish**. The wallet fetches nothing first.
 
-Publishing needs a funded ETH channel, and a profile holds 100 games; taking a game down with **Remove** needs neither.
+Publishing needs an open balance, and a profile holds 100 games; taking a game down with **Take down** needs neither.
 The exact rules for names and URLs are in the [game URL reference](../reference/game-url.md#publishing).
 
 The game is then at `https://play.hookedin.com/@<alias>/<name>`, or `/~<uname>/<name>` for an account with no alias,

@@ -35,7 +35,7 @@ copies `src/icon.svg` into `dist/` beside the page, like any other file.
 | Route                                  | Opens                                                                                                                               |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `/@<alias>/<name>`, `/~<uname>/<name>` | A published game, at the URL its profile records ([`GET /api/players/:name/:game`](../casino-api/public.md#get-apiplayersnamegame)) |
-| `/games/custom?url=<encoded game URL>` | Any game, by its URL alone, as **Open a game by URL** in the library does                                                           |
+| `/games/custom?url=<encoded game URL>` | Any game, by its URL alone, as **Open a game by its URL** in the library does                                                       |
 
 A published game's developer is the account that published it, and its [key](signed-messages.md#game-keys) is
 `keccak256(abi.encode(address developer, string name))` with that account's address and the name it is published
@@ -59,9 +59,9 @@ casino bet's, its bank takes the game's developer bets, and its key settles them
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Name     | 1 to 32 lower-case letters, digits or hyphens, not starting with a hyphen: `^[a-z0-9][a-z0-9-]{0,31}$`                                                                 |
 | URL      | At most 300 characters. `https:`, or `http:` only for `localhost`, `127.0.0.1` or `[::1]`. No user name or password, no fragment. Kept as the URL parser normalises it |
-| Account  | Has a funded channel that is not closing                                                                                                                               |
+| Account  | Has an open channel that is not closing                                                                                                                                |
 | Profile  | Holds at most 100 games. Publishing a name again points it at another URL                                                                                              |
-| Removing | Needs no funded channel                                                                                                                                                |
+| Removing | Needs no open channel                                                                                                                                                  |
 
 The casino refuses a URL the parser cannot read with "A game is the URL of its page". A published game's key stays the
 same wherever the game is served. See [publishing](../games/publishing.md).

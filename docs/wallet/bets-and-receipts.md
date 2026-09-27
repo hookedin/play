@@ -8,7 +8,7 @@ sidebar:
 The wallet keeps a receipt of everything it signs, and shows your bets from those receipts. No game states what it pays
 back: every figure here is measured from bets that really happened.
 
-## Bet history
+## Bets
 
 **Bets** in the top bar, `/bets`, lists every settled bet this wallet signed, newest first: each casino bet, and each
 developer bet once what it was paid has been collected. A row shows the game, the time, the stake, what the bet paid
@@ -70,13 +70,13 @@ a prize, the bet for it must carry more edge still for the bankroll to take it: 
 Plinko's 16-row low board, its rarest bet pays back about 22%.
 
 My games lists the games you have played, your favourites first and then the most staked. A favourite is a note in this
-browser, never signed or sent anywhere. Each game links to its public record, and **Play again** reopens a game the
-library has shown.
+browser, never signed or sent anywhere. Each game links to its public record, and **Play** reopens a game the library
+has shown.
 
 ## Groups
 
 A game can give its bets and payments a **group**, a label of up to 64 characters that ties them together: the steps of
-one hand, the bets of one spin, one match. Bet history shows the bets of one group in one game as a single row, with
+one hand, the bets of one spin, one match. **Bets** shows the bets of one group in one game as a single row, with
 how many bets it holds and their net result; opening it lists each bet. Only the net is added up: a multi-step game
 stakes again what its last step paid, so adding its stakes or its payouts would count the same money more than once.
 
@@ -110,30 +110,31 @@ Anyone can judge a game by what it has paid, without taking the game's word for 
 
 ## Developer bets
 
-A developer bet's stake is with the game's developer from the moment it is placed. **My wallet** lists your developer
+A developer bet's stake is with the game's developer from the moment it is placed. The Wallet page lists your developer
 bets under **Developer bets** until what each was paid has been collected:
 
 | Status                    | Meaning                                                                       |
 | ------------------------- | ----------------------------------------------------------------------------- |
 | Waiting for the developer | Open: the stake is in the developer's bank, and the developer has not settled |
-| Payout ready              | Settled, and the payout is not yet in your channel                            |
-| Payout collected          | The payout is in your channel                                                 |
+| Payout ready              | Settled, and the payout is not yet in your balance                            |
+| Payout collected          | The payout is in your balance                                                 |
 | Settled · no payout       | Settled for nothing: there is nothing to collect                              |
 
-Every 4 seconds while the wallet's tab is visible, and when you press **Check results and collect payouts**, the wallet
-asks the casino for your settled bets. For each, it checks the developer's signed `Settlement` against the bet you
-signed (its hash, its stake and its developer) and signs a credit for exactly what the settlement pays you, into your
-channel. If the game that placed the bet is open with ETH, the wallet sends it the settled receipt, and the payout
-raises the game's limit. A collected developer bet then appears in bet history.
+Every 4 seconds while the wallet's tab is visible, and when you press **Check now**, the wallet asks the casino for your
+settled bets. For each, it checks the developer's signed `Settlement` against the bet you signed (its hash, its stake
+and its developer) and signs a credit for exactly what the settlement pays you, into your balance. If the game that
+placed the bet is open with ETH, the wallet sends it the settled receipt, and the payout raises the game's limit. A
+collected developer bet then appears in bet history.
 
 Stakes with developers and payouts not yet collected are apart from your signed balance: they are not in the channel,
 and the contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).
 
 ## Activity
 
-**Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, deposits,
-closes, collected claims, and bankroll and bank movements. A row expands to its operation ID, channel, sequence and
-commission, and for a transaction its hash (linked to Sepolia Etherscan) and block, with the raw JSON behind it. An
-off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**, **Reverted**, **Replaced** or
-**Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100 receipts, and the receipt of
-every developer bet still open.
+**Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, bankroll and
+bank movements, and transactions: **Deposited**, **Withdrawn to your vault** (a withdrawal or a collected claim),
+**Sent from your vault**, **Balance closed** and **Close challenged**. A row expands to its operation ID, channel,
+sequence and commission, and for a transaction its hash (linked to Sepolia Etherscan), its block and a send's recipient,
+with the raw JSON behind it. An off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**,
+**Reverted**, **Replaced** or **Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100
+receipts, and the receipt of every developer bet still open.

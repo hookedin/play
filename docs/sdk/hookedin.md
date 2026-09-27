@@ -394,7 +394,7 @@ export interface Asset {
 }
 ```
 
-What the wallet counts in, as a player reads it: the network's ETH (symbol `ETH` or `Sepolia ETH`), in
+What the wallet counts in, as a player reads it: the network's ETH (symbol `ETH`), in
 [practice](../reference/bridge.md#practice) as with money. It counts in units of 10^-18: `decimals` is 18.
 
 ### `WalletLimits`

@@ -11,12 +11,14 @@ carry trust of their own, set out below.
 
 ## What the contract enforces
 
-- **Your deposit is protected while the channel is open.** The contract counts every open deposit as protected
-  principal. The owner can withdraw only what the contract holds beyond protected principal and finalized winnings.
-- **Losses are real.** At closure the contract protects `min(deposit, balance)`. It does not refund what you lost.
+- **Your deposits are protected while the channel is open.** The contract counts every deposit into an open channel,
+  the first and every later one, as protected principal. The owner can withdraw only what the contract holds beyond
+  protected principal and finalized winnings.
+- **Losses are real.** At closure the contract protects what you deposited only up to what the close is owed,
+  `min(deposits, owed)`. It does not refund what you lost.
 - **Only signed states settle.** A channel closes to a balance both sides signed, or to that balance plus one operation
-  the channel key authorized and the casino signed, settled by the secret and seed that hash to what the bet named.
-  Every signature is bound to the chain and to this contract.
+  the channel key authorized and the casino signed, settled by the secret and seed that hash to what the bet named. A
+  deposit that balance has not taken in is added to it. Every signature is bound to the chain and to this contract.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
   claim, with no casino server involved. The challenge window is a fixed 24 hours, and a challenge never extends it.
 - **Winnings are recorded, and paid in order.** Finalizing records unpaid winnings permanently. The contract pays them
@@ -31,9 +33,10 @@ carry trust of their own, set out below.
 - **One operator signs and holds the bankroll.** The account that deployed the contract is its owner and the only
   settlement signer. It controls the house bankroll, including through signed winning balances for accounts it controls:
   the bankroll is trusted to it, not protected from it.
-- **Paying winnings.** Anything above your deposit is an unsecured claim on the shared bankroll. Neither replenishment
-  nor a payout deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is
-  covered. This is a deliberate choice of capital efficiency ([architecture](architecture.md#money-and-authority)).
+- **Paying winnings.** Anything above what you deposited is an unsecured claim on the shared bankroll. Neither
+  replenishment nor a payout deadline is guaranteed, and the ETH visible in the contract does not prove that every
+  signed balance is covered. This is a deliberate choice of capital efficiency
+  ([architecture](architecture.md#money-and-authority)).
 - **Admitting bets.** The casino sizes each casino bet against its bankroll with a Kelly rule and sets its commission.
   That is its own risk management: the contract does not enforce it and the wallet does not check it.
 - **Completing bets.** The casino can decline a casino bet, go offline or never answer, with no protocol penalty. A
@@ -49,14 +52,15 @@ carry trust of their own, set out below.
 
 - **Watch your channel.** Either side can start a unilateral close, and the casino could close with an older signed
   state. A challenge with your newer evidence must be mined within 24 hours of the close starting, or the older, lower
-  balance becomes final. Opening the wallet does not send a challenge: you press **Challenge stale close**, or run a
+  balance becomes final. Opening the wallet does not send a challenge: you press **Challenge the close**, or run a
   [watchtower](../wallet/backups-and-recovery.md#the-watchtower). The casino's own watcher defends channels in the
   casino's interest, not yours.
 - **Keep your evidence.** Your latest signed state is your proof. Export recovery bundles, and keep an encrypted backup
   of every account you fund: a key alone cannot rebuild an off-chain balance
   ([backups and recovery](../wallet/backups-and-recovery.md)).
-- **Keep ETH for the exit.** Closing, challenging, finalizing and collecting are transactions. The wallet keeps 0.001 ETH
-  aside when you deposit, a floor rather than a guaranteed budget.
+- **Keep ETH for the exit.** Closing, challenging, finalizing and collecting are transactions. The wallet keeps
+  0.001 ETH in your vault when you deposit, and when you send from it while a balance is open: a floor rather than a
+  guaranteed budget.
 - **Set each game's limit.** You choose how much each game may play with, and the wallet holds it to that.
 
 ## What a game can and cannot do

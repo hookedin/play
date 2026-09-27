@@ -19,9 +19,11 @@ Registers a channel with the casino, or returns it if the casino already knows i
 **Auth:** channel access · **Idempotent:** yes: a known channel is returned as it stands
 
 A channel is opened on-chain first, and its deposit must be confirmed (2 blocks on Sepolia, 1 on Anvil). The casino
-reads it at its last observed block and requires the same funding account, channel key, deposit and genesis hash as the
-opening. The token is the channel key's, for `:id`. A channel the casino knows is authenticated and returned with no
-chain read. Registering a channel counts against [budgets](index.md#budgets-and-queues) of its own.
+reads it at its last observed block and requires the same funding account, channel key and genesis hash as the opening,
+whose deposit the channel ID fixes. The channel may hold more than that by then, from
+[deposits](../reference/contract.md#functions-that-change-state) since. The token is the channel key's, for `:id`. A
+channel the casino knows is authenticated and returned with no chain read. Registering a channel counts against
+[budgets](index.md#budgets-and-queues) of its own.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
@@ -59,7 +61,8 @@ The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows 
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "1000000000000000000"
+    "balance": "1000000000000000000",
+    "deposited": "1000000000000000000"
   },
   "playerSignature": "0x",
   "casinoSignature": "0x",
@@ -130,7 +133,8 @@ evidence.
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "1000000000000000000"
+    "balance": "1000000000000000000",
+    "deposited": "1000000000000000000"
   },
   "playerSignature": "0x",
   "casinoSignature": "0x",
@@ -188,8 +192,8 @@ only before a channel's first casino bet or after losing track. The body is igno
 
 ### `POST /api/channels/:id/operations`
 
-Submits one signed operation, a casino bet, a debit or a credit, and answers with the casino's signed result or its
-signed rejection.
+Submits one signed operation, a casino bet, a debit, a credit or a deposit, and answers with the casino's signed result
+or its signed rejection.
 
 **Auth:** channel access · **Idempotent:** yes, by operation ID
 
@@ -212,15 +216,16 @@ returns the recorded reply; see [retries](index.md#operations-and-retries).
 
 What the casino checks and answers, by operation:
 
-| Operation                   | Details                                                  | The casino                                                                                                                                                                                                                                                                                           | The reply adds                                                                                       |
-| --------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Casino bet, kind 1          | `{id, game, group?}`                                     | Needs `seed` when the bet is on the channel's own open round (`400` `invalid` without it); declines a bet on any other round. Admits the bet by [the Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager) before it reads the round's secret, and declines what the bankroll cannot take | `commission`; `developer` when the game is published; `nextRound`; when declined, `secret` or `lost` |
-| Payment, kind 2             | `{id, game, group?}`                                     | Moves the amount into the bankroll                                                                                                                                                                                                                                                                   | –                                                                                                    |
-| Developer bet, kind 2       | `{id, game, group?, meta}`                               | Moves the stake into the bank of the game's developer; declines a bet on a game nobody publishes                                                                                                                                                                                                     | –                                                                                                    |
-| Investment, kind 2          | `{id, counterparty: FUND_ID}`                            | Mints shares to the channel's player at the current price; declines one too small to buy a share, and one while shares are in issue and the fund's equity is not positive                                                                                                                            | `statement`: the `ShareStatement`                                                                    |
-| Bank deposit, kind 2        | `{id, counterparty: BANK_ID}`                            | Moves the amount into the bank of the channel's own account                                                                                                                                                                                                                                          | `statement`: the `BankStatement`                                                                     |
-| Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                       | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                      | –                                                                                                    |
-| Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID or the bet's hash}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                       | –                                                                                                    |
+| Operation                   | Details                                                  | The casino                                                                                                                                                                                                                                                                                                            | The reply adds                                                                                       |
+| --------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Casino bet, kind 1          | `{id, game, group?}`                                     | Needs `seed` when the bet is on the channel's own open round (`400` `invalid` without it); declines a bet on any other round. Admits the bet by [the Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager) before it reads the round's secret, and declines what the bankroll cannot take                  | `commission`; `developer` when the game is published; `nextRound`; when declined, `secret` or `lost` |
+| Payment, kind 2             | `{id, game, group?}`                                     | Moves the amount into the bankroll                                                                                                                                                                                                                                                                                    | –                                                                                                    |
+| Developer bet, kind 2       | `{id, game, group?, meta}`                               | Moves the stake into the bank of the game's developer; declines a bet on a game nobody publishes                                                                                                                                                                                                                      | –                                                                                                    |
+| Investment, kind 2          | `{id, counterparty: FUND_ID}`                            | Mints shares to the channel's player at the current price; declines one too small to buy a share, and one while shares are in issue and the fund's equity is not positive                                                                                                                                             | `statement`: the `ShareStatement`                                                                    |
+| Bank deposit, kind 2        | `{id, counterparty: BANK_ID}`                            | Moves the amount into the bank of the channel's own account                                                                                                                                                                                                                                                           | `statement`: the `BankStatement`                                                                     |
+| Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                       | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                                       | –                                                                                                    |
+| Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID or the bet's hash}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                                        | –                                                                                                    |
+| Deposit, kind 4             | `{id}`                                                   | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposit covers the state's `deposited` plus the amount. When it has not seen that, it reads the chain again, and refuses with `unconfirmed` if it still has not, signing nothing | –                                                                                                    |
 
 A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already
 carried out on another channel is declined with `used: true`. A developer bet is known afterwards by the hash of its
@@ -279,7 +284,8 @@ A casino bet, and its signed result:
     "sequence": "1",
     "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
     "transitionHash": "0x020c50b991fa94180f2fd157d752507789eaad1473072f49a7e5e69ad63af98d",
-    "balance": "999000000000000000"
+    "balance": "999000000000000000",
+    "deposited": "1000000000000000000"
   },
   "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c",
   "evidence": {
@@ -288,7 +294,8 @@ A casino bet, and its signed result:
       "sequence": "0",
       "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "balance": "1000000000000000000"
+      "balance": "1000000000000000000",
+      "deposited": "1000000000000000000"
     },
     "playerSignature": "0x",
     "casinoSignature": "0x",
@@ -380,7 +387,8 @@ rejection reveals the round's secret and names the next round.
     "sequence": "3",
     "previousStateHash": "0xa959347273365dd6d3c634256dfbbe4db6e7d303bab27f61f513462fd23eef9b",
     "transitionHash": "0xa262900681d266388a0f304a73585f7b735ac12a67c983141e3acac853c066ea",
-    "balance": "999000000000000000"
+    "balance": "999000000000000000",
+    "deposited": "1000000000000000000"
   },
   "casinoSignature": "0x964cbf1f7187376516b175222c69d194f11b36ffe1ea921904b39bbfdb37a75a4df4dae5225ded059a5f0924da7b6cb0e81dfcb842fc2e2ad16c387b7cc1f7041c",
   "commission": "0",
@@ -390,7 +398,8 @@ rejection reveals the round's secret and names the next round.
       "sequence": "1",
       "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
       "transitionHash": "0x020c50b991fa94180f2fd157d752507789eaad1473072f49a7e5e69ad63af98d",
-      "balance": "999000000000000000"
+      "balance": "999000000000000000",
+      "deposited": "1000000000000000000"
     },
     "playerSignature": "0x9ad43b0deb9eb2a01ded1c8d65fd27ca0bda08aea2b3954045bb0005dd1414905bbf91adc2e6040181d0134903b61faa04d07616343810cb7d45c6e50bea13981c",
     "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c",
@@ -440,9 +449,9 @@ that is not the channel's next, an amount above the balance, and a casino bet wh
 
 **Errors:** [`unauthorized`](index.md#errors) (401), [`invalid`](index.md#errors) (400), [`invalid`](index.md#errors)
 (409), [`unacknowledged`](index.md#errors) (409), [`channel-closed`](index.md#errors) (409),
-[`id-conflict`](index.md#errors) (409), [`not-due`](index.md#errors) (409), [`refused`](index.md#errors) (409),
-[`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503),
-[`too-large`](index.md#errors) (413)
+[`id-conflict`](index.md#errors) (409), [`not-due`](index.md#errors) (409), [`unconfirmed`](index.md#errors) (409),
+[`refused`](index.md#errors) (409), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429),
+[`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
 
 ### `GET /api/channels/:id/operations/:operationId`
 
@@ -467,7 +476,8 @@ The reply is the operation's reply as recorded, without `bankroll` and `nextRoun
     "sequence": "1",
     "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
     "transitionHash": "0x020c50b991fa94180f2fd157d752507789eaad1473072f49a7e5e69ad63af98d",
-    "balance": "999000000000000000"
+    "balance": "999000000000000000",
+    "deposited": "1000000000000000000"
   },
   "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c",
   "evidence": {
@@ -476,7 +486,8 @@ The reply is the operation's reply as recorded, without `bankroll` and `nextRoun
       "sequence": "0",
       "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "balance": "1000000000000000000"
+      "balance": "1000000000000000000",
+      "deposited": "1000000000000000000"
     },
     "playerSignature": "0x",
     "casinoSignature": "0x",
@@ -554,7 +565,7 @@ answers `{"acknowledged": true}` all the same.
 ### `POST /api/channels/:id/close`
 
 Asks for the casino's `Close` signature over the channel's latest checkpoint, to close it at once on-chain with
-`cooperativeClose`.
+`cooperativeClose`, which pays the player in the same transaction.
 
 **Auth:** channel access · **Idempotent:** yes
 
@@ -586,7 +597,8 @@ The wallet then calls [`cooperativeClose`](../reference/contract.md#functions-th
       "sequence": "8",
       "previousStateHash": "0x4b50de24e2c162784bd97161b6137926ee06832337e8f0470b4bc0ced254a146",
       "transitionHash": "0xc7a0466a9b9906cc5f28f2d8fe420bb034ec0fd679305df42cdef0ff7b8f7172",
-      "balance": "991900000000000000"
+      "balance": "991900000000000000",
+      "deposited": "1000000000000000000"
     },
     "playerSignature": "0x5d61d4e9d0641ccbda471882a0c2a389be37e36c3b18361848e2d98eae84db8175dc10003384263e0199cce95112273296c9fc17f347c015dbeebfe0435df99b1c",
     "casinoSignature": "0xcc40131e943130644dab7fe411806a3c0c46b493e7573df6499dbc7ee85fdba103f362e4ca4ebcd9ad0b4482707c35fad7ffb4d00c580e07275de09a1c3b1d5a1b",

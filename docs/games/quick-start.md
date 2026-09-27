@@ -52,7 +52,7 @@ This runs [`hookedin-game serve`](../reference/cli.md#serve): it builds `src/` i
 ## Open it in the wallet
 
 1. Open [play.hookedin.com](https://play.hookedin.com) and go to **Games**.
-2. Choose **Open a game by URL**, enter `http://127.0.0.1:4185/` as the **Game URL** and choose **Open game**.
+2. Choose **Open a game by its URL**, enter `http://127.0.0.1:4185/` and choose **Open**.
 
 The wallet frames the page from your machine in a sandbox and connects the bridge. The probe prints the replies to
 `wallet.hello` and `wallet.info` as it starts. A game served from your machine plays against the public wallet and

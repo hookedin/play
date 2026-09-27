@@ -77,7 +77,7 @@ node sdk/bin/hookedin-game.js serve games/mines
 This builds the game into `dist/` and serves it at `http://127.0.0.1:4185/` (set `PORT` to move it). Then:
 
 1. Open the wallet at [play.hookedin.com](https://play.hookedin.com).
-2. Go to **Games**, choose **Open a game by URL** and open `http://127.0.0.1:4185/`.
+2. Go to **Games**, choose **Open a game by its URL** and open `http://127.0.0.1:4185/`.
 
 A game served from your own machine works against any HookedIn wallet and casino, because your browser loads both the wallet and the page. Testing against a fully local stack needs the casino server, which is private; its `npm run dev` runs this game with the rest of the stack. Most developers should use the public Sepolia deployment at play.hookedin.com.
 
@@ -100,7 +100,7 @@ You earn half the commission on every bet placed through your game once you publ
 
 Any static host works. It must send the headers in `dist/_headers`, which Cloudflare applies by itself, among them the page's Content-Security-Policy. Do not host the game on the wallet's own origin; the wallet refuses that.
 
-Your game is then playable by anyone who opens its URL, such as `https://your-host/`, with **Open a game by URL**, or through the link `https://play.hookedin.com/games/custom?url=<encoded game URL>`.
+Your game is then playable by anyone who opens its URL, such as `https://your-host/`, with **Open a game by its URL**, or through the link `https://play.hookedin.com/games/custom?url=<encoded game URL>`.
 
 ## Get listed
 

@@ -27,26 +27,30 @@ a git submodule, so it always runs an exact public protocol revision.
 | Game frame ([SDK](../sdk/index.md))                                               | Run its own rules, request casino and developer bets, read results from the receipts the wallet checked; no keys and no future outcome entropy                                |
 | [Recovery](../../protocol/recovery.ts), [watchtower](../../scripts/watchtower.ts) | Verify exported evidence against current canonical contract state without the casino API or payment logs, and challenge with it                                               |
 
-Players open and fund channels on-chain without the casino's authorization. Activation checks the confirmed deposit and
-the channel key's authentication before the casino keeps any state for the channel. The genesis checkpoint supports
-unilateral recovery of the deposit. Randomness is not channel state: each casino bet names the round that settles it.
+Players open and fund channels on-chain without the casino's authorization. Activation checks the confirmed opening, the
+channel ID and genesis hash the contract registered, and the channel key's authentication before the casino keeps any
+state for the channel. A player adds to an open channel on-chain the same way; the balance takes the money in with a
+deposit operation, which the casino signs only once it has seen that much confirmed, and until then a close adds it to
+what the channel is owed. The genesis checkpoint supports unilateral recovery of every deposit. Randomness is not
+channel state: each casino bet names the round that settles it.
 
-The contract settles money and nothing else: a casino bet, a debit or a credit ([how it works](how-it-works.md#channels)).
-What an operation means (its name, the game that asked for it, what it pays into or collects from) is the hash `memo`,
-which the wallet and the casino check and keep and the contract never reads. A jointly signed checkpoint can establish
-any balance both sides accept; one transition the channel key authorized and the casino signed extends it without a
-final acknowledgment from the player. The EIP-712 domain binds the name `HookedIn`, version `1`, the chain and the
-deployment. Risk admission and commission belong to the casino, and what a game means by its bets to the game. The
-wallet and the contract check a casino bet's stake, chance and prize, the round's secret, the sequence and the
-arithmetic bounds, and the wallet records the exact return of what the player signed. A bet and a payment sign
-the game that asked for them, by its key, and any group the game gave them, so the game a player's money went to is part
-of the signed record and the casino tallies commission per game. Commission is not in the signed operation.
+The contract settles money and nothing else: a casino bet, a debit, a credit or a deposit
+([how it works](how-it-works.md#channels)). What an operation means (its name, the game that asked for it, what it pays
+into or collects from) is the hash `memo`, which the wallet and the casino check and keep and the contract never reads.
+A jointly signed checkpoint can establish any balance both sides accept; one transition the channel key authorized and
+the casino signed extends it without a final acknowledgment from the player. The EIP-712 domain binds the name
+`HookedIn`, version `1`, the chain and the deployment. Risk admission and commission belong to the casino, and what a
+game means by its bets to the game. The wallet and the contract check a casino bet's stake, chance and prize, the
+round's secret, the sequence and the arithmetic bounds, and the wallet records the exact return of what the player
+signed. A bet and a payment sign the game that asked for them, by its key, and any group the game gave them, so the game
+a player's money went to is part of the signed record and the casino tallies commission per game. Commission is not in
+the signed operation.
 
 The contract reads operations and signatures from calldata, reuses computed hashes, packs a channel's status and deadline
 with its player address, and uses a transient reentrancy guard. A claim's beneficiary comes from channel ownership, and
 the claim stores only its current payout recipient.
 
-A channel holds ETH. A wallet with no funded channel practices with play money of its own
+A channel holds ETH. A wallet with no open channel practices with play money of its own
 ([practice](how-it-works.md#practice)): it settles a game's casino bets and payments itself and sends the casino
 nothing, so no play money is in any channel, book or record.
 
@@ -55,11 +59,14 @@ nothing, so no play money is in any channel, book or record.
 The deployer is the only owner and settlement signer. It controls house liquidity, including through jointly signed
 winning checkpoints for accounts it controls.
 
-An open deposit is fully protected. Finalization protects `min(deposit, accepted balance)` and records the remainder as
-winnings debt, so losses reduce the principal returned. Finalization never calls a recipient: a separate collection
-transaction pays protected principal and allocated winnings, and a rejected transfer reverts that collection and keeps
-the whole unpaid claim. Paid totals are derived from the original amount less the principal and winnings remaining. The
-beneficiary can redirect collection. Every channel finalizes once.
+Every deposit into an open channel is fully protected, the first and every later one. A close is owed the accepted
+balance plus the deposits it has not taken in, and a state that has taken in more than was deposited closes nothing.
+Finalization protects `min(deposits, owed)` and records the remainder as winnings debt, so losses reduce the principal
+returned. Finalization never calls a recipient. A cooperative close, which both sides signed, collects in the same
+transaction: it pays protected principal and allocated winnings, and a recipient that refuses payment reverts the whole
+close, so that player closes unilaterally. After a unilateral close, a separate collection transaction pays, and a
+rejected transfer reverts that collection and keeps the whole unpaid claim. Paid totals are derived from the original
+amount less the principal and winnings remaining. The beneficiary can redirect collection. Every channel finalizes once.
 
 Finalized winnings are allocated first in, first out. A recipient that rejects payment keeps its allocation without
 stopping later cash from reaching the claims behind it. Funding and collection allocate at most eight entries, and an
@@ -178,13 +185,14 @@ and everything with ETH waits for it; a failed check leaves the wallet practicin
 tab does not poll the chain ([deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
 A game's spending limit is a reservation against the signed channel balance, held only in the open tab's memory
-([games and limits](../wallet/games-and-limits.md#giving-a-game-money)). It signs nothing, so the player can set it
-while an operation is pending, up to the balance less what that operation has committed. A result recovered after a
-reload changes only the channel balance. A game that practices has no limit: it plays with play money, which the wallet
-keeps beside the channel and never mixes into it. A game's operation IDs belong to the player and the game, not to a
-channel, so exact retries and receipt lookups by the game's own IDs work across the player's channels without game
-records in the wallet, and the casino declines an ID its player already used on another channel rather than carry it out
-twice. There is no game account in the contract or at the casino.
+([games and limits](../wallet/games-and-limits.md#giving-a-game-money)); money deposited and not yet taken in is not
+part of it. It signs nothing, so the player can set it while an operation is pending, up to the balance less what that
+operation has committed. A result recovered after a reload changes only the channel balance. A game that practices has
+no limit: it plays with play money, which the wallet keeps beside the channel and never mixes into it. A game's
+operation IDs belong to the player and the game, not to a channel, so exact retries and receipt lookups by the game's
+own IDs work across the player's channels without game records in the wallet, and the casino declines an ID its player
+already used on another channel rather than carry it out twice. There is no game account in the contract or at the
+casino.
 
 Encrypted backups hold only the selected account
 ([backups and recovery](../wallet/backups-and-recovery.md#encrypted-backups)); keys alone cannot rebuild signed
@@ -276,8 +284,8 @@ immediate cooperative close needs the funding account and the casino. Every sign
 signature, so a contract account that funds a channel exits through a unilateral close.
 
 **Players must watch their channel and get a challenge of a stale close mined before the deadline.** The wallet shows
-the observation time, the saved and proposed sequences, the balance at risk, the deadline and any pending challenge,
-with the protected principal, unpaid winnings and allocated winnings of each claim
+what was deposited, the observation time, the saved and proposed sequences, the balance at risk, the deadline and any
+pending challenge, and for each claim what is still owed and what can be collected now
 ([closing and claims](../wallet/closing-and-claims.md)). Opening the wallet does not send a challenge. The 0.001 ETH
 reserve is a convenience floor, not a guaranteed gas budget. An independent watchtower is optional; the casino's
 watcher does not protect against a malicious casino.

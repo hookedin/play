@@ -5,15 +5,15 @@ sidebar:
   order: 7
 ---
 
-The bankroll that backs casino bets is open to investors. You move money from your ETH channel into the bankroll and
-hold shares of it: when players lose, every share is worth more, and when they win, less. Live figures are at
+The bankroll that backs casino bets is open to investors. You move money from your balance into the bankroll and hold
+shares of it: when players lose, every share is worth more, and when they win, less. Live figures are at
 https://hookedin.com/bankroll/.
 
 ## Investing
 
-On **Bankroll**, `/bankroll`, enter an amount under **Invest** and press **Buy shares**. The wallet signs a debit from
-your ETH channel whose details name the fund, `FUND_ID = keccak256("HOOKEDIN/BANKROLL")`. No ETH moves on-chain: your
-signed balance falls, and the casino's bankroll rises by the same amount, which widens what it can admit.
+On **Bankroll**, `/bankroll`, enter an amount under **Buy shares with** and press **Buy shares**. The wallet signs a
+debit from your balance whose details name the fund, `FUND_ID = keccak256("HOOKEDIN/BANKROLL")`. No ETH moves on-chain:
+your signed balance falls, and the casino's bankroll rises by the same amount, which widens what it can admit.
 
 The casino prices the investment when it takes it:
 
@@ -27,8 +27,8 @@ wei. The wallet shows shares with 18 decimals, like ETH, so a whole share began 
 bankroll has made or lost since.
 
 Your holding belongs to your funding account's address, not to a channel, so it outlives every channel you open. The
-fund takes ETH only, so buying and selling need an open funded channel. An amount too small to buy a share, or a
-bankroll with nothing left, is declined with a signed rejection, and your balance is unchanged.
+fund takes ETH only, so buying and selling need an open balance. An amount too small to buy a share, or a bankroll with
+nothing left, is declined with a signed rejection, and your balance is unchanged.
 
 ## The statements your wallet checks
 
@@ -59,7 +59,7 @@ recorded statement. The casino burns the shares at the price of that moment:
 amount = shares × equity / totalShares    rounded down
 ```
 
-That amount leaves the bankroll at once and is owed to you. The wallet collects it into your channel with a credit that
+That amount leaves the bankroll at once and is owed to you. The wallet collects it into your balance with a credit that
 names the fund, and signs such a credit only for an amount one of its own statements priced. A sale larger than the
 bankroll not reserved for casino bets in progress is refused until those bets settle. Buying and selling at the going
 price leave every other share worth what it was.
@@ -80,6 +80,6 @@ the price does not move. The house cannot give up shares it does not have: what 
 loss every holder bears, and the quote reports it as `overdrawn` from then on. The Bankroll page then says how much
 more the owner has withdrawn than its own shares covered.
 
-While your channel is open, the contract still protects your whole original deposit, so the owner cannot withdraw it.
-That protection ends when the channel closes, and your shares remain the casino's promise
+While your balance is open, the contract still protects everything you deposited into it, so the owner cannot withdraw
+it. That protection ends when the channel closes, and your shares remain the casino's promise
 ([trust model](../overview/trust-model.md#fund-shares-are-the-casinos-promise)).

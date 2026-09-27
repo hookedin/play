@@ -1,39 +1,46 @@
 ---
 title: How it works
-description: Channels, rounds, casino and developer bets, the bankroll, closing and practice, in one pass.
+description: Channels, deposits, rounds, casino and developer bets, the bankroll, closing and practice, in one pass.
 sidebar:
   order: 1
 ---
 
-HookedIn keeps a running balance between you and the casino in a **channel**. The contract holds your deposit, every bet
-is a pair of signed messages that moves the balance, and the chain is needed only to open the channel and to settle it.
+HookedIn keeps a running balance between you and the casino in a **channel**. The contract holds what you deposit,
+every bet is a pair of signed messages that moves the balance, and the chain is needed only to open the channel, to
+deposit into it and to settle it.
 
 ![The game and the wallet in your browser, the casino API and the contract](how-it-works.svg)
 
 The game runs in a sandboxed frame beside the wallet and asks it for bets over a message bridge. The wallet signs each
 bet and sends it to the casino, which answers with a signed result. The wallet sends every on-chain transaction itself,
-from your funding account: the deposit, a close, a challenge, a claim. The casino watches the contract and can close a
+from your funding account: a deposit, a close, a challenge, a claim. The casino watches the contract and can close a
 channel too.
 
 ## Channels
 
 **Open.** One transaction, `openChannel(signer)`, opens a channel. It comes from your **funding account**, the account
-whose ETH you deposit, and `signer` is the address of a fresh **channel key** the wallet generates for this channel. The
-contract derives the channel ID as `keccak256(abi.encode(player, signer, deposit))`, records who funded the channel and
-which key signs for it, and protects the deposit. The casino's permission is not needed. A funding account has one open
-channel at a time: to add money, close the channel and open another. Once the deposit has two confirmations on Sepolia,
-the wallet registers the channel with the casino.
+whose ETH you deposit, which the wallet shows as your **vault**, and `signer` is the address of a fresh **channel key**
+the wallet generates for this channel. The contract derives the channel ID as
+`keccak256(abi.encode(player, signer, deposit))`, records who funded the channel and which key signs for it, and
+protects the deposit. The casino's permission is not needed. A funding account has one open channel at a time. Once the
+deposit has two confirmations on Sepolia, the wallet registers the channel with the casino.
+
+**Deposit.** `deposit(channelId)` adds money to the open channel, protected like the first deposit. The balance takes it
+in with a **deposit** operation, which the casino signs once it has seen the money confirmed on-chain. Until then a
+close adds it to what the channel is owed, so the money is the player's either way.
 
 **Sign.** Every change to the balance is an **operation** that the channel key signs, answered by a **checkpoint** that
 the casino signs: the channel's sequence number, the hash of the state before it, a hash of the operation that led to
-it, and the balance after it. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and
-saves it before the game hears anything. There are three kinds of operation, and the contract knows no others:
+it, the balance after it, and how much of the channel's deposits the balance has taken in. The wallet re-derives the
+checkpoint, checks the casino's signature, countersigns it and saves it before the game hears anything. There are four
+kinds of operation, and the contract knows no others:
 
 | Kind         | Effect on the balance       | Used for                                                                                          |
 | ------------ | --------------------------- | ------------------------------------------------------------------------------------------------- |
 | 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                       |
 | 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank        |
 | 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals |
+| 4 deposit    | + amount                    | Taking in money deposited into the open channel                                                   |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in its
 **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino
@@ -122,26 +129,27 @@ bankroll does not need, split equally between the game's developer and the casin
 accounting, not a second debit from your balance; a bet's receipt reports it. [Economics](../reference/economics.md)
 derives the rule, and [earnings](../games/earnings.md) explains what a developer collects.
 
-Anyone with an ETH channel can move money into the bankroll and hold shares of it: the
+Anyone with a balance can move money from it into the bankroll and hold shares of it: the
 [bankroll fund](../wallet/bankroll-fund.md).
 
 ## Closing and claims
 
 A channel closes in one of two ways:
 
-- **Cooperatively.** Your funding account and the casino both sign the latest state, and the contract finalizes it at
-  once.
+- **Cooperatively.** Your funding account and the casino both sign the latest state, and the contract finalizes it and
+  pays it out in the same transaction, as far as it can. Withdrawing is this.
 - **Unilaterally.** Either side submits its latest evidence, which starts a fixed 24-hour window. Anyone with strictly
   newer evidence can replace it before the deadline, and the deadline never moves. After it, anyone can finalize.
 
-Finalizing records a **claim**. Up to your deposit it is protected principal: the contract returns
-`min(deposit, balance)`, so losses reduce it. Anything above the deposit is **winnings**, owed from the shared bankroll
-and paid first in, first out as cash arrives. Collecting is a separate transaction.
+A close is owed the state's balance, plus any deposit it has not taken in. Finalizing records that as a **claim**. Up
+to what you deposited it is protected principal: the contract returns `min(deposits, owed)`, so losses reduce it.
+Anything above is **winnings**, owed from the shared bankroll and paid first in, first out as cash arrives. A
+cooperative close pays what it can at once; after a unilateral close, collecting is a separate transaction.
 [Closing and claims](../wallet/closing-and-claims.md) walks through each step.
 
 ## Practice
 
-A wallet without a funded channel **practices**, and so does a game the player switches to practice: the game plays
+A wallet with no balance open **practices**, and so does a game the player switches to practice: the game plays
 with **play money** the wallet keeps in the tab's memory, in amounts the size of the network's ETH. It starts at 10,000
 of the network's recommended stakes and never runs out: an operation that would take more than it holds tops it back up
 first. The wallet settles a game's casino bets and payments itself, under the casino's own admission rule against a

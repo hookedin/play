@@ -45,9 +45,9 @@ npm run dev      # build, then serve dist/ at http://127.0.0.1:4184
 npm test         # build, type-check, check the vectors, run every test suite (needs anvil and Chrome)
 ```
 
-`npm run dev` serves the wallet only. Without `HOOKEDIN_CLIENT_CONFIG` the build ships the defaults in [client/config.ts](client/config.ts), which expect a casino service at `http://127.0.0.1:4183`; settings saved in the wallet override them. The game library comes from the casino: it is what `@hookedin` publishes. Playing needs a casino service. When none answers, or it advertises another chain, contract or owner, a wallet whose configuration pins a `deployment` starts in recovery mode: evidence import and export, unilateral close, challenge and claims work, play does not. A wallet with no pinned deployment and no casino cannot start. `PORT` moves the static server.
+`npm run dev` serves the wallet only. Without `HOOKEDIN_CLIENT_CONFIG` the build ships the defaults in [client/config.ts](client/config.ts), which expect a casino service at `http://127.0.0.1:4183`; settings saved in the wallet override them. The game library comes from the casino: it is what `@hookedin` publishes. Playing needs a casino service. When none answers, or it advertises another chain, contract or owner, a wallet whose configuration pins a `deployment` starts in recovery mode: evidence import and export, unilateral close, challenge and claims work; play, deposits and withdrawals do not. A wallet with no pinned deployment and no casino cannot start. `PORT` moves the static server.
 
-To work on a game, `node sdk/bin/hookedin-game.js serve games/<id>` serves it at `http://127.0.0.1:4185/` and builds it again on every page load; in any wallet, choose **Open a game by URL** and open that address.
+To work on a game, `node sdk/bin/hookedin-game.js serve games/<id>` serves it at `http://127.0.0.1:4185/` and builds it again on every page load; in any wallet, choose **Open a game by its URL** and open that address.
 
 Other commands: `npm run typecheck`, `npm run vectors` (regenerate the vectors), `npm run format`.
 
@@ -59,7 +59,7 @@ Blackjack and roulette, the house's game with a server, test and publish themsel
 
 To publish the wallet by hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy`. To publish a game: `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`.
 
-Client-side routes (`/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity`, `/games/<key>`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`, and `dist/_redirects` serves `/@<alias>` ones as written rather than letting Cloudflare redirect them to `/%40<alias>`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
+Client-side routes (`/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity`, `/games/<key>`, `/@<alias>/<game>`) rely on the single-page fallback set in `wrangler.jsonc`, and `dist/_redirects` serves `/@<alias>` ones as written rather than letting Cloudflare redirect them to `/%40<alias>`. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths.
 
 The operator commits [config/production.json](config/production.json), the deployment the wallet release pins; it is published as `config.js`, so it holds nothing secret. [Deployment](docs/reference/deployment.md) describes its fields.
 

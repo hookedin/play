@@ -78,8 +78,8 @@ receipt.
 **Saving.** The store key is `hookedin:round:<name>:<chainId>:<uname>`, or `hookedin:round:<name>:<chainId>:practice`,
 from [`playerScope`](wire.md#playerscope). A saved round records its format, `HOOKEDIN/ROUND/5`, and its rules: the
 SHA-256 hash of the graph its setup builds, as JSON. A page cannot finish a round saved in another format or under other
-rules. The next `restore`, `start` or `action` removes it and throws `This round was started under rules this game does
-not play. What it held is in your balance.`
+rules, a setup its rules refuse included. The next `restore`, `start` or `action` removes it and throws `This round was
+started under rules this game does not play. What it held is in your balance.`
 
 **Pricing.** `start` prices the graph against the bankroll `wallet.info` reports. It reuses the saved round's plan when
 the setup is the same and the bankroll still covers the plan's `conservativeBankroll`. With `funding`, when the stake is

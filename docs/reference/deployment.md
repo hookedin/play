@@ -72,7 +72,7 @@ on Sepolia for a wallet with neither a pinned deployment nor a saved one, is sho
 practices until a reload checks again.
 
 When the casino is unreachable, answers with an error or malformed data, or reports another chain, contract, operator
-or protocol, a wallet with a pinned deployment starts in **recovery mode**: play and cooperative closes are off,
+or protocol, a wallet with a pinned deployment starts in **recovery mode**: play, deposits and withdrawals are off,
 while evidence import and export, unilateral closes, challenges and claims work against the pinned contract through the
 pinned RPCs. A reload reconnects once the casino is back. A wallet with no pinned deployment and no working casino does
 not start. [Backups and recovery](../wallet/backups-and-recovery.md) covers working without the casino.

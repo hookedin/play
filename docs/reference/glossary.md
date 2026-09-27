@@ -22,8 +22,13 @@ Kelly condition for its two outcomes. See [economics](economics.md).
 
 ### Alias
 
-A name a player may take from a funded ETH channel, written `@Bob`, and be shown by instead of their uname. See
+A name a player may take while they have a balance open, written `@Bob`, and be shown by instead of their uname. See
 [names and publishing](../wallet/names-and-publishing.md).
+
+### Balance
+
+What games play with: the signed balance of a player's channel, and any deposit on its way into it. See
+[getting started](../wallet/getting-started.md).
 
 ### Bank
 
@@ -37,7 +42,7 @@ The casino's money for backing casino bets, after every obligation. See
 
 ### Bankroll fund
 
-Shares of the bankroll that anyone with an ETH channel can buy and sell back at the bankroll's own price. A share is a
+Shares of the bankroll that anyone with a balance can buy and sell back at the bankroll's own price. A share is a
 statement the casino signs. See [the bankroll fund](../wallet/bankroll-fund.md).
 
 ### Binary steps
@@ -66,7 +71,7 @@ How many of the 2^64 outcomes win a casino bet, from 1 to 2^64 − 1: the bet wi
 
 ### Channel
 
-A running balance between a player and the casino, backed on-chain by a deposit of ETH. See
+A running balance between a player and the casino, backed on-chain by the ETH the player deposited. See
 [channels](../overview/how-it-works.md#channels).
 
 ### Channel key
@@ -76,13 +81,13 @@ the channel's `signer`.
 
 ### Checkpoint
 
-A channel's state at a sequence number: the hash of the state before it, the hash of what led to it, and the balance.
-The casino signs each; the player countersigns.
+A channel's state at a sequence number: the hash of the state before it, the hash of what led to it, the balance, and
+how much of the channel's deposits the balance has taken in. The casino signs each; the player countersigns.
 
 ### Claim
 
-What a finalized channel is owed on-chain: protected principal up to the deposit, and winnings above it, paid first in,
-first out. See [closing and claims](../wallet/closing-and-claims.md).
+What a finalized channel is owed on-chain: protected principal up to what was deposited, and winnings above it, paid
+first in, first out. See [closing and claims](../wallet/closing-and-claims.md).
 
 ### Collapse
 
@@ -99,6 +104,12 @@ casino. It is accounting, never a second debit. See [earnings](../games/earnings
 
 What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, the developer earnings, or a
 developer bet. See [counterparties](signed-messages.md#counterparties).
+
+### Deposit
+
+Moving ETH from a player's vault into their balance. The first opens a channel; a later one adds to the open channel,
+and the balance takes it in with a deposit operation, kind 4, once the casino has seen it confirmed. See
+[getting started](../wallet/getting-started.md#deposit).
 
 ### Details
 
@@ -127,7 +138,8 @@ See [evidence](signed-messages.md#evidence).
 
 ### Funding account
 
-The account whose ETH opens a channel, the channel's `player`. It signs the transactions and the cooperative close.
+The account whose ETH opens a channel, the channel's `player`. It signs the transactions and the cooperative close, and
+the ETH at its address is the player's [vault](#vault).
 
 ### Game key
 
@@ -155,7 +167,7 @@ it; the casino keeps it and never reads it.
 
 ### Operation
 
-A signed change to a channel's balance: a casino bet, a debit or a credit. See
+A signed change to a channel's balance: a casino bet, a debit, a credit or a deposit. See
 [channels](../overview/how-it-works.md#channels).
 
 ### Operation ID
@@ -232,7 +244,17 @@ What a bet pays to enter.
 The name the casino derives for every player from an address it never publishes, written `~3byt9ocwnnzaxanmiz3stocj`.
 See [names and publishing](../wallet/names-and-publishing.md).
 
+### Vault
+
+The ETH at a player's own address, their funding account: only their key moves it. Deposits come from it, and
+withdrawals go to it.
+
 ### Watchtower
 
 A process that watches one channel from its exported evidence and challenges a stale close. See
 [backups and recovery](../wallet/backups-and-recovery.md).
+
+### Withdraw
+
+Moving the whole balance to the vault: a cooperative close, which pays in the same transaction what it can. See
+[getting started](../wallet/getting-started.md#withdraw).

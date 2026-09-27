@@ -60,10 +60,11 @@ no header of its own: it only frames the page and shows `icon.svg` as an image.
 ### `serve`
 
 `serve` builds the game, then serves its `dist/` at `http://127.0.0.1:4185/`, and prints that address with the way to
-open it: "In the wallet, choose Games → Open a game by URL and paste that address."
+open it: "In the wallet, choose Open a game by its URL and paste that address."
 
-- A request for a page, a path ending in `/` or `.html`, builds the game again first, so a change shows on reload. A
-  failed build answers 500 with its message.
+- A request for a page, a path ending in `/` or `.html`, builds the game again first, so a change shows on reload.
+  Every request waits for the build in flight, so none reads a `dist/` being made, and while the latest build has
+  failed, answers 500 with its message.
 - It serves every file in `dist/`, with the headers from `dist/_headers` and `Cache-Control: no-store`.
 - A path with a `..` segment, or with a segment starting with `.` or `_`, answers 404, as does a missing file.
 - It listens on `127.0.0.1` only.
@@ -118,8 +119,9 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
   state.
 - With `--rpc`, `inspect` also checks, at one canonical block, the chain ID, that the contract's owner is the bundle's
   operator, that the registered player, signer and opening state match the bundle, and that the contract supports its
-  evidence. It prints the channel's status, challenge deadline and closing state, the signed balance, the claim with
-  what is paid and what remains, and how the claim stands against the contract's cash, as `paymentStatus`:
+  evidence. It prints the channel's status, challenge deadline and closing state, the signed balance, what a close on
+  the evidence is owed (`owed`: that balance plus any deposit it has not taken in), the claim with what is paid and what
+  remains, and how the claim stands against the contract's cash, as `paymentStatus`:
 
   | `paymentStatus`                           | Meaning                                                                             |
   | ----------------------------------------- | ----------------------------------------------------------------------------------- |

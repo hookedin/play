@@ -62,8 +62,9 @@ its verified winnings.
 - The wallet pushes `game.balance` with `{ balance, pending }` when the page loads and whenever either changes.
   `HookedIn.onBalance` hears it, and `HookedIn.balance()` resolves to the latest.
 - Every bet and payment must fit the limit. Verified winnings raise it; stakes and payments lower it.
-- The player can raise, lower or take back the limit at any time with **Change limit** above the game.
-- Leaving the game, reloading or closing the tab releases the limit. The money never left the channel.
+- The player can raise, lower or take back the limit at any time with **Set a limit** or **Change limit** above the
+  game.
+- Leaving the game, reloading or closing the tab releases the limit. The money never left the player's balance.
 - One game per wallet holds a limit at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](state-and-recovery.md#lost-replies)).

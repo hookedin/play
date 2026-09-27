@@ -15,7 +15,7 @@ tile, the game's [icon](../reference/game-url.md#the-icon), or the first letter 
 name it is published under, and **Every bet** on it opens the game's public record
 ([a game's public record](bets-and-receipts.md#a-games-public-record)).
 
-**Open a game by URL** opens any game by the URL of its page: enter it as the **Game URL** and choose **Open game**.
+**Open a game by its URL**, below the tiles, opens any game by the URL of its page: enter it and choose **Open**.
 
 ## Opening a game
 
@@ -42,26 +42,22 @@ bets fail until it is given money.
 
 ## Giving a game money
 
-A game gets ETH only through the wallet's spending-limit dialog. The dialog opens when the game asks, suggesting an
-amount and nothing else, or when you press **Change limit** in the strip above the game. Every word in it is the
-wallet's own.
+A game gets ETH only through the wallet's own dialog, **Play … with ETH**, or **Change …'s limit** once it holds some.
+The dialog opens when the game asks, suggesting an amount and nothing else, or when you press **Set a limit** or
+**Change limit** in the strip above the game. Every word in it is the wallet's own.
 
-The dialog names the game, the host it is served from, and the developer who earns half of each casino bet's commission
-and settles its developer bets, or that nobody publishes it. It shows three figures:
-
-| Figure               | Meaning                                                       |
-| -------------------- | ------------------------------------------------------------- |
-| It holds now         | The game's limit as it stands                                 |
-| It would hold        | The limit you are setting                                     |
-| Stays in your wallet | Your playing balance less that limit, out of the game's reach |
-
-Set the limit with the number field or the slider, which runs from nothing to your whole playing balance in hundredths.
-The confirm button reads **Allow up to** an amount when you raise the limit and **Take back** an amount when you lower
-it; **Take it all back** sets the limit to zero, and **Not now** leaves it as it is. The game is told what you decided.
+The dialog names who publishes the game and the host it is served from, and says that its developer earns half of each
+casino bet's commission and takes and settles its developer bets, or that nobody publishes it. Under
+**It may play with up to**, set the limit with the number field or the slider, which runs from nothing to your whole
+balance in hundredths. The confirm button reads **Allow** an amount when you raise the limit and **Take back** an amount
+when you lower it; **Take it all back** fills in zero, and **Not now** leaves the limit as it is. The game is told what
+you decided. **How a game limit works**, folded below, explains the limit, and **Deposit more** opens the wallet's
+Deposit tab ([deposit](getting-started.md#deposit)).
 
 The limit caps what the game may risk; it moves no money:
 
-- The money stays in your channel. The limit is the most the game may put at risk.
+- The money stays in your balance. The limit is the most the game may put at risk, out of what your balance has taken
+  in: a deposit still arriving cannot raise it.
 - It lives only in this tab's memory. Leaving the game, reloading or closing the tab releases it, and the game asks
   again next time. The wallet remembers the last limit you chose for a game in this browser, only as the next
   suggestion.
@@ -73,7 +69,7 @@ The limit caps what the game may risk; it moves no money:
 A game that [practices](getting-started.md#practice) has no limit and no dialog: it plays with all of your play money,
 and gets more at once when it asks. Before a game holds any ETH, the dialog offers **Practice with play money instead**.
 
-## One funded game at a time
+## One game with ETH at a time
 
 One game per account holds a limit at a time, across every tab of the browser. Once you have given a game money, a game
 in another tab is refused at the dialog until you leave the first game or close its tab. Play money is each tab's own,

@@ -23,8 +23,8 @@ wants the server to hold less publishes the game from an account of its own.
 
 Your **bank** is a balance at the casino. The stakes of your developer bets go in as they are placed; your settlements
 and your casino bets are paid from it, and an accepted casino bet's payout goes back in. Nothing in it is reserved.
-Deposit into it and withdraw from it on the wallet's **My games** page, from the account's own channel. A batch of
-settlements the bank cannot pay in full is refused whole, with `bank-short`.
+Put money in and take it out on the wallet's **My games** page, with **Put in** and **Take out**, from the account's own
+balance. A batch of settlements the bank cannot pay in full is refused whole, with `bank-short`.
 
 Developer bets are placed with ETH. A wallet that [practices](../reference/bridge.md#practice) refuses them with
 `practice`, so a page built on them shows its table in practice and says that it plays with ETH.
@@ -56,7 +56,7 @@ const receipt = await HookedIn.developerBet({
   and the game's public record counts the open ones.
 - Only a published game takes developer bets. A game opened by its URL alone is refused with `invalid-request`
   ([publishing](publishing.md)).
-- Once you settle a bet, the wallet checks your signed settlement and collects what it pays into the player's channel.
+- Once you settle a bet, the wallet checks your signed settlement and collects what it pays into the player's balance.
   While the game is open, it raises the game's limit by that and pushes the receipt, `settled` with its `payout`, as a
   `game.receipt` event. The wallet looks every 4 seconds while its tab is visible; a page that hears from your server
   that a bet has settled calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload,

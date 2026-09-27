@@ -164,10 +164,11 @@ from withdrawing on-chain.
 At a consistent confirmed block, the reported bankroll is:
 
 ```text
-max(0, pool cash − active signed player balances − finalized unpaid claims − accrued unpaid developer commissions − reservations − escrow − developer banks)
+max(0, pool cash − active player balances − finalized unpaid claims − accrued unpaid developer commissions − reservations − escrow − developer banks)
 ```
 
-Reservations are the worst cases of the casino bets being decided. Escrow is every payout awarded and not yet
+An active player balance is what an open or closing channel is owed: its signed balance, and the deposits it has not
+taken in. Reservations are the worst cases of the casino bets being decided. Escrow is every payout awarded and not yet
 collected: money that has left the bankroll for a player who has not yet signed for it. Developer banks are the
 developers' own money, the stakes of their developer bets among it. [`GET /api/status`](../casino-api/public.md#get-apistatus)
 reports every term.
@@ -180,8 +181,8 @@ add to equity, and wins and developer commission take from it, pro rata. Investo
 exactly as the owner's funding does, and the owner's funding and withdrawals buy and sell house shares at the going
 price. A redemption never takes money a casino bet has reserved.
 
-An open channel's full original deposit stays protected on-chain even after signed losses. On closure the protection
-becomes `min(original deposit, final balance)`, and the rest of a loss is released. A finalized unpaid claim takes the
+Everything deposited into an open channel stays protected on-chain even after signed losses. On closure the protection
+becomes `min(deposits, what the close is owed)`, and the rest of a loss is released. A finalized unpaid claim takes the
 place of the channel's active liability. Claim payments reduce both cash and claim liabilities, and confirmed funding and
 withdrawals change cash. The casino reconciles each category without counting a channel and its claim twice.
 
@@ -191,8 +192,8 @@ commission is a cumulative counter, not a second payable. Owner withdrawals redu
 bankroll's equity, and no separate release of house commission can be counted twice.
 
 A game's payment is a debit that lowers the player's signed balance by its amount and raises the accounting bankroll
-by the same amount. It settles on no round, accrues no commission and moves no ETH; the original deposit stays
-protected on-chain until closure.
+by the same amount. It settles on no round, accrues no commission and moves no ETH; the deposits stay protected
+on-chain until closure.
 
 Unallocated winnings cash excludes protected principal and winnings already reserved, and owner withdrawals exclude
 every finalized unpaid winning. Finalization order sets the order of [allocation](contract.md#the-winnings-queue), and

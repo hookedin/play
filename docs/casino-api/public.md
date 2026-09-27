@@ -87,22 +87,22 @@ The casino's health, its books, what developers have earned, the last observed b
 
 The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
 
-| Field                                                      | Meaning                                                                                       |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `cash`                                                     | Pool cash: the contract's balance                                                             |
-| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                     |
-| `activeLiabilities`                                        | The signed balances of open and closing channels                                              |
-| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                         |
-| `commissions`                                              | Developer commission earned and not yet collected                                             |
-| `escrow`                                                   | Payouts awarded and not yet collected                                                         |
-| `banks`                                                    | Everything in developers' banks                                                               |
-| `houseFeesEarned`                                          | The casino's own commission, in total                                                         |
-| `reserved`                                                 | The worst cases of the casino bets being decided                                              |
-| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                             |
-| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                       |
-| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                            |
-| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`       |
-| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()` |
+| Field                                                      | Meaning                                                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `cash`                                                     | Pool cash: the contract's balance                                                                       |
+| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                               |
+| `activeLiabilities`                                        | What open and closing channels are owed: their signed balances, and the deposits they have not taken in |
+| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                                   |
+| `commissions`                                              | Developer commission earned and not yet collected                                                       |
+| `escrow`                                                   | Payouts awarded and not yet collected                                                                   |
+| `banks`                                                    | Everything in developers' banks                                                                         |
+| `houseFeesEarned`                                          | The casino's own commission, in total                                                                   |
+| `reserved`                                                 | The worst cases of the casino bets being decided                                                        |
+| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                                       |
+| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                                 |
+| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                                      |
+| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`                 |
+| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`           |
 
 `disputes.alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining`
 the seconds left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older

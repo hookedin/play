@@ -91,7 +91,7 @@ npm ci
 node sdk/bin/hookedin-game.js serve games/dice
 ```
 
-Then, in the wallet, choose **Open a game by URL** and open `http://127.0.0.1:4185/`. To make one your own, start a
+Then, in the wallet, choose **Open a game by its URL** and open `http://127.0.0.1:4185/`. To make one your own, start a
 repository from the template and copy the game's `src/` and `test/` over it. Blackjack, and roulette with its server,
 run under `npm run dev` in their own repositories ([blackjack](https://github.com/hookedin/game-blackjack#run-it),
 [roulette](https://github.com/hookedin/game-roulette#run-it)).
