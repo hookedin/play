@@ -17,13 +17,13 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
   };
   const amount = element<HTMLElement>('strong', 'bank-amount', '—'),
     asset = element<HTMLElement>('span', 'bank-asset'),
-    status = element<HTMLElement>('span', 'bank-status', 'Connecting wallet…'),
+    status = element<HTMLElement>('span', 'bank-status'),
     button = element<HTMLButtonElement>('button', 'bank-add', 'Add funds');
   asset.setAttribute('data-asset', '');
   button.type = 'button';
   button.disabled = true;
   const figure = element<HTMLElement>('div', 'bank-figure');
-  const label = element<HTMLElement>('span', 'bank-label', 'Game balance');
+  const label = element<HTMLElement>('span', 'bank-label', 'Balance');
   figure.append(label, amount, asset);
   root.className = 'bank';
   root.setAttribute('aria-live', 'polite');
@@ -33,6 +33,7 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     held = false,
     withheld = 0n,
     requesting = false,
+    failure = '',
     // Until the wallet has said what it plays with, there is no figure to show.
     greeted = false,
     practice = false;
@@ -41,20 +42,16 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     const shown = BigInt(current.balance) - withheld - (options.round?.inHand() ?? 0n);
     amount.textContent = greeted ? HookedIn.formatAmount(shown < 0n ? 0n : shown) : '—';
     root.dataset.state = current.pending ? 'pending' : current.balance === '0' ? 'empty' : 'ready';
-    label.textContent = practice ? 'Practice' : 'Game balance';
+    label.textContent = practice ? 'Practice' : 'Balance';
     button.hidden = practice;
+    // The figure says the rest: the line speaks only when something needs the player.
     status.textContent = requesting
       ? 'Waiting for your wallet…'
-      : practice
-        ? 'It tops itself up when it runs out.'
-        : current.pending
-          ? 'An operation is waiting in your wallet.'
-          : current.balance === '0'
-            ? 'No money in this game yet. Add funds to play.'
-            : 'Yours to risk here. Leaving the game returns it to your wallet.';
+      : failure || (current.pending && !practice ? 'An operation is waiting in your wallet.' : '');
+    status.hidden = !status.textContent;
     // Setting the limit signs nothing, so the player can do it while an operation is pending.
     button.disabled = busy || requesting;
-    button.textContent = requesting ? 'Waiting…' : current.balance !== '0' ? 'Add funds' : 'Add funds ↗';
+    button.textContent = requesting ? 'Waiting…' : 'Add funds';
   }
   function update(balance: (Partial<GameBalance> & { balance: string }) | undefined) {
     if (!balance) return;
@@ -88,11 +85,12 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
   button.addEventListener('click', async () => {
     if (busy || requesting) return;
     requesting = true;
+    failure = '';
     render();
     try {
       update(await HookedIn.requestFunds());
     } catch (error: any) {
-      status.textContent = error.message;
+      failure = error.message;
     } finally {
       requesting = false;
       render();

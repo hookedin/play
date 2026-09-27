@@ -354,18 +354,20 @@ h1 {
     transform: rotate(360deg);
   }
 }
-/* The game's view of its wallet allocation. */
+/* The game's view of its wallet allocation: one slim line, the figure and the way to add to it. */
 .bank {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
-  margin-top: 18px;
-  padding: 12px 16px;
+  gap: 6px 16px;
+  margin-top: 16px;
+  padding: 7px 7px 7px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
 }
 .bank-figure {
+  flex: 1;
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -391,17 +393,12 @@ h1 {
   font-weight: 600;
 }
 .bank-status {
-  flex: 1;
-  min-width: 0;
-  color: var(--muted);
+  order: 3;
+  flex-basis: 100%;
+  padding-bottom: 4px;
+  color: #ffa9a2;
   font-size: 11px;
   line-height: 1.5;
-}
-.bank[data-state='empty'] .bank-status {
-  color: #f0d79a;
-}
-.bank[data-state='pending'] .bank-status {
-  color: #ffa9a2;
 }
 /* Play money never looks like the real thing. */
 .bank[data-practice] {
@@ -432,36 +429,35 @@ h1 {
 }
 @media (max-width: 600px) {
   main {
-    padding: 20px 16px;
+    padding: 14px 14px 20px;
   }
-  .bank {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .bank-status {
-    flex-basis: 100%;
-    order: 3;
+  /* A phone shows the game: the name stays, the flourishes go. */
+  .game-head .eyebrow,
+  .head-note {
+    display: none;
   }
   .game-head {
     gap: 12px;
   }
-  .head-note {
-    max-width: 110px;
-    font-size: 9px;
-    line-height: 1.5;
+  .game-title {
+    margin-top: 0;
+  }
+  .bank {
+    margin-top: 12px;
   }
   .controls {
     grid-template-columns: 1fr 1fr;
+    gap: 10px;
   }
   .controls > .primary:last-child {
     grid-column: 1/-1;
   }
   h1 {
-    font-size: 24px;
+    font-size: 22px;
   }
   .stage {
-    margin: 20px 0;
-    min-height: 260px;
+    margin: 12px 0;
+    min-height: 200px;
   }
   .foot {
     flex-direction: column;
