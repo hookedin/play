@@ -1,9 +1,12 @@
 import { fraction } from '@hookedin/play/sdk/engine';
 import type { GameGraph } from '@hookedin/play/sdk/engine';
 
-/** The house keeps 1%: a win pays the stake back divided by its chance, times 0.99. */
+/** Win chances in ten-thousandths: from 10% to 90%. */
 export const CHANCE_MIN = 1000;
 export const CHANCE_MAX = 9000;
+
+/** The house keeps 1%: a win pays the stake divided by its chance, times 0.99, in whole units. */
+export const winPayout = (stake: bigint, chanceBps: number) => (stake * 9900n) / BigInt(chanceBps);
 
 /** One roll: win with `chanceBps` in ten-thousandths, or lose the stake. */
 export function diceGraph(setup: { stake: string; chanceBps: number }): GameGraph {
@@ -26,7 +29,7 @@ export function diceGraph(setup: { stake: string; chanceBps: number }): GameGrap
           },
         ],
       },
-      { id: 'dice:win', kind: 'terminal', payout: (BigInt(setup.stake) * 9900n) / BigInt(chance) },
+      { id: 'dice:win', kind: 'terminal', payout: winPayout(BigInt(setup.stake), chance) },
       { id: 'dice:lose', kind: 'terminal', payout: 0n },
     ],
   };

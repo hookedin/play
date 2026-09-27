@@ -7,10 +7,12 @@ Play it at [dice-game.hookedin.com](https://dice-game.hookedin.com/) through the
 ## How to play
 
 1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
-2. Set the win chance with the slider, from 10% to 90% in steps of 0.5%.
-3. Enter a stake and press **Roll dice**.
+2. Set the win chance with the slider, from 10% to 90% in steps of 0.5%, or type it.
+3. Enter a stake, or halve or double it with **½** and **2×**, and press **Roll dice** or Space.
 
-A win pays `99% / win chance` times the stake: 2× at 49.5%, 9.9× at 10%, 1.1× at 90%. A loss pays nothing. The roll shown is the verified outcome on a 0–100 scale: a win falls under the win chance, a loss at or above it.
+A win pays `99% / win chance` times the stake: 2× at 49.5%, 9.9× at 10%, 1.1× at 90%. A loss pays nothing. The roll shown is the verified outcome on a 0–100 scale: a win falls under the win chance, a loss at or above it. The track marks where the last roll landed against the winning zone, and the strip above it keeps the last ten rolls.
+
+**Auto** makes one press roll 10, 50 or 100 times at the same stake and odds; the button then reads **Stop** and ends the run after the roll under way.
 
 The wallet plays with the network's ETH, or practices with play money of its own; the game is the same either way.
 
@@ -23,8 +25,8 @@ actions: [{ id: 'roll', outcomes: [
   { next: 'dice:win',  probability: fraction(BigInt(chance), 10000n) },
   { next: 'dice:lose', probability: fraction(BigInt(10000 - chance), 10000n) },
 ]}],
-// terminals
-{ id: 'dice:win',  kind: 'terminal', payout: (BigInt(setup.stake) * 9900n) / BigInt(chance) },
+// terminals: winPayout(stake, chance) is stake × 9900 / chance, rounded down to a whole wei
+{ id: 'dice:win',  kind: 'terminal', payout: winPayout(BigInt(setup.stake), chance) },
 { id: 'dice:lose', kind: 'terminal', payout: 0n },
 ```
 
@@ -42,8 +44,8 @@ Where `chance / 10000` of 2^64 is not a whole number of outcomes, the bet's chan
 
 | File                                   | What it holds                                                                            |
 | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| [src/rules.ts](src/rules.ts)           | The graph above, and the chance limits                                                   |
-| [src/game.ts](src/game.ts)             | All of the page logic: startup, recovery, the roll button                                |
+| [src/rules.ts](src/rules.ts)           | The graph above, the win payout and the chance limits                                    |
+| [src/game.ts](src/game.ts)             | All of the page logic: startup, recovery, the controls and Auto                          |
 | [src/index.html](src/index.html)       | The page and the rules text                                                              |
 | [src/style.css](src/style.css)         | Dice-specific styles, on top of the SDK's `shared.css`                                   |
 | [src/icon.svg](src/icon.svg)           | The icon the wallet shows the game by: a square SVG of one symbol                        |
@@ -85,7 +87,7 @@ Every page load rebuilds the game, so reload to see a change.
 Start a repository from [game-template](https://github.com/hookedin/game-template) and copy this game's `src/` and `test/` over it. What to change first:
 
 - [src/icon.svg](src/icon.svg): the icon the wallet shows your game by, a square SVG of one symbol that fills the square, with no rounded background of its own: the wallet rounds its corners ([the icon](../../docs/reference/game-url.md#the-icon)).
-- The rules: the `9900n` in [src/rules.ts](src/rules.ts) is the return in basis points, and the `1000`/`9000` bounds are the chance limits. Keep the slider in [src/index.html](src/index.html), the `odds()` display in [src/game.ts](src/game.ts) and [test/dice.test.ts](test/dice.test.ts) in step. A higher return leaves the casino less edge, so it admits smaller stakes.
+- The rules: the `9900n` in `winPayout` in [src/rules.ts](src/rules.ts) is the return in basis points, and `CHANCE_MIN` and `CHANCE_MAX` are the chance limits, which the page's slider keeps to. Keep the multiplier in `odds()` in [src/game.ts](src/game.ts) and [test/dice.test.ts](test/dice.test.ts) in step. A higher return leaves the casino less edge, so it admits smaller stakes.
 - The art: [src/index.html](src/index.html) and [src/style.css](src/style.css). The die is pure CSS.
 
 You earn half the commission on every bet placed through your game once you publish it. It accrues to the account that publishes it, on wins and losses alike, and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).

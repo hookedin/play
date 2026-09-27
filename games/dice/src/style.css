@@ -1,34 +1,76 @@
-.dice-scene {
-  position: relative;
+:root {
+  --lose: #ff8f86;
+}
+.stage {
+  --thumb: 26px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 22px 18px;
+}
+/* The last rolls, newest on the right. */
+.history {
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 5px;
+  min-height: 25px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 32px);
+}
+.history li {
+  flex: none;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: #2b2426;
+  color: var(--lose);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.history li[data-won='true'] {
+  background: var(--accent);
+  color: #14201b;
+}
+.history li:first-child {
+  animation: arrive 0.25s ease-out;
+}
+@keyframes arrive {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+}
+.result {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  width: 100%;
-  padding-top: 18px;
+  gap: 20px;
 }
 .die {
-  width: 91px;
-  height: 91px;
-  border-radius: 20px;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 13px;
   background: linear-gradient(135deg, #e5ffc3, #9fc978);
   box-shadow:
-    0 9px 0 #57754c,
-    0 22px 50px #0006,
+    0 5px 0 #57754c,
+    0 14px 30px #0006,
     inset 0 1px 0 #ffffffc0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  padding: 19px;
-  gap: 6px;
+  padding: 11px;
+  gap: 4px;
   transform: rotate(-13deg);
-  position: relative;
-  z-index: 1;
 }
 .die span {
   background: #263d2a;
   border-radius: 50%;
-  box-shadow: inset 0 2px 1px #0007;
+  box-shadow: inset 0 1px 1px #0007;
 }
 .die span:nth-child(2) {
   grid-column: 3;
@@ -45,105 +87,207 @@
   grid-column: 3;
   grid-row: 3;
 }
-.orbit {
-  position: absolute;
-  width: 265px;
-  height: 110px;
-  top: 14px;
-  border: 1px solid #c5ef9110;
-  border-radius: 50%;
-  transform: rotate(-25deg);
-}
-.orbit-two {
-  transform: rotate(25deg);
-  width: 205px;
-  height: 160px;
-  top: 0;
-}
-.result-label {
-  font-size: 21px;
-  letter-spacing: -0.6px;
-  margin-top: 32px;
-  font-weight: 500;
-}
-.result-value {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 8px;
-}
 .die.rolling {
-  animation: roll 0.55s ease-in-out infinite alternate;
+  animation: roll 0.25s ease-in-out infinite alternate;
 }
 .die.lost {
   background: linear-gradient(135deg, #b2bbb0, #737d72);
   box-shadow:
-    0 9px 0 #3a4439,
-    0 22px 50px #0006;
-}
-.odds-controls {
-  padding: 0 0 24px;
-}
-.odds-line {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 13px;
-}
-.odds-line label {
-  font-size: 11px;
-  color: var(--muted);
-}
-.odds-line strong {
-  font-size: 18px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.odds-line strong span {
-  color: var(--muted);
-  font-size: 11px;
-  margin-left: 4px;
-}
-input[type='range'] {
-  display: block;
-  width: 100%;
-  height: 7px;
-  border-radius: 10px;
-  appearance: none;
-  background: linear-gradient(to right, var(--accent) 49.375%, #27332c 49.375%);
-  cursor: pointer;
-}
-input[type='range']::-webkit-slider-thumb {
-  appearance: none;
-  width: 19px;
-  height: 19px;
-  background: #efffdf;
-  border: 4px solid #a7d67f;
-  border-radius: 50%;
-  box-shadow: 0 0 0 5px #c5ef9112;
-}
-input[type='range']::-moz-range-thumb {
-  width: 13px;
-  height: 13px;
-  background: #efffdf;
-  border: 4px solid #a7d67f;
-  border-radius: 50%;
-}
-.range-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 8px;
-  letter-spacing: 1px;
-  color: #6f8177;
-  margin-top: 13px;
-}
-.stage {
-  min-height: 285px;
+    0 5px 0 #3a4439,
+    0 14px 30px #0006;
 }
 @keyframes roll {
   from {
-    transform: rotate(-20deg) translateY(-2px);
+    transform: rotate(-24deg) translateY(-3px);
   }
   to {
-    transform: rotate(16deg) translateY(5px);
+    transform: rotate(18deg) translateY(3px);
+  }
+}
+.roll {
+  display: block;
+  min-width: 3.3em;
+  font-size: 46px;
+  font-weight: 600;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.roll:not([data-won]) {
+  color: var(--muted);
+}
+.roll[data-won='true'] {
+  color: var(--accent);
+}
+.roll[data-won='false'] {
+  color: var(--lose);
+}
+.result-note {
+  margin-top: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The track: 0 to 100, the winning zone under the win chance, and where the last roll landed. The rail and the pin
+   are inset by half the thumb, so a value sits exactly under the thumb that sets it. */
+.track {
+  position: relative;
+  height: 46px;
+}
+.rail {
+  position: absolute;
+  left: calc(var(--thumb) / 2);
+  right: calc(var(--thumb) / 2);
+  bottom: 9px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, var(--accent) var(--chance), #5a2f31 var(--chance));
+}
+.pin {
+  position: absolute;
+  top: 3px;
+  left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--at));
+  border: 7px solid transparent;
+  border-top: 10px solid var(--accent);
+  border-bottom: 0;
+  transform: translateX(-50%);
+  transition: left 0.2s ease-out;
+}
+.pin[data-won='false'] {
+  border-top-color: var(--lose);
+}
+#chance {
+  position: absolute;
+  inset: auto 0 0;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+#chance::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--thumb);
+  height: var(--thumb);
+  border-radius: 8px;
+  background: #efffdf;
+  border: 4px solid #a7d67f;
+  box-shadow: 0 2px 10px #0009;
+}
+#chance::-moz-range-thumb {
+  width: var(--thumb);
+  height: var(--thumb);
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #efffdf;
+  border: 4px solid #a7d67f;
+}
+#chance:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.scale {
+  display: flex;
+  justify-content: space-between;
+  margin: -8px calc(var(--thumb) / 2) 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+/* Each label is centred on its mark. */
+.scale span {
+  width: 0;
+  display: flex;
+  justify-content: center;
+}
+.odds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.odds .field-label {
+  margin-bottom: 7px;
+}
+.odd-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--dark);
+}
+.odd-box input,
+.odd-box strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.odd-box input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: inherit;
+}
+.odd-box span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.odd-box:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+/* The stake's quick buttons sit inside its field. */
+.input-wrap:has(.quick) {
+  padding-right: 5px;
+}
+.quick {
+  flex: none;
+  height: 36px;
+  min-width: 38px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #243030;
+  color: #dfe7e3;
+  font-size: 12px;
+  font-weight: 700;
+}
+.quick:hover:not(:disabled) {
+  background: #2e3c3b;
+}
+.play {
+  display: flex;
+  gap: 8px;
+}
+.play .primary {
+  flex: 1;
+}
+.play .tool {
+  height: 48px;
+  min-width: 88px;
+}
+@media (max-width: 600px) {
+  .stage {
+    gap: 12px;
+    padding: 12px 14px 14px;
+  }
+  .roll {
+    font-size: 40px;
+  }
+  .die {
+    width: 48px;
+    height: 48px;
+    padding: 9px;
+  }
+  .play {
+    grid-column: 1 / -1;
+  }
+  /* A phone keeps the stake's width for its digits; the profit beside it names the asset. */
+  .input-wrap [data-asset] {
+    display: none;
   }
 }

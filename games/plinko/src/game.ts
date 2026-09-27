@@ -7,6 +7,7 @@ import { RISKS, ROWS, multipliers } from './tables.ts';
 import type { Risk, Rows } from './tables.ts';
 import { mountBoard } from './board.ts';
 
+/** What Auto cycles through: the balls one press of Drop plays, where 0 is one ball a tap. */
 const AUTO = [0, 10, 50, 100];
 /** Taps ahead of the wallet wait here; more would only hide how many balls are still to come. */
 const QUEUE = 20;
@@ -36,6 +37,8 @@ const drops = new DropClient(HookedIn);
     asset = 'ETH',
     fast = false,
     auto = 0,
+    // Balls still to drop in this run of Auto.
+    left = 0,
     queued = 0,
     working = false,
     stats = { balls: 0, best: 0, net: 0n };
@@ -97,19 +100,23 @@ const drops = new DropClient(HookedIn);
     renderRisk();
     renderRows();
     const locked = busy();
-    stakeInput.disabled = $<HTMLButtonElement>('bet-up').disabled = $<HTMLButtonElement>('bet-down').disabled = locked;
+    for (const id of ['stake', 'half', 'double']) $<HTMLInputElement>(id).disabled = locked;
     const drop = $<HTMLButtonElement>('drop');
     drop.disabled = !ready;
     drop.textContent = !ready
       ? connecting
         ? 'Connecting wallet…'
         : 'Wallet unavailable'
-      : drops.pending && !working
-        ? 'Drop the saved ball ↓'
-        : queued
-          ? `Drop ball ↓ · ${queued} waiting`
-          : 'Drop ball ↓';
-    $<HTMLButtonElement>('auto').disabled = !ready;
+      : left
+        ? `Stop · ${left} left`
+        : auto
+          ? `Drop ${auto} balls ↓`
+          : drops.pending && !working
+            ? 'Drop the saved ball ↓'
+            : queued
+              ? `Drop ball ↓ · ${queued} waiting`
+              : 'Drop ball ↓';
+    $<HTMLButtonElement>('auto').disabled = !ready || working;
     $('auto').textContent = auto ? `Auto · ${auto}` : 'Auto';
     $('auto').setAttribute('aria-pressed', String(auto > 0));
     $('stat-drops').textContent = String(stats.balls);
@@ -164,9 +171,9 @@ const drops = new DropClient(HookedIn);
     working = true;
     render();
     try {
-      while (queued > 0 || auto > 0) {
+      while (queued > 0 || left > 0) {
         if (queued > 0) queued--;
-        else auto--;
+        else left--;
         const config: DropConfig = { rows, risk, stake: HookedIn.parseAmount(stakeInput.value) };
         board.hover(true);
         bank.hold(true);
@@ -182,7 +189,7 @@ const drops = new DropClient(HookedIn);
         await new Promise(resolve => setTimeout(resolve, fast ? 90 : 220));
       }
     } catch (error: any) {
-      queued = auto = 0;
+      queued = left = 0;
       message(error.message, true);
     } finally {
       bank.hold(false);
@@ -190,10 +197,13 @@ const drops = new DropClient(HookedIn);
       render();
     }
   }
+  /** Drop: one more ball, or a run of Auto's count; during a run, stop it after the ball under way. */
   function request() {
     if (!ready) return;
     synth.unlock();
-    if (queued < QUEUE) queued++;
+    if (left) left = 0;
+    else if (auto) left = auto;
+    else if (queued < QUEUE) queued++;
     render();
     void work();
   }
@@ -210,11 +220,11 @@ const drops = new DropClient(HookedIn);
       ready = true;
       if (landed) {
         fly(landed);
-        message('Your last ball settled while you were away. Here it comes.');
+        message('Your last ball finished while you were away. Here it comes.');
       } else if (drops.pending) {
         setBoard(drops.pending.rows, drops.pending.risk);
         stakeInput.value = HookedIn.exactAmount(drops.pending.stake);
-        message('A ball is still waiting for its casino bet. Drop to finish it.');
+        message('A ball is still waiting. Drop to finish it.');
       }
     } catch (error: any) {
       message(error.message, true);
@@ -227,23 +237,25 @@ const drops = new DropClient(HookedIn);
   $('drop').addEventListener('click', request);
   document.addEventListener('keydown', event => {
     if (event.code !== 'Space' || event.repeat) return;
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
+    // Space drops unless it is typing.
+    if (event.target instanceof HTMLInputElement) return;
     event.preventDefault();
     request();
   });
-  $('bet-up').addEventListener('click', () => HookedIn.stepStake(stakeInput, true));
-  $('bet-down').addEventListener('click', () => HookedIn.stepStake(stakeInput, false));
+  function scaleStake(up: boolean) {
+    try {
+      const wei = BigInt(HookedIn.parseAmount(stakeInput.value));
+      stakeInput.value = HookedIn.exactAmount(up ? wei * 2n : wei / 2n || 1n);
+    } catch {}
+  }
+  $('half').addEventListener('click', () => scaleStake(false));
+  $('double').addEventListener('click', () => scaleStake(true));
   $('fast').addEventListener('click', () => {
     fast = !fast;
     $('fast').setAttribute('aria-pressed', String(fast));
   });
-  // Cycle to a count; the run starts after a moment, and pressing it during a run stops it.
-  let autoTimer = 0;
   $('auto').addEventListener('click', () => {
-    synth.unlock();
-    clearTimeout(autoTimer);
-    auto = working ? 0 : (AUTO[(AUTO.indexOf(auto) + 1) % AUTO.length] ?? 0);
-    if (auto) autoTimer = window.setTimeout(() => void work(), 900);
+    auto = AUTO[(AUTO.indexOf(auto) + 1) % AUTO.length];
     render();
   });
   const renderMute = () => {

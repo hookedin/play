@@ -21,24 +21,38 @@
         <div class="head-note"><span class="live-dot"></span>One roll. Your odds.</div>
       </header>
       <div id="bank" class="bank" data-state="connecting"></div>
-      <section class="stage" aria-label="Dice result">
-        <div class="stage-meta">FORTUNE FAVORS THE ROLL</div>
-        <div class="stage-badge">SET YOUR OWN ODDS</div>
-        <div class="dice-scene">
-          <div class="orbit orbit-one"></div>
-          <div class="orbit orbit-two"></div>
-          <div class="die" id="die"><span></span><span></span><span></span><span></span><span></span></div>
-          <div class="result-label" id="result-label">Make your move.</div>
-          <div class="result-value" id="result-value">A little chance. A lot of possibility.</div>
+      <section class="stage" aria-label="Dice">
+        <ol class="history" id="history" aria-label="Last rolls"></ol>
+        <div class="result" role="status" aria-live="polite">
+          <div class="die" id="die" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div>
+            <strong class="roll" id="roll">–</strong>
+            <div class="result-note" id="result-note">Roll under 49.50 to win</div>
+          </div>
+        </div>
+        <div class="track">
+          <div class="rail" id="rail"></div>
+          <div class="pin" id="pin" hidden></div>
+          <input type="range" id="chance" min="0" max="10000" step="50" value="4950" aria-label="Win chance" />
+        </div>
+        <div class="scale" aria-hidden="true">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+        </div>
+        <div class="odds">
+          <div class="odd">
+            <label class="field-label" for="chance-text">Win chance</label>
+            <div class="odd-box">
+              <input id="chance-text" inputmode="decimal" value="49.50" autocomplete="off" /><span>%</span>
+            </div>
+          </div>
+          <div class="odd">
+            <div class="field-label">Multiplier</div>
+            <div class="odd-box"><strong id="multiplier">2.0000</strong><span>×</span></div>
+          </div>
         </div>
       </section>
-      <div class="odds-controls">
-        <div class="odds-line">
-          <label for="chance">Win chance</label><strong id="chance-label">49.50<span>%</span></strong>
-        </div>
-        <input type="range" id="chance" min="1000" max="9000" step="50" value="4950" />
-        <div class="range-labels"><span>10% · HIGH REWARD</span><span>90% · HIGH CHANCE</span></div>
-      </div>
       <section class="controls" aria-label="Bet controls">
         <div class="field">
           <label for="stake">Stake</label>
@@ -46,18 +60,20 @@
             <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Stake in ETH" /><span
               data-asset
               >ETH</span
-            >
+            ><button class="quick" id="half" type="button" aria-label="Halve the stake">½</button
+            ><button class="quick" id="double" type="button" aria-label="Double the stake">2×</button>
           </div>
         </div>
         <div class="field">
-          <div class="field-label">Win return</div>
-          <div class="readout"><strong id="multiplier">2.00</strong><span>× stake</span></div>
+          <div class="field-label">Profit on win</div>
+          <div class="readout"><strong id="profit">–</strong><span data-asset>ETH</span></div>
         </div>
-        <button class="primary" id="play" type="button">Roll dice ↗</button>
+        <div class="play">
+          <button class="primary" id="play" type="button" aria-keyshortcuts="Space" disabled>Connecting wallet…</button>
+          <button class="tool" id="auto" type="button" aria-pressed="false">Auto</button>
+        </div>
       </section>
-      <div class="status" id="status" role="status" aria-live="polite">
-        Your wallet handles each bet and verifies the casino reveal.
-      </div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
       <footer class="foot">
         <div class="foot-note">
           A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
@@ -65,15 +81,13 @@
         <details class="rules">
           <summary>How to play</summary>
           <p>
-            Choose a win chance and stake, then roll. Each roll can win or lose. The win return shown is what the roll
-            pays for each unit staked if it lands, and it falls as your win chance rises. The roll shown is the
-            wallet-verified outcome read on a 0–100 scale: you win when it falls under your win chance. Your wallet
-            works out exactly what each roll is worth before it signs it, and your bet history keeps that figure.
+            Set your win chance, from 10% to 90%, with the slider or by typing it, choose a stake and roll. The roll is
+            a number from 0 to 100: under your win chance wins. A win pays the stake times the multiplier, which is 99
+            divided by the win chance; a loss pays nothing. Space rolls.
           </p>
           <p>
-            The game prepares each casino bet and the wallet verifies its settlement. The round value can differ from
-            the shown payout due to continuation pricing and fees. The wallet identifies the connected network and
-            asset.
+            Auto rolls 10, 50 or 100 times at the same stake and odds; press Stop to end it early. Your wallet checks
+            each roll before it signs it, and your bet history keeps what each one paid.
           </p>
         </details>
       </footer>
