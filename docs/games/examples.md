@@ -57,9 +57,10 @@ Copy it for a game with many outcomes and presentation drawn from the result.
 
 ## Mines
 
-Five tiles, one mine, up to three gems, cash out when you like. The rules are `createMines` from the SDK
-([src/rules.ts](../../games/mines/src/rules.ts)); each reveal is one bet at the exact remaining odds, and `cash-out`
-places no bet. Copy it for a game where the player decides when to stop; for other rules, copy
+A five-by-five board with 1 to 24 mines, and a cash-out after any gem at 99% of fair odds. The rules are
+`createMines` from the SDK ([src/rules.ts](../../games/mines/src/rules.ts)), built from the stake, the mines and how
+many picks the casino covers at that stake; each reveal is one bet at the exact remaining odds, and `cash-out` places no
+bet. Copy it for a game where the player decides when to stop; for other rules, copy
 [mines.ts](../../sdk/src/engine/mines.ts) from the SDK and pass your own graph.
 
 ## Blackjack

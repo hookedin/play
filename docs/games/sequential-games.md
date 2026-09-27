@@ -274,7 +274,8 @@ Each further reveal carries its own positive edge: the conditional expected cash
 1.17, and from 1.56 to 1.52. At the example's bankroll floor each safe state is already funded at its cash-out value,
 and `cash-out` is a step with no bet to that same cash; the example has no payments. A ladder with a constant overall
 return would make later reveals zero-edge bets, which finite-bankroll Kelly admission refuses when they are funded only
-at their stated cash-outs.
+at their stated cash-outs. The house's [Mines](../../games/mines/) is such a ladder: each state is funded above its
+cash-out, and the page offers only as many picks as the bankroll backs at the stake.
 
 ## Implementation boundary
 

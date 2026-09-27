@@ -133,8 +133,9 @@ of its actions with bets the casino's rule admits. That is more than the state's
 `RoundClient` prices against half the bankroll `wallet.info` reports, on a grid of a billionth of the stake, and starts
 the round with the stake as its cash. A stake the casino cannot back is refused before anything is signed, with an
 error naming about how much it can back. The next round with the same setup reuses the prices while the bankroll still
-covers their conservative starting requirement. Every step needs an edge of its own: a step with none is never
-admitted, which is why a Mines ladder pays back less the deeper it goes.
+covers their conservative starting requirement. Every step needs an edge of its own at its state's cash: a step with
+none is never admitted. Mines pays 99% of fair odds at any depth, so each pick after the first is fair at the
+cash-outs; each state holds a little more than its cash-out, what its next pick needs, and cashing out pays that back.
 
 ## Extra wagers
 

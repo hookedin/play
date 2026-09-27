@@ -9,61 +9,72 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="gem" viewBox="96 115 320 320">
+        <polygon points="172,150 108,216 200,216" fill="#f3e7ff" />
+        <polygon points="172,150 256,150 200,216" fill="#dcc2ff" />
+        <polygon points="256,150 312,216 200,216" fill="#c49bff" />
+        <polygon points="256,150 340,150 312,216" fill="#e7d6ff" />
+        <polygon points="340,150 404,216 312,216" fill="#b98af7" />
+        <polygon points="108,216 200,216 256,400" fill="#9b62ef" />
+        <polygon points="200,216 312,216 256,400" fill="#c7a0ff" />
+        <polygon points="312,216 404,216 256,400" fill="#7440d6" />
+      </symbol>
+      <symbol id="mine" viewBox="0 0 64 64">
+        <path d="M32 7v50M7 32h50M14 14l36 36M50 14 14 50" stroke="#240b16" stroke-width="6" stroke-linecap="round" />
+        <circle cx="32" cy="32" r="17" fill="#240b16" />
+        <circle cx="26" cy="26" r="5" fill="#ff9dbb" />
+      </symbol>
+    </svg>
     <main>
       <header class="game-head">
         <div>
           <div class="eyebrow">HOOKEDIN ORIGINALS / 02</div>
           <div class="game-title">
             <h1>Mines</h1>
-            <span class="edition">FIVE TILES</span>
+            <span class="edition">5 × 5</span>
           </div>
         </div>
         <div class="head-note"><span class="live-dot"></span>Know when to walk away.</div>
       </header>
       <div id="bank" class="bank" data-state="connecting"></div>
-      <section class="stage" aria-label="Mines board">
-        <div class="stage-meta">FIND YOUR NEXT GEM</div>
-        <div class="stage-badge">01 mine / 05 tiles</div>
-        <div class="board-wrap">
-          <div class="board" id="board">
-            <button class="tile" data-tile="0" aria-label="Reveal tile 1" disabled>
-              <span class="tile-art">✦</span><span class="tile-number">01</span></button
-            ><button class="tile" data-tile="1" aria-label="Reveal tile 2" disabled>
-              <span class="tile-art">✦</span><span class="tile-number">02</span></button
-            ><button class="tile" data-tile="2" aria-label="Reveal tile 3" disabled>
-              <span class="tile-art">✦</span><span class="tile-number">03</span></button
-            ><button class="tile" data-tile="3" aria-label="Reveal tile 4" disabled>
-              <span class="tile-art">✦</span><span class="tile-number">04</span></button
-            ><button class="tile" data-tile="4" aria-label="Reveal tile 5" disabled>
-              <span class="tile-art">✦</span><span class="tile-number">05</span>
-            </button>
+      <div class="table">
+        <section class="controls" aria-label="Bet controls">
+          <div class="field stake-field">
+            <label for="stake">Stake</label>
+            <div class="input-wrap">
+              <input
+                id="stake"
+                inputmode="decimal"
+                value="0.000001"
+                autocomplete="off"
+                aria-label="Stake in ETH"
+              /><span data-asset>ETH</span
+              ><button class="quick" id="half" type="button" aria-label="Halve the stake">½</button
+              ><button class="quick" id="double" type="button" aria-label="Double the stake">2×</button>
+            </div>
           </div>
-          <div class="board-caption" id="board-caption">Every tile is a new decision.</div>
-          <div class="ladder">
-            <div class="step" id="step-1"><span>01 GEM</span><strong>1.20×</strong></div>
-            <div class="step" id="step-2"><span>02 GEMS</span><strong>1.56×</strong></div>
-            <div class="step" id="step-3"><span>03 GEMS</span><strong>2.28×</strong></div>
+          <div class="field">
+            <label for="mines">Mines</label>
+            <select id="mines"></select>
           </div>
-        </div>
-      </section>
-      <section class="controls" aria-label="Bet controls">
-        <div class="field">
-          <label for="stake">Stake</label>
-          <div class="input-wrap">
-            <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Stake in ETH" /><span
-              data-asset
-              >ETH</span
-            >
+          <button class="secondary" id="random" type="button">Random tile</button>
+          <button class="primary" id="play" type="button">Bet</button>
+        </section>
+        <section class="stage" aria-label="Mines board">
+          <div class="stats">
+            <div>Gems <strong id="gems">0/22</strong></div>
+            <div>Pays <strong id="pays">—</strong></div>
+            <div>Next <strong id="next">—</strong></div>
           </div>
-        </div>
-        <div class="field">
-          <div class="field-label" id="cash-label">Continuation value</div>
-          <div class="readout"><strong id="cash">—</strong><span data-asset>ETH</span></div>
-        </div>
-        <button class="primary" id="play" type="button">Start exploring ↗</button>
-      </section>
-      <div class="status" id="status" role="status" aria-live="polite">
-        Start a round, then choose a tile. Cash out after any safe pick.
+          <div class="board-wrap">
+            <div class="board" id="board"></div>
+            <div class="result" id="result" hidden>
+              <strong id="result-times"></strong><span id="result-won"></span>
+            </div>
+          </div>
+          <div class="status" id="status" role="status" aria-live="polite">Choose a stake and the mines, then bet.</div>
+        </section>
       </div>
       <footer class="foot">
         <div class="foot-note">
@@ -72,15 +83,14 @@
         <details class="rules">
           <summary>How to play</summary>
           <p>
-            Start with five tiles and one mine. Each reveal samples a new safe/mine outcome using the exact remaining
-            probabilities: 4/5, 3/4, then 2/3 chance of a gem. Tile positions are your visual choices; no hidden board
-            is pre-generated.
+            Choose your stake and how many of the 25 tiles hide mines, then bet. Pick tiles one at a time: a gem raises
+            what you can cash out, a mine ends the round and takes the stake. Cash out after any gem. The more mines,
+            the more each gem pays.
           </p>
           <p>
-            Cash out after one, two, or three gems for 1.20×, 1.56×, or 2.28× your stake; a mine ends the round with
-            nothing. Each reveal settles on its own, so the continuation value is already in your balance, and yours if
-            you stop now. At a stake large for the bankroll it can exceed the cash-out, and cashing out then pays the
-            difference to the house.
+            A cash-out pays 99% of fair odds for the gems found. There is no hidden board: each pick is a bet of its own
+            at the exact odds of the tiles left, decided when you make it. At a large stake the casino may cover fewer
+            picks than the board holds; the game says when you reach that point, and you cash out there.
           </p>
         </details>
       </footer>

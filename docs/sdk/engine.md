@@ -767,5 +767,6 @@ the first safe pick, `cash-out`, which leads to `mines:payout:<k>`, paying `cash
 value only `cash-out` is left. Throws a `RangeError` unless `0 < mines < tiles` in whole numbers and `cashouts` holds 1
 to `tiles - mines` positive bigints.
 
-The house's [mines](../../games/mines/) pays 1.20, 1.56 and 2.28 times the stake on five tiles with one mine: cashing
-out after one, two or three safe picks returns exactly 96%, 93.6% and 91.2%.
+The house's [mines](../../games/mines/) plays 25 tiles and 1 to 24 mines, with `cashouts[k - 1]` at
+`0.99 × C(25, k) / C(25 - mines, k)` times the stake for as many safe picks as the bankroll backs: cashing out after any
+of them returns 99%.
