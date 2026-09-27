@@ -49,7 +49,7 @@ test('the spending limit lives in memory: leaving the game releases it, and noth
   await assert.rejects(w.gameCasinoBet(terms()), /exceeds the game balance/);
   await w.setGameLimit('100');
   assert.equal(w.availableBalance(), 999900n);
-  await assert.rejects(w.setGameLimit('1000001'), /exceeds your playing balance/);
+  await assert.rejects(w.setGameLimit('1000001'), /exceeds your balance/);
   await assert.rejects(w.gameCasinoBet({ ...terms(), stake: '101' }), /game balance/);
   await assert.rejects(w.payBankroll(999901n), /unallocated/);
   w.closeGame();
@@ -974,6 +974,29 @@ test('the state carries the setup its round was started with, across a reload', 
   assert.deepEqual((await new RoundClient(bridgeFor(f, w), graph, undefined, { store }).start(setup)).setup, setup);
   const reloaded = new RoundClient(bridgeFor(f, w), graph, undefined, { store });
   assert.deepEqual((await reloaded.restore())!.setup, setup);
+});
+
+test('a round saved with a setup the rules refuse is let go once, and the next round starts', async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity('setup'));
+  await w.setGameLimit('10000');
+  const store = memoryStore(),
+    graph = (setup: any) => createMines({ tiles: setup.tiles, mines: 1, cashouts: [1200n, 1560n, 2280n] });
+  await new RoundClient(bridgeFor(f, w), graph, undefined, { store }).start({ stake: '1000', tiles: 5 });
+  // The game's rules change so that the saved setup no longer builds a graph.
+  const stricter = (setup: any) => {
+    if (setup.mines === undefined) throw new RangeError('mines requires integer 0 < mines < tiles');
+    return graph(setup);
+  };
+  const reloaded = new RoundClient(bridgeFor(f, w), stricter, undefined, { store });
+  await assert.rejects(reloaded.restore(), /rules this game does not play/);
+  assert.equal(await reloaded.restore(), null);
+  assert.deepEqual((await reloaded.start({ stake: '1000', tiles: 5, mines: 1 })).setup, {
+    stake: '1000',
+    tiles: 5,
+    mines: 1,
+  });
 });
 
 test('an action sent again after its reply was lost is that step, not another from where it led', async () => {

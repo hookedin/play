@@ -438,7 +438,7 @@ export class CasinoWallet extends GameSessions {
   /** What games count in, as a game is told it: the network's ETH, in units of 10^-18. Practice counts in the same
    * amounts, and a game is told apart that it practices. */
   get asset() {
-    return { symbol: this.networkName === 'Sepolia' ? 'Sepolia ETH' : 'ETH', decimals: 18 };
+    return { symbol: 'ETH', decimals: 18 };
   }
   get pending() {
     return this.channel?.pending || null;
@@ -544,14 +544,18 @@ export class CasinoWallet extends GameSessions {
   }
   render() {
     this.syncSession();
-    const c = this.channel;
+    const c = this.channel,
+      open = c && Number(c.onchain?.status) === 1,
+      // Deposited into the open channel and not taken into its balance yet: the player's all the same.
+      arriving = open ? BigInt(c.onchain.deposit) - BigInt(c.state.deposited) : 0n;
     this.publicState = {
       address: this.address,
-      balance: c && Number(c.onchain?.status) === 1 ? c.state.balance : '0',
+      balance: open ? String(BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n)) : '0',
+      arriving: String(arriving > 0n ? arriving : 0n),
       nativeBalance: this.nativeBalance || '0',
       channelId: c?.state.channelId || null,
       channelStatus: c?.onchain?.status || '0',
-      protectedDeposit: c && Number(c.onchain?.status) !== 3 ? c.opening.deposit : '0',
+      protectedDeposit: c && Number(c.onchain?.status) !== 3 ? c.onchain.deposit : '0',
       deadline: c?.onchain?.deadline || '0',
       observedAt: this.lastChainCheck || 0,
       savedSequence: c?.state.sequence || '0',
@@ -760,7 +764,8 @@ export class CasinoWallet extends GameSessions {
   }
   async exclusive<T>(fn: () => T | Promise<T>, { wait = false } = {}) {
     await this.synced;
-    if (wait && this.busy && this.actionDone) await this.actionDone;
+    // Waiting takes the wallet as soon as it is free: whoever else was waiting may have taken it first.
+    while (wait && this.busy && this.actionDone) await this.actionDone;
     this.requireDurableState();
     if (this.busy) throw new Error('Wallet is busy or storage needs recovery');
     this.busy = true;

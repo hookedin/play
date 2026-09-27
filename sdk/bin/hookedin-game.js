@@ -50,9 +50,11 @@ export async function buildGame(root = process.cwd()) {
   );
 }
 
-/** Serve the game in `root`, building it again for every page load, so a change shows on reload. */
+/** Serve the game in `root`, building it again for every page load, so a change shows on reload. Every request waits
+ * for the build in flight, so nothing is read from a dist/ that is being made again. */
 async function serve(root) {
-  await buildGame(root);
+  let building = buildGame(root);
+  await building;
   const headers = { 'Cache-Control': 'no-store' };
   for (const line of fs.readFileSync(path.join(root, 'dist/_headers'), 'utf8').split('\n')) {
     const match = /^\s+([A-Za-z-]+):\s*(.+)$/.exec(line);
@@ -65,12 +67,11 @@ async function serve(root) {
         const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
         if (pathname.split('/').some(p => p === '..' || p.startsWith('.') || p.startsWith('_'))) throw new Error();
         const name = pathname.endsWith('/') ? pathname + 'index.html' : pathname;
-        if (name.endsWith('.html')) {
-          try {
-            await buildGame(root);
-          } catch (error) {
-            return void res.writeHead(500, { ...headers, 'Content-Type': 'text/plain' }).end(error.message);
-          }
+        if (name.endsWith('.html')) building = building.catch(() => {}).then(() => buildGame(root));
+        try {
+          await building;
+        } catch (error) {
+          return void res.writeHead(500, { ...headers, 'Content-Type': 'text/plain' }).end(error.message);
         }
         const file = path.join(root, 'dist', name);
         const data = fs.readFileSync(file);
@@ -83,7 +84,7 @@ async function serve(root) {
     })
     .listen(port, '127.0.0.1', () =>
       console.log(
-        `Game: http://127.0.0.1:${port}/\nIn the wallet, choose Games → Open a game by URL and paste that address.\nEvery page load rebuilds the game, so reload to see a change.`,
+        `Game: http://127.0.0.1:${port}/\nIn the wallet, choose Open a game by its URL and paste that address.\nEvery page load rebuilds the game, so reload to see a change.`,
       ),
     );
 }

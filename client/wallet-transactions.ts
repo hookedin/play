@@ -78,7 +78,7 @@ export class WalletTransactions {
         : MIN_GAS_RESERVE;
       if (balance < value + fees.maxCost + reserve) {
         throw new Error(
-          `Keep at least ${formatEther(MIN_GAS_RESERVE)} ETH in your wallet, plus up to ${formatEther(fees.maxCost)} ETH for this transaction’s fee. Add ETH or reduce the deposit amount.`,
+          `Your vault keeps ${formatEther(MIN_GAS_RESERVE)} ETH for network fees, and this transaction’s fee can be up to ${formatEther(fees.maxCost)} ETH. Add ETH to your vault, or deposit less.`,
         );
       }
       await this.assertNetwork();
@@ -189,7 +189,6 @@ export class WalletTransactions {
   }
   async maxDeposit(this: CasinoWallet) {
     return this.exclusive(async () => {
-      if (this.channel) throw new Error('Close the active channel before another deposit');
       await this.assertNetwork();
       const balance = await this.provider.getBalance(this.address, 'pending'),
         fees = await this.provider.getFeeData();
@@ -205,13 +204,26 @@ export class WalletTransactions {
       };
     });
   }
+  /** Move money from the vault into the balance: into the open channel, which takes it in once the casino has seen it
+   * confirmed, or as the opening deposit of a new one. */
   async deposit(this: CasinoWallet, amount: Integer) {
-    return this.exclusive(async () => {
+    const added = await this.exclusive(async () => {
       if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
         throw new Error('Deposit must be a positive uint256 amount');
-      if (this.channel || this.pending || this.missingChannel)
-        throw new Error('Close or recover the existing channel before depositing');
+      if (this.missingChannel)
+        throw new Error(
+          'This account has a balance open that this browser holds no evidence for: import its recovery bundle first.',
+        );
+      if (this.pending && this.pending.kind !== 'taken-in')
+        throw new Error('Finish the saved operation before depositing.');
       await this.assertNetwork();
+      if (this.funded) {
+        this.onProgress('Depositing into your balance…');
+        const tx = await this.sendTransaction('deposit', [this.channelId], { value: BigInt(amount) });
+        await this.waitTransaction(tx);
+        return true;
+      }
+      if (this.channel) throw new Error('Your balance is still closing. Deposit once it has closed.');
       const key = Wallet.createRandom().privateKey;
       const signer = new Wallet(key).address;
       const opening = {
@@ -231,23 +243,101 @@ export class WalletTransactions {
         onchain: { status: '0' },
       };
       await this.save();
-      this.onProgress('Opening your channel and protecting the deposit…');
+      this.onProgress('Depositing into your balance…');
       const tx = await this.sendTransaction('openChannel', [opening.signer], { value: BigInt(amount) });
       await this.waitTransaction(tx);
       await this.activate();
       await this.save();
-      return tx.hash;
+      return false;
+    });
+    if (added) {
+      await this.refresh();
+      await this.takeDeposits();
+    }
+  }
+  /** Take into the balance what was deposited into the open channel and not taken in yet: a deposit operation, which
+   * the casino signs once it has seen the money confirmed. One that is waiting for the casino is asked again. */
+  async takeDeposits(this: CasinoWallet) {
+    const c = this.channel,
+      pending = this.pending;
+    if (pending)
+      return pending.kind === 'taken-in'
+        ? this.perform('taken-in', { amount: pending.request.amount }, pending.operationId)
+        : null;
+    if (!this.funded || !c) return null;
+    const waiting = BigInt(c.onchain.deposit) - BigInt(c.state.deposited);
+    if (waiting <= 0n) return null;
+    return this.perform('taken-in', { amount: waiting }, `taken-in:${c.onchain.deposit}`);
+  }
+  /** The most the vault can send: its ETH less a transfer's fee, and less the gas reserve while a balance is open. */
+  async maxSend(this: CasinoWallet) {
+    await this.assertNetwork();
+    const [fees, balance] = await Promise.all([
+      this.provider.getFeeData(),
+      this.provider.getBalance(this.address, 'pending'),
+    ]);
+    if (!fees.maxFeePerGas) throw new Error('Network fees could not be estimated. Try again.');
+    const rest = balance - 21000n * fees.maxFeePerGas - (this.channel ? MIN_GAS_RESERVE : 0n);
+    return rest > 0n ? rest : 0n;
+  }
+  /** Send ETH from the vault, this wallet's own address, to any other. While a balance is open, the vault keeps the
+   * gas reserve that closing it may need. */
+  async send(this: CasinoWallet, to: string, amount: bigint) {
+    if (this.mode !== 'demo') throw new Error('Send from your connected wallet itself');
+    return this.exclusive(async () => {
+      const recipient = getAddress(to.trim());
+      if (amount <= 0n) throw new Error('Enter an amount to send');
+      if (same(recipient, this.address)) throw new Error('That is this wallet’s own address');
+      await this.assertNetwork();
+      const [fees, balance, gasLimit] = await Promise.all([
+        this.provider.getFeeData(),
+        this.provider.getBalance(this.address, 'pending'),
+        this.provider.estimateGas({ from: this.address, to: recipient, value: amount }),
+      ]);
+      if (!fees.maxFeePerGas || fees.maxPriorityFeePerGas == null)
+        throw new Error('Network fees could not be estimated. Try again.');
+      this.checkTransactionBudget(gasLimit, fees.maxFeePerGas);
+      const reserve = this.channel ? MIN_GAS_RESERVE : 0n,
+        fee = gasLimit * fees.maxFeePerGas;
+      if (balance < amount + fee + reserve)
+        throw new Error(
+          `Your vault holds ${formatEther(balance)} ETH: not enough for ${formatEther(amount)} ETH, up to ${formatEther(fee)} ETH in fees${reserve ? ` and the ${formatEther(reserve)} ETH kept for closing your balance` : ''}.`,
+        );
+      this.onProgress('Sending from your vault…');
+      const tx = await this.signer.sendTransaction({
+        to: recipient,
+        value: amount,
+        gasLimit,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+        chainId: this.expectedChainId,
+        type: 2,
+      });
+      const receipt = await tx.wait(this.config.confirmations || 1, 90000);
+      if (!receipt || receipt.status !== 1) throw new Error('The transfer did not go through');
+      await this.save({
+        kind: 'sent',
+        operationId: 'tx:' + receipt.hash,
+        amount: String(amount),
+        to: recipient,
+        txHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
+        blockHash: receipt.blockHash,
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
+      });
+      return receipt.hash;
     });
   }
   async verifyRegisteredOpening(this: CasinoWallet, opening: Opening) {
     validateOpening(opening);
     const observation = await this.observer.observe();
     const value = await this.observer.contractRead(this.reader, 'channels', [opening.channelId], observation.block);
+    // The opening's deposit is in its channel ID and its first state; the channel may have taken more since.
     if (
       Number(value.status) !== 1 ||
       !same(value.player, opening.player) ||
       !same(value.signer, opening.signer) ||
-      BigInt(value.deposit) !== BigInt(opening.deposit) ||
       !same(value.initialHash, hashState(this.domain, initialState(opening)))
     )
       throw new Error('Registered channel differs from the opening');
@@ -304,13 +394,15 @@ export class WalletTransactions {
       kind:
         status !== 'confirmed'
           ? 'transaction'
-          : intent?.method === 'openChannel'
+          : ['openChannel', 'deposit'].includes(intent?.method)
             ? 'deposit'
-            : ['claim', 'claimTo'].includes(intent?.method)
+            : ['claim', 'claimTo', 'cooperativeClose'].includes(intent?.method)
               ? 'withdrawal'
-              : ['cooperativeClose', 'finalizeClose'].includes(intent?.method)
-                ? 'closure'
-                : 'dispute',
+              : intent?.method === 'startClose'
+                ? 'close-started'
+                : intent?.method === 'finalizeClose'
+                  ? 'closure'
+                  : 'dispute',
       operationId: 'tx:' + receipt.hash,
       amount,
       txHash: receipt.hash,
@@ -490,6 +582,7 @@ export class WalletTransactions {
         };
       c.closing = true;
       await this.save();
+      this.onProgress('Withdrawing your balance to your vault…');
       const signature = await this.signer.signTypedData(this.domain, CLOSE_TYPES, message);
       const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature }, c);
       assertSignature(this.domain, CLOSE_TYPES, message, casino.signature, this.operator);
@@ -515,6 +608,7 @@ export class WalletTransactions {
   }
   async claim(this: CasinoWallet, channelId: string, recipient?: string) {
     const result = await this.exclusive(async () => {
+      this.onProgress('Collecting what the closed balance is owed…');
       const tx = await this.sendTransaction(
         recipient ? 'claimTo' : 'claim',
         recipient ? [channelId, getAddress(recipient)] : [channelId],

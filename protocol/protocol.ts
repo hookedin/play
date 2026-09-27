@@ -60,7 +60,7 @@ export function hashJSON(context: unknown) {
 }
 export const STATE_TYPES = {
   Checkpoint: fields(
-    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance',
+    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited',
   ),
 };
 export const OP_TYPES = {
@@ -235,7 +235,14 @@ export function initialState(opening: Pick<Opening, 'channelId' | 'deposit'>) {
     previousStateHash: ZeroHash,
     transitionHash: ZeroHash,
     balance: String(opening.deposit),
+    deposited: String(opening.deposit),
   };
+}
+/** What a close of the channel in `state` pays: its balance, and whatever of the channel's on-chain `deposit` it has not
+ * taken in yet. The contract works it out the same way, and refuses a state that has taken in more. */
+export function owed(state: Pick<Checkpoint, 'balance' | 'deposited'>, deposit: Integer) {
+  if (BigInt(state.deposited) > BigInt(deposit)) throw new Error('The state has taken in more than was deposited');
+  return BigInt(state.balance) + BigInt(deposit) - BigInt(state.deposited);
 }
 export function operation(d: Domain, base: Checkpoint, values: Partial<Operation>) {
   return plain({
@@ -278,8 +285,8 @@ export const LIMITS = {
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
  * developer bet, whose meta alone says what it is) or what it pays into (an investment, a bank deposit); a credit
- * what it collects from. Only what names a game carries a group. Every field is in one form, so one meaning has
- * one memo. */
+ * what it collects from; a deposit nothing but itself. Only what names a game carries a group. Every field is in one
+ * form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
@@ -297,7 +304,9 @@ export function checkDetails(kind: number, details: Details) {
       ? named && !counterparty && meta === undefined
       : kind === KIND.debit
         ? named !== counterparty
-        : kind === KIND.credit && counterparty && !named)
+        : kind === KIND.credit
+          ? counterparty && !named
+          : kind === KIND.deposit && !counterparty && !named)
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
@@ -343,8 +352,9 @@ export function outcome(seed: string, secret: string) {
 export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigint) =>
   value < BigInt(bet.chance) ? BigInt(bet.prize) : 0n;
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
- * the operation itself; a developer bet is a debit that pays its stake to its developer's bank. */
-export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3 } as const;
+ * the operation itself; a developer bet is a debit that pays its stake to its developer's bank; a deposit takes in
+ * money the player deposited into the channel on-chain. */
+export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3, deposit: 4 } as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
   if (
     !same(base.channelId, op.channelId) ||
@@ -364,8 +374,10 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     balance = uint256(BigInt(base.balance)),
     amount = uint256(BigInt(op.amount));
   const casinoBet = kind === KIND.casinoBet,
-    credit = kind === KIND.credit;
-  if (![KIND.casinoBet, KIND.debit, KIND.credit].includes(kind as 1)) throw new Error('Unknown operation');
+    credit = kind === KIND.credit,
+    deposit = kind === KIND.deposit;
+  if (![KIND.casinoBet, KIND.debit, KIND.credit, KIND.deposit].includes(kind as 1))
+    throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A casino bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
   const chance = BigInt(op.chance),
@@ -390,10 +402,19 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     amount >= MAX_BALANCE
   )
     throw new Error(
-      casinoBet ? 'Invalid casino bet commitment or balance' : credit ? 'Invalid credit' : 'Invalid debit',
+      casinoBet
+        ? 'Invalid casino bet commitment or balance'
+        : credit
+          ? 'Invalid credit'
+          : deposit
+            ? 'Invalid deposit'
+            : 'Invalid debit',
     );
-  if (credit) next.balance = String(balance + amount);
-  else {
+  if (credit || deposit) {
+    next.balance = String(balance + amount);
+    // A deposit takes in money the contract holds for this channel; a close checks it does.
+    if (deposit) next.deposited = String(BigInt(base.deposited) + amount);
+  } else {
     if (amount > balance)
       throw new Error(casinoBet ? 'Invalid casino bet commitment or balance' : 'Insufficient balance');
     next.balance = String(balance - amount + (casinoBet ? betPayout(op, outcome(seed, secret).value) : 0n));

@@ -19,12 +19,10 @@ export interface LogEntry {
 }
 const LIMIT = 500;
 const PAYLOAD_LIMIT = 70000;
-/** What the log's amounts are in: the network's ETH, in practice as with money. */
-let symbol = 'ETH';
-export const logAsset = (value: string) => (symbol = value);
+/** The log's amounts are in the network's ETH, in practice as with money. */
 const eth = (wei: unknown) => {
   try {
-    return `${formatEther(BigInt(wei as string))} ${symbol}`;
+    return `${formatEther(BigInt(wei as string))} ETH`;
   } catch {
     return String(wei);
   }

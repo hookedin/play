@@ -193,10 +193,14 @@ export class RoundClient {
       this.plan = null;
       return;
     }
-    // A round saved in another format, or under rules this page does not play, cannot be finished here. Every
-    // step it took settled in the wallet, so what it held is in the player's balance: it is let go, once, and
-    // the player is told.
-    if (this.data.schema !== SCHEMA || this.data.rules !== (await this.rules(this.data.setup))) {
+    // A round saved in another format, or under rules this page does not play (a setup its rules refuse included),
+    // cannot be finished here. Every step it took settled in the wallet, so what it held is in the player's balance:
+    // it is let go, once, and the player is told.
+    let rules = null;
+    try {
+      rules = await this.rules(this.data.setup);
+    } catch {}
+    if (this.data.schema !== SCHEMA || rules === null || this.data.rules !== rules) {
       this.store.remove(this.storageKey);
       this.data = null;
       this.plan = null;

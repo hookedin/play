@@ -227,10 +227,12 @@ export function receiptSummary(
             : `${bet} broke even`
         : (
             {
-              deposit: 'Channel funded',
-              withdrawal: 'Claim collected',
-              closure: 'Channel closed',
-              dispute: 'Channel dispute',
+              deposit: 'Deposited',
+              withdrawal: 'Withdrawn to your vault',
+              sent: 'Sent from your vault',
+              'close-started': 'Close started',
+              closure: 'Balance closed',
+              dispute: 'Close challenged',
               payment: 'Game payment',
               'developer-bet-payout': 'Developer bet payout',
               bank: 'Put into your bank',
@@ -253,7 +255,7 @@ export function receiptSummary(
           ? 'Invested'
           : receipt.kind === 'redeem'
             ? 'Owed to you'
-            : ['payment', 'developer-bet', 'bank'].includes(receipt.kind)
+            : ['payment', 'developer-bet', 'bank', 'sent'].includes(receipt.kind)
               ? 'Sent'
               : receipt.kind === 'closure'
                 ? 'Claim recorded'
@@ -278,7 +280,7 @@ export function receiptSummary(
   if (receipt.kind === 'invest')
     description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'redeem')
-    description = `Sold ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. Your wallet collects the money into your open channel.`;
+    description = `Sold ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. Your wallet collects the money into your balance.`;
   if (receipt.kind === 'divest')
     description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'payment')
@@ -290,18 +292,20 @@ export function receiptSummary(
       description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${formatEther(receipt.balance)} ${unit}`;
   }
   if (receipt.kind === 'developer-bet-payout')
-    description = `What a developer bet’s developer paid, checked by your wallet and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `What a developer bet’s developer paid, checked by your wallet and collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'bank')
     description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'withdrawn')
-    description = `Taken from your bank and collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Taken from your bank and collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'earnings')
-    description = `Commission your games earned, collected into this channel. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Commission your games earned, collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
   const notice =
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or use the saved transaction details to retry from your funding wallet.'
-      : receipt.kind === 'closure'
-        ? 'Closing records a withdrawal claim. Collect available funds separately; unpaid winnings remain claimable.'
-        : undefined;
+      : receipt.kind === 'close-started'
+        ? 'A close without the casino can be challenged for 24 hours. Then finish it under Wallet → Recovery.'
+        : receipt.kind === 'closure'
+          ? 'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.'
+          : undefined;
   return { title, status, tone, amount, amountLabel, description, notice };
 }

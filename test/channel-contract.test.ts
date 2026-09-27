@@ -16,9 +16,8 @@ test('shared-pool contract protects principal, retains debts and verifies channe
   await assert.rejects(f.contract.withdrawHouse(id('blocked-withdrawal'), owner.address, 1n));
   const win = await signedIncrease(f, ca, 500n);
   assert.equal((await f.contract.supported(win.evidence)).balance, 1500n);
+  // Agreed, a close pays at once what it can: the principal, while the pool holds no cash for winnings.
   await closeCoop(f, ca, win.evidence);
-  assert.equal((await f.contract.claims(ca.state.channelId)).paid, 0n);
-  await (await f.contract.claim(ca.state.channelId)).wait();
   let claim = await f.contract.claims(ca.state.channelId);
   assert.equal(claim.paid, 1000n);
   assert.equal(claim.winningsRemaining, 500n);
@@ -33,7 +32,6 @@ test('shared-pool contract protects principal, retains debts and verifies channe
   assert.equal((await f.contract.claims(ca.state.channelId)).winningsRemaining, 300n);
   const loss = await step(f, cb, 2, 700n);
   await closeCoop(f, cb, loss.evidence);
-  await (await f.contract.claim(cb.state.channelId)).wait();
   assert.equal((await f.contract.claims(cb.state.channelId)).paid, 1300n);
   assert.equal(await f.contract.protectedPrincipal(), 0n);
   await (await f.contract.claim(ca.state.channelId)).wait();
@@ -83,6 +81,42 @@ test('shared-pool contract protects principal, retains debts and verifies channe
     await owner.signTypedData(f.d, STATE_TYPES, changed),
   );
   assert.equal((await f.contract.supported(jointly)).balance, 90n);
+});
+test('money deposited into an open channel is protected, taken in by a signed deposit, and owed by any close', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b] = env.wallets;
+  const ca = await open(f, a, 1000n),
+    cb = await open(f, b, 1000n);
+  // Only a channel's player adds to it, and only something.
+  await assert.rejects(f.contract.connect(b).deposit.staticCall(ca.state.channelId, { value: 1n }));
+  await assert.rejects(f.contract.connect(a).deposit.staticCall(ca.state.channelId, { value: 0n }));
+  await (await f.contract.connect(a).deposit(ca.state.channelId, { value: 500n })).wait();
+  await (await f.contract.connect(b).deposit(cb.state.channelId, { value: 200n })).wait();
+  assert.equal((await f.contract.channels(ca.state.channelId)).deposit, 1500n);
+  assert.equal(await f.contract.protectedPrincipal(), 2700n);
+  // A state that has not taken a deposit in is owed it all the same: a close adds it.
+  const spent = await step(f, ca, 2, 300n);
+  await (await f.contract.connect(a).startClose(spent.evidence)).wait();
+  assert.equal((await f.contract.channels(ca.state.channelId)).closingBalance, 1200n);
+  await assert.rejects(f.contract.connect(a).deposit.staticCall(ca.state.channelId, { value: 1n }));
+  await env.provider.send('evm_increaseTime', [86400]);
+  await env.provider.send('evm_mine', []);
+  await (await f.contract.finalizeClose(ca.state.channelId)).wait();
+  assert.equal((await f.contract.claims(ca.state.channelId)).protectedRemaining, 1200n);
+  // A state that takes in more than was deposited closes nothing; one that takes in what was is paid at once.
+  const over = await step(f, cb, 4, 201n);
+  await assert.rejects(f.contract.connect(b).startClose.staticCall(over.evidence));
+  await assert.rejects(closeCoop(f, cb, over.evidence));
+  const taken = await step(f, cb, 4, 200n);
+  assert.equal((await f.contract.supported(taken.evidence)).deposited, 1200n);
+  const before = await env.provider.getBalance(b.address);
+  await closeCoop(f, cb, taken.evidence);
+  const claim = await f.contract.claims(cb.state.channelId);
+  assert.deepEqual([claim.amount, claim.paid], [1200n, 1200n]);
+  assert.equal((await env.provider.getBalance(b.address)) - before, 1200n);
+  assert.equal(await f.contract.protectedPrincipal(), 1200n);
 });
 test('channel evidence rejects replay across channels and chains', async t => {
   const env = await anvil();
@@ -160,7 +194,6 @@ test('balances are capped below 2^128 so aggregate debt cannot overflow and bloc
   await closeCoop(f, b, await balanceEvidence(b, 10n));
   assert.equal(await f.contract.unpaidWinnings(), max - 1n + 9n);
   await closeCoop(f, c);
-  await (await f.contract.claim(c.state.channelId)).wait();
   assert.equal((await f.contract.claims(c.state.channelId)).paid, 1n);
   await (await f.contract.fundBankroll({ value: 20n })).wait();
   assert.equal(await f.contract.withdrawableHouse(), 0n);

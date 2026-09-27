@@ -55,17 +55,22 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     await assert.rejects(f.contract.derive(evidence.base, evidence.step));
     await assert.rejects(f.contract.supported(evidence));
   };
-  // Valid transitions: a bet, a debit and a credit. The memo means nothing to either verifier.
+  // Valid transitions: a bet, a debit, a credit and a deposit. The memo means nothing to either verifier.
   const bet = await step(f, a, 1, 100n, { ...below(1n << 62n, 150n), seed: id('seed') });
   await agree(a, bet.evidence);
   const debit = await step(f, a, 2, 10n);
   await agree(a, debit.evidence);
   const credit = await step(f, b, 3, 20n, { memo: ZeroHash });
   await agree(b, credit.evidence);
-  // Every field a debit or a credit does not use must be zero; both sides reject the same encodings.
+  // A deposit takes money into the balance and counts it as deposited; whether it was is a close's to check.
+  const deposit = await step(f, b, 4, 30n);
+  await agree(b, deposit.evidence);
+  assert.deepEqual([b.state.balance, b.state.deposited], ['1050', '1030']);
+  // Every field a debit, a credit or a deposit does not use must be zero; both sides reject the same encodings.
   for (const [kind, reason] of [
     [2, /Invalid debit/],
     [3, /Invalid credit/],
+    [4, /Invalid deposit/],
   ] as const) {
     await disagreeNever(await craft(a, { kind, amount: 10n, round: id('a round') }), reason);
     await disagreeNever(await craft(a, { kind, amount: 10n, seedHash: id('entropy') }), reason);
@@ -112,7 +117,7 @@ test('contract derive and deriveState agree on every operation kind and invalid 
       'one secret settles both',
     );
   await disagreeNever(await craft(a, { kind: 2, amount: 5000n }), /Insufficient balance/);
-  for (const kind of [4, 5, 6, 7]) await disagreeNever(await craft(a, { kind, amount: 1n }), /Unknown operation/);
+  for (const kind of [5, 6, 7, 8]) await disagreeNever(await craft(a, { kind, amount: 1n }), /Unknown operation/);
   // A checkpoint-only proof must carry the canonical empty step.
   const padded = checkpointEvidence(a.state, a.evidence.playerSignature, a.evidence.casinoSignature);
   padded.step.secret = id('stray secret');

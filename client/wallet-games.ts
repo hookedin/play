@@ -185,13 +185,17 @@ export class GameSessions extends ChannelClient {
   async setGameLimit(this: CasinoWallet, amount: string) {
     const n = gameAmount(amount, false);
     if (this.requireGame().practice) throw new Error('A practice game plays with all of its play money');
-    return this.exclusive(async () => {
-      this.ready();
-      const game = this.requireGame();
-      if (n > this.playableBalance()) throw new Error('The limit exceeds your playing balance');
-      game.balance = String(n);
-      this.render();
-    });
+    // It waits for the wallet's own background work rather than failing as busy.
+    return this.exclusive(
+      async () => {
+        this.ready();
+        const game = this.requireGame();
+        if (n > this.playableBalance()) throw new Error('The limit exceeds your balance');
+        game.balance = String(n);
+        this.render();
+      },
+      { wait: true },
+    );
   }
   /** A casino bet of the open game: settled at once against the bankroll, on the player's own round. The same
    * request again returns its receipt. */

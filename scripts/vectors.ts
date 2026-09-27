@@ -122,8 +122,10 @@ export function buildVectors() {
     { kind: KIND.credit, amount: 120_000_000n },
     { id: `0x${'84'.repeat(32)}`, counterparty: developerBet.hash },
   );
+  // A deposit, taking into the balance money deposited into the channel on-chain after it opened.
+  const deposited = apply(payout.next, { kind: KIND.deposit, amount: 500_000_000n }, { id: `0x${'85'.repeat(32)}` });
   const rejection = rejectionCheckpoint(d, genesis, bet.operation),
-    close = { channelId: opening.channelId, stateHash: payout.nextHash };
+    close = { channelId: opening.channelId, stateHash: deposited.nextHash };
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     identity,
@@ -132,7 +134,7 @@ export function buildVectors() {
     opening,
     genesis,
     genesisHash: hashState(d, genesis),
-    operations: [bet, developerBet, payout],
+    operations: [bet, developerBet, payout, deposited],
     outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),

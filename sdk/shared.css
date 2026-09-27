@@ -455,6 +455,10 @@ h1 {
   h1 {
     font-size: 22px;
   }
+  /* A phone zooms into any field under 16px when it takes focus. */
+  input {
+    font-size: 16px !important;
+  }
   .stage {
     margin: 12px 0;
     min-height: 200px;

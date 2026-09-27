@@ -16,10 +16,11 @@ contract HookedInCasino {
     uint256 private constant KIND_CASINO_BET = 1;
     uint256 private constant KIND_DEBIT = 2;
     uint256 private constant KIND_CREDIT = 3;
+    uint256 private constant KIND_DEPOSIT = 4;
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
     bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 constant STATE_TYPEHASH = keccak256(
-        "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance)"
+        "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited)"
     );
     bytes32 constant OP_TYPEHASH = keccak256(
         "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo)"
@@ -37,15 +38,17 @@ contract HookedInCasino {
     uint256 public unpaidWinnings;
     bool transient private entered;
 
+    /// `deposited` is how much of the channel's on-chain deposits the balance has taken in; a close adds the rest.
     struct Checkpoint {
         bytes32 channelId;
         uint256 sequence;
         bytes32 previousStateHash;
         bytes32 transitionHash;
         uint256 balance;
+        uint256 deposited;
     }
 
-    /// The contract settles money: a casino bet, a debit or a credit. What an operation means to the wallet and
+    /// The contract settles money: a casino bet, a debit, a credit or a deposit. What an operation means to the wallet and
     /// the casino (its name, its game, what it pays into or collects from) is the hash `memo`, which the
     /// contract does not read.
     struct Operation {
@@ -82,6 +85,7 @@ contract HookedInCasino {
         uint64 deadline;
         uint8 status;
         address signer;
+        // Everything the player has deposited, the opening and every deposit while open.
         uint256 deposit;
         bytes32 initialHash;
         uint256 closingSequence;
@@ -108,6 +112,7 @@ contract HookedInCasino {
     bytes32 private lastClaim;
     uint256 public reservedWinnings;
     event ChannelOpened(bytes32 indexed channelId, address indexed player, uint256 deposit);
+    event ChannelDeposit(bytes32 indexed channelId, uint256 amount, uint256 deposit);
     event CloseStarted(bytes32 indexed channelId, uint256 sequence, bytes32 stateHash, uint256 deadline);
     event CloseChallenged(bytes32 indexed channelId, uint256 sequence, bytes32 stateHash);
     event ClaimEstablished(
@@ -193,12 +198,23 @@ contract HookedInCasino {
         if (channels[channelId].status != STATUS_UNOPENED || activeChannel[msg.sender] != bytes32(0))
             revert Unauthorized();
         Checkpoint memory initial =
-            Checkpoint(channelId, 0, bytes32(0), bytes32(0), msg.value);
+            Checkpoint(channelId, 0, bytes32(0), bytes32(0), msg.value, msg.value);
         channels[channelId] =
             Channel(msg.sender, 0, STATUS_OPEN, signer, msg.value, hashState(initial), 0, bytes32(0), 0);
         activeChannel[msg.sender] = channelId;
         protectedPrincipal += msg.value;
         emit ChannelOpened(channelId, msg.sender, msg.value);
+    }
+
+    // More money into an open channel, protected like the opening deposit. The balance takes it in with a deposit
+    // operation the casino signs; until then a close adds it to what the channel is owed.
+    function deposit(bytes32 channelId) external payable nonReentrant {
+        Channel storage c = channels[channelId];
+        if (c.status != STATUS_OPEN || msg.sender != c.player) revert Unauthorized();
+        if (msg.value == 0 || c.deposit + msg.value >= MAX_BALANCE) revert InvalidTerms();
+        c.deposit += msg.value;
+        protectedPrincipal += msg.value;
+        emit ChannelDeposit(channelId, msg.value, c.deposit);
     }
 
     function fundBankroll() external payable nonReentrant {
@@ -272,6 +288,10 @@ contract HookedInCasino {
         if (op.kind == KIND_CREDIT) {
             // The casino attests what the credit collects. Principal and liquidity do not move.
             next.balance += op.amount;
+        } else if (op.kind == KIND_DEPOSIT) {
+            // The balance takes in money deposited on-chain; a close checks it was.
+            next.balance += op.amount;
+            next.deposited += op.amount;
         } else if (casinoBet || op.kind == KIND_DEBIT) {
             // The stake is paid to enter; a casino bet pays its prize when the outcome is below its chance.
             if (op.amount > base.balance) revert InvalidTerms();
@@ -311,6 +331,14 @@ contract HookedInCasino {
         if (result.balance >= MAX_BALANCE) revert InvalidState();
     }
 
+    // What a supported state is owed: its balance and the deposits it has not taken in. A state that has taken in more
+    // than was deposited is owed nothing and closes nothing.
+    function _owed(Checkpoint memory s) private view returns (uint256) {
+        uint256 deposited = channels[s.channelId].deposit;
+        if (s.deposited > deposited) revert InvalidState();
+        return s.balance + deposited - s.deposited;
+    }
+
     function cooperativeClose(
         Evidence calldata evidence,
         bytes calldata playerSignature,
@@ -330,7 +358,9 @@ contract HookedInCasino {
         if (_signer(digest, playerSignature) != c.player || _signer(digest, casinoSignature) != owner) {
             revert Unauthorized();
         }
-        _finalize(s.channelId, stateHash, s.balance);
+        _finalize(s.channelId, stateHash, _owed(s));
+        // Both sides agreed, so the claim is paid at once, as far as it can be.
+        _pay(s.channelId);
     }
 
     function startClose(Evidence calldata evidence) external nonReentrant {
@@ -342,7 +372,7 @@ contract HookedInCasino {
         c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
-        c.closingBalance = s.balance;
+        c.closingBalance = _owed(s);
         emit CloseStarted(s.channelId, s.sequence, c.closingHash, c.deadline);
     }
 
@@ -355,7 +385,7 @@ contract HookedInCasino {
         }
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
-        c.closingBalance = s.balance;
+        c.closingBalance = _owed(s);
         emit CloseChallenged(s.channelId, s.sequence, c.closingHash);
     }
 
@@ -365,7 +395,8 @@ contract HookedInCasino {
         _finalize(channelId, c.closingHash, c.closingBalance);
     }
 
-    // Finalization only establishes debt. Collection is an independent transaction.
+    // Finalization only establishes debt. A cooperative close collects in the same transaction; after a unilateral
+    // close, collection is an independent transaction.
     function _finalize(bytes32 channelId, bytes32 stateHash, uint256 balance) private {
         Channel storage c = channels[channelId];
         c.status = STATUS_FINALIZED;

@@ -1,7 +1,7 @@
 import type { JsonRpcProvider, InterfaceAbi, BlockTag } from 'ethers';
 import type { EvidenceBundle } from './types.ts';
 import { Contract } from 'ethers';
-import { verifyEvidence, domain, initialState, hashState, same, plain } from './protocol.ts';
+import { verifyEvidence, domain, initialState, hashState, same, plain, owed } from './protocol.ts';
 import { blockReference, readContract, requireCanonicalBlock } from './chain-observer.ts';
 
 /** Settlement needs current contract state, never historical event availability. */
@@ -57,6 +57,8 @@ export async function inspectEvidence(
     closingSequence: channel.closingSequence,
     closingStateHash: channel.closingHash,
     signedBalance: verified.state.balance,
+    // What a close with this evidence would be owed: the signed balance and the deposits it has not taken in.
+    owed: owed(verified.state, channel.deposit),
     claim: Object.fromEntries(
       ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining', 'finalizedAt'].map(
         key => [key, claim[key]],

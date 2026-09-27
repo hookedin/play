@@ -25,6 +25,8 @@ export interface Checkpoint {
   previousStateHash: string;
   transitionHash: string;
   balance: Integer;
+  /** How much of the channel's on-chain deposits the balance has taken in. A close adds the rest. */
+  deposited: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
  * under; or, for a game opened by its URL alone, the zero address and that URL. */

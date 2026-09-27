@@ -7,7 +7,7 @@
     "signer": "0x3333333333333333333333333333333333333333",
     "developer": "0x4444444444444444444444444444444444444444"
   },
-  "protocol": "0x319a7023d2f8ced461cfc7257cce3f82b425e3eb62d55347b87cf0383ce0fe8a",
+  "protocol": "0xe7b5e9554e3d97d8fcb393fde43293f3a7a46b81c206223a9978beca190e7388",
   "developerProtocol": "0xf5bd44c475a9e6e0136b45e0fb337e44a37298c63003b0c8f7fd74d6838a6d65",
   "opening": {
     "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
@@ -20,9 +20,10 @@
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "1000000000"
+    "balance": "1000000000",
+    "deposited": "1000000000"
   },
-  "genesisHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
+  "genesisHash": "0x690366f3875be0aa63859b0bb23f44cad2957d012f9a3eb4a231182da1d6f54d",
   "operations": [
     {
       "details": {
@@ -32,7 +33,7 @@
       "canonical": "{\"game\":\"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d\",\"id\":\"0x8282828282828282828282828282828282828282828282828282828282828282\"}",
       "operation": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-        "previousStateHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
+        "previousStateHash": "0x690366f3875be0aa63859b0bb23f44cad2957d012f9a3eb4a231182da1d6f54d",
         "sequence": "1",
         "kind": 1,
         "amount": "100000000",
@@ -42,17 +43,18 @@
         "seedHash": "0x93eebcc6bf46d8794e5dceae4f639f506d51617f75530350bae4a57914135fb3",
         "memo": "0x3b9bec2484aa9c100236c93793cbe6b414ff93c5734aee5f66316d4e68bee492"
       },
-      "hash": "0xa9f21e5667b2b230c81b616282d0d3e74f5e43c4a4984012841db1b9ddf8c1c3",
+      "hash": "0xfae9667b583485aa9b8c00c643bff3b3db09a1352a3febe51d4d4a59d6ccea2e",
       "seed": "0x7272727272727272727272727272727272727272727272727272727272727272",
       "secret": "0xb4601af5d75712b9c5a4903508c1dc68220290927397da8657d119178cf34cc6",
       "next": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
         "sequence": "1",
-        "previousStateHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
-        "transitionHash": "0x1d60a04af89d57809d25b3faf1920a24381f75e9b1b42c25525b74a41988979c",
-        "balance": "1100000000"
+        "previousStateHash": "0x690366f3875be0aa63859b0bb23f44cad2957d012f9a3eb4a231182da1d6f54d",
+        "transitionHash": "0x32a22b5c34ed33f60265e882906b1a28629d2a5f35cc260c53e9d4d18c82c140",
+        "balance": "1100000000",
+        "deposited": "1000000000"
       },
-      "nextHash": "0x7c6409d4d9aa7173cb31f53a5c3e24cd7cfbb24eca0f6337a233442bfa83aa36"
+      "nextHash": "0xac37f6cc4b722154c5494c91f185d60fb9a6f240f97dcea248b391729c56bec0"
     },
     {
       "details": {
@@ -70,7 +72,7 @@
       "canonical": "{\"game\":\"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d\",\"group\":\"spin-1\",\"id\":\"0x8383838383838383838383838383838383838383838383838383838383838383\",\"meta\":{\"chips\":{\"17\":\"20000000\",\"9\":\"10000000\",\"red\":\"30000000\"}}}",
       "operation": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-        "previousStateHash": "0x7c6409d4d9aa7173cb31f53a5c3e24cd7cfbb24eca0f6337a233442bfa83aa36",
+        "previousStateHash": "0xac37f6cc4b722154c5494c91f185d60fb9a6f240f97dcea248b391729c56bec0",
         "sequence": "2",
         "kind": 2,
         "amount": "60000000",
@@ -80,27 +82,28 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x88456920b0dce4c103868f21a4ecdcad753a3d3bfa56f2cdfb16a7a2c9d0b370"
       },
-      "hash": "0xf5aacc780b5cae72dcfd5041b2f55341940bfe2e09f423edf896f2811e864ac1",
+      "hash": "0x32077ed513cad7c00fa91c53705f75fde4cca8c6fa04d7d98af9dfebf5b1482c",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
         "sequence": "2",
-        "previousStateHash": "0x7c6409d4d9aa7173cb31f53a5c3e24cd7cfbb24eca0f6337a233442bfa83aa36",
-        "transitionHash": "0x6fc1f4652998ec6493b900d00d9d13a5be00b064a204bb1de27f8aeaa62da000",
-        "balance": "1040000000"
+        "previousStateHash": "0xac37f6cc4b722154c5494c91f185d60fb9a6f240f97dcea248b391729c56bec0",
+        "transitionHash": "0x98f62763e09944e4e5527cc339e14d6e6983f961baa02c034b2f2db58077315a",
+        "balance": "1040000000",
+        "deposited": "1000000000"
       },
-      "nextHash": "0x0289beac6f6a29baaaa365afb8e56f53d03c75e5461dac06f64076f06be9329b"
+      "nextHash": "0xfc9267f4fe4dc64d7796a3549daed8ac3e4856b80161819ab83ec2117395f811"
     },
     {
       "details": {
         "id": "0x8484848484848484848484848484848484848484848484848484848484848484",
-        "counterparty": "0xf5aacc780b5cae72dcfd5041b2f55341940bfe2e09f423edf896f2811e864ac1"
+        "counterparty": "0x32077ed513cad7c00fa91c53705f75fde4cca8c6fa04d7d98af9dfebf5b1482c"
       },
-      "canonical": "{\"counterparty\":\"0xf5aacc780b5cae72dcfd5041b2f55341940bfe2e09f423edf896f2811e864ac1\",\"id\":\"0x8484848484848484848484848484848484848484848484848484848484848484\"}",
+      "canonical": "{\"counterparty\":\"0x32077ed513cad7c00fa91c53705f75fde4cca8c6fa04d7d98af9dfebf5b1482c\",\"id\":\"0x8484848484848484848484848484848484848484848484848484848484848484\"}",
       "operation": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-        "previousStateHash": "0x0289beac6f6a29baaaa365afb8e56f53d03c75e5461dac06f64076f06be9329b",
+        "previousStateHash": "0xfc9267f4fe4dc64d7796a3549daed8ac3e4856b80161819ab83ec2117395f811",
         "sequence": "3",
         "kind": 3,
         "amount": "120000000",
@@ -108,19 +111,50 @@
         "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "memo": "0xd668bfcf137558f8fb91dda8730b8283ee8ab7ea905d4f31a7197d67e6ad1438"
+        "memo": "0x1a9204a8b9d346a122401cd9594ed534cf15d3da0564e11b48801a4b250ec8bd"
       },
-      "hash": "0x5b0e3790f46b8f79d545efb713bbf8dfd03a2c01e5ad816e2b27acc5d08272e4",
+      "hash": "0xf21ea6a083e043b65afa25a7e30472628170c749f7a0a73dd3016c8ab69ff897",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
         "sequence": "3",
-        "previousStateHash": "0x0289beac6f6a29baaaa365afb8e56f53d03c75e5461dac06f64076f06be9329b",
-        "transitionHash": "0xada2cb772ff86076861ad949bc76ffe88a4f6d4fc208d9810b49f03a9e6e1f9f",
-        "balance": "1160000000"
+        "previousStateHash": "0xfc9267f4fe4dc64d7796a3549daed8ac3e4856b80161819ab83ec2117395f811",
+        "transitionHash": "0x5fcb5c86f08c29ca4a858f40311a558ee455daab20227ceabdf8fc223aee42ab",
+        "balance": "1160000000",
+        "deposited": "1000000000"
       },
-      "nextHash": "0x90dc352f7f1d7b3d15c826d4da5e90d2d60a156bb2dddf6cfa80da10b012e2f2"
+      "nextHash": "0xa268738967a4cc6b1ccbd64fc73e32f1717a790e9f53b8176c0a5cc03db9f48c"
+    },
+    {
+      "details": {
+        "id": "0x8585858585858585858585858585858585858585858585858585858585858585"
+      },
+      "canonical": "{\"id\":\"0x8585858585858585858585858585858585858585858585858585858585858585\"}",
+      "operation": {
+        "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
+        "previousStateHash": "0xa268738967a4cc6b1ccbd64fc73e32f1717a790e9f53b8176c0a5cc03db9f48c",
+        "sequence": "4",
+        "kind": 4,
+        "amount": "500000000",
+        "chance": "0",
+        "prize": "0",
+        "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "memo": "0xea3244c5bd73984406a3f0e89003997b18a2c1e67c029db54a471417b7dcac83"
+      },
+      "hash": "0x6aa80294fdd1a7ac95fb296cb0f9e0fdfc4ae5bae9e30d114a4c4cf7b733e112",
+      "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "next": {
+        "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
+        "sequence": "4",
+        "previousStateHash": "0xa268738967a4cc6b1ccbd64fc73e32f1717a790e9f53b8176c0a5cc03db9f48c",
+        "transitionHash": "0xacfa0c1dd69682e61c5f9eda9f1c2b9030ef447481f01c1a6eab0a2b7fe3915c",
+        "balance": "1660000000",
+        "deposited": "1500000000"
+      },
+      "nextHash": "0xb73d1cec704e40c1a86e67fdfff9f39f44d5899d6f0f1530f47f698050a1a638"
     }
   ],
   "outcome": {
@@ -131,16 +165,17 @@
   "rejection": {
     "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
     "sequence": "2",
-    "previousStateHash": "0xb519d92aed0761b07238b02c60d65ec325be7458bb5f50068b519c8c8b572da6",
-    "transitionHash": "0xa9f21e5667b2b230c81b616282d0d3e74f5e43c4a4984012841db1b9ddf8c1c3",
-    "balance": "1000000000"
+    "previousStateHash": "0x690366f3875be0aa63859b0bb23f44cad2957d012f9a3eb4a231182da1d6f54d",
+    "transitionHash": "0xfae9667b583485aa9b8c00c643bff3b3db09a1352a3febe51d4d4a59d6ccea2e",
+    "balance": "1000000000",
+    "deposited": "1000000000"
   },
-  "rejectionHash": "0x61cbe6c08172ad30a70f484862d90a4dcb42e4ce50f8612f28d21d6d75a0a0cd",
+  "rejectionHash": "0x21c75b1ee2ec3e1c96266ccd7b586fb0e2731172de637d856c4e5271438fe998",
   "close": {
     "channelId": "0x25525c4bf6ee008c2456d7622bfced26242fad77d94fab1a03e4658e50f36d34",
-    "stateHash": "0x90dc352f7f1d7b3d15c826d4da5e90d2d60a156bb2dddf6cfa80da10b012e2f2"
+    "stateHash": "0xb73d1cec704e40c1a86e67fdfff9f39f44d5899d6f0f1530f47f698050a1a638"
   },
-  "closeHash": "0xa05b3705e5a62cf82ae2691e57bf7aa2d6a7dc98e1df0c49048ac695e9be8e25",
+  "closeHash": "0xd0ae099d702b23e22c4688fa9b91acaef7501e9eda1fdb6d60e016221b714394",
   "cases": [
     {
       "bankroll": "10000000000",

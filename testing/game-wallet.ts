@@ -120,7 +120,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       state: structuredClone(state),
       playerSignature: await key.signTypedData(d, STATE_TYPES, state),
       casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
-      onchain: { status: '1' },
+      onchain: { status: '1', deposit: String(deposit) },
     };
   };
   const first = await openChannel();
@@ -502,7 +502,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     async replaceChannel(of = wallet) {
       const old = of.channels[of.channelId!]!,
         next = await openChannel();
-      of.channels[old.opening.channelId] = { ...old, onchain: { status: '3' } };
+      of.channels[old.opening.channelId] = { ...old, onchain: { ...old.onchain, status: '3' } };
       of.channels[next.opening.channelId] = structuredClone(next);
       of.channelId = next.opening.channelId;
       await of.save();

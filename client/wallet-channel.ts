@@ -44,8 +44,8 @@ import { gameAmount, gameRef } from './game-account.ts';
 import { gameError, META } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
-/** Operations that collect what is owed. They commit none of the signed balance. */
-const CREDITS = ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'];
+/** Operations that add to the balance: a payout collected, or a deposit taken in. They commit none of it. */
+const CREDITS = ['divest', 'earnings', 'developer-bet-payout', 'withdrawn', 'taken-in'];
 const bytes32 = (value: unknown): value is string =>
   typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value) && !same(value, ZeroHash);
 /** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
@@ -110,8 +110,11 @@ export class ChannelClient extends WalletTransactions {
   }
   async perform(this: CasinoWallet, kind: string, input: any, operationId: string, game?: GameIntent) {
     this.requireDurableState();
+    // A deposit on its way into the balance goes first: nothing else is signed before the casino has signed it.
+    if (kind !== 'taken-in' && this.pending?.kind === 'taken-in') await this.takeDeposits();
     const intent = {
-      // A developer bet, a payment and an investment are debits, and a payout collected is a credit.
+      // A developer bet, a payment and an investment are debits, a payout collected is a credit, and money deposited
+      // into the channel is taken in with a deposit.
       kind:
         (
           {
@@ -124,6 +127,7 @@ export class ChannelClient extends WalletTransactions {
             earnings: KIND.credit,
             'developer-bet-payout': KIND.credit,
             withdrawn: KIND.credit,
+            'taken-in': KIND.deposit,
           } as Record<string, number>
         )[kind] || 0,
       amount: BigInt(kind === 'casino-bet' ? input.stake : input.amount),
@@ -205,18 +209,22 @@ export class ChannelClient extends WalletTransactions {
       };
       await this.save();
     };
-    return this.exclusive(async () => {
-      this.ready();
-      if (!this.pending) await sign();
-      else {
-        if (this.pending.operationId !== operationId)
-          throw gameError('pending-operation', 'Recover the previous operation');
-        matches(this.pending.request, this.pending.details);
-        if (game && canonicalJSON(this.pending.game) !== canonicalJSON(game))
-          throw gameError('id-conflict', 'Pending game request differs');
-      }
-      return this.resume();
-    });
+    // The wallet's own background work finishes first: an operation waits for it rather than failing as busy.
+    return this.exclusive(
+      async () => {
+        this.ready();
+        if (!this.pending) await sign();
+        else {
+          if (this.pending.operationId !== operationId)
+            throw gameError('pending-operation', 'Recover the previous operation');
+          matches(this.pending.request, this.pending.details);
+          if (game && canonicalJSON(this.pending.game) !== canonicalJSON(game))
+            throw gameError('id-conflict', 'Pending game request differs');
+        }
+        return this.resume();
+      },
+      { wait: true },
+    );
   }
   async getReceipt(this: CasinoWallet, operationId: string) {
     return this.storage.get(this.storageKey + ':receipt:' + operationId);
@@ -738,6 +746,8 @@ export class ChannelClient extends WalletTransactions {
    * is checked against this wallet's own share statement before it signs the credit, and a developer bet against its
    * developer's settlement; commission is simply collected. */
   async collectPayouts(this: CasinoWallet) {
+    // Money deposited into the channel goes into the balance first: a waiting casino is asked again next time.
+    if (!this.busy) await this.takeDeposits().catch(() => {});
     if (
       this.busy ||
       this.pending ||
