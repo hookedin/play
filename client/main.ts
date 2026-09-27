@@ -1008,8 +1008,9 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       if (method === 'wallet.info') return wallet.gameInfo();
       if (method === 'wallet.round') return wallet.gameRound(params.id);
       if (method === 'game.receipt') return wallet.gameReceipt(params.id);
-      // Practice is the wallet's own arithmetic: nothing the channel is busy with holds up a bet.
-      if ((method === 'game.requestFunds' || !wallet.practicing) && (uiBusy || wallet.busy))
+      // Practice is the wallet's own arithmetic, its test coins included: nothing the channel or this page is busy
+      // with holds it up.
+      if (!wallet.practicing && (uiBusy || wallet.busy))
         throw gameError('busy', 'The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
         const requested = params.amount === undefined ? undefined : BigInt(params.amount);
