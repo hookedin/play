@@ -62,18 +62,18 @@ its verified winnings.
 - The wallet pushes `game.balance` with `{ balance, pending }` when the page loads and whenever either changes.
   `HookedIn.onBalance` hears it, and `HookedIn.balance()` resolves to the latest.
 - Every bet and payment must fit the limit. Verified winnings raise it; stakes and payments lower it.
-- The player can raise, lower or take back the limit from the wallet's top bar at any time.
+- The player can raise, lower or take back the limit at any time with **Change limit** above the game.
 - Leaving the game, reloading or closing the tab releases the limit. The money never left the channel.
 - One game per wallet holds a limit at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](state-and-recovery.md#lost-replies)).
-- A wallet with no funded channel [practices](../reference/bridge.md#practice): the limit is in test coins the wallet
-  keeps, and a game that asks for some gets them at once, without the dialog. The wallet settles casino bets and
-  payments itself, and a developer bet fails with `practice`. `wallet.hello` says so, and a game built on developer bets
-  shows its table and says that it plays with ETH.
+- A game that [practices](../reference/bridge.md#practice) has no limit: it plays with play money the wallet keeps and
+  tops up by itself, and a game that asks for more gets it at once, without the dialog. The wallet settles casino bets
+  and payments itself, and a developer bet fails with `practice`. `wallet.hello` says so, and a game built on developer
+  bets shows its table and says that it plays with ETH.
 
-[`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the limit as the balance strip the house games show, with an
-**Add funds** button.
+[`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the balance strip the house games show: the limit with an
+**Add funds** button, or in practice the play money.
 
 ## The bridge
 
@@ -102,13 +102,14 @@ player, the first balance, the money's name on the page and the recommended stak
 
 ## ETH and practice
 
-A wallet plays with the network's ETH, or [practices](../reference/bridge.md#practice) with test coins of its own, with
-which nobody wins or loses anything real. `wallet.hello` says which: `practice` is `true` in practice, `asset.symbol` is
-what to show, and `asset.decimals` is 18. Amounts on the bridge are decimal strings of whole smallest units, wei for
-ETH. `HookedIn.parseAmount('0.001')` is `'1000000000000000'`; `formatAmount`, `exactAmount` and `stepStake` convert the
-other way. A game of casino bets and payments needs no code of its own for practice. A game of developer bets is watched
-in practice: it shows its table and says it plays with ETH. The player switches in the wallet, which releases the limit
-and reloads the game: a limit, a round and saved state belong to practice or to the player's ETH.
+A game plays with the network's ETH, or [practices](../reference/bridge.md#practice) with the wallet's play money, with
+which nobody wins or loses anything real. Play money counts as ETH does, so the asset is the same either way:
+`asset.symbol` is what to show, `asset.decimals` is 18, and `practice` says which. Amounts on the bridge are decimal
+strings of whole wei. `HookedIn.parseAmount('0.001')` is `'1000000000000000'`; `formatAmount`, `exactAmount` and
+`stepStake` convert the other way. A game of casino bets and payments needs no code of its own for practice. A game of
+developer bets is watched in practice: it shows its table and says it plays with ETH. The player switches in the wallet,
+which releases the limit and reloads the game: a limit, a round and saved state belong to practice or to the player's
+ETH.
 
 ## What a game learns about the player
 

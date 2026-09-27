@@ -10,7 +10,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     const { HookedIn, HookedInError } = await import('../src/sdk.ts');
     const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
     // The page greets the wallet as it loads. No balance reaches the game until the wallet answers,
-    // but an amount can be read and written meanwhile: ETH and test coins both count in units of 10^-18.
+    // but an amount can be read and written meanwhile: ETH counts in units of 10^-18.
     assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
     assert.equal(HookedIn.formatAmount('1500000000000000000'), '1.5');
     assert.equal(HookedIn.parseAmount('1.5'), '1500000000000000000');

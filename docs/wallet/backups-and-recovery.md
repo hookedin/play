@@ -46,7 +46,7 @@ transaction pending. Before it writes anything, the wallet checks that:
 - it replaces no saved evidence with an older or conflicting checkpoint, and changes no pending operation.
 
 A backup of another account makes that account the funding account; a backup made with a connected browser wallet asks
-you to connect that wallet first. Test coins are in no backup: they live in the tab.
+you to connect that wallet first. Play money is in no backup: it lives in the tab.
 
 ## Recovery bundles
 

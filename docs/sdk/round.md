@@ -220,8 +220,8 @@ The name the constructor was given, or its default: part of the storage key.
 units: string;
 ```
 
-The symbol of what the wallet plays with, from `wallet.hello`, used in the sentences the helper writes to the player. It
-is `''` until a `restore`, `start` or `action` has had the wallet's answer.
+The symbol of the wallet's asset, from `wallet.hello`, used in the sentences the helper writes to the player. It is `''`
+until a `restore`, `start` or `action` has had the wallet's answer.
 
 ## Types
 

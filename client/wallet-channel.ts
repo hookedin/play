@@ -70,17 +70,16 @@ export class ChannelClient extends WalletTransactions {
   async balance(this: CasinoWallet) {
     return BigInt(this.channel?.state.balance || 0);
   }
-  /** What the player may still allocate to the open game: the test coins this tab practices with, or the signed
-   * balance less what a pending operation has already committed. A credit collects what is owed and commits nothing. */
+  /** What the player may still allocate to the open game: the signed balance less what a pending operation has already
+   * committed. A credit collects what is owed and commits nothing. */
   playableBalance(this: CasinoWallet) {
-    if (this.practicing) return this.practiceBalance;
     const pending = this.pending,
       committed = pending?.request && !CREDITS.includes(pending.kind) ? BigInt(pending.request.amount) : 0n,
       free = BigInt(this.channel?.state.balance || 0) - committed;
     return free < 0n ? 0n : free;
   }
-  /** The signed balance minus what this tab's open game may still risk of it; never below zero. A practice limit is in
-   * test coins, and holds none of it. */
+  /** The signed balance minus what this tab's open game may still risk of it; never below zero. A practice game plays
+   * with play money, and holds none of it. */
   availableBalance(this: CasinoWallet) {
     const limit = this.game && !this.game.practice ? BigInt(this.game.balance) : 0n,
       available = BigInt(this.channel?.state.balance || 0) - limit;

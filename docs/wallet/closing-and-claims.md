@@ -13,8 +13,7 @@ with the casino's signature in one transaction, or alone with your latest eviden
 | Figure                     | What it is                                                                                                                                    |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Wallet funds               | The ETH at your funding account's address. It pays deposits and network fees, and collected claims arrive here unless you send them elsewhere |
-| ETH balance                | Your channel's signed balance while it is open, the limits of games included. The top bar shows it while you play with ETH                    |
-| Test coins                 | What this tab practices with, kept in its memory and never sent to the casino                                                                 |
+| ETH balance                | Your channel's signed balance while it is open, the limits of games included. The top bar shows it while no game is open                      |
 | Original protected deposit | What you deposited. The contract keeps all of it aside while the channel is open, whatever the balance                                        |
 | Developer bets             | Stakes with developers, and payouts not yet collected, which are outside the signed balance                                                   |
 | Claims                     | What each finalized channel is owed, and what has been paid                                                                                   |

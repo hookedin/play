@@ -15,7 +15,7 @@ import { HookedIn } from '@hookedin/play/sdk/sdk';
 
 const shown = document.querySelector('#balance')!;
 HookedIn.onBalance(({ balance }) => (shown.textContent = HookedIn.formatAmount(balance)));
-const { asset } = await HookedIn.hello(); // asset.symbol names what this wallet plays with
+const { asset } = await HookedIn.hello(); // asset.symbol names the network's ETH, practicing or not
 
 const stake = HookedIn.parseAmount('0.000001'); // '1000000000000' in the asset's smallest units
 const funding = await HookedIn.requestFunds({ amount: stake });
@@ -107,10 +107,10 @@ const receipt = await HookedIn.call('game.receipt', { id: 'coin-17' });
 hello: () => Promise<WalletHello>;
 ```
 
-The wallet's greeting, [`wallet.hello`](../reference/bridge.md#wallethello): the methods it offers, what it plays with,
-whether it practices, its chain and its limits. The module sends it as it loads inside a frame, and every call returns
-that one promise while it is pending or once it has resolved. A greeting that failed is forgotten, so the next call asks
-the wallet again. It rejects as [`call`](#call) does.
+The wallet's greeting, [`wallet.hello`](../reference/bridge.md#wallethello): the methods it offers, the asset it counts
+in, whether it practices, its chain and its limits. The module sends it as it loads inside a frame, and every call
+returns that one promise while it is pending or once it has resolved. A greeting that failed is forgotten, so the next
+call asks the wallet again. It rejects as [`call`](#call) does.
 
 #### `limits`
 
@@ -178,8 +178,8 @@ requestFunds: (options?: { amount?: bigint | string }) =>
 Asks for money with [`game.requestFunds`](../reference/bridge.md#gamerequestfunds). `amount` is how much more than the
 game holds, in smallest units. With ETH it is a suggestion the wallet's own dialog shows, and the call resolves once the
 player has decided: `funded` says whether they set a limit, `amount` is the limit they chose (`null` if they declined),
-and `balance` and `pending` are the game's state after it. In practice the wallet asks nothing: the game gets test coins
-at once, `amount` more, or ten coins more without one, as far as the practice balance goes.
+and `balance` and `pending` are the game's state after it. In practice the wallet asks nothing: the play money grows at
+once by `amount`, or by what practice starts with without one, and `amount` and `balance` are the play money after it.
 
 #### `receipt`
 
@@ -252,7 +252,7 @@ the uname, so taking or dropping an alias keeps what the player had. [`playerSco
 part after the path.
 
 ```ts
-HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:eth:3byt9ocwnnzaxanmiz3stocj'
+HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:3byt9ocwnnzaxanmiz3stocj'
 ```
 
 #### `showName`
@@ -381,9 +381,9 @@ export interface GameBalance {
 ```
 
 What the wallet pushes as [`game.balance`](../reference/bridge.md#gamebalance). `balance` is what the game may still
-risk in this tab, including its winnings, in smallest units of what the wallet plays with; the wallet releases it when
-the player leaves the game. `pending` is `true` while a signed operation of this game awaits recovery in the wallet, and
-no bet or payment is possible.
+risk in this tab, including its winnings, in wei, or in practice the play money; the wallet releases a limit when the
+player leaves the game. `pending` is `true` while a signed operation of this game awaits recovery in the wallet, and no
+bet or payment is possible.
 
 ### `Asset`
 
@@ -394,8 +394,8 @@ export interface Asset {
 }
 ```
 
-What the wallet plays with, as a player reads it: the network's ETH (symbol `ETH` or `Sepolia ETH`), or in
-[practice](../reference/bridge.md#practice) test coins (symbol `TEST`). Both count in units of 10^-18: `decimals` is 18.
+What the wallet counts in, as a player reads it: the network's ETH (symbol `ETH` or `Sepolia ETH`), in
+[practice](../reference/bridge.md#practice) as with money. It counts in units of 10^-18: `decimals` is 18.
 
 ### `WalletLimits`
 
@@ -423,8 +423,9 @@ export interface WalletHello {
 }
 ```
 
-The result of [`wallet.hello`](../reference/bridge.md#wallethello). `practice` is `true` while the wallet practices: it
-settles casino bets and payments itself in test coins, and takes no developer bets.
+The result of [`wallet.hello`](../reference/bridge.md#wallethello). `practice` is `true` while the game practices: it
+plays with play money in ETH's amounts, which the wallet tops up by itself and settles casino bets and payments with,
+and the wallet takes no developer bets.
 
 ### `WalletInfo`
 
@@ -440,8 +441,9 @@ export interface WalletInfo {
 
 The result of [`wallet.info`](../reference/bridge.md#walletinfo): everything a game learns about the player. `uname` is
 theirs for good and `null` until a casino has answered the wallet; a game keys anything of its own by it. `alias` is the
-name they are shown by, `null` unless they took one. `bankroll` is the casino's bankroll as last reported, what to price bets
-against rather than a promise to admit them.
+name they are shown by, `null` unless they took one. `bankroll` is the casino's bankroll as last reported, or in
+[practice](../reference/bridge.md#practice) the practice bankroll: what to price bets against rather than a promise to
+admit them.
 
 ### `CasinoBetRequest`
 

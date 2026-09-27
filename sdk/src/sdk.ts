@@ -5,8 +5,8 @@ export interface GameBalance {
   /** A signed operation awaits recovery in the wallet; no new bet or payment is possible. */
   pending: boolean;
 }
-/** What the wallet plays with, as a player reads it: the network's ETH, or TEST, the test coins a wallet practices
- * with. Amounts on the bridge are whole numbers of its smallest unit, as decimal strings. */
+/** What the wallet counts in, as a player reads it: the network's ETH, in practice as with money. Amounts on the bridge
+ * are whole numbers of its smallest unit, as decimal strings. */
 export interface Asset {
   symbol: string;
   decimals: number;
@@ -25,8 +25,8 @@ export interface WalletLimits {
 export interface WalletHello {
   methods: string[];
   asset: Asset;
-  /** The wallet practices: its test coins are its own, it settles casino bets and payments itself, and it takes no
-   * developer bets. Nothing real is won or lost. */
+  /** The wallet practices: the game plays with play money in ETH's amounts, which the wallet tops up by itself and
+   * settles casino bets and payments with, and it takes no developer bets. Nothing real is won or lost. */
   practice: boolean;
   chainId: string;
   limits: WalletLimits;
@@ -135,8 +135,8 @@ export const HookedIn = (() => {
       },
     ));
   if (window.parent !== window) hello().catch(() => {});
-  /** ETH and test coins both count in units of 10^-18, so an amount can be read and written before the wallet has
-   * said which one this is; only its name has to wait for the greeting. */
+  /** ETH counts in units of 10^-18, so an amount can be read and written before the wallet has greeted the page; only
+   * its name has to wait for the greeting. */
   const asset = (): Asset => greeted?.asset ?? { symbol: '', decimals: 18 };
 
   /** The wallet pushes the game's spendable balance whenever it changes, including stops and top-ups. */

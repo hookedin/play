@@ -54,9 +54,9 @@ import { HEADS, flipBet, wire } from './flip.ts';
 await HookedIn.hello(); // whether the wallet practices, which the storage key below names
 const key = `${HookedIn.storageScope(await HookedIn.info())}:flip`;
 
-/** One flip for `stake`, in smallest units of what the wallet plays with. */
+/** One flip for `stake`, in wei. */
 async function flip(stake: bigint) {
-  // The game may risk only its spending limit. The player sets it in the wallet's own dialog.
+  // With ETH, the game may risk only its spending limit, which the player sets in the wallet's own dialog.
   const { balance } = await HookedIn.balance();
   if (BigInt(balance) < stake) {
     const funding = await HookedIn.requestFunds({ amount: 10n * stake - BigInt(balance) });

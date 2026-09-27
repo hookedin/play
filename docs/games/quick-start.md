@@ -11,8 +11,8 @@ template to a settled bet: you run the template's bridge probe on your machine a
 ## What you need
 
 - Node 24.4 or later.
-- A HookedIn wallet: open [play.hookedin.com](https://play.hookedin.com). A wallet with no deposit practices with test
-  coins of its own, which settle casino bets and payments but no developer bets
+- A HookedIn wallet: open [play.hookedin.com](https://play.hookedin.com). A wallet with no deposit practices with play
+  money of its own, which settles casino bets and payments but no developer bets
   ([getting started](../wallet/getting-started.md#practice)).
 
 ## Create the game
@@ -64,8 +64,8 @@ Open the wallet as `https://play.hookedin.com/?log` to see every bridge message 
 
 ## Place a first bet
 
-1. Press **Add funds**. A wallet that practices gives the game ten test coins at once; with ETH, the wallet's own
-   dialog asks how much the game may play with. The probe prints the `game.balance` event that follows.
+1. With ETH, press **Add funds**: the wallet's own dialog asks how much the game may play with, and the probe prints
+   the `game.balance` event that follows. A wallet that practices needs no funds: the game plays with its play money.
 2. Press **game.casinoBet · 50% to double**, then **Send**. The bet pays twice the stake on half the outcomes, which
    leaves the casino no edge, so it declines it: the receipt says `"status": "rejected"`, and the balance is unchanged.
 3. Press the preset again, for a fresh operation ID. In the request, change `prize` to `"1900000000000"`, 1.9 times

@@ -36,20 +36,14 @@
         </nav>
         <div class="topbar-context"><span class="live-dot"></span><span id="network-name">Sepolia</span></div>
         <div class="topbar-wallet">
-          <div class="money-pill">
-            <a
-              id="balance-link"
-              class="balance-link"
-              href="/wallet"
-              data-page="wallet"
-              title="Your playing balance. Open my wallet."
-              ><span id="balance-amount">—</span></a
-            >
-            <div id="asset-switch" class="asset-switch" role="group" aria-label="What you play with">
-              <button type="button" data-play="eth">ETH</button><button type="button" data-play="practice">TEST</button>
-            </div>
-          </div>
-          <button id="game-funds" class="button secondary compact hidden" type="button">Take money back</button
+          <a
+            id="balance-link"
+            class="money-pill hidden"
+            href="/wallet"
+            data-page="wallet"
+            title="Your ETH balance. Open My wallet."
+            ><span id="balance-amount">—</span><small>ETH</small></a
+          ><button id="play-eth" class="button primary compact hidden" type="button">Play with ETH</button
           ><a id="account-link" class="account-link" href="/account" data-page="account"
             ><span class="account-mark" aria-hidden="true">◈</span
             ><span class="account-names"
@@ -126,6 +120,12 @@
         </section>
 
         <section id="page-play" class="page hidden">
+          <div id="game-strip" class="game-strip" data-mode="practice">
+            <strong id="strip-mode">Practice</strong><span id="strip-note" class="strip-note"></span
+            ><span id="strip-amount" class="strip-amount"></span
+            ><button id="strip-limit" class="text-button hidden" type="button">Change limit</button
+            ><button id="strip-switch" class="button small" type="button">Play with ETH</button>
+          </div>
           <div id="frame-slot" class="game-viewport"></div>
           <section id="game-activity" class="game-activity hidden" aria-labelledby="game-activity-title">
             <div class="game-activity-heading">
@@ -173,7 +173,7 @@
           <div class="eyebrow">YOURS TO CONTROL</div>
           <h1>My wallet<span class="heading-dot">.</span></h1>
           <p class="intro wallet-intro">
-            Every wallet can practice at once with test coins kept in this tab. Receive ETH here to play with real
+            The ETH this wallet holds, and the channel its games play from. Until you add some, games practice with play
             money.
           </p>
           <div class="funding-balances">
@@ -188,19 +188,11 @@
               <p>Your signed channel balance, including game spending limits</p>
               <p id="developer-earnings" class="hidden"></p>
             </div>
-            <div class="wallet-balance-card">
-              <div class="eyebrow">TEST COINS</div>
-              <div class="large-amount"><span id="test-balance">—</span><small>TEST</small></div>
-              <p>
-                Practice money this tab keeps: the same games at the same odds, with nothing sent to the casino and
-                nothing real won or lost. A reload starts again at 100. Games with developer bets need ETH.
-              </p>
-              <p class="text-button-row">
-                <button id="test-faucet" class="text-button" type="button">Add 100 test coins</button>
-              </p>
-            </div>
           </div>
-          <button id="wallet-history" class="text-button wallet-history-link">View transaction history ↗</button>
+          <p class="wallet-actions">
+            <button id="add-eth" class="button primary" type="button">Add ETH</button
+            ><button id="wallet-history" class="text-button">View transaction history ↗</button>
+          </p>
           <section class="surface wallet-developer-bets-card" aria-labelledby="developer-bets-title">
             <h2 id="developer-bets-title">Developer bets</h2>
             <p id="developer-bets-status" role="status"></p>
@@ -209,91 +201,6 @@
             </button>
             <div id="wallet-developer-bets" class="activity-list"></div>
           </section>
-          <div class="funding-steps">
-            <section class="surface receive-card" aria-labelledby="receive-title">
-              <div class="funding-heading">
-                <span class="step-number">1</span>
-                <div>
-                  <h2 id="receive-title" tabindex="-1">Receive ETH</h2>
-                  <p>Deposit into your wallet</p>
-                </div>
-              </div>
-              <p id="receive-instructions">
-                Send Sepolia test ETH from another wallet or a faucet to the address below.
-              </p>
-              <div class="receive-network">
-                <span id="receive-network">Sepolia · 11155111</span><span id="asset-name">Sepolia ETH</span>
-              </div>
-              <p id="receive-network-note" class="network-note">
-                Select Sepolia (11155111) in the sending wallet or service. ETH sent on another network won’t appear in
-                this balance.
-              </p>
-              <label id="receive-address-label">Your deposit address</label>
-              <div class="deposit-address-box">
-                <code id="wallet-address" aria-labelledby="receive-address-label" dir="ltr">Connecting…</code
-                ><button id="copy-address" class="button primary small" disabled>Copy address</button>
-              </div>
-              <div class="receive-progress">
-                <span class="live-dot"></span>
-                <p id="receive-status" role="status">Connecting to your wallet…</p>
-              </div>
-              <div class="receive-refresh">
-                <span id="receive-check">Your balance updates automatically while this page is open.</span
-                ><button id="check-deposit" class="text-button" disabled>Check now ↻</button>
-              </div>
-              <div id="demo-funding" class="demo-funding hidden">
-                <p>Testing locally? Add demo ETH to your wallet and playing balance.</p>
-                <button id="setup-wallet" class="button secondary small hidden" disabled>Set up demo wallet ↗</button>
-              </div>
-            </section>
-            <section class="surface play-funding-card" aria-labelledby="play-funding-title">
-              <div class="funding-heading">
-                <span class="step-number">2</span>
-                <div>
-                  <h2 id="play-funding-title">Open a funded channel</h2>
-                  <p>Deposit and register in one transaction</p>
-                </div>
-              </div>
-              <p>
-                Open once and play across games and visits. Check your wallet regularly and challenge any stale closure
-                within 24 hours of its start. Keep current recovery evidence. Close and reopen to add funds.
-              </p>
-              <div class="funding-amount-label">
-                <label for="deposit-amount">Amount to add</label
-                ><button
-                  id="max-deposit"
-                  class="text-button"
-                  type="button"
-                  aria-label="Use maximum deposit amount"
-                  disabled
-                >
-                  Max
-                </button>
-              </div>
-              <div class="amount-input">
-                <input
-                  id="deposit-amount"
-                  type="text"
-                  inputmode="decimal"
-                  value="0.00001"
-                  aria-describedby="deposit-help gas-reserve-note"
-                /><span>ETH</span>
-              </div>
-              <p id="deposit-help" class="funding-help">Receive ETH in step 1 to get started.</p>
-              <button id="deposit" class="button primary full" disabled>Open a funded channel ↗</button>
-              <p id="gas-reserve-note" class="funding-fee">
-                At least 0.001 ETH stays in your wallet for future network fees. Max also sets aside this deposit’s fee.
-              </p>
-              <details class="withdraw-details">
-                <summary>Close channel</summary>
-                <p>
-                  Your signed balance becomes a claim. Then collect available principal and winnings below in a separate
-                  transaction. Unpaid winnings remain claimable.
-                </p>
-                <button id="withdraw" class="button secondary full" disabled>Close channel ↙</button>
-              </details>
-            </section>
-          </div>
           <section class="surface wallet-settings">
             <h2>Channel and withdrawal claims</h2>
             <p id="channel-status">No open channel</p>
@@ -311,6 +218,14 @@
               ><button id="channel-challenge" class="button secondary small">Challenge stale balance</button
               ><button id="channel-finalize" class="button secondary small">Finalize withdrawal claim</button>
             </div>
+            <details class="withdraw-details">
+              <summary>Close channel</summary>
+              <p>
+                Your signed balance becomes a claim. Then collect available principal and winnings below in a separate
+                transaction. Unpaid winnings remain claimable.
+              </p>
+              <button id="withdraw" class="button secondary full" disabled>Close channel ↙</button>
+            </details>
             <label for="channel-import">Import recovery bundle</label
             ><input id="channel-import" type="file" accept="application/json" />
             <div id="claim-list"></div>
@@ -701,7 +616,7 @@
     <div id="toast" class="toast hidden" role="alert"></div>
     <dialog id="fund-dialog" class="fund-dialog" aria-labelledby="fund-title">
       <form id="fund-form">
-        <div id="fund-eyebrow" class="eyebrow">YOU ARE AUTHORIZING</div>
+        <div class="eyebrow">YOU ARE AUTHORIZING</div>
         <h2 id="fund-title">How much may this game play with?</h2>
         <p id="fund-who" class="fund-who"></p>
         <div class="fund-change" role="group" aria-label="What this changes">
@@ -740,13 +655,102 @@
             your bet history shows what this game has really paid you.
           </li>
         </ul>
-        <p id="fund-test-note" class="fund-note">
-          Test coins are practice money this tab keeps: the same games at the same odds, with nothing sent to the casino
-          and nothing real won or lost.
-        </p>
-        <button id="fund-faucet" class="text-button fund-aside" type="button">Add 100 test coins</button>
-        <button id="fund-switch" class="text-button fund-aside" type="button"></button>
+        <button id="fund-practice" class="text-button fund-aside" type="button">
+          Practice with play money instead
+        </button>
       </form>
+    </dialog>
+    <dialog id="eth-dialog" class="eth-dialog" aria-labelledby="eth-title">
+      <div class="bet-detail-bar">
+        <div>
+          <div class="eyebrow">PLAY WITH ETH</div>
+          <h2 id="eth-title">Get ETH into your wallet, then open a channel with it</h2>
+        </div>
+        <button id="eth-close" class="button secondary small" type="button">Close</button>
+      </div>
+      <div class="funding-steps">
+        <section class="surface receive-card" aria-labelledby="receive-title">
+          <div class="funding-heading">
+            <span class="step-number">1</span>
+            <div>
+              <h2 id="receive-title" tabindex="-1">Receive ETH</h2>
+              <p>Deposit into your wallet</p>
+            </div>
+          </div>
+          <p id="receive-instructions">Send Sepolia test ETH from another wallet or a faucet to the address below.</p>
+          <a
+            id="faucet-link"
+            class="text-button faucet-link"
+            href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Get free Sepolia ETH from a faucet ↗</a
+          >
+          <div class="receive-network">
+            <span id="receive-network">Sepolia · 11155111</span><span id="asset-name">Sepolia ETH</span>
+          </div>
+          <p id="receive-network-note" class="network-note">
+            Select Sepolia (11155111) in the sending wallet or service. ETH sent on another network won’t appear in this
+            balance.
+          </p>
+          <label id="receive-address-label">Your deposit address</label>
+          <div class="deposit-address-box">
+            <code id="wallet-address" aria-labelledby="receive-address-label" dir="ltr">Connecting…</code
+            ><button id="copy-address" class="button primary small" disabled>Copy address</button>
+          </div>
+          <div class="receive-progress">
+            <span class="live-dot"></span>
+            <p id="receive-status" role="status">Connecting to your wallet…</p>
+          </div>
+          <div class="receive-refresh">
+            <span id="receive-check">Your balance updates automatically while this page is open.</span
+            ><button id="check-deposit" class="text-button" disabled>Check now ↻</button>
+          </div>
+          <div id="demo-funding" class="demo-funding hidden">
+            <p>Testing locally? Add demo ETH to your wallet and playing balance.</p>
+            <button id="setup-wallet" class="button secondary small hidden" disabled>Set up demo wallet ↗</button>
+          </div>
+        </section>
+        <section class="surface play-funding-card" aria-labelledby="play-funding-title">
+          <div class="funding-heading">
+            <span class="step-number">2</span>
+            <div>
+              <h2 id="play-funding-title">Open a funded channel</h2>
+              <p>Deposit and register in one transaction</p>
+            </div>
+          </div>
+          <p>
+            Open once and play across games and visits. Check your wallet regularly and challenge any stale closure
+            within 24 hours of its start. Keep current recovery evidence. Close and reopen to add funds.
+          </p>
+          <div class="funding-amount-label">
+            <label for="deposit-amount">Amount to add</label
+            ><button
+              id="max-deposit"
+              class="text-button"
+              type="button"
+              aria-label="Use maximum deposit amount"
+              disabled
+            >
+              Max
+            </button>
+          </div>
+          <div class="amount-input">
+            <input
+              id="deposit-amount"
+              type="text"
+              inputmode="decimal"
+              value="0.00001"
+              aria-describedby="deposit-help gas-reserve-note"
+            /><span>ETH</span>
+          </div>
+          <p id="deposit-help" class="funding-help">Receive ETH in step 1 to get started.</p>
+          <button id="deposit" class="button primary full" disabled>Open a funded channel ↗</button>
+          <p id="gas-reserve-note" class="funding-fee">
+            At least 0.001 ETH stays in your wallet for future network fees. Max also sets aside this deposit’s fee.
+          </p>
+        </section>
+      </div>
     </dialog>
     <dialog id="bet-dialog" class="bet-dialog" aria-labelledby="bet-detail-title">
       <div class="bet-detail-bar">

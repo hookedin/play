@@ -765,7 +765,7 @@ test('every sentence the round helper writes names what the wallet plays with, a
         return { funded: false, amount: null, balance: limit, pending: false };
       }
       if (method === 'wallet.hello' && ++greetings === 1) throw new Error('The wallet did not respond.');
-      return { bankroll: '5000000000000000', chainId: '1', asset: { symbol: 'TEST', decimals: 18 }, practice: true };
+      return { bankroll: '5000000000000000', chainId: '1', asset: { symbol: 'ETH', decimals: 18 }, practice: true };
     },
     balance: async () => ({ balance: limit, pending: false }),
   };
@@ -798,7 +798,7 @@ test('every sentence the round helper writes names what the wallet plays with, a
   await assert.rejects(round.start({ stake: '1000' }), /Add enough money/);
   assert.deepEqual(requests.at(-1), { amount: '5000' }, 'the shortfall plus four stakes, and no words of its own');
   limit = '100000000000000000';
-  await assert.rejects(round.start({ stake: '5000000000000000' }), /back about 0\.0025 TEST of payouts/);
+  await assert.rejects(round.start({ stake: '5000000000000000' }), /back about 0\.0025 ETH of payouts/);
 });
 
 test('a stake the casino cannot back fails with a plain capacity message, not a pricing error', async () => {

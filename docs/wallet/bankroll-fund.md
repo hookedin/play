@@ -27,8 +27,8 @@ wei. The wallet shows shares with 18 decimals, like ETH, so a whole share began 
 bankroll has made or lost since.
 
 Your holding belongs to your funding account's address, not to a channel, so it outlives every channel you open. The
-fund takes ETH only, so buy and sell while the tab plays with ETH. An amount too small to buy a share, or a bankroll
-with nothing left, is declined with a signed rejection, and your balance is unchanged.
+fund takes ETH only, so buying and selling need an open funded channel. An amount too small to buy a share, or a
+bankroll with nothing left, is declined with a signed rejection, and your balance is unchanged.
 
 ## The statements your wallet checks
 

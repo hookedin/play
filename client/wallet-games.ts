@@ -15,19 +15,16 @@ import { developerBetStatus, gameAmount, gameOperationKey } from './game-account
 import { METHODS, gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
-const COIN = 10n ** 18n;
-/** Practice is test coins this tab keeps in memory: it starts with `PRACTICE_COINS`, and gets as many again once it
- * holds fewer than `PRACTICE_REFILL_BELOW`. Its casino bets are held to the casino's own rule against
- * `PRACTICE_BANKROLL`. */
-export const PRACTICE_COINS = 100n * COIN;
-export const PRACTICE_REFILL_BELOW = 10n * COIN;
-export const PRACTICE_BANKROLL = 10_000_000n * COIN;
+/** Practice is play money this tab keeps in memory, in amounts the size of the network's ETH: it starts at
+ * `PRACTICE_STAKES` of the network's recommended stake, and never runs out, since an operation that would take more than
+ * it holds tops it back up. Its casino bets are held to the casino's own rule against a bankroll a hundred times that. */
+export const PRACTICE_STAKES = 10_000n;
 /** A practice casino bet's outcome: a uniform 64-bit number, drawn here. */
 const draw = () => crypto.getRandomValues(new BigUint64Array(1))[0]!;
 /** Whether the casino's own rule takes a casino bet against the practice bankroll. */
-function admitted(bet: ReturnType<typeof betTerms>) {
+function admitted(bankroll: bigint, bet: ReturnType<typeof betTerms>) {
   try {
-    assessBet({ bankroll: PRACTICE_BANKROLL, bet });
+    assessBet({ bankroll, bet });
     return true;
   } catch (error) {
     if (!(error instanceof RangeError)) throw error;
@@ -68,16 +65,18 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
 /**
  * The open game's spending limit. It lives only in this tab's memory: the wallet persists no game
  * state, and leaving the game or closing the tab releases the limit back to the balance it came from.
- * The signed channel balance is the money; the limit only caps what the game may risk. In practice, the limit is
- * in the test coins this tab keeps, and the wallet settles the game's casino bets and payments itself.
+ * The signed channel balance is the money; the limit only caps what the game may risk. In practice the game plays
+ * with all of this tab's play money, which has no limit, and the wallet settles its casino bets and payments itself.
  */
 export class GameSessions extends ChannelClient {
   game: GameSession | null = null;
-  /** The test coins this tab practices with. Never saved, signed or sent: a reload starts again. */
-  practiceBalance = PRACTICE_COINS;
+  /** What practice starts with, and tops back up to. */
+  declare practiceStart: bigint;
+  /** The play money this tab practices with. Never saved, signed or sent: a reload starts again. */
+  declare practiceBalance: bigint;
   /** Every practice operation's receipt, by the wallet's name for it, with the terms it was asked with. */
   practiced = new Map<string, { terms: string; receipt: GameReceipt }>();
-  /** Choose what this tab plays with: test coins, or the channel's ETH. The open game's limit was in the other money,
+  /** Choose what this tab plays with: play money, or the channel's ETH. The open game's limit was in the other money,
    * so it goes back. */
   setPractice(this: CasinoWallet, on: boolean) {
     if (!on && !this.funded) throw new Error('Deposit ETH to play with it');
@@ -92,11 +91,10 @@ export class GameSessions extends ChannelClient {
       this.game.balance = '0';
     }
   }
-  /** More test coins, once they run low. */
-  refillPractice(this: CasinoWallet) {
-    if (this.practiceBalance >= PRACTICE_REFILL_BELOW)
-      throw new Error('Test coins are topped up once you hold fewer than 10');
-    this.practiceBalance += PRACTICE_COINS;
+  /** Play money never runs out: `more` is added, and the balance is never left below what practice starts with. */
+  topUpPractice(this: CasinoWallet, more: bigint) {
+    const wanted = this.practiceBalance + more;
+    this.practiceBalance = wanted > this.practiceStart ? wanted : this.practiceStart;
     this.render();
   }
   openGame(this: CasinoWallet, identity: GameIdentity) {
@@ -121,13 +119,13 @@ export class GameSessions extends ChannelClient {
   gameLimit(this: CasinoWallet): GameLimit {
     const game = this.requireGame();
     return {
-      balance: game.balance,
+      balance: game.practice ? String(this.practiceBalance) : game.balance,
       pending: !game.practice && this.pending?.game?.key === game.key,
     };
   }
-  /** What a game page learns when it loads: what this wallet offers, and what it plays with: test coins in practice,
-   * or the network's ETH. Amounts on the bridge are whole numbers of the smallest unit. In practice the wallet takes
-   * no developer bets, so it does not offer them. */
+  /** What a game page learns when it loads: what this wallet offers, and whether it practices, with play money in the
+   * network's ETH amounts, or plays with ETH. Amounts on the bridge are whole numbers of the smallest unit. In practice
+   * the wallet takes no developer bets, so it does not offer them. */
   gameHello(this: CasinoWallet) {
     const game = this.requireGame();
     return {
@@ -148,8 +146,8 @@ export class GameSessions extends ChannelClient {
       uname: this.uname,
       alias: this.alias,
       chainId: String(this.expectedChainId),
-      bankroll: String(game.practice ? PRACTICE_BANKROLL : this.reportedBankroll),
-      recommendedStake: game.practice ? String(COIN) : this.recommendedStake,
+      bankroll: String(game.practice ? 100n * this.practiceStart : this.reportedBankroll),
+      recommendedStake: this.recommendedStake,
     };
   }
   /** A developer's round as the casino shows it to anyone, read through this wallet: a game whose players share a
@@ -183,14 +181,10 @@ export class GameSessions extends ChannelClient {
   }
   /** The only grant of spending authority: how much of the playing balance the open game may risk.
    * The limit lives in this tab's memory and signs nothing, so it can be set while an operation is
-   * pending; what that operation has already committed is simply not the player's to allocate. */
+   * pending; what that operation has already committed is simply not the player's to allocate. Practice has none. */
   async setGameLimit(this: CasinoWallet, amount: string) {
     const n = gameAmount(amount, false);
-    if (this.requireGame().practice) {
-      if (n > this.practiceBalance) throw new Error('The limit exceeds your playing balance');
-      this.game!.balance = String(n);
-      return this.render();
-    }
+    if (this.requireGame().practice) throw new Error('A practice game plays with all of its play money');
     return this.exclusive(async () => {
       this.ready();
       const game = this.requireGame();
@@ -256,7 +250,7 @@ export class GameSessions extends ChannelClient {
       ),
     );
   }
-  /** A casino bet or a payment in practice, settled here in test coins: nothing is signed and nothing is sent. As with
+  /** A casino bet or a payment in practice, settled here in play money: nothing is signed and nothing is sent. As with
    * money, the same request again returns its receipt, a casino bet is held to the casino's own rule, against the
    * practice bankroll, and its outcome decides it: drawn here. */
   practice(
@@ -265,8 +259,7 @@ export class GameSessions extends ChannelClient {
     kind: 'casino-bet' | 'payment',
     request: { stake?: string; chance?: string; prize?: string; amount?: string; group?: string },
   ): GameReceipt {
-    const game = this.requireGame(),
-      operationId = this.gameOperationId(id),
+    const operationId = this.gameOperationId(id),
       terms = JSON.stringify([kind, request.stake ?? request.amount, request.chance, request.prize, request.group]),
       known = this.practiced.get(operationId);
     if (known) {
@@ -276,7 +269,7 @@ export class GameSessions extends ChannelClient {
     }
     const group = request.group === undefined ? {} : { group: request.group },
       cost = gameAmount(kind === 'payment' ? request.amount : request.stake);
-    if (cost > BigInt(game.balance)) throw gameError('insufficient-funds', 'Bet exceeds the game balance');
+    if (cost > this.practiceBalance) this.topUpPractice(cost - this.practiceBalance);
     let receipt: GameReceipt = { id, kind, status: 'settled', ...group },
       paid = 0n;
     if (kind === 'casino-bet') {
@@ -295,16 +288,14 @@ export class GameSessions extends ChannelClient {
         prize: request.prize,
         ...group,
       };
-      if (admitted(bet)) {
+      if (admitted(100n * this.practiceStart, bet)) {
         const outcome = draw();
         paid = betPayout(bet, outcome);
         receipt = { ...receipt, outcome: String(outcome), payout: String(paid) };
       } else receipt = { ...receipt, status: 'rejected', reason: 'The bankroll cannot take this casino bet' };
     }
     // A declined casino bet moves nothing.
-    const change = receipt.status === 'rejected' ? 0n : paid - cost;
-    game.balance = String(BigInt(game.balance) + change);
-    this.practiceBalance += change;
+    this.practiceBalance += receipt.status === 'rejected' ? 0n : paid - cost;
     this.practiced.set(operationId, { terms, receipt });
     this.render();
     return receipt;

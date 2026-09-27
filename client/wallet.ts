@@ -68,7 +68,7 @@ import { verifyDeployment } from '../protocol/deployment.ts';
 import { encryptBackup, decryptBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { MIN_GAS_RESERVE, channelRecord, picked } from './wallet-transactions.ts';
-import { GameSessions } from './wallet-games.ts';
+import { GameSessions, PRACTICE_STAKES } from './wallet-games.ts';
 export { MIN_GAS_RESERVE } from './wallet-transactions.ts';
 export const HISTORICAL_CHANNEL_BATCH = 16;
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
@@ -209,6 +209,8 @@ export class CasinoWallet extends GameSessions {
       bank: {},
       developerEarnings: null,
       preferPractice: false,
+      practiceStart: PRACTICE_STAKES * BigInt(n.stake),
+      practiceBalance: PRACTICE_STAKES * BigInt(n.stake),
       history: [],
       channels: {},
       busy: false,
@@ -428,17 +430,15 @@ export class CasinoWallet extends GameSessions {
     const c = this.channel;
     return Boolean(c?.key) && Number(c!.onchain?.status) === 1 && !c!.closing;
   }
-  /** What games play with in this tab: test coins, the practice money it keeps, unless the account can play with
-   * ETH and the player has not chosen to practice. */
+  /** Whether games play with this tab's play money: always, until the account can play with ETH, and then when the
+   * player chooses to practice. */
   get practicing() {
     return !this.funded || this.preferPractice;
   }
-  /** What games play with, as a game is told it: test coins, or the network's ETH. Both count in units of 10^-18. */
+  /** What games count in, as a game is told it: the network's ETH, in units of 10^-18. Practice counts in the same
+   * amounts, and a game is told apart that it practices. */
   get asset() {
-    return {
-      symbol: this.practicing ? 'TEST' : this.networkName === 'Sepolia' ? 'Sepolia ETH' : 'ETH',
-      decimals: 18,
-    };
+    return { symbol: this.networkName === 'Sepolia' ? 'Sepolia ETH' : 'ETH', decimals: 18 };
   }
   get pending() {
     return this.channel?.pending || null;
@@ -572,9 +572,6 @@ export class CasinoWallet extends GameSessions {
         .filter(v => v.claim)
         .map(v => ({ channelId: v.state.channelId, observedAt: v.observedAt, ...v.claim })),
       chainId: String(this.expectedChainId),
-      // What games play with in this tab: the test coins it practices with, or the channel's ETH.
-      playBalance: this.practicing ? String(this.practiceBalance) : c!.state.balance,
-      practiceBalance: String(this.practiceBalance),
       // Commission this account's games have earned, as the casino reports it to this channel.
       developerEarnings: this.developerEarnings,
     };

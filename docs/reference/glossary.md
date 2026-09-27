@@ -173,6 +173,12 @@ chance. See [the outcome](signed-messages.md#the-outcome).
 A debit a game asks for to the bankroll: a fixed amount, on no round, with no commission. See
 [payments](../overview/how-it-works.md#payments).
 
+### Play money
+
+The money a game practices with, kept in the tab's memory in amounts the size of the network's ETH, which never runs
+out. The wallet settles a game's casino bets and payments with it and sends the casino nothing. See
+[practice](../overview/how-it-works.md#practice).
+
 ### Prize
 
 What a casino bet pays when it wins. The stake was paid to enter, so a win gains the prize less the stake.
@@ -213,18 +219,13 @@ A developer's signed statement of what a developer bet pays its player and gives
 
 ### Spending limit
 
-The money the open game may play with in the tab: ETH the player allows in the wallet's own dialog, or in practice test
-coins the game gets when it asks. It signs nothing and is released when the game closes. See
-[games and limits](../wallet/games-and-limits.md).
+The ETH the open game may play with in the tab, which the player allows in the wallet's own dialog. It signs nothing and
+is released when the game closes; a game that practices has none, and plays with all of the [play money](#play-money).
+See [games and limits](../wallet/games-and-limits.md).
 
 ### Stake
 
 What a bet pays to enter.
-
-### Test coins
-
-The money a wallet practices with, TEST, kept in the tab's memory: the wallet settles a game's casino bets and payments
-in them itself and sends the casino nothing. See [practice](../overview/how-it-works.md#practice).
 
 ### Uname
 

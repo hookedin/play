@@ -6,13 +6,13 @@ Play it at [dice-game.hookedin.com](https://dice-game.hookedin.com/) through the
 
 ## How to play
 
-1. Add funds to the game from your wallet with **Add funds**.
+1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
 2. Set the win chance with the slider, from 10% to 90% in steps of 0.5%.
 3. Enter a stake and press **Roll dice**.
 
 A win pays `99% / win chance` times the stake: 2× at 49.5%, 9.9× at 10%, 1.1× at 90%. A loss pays nothing. The roll shown is the verified outcome on a 0–100 scale: a win falls under the win chance, a loss at or above it.
 
-The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
+The wallet plays with the network's ETH, or practices with play money of its own; the game is the same either way.
 
 ## How it works
 

@@ -19,7 +19,7 @@ export interface LogEntry {
 }
 const LIMIT = 500;
 const PAYLOAD_LIMIT = 70000;
-/** What the log's amounts are in: test coins or ETH, whatever the wallet plays with while this game is open. */
+/** What the log's amounts are in: the network's ETH, in practice as with money. */
 let symbol = 'ETH';
 export const logAsset = (value: string) => (symbol = value);
 const eth = (wei: unknown) => {

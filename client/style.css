@@ -187,54 +187,25 @@ h3 {
 /* The top bar's money: the balance this tab plays with, and the choice of what that is. */
 .money-pill {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 6px;
   border: 1px solid #2b3140;
   background: #151a24;
   border-radius: 7px;
-  padding: 5px 6px 5px 12px;
-}
-.balance-link {
+  padding: 9px 12px;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.2px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.balance-link:hover {
+.money-pill small {
+  font-size: 10px;
+  font-weight: 500;
+  color: #8f98aa;
+}
+.money-pill:hover {
   color: #c6b6ff;
-}
-.asset-switch {
-  display: flex;
-  gap: 2px;
-  background: #0e131c;
-  border-radius: 5px;
-  padding: 2px;
-}
-.asset-switch button {
-  border: 0;
-  background: none;
-  border-radius: 4px;
-  padding: 4px 7px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.6px;
-  color: #737d8e;
-}
-.asset-switch button:hover:not(:disabled) {
-  color: #c3c9d6;
-}
-.asset-switch button[aria-pressed='true'] {
-  background: #29223e;
-  color: #c6b6ff;
-}
-/* Test coins look different from money. */
-.asset-switch button[data-play='practice'][aria-pressed='true'] {
-  background: #3a2c11;
-  color: #f0c976;
-}
-.asset-switch button:disabled {
-  opacity: 0.45;
 }
 .button {
   border: 1px solid transparent;
@@ -605,6 +576,44 @@ main {
 .game-viewport {
   flex: 1;
   min-height: 0;
+}
+/* Above the open game, the one place its money shows: what it plays with, how much, and the switch. Practice is loud,
+   ETH is quiet. */
+.game-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 42px;
+  border-bottom: 1px solid var(--line);
+  background: #11151f;
+  font-size: 12px;
+}
+.game-strip[data-mode='practice'] {
+  border-bottom-color: #5a4418;
+  background: #2b2211;
+  color: #f3cd7c;
+}
+.strip-note {
+  color: #8f98aa;
+}
+.game-strip[data-mode='practice'] .strip-note {
+  color: #cdb07a;
+}
+.strip-amount {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 620px) {
+  .game-strip {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: 7px 18px;
+  }
+  .strip-note {
+    order: 5;
+    flex-basis: 100%;
+  }
 }
 /* With the developer log open the page scrolls: the game keeps a full screen and the log follows it. */
 .workspace:has(.game-activity:not(.hidden)):has(#page-play:not(.hidden)) {
@@ -1213,6 +1222,11 @@ main {
   margin-top: 18px;
   margin-bottom: 20px;
 }
+.faucet-link {
+  display: inline-block;
+  margin: -8px 0 16px;
+  font-size: 11px;
+}
 .receive-network {
   display: flex;
   flex-wrap: wrap;
@@ -1504,6 +1518,16 @@ main {
 .wallet-history-link {
   display: block;
   margin: -8px 0 24px;
+  font-size: 11px;
+}
+.wallet-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: -6px 0 26px;
+}
+.wallet-actions .text-button {
   font-size: 11px;
 }
 .history-status {
@@ -1933,12 +1957,6 @@ html:has(dialog[open]) {
   font-size: 20px;
   letter-spacing: -0.6px;
 }
-.fund-note {
-  font-size: 12px;
-  line-height: 1.7;
-  color: #9ba7bd;
-  margin-top: 12px;
-}
 /* The whole track is the playing balance; the filled part is what the game may risk. */
 .fund-slider {
   width: 100%;
@@ -2078,11 +2096,6 @@ html:has(dialog[open]) {
 }
 
 /* Two separate actions, not one sentence: keep them visibly apart. */
-.text-button-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
-}
 
 /* Until the framed game paints, its icon and name say which game is on its way. */
 .game-loading {
@@ -2137,10 +2150,6 @@ html:has(dialog[open]) {
 }
 .account-uname:empty {
   display: none;
-}
-#game-funds[data-holding] {
-  border-color: #6a4f5c;
-  color: #f0b9c3;
 }
 /* A uname is 24 characters of one word, so the headings that carry one break inside it rather than
    pushing the page sideways. */
@@ -2352,7 +2361,8 @@ button.bet-row:hover {
   color: #e2748c;
 }
 /* One bet in full. Wide, because a prize range is a twenty-digit number. */
-.bet-dialog {
+.bet-dialog,
+.eth-dialog {
   width: min(780px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   padding: 20px 22px 24px;
@@ -2363,7 +2373,8 @@ button.bet-row:hover {
   box-shadow: 0 30px 80px #000a;
   overflow: auto;
 }
-.bet-dialog::backdrop {
+.bet-dialog::backdrop,
+.eth-dialog::backdrop {
   background: #05070ccc;
   backdrop-filter: blur(3px);
 }

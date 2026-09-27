@@ -46,9 +46,9 @@ The contract reads operations and signatures from calldata, reuses computed hash
 with its player address, and uses a transient reentrancy guard. A claim's beneficiary comes from channel ownership, and
 the claim stores only its current payout recipient.
 
-A channel holds ETH. A wallet with no funded channel practices with test coins of its own
+A channel holds ETH. A wallet with no funded channel practices with play money of its own
 ([practice](how-it-works.md#practice)): it settles a game's casino bets and payments itself and sends the casino
-nothing, so no test coin is in any channel, book or record.
+nothing, so no play money is in any channel, book or record.
 
 ## Money and authority
 
@@ -180,11 +180,11 @@ tab does not poll the chain ([deployment](../reference/deployment.md#how-the-wal
 A game's spending limit is a reservation against the signed channel balance, held only in the open tab's memory
 ([games and limits](../wallet/games-and-limits.md#giving-a-game-money)). It signs nothing, so the player can set it
 while an operation is pending, up to the balance less what that operation has committed. A result recovered after a
-reload changes only the channel balance. In practice the limit is in test coins, which the wallet keeps beside the
-channel and never mixes into it. A game's operation IDs belong to the player and the game, not to a channel, so exact
-retries and receipt lookups by the game's own IDs work across the player's channels without game records in the wallet,
-and the casino declines an ID its player already used on another channel rather than carry it out twice. There is no
-game account in the contract or at the casino.
+reload changes only the channel balance. A game that practices has no limit: it plays with play money, which the wallet
+keeps beside the channel and never mixes into it. A game's operation IDs belong to the player and the game, not to a
+channel, so exact retries and receipt lookups by the game's own IDs work across the player's channels without game
+records in the wallet, and the casino declines an ID its player already used on another channel rather than carry it out
+twice. There is no game account in the contract or at the casino.
 
 Encrypted backups hold only the selected account
 ([backups and recovery](../wallet/backups-and-recovery.md#encrypted-backups)); keys alone cannot rebuild signed

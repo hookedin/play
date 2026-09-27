@@ -33,7 +33,9 @@ Draws the game's balance strip into `root`, replacing its children: the figure l
 asset's symbol, a status line, and an **Add funds** button that asks the player for money with
 [`HookedIn.requestFunds()`](hookedin.md#requestfunds), suggesting no amount. It follows every
 [`game.balance`](../reference/bridge.md#gamebalance) push. The figure reads `—` until the wallet has greeted the page,
-then the balance less anything withheld, never below zero.
+then the balance less anything withheld, never below zero. In [practice](../reference/bridge.md#practice) the figure is
+labelled **Practice**, the status line says `It tops itself up when it runs out.`, and the **Add funds** button is
+hidden: the wallet tops up play money by itself.
 
 `root` gets the class `bank` and `aria-live="polite"`. Its `data-state` is `pending` while an operation awaits recovery,
 `empty` at a zero balance and `ready` otherwise, and it carries `data-practice` while the wallet practices. The children
@@ -165,6 +167,6 @@ document.getElementById('play')!.addEventListener('click', () => {
 
 The house games' stylesheet: a dark theme with the custom properties `--muted`, `--accent`, `--line`, `--panel` and
 `--dark`; the page layout, from `main`, `.game-head`, `.stage` and `.controls` to `.primary`, `.secondary`, `.status`,
-`.readout`, `.rules` and `.foot`; and the bank strip, drawn with a dashed border in test coins. It is `sdk/shared.css`
-in the package. `hookedin-game build` copies it into `dist/shared.css` ([CLI](../reference/cli.md)), and a page links
+`.readout`, `.rules` and `.foot`; and the bank strip, drawn with a dashed border in practice. It is `sdk/shared.css` in
+the package. `hookedin-game build` copies it into `dist/shared.css` ([CLI](../reference/cli.md)), and a page links
 `./shared.css` before its own `./style.css`.

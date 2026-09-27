@@ -403,7 +403,7 @@ h1 {
 .bank[data-state='pending'] .bank-status {
   color: #ffa9a2;
 }
-/* Test coins never look like the real thing. */
+/* Play money never looks like the real thing. */
 .bank[data-practice] {
   border-style: dashed;
   border-color: #d9a441;

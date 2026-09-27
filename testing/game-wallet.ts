@@ -65,6 +65,11 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
       if (method === 'wallet.round') return wallet.gameRound(checked.id);
       if (method === 'game.receipt') return wallet.gameReceipt(checked.id);
       if (method === 'game.requestFunds') {
+        // In practice the wallet gives play money at once, as the wallet's page does.
+        if (wallet.practicing) {
+          wallet.topUpPractice(checked.amount === undefined ? wallet.practiceStart : BigInt(checked.amount));
+          return { funded: true, amount: String(wallet.practiceBalance), ...wallet.gameLimit() };
+        }
         // The player agrees: the game may risk what it asked for more, as far as the balance goes.
         const more = checked.amount === undefined ? wallet.playableBalance() : BigInt(checked.amount),
           limit = BigInt(wallet.gameLimit().balance) + more,

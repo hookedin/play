@@ -109,7 +109,8 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge;
 A game's side of the bridge to `wallet`. Every request goes through the checks the wallet's bridge makes, with an
 envelope ID above the last, and on to the wallet's own methods. The player agrees to every `game.requestFunds`: the limit
 rises by the amount asked, or by the whole playable balance when none is, up to the playable balance, and the reply says
-`funded: true`. Every receipt the wallet pushes reaches the `onReceipt` listeners of every bridge to that wallet.
+`funded: true`. A practicing wallet answers as its page does: the play money grows by the amount asked, or by as much as
+practice starts with, and never falls below that. Every receipt the wallet pushes reaches the `onReceipt` listeners of every bridge to that wallet.
 
 It leaves out what only a wallet page does: the queue, the player's dialog, and the `busy` refusal. A refusal is the
 wallet's own `Error`, whose `code` is set wherever the wallet sets one; a page's bridge reports the rest as `failed`.

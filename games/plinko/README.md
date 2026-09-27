@@ -6,13 +6,13 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Add funds to the game from your wallet with **Add funds**.
+1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
 2. Choose the rows (8, 12 or 16), the risk (low, medium or high) and the bet.
 3. Drop a ball. Each tap queues another ball, up to 20 ahead; autoplay drops 10, 50 or 100.
 
 The ball bounces left or right at each peg with equal chance and lands in a bucket. The bucket's multiplier times the bet is paid. Outer buckets pay the most and are the rarest. Under the buckets, bars show where this session's balls landed and white marks show the exact expectation.
 
-The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
+The wallet plays with the network's ETH, or practices with play money of its own; the game is the same either way.
 
 ## How it works
 

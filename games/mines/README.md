@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Add funds to the game from your wallet with **Add funds**.
+1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
 2. Enter a stake and start.
 3. Pick a tile. A gem lets you continue or cash out; the mine ends the round at zero.
 
@@ -18,7 +18,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 Which tile you pick is a visual choice. No hidden board is generated in advance: each reveal is a fresh bet at the exact remaining odds.
 
-The wallet plays with the network's ETH, or practices with test coins of its own; the game is the same either way.
+The wallet plays with the network's ETH, or practices with play money of its own; the game is the same either way.
 
 ## How it works
 

@@ -125,7 +125,7 @@ export class RoundClient {
     this.units = this.hello?.asset?.symbol ?? '';
     return this.hello;
   }
-  /** An amount in what the wallet plays with. ETH and test coins both count in units of 10^-18. */
+  /** An amount in what the wallet counts in: ETH, in units of 10^-18. */
   private amount(units: bigint) {
     const whole = units / 10n ** 18n,
       fraction = (units % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '');
