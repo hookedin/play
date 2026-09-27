@@ -153,14 +153,6 @@ export class ChannelClient extends WalletTransactions {
       )
         throw gameError('id-conflict', 'Operation ID is bound to a different intent (terms or game)');
     };
-    const cached = await this.getReceipt(operationId);
-    this.requireDurableState();
-    if (cached) {
-      matches(cached.request || cached.proof.step.operation, cached.details);
-      if (game && (cached.game?.key !== game.key || cached.game?.id !== game.id))
-        throw gameError('id-conflict', 'Operation ID is bound to a different game');
-      return cached;
-    }
     /** What every operation this wallet signs must satisfy: it fits the money the player allowed, and
      * a bet's terms are ones the casino's own rule can read. */
     const allowed = (debit: bigint) => {
@@ -211,6 +203,15 @@ export class ChannelClient extends WalletTransactions {
     // The wallet's own background work finishes first: an operation waits for it rather than failing as busy.
     return this.exclusive(
       async () => {
+        // Read under the lock: a request with this ID that finished while this one waited, here or in another tab,
+        // is its answer. Signing again would bind a second operation to the ID, which the casino refuses for good.
+        const cached = await this.getReceipt(operationId);
+        if (cached) {
+          matches(cached.request || cached.proof.step.operation, cached.details);
+          if (game && (cached.game?.key !== game.key || cached.game?.id !== game.id))
+            throw gameError('id-conflict', 'Operation ID is bound to a different game');
+          return cached;
+        }
         this.ready();
         if (!this.pending) await sign();
         else {
@@ -246,8 +247,13 @@ export class ChannelClient extends WalletTransactions {
       acknowledgment,
       ...(pending.seed ? { seed: pending.seed } : {}),
     };
-    const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
-    return this.accept(response, pending.operationId, pending.kind);
+    try {
+      const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
+      return await this.accept(response, pending.operationId, pending.kind);
+    } catch (error: any) {
+      this.pendingError = { operationId: pending.operationId, message: error.message, code: error.code };
+      throw error;
+    }
   }
   /** Verify a signed result, record it and advance the channel. */
   async accept(this: CasinoWallet, response: any, operationId: string, kind: string) {
@@ -810,6 +816,7 @@ export class ChannelClient extends WalletTransactions {
         const paid = await this.collectDeveloperBet(hash);
         if (paid) collected.push(paid);
       } catch (error: any) {
+        this.onBackgroundError(`Collecting developer bet ${hash} failed`, error);
         await this.exclusive(
           async () => {
             if (this.channelId === channelId && this.developerBets[hash])

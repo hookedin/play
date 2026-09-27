@@ -105,7 +105,8 @@ back little: a game can spend its whole limit on poor bets. The limit you set bo
 ## The developer log
 
 Opening the wallet with `?log` in its URL, such as `/@hookedin/dice?log`, adds a live log below the game: every bridge
-request and reply with its round-trip time, the wallet's own actions, and the balance pushed to the game, newest first.
+request and reply with its round-trip time, the wallet's own actions, the balance pushed to the game, and each payout the
+wallet fails to collect on its own, such as what a developer bet was paid, newest first.
 A request is summed up in one line: a casino bet's stake, its prize, its chance and its exact return, or the amount a
 request for money suggests. Filters show all events, bridge traffic, wallet events or errors, and the search covers
 payloads. **Export JSON** downloads the entries with their payloads whole.

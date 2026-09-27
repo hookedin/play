@@ -65,7 +65,9 @@ channel key, imported evidence still lets the wallet close, challenge, finalize 
 ## When a reply is lost
 
 The wallet saves every signed request before it sends it. When the casino's answer does not arrive, the operation stays
-pending, play on that channel waits, and a banner offers:
+pending, play on that channel waits, and a banner names it: what it is, its amount and game, the ID the casino knows it
+by, the sequence it was signed at, and what the last attempt to send it ran into, with the casino's code when the casino
+refused it. The banner offers:
 
 - **Retry**, which sends the exact saved request again. The casino answers a retry with the result it recorded,
   accepted or rejected, so an operation is never carried out twice.

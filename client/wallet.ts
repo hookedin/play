@@ -11,6 +11,8 @@ export interface WalletOptions {
   onProgress?: (message: string) => void;
   /** A game's bet that settled later was collected: the receipt it now has, for the game that placed it. */
   onGameReceipt?: (game: GameIntent, receipt: any) => void;
+  /** Collecting what is owed, which the wallet does on its own, failed: what it was collecting, and why. */
+  onBackgroundError?: (title: string, error: any) => void;
   storage?: Store;
   trustedDeployment?: Deployment | null;
 }
@@ -90,6 +92,7 @@ export class CasinoWallet extends GameSessions {
   declare onChange: (wallet: CasinoWallet) => void;
   declare onProgress: (message: string) => void;
   declare onGameReceipt: (game: GameIntent, receipt: any) => void;
+  declare onBackgroundError: (title: string, error: any) => void;
   declare storage: Store;
   declare trustedDeployment: Deployment | null;
   declare publicState: Record<string, any>;
@@ -112,6 +115,9 @@ export class CasinoWallet extends GameSessions {
   /** Where the feed of this account's settled developer bets was read up to. */
   declare developerBetCursor: string;
   developerBetError: string | null = null;
+  /** What the last attempt to send the pending operation it names ran into: a casino that refuses an operation
+   * refuses it the same way on every retry. */
+  pendingError: { operationId: string; message: string; code?: string } | null = null;
   /** This account's bank as a developer: the casino's statement for its latest deposit or withdrawal, a withdrawal
    * signed and not yet answered, and withdrawn money not yet collected. */
   declare bank: {
@@ -180,6 +186,7 @@ export class CasinoWallet extends GameSessions {
     onChange = () => {},
     onProgress = () => {},
     onGameReceipt = () => {},
+    onBackgroundError = () => {},
     storage = new BrowserStore(),
     trustedDeployment = null,
   }: WalletOptions = {}) {
@@ -195,6 +202,7 @@ export class CasinoWallet extends GameSessions {
       onChange,
       onProgress,
       onGameReceipt,
+      onBackgroundError,
       storage,
       trustedDeployment,
       publicState: {},
@@ -332,7 +340,7 @@ export class CasinoWallet extends GameSessions {
     this.timer = setInterval(() => {
       if (!this.busy && !globalThis.document?.hidden)
         void this.refresh()
-          .then(() => this.collectPayouts())
+          .then(() => this.collectPayouts().catch(error => this.onBackgroundError('Collecting payouts failed', error)))
           .catch(() => {});
     }, 4000);
     this.timer.unref?.();

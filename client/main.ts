@@ -59,6 +59,29 @@ const eth = (value: string | number | bigint | undefined, precision = networkDef
   });
 };
 const short = (value: string | null | undefined) => (value ? `${value.slice(0, 8)}…${value.slice(-6)}` : '—');
+/** What each operation the wallet signs is, as the banner of a saved one names it. */
+const OPERATIONS: Record<string, string> = {
+  'casino-bet': 'casino bet',
+  'developer-bet': 'developer bet',
+  payment: 'game payment',
+  invest: 'bankroll investment',
+  bank: 'bank deposit',
+  'developer-bet-payout': 'developer bet payout',
+  divest: 'bankroll payout',
+  withdrawn: 'bank withdrawal',
+  earnings: 'earnings payout',
+};
+/** A saved operation in words: what it is, the ID the casino knows it by and the sequence it was signed at, and what the
+ * last attempt to send it ran into. */
+function pendingSummary({ kind, request, details, game, operationId }: any) {
+  const what = `${formatEther(request.amount)} ETH ${OPERATIONS[kind] ?? kind}${game ? ` in ${game.name}` : ''}`,
+    failed = wallet.pendingError?.operationId === operationId ? wallet.pendingError : null;
+  return (
+    `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${request.sequence}). ` +
+    'Retry sends exactly the same request again.' +
+    (failed ? ` Last attempt: ${failed.message}${failed.code ? ` (${failed.code})` : ''}.` : '')
+  );
+}
 let settingsWarning = null;
 // Each launcher supplies its defaults; manual settings stay in the browser.
 const networkSetting = `hookedin:${config.network}:selected-network`;
@@ -115,6 +138,13 @@ const wallet = new CasinoWallet({
     const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.id, receipt) };
     active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
     gameLog.log('event', 'game.receipt', { description: describeReceipt(message.receipt), payload: message });
+  },
+  // What the wallet collects on its own answers no request of the game's, so the developer log shows its failures.
+  onBackgroundError: (title, error) => {
+    if (active)
+      gameLog.log('error', title, {
+        description: error?.code ? `${error.code}: ${error.message}` : String(error?.message ?? error),
+      });
   },
 });
 
@@ -606,7 +636,9 @@ function renderWallet() {
       : 'Your browser wallet did not return a transaction. Retry checks what happened, then asks to send the same transaction again.'
     : wallet.needsOpening
       ? 'Your deposit needs finishing. Its keys are saved: retry to complete it.'
-      : 'An operation is saved and unanswered. Retry sends exactly the same request again.';
+      : wallet.pending
+        ? pendingSummary(wallet.pending)
+        : '';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
   $<HTMLButtonElement>('speed-up-transaction').disabled = busy || !wallet.transactionIntent;
   $<HTMLButtonElement>('export-evidence').disabled = busy || !wallet.channel;

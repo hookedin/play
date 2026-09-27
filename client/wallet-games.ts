@@ -116,7 +116,10 @@ export class GameSessions extends ChannelClient {
     const receipt = await this.getReceipt(this.gameOperationId(id));
     if (!receipt) return null;
     const answer = gameReceipt(id, receipt);
-    if (answer.status === 'open') void this.collectDeveloperBet(receipt.bet).catch(() => {});
+    if (answer.status === 'open')
+      void this.collectDeveloperBet(receipt.bet).catch(error =>
+        this.onBackgroundError(`Collecting developer bet ${receipt.bet} failed`, error),
+      );
     return answer;
   }
   /** Which game asks, as its receipts remember it: its key, its own name for the operation, what it calls itself
