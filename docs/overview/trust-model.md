@@ -57,8 +57,7 @@ carry trust of their own, set out below.
   of every account you fund: a key alone cannot rebuild an off-chain balance
   ([backups and recovery](../wallet/backups-and-recovery.md)).
 - **Keep ETH for the exit.** Closing, challenging, finalizing and collecting are transactions. The wallet keeps
-  0.001 ETH in your vault when you deposit, and when you send from it while a balance is open: a floor rather than a
-  guaranteed budget.
+  0.001 ETH at your deposit address when it deposits: a floor rather than a guaranteed budget.
 - **Set each game's limit.** You choose how much each game may play with, and the wallet holds it to that.
 
 ## What a game can and cannot do

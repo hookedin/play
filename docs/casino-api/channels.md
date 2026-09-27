@@ -564,30 +564,32 @@ answers `{"acknowledged": true}` all the same.
 
 ### `POST /api/channels/:id/close`
 
-Asks for the casino's `Close` signature over the channel's latest checkpoint, to close it at once on-chain with
-`cooperativeClose`, which pays the player in the same transaction.
+Asks for the casino's `Close` signature over the channel's latest checkpoint and the address to pay, to close it at
+once on-chain with `cooperativeClose`, which pays that address in the same transaction.
 
 **Auth:** channel access · **Idempotent:** yes
 
 The body carries evidence of the channel's latest checkpoint, either the last reply's evidence or the latest jointly
-signed checkpoint with the empty step, and the funding account's [`Close`](../reference/signed-messages.md#close)
-signature of the channel and that checkpoint's hash. The casino checks that the evidence yields its latest checkpoint
-and that the funding account signed, records the channel as closing, so that it takes no more operations, and signs.
+signed checkpoint with the empty step, the address to pay, and the funding account's
+[`Close`](../reference/signed-messages.md#close) signature of the channel, that checkpoint's hash and the address. The
+casino checks that the evidence yields its latest checkpoint and that the funding account signed, records the channel
+as closing, so that it takes no more operations, and signs.
 The wallet then calls [`cooperativeClose`](../reference/contract.md#functions-that-change-state) with both signatures.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field  | Type     | Meaning                                                                                                      |
-| ----------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `evidence`  | Evidence | [Evidence](../reference/signed-messages.md#evidence) of the latest checkpoint                                |
-| `signature` | string   | The `Close` of `{channelId, stateHash}` signed by the funding account, `opening.player`, not the channel key |
+| Body field  | Type     | Meaning                                                                                                                 |
+| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `evidence`  | Evidence | [Evidence](../reference/signed-messages.md#evidence) of the latest checkpoint                                           |
+| `recipient` | address  | Where the close pays: any address but zero and the contract                                                             |
+| `signature` | string   | The `Close` of `{channelId, stateHash, recipient}` signed by the funding account, `opening.player`, not the channel key |
 
-| Response field | Type   | Meaning                        |
-| -------------- | ------ | ------------------------------ |
-| `message`      | object | `{channelId, stateHash}`       |
-| `signature`    | string | The casino's `Close` signature |
+| Response field | Type   | Meaning                             |
+| -------------- | ------ | ----------------------------------- |
+| `message`      | object | `{channelId, stateHash, recipient}` |
+| `signature`    | string | The casino's `Close` signature      |
 
 ```json title="Request"
 {
@@ -621,6 +623,7 @@ The wallet then calls [`cooperativeClose`](../reference/contract.md#functions-th
       "casinoSignature": "0x"
     }
   },
+  "recipient": "0x8f6d3C1B2a4e5F7091c2d3E4f5A6b7C8d9e0f1a2",
   "signature": "0xea7f2322aa67b2256896ba696a18201fa7ac2ce0f434eb8f3e66e2a5e2b0c1713b7088b71003ead04ccabbcca980c13b7ead5f63c05e65556808c2e4f08bf4c61c"
 }
 ```
@@ -629,17 +632,19 @@ The wallet then calls [`cooperativeClose`](../reference/contract.md#functions-th
 {
   "message": {
     "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "stateHash": "0xb71fe8b5af210c2660a10dd0ec6d40ca608090aeb54356c682b494ff375fe0d0"
+    "stateHash": "0xb71fe8b5af210c2660a10dd0ec6d40ca608090aeb54356c682b494ff375fe0d0",
+    "recipient": "0x8f6d3C1B2a4e5F7091c2d3E4f5A6b7C8d9e0f1a2"
   },
   "signature": "0x5762910f655e34cd69cd3d9a06b81b35ab3675bc9335ace1e3a858e8e11094c348f2268f210782e27e092162107a6ba869f4311d774044831e08b90e5643ba181b"
 }
 ```
 
-`refused` answers evidence of any other checkpoint ("Recover the latest checkpoint before closing") and a signature
-that is not the funding account's.
+`invalid` answers a recipient that is not an address, is zero or is the contract. `refused` answers evidence of any
+other checkpoint ("Recover the latest checkpoint before closing") and a signature that is not the funding account's.
 
-**Errors:** [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors)
-(429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
+**Errors:** [`invalid`](index.md#errors) (400), [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors)
+(401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503),
+[`too-large`](index.md#errors) (413)
 
 ## Payouts and developer bets
 

@@ -77,7 +77,10 @@ test('closures and actual collections remain distinct from off-chain payments', 
   const closure = receiptSummary({ kind: 'closure', amount: '0', status: 'confirmed' });
   assert.equal(closure.amount, '0.0 ETH');
   assert.match(closure.notice!, /Collect it under Wallet → Waiting to be paid/);
-  assert.equal(receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }).amountLabel, 'Received');
+  assert.equal(receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }).amountLabel, 'Paid out');
+  // Starting or challenging a close moves no ETH.
+  for (const kind of ['close-started', 'dispute'])
+    assert.equal(receiptSummary({ kind, amount: '0', status: 'confirmed' }).amountLabel, 'No payment');
   const payment = receiptSummary({ kind: 'payment', amount: '123', status: 'signed', balance: '456' });
   assert.equal(payment.amountLabel, 'Sent');
   assert.equal(payment.status, 'Signed off-chain');

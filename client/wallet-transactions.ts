@@ -2,7 +2,7 @@ import type { TransactionReceipt, TransactionResponse, TransactionRequest } from
 import type { Integer, Opening } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
-import { Wallet, formatEther, parseEther, getAddress, keccak256, Transaction } from 'ethers';
+import { Wallet, ZeroAddress, formatEther, getAddress, keccak256, Transaction } from 'ethers';
 import {
   plain,
   same,
@@ -17,6 +17,8 @@ import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { withLock } from './storage.ts';
 export const MIN_GAS_RESERVE = 1000000000000000n;
+/** The gas a deposit's fee is budgeted for: opening a channel takes the most, adding to one less. */
+export const DEPOSIT_GAS = 300000n;
 export const TRANSACTION_LIMITS = Object.freeze({
   gas: 2000000n,
   feePerGas: 200000000000n,
@@ -78,7 +80,7 @@ export class WalletTransactions {
         : MIN_GAS_RESERVE;
       if (balance < value + fees.maxCost + reserve) {
         throw new Error(
-          `Your vault keeps ${formatEther(MIN_GAS_RESERVE)} ETH for network fees, and this transaction’s fee can be up to ${formatEther(fees.maxCost)} ETH. Add ETH to your vault, or deposit less.`,
+          `Your address holds too little for this transaction: its fee can be up to ${formatEther(fees.maxCost)} ETH, and ${formatEther(MIN_GAS_RESERVE)} ETH stays there for network fees.`,
         );
       }
       await this.assertNetwork();
@@ -88,7 +90,7 @@ export class WalletTransactions {
         provider !== this.provider ||
         contract !== this.contract
       )
-        throw new Error('The connected wallet changed. Check the amount and try again.');
+        throw new Error('The account changed. Check the amount and try again.');
       // Pin the same gas limit and fee caps used by the reserve check. Neither
       // the caller nor a later provider estimate can raise this cost silently.
       const pinnedOverrides = {
@@ -100,6 +102,8 @@ export class WalletTransactions {
       this.requireDurableState();
       if (!this.storageKey) return contract[method](...args, pinnedOverrides);
       if (this.transactionIntent) throw new Error('Recover the saved transaction before sending another');
+      // Signed, then saved, then broadcast: a lost reply leaves exactly this transaction to look for or send again.
+      const raw = await signer.signTransaction(await contract[method].populateTransaction(...args, pinnedOverrides));
       this.transactionIntent = {
         method,
         args: plain(args),
@@ -108,27 +112,11 @@ export class WalletTransactions {
         to: await contract.getAddress(),
         data: contract.interface.encodeFunctionData(method, args),
         fees: plain(fees.overrides),
+        raw,
+        hash: keccak256(raw),
       };
-      if (this.mode === 'demo') {
-        const populated = await contract[method].populateTransaction(...args, pinnedOverrides);
-        const raw = await signer.signTransaction(populated);
-        Object.assign(this.transactionIntent, { raw, hash: keccak256(raw) });
-        await this.save();
-        return provider.broadcastTransaction(raw);
-      }
       await this.save();
-      try {
-        const tx = await contract[method](...args, pinnedOverrides);
-        this.transactionIntent.hash = tx.hash;
-        await this.save();
-        return tx;
-      } catch (error: any) {
-        if (error.code === 'ACTION_REJECTED') {
-          this.transactionIntent = null;
-          await this.save();
-        }
-        throw error;
-      }
+      return provider.broadcastTransaction(raw);
     };
     try {
       return await withLock(
@@ -187,43 +175,74 @@ export class WalletTransactions {
         'Transaction exceeds wallet fee limits (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
       );
   }
-  async maxDeposit(this: CasinoWallet) {
-    return this.exclusive(async () => {
-      await this.assertNetwork();
-      const balance = await this.provider.getBalance(this.address, 'pending'),
-        fees = await this.provider.getFeeData();
-      if (!fees.maxFeePerGas) throw new Error('Fee estimate unavailable');
-      this.checkTransactionBudget(300000n, fees.maxFeePerGas);
-      const maxFee = 300000n * fees.maxFeePerGas;
-      return {
-        address: this.address,
-        nativeBalance: balance,
-        maxFee,
-        reserve: MIN_GAS_RESERVE,
-        amount: balance > MIN_GAS_RESERVE + maxFee ? balance - MIN_GAS_RESERVE - maxFee : 0n,
-      };
-    });
+  /** What this account's address can put into its balance: everything beyond the gas reserve and a deposit's fee. */
+  async depositable(this: CasinoWallet) {
+    await this.assertNetwork();
+    const [balance, fees] = await Promise.all([
+      this.provider.getBalance(this.address, 'pending'),
+      this.provider.getFeeData(),
+    ]);
+    if (!fees.maxFeePerGas) throw new Error('Network fees could not be estimated. Try again.');
+    this.checkTransactionBudget(DEPOSIT_GAS, fees.maxFeePerGas);
+    const fee = DEPOSIT_GAS * fees.maxFeePerGas,
+      rest = balance - MIN_GAS_RESERVE - fee;
+    this.depositFee = fee;
+    return { amount: rest > 0n ? rest : 0n, fee };
   }
-  /** Move money from the vault into the balance: into the open channel, which takes it in once the casino has seen it
-   * confirmed, or as the opening deposit of a new one. */
-  async deposit(this: CasinoWallet, amount: Integer) {
+  /** Move money from this account's address into its balance: into the open channel, which takes it in once the casino
+   * has seen it confirmed, or as the opening deposit of a new one. With no amount, everything the address can. */
+  async deposit(this: CasinoWallet, amount?: Integer) {
     const added = await this.exclusive(async () => {
-      if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
-        throw new Error('Deposit must be a positive uint256 amount');
-      if (this.missingChannel)
-        throw new Error(
-          'This account has a balance open that this browser holds no evidence for: import its recovery bundle first.',
-        );
-      if (this.pending && this.pending.kind !== 'taken-in')
-        throw new Error('Finish the saved operation before depositing.');
+      if (amount === undefined) {
+        amount = (await this.depositable()).amount;
+        if (!amount) throw new Error('Your address holds too little to add after network fees.');
+      }
+      return this.depositLocked(amount);
+    });
+    if (added) {
+      await this.refresh();
+      await this.takeDeposits();
+    }
+  }
+  /** ETH sent to this account's address goes into its balance by itself, while the wallet `sweeps`. An amount smaller
+   * than its own fee stays where it is. */
+  async sweep(this: CasinoWallet) {
+    if (!this.sweeps) return;
+    const added = await this.exclusive(
+      async () => {
+        if (!this.sweeps) return null;
+        const { amount, fee } = await this.depositable();
+        return amount > fee ? this.depositLocked(amount) : null;
+      },
+      { wait: true },
+    );
+    if (added) {
+      await this.refresh();
+      await this.takeDeposits();
+    }
+  }
+  /** A deposit, under the wallet's lock: true when it went into the open channel, for the casino to take in. While it
+   * runs, `depositing` says what it adds. */
+  async depositLocked(this: CasinoWallet, amount: Integer) {
+    if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
+      throw new Error('Deposit must be a positive uint256 amount');
+    if (this.missingChannel)
+      throw new Error(
+        'This account has a balance open that this browser holds no evidence for: import its recovery bundle first.',
+      );
+    if (this.pending && this.pending.kind !== 'taken-in')
+      throw new Error('Finish the saved operation before depositing.');
+    if (this.channel && !this.funded) throw new Error('Your balance is still closing. Deposit once it has closed.');
+    this.depositing = BigInt(amount);
+    this.render();
+    try {
       await this.assertNetwork();
       if (this.funded) {
-        this.onProgress('Depositing into your balance…');
+        this.onProgress('Adding ETH to your balance…');
         const tx = await this.sendTransaction('deposit', [this.channelId], { value: BigInt(amount) });
         await this.waitTransaction(tx);
         return true;
       }
-      if (this.channel) throw new Error('Your balance is still closing. Deposit once it has closed.');
       const key = Wallet.createRandom().privateKey;
       const signer = new Wallet(key).address;
       const opening = {
@@ -243,16 +262,14 @@ export class WalletTransactions {
         onchain: { status: '0' },
       };
       await this.save();
-      this.onProgress('Depositing into your balance…');
+      this.onProgress('Adding ETH to your balance…');
       const tx = await this.sendTransaction('openChannel', [opening.signer], { value: BigInt(amount) });
       await this.waitTransaction(tx);
       await this.activate();
       await this.save();
       return false;
-    });
-    if (added) {
-      await this.refresh();
-      await this.takeDeposits();
+    } finally {
+      this.depositing = 0n;
     }
   }
   /** Take into the balance what was deposited into the open channel and not taken in yet: a deposit operation, which
@@ -269,65 +286,44 @@ export class WalletTransactions {
     if (waiting <= 0n) return null;
     return this.perform('taken-in', { amount: waiting }, `taken-in:${c.onchain.deposit}`);
   }
-  /** The most the vault can send: its ETH less a transfer's fee, and less the gas reserve while a balance is open. */
-  async maxSend(this: CasinoWallet) {
+  /** Send everything at this account's address, less the transfer's fee, to another address: how Withdraw empties it
+   * while no balance is open. Under the wallet's lock. */
+  async transferAll(this: CasinoWallet, recipient: string) {
     await this.assertNetwork();
-    const [fees, balance] = await Promise.all([
+    const [fees, balance, gasLimit] = await Promise.all([
       this.provider.getFeeData(),
       this.provider.getBalance(this.address, 'pending'),
+      this.provider.estimateGas({ from: this.address, to: recipient, value: 1n }),
     ]);
-    if (!fees.maxFeePerGas) throw new Error('Network fees could not be estimated. Try again.');
-    const rest = balance - 21000n * fees.maxFeePerGas - (this.channel ? MIN_GAS_RESERVE : 0n);
-    return rest > 0n ? rest : 0n;
-  }
-  /** Send ETH from the vault, this wallet's own address, to any other. While a balance is open, the vault keeps the
-   * gas reserve that closing it may need. */
-  async send(this: CasinoWallet, to: string, amount: bigint) {
-    if (this.mode !== 'demo') throw new Error('Send from your connected wallet itself');
-    return this.exclusive(async () => {
-      const recipient = getAddress(to.trim());
-      if (amount <= 0n) throw new Error('Enter an amount to send');
-      if (same(recipient, this.address)) throw new Error('That is this wallet’s own address');
-      await this.assertNetwork();
-      const [fees, balance, gasLimit] = await Promise.all([
-        this.provider.getFeeData(),
-        this.provider.getBalance(this.address, 'pending'),
-        this.provider.estimateGas({ from: this.address, to: recipient, value: amount }),
-      ]);
-      if (!fees.maxFeePerGas || fees.maxPriorityFeePerGas == null)
-        throw new Error('Network fees could not be estimated. Try again.');
-      this.checkTransactionBudget(gasLimit, fees.maxFeePerGas);
-      const reserve = this.channel ? MIN_GAS_RESERVE : 0n,
-        fee = gasLimit * fees.maxFeePerGas;
-      if (balance < amount + fee + reserve)
-        throw new Error(
-          `Your vault holds ${formatEther(balance)} ETH: not enough for ${formatEther(amount)} ETH, up to ${formatEther(fee)} ETH in fees${reserve ? ` and the ${formatEther(reserve)} ETH kept for closing your balance` : ''}.`,
-        );
-      this.onProgress('Sending from your vault…');
-      const tx = await this.signer.sendTransaction({
-        to: recipient,
-        value: amount,
-        gasLimit,
-        maxFeePerGas: fees.maxFeePerGas,
-        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-        chainId: this.expectedChainId,
-        type: 2,
-      });
-      const receipt = await tx.wait(this.config.confirmations || 1, 90000);
-      if (!receipt || receipt.status !== 1) throw new Error('The transfer did not go through');
-      await this.save({
-        kind: 'sent',
-        operationId: 'tx:' + receipt.hash,
-        amount: String(amount),
-        to: recipient,
-        txHash: receipt.hash,
-        blockNumber: receipt.blockNumber,
-        blockHash: receipt.blockHash,
-        status: 'confirmed',
-        createdAt: new Date().toISOString(),
-      });
-      return receipt.hash;
+    if (!fees.maxFeePerGas || fees.maxPriorityFeePerGas == null)
+      throw new Error('Network fees could not be estimated. Try again.');
+    this.checkTransactionBudget(gasLimit, fees.maxFeePerGas);
+    const amount = balance - gasLimit * fees.maxFeePerGas;
+    if (amount <= 0n) throw new Error('Your address holds too little to withdraw after network fees.');
+    this.onProgress('Withdrawing…');
+    const tx = await this.signer.sendTransaction({
+      to: recipient,
+      value: amount,
+      gasLimit,
+      maxFeePerGas: fees.maxFeePerGas,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+      chainId: this.expectedChainId,
+      type: 2,
     });
+    const receipt = await tx.wait(this.config.confirmations || 1, 90000);
+    if (!receipt || receipt.status !== 1) throw new Error('The transfer did not go through');
+    await this.save({
+      kind: 'withdrawal',
+      operationId: 'tx:' + receipt.hash,
+      amount: String(amount),
+      to: recipient,
+      txHash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+      blockHash: receipt.blockHash,
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+    });
+    return receipt.hash;
   }
   async verifyRegisteredOpening(this: CasinoWallet, opening: Opening) {
     validateOpening(opening);
@@ -358,11 +354,12 @@ export class WalletTransactions {
     this.noteNames(reply);
     this.updateBankroll(reply.bankroll);
   }
+  /** The local chain's faucet fills this account's address, and the sweep puts it into the balance. */
   async setupDemo(this: CasinoWallet) {
-    if (!this.isLocalDevelopment || this.mode !== 'demo') throw new Error('Automatic funding is local only');
+    if (!this.isLocalDevelopment) throw new Error('Automatic funding is local only');
     await this.api('/api/faucet', { address: this.address });
-    await this.deposit(parseEther('1'));
     await this.refresh();
+    await this.sweep();
   }
   async waitTransaction(this: CasinoWallet, tx: TransactionResponse) {
     this.lastChainCheck = 0;
@@ -379,13 +376,17 @@ export class WalletTransactions {
     return receipt;
   }
   transactionRecord(this: CasinoWallet, receipt: TransactionReceipt, intent: any, status = 'confirmed') {
-    let amount = status === 'confirmed' ? intent?.value || '0' : '0';
+    let amount = status === 'confirmed' ? intent?.value || '0' : '0',
+      to: string | undefined;
     for (const log of receipt.logs || []) {
       if (status !== 'confirmed' || !same(log.address, intent?.to || this.config.contractAddress)) continue;
       try {
         const event = this.reader.interface.parseLog(log);
-        if (event?.name === 'ClaimPayment' && same(event.args.beneficiary, this.address))
+        // What a close or a claim paid, and where: this account's address, or the one a withdrawal named.
+        if (event?.name === 'ClaimPayment') {
           amount = String(event.args.amount);
+          to = event.args.beneficiary;
+        }
       } catch {}
     }
     return {
@@ -403,6 +404,7 @@ export class WalletTransactions {
                   : 'dispute',
       operationId: 'tx:' + receipt.hash,
       amount,
+      ...(to && !same(to, this.address) ? { to } : {}),
       txHash: receipt.hash,
       blockNumber: receipt.blockNumber,
       blockHash: receipt.blockHash,
@@ -486,29 +488,8 @@ export class WalletTransactions {
     // A consumed nonce may be awaiting the configured confirmation depth.
     if ((await this.provider.getTransactionCount(this.address, 'latest')) > intent.nonce)
       throw new Error('Replacement is awaiting confirmation; recover again shortly');
-    if (replace || !intent.hash) {
-      let original: Pick<
-        Transaction,
-        'from' | 'to' | 'data' | 'value' | 'nonce' | 'gasLimit' | 'maxFeePerGas' | 'maxPriorityFeePerGas' | 'gasPrice'
-      > | null = intent.raw
-        ? Transaction.from(intent.raw)
-        : intent.hash
-          ? await this.provider.getTransaction(intent.hash)
-          : null;
-      if (!original) {
-        const savedFees = intent.fees;
-        original = {
-          from: this.address,
-          to: intent.to,
-          data: intent.data,
-          value: BigInt(intent.value),
-          nonce: intent.nonce,
-          gasPrice: null,
-          gasLimit: BigInt(savedFees.gasLimit),
-          maxFeePerGas: BigInt(savedFees.maxFeePerGas ?? savedFees.gasPrice),
-          maxPriorityFeePerGas: BigInt(savedFees.maxPriorityFeePerGas ?? 0),
-        };
-      }
+    if (replace) {
+      const original = Transaction.from(intent.raw);
       if (!sameTransactionIntent(original, intent, this.address))
         throw new Error('Saved transaction differs from the original intent');
       const fees = await this.provider.getFeeData(),
@@ -535,27 +516,17 @@ export class WalletTransactions {
         maxPriorityFeePerGas,
       };
       await this.assertNetwork();
-      intent.attempts ??= intent.hash ? [{ hash: intent.hash, raw: intent.raw }] : [];
+      intent.attempts ??= [{ hash: intent.hash, raw: intent.raw }];
       intent.fees = plain({ gasLimit: request.gasLimit, maxFeePerGas, maxPriorityFeePerGas });
-      if (this.mode === 'demo') {
-        const raw = await this.signer.signTransaction(request),
-          hash = keccak256(raw);
-        intent.attempts.push({ hash, raw });
-        Object.assign(intent, { raw, hash });
-        await this.save();
-        await this.provider.broadcastTransaction(raw);
-      } else {
-        await this.save(); // The nonce remains recoverable if the prompt's reply is lost.
-        const tx = await this.signer.sendTransaction(request);
-        intent.attempts.push({ hash: tx.hash });
-        intent.hash = tx.hash;
-        await this.save();
-      }
-    } else if (intent.raw && !(await this.provider.getTransaction(intent.hash))) {
+      const raw = await this.signer.signTransaction(request),
+        hash = keccak256(raw);
+      intent.attempts.push({ hash, raw });
+      Object.assign(intent, { raw, hash });
+      await this.save();
+      await this.provider.broadcastTransaction(raw);
+    } else if (!(await this.provider.getTransaction(intent.hash))) {
       await this.provider.broadcastTransaction(intent.raw);
     }
-    if (!intent.hash)
-      throw new Error('Injected transaction outcome is unknown. Check the funding wallet before retrying');
     if (!wait) return intent.hash;
     await this.provider.waitForTransaction(intent.hash, options.confirmations, 90000);
     const receipt = await confirmedReceipt(options, intent.hash);
@@ -567,9 +538,14 @@ export class WalletTransactions {
     await this.refresh();
     return hash;
   }
-  async withdraw(this: CasinoWallet) {
+  /** Withdraw to an address: the open balance, all of it, through a close that pays it there in the same transaction;
+   * with no balance open, everything at this account's address. */
+  async withdraw(this: CasinoWallet, to: string) {
+    const recipient = getAddress(to.trim());
+    if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
+      throw new Error('A withdrawal cannot pay that address: name another.');
     const result = await this.exclusive(async () => {
-      if (!this.channel) throw new Error('No active channel');
+      if (!this.channel) return this.transferAll(recipient);
       if (this.channel.pending) throw new Error('Recover the pending operation or start unilateral closure');
       await this.assertNetwork();
       const c = this.channel,
@@ -577,14 +553,16 @@ export class WalletTransactions {
         message = {
           channelId: c.state.channelId,
           stateHash: hashState(this.domain, c.state),
+          recipient,
         };
+      // Once this signature is out, the casino can close with this state: nothing more is played on it.
       c.closing = true;
       await this.save();
-      this.onProgress('Withdrawing your balance to your vault…');
+      this.onProgress('Withdrawing your balance…');
       const signature = await this.signer.signTypedData(this.domain, CLOSE_TYPES, message);
-      const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature }, c);
+      const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature, recipient }, c);
       assertSignature(this.domain, CLOSE_TYPES, message, casino.signature, this.operator);
-      const tx = await this.sendTransaction('cooperativeClose', [evidence, signature, casino.signature]);
+      const tx = await this.sendTransaction('cooperativeClose', [evidence, recipient, signature, casino.signature]);
       await this.waitTransaction(tx);
       return tx.hash;
     });

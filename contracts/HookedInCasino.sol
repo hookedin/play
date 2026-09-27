@@ -28,7 +28,7 @@ contract HookedInCasino {
     // The struct hash of the all-zero operation: the one encoding of "no step".
     bytes32 constant EMPTY_OPERATION =
         keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, 0, 0, bytes32(0), bytes32(0), bytes32(0)));
-    bytes32 constant CLOSE_TYPEHASH = keccak256("Close(bytes32 channelId,bytes32 stateHash)");
+    bytes32 constant CLOSE_TYPEHASH = keccak256("Close(bytes32 channelId,bytes32 stateHash,address recipient)");
     // The same authority signs settlement evidence and withdraws house funds.
     // It can create winnings claims; no separate key can make those promises safe.
     // Historical signatures remain valid for the lifetime of this deployment.
@@ -170,8 +170,8 @@ contract HookedInCasino {
         return _digest(_operationStruct(v));
     }
 
-    function hashClose(bytes32 channelId, bytes32 stateHash) public view returns (bytes32) {
-        return _digest(keccak256(abi.encode(CLOSE_TYPEHASH, channelId, stateHash)));
+    function hashClose(bytes32 channelId, bytes32 stateHash, address recipient) public view returns (bytes32) {
+        return _digest(keccak256(abi.encode(CLOSE_TYPEHASH, channelId, stateHash, recipient)));
     }
 
     function _signer(bytes32 digest, bytes calldata signature) private pure returns (address) {
@@ -339,11 +339,14 @@ contract HookedInCasino {
         return s.balance + deposited - s.deposited;
     }
 
+    // Both sides sign where the claim goes, so a withdrawal pays any address in one transaction.
     function cooperativeClose(
         Evidence calldata evidence,
+        address recipient,
         bytes calldata playerSignature,
         bytes calldata casinoSignature
     ) external nonReentrant {
+        if (recipient == address(0) || recipient == address(this)) revert InvalidTerms();
         Checkpoint memory s = supported(evidence);
         Channel storage c = channels[s.channelId];
         bytes32 stateHash = hashState(s);
@@ -354,11 +357,11 @@ contract HookedInCasino {
                     || s.sequence < c.closingSequence
                     || (s.sequence == c.closingSequence && stateHash != c.closingHash))
         ) revert InvalidState();
-        bytes32 digest = hashClose(s.channelId, stateHash);
+        bytes32 digest = hashClose(s.channelId, stateHash, recipient);
         if (_signer(digest, playerSignature) != c.player || _signer(digest, casinoSignature) != owner) {
             revert Unauthorized();
         }
-        _finalize(s.channelId, stateHash, _owed(s));
+        _finalize(s.channelId, stateHash, _owed(s), recipient);
         // Both sides agreed, so the claim is paid at once, as far as it can be.
         _pay(s.channelId);
     }
@@ -392,19 +395,20 @@ contract HookedInCasino {
     function finalizeClose(bytes32 channelId) external nonReentrant {
         Channel storage c = channels[channelId];
         if (c.status != STATUS_CLOSING || block.timestamp < c.deadline) revert InvalidState();
-        _finalize(channelId, c.closingHash, c.closingBalance);
+        _finalize(channelId, c.closingHash, c.closingBalance, c.player);
     }
 
-    // Finalization only establishes debt. A cooperative close collects in the same transaction; after a unilateral
-    // close, collection is an independent transaction.
-    function _finalize(bytes32 channelId, bytes32 stateHash, uint256 balance) private {
+    // Finalization only establishes debt, owed to the address a cooperative close names or, after a unilateral close,
+    // to the player. A cooperative close collects in the same transaction; after a unilateral close, collection is an
+    // independent transaction.
+    function _finalize(bytes32 channelId, bytes32 stateHash, uint256 balance, address recipient) private {
         Channel storage c = channels[channelId];
         c.status = STATUS_FINALIZED;
         activeChannel[c.player] = bytes32(0);
         uint256 principal = balance < c.deposit ? balance : c.deposit;
         protectedPrincipal = protectedPrincipal - c.deposit + principal;
         unpaidWinnings += balance - principal;
-        _claims[channelId] = Claim(c.player, stateHash, balance, principal, balance - principal, block.timestamp);
+        _claims[channelId] = Claim(recipient, stateHash, balance, principal, balance - principal, block.timestamp);
         if (balance > principal) {
             if (lastClaim == bytes32(0)) firstClaim = channelId;
             else nextClaim[lastClaim] = channelId;

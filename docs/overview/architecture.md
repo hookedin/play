@@ -172,8 +172,7 @@ watchtower and the casino share this observer.
 ## The wallet
 
 The wallet keeps funding and channel keys, signed requests, receipts and transaction intents in IndexedDB, and nothing
-about games. An injected wallet's funding key stays in that wallet. Web Locks and durable revisions serialize competing
-tabs. Each channel owns its pending operation across reorgs and changes of selection, and recovering a registration
+about games. Web Locks and durable revisions serialize competing tabs. Each channel owns its pending operation across reorgs and changes of selection, and recovering a registration
 follows from the channel's on-chain status. A funding key is committed before its receiving address is shown. Small
 settings use Web Storage.
 

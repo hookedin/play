@@ -145,16 +145,10 @@
             <strong><span id="balance-amount">—</span> <small>ETH</small></strong>
             <span id="balance-note" class="muted">What games play with.</span>
           </div>
-          <div class="money-card">
-            <span class="label">Vault</span>
-            <strong><span id="vault-amount">—</span> <small>ETH</small></strong>
-            <span class="muted">Your own address. Only your key moves it.</span>
-          </div>
         </div>
         <div class="actions">
           <button class="button primary" type="button" data-wallet-tab="deposit">Deposit</button
           ><button class="button" type="button" data-wallet-tab="withdraw">Withdraw</button
-          ><button id="send-open" class="button" type="button" data-wallet-tab="send">Send</button
           ><a class="text-button" href="/activity" data-page="activity">All activity →</a>
         </div>
         <p id="developer-earnings" class="muted hidden"></p>
@@ -374,8 +368,7 @@
         </section>
         <section class="card" aria-labelledby="keys-title">
           <h2 id="keys-title">Keys and backups</h2>
-          <p id="wallet-caption" class="muted"></p>
-          <p class="muted"><span id="wallet-mode"></span></p>
+          <p class="muted">This account's key is stored only in this browser.</p>
           <button id="export-key" class="text-button" type="button">Show this wallet's private key</button>
           <textarea id="exported-key" class="key-field hidden" readonly aria-label="Private key"></textarea>
           <p class="muted">
@@ -417,7 +410,6 @@
               Import
             </button>
           </div>
-          <button id="connect-browser" class="button small" type="button">Connect a browser wallet</button>
           <p class="muted">Switching accounts closes the open game. Back up every account you fund, one by one.</p>
         </section>
         <section class="card" aria-labelledby="casino-title">
@@ -483,68 +475,37 @@
         <h2 id="wallet-title">Wallet</h2>
         <button class="close" type="button" data-close aria-label="Close">×</button>
       </div>
-      <div class="money compact">
-        <div class="money-card balance">
-          <span class="label">Balance</span><strong><span id="sheet-balance">—</span> <small>ETH</small></strong>
-        </div>
-        <div class="money-card">
-          <span class="label">Vault</span><strong><span id="sheet-vault">—</span> <small>ETH</small></strong>
-        </div>
+      <div class="money-card balance sheet-balance">
+        <span class="label">Balance</span><strong><span id="sheet-balance">—</span> <small>ETH</small></strong>
       </div>
       <div class="tabs" role="tablist" aria-label="Move money">
         <button role="tab" type="button" data-tab="deposit" aria-selected="true">Deposit</button
-        ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button
-        ><button id="send-tab" role="tab" type="button" data-tab="send" aria-selected="false">Send</button>
+        ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
-        <div id="deposit-form" class="deposit-form">
-          <div class="label-row">
-            <label for="deposit-amount">From your vault to your balance</label
-            ><button id="max-deposit" class="text-button" type="button">Max</button>
-          </div>
-          <div class="amount-input">
-            <input id="deposit-amount" type="text" inputmode="decimal" autocomplete="off" /><span>ETH</span>
-          </div>
-          <p id="deposit-help" class="help"></p>
-          <button id="deposit" class="button primary full" type="button">Deposit</button>
+        <label id="deposit-instructions" for="wallet-address"></label>
+        <div class="address">
+          <code id="wallet-address">Connecting…</code
+          ><button id="copy-address" class="button small" type="button" disabled>Copy</button>
         </div>
-        <div id="receive" class="receive">
-          <h3>Add ETH to your vault</h3>
-          <p id="receive-instructions" class="muted"></p>
-          <div class="address">
-            <code id="wallet-address">Connecting…</code
-            ><button id="copy-address" class="button small" type="button" disabled>Copy</button>
-          </div>
-          <p id="receive-status" class="muted" role="status"></p>
-          <a
-            id="faucet-link"
-            class="text-button"
-            href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Get free Sepolia ETH from a faucet ↗</a
-          >
-          <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
-        </div>
+        <p id="deposit-status" role="status"></p>
+        <button id="add-to-balance" class="button primary full hidden" type="button">Add to balance</button>
+        <a
+          id="faucet-link"
+          class="text-button"
+          href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Get free Sepolia ETH ↗</a
+        >
+        <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
+        <p id="deposit-note" class="help"></p>
       </section>
       <section class="tab-panel" data-panel="withdraw" hidden>
-        <p class="muted">
-          Withdrawing moves your whole balance to your vault in one transaction. Deposit again whenever you like.
-        </p>
+        <label for="withdraw-to">To</label>
+        <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
         <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
-      </section>
-      <section class="tab-panel" data-panel="send" hidden>
-        <label for="send-to">To</label>
-        <input id="send-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
-        <div class="label-row">
-          <label for="send-amount">Amount</label><button id="max-send" class="text-button" type="button">Max</button>
-        </div>
-        <div class="amount-input">
-          <input id="send-amount" type="text" inputmode="decimal" autocomplete="off" /><span>ETH</span>
-        </div>
-        <p id="send-help" class="help"></p>
-        <button id="send" class="button primary full" type="button">Send</button>
       </section>
     </dialog>
 

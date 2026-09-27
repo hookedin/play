@@ -2,14 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CasinoWallet } from '../client/wallet.ts';
 
-function fixture({
-  network = 'sepolia',
-  rpcChain = '0xaa36a7',
-  signerChain = '0xaa36a7',
-  isLocalDevelopment = false,
-} = {}) {
+function fixture({ network = 'sepolia', rpcChain = '0xaa36a7', isLocalDevelopment = false } = {}) {
   const wallet = new CasinoWallet({ network });
-  const state = { rpcChain, signerChain, sent: [] as any[], calls: [] as string[] };
+  const state = { rpcChain, sent: [] as any[], calls: [] as string[] };
   wallet.config = { chainId: String(wallet.expectedChainId), isLocalDevelopment };
   wallet.address = '0x2222222222222222222222222222222222222222';
   wallet.provider = {
@@ -25,15 +20,7 @@ function fixture({
       throw new Error(`Unexpected RPC method ${method}`);
     },
   } as any;
-  wallet.signer = {
-    provider: {
-      send: async (method: any) => {
-        state.calls.push(`signer:${method}`);
-        assert.equal(method, 'eth_chainId');
-        return state.signerChain;
-      },
-    },
-  } as any;
+  wallet.signer = {} as any;
   wallet.contract = Object.fromEntries(
     ['openChannel', 'startClose', 'claim'].map(method => [
       method,
@@ -62,7 +49,7 @@ test('Sepolia is required by default, and unknown or mainnet modes cannot be sel
   );
 });
 
-test('a casino advertising the wrong chain is rejected before consulting either provider', async () => {
+test('a casino advertising the wrong chain is rejected before consulting the RPC', async () => {
   const { wallet, state } = fixture();
   wallet.config.chainId = '1';
   await assert.rejects(wallet.sendTransaction('openChannel', [], { nonce: 0 }), /requires Sepolia/);
@@ -79,22 +66,11 @@ test('a mainnet or local RPC cannot sign transactions in Sepolia mode', async ()
   }
 });
 
-test('every contract write is rejected if the injected wallet switches away from Sepolia', async () => {
-  const { wallet, state } = fixture();
-  await wallet.assertNetwork();
-  state.signerChain = '0x1';
-  for (const method of ['openChannel', 'startClose', 'claim']) {
-    await assert.rejects(wallet.sendTransaction(method, [], { nonce: 0 }), /Switch your signing wallet to Sepolia/);
-  }
-  assert.equal(state.sent.length, 0);
-  assert.equal(wallet.verifiedChainId, null);
-});
-
-test('the write guard reads both current networks and pins Sepolia on the stubbed transaction', async () => {
+test('the write guard reads the current network, before and after, and pins Sepolia on the stubbed transaction', async () => {
   const { wallet, state } = fixture();
   await wallet.sendTransaction('openChannel', [], { nonce: 7, value: 1n, chainId: 1n });
-  assert.deepEqual(state.calls.slice(0, 2), ['rpc:eth_chainId', 'signer:eth_chainId']);
-  assert.deepEqual(state.calls.slice(-2), ['rpc:eth_chainId', 'signer:eth_chainId']);
+  assert.equal(state.calls[0], 'rpc:eth_chainId');
+  assert.equal(state.calls.at(-1), 'rpc:eth_chainId');
   assert.deepEqual(state.sent, [
     {
       method: 'openChannel',
@@ -117,12 +93,7 @@ test('the write guard reads both current networks and pins Sepolia on the stubbe
 });
 
 test('Anvil tests require an explicit constructor mode and verified chain 31337', async () => {
-  const { wallet, state } = fixture({
-    network: 'local',
-    rpcChain: '0x7a69',
-    signerChain: '0x7a69',
-    isLocalDevelopment: true,
-  });
+  const { wallet, state } = fixture({ network: 'local', rpcChain: '0x7a69', isLocalDevelopment: true });
   assert.equal(wallet.isLocalDevelopment, false, 'configuration alone cannot enable the faucet');
   await wallet.assertNetwork();
   assert.equal(wallet.isLocalDevelopment, true);
@@ -142,7 +113,7 @@ test('the automatic faucet remains disabled on Sepolia, even if the server claim
 });
 
 test('chain 31337 without the explicit server development flag cannot use the automatic faucet', async () => {
-  const { wallet, state } = fixture({ network: 'local', rpcChain: '0x7a69', signerChain: '0x7a69' });
+  const { wallet, state } = fixture({ network: 'local', rpcChain: '0x7a69' });
   await wallet.assertNetwork();
   assert.equal(wallet.isLocalDevelopment, false);
   await assert.rejects(wallet.setupDemo(), /local only/);

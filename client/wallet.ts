@@ -1,5 +1,4 @@
-/// <reference path="../types/browser.d.ts" />
-import type { JsonRpcProvider, Signer } from 'ethers';
+import type { JsonRpcProvider } from 'ethers';
 import type { Store } from './storage.ts';
 import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerDeveloperBet } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
@@ -40,7 +39,7 @@ export interface GameIntent {
   /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
   developer: string;
 }
-import { BrowserProvider, Contract, Wallet, getAddress, ZeroHash } from 'ethers';
+import { Contract, Wallet, getAddress, ZeroHash } from 'ethers';
 import {
   domain,
   canonicalJSON,
@@ -129,7 +128,6 @@ export class CasinoWallet extends GameSessions {
   declare developerEarnings: { earned: string; collected: string } | null;
   declare channels: Record<string, WalletChannel>;
   declare busy: boolean;
-  declare mode: string;
   declare revision: number;
   declare verifiedChainId: bigint | null;
   declare sending: boolean | undefined;
@@ -145,7 +143,8 @@ export class CasinoWallet extends GameSessions {
   /** The deployment check, then the current account's first chain observation and casino reconciliation. */
   declare synced: Promise<void>;
   declare savedFundingAddresses: string[];
-  declare signer: Signer;
+  /** This account's key: its address receives deposits, opens its channels and is paid when they close. */
+  declare signer: Wallet;
   declare address: string;
   declare contract: Contract;
   declare reader: Contract;
@@ -176,6 +175,11 @@ export class CasinoWallet extends GameSessions {
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
   reportedBankroll = '0';
+  /** What a deposit under way is adding to the balance, from this account's address; nothing between deposits. */
+  depositing = 0n;
+  /** The fee the last deposit was budgeted: the sweep leaves alone an address holding less than twice it beyond the gas
+   * reserve, since a deposit of that would cost more than half of it. */
+  depositFee = 0n;
   /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */
   tokens = new Map<string, { expiresAt: number; header: string }>();
   declare actionDone: Promise<void> | undefined;
@@ -217,7 +221,6 @@ export class CasinoWallet extends GameSessions {
       history: [],
       channels: {},
       busy: false,
-      mode: 'demo',
       revision: 0,
     });
   }
@@ -248,27 +251,15 @@ export class CasinoWallet extends GameSessions {
       );
     }
   }
-  async assertNetwork({ signer = this.signer } = {}) {
+  async assertNetwork() {
     this.verifiedChainId = null;
     this.validateConfiguredNetwork();
-    // getNetwork() may cache a previously selected injected network. Read the
-    // current chain directly, then pin this same chain ID on the transaction.
+    // Read the current chain directly, then pin this same chain ID on the transaction.
     const actualChain = BigInt(await this.provider.send('eth_chainId', []));
     if (actualChain !== this.expectedChainId)
       throw new Error(
         `Casino RPC must be on ${this.networkName} (chain ${this.expectedChainId}). No transaction was signed.`,
       );
-    if (signer) {
-      if (!signer.provider) throw new Error('The signing wallet has no connected network.');
-      const signerChain =
-        signer.provider === this.provider
-          ? actualChain
-          : BigInt(await (signer.provider as JsonRpcProvider).send('eth_chainId', []));
-      if (signerChain !== this.expectedChainId)
-        throw new Error(
-          `Switch your signing wallet to ${this.networkName} (chain ${this.expectedChainId}). No transaction was signed.`,
-        );
-    }
     this.verifiedChainId = actualChain;
   }
   async start() {
@@ -334,33 +325,32 @@ export class CasinoWallet extends GameSessions {
       });
     });
     this.verified.catch(() => {});
-    const vault = await fundingAccounts(this.storage, this.expectedChainId, { create: true });
-    await this.useSigner(new Wallet(vault.accounts[vault.selected!], this.provider), 'demo', { select: false });
+    const saved = await fundingAccounts(this.storage, this.expectedChainId, { create: true });
+    await this.useKey(saved.accounts[saved.selected!], { select: false });
     // The single observation loop; the page only re-renders from wallet state. A hidden tab does not poll.
     this.timer = setInterval(() => {
       if (!this.busy && !globalThis.document?.hidden)
         void this.refresh()
+          .then(() => this.sweep().catch(error => this.onBackgroundError('Adding ETH to your balance failed', error)))
           .then(() => this.collectPayouts().catch(error => this.onBackgroundError('Collecting payouts failed', error)))
           .catch(() => {});
     }, 4000);
     this.timer.unref?.();
     return this;
   }
-  /** Switch to an account. Its saved state loads at once; its first look at the chain and the casino follows the
-   * deployment check, in synced. */
-  async useSigner(signer: Signer, mode: string, { select = true } = {}) {
+  /** Switch to the account of a key, saved in this browser from then on. Its saved state loads at once; its first
+   * look at the chain and the casino follows the deployment check, in synced. */
+  async useKey(privateKey: string, { select = true } = {}) {
     await this.synced?.catch(() => {});
     this.requireDurableState();
     if (this.busy || this.pending || this.needsOpening || this.transactionIntent)
       throw new Error('Recover the pending operation before changing wallets');
+    const signer = new Wallet(privateKey, this.provider);
     this.busy = true;
     try {
       await this.refreshing?.catch(() => {});
       this.requireDurableState();
-      // A browser wallet on another network is turned away at once. The wallet's own keys use the casino's RPC,
-      // whose chain every observation checks.
-      if (signer.provider !== this.provider) await this.assertNetwork({ signer });
-      const address = getAddress(await signer.getAddress());
+      const address = getAddress(signer.address);
       this.developerEarnings = null;
       const contract = new Contract(this.config.contractAddress, trustedArtifact.abi, signer);
       const reader = contract.connect(this.provider) as Contract;
@@ -372,16 +362,13 @@ export class CasinoWallet extends GameSessions {
         ':' +
         address.toLowerCase();
       const run = async () => {
-        if (mode === 'demo') {
-          const vault = await fundingAccounts(this.storage, this.expectedChainId, {
-            privateKeys: [(signer as Wallet).privateKey],
-            select,
-          });
-          this.savedFundingAddresses = Object.keys(vault.accounts);
-        }
+        const saved = await fundingAccounts(this.storage, this.expectedChainId, {
+          privateKeys: [signer.privateKey],
+          select,
+        });
+        this.savedFundingAddresses = Object.keys(saved.accounts);
         Object.assign(this, {
           signer,
-          mode,
           address,
           contract,
           reader,
@@ -446,6 +433,29 @@ export class CasinoWallet extends GameSessions {
   }
   get needsOpening() {
     return Boolean(this.channel && Number(this.channel.onchain?.status || 0) === 0);
+  }
+  /** Whether this account's newest balance was closed without the casino, by either side: such a close leaves its
+   * deadline on the channel, a withdrawal does not. */
+  get forceClosed() {
+    if (this.channel) return false;
+    let newest: WalletChannel | undefined;
+    for (const c of Object.values(this.channels))
+      if (c.claim && (!newest || BigInt(c.claim.finalizedAt) > BigInt(newest.claim.finalizedAt))) newest = c;
+    return Boolean(newest && BigInt(newest.onchain?.deadline || 0) > 0n);
+  }
+  /** Whether ETH at this account's address goes into its balance by itself: while the casino is there and nothing is
+   * closing or in flight. After a close without the casino it waits for the player, who may want it elsewhere. */
+  get sweeps() {
+    return (
+      !this.recoveryOnly &&
+      !this.storageFailed &&
+      !this.transactionIntent &&
+      !this.missingChannel &&
+      !this.needsOpening &&
+      !(this.pending && this.pending.kind !== 'taken-in') &&
+      (this.channel ? this.funded : !this.forceClosed) &&
+      BigInt(this.nativeBalance || 0) > MIN_GAS_RESERVE + 2n * this.depositFee
+    );
   }
   requireDurableState() {
     if (this.storageFailed) throw new Error('Wallet storage needs recovery; reload from durable state');
@@ -857,18 +867,12 @@ export class CasinoWallet extends GameSessions {
       });
     return value;
   }
-  async connectInjected() {
-    if (!window.ethereum) throw new Error('No browser wallet found');
-    const provider = new BrowserProvider(window.ethereum);
-    await provider.send('eth_requestAccounts', []);
-    await this.useSigner(await provider.getSigner(), 'injected');
-  }
   async importKey(privateKey: string) {
-    await this.useSigner(new Wallet(privateKey.trim(), this.provider), 'demo');
+    await this.useKey(privateKey.trim());
   }
   async selectSavedAccount(address: string) {
-    const vault = await readFundingAccounts(this.storage, this.expectedChainId);
-    const key = vault.accounts[getAddress(address)];
+    const saved = await readFundingAccounts(this.storage, this.expectedChainId);
+    const key = saved.accounts[getAddress(address)];
     if (!key) throw new Error('No saved funding key for this address');
     await this.importKey(key);
   }
@@ -879,8 +883,7 @@ export class CasinoWallet extends GameSessions {
       );
   }
   exportKey() {
-    if (this.mode !== 'demo') throw new Error('Use your connected wallet to export its key');
-    return (this.signer as Wallet).privateKey;
+    return this.signer.privateKey;
   }
   async encryptedBackup(password: string) {
     const value = await this.withSavedRecord(async record => ({
@@ -888,7 +891,7 @@ export class CasinoWallet extends GameSessions {
       chainId: String(this.expectedChainId),
       casino: this.config.contractAddress,
       address: this.address,
-      fundingKey: this.mode === 'demo' ? (this.signer as Wallet).privateKey : null,
+      fundingKey: this.signer.privateKey,
       scope: 'selected-account',
       record,
     }));
@@ -918,12 +921,9 @@ export class CasinoWallet extends GameSessions {
         evidence: this.evidence(c),
       });
     }
-    if (value.fundingKey && !same(new Wallet(value.fundingKey).address, value.address))
+    if (typeof value.fundingKey !== 'string' || !same(new Wallet(value.fundingKey).address, value.address))
       throw new Error('Backup funding key differs');
-    if (!same(value.address, this.address)) {
-      if (!value.fundingKey) throw new Error('Connect the funding wallet named by this backup first');
-      await this.importKey(value.fundingKey);
-    }
+    if (!same(value.address, this.address)) await this.importKey(value.fundingKey);
     await this.exclusive(async () => {
       if (!same(value.address, this.address))
         throw new Error('Wallet changed while restoring; retry with the backup wallet');

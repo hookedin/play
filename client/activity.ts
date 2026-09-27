@@ -228,8 +228,7 @@ export function receiptSummary(
         : (
             {
               deposit: 'Deposited',
-              withdrawal: 'Withdrawn to your vault',
-              sent: 'Sent from your vault',
+              withdrawal: 'Withdrawn',
               'close-started': 'Close started',
               closure: 'Balance closed',
               dispute: 'Close challenged',
@@ -249,17 +248,21 @@ export function receiptSummary(
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
       ? 'Deposited'
-      : ['withdrawal', 'divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
-        ? 'Received'
-        : receipt.kind === 'invest'
-          ? 'Invested'
-          : receipt.kind === 'redeem'
-            ? 'Owed to you'
-            : ['payment', 'developer-bet', 'bank', 'sent'].includes(receipt.kind)
-              ? 'Sent'
-              : receipt.kind === 'closure'
-                ? 'Claim recorded'
-                : `${unit} received`;
+      : receipt.kind === 'withdrawal'
+        ? 'Paid out'
+        : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
+          ? 'Received'
+          : receipt.kind === 'invest'
+            ? 'Invested'
+            : receipt.kind === 'redeem'
+              ? 'Owed to you'
+              : ['payment', 'developer-bet', 'bank'].includes(receipt.kind)
+                ? 'Sent'
+                : receipt.kind === 'closure'
+                  ? 'Claim recorded'
+                  : ['close-started', 'dispute'].includes(receipt.kind)
+                    ? 'No payment'
+                    : `${unit} received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (played) {

@@ -132,9 +132,8 @@ and the contract protects neither ([trust model](../overview/trust-model.md#deve
 ## Activity
 
 **Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, bankroll and
-bank movements, and transactions: **Deposited**, **Withdrawn to your vault** (a withdrawal or a collected claim),
-**Sent from your vault**, **Balance closed** and **Close challenged**. A row expands to its operation ID, channel,
-sequence and commission, and for a transaction its hash (linked to Sepolia Etherscan), its block and a send's recipient,
-with the raw JSON behind it. An off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**,
+bank movements, and transactions: **Deposited**, **Withdrawn** (a withdrawal or a collected claim), **Balance closed**
+and **Close challenged**. A row expands to its operation ID, channel, sequence and commission, and for a transaction
+its hash (linked to Sepolia Etherscan), its block and the address a withdrawal paid, with the raw JSON behind it. An off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**,
 **Reverted**, **Replaced** or **Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100
 receipts, and the receipt of every developer bet still open.

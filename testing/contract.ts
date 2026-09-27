@@ -144,17 +144,20 @@ export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) 
   };
   return { state: next, evidence };
 }
-export async function closeCoop(f: any, ch: any, evidence = ch.evidence) {
+/** Close with both signatures, paying the player or the recipient they name. */
+export async function closeCoop(f: any, ch: any, evidence = ch.evidence, recipient = ch.player.address) {
   const state = Number(evidence.step.operation.kind)
     ? deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret, evidence.step.seed)
     : evidence.base;
   const message = {
     channelId: state.channelId,
     stateHash: hashState(f.d, state),
+    recipient,
   };
   return (
     await f.contract.cooperativeClose(
       evidence,
+      recipient,
       await ch.player.signTypedData(f.d, CLOSE_TYPES, message),
       await f.owner.signTypedData(f.d, CLOSE_TYPES, message),
     )

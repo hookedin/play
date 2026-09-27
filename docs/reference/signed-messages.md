@@ -40,7 +40,7 @@ state hash (`previousStateHash`, `Close.stateHash`, the contract's `initialHash`
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
 | `Checkpoint`      | `bytes32 channelId`, `uint256 sequence`, `bytes32 previousStateHash`, `bytes32 transitionHash`, `uint256 balance`, `uint256 deposited`                                                        | The casino, and the channel key when it countersigns | Contract, wallet, casino |
 | `Operation`       | `bytes32 channelId`, `bytes32 previousStateHash`, `uint256 sequence`, `uint256 kind`, `uint256 amount`, `uint64 chance`, `uint256 prize`, `bytes32 round`, `bytes32 seedHash`, `bytes32 memo` | The channel key                                      | Contract, casino, wallet |
-| `Close`           | `bytes32 channelId`, `bytes32 stateHash`                                                                                                                                                      | The funding account and the casino                   | Contract, casino, wallet |
+| `Close`           | `bytes32 channelId`, `bytes32 stateHash`, `address recipient`                                                                                                                                 | The funding account and the casino                   | Contract, casino, wallet |
 | `Access`          | `bytes32 channelId`, `uint256 expiresAt`                                                                                                                                                      | The channel key                                      | Casino                   |
 | `DeveloperAccess` | `address developer`, `uint256 expiresAt`                                                                                                                                                      | The developer                                        | Casino                   |
 | `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                             | The developer                                        | Casino, wallet           |
@@ -314,8 +314,9 @@ the payout.
 
 ### Close
 
-`Close(channelId, stateHash)` closes a channel at once on-chain, through `cooperativeClose`. `stateHash` is the hash of
-the checkpoint the channel closes on. The funding account signs it and asks the casino for its signature with
+`Close(channelId, stateHash, recipient)` closes a channel at once on-chain, through `cooperativeClose`. `stateHash` is
+the hash of the checkpoint the channel closes on, and `recipient` the address its claim pays, at once and whenever more
+of it is paid. The funding account signs it and asks the casino for its signature with
 [`POST /api/channels/:id/close`](../casino-api/channels.md#post-apichannelsidclose).
 
 ### Access tokens
@@ -404,7 +405,7 @@ The first three are `LIMITS`, which `GET /api/config` reports as `limits`:
 `PROTOCOL` fixes everything a wallet and the casino must agree on. It is the keccak-256 of the UTF-8 bytes of the
 twelve EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
 canonical JSON of the rules they apply alike. An `encodeType` string is a structure's name and its fields, as in
-`Close(bytes32 channelId,bytes32 stateHash)`. The rules:
+`Close(bytes32 channelId,bytes32 stateHash,address recipient)`. The rules:
 
 ```text
 {"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"none":0},"limits":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
@@ -436,7 +437,7 @@ the hashing and pricing rules in numbers.
 | `operations`                    | Four operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |
 | `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                    |
 | `rejection`, `rejectionHash`    | The checkpoint that declines the casino bet instead, and its hash                                                                                                                                                                                  |
-| `close`, `closeHash`            | The `Close` of the channel on its last checkpoint, and its hash                                                                                                                                                                                    |
+| `close`, `closeHash`            | The `Close` of the channel on its last checkpoint, paying `identity.recipient`, and its hash                                                                                                                                                       |
 | `cases`                         | Four casino bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                      |
 | `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                 |
 

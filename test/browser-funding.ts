@@ -21,10 +21,10 @@ try {
   };
   await storage.put(key + ':' + role + ':ready', true);
   await waitFor(':' + peer + ':ready');
-  const vault = await fundingAccounts(storage, key, { create: true });
-  await storage.put(key + ':' + role + ':address', vault.selected);
+  const saved = await fundingAccounts(storage, key, { create: true });
+  await storage.put(key + ':' + role + ':address', saved.selected);
   const other = await waitFor(':' + peer + ':address');
-  if (other !== vault.selected) throw new Error('Concurrent tabs selected different funding accounts');
+  if (other !== saved.selected) throw new Error('Concurrent tabs selected different funding accounts');
   const durable = await readFundingAccounts(storage, key);
   if (Object.keys(durable.accounts).length !== 1 || !durable.accounts[other])
     throw new Error('Funding key was not retained');

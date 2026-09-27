@@ -24,7 +24,7 @@ On **Settings**, under **Keys and backups**, enter a passphrase of 12 to 1,024 c
 and press **Download encrypted backup**. The wallet downloads `hookedin-encrypted-wallet.json`. A backup holds only the
 account in use:
 
-- its funding key, if the wallet holds it (a connected browser wallet keeps its own);
+- its funding key;
 - every channel's key, opening, latest evidence, close authorization and pending operation;
 - its bankroll fund statements, developer bets and bank statements;
 - its latest 100 receipts, and the receipt of every developer bet still open.
@@ -45,8 +45,7 @@ pending. Before it writes anything, the wallet checks that:
 - every channel belongs to the backup's address, every key matches its channel, and all the evidence verifies;
 - it replaces no saved evidence with an older or conflicting checkpoint, and changes no pending operation.
 
-A backup of another account makes that account the funding account; a backup made with a connected browser wallet asks
-you to connect that wallet first.
+A backup of another account makes that account the funding account.
 
 ## Recovery bundles
 
@@ -79,8 +78,7 @@ be taken into your balance needs no banner: the wallet asks the casino again at 
 
 The same banner covers an on-chain transaction that has not confirmed. **Retry** looks for its outcome, including a
 replacement your funding account sent at the same nonce, and sends the exact saved transaction again when the network
-has none; a connected browser wallet asks you to approve that. **Speed up** sends it again with a higher fee, at most
-200 gwei per gas. A first deposit whose channel was not registered is recovered the same way.
+has none. **Speed up** sends it again with a higher fee, at most 200 gwei per gas. A first deposit whose channel was not registered is recovered the same way.
 
 ## Recovery mode
 

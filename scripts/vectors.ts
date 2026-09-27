@@ -32,6 +32,8 @@ export function buildVectors() {
     player: '0x2222222222222222222222222222222222222222',
     signer: '0x3333333333333333333333333333333333333333',
     developer: '0x4444444444444444444444444444444444444444',
+    // Where a withdrawal pays: any address the player names.
+    recipient: '0x5555555555555555555555555555555555555555',
   };
   const Q = OUTCOME_SPACE,
     priced = (bankroll: bigint, bet: { stake: bigint; chance: bigint; prize: bigint }) => {
@@ -125,7 +127,7 @@ export function buildVectors() {
   // A deposit, taking into the balance money deposited into the channel on-chain after it opened.
   const deposited = apply(payout.next, { kind: KIND.deposit, amount: 500_000_000n }, { id: `0x${'85'.repeat(32)}` });
   const rejection = rejectionCheckpoint(d, genesis, bet.operation),
-    close = { channelId: opening.channelId, stateHash: deposited.nextHash };
+    close = { channelId: opening.channelId, stateHash: deposited.nextHash, recipient: identity.recipient };
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     identity,

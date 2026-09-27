@@ -19,8 +19,8 @@ channel too.
 ## Channels
 
 **Open.** One transaction, `openChannel(signer)`, opens a channel. It comes from your **funding account**, the account
-whose ETH you deposit, which the wallet shows as your **vault**, and `signer` is the address of a fresh **channel key**
-the wallet generates for this channel. The contract derives the channel ID as
+whose address the wallet shows as your **deposit address** and whose ETH it deposits, and `signer` is the address of a
+fresh **channel key** the wallet generates for this channel. The contract derives the channel ID as
 `keccak256(abi.encode(player, signer, deposit))`, records who funded the channel and which key signs for it, and
 protects the deposit. The casino's permission is not needed. A funding account has one open channel at a time. Once the
 deposit has two confirmations on Sepolia, the wallet registers the channel with the casino.

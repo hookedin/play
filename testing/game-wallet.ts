@@ -191,7 +191,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       uname,
       alias: null,
       signer: player,
-      mode: 'demo',
       domain: d,
       config: { contractAddress: casino, operator: owner.address },
       verifiedChainId: 31337n,

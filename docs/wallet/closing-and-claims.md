@@ -5,23 +5,22 @@ sidebar:
   order: 5
 ---
 
-Your balance is a channel in the HookedIn contract. Withdrawing closes it with the casino's signature and pays you in
-the same transaction. Without the casino you close it alone, with your latest evidence and a 24-hour window, and then
+Your balance is a channel in the HookedIn contract. Withdrawing closes it with the casino's signature and pays the
+address you name in the same transaction. Without the casino you close it alone, with your latest evidence and a 24-hour window, and then
 collect what it is owed.
 
 ## What the Wallet page shows
 
 **Wallet**, `/wallet`, shows:
 
-| Part                    | What it is                                                                                                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Balance                 | Your channel's signed balance while it is open, the limits of games included, and money you deposited that the balance has not taken in yet, which the line under it counts as arriving |
-| Vault                   | The ETH at your funding account's address. It pays deposits and network fees, and withdrawals and collected claims arrive in it unless you send them elsewhere                          |
-| Deposit, Withdraw, Send | The [Wallet dialog](getting-started.md#deposit) on that tab; **All activity** opens [Activity](bets-and-receipts.md#activity)                                                           |
-| Commission              | Shown once your games have earned some: what they earned, and how much of it is collected into your balance ([earnings](../games/earnings.md))                                          |
-| Waiting to be paid      | Shown while a closed balance is still owed something: each claim, what it is still owed, and what can be collected now ([claims and collection](#claims-and-collection))                |
-| Developer bets          | Shown when there are some: stakes with developers, and payouts not yet collected, which are outside the signed balance ([developer bets](bets-and-receipts.md#developer-bets))          |
-| Recovery                | Collapsed: the channel behind your balance, and what you can do without the casino ([recovery](#recovery))                                                                              |
+| Part               | What it is                                                                                                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Balance            | Your channel's signed balance while it is open, the limits of games included, and money you deposited that the balance has not taken in yet, which the line under it counts as arriving |
+| Deposit, Withdraw  | The [Wallet dialog](getting-started.md#deposit) on that tab; **All activity** opens [Activity](bets-and-receipts.md#activity)                                                           |
+| Commission         | Shown once your games have earned some: what they earned, and how much of it is collected into your balance ([earnings](../games/earnings.md))                                          |
+| Waiting to be paid | Shown while a closed balance is still owed something: each claim, what it is still owed, and what can be collected now ([claims and collection](#claims-and-collection))                |
+| Developer bets     | Shown when there are some: stakes with developers, and payouts not yet collected, which are outside the signed balance ([developer bets](bets-and-receipts.md#developer-bets))          |
+| Recovery           | Collapsed: the channel behind your balance, and what you can do without the casino ([recovery](#recovery))                                                                              |
 
 When the channel closes, what it is owed up to what you deposited is protected principal. The part above it is
 **winnings**: a signed balance, owed from the shared bankroll.
@@ -37,16 +36,16 @@ bundle back ([recovery bundles](backups-and-recovery.md#recovery-bundles)).
 
 ## Withdraw
 
-1. On the **Withdraw** tab, press **Withdraw … ETH to your vault**.
-2. The wallet stops play on the channel, and your funding account signs `Close(channelId, stateHash)` over the latest
-   checkpoint.
-3. The casino countersigns it, and the wallet sends `cooperativeClose` with both signatures and the evidence. The
-   contract finalizes the channel, records the claim and pays it at once, as far as it can
-   ([claims and collection](#claims-and-collection)).
+1. On the **Withdraw** tab, enter the address to pay under **To** and press **Withdraw … ETH**.
+2. The wallet stops play on the channel, and your funding account signs `Close(channelId, stateHash, recipient)` over
+   the latest checkpoint and that address.
+3. The casino countersigns it, and the wallet sends `cooperativeClose` with the evidence, the address and both
+   signatures. The contract finalizes the channel, records the claim for that address and pays it at once, as far as it
+   can ([claims and collection](#claims-and-collection)).
 
 A withdrawal needs the casino, and a channel with no pending operation. The contract checks the `Close` signature as a
-signature of an externally owned account, so a funding account that is a contract closes without the casino. So does
-one that refuses ETH: the payment is part of the close, and a refused payment reverts it.
+signature of an externally owned account, so a funding account that is a contract closes without the casino. An address
+that refuses ETH cannot be paid this way: the payment is part of the close, and a refused payment reverts it.
 
 ## Close without the casino
 
@@ -57,6 +56,10 @@ one that refuses ETH: the payment is part of the close, and a refused payment re
 3. Once the deadline has passed, press **Finish the close**. Anyone can send `finalizeClose`, and the claim is recorded
    at the state the close ended with.
 4. [Collect the claim](#claims-and-collection).
+
+Such a close pays your funding account, at your deposit address, whoever started it. Until you open a new balance, the
+wallet puts nothing at that address into one by itself: what the close pays and anything sent since waits for
+**Add to balance** or **Withdraw** ([deposit](getting-started.md#deposit)).
 
 The evidence is your latest countersigned checkpoint, or that checkpoint plus the last operation the casino signed. A
 close is owed that state's balance, plus any deposit the balance has not taken in. The wallet needs no casino for any of
@@ -91,7 +94,8 @@ then. **Waiting to be paid**, on the Wallet page, lists every claim of this acco
 a time, those of older channels included, with what it is owed and what can be collected now:
 
 - **Collect** sends `claim(channelId)`, which anyone may send. It pays the claim's protected principal and the winnings
-  reserved for it to the claim's recipient: your funding account, unless you have redirected it.
+  reserved for it to the claim's recipient: the address a withdrawal named or, after a close without the casino, your
+  funding account, unless you have redirected it.
 - **Collect there**, with an address beside it, sends `claimTo(channelId, recipient)`, which only the funding account
   may send. It makes `recipient` the claim's recipient, for this collection and every later one, and pays.
 - **Export evidence** saves the recovery bundle of its channel.
@@ -103,13 +107,13 @@ queue; anyone can call `allocateWinnings` for up to 64. Cash reserved for a clai
 be collected again as more is reserved for it. The owner can never withdraw protected principal or finalized winnings.
 
 The payment is sent with 100,000 gas. A recipient that rejects it, or needs more gas to accept it, makes the collection
-revert and leaves the claim whole. A withdrawal then reverts whole, and that account closes without the casino instead.
+revert and leaves the claim whole. A withdrawal to such an address reverts whole: withdraw to another.
 
 ## Fees and gas
 
-Depositing, withdrawing, sending, closing, challenging, finishing a close and collecting are transactions from your
-funding account. The wallet caps each at 2,000,000 gas, 200 gwei per gas and 0.05 ETH in total fees, and stops before
+Depositing, withdrawing, closing, challenging, finishing a close and collecting are transactions from your funding
+account. The wallet caps each at 2,000,000 gas, 200 gwei per gas and 0.05 ETH in total fees, and stops before
 signing when the network's estimate is higher; the casino cannot raise these caps. A deposit leaves at least 0.001 ETH
-in your vault for later fees, and so does a send while a balance is open; a withdrawal, a close, a challenge, finishing
-a close or collecting may spend it. That reserve is a floor, not a guaranteed budget. A pending transaction shows
+at your deposit address for later fees; a withdrawal, a close, a challenge, finishing a close or collecting may spend
+it. That reserve is a floor, not a guaranteed budget. A pending transaction shows
 **Retry** and **Speed up** ([when a reply is lost](backups-and-recovery.md#when-a-reply-is-lost)).

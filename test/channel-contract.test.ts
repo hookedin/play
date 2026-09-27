@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { id, Signature, verifyTypedData, Wallet } from 'ethers';
+import { id, Signature, verifyTypedData, Wallet, ZeroAddress } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBinary } from '../testing/contract.ts';
-import { assertSignature, hashState, checkpointEvidence, STATE_TYPES } from '../protocol/protocol.ts';
+import { assertSignature, hashState, checkpointEvidence, CLOSE_TYPES, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 test('shared-pool contract protects principal, retains debts and verifies channel evidence', async t => {
   const env = await anvil();
@@ -117,6 +117,31 @@ test('money deposited into an open channel is protected, taken in by a signed de
   assert.deepEqual([claim.amount, claim.paid], [1200n, 1200n]);
   assert.equal((await env.provider.getBalance(b.address)) - before, 1200n);
   assert.equal(await f.contract.protectedPrincipal(), 1200n);
+});
+test('a cooperative close pays the address both sides signed, at once and when its winnings are paid later', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a] = env.wallets,
+    recipient = Wallet.createRandom().address,
+    ca = await open(f, a, 1000n),
+    win = await signedIncrease(f, ca, 500n);
+  const signed = async (to: string) => {
+    const message = { channelId: ca.state.channelId, stateHash: hashState(f.d, win.state), recipient: to };
+    return [await a.signTypedData(f.d, CLOSE_TYPES, message), await f.owner.signTypedData(f.d, CLOSE_TYPES, message)];
+  };
+  const [player, casino] = await signed(recipient);
+  // Signed for one address, the close pays no other, and never nobody or the contract itself.
+  await assert.rejects(f.contract.cooperativeClose.staticCall(win.evidence, a.address, player, casino));
+  for (const nowhere of [ZeroAddress, await f.contract.getAddress()])
+    await assert.rejects(f.contract.cooperativeClose.staticCall(win.evidence, nowhere, ...(await signed(nowhere))));
+  // The principal is paid at once; the winnings wait for the pool to have the cash, and go to the same address.
+  await (await f.contract.cooperativeClose(win.evidence, recipient, player, casino)).wait();
+  assert.equal(await env.provider.getBalance(recipient), 1000n);
+  assert.equal(await f.contract.claimRecipient(ca.state.channelId), recipient);
+  await (await f.contract.fundBankroll({ value: 500n })).wait();
+  await (await f.contract.claim(ca.state.channelId)).wait();
+  assert.equal(await env.provider.getBalance(recipient), 1500n);
 });
 test('channel evidence rejects replay across channels and chains', async t => {
   const env = await anvil();

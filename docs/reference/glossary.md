@@ -107,9 +107,14 @@ developer bet. See [counterparties](signed-messages.md#counterparties).
 
 ### Deposit
 
-Moving ETH from a player's vault into their balance. The first opens a channel; a later one adds to the open channel,
-and the balance takes it in with a deposit operation, kind 4, once the casino has seen it confirmed. See
-[getting started](../wallet/getting-started.md#deposit).
+Moving ETH from a player's deposit address into their balance, which the wallet does by itself as ETH arrives. The
+first opens a channel; a later one adds to the open channel, and the balance takes it in with a deposit operation,
+kind 4, once the casino has seen it confirmed. See [getting started](../wallet/getting-started.md#deposit).
+
+### Deposit address
+
+The address of a player's funding account, where they send ETH to play. The wallet puts what arrives into their
+balance and keeps 0.001 ETH there for network fees. See [getting started](../wallet/getting-started.md#deposit).
 
 ### Details
 
@@ -139,7 +144,7 @@ See [evidence](signed-messages.md#evidence).
 ### Funding account
 
 The account whose ETH opens a channel, the channel's `player`. It signs the transactions and the cooperative close, and
-the ETH at its address is the player's [vault](#vault).
+its address is the player's [deposit address](#deposit-address).
 
 ### Game key
 
@@ -237,11 +242,6 @@ What a bet pays to enter.
 The name the casino derives for every player from an address it never publishes, written `~3byt9ocwnnzaxanmiz3stocj`.
 See [names and publishing](../wallet/names-and-publishing.md).
 
-### Vault
-
-The ETH at a player's own address, their funding account: only their key moves it. Deposits come from it, and
-withdrawals go to it.
-
 ### Watchtower
 
 A process that watches one channel from its exported evidence and challenges a stale close. See
@@ -249,5 +249,5 @@ A process that watches one channel from its exported evidence and challenges a s
 
 ### Withdraw
 
-Moving the whole balance to the vault: a cooperative close, which pays in the same transaction what it can. See
-[getting started](../wallet/getting-started.md#withdraw).
+Moving the whole balance to an address the player names: a cooperative close, which pays it there in the same
+transaction, as far as it can. See [getting started](../wallet/getting-started.md#withdraw).

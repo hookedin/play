@@ -64,7 +64,7 @@ test('durable wallet state survives reload and refuses signing after persistence
   );
   assert.equal((await storage.get(wallet.storageKey)).channels.channel.pending.signature, 'signed');
 });
-test('a replaced injected transaction cannot be reported as a channel deposit', async () => {
+test('a replaced transaction cannot be reported as a channel deposit', async () => {
   const wallet = new CasinoWallet({
     network: 'local',
     storage: new MemoryStore(),

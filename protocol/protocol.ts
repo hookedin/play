@@ -69,7 +69,7 @@ export const OP_TYPES = {
   ),
 };
 export const CLOSE_TYPES = {
-  Close: fields('bytes32 channelId,bytes32 stateHash'),
+  Close: fields('bytes32 channelId,bytes32 stateHash,address recipient'),
 };
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
@@ -214,7 +214,7 @@ export function verifyShareStatement(
     throw new Error('Share statement does not match the redemption');
   return burned;
 }
-export const hashClose = (d: Domain, s: { channelId: string; stateHash: string }) =>
+export const hashClose = (d: Domain, s: { channelId: string; stateHash: string; recipient: string }) =>
   TypedDataEncoder.hash(d, CLOSE_TYPES, s);
 /** A signature in the one form the contract recovers: 65 bytes, v 27 or 28. ethers recovers a compact one or a v of 0
  * or 1 as well, and each side keeps the other's signatures as they came, as its evidence. */

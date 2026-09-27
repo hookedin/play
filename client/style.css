@@ -615,7 +615,7 @@ main:has(> #page-play:not(.hidden)) {
   font-size: 18px;
 }
 
-/* Money: the balance, what games play with, and the vault, the player's own address. */
+/* Money: the balance, what games play with. */
 .money {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -664,17 +664,6 @@ main:has(> #page-play:not(.hidden)) {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
-}
-.money.compact {
-  grid-template-columns: 1fr 1fr;
-  margin-top: 14px;
-}
-.money.compact .money-card {
-  padding: 12px 14px;
-  gap: 2px;
-}
-.money.compact strong {
-  font-size: 20px;
 }
 #page-wallet .actions {
   margin-top: 16px;
@@ -1116,30 +1105,17 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .tab-panel[hidden] {
   display: none;
 }
-.tab-panel > .muted:first-child {
-  margin: 14px 0;
-}
 .tab-panel > label:first-child {
   margin-top: 16px;
 }
-/* An empty vault asks for ETH first: the address comes before the form it would fund. */
-.tab-panel[data-empty] .receive {
-  order: -1;
-  margin: 12px 0 18px;
-  padding-top: 0;
-  border-top: 0;
+/* The wallet dialog: the balance, the address ETH comes in at and what happens to it, and the way out. */
+.sheet-balance {
+  margin-top: 14px;
+  padding: 12px 14px;
+  gap: 2px;
 }
-.receive {
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
-}
-.receive h3 {
-  font-size: 14px;
-}
-.receive > .muted {
-  margin-top: 6px;
-  font-size: 12px;
+.sheet-balance strong {
+  font-size: 22px;
 }
 .address {
   display: flex;
@@ -1156,13 +1132,18 @@ main:has(> #page-play:not(.hidden)) > .banner {
   font-size: 12px;
   line-height: 1.5;
 }
-.receive .text-button {
-  display: inline-block;
-  margin-top: 8px;
-  font-size: 12px;
+#deposit-status {
+  font-size: 13px;
+  line-height: 1.6;
 }
-.receive .button {
+#add-to-balance {
   margin-top: 12px;
+}
+.tab-panel .text-button,
+.tab-panel .button.small {
+  align-self: flex-start;
+  margin-top: 10px;
+  font-size: 12px;
 }
 #fund-who {
   margin-top: 8px;
