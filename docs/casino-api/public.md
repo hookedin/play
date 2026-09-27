@@ -254,6 +254,12 @@ GET /api/players?limit=10
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       },
       {
+        "name": "crash",
+        "url": "https://crash-game.hookedin.com/",
+        "key": "0x398a46cd97b5a291f9b9a9cf908b2af4cfe47d7567949f96e958d6025a12803e",
+        "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
+      },
+      {
         "name": "dice",
         "url": "https://dice-game.hookedin.com/",
         "key": "0x1c610e909ab30b59687e87b9f4b639e0af4cf4e1c6250e2318d82002df54b31a",

@@ -308,6 +308,8 @@ through its player's wallet with [`HookedIn.round`](../sdk/hookedin.md#hookedin)
   which the table publishes. The page places a player's whole layout as one developer bet, with the spin as its `group`
   and meta `{ chips }`, each chip a spot and its amount as a decimal string. The wheel believes the casino, not the
   page, and reads the open bets itself.
+- The wheel turns every 20 seconds, whether or not anybody bets. A turn with no layout on it lands on a pocket drawn at
+  random and reveals nothing, and the spin's rounds take the next turn's bets: an empty table costs the casino nothing.
 - At close, the wheel works out what it owes on each of the 37 pockets from the bets it covers, prices the tree once
   with `priceSteps` at half the casino's reported bankroll, and walks it: the spin's round for each level, `stepBet`
   placed as its casino bet with the spin as its group and meta `{ side }`, the first step's meta also committing to the
@@ -327,7 +329,8 @@ A crash game whose players all set their cash-out before the draw fits the same 
 crash points, and on each the server owes what the cash-outs it reaches pay. A cash-out made by hand while the curve
 climbs cannot ride a round: to know when to crash, the server would have to reveal the draw at take-off, and a revealed
 round is public, so every page would know the crash point. Such a game keeps its crash point to itself and settles
-every bet on its word.
+every bet on its word, as the house's [crash](https://github.com/hookedin/game-crash) does: a flight's ID is the hash of
+a secret revealed after the crash, and each escape is paid from the developer's bank.
 
 ## One Cloudflare Worker
 

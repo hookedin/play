@@ -1,25 +1,27 @@
 ---
 title: Examples
-description: The six house games and the template, what each shows, and the files to copy.
+description: The seven house games and the template, what each shows, and the files to copy.
 sidebar:
   order: 12
 ---
 
 The house's games are what `@hookedin` publishes, each with its README, its tests and a Cloudflare deployment. Four
 static ones live in play's [games/](../../games/) folder. Blackjack is a repository of its own,
-[hookedin/game-blackjack](https://github.com/hookedin/game-blackjack), and so are roulette, the one with a server,
-[hookedin/game-roulette](https://github.com/hookedin/game-roulette), and the template. Every one of them is complete:
-start from the one closest to your game.
+[hookedin/game-blackjack](https://github.com/hookedin/game-blackjack), and so are the two with a server, roulette
+([hookedin/game-roulette](https://github.com/hookedin/game-roulette)) and crash
+([hookedin/game-crash](https://github.com/hookedin/game-crash)), and the template. Every one of them is complete: start
+from the one closest to your game.
 
-| Game                                                       | What it shows                                                                | Copy                                                                                             |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [Game template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand                            | The whole repository: build, tests, deployment                                                   |
-| [Dice](../../games/dice/)                                  | The smallest `RoundClient` game: one decision, two outcomes                  | [src/rules.ts](../../games/dice/src/rules.ts), [src/game.ts](../../games/dice/src/game.ts)       |
-| [Plinko](../../games/plinko/)                              | One decision of many outcomes, collapsed into one bet per drop               | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts) |
-| [Samson's Gold](../../games/samson/)                       | A 243-ways slot whose odds are counted exactly from its reels                | [src/math.ts](../../games/samson/src/math.ts)                                                    |
-| [Mines](../../games/mines/)                                | Reveal or cash out: the simplest multi-step graph                            | [src/rules.ts](../../games/mines/src/rules.ts)                                                   |
-| [Blackjack](https://github.com/hookedin/game-blackjack)    | A multi-step game with doubles, splits and insurance, and precomputed prices | The whole repository: rules, prices, page, tests, deployment                                     |
-| [Roulette](https://github.com/hookedin/game-roulette)      | Many players' developer bets on one spin, backed by the wheel's casino bets  | The whole repository: page, server, tests, deployment                                            |
+| Game                                                       | What it shows                                                                   | Copy                                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Game template](https://github.com/hookedin/game-template) | A bridge probe: every wallet method, sent by hand                               | The whole repository: build, tests, deployment                                                   |
+| [Dice](../../games/dice/)                                  | The smallest `RoundClient` game: one decision, two outcomes                     | [src/rules.ts](../../games/dice/src/rules.ts), [src/game.ts](../../games/dice/src/game.ts)       |
+| [Plinko](../../games/plinko/)                              | One decision of many outcomes, collapsed into one bet per drop                  | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts) |
+| [Samson's Gold](../../games/samson/)                       | A 243-ways slot whose odds are counted exactly from its reels                   | [src/math.ts](../../games/samson/src/math.ts)                                                    |
+| [Mines](../../games/mines/)                                | Reveal or cash out: the simplest multi-step graph                               | [src/rules.ts](../../games/mines/src/rules.ts)                                                   |
+| [Blackjack](https://github.com/hookedin/game-blackjack)    | A multi-step game with doubles, splits and insurance, and precomputed prices    | The whole repository: rules, prices, page, tests, deployment                                     |
+| [Roulette](https://github.com/hookedin/game-roulette)      | Many players' developer bets on one spin, backed by the wheel's casino bets     | The whole repository: page, server, tests, deployment                                            |
+| [Crash](https://github.com/hookedin/game-crash)            | Many players on one flight, each a developer bet paid from the developer's bank | The whole repository: page, server, tests, deployment                                            |
 
 ## Game template
 
@@ -83,6 +85,17 @@ is the developer, and [server/worker.ts](https://github.com/hookedin/game-roulet
 Worker and its Durable Object. Its repository is a GitHub template that tests and deploys itself: start from it with
 **Use this template** for any game where many players share one outcome ([developer bets](developer-bets.md)).
 
+## Crash
+
+One rocket for every player, with ETH: each seat is a developer bet, and the room pays each escape from the developer's
+bank on its own word. A flight's ID is the hash of a secret the room reveals after the crash, so every crash point can
+be checked against the ID the seats signed.
+[src/rules.ts](https://github.com/hookedin/game-crash/blob/main/src/rules.ts) is the crash curve and the check, shared
+by page and server; [server/room.ts](https://github.com/hookedin/game-crash/blob/main/server/room.ts) is the developer,
+which saves every escape before it answers, and
+[server/worker.ts](https://github.com/hookedin/game-crash/blob/main/server/worker.ts) the Worker and its Durable Object.
+Copy it for a game whose players act on a shared outcome as it unfolds.
+
 ## Running a house game
 
 From play's root, with Node 24.4 or later:
@@ -93,6 +106,6 @@ node sdk/bin/hookedin-game.js serve games/dice
 ```
 
 Then, in the wallet, choose **Open a game by its URL** and open `http://127.0.0.1:4185/`. To make one your own, start a
-repository from the template and copy the game's `src/` and `test/` over it. Blackjack, and roulette with its server,
-run under `npm run dev` in their own repositories ([blackjack](https://github.com/hookedin/game-blackjack#run-it),
-[roulette](https://github.com/hookedin/game-roulette#run-it)).
+repository from the template and copy the game's `src/` and `test/` over it. Blackjack, and roulette and crash with
+their servers, run in their own repositories ([blackjack](https://github.com/hookedin/game-blackjack#run-it),
+[roulette](https://github.com/hookedin/game-roulette#run-it), [crash](https://github.com/hookedin/game-crash#try-it-locally)).
