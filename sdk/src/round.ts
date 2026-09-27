@@ -38,7 +38,7 @@ export interface RoundBridge {
   call: Bridge;
   balance: () => Promise<GameLimit>;
 }
-/** Where a round lives between reloads: the game's own origin storage, keyed per game, and per player or practice. */
+/** Where a round lives between reloads: the game's own origin storage, keyed per game and per player. */
 export interface RoundStore {
   get(key: string): string | null;
   set(key: string, value: string): void;
@@ -184,8 +184,8 @@ export class RoundClient {
   }
   /** Read the round as this origin's storage holds it. */
   private async load() {
-    const [info, hello] = await Promise.all([this.call('wallet.info'), this.greet()]);
-    this.storageKey = `hookedin:round:${this.name}:${playerScope(info, hello?.practice === true)}`;
+    const [info] = await Promise.all([this.call('wallet.info'), this.greet()]);
+    this.storageKey = `hookedin:round:${this.name}:${playerScope(info)}`;
     this.account = await this.balance();
     const saved = this.store.get(this.storageKey);
     this.data = saved ? JSON.parse(saved) : null;

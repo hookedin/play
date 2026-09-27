@@ -19,11 +19,7 @@ export interface GameIdentity {
 export interface GameSession {
   key: string;
   identity: GameIdentity;
-  /** Whether the game plays with this tab's play money, which has no limit, or with the channel's ETH up to the limit
-   * below. */
-  practice: boolean;
-  /** Decimal wei the game may still risk, including its winnings. In practice the game plays with all of the play money
-   * instead. */
+  /** Decimal wei the game may still risk, including its winnings. */
   balance: string;
 }
 /** A casino bet: settled against the casino's bankroll in the request that places it, on the player's own round.

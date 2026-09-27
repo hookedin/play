@@ -35,16 +35,15 @@ A game opened by its URL alone is published by nobody, and the wallet calls it b
 commission, the house keeps all of it, and it takes no developer bets. Its key is made from the zero address and its
 URL, which no published game can share.
 
-An open game has the page under the top bar, below a strip that says whether it practices or plays with ETH
-([practice or ETH](getting-started.md#practice-or-eth)), and **Games** in the top bar leads back to the library. While
-it loads, the wallet shows its icon. In practice a game plays at once; with ETH it starts with a limit of zero, and its
-bets fail until it is given money.
+An open game fills the page under the top bar, and **Games** in the top bar leads back to the library. While it loads,
+the wallet shows its icon. It starts with a limit of zero, and its bets fail until it is given money.
 
 ## Giving a game money
 
 A game gets ETH only through the wallet's own dialog, **Play … with ETH**, or **Change …'s limit** once it holds some.
-The dialog opens when the game asks, suggesting an amount and nothing else, or when you press **Set a limit** or
-**Change limit** in the strip above the game. Every word in it is the wallet's own.
+The dialog opens when the game asks, suggesting an amount and nothing else, and every word in it is the wallet's own.
+When your balance has nothing to allow, the wallet opens its Deposit tab instead
+([deposit](getting-started.md#deposit)).
 
 The dialog names who publishes the game and the host it is served from, and says that its developer earns half of each
 casino bet's commission and takes and settles its developer bets, or that nobody publishes it. Under
@@ -66,25 +65,20 @@ The limit caps what the game may risk; it moves no money:
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
   has already committed.
 
-A game that [practices](getting-started.md#practice) has no limit and no dialog: it plays with all of your play money,
-and gets more at once when it asks. Before a game holds any ETH, the dialog offers **Practice with play money instead**.
-
-## One game with ETH at a time
+## One game at a time
 
 One game per account holds a limit at a time, across every tab of the browser. Once you have given a game money, a game
-in another tab is refused at the dialog until you leave the first game or close its tab. Play money is each tab's own,
-so practice is not held to this.
+in another tab is refused at the dialog until you leave the first game or close its tab.
 
 ## What a game sees
 
 A game learns:
 
-- what the wallet offers and what it plays with: the methods, whether it practices, the money's symbol and decimals, the
-  chain ID and the protocol's limits on a bet ([`wallet.hello`](../reference/bridge.md#wallethello));
+- what the wallet offers and what it plays with: the methods, the money's symbol and decimals, the chain ID and the
+  protocol's limits on a bet ([`wallet.hello`](../reference/bridge.md#wallethello));
 - your uname and alias, the bankroll figure the casino reports and a suggested stake
   ([`wallet.info`](../reference/bridge.md#walletinfo));
-- its own limit, or in practice your play money, and whether one of its operations is pending
-  ([`game.balance`](../reference/bridge.md#gamebalance));
+- its own limit, and whether one of its operations is pending ([`game.balance`](../reference/bridge.md#gamebalance));
 - the receipts of its own operations, under its own IDs;
 - a developer's round, as the casino shows it to anyone ([`wallet.round`](../reference/bridge.md#walletround)).
 

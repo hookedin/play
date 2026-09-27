@@ -1,5 +1,4 @@
-/** The in-game view of the wallet's spending limit for this tab, and a way to ask for more; in practice, of the play
- * money, which the wallet tops up by itself. */
+/** The in-game view of the wallet's spending limit for this tab, and a way to ask for more. */
 import { HookedIn } from './sdk.ts';
 import type { GameBalance } from './sdk.ts';
 import type { RoundClient } from './round.ts';
@@ -34,20 +33,17 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     withheld = 0n,
     requesting = false,
     failure = '',
-    // Until the wallet has said what it plays with, there is no figure to show.
-    greeted = false,
-    practice = false;
+    // Until the wallet has said what it counts in, there is no figure to show.
+    greeted = false;
   function render() {
     if (held || options.round?.busy) return;
     const shown = BigInt(current.balance) - withheld - (options.round?.inHand() ?? 0n);
     amount.textContent = greeted ? HookedIn.formatAmount(shown < 0n ? 0n : shown) : '—';
     root.dataset.state = current.pending ? 'pending' : current.balance === '0' ? 'empty' : 'ready';
-    label.textContent = practice ? 'Practice' : 'Balance';
-    button.hidden = practice;
     // The figure says the rest: the line speaks only when something needs the player.
     status.textContent = requesting
       ? 'Waiting for your wallet…'
-      : failure || (current.pending && !practice ? 'An operation is waiting in your wallet.' : '');
+      : failure || (current.pending ? 'An operation is waiting in your wallet.' : '');
     status.hidden = !status.textContent;
     // Setting the limit signs nothing, so the player can do it while an operation is pending.
     button.disabled = busy || requesting;
@@ -61,15 +57,12 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     };
     render();
   }
-  /** What the wallet plays with, once it has greeted the page. */
+  /** What the wallet counts in, once it has greeted the page. */
   function greet() {
     HookedIn.hello()
       .then(hello => {
         greeted = true;
         asset.textContent = hello.asset.symbol;
-        // Play money looks different from money.
-        practice = hello.practice === true;
-        root.toggleAttribute('data-practice', practice);
         render();
       })
       .catch(() => {});

@@ -68,7 +68,7 @@ import { verifyDeployment } from '../protocol/deployment.ts';
 import { encryptBackup, decryptBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { MIN_GAS_RESERVE, channelRecord, picked } from './wallet-transactions.ts';
-import { GameSessions, PRACTICE_STAKES } from './wallet-games.ts';
+import { GameSessions } from './wallet-games.ts';
 export { MIN_GAS_RESERVE } from './wallet-transactions.ts';
 export const HISTORICAL_CHANNEL_BATCH = 16;
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
@@ -148,8 +148,6 @@ export class CasinoWallet extends GameSessions {
   declare lastChainCheck: number;
   /** The account's channel: what deposits, play, closes and recovery are about. */
   declare channelId: string | null;
-  /** The player chose to practice in this tab although the account has ETH to play with. */
-  declare preferPractice: boolean;
   declare storageFailed: boolean | undefined;
   declare refreshing: Promise<any> | null;
   declare nativeBalance: string;
@@ -208,9 +206,6 @@ export class CasinoWallet extends GameSessions {
       developerBetCursor: '0',
       bank: {},
       developerEarnings: null,
-      preferPractice: false,
-      practiceStart: PRACTICE_STAKES * BigInt(n.stake),
-      practiceBalance: PRACTICE_STAKES * BigInt(n.stake),
       history: [],
       channels: {},
       busy: false,
@@ -314,8 +309,8 @@ export class CasinoWallet extends GameSessions {
       chainId: this.expectedChainId,
       finality: this.config.confirmations || 1,
     });
-    // Practice needs neither the chain nor this check, so the wallet is ready as soon as its account is loaded.
-    // Everything that touches ETH waits for it, through synced.
+    // The wallet is ready as soon as its account is loaded; everything that touches ETH waits for this check, through
+    // synced.
     this.verified = verifyDeployment({
       observer: this.observer,
       provider: this.provider,
@@ -397,7 +392,7 @@ export class CasinoWallet extends GameSessions {
     this.synced.catch(() => {});
   }
   /** The account's first look at the chain and its channel's at the casino, once the deployment check has passed.
-   * Nothing else with ETH runs meanwhile: every such path waits for it. Practice never does. */
+   * Nothing else with ETH runs meanwhile: every such path waits for it. */
   async sync() {
     await this.verified;
     await this.withChannelLock(true, async () => {
@@ -430,13 +425,7 @@ export class CasinoWallet extends GameSessions {
     const c = this.channel;
     return Boolean(c?.key) && Number(c!.onchain?.status) === 1 && !c!.closing;
   }
-  /** Whether games play with this tab's play money: always, until the account can play with ETH, and then when the
-   * player chooses to practice. */
-  get practicing() {
-    return !this.funded || this.preferPractice;
-  }
-  /** What games count in, as a game is told it: the network's ETH, in units of 10^-18. Practice counts in the same
-   * amounts, and a game is told apart that it practices. */
+  /** What games count in, as a game is told it: the network's ETH, in units of 10^-18. */
   get asset() {
     return { symbol: 'ETH', decimals: 18 };
   }
@@ -543,7 +532,6 @@ export class CasinoWallet extends GameSessions {
     return this.profile;
   }
   render() {
-    this.syncSession();
     const c = this.channel,
       open = c && Number(c.onchain?.status) === 1,
       // Deposited into the open channel and not taken into its balance yet: the player's all the same.

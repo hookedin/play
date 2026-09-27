@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
+1. Add funds to the game from your wallet with **Add funds**.
 2. Set the bet with − and +, and press **Spin** or Space. Press again to land the reels, or to cut a win short and spin again.
 3. **Turbo** spins faster. **Auto** plays 10 to 100 spins and stops at a bonus; **Stop** ends it.
 
@@ -31,8 +31,6 @@ Pays per way, in bets:
 | Q, J    | 1       | 2       | 6       |
 
 Bonus spins are prepaid, not free. The triggering spin adds eight bets of cash to its payout, and the game offers to spend that on eight bonus spins at the triggering bet. You may keep the cash instead. **Buy bonus** is the same eight spins without waiting for a trigger.
-
-The wallet plays with the network's ETH, or practices with play money of its own; the game is the same either way.
 
 ## How it works
 

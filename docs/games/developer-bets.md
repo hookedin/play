@@ -26,9 +26,6 @@ and your casino bets are paid from it, and an accepted casino bet's payout goes 
 Put money in and take it out on the wallet's **My games** page, with **Put in** and **Take out**, from the account's own
 balance. A batch of settlements the bank cannot pay in full is refused whole, with `bank-short`.
 
-Developer bets are placed with ETH. A wallet that [practices](../reference/bridge.md#practice) refuses them with
-`practice`, so a page built on them shows its table in practice and says that it plays with ETH.
-
 ## Placing a bet from the page
 
 ```ts

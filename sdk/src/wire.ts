@@ -10,7 +10,6 @@ export interface PlayerNames {
 export const showName = (names: PlayerNames | null | undefined) =>
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
 /** What tells one player's saved state from another's: the chain, and the player's uname, which an alias never
- * changes, or practice, which is nobody's money. Games that share a host, accounts that share a browser, and practice
- * beside play must not read each other's state. */
-export const playerScope = (names: (PlayerNames & { chainId?: string }) | null | undefined, practice: boolean) =>
-  `${names?.chainId ?? 'chain'}:${practice ? 'practice' : String(names?.uname ?? 'anonymous').toLowerCase()}`;
+ * changes. Games that share a host and accounts that share a browser must not read each other's state. */
+export const playerScope = (names: (PlayerNames & { chainId?: string }) | null | undefined) =>
+  `${names?.chainId ?? 'chain'}:${String(names?.uname ?? 'anonymous').toLowerCase()}`;

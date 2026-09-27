@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
+1. Add funds to the game from your wallet with **Add funds**.
 2. Choose a stake and how many of the 25 tiles are mines, then **Bet** (or press Space).
 3. Pick tiles, or let **Random tile** pick one. A gem raises what you can cash out; a mine ends the round at zero.
 4. **Cash out** (or Space) after any gem, for what the button shows.
@@ -24,8 +24,6 @@ After `k` gems among `m` mines, a cash-out pays `0.99 × C(25, k) / C(25 − m, 
 Which tile you pick is a visual choice. No hidden board is generated in advance: each pick is a fresh bet at the exact odds of the tiles left. After a loss the page shows the mine on the tile you picked, and nowhere else, because there is nowhere else.
 
 At a stake large for the casino's bankroll, the casino covers fewer picks than the board holds. The page says so when the round starts and again when you reach the last covered pick; cash out there, or lower the stake to go further.
-
-The wallet plays with the network's ETH, or practices with play money of its own; the game is the same either way.
 
 ## How it works
 

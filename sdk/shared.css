@@ -400,15 +400,6 @@ h1 {
   font-size: 11px;
   line-height: 1.5;
 }
-/* Play money never looks like the real thing. */
-.bank[data-practice] {
-  border-style: dashed;
-  border-color: #d9a441;
-}
-.bank[data-practice] .bank-label,
-.bank[data-practice] .bank-asset {
-  color: #f0c976;
-}
 .bank-add {
   height: 36px;
   padding: 0 14px;

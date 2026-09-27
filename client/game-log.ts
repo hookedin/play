@@ -19,7 +19,7 @@ export interface LogEntry {
 }
 const LIMIT = 500;
 const PAYLOAD_LIMIT = 70000;
-/** The log's amounts are in the network's ETH, in practice as with money. */
+/** The log's amounts are in the network's ETH. */
 const eth = (wei: unknown) => {
   try {
     return `${formatEther(BigInt(wei as string))} ETH`;
@@ -65,7 +65,7 @@ export function describeResult(method: string, result: any) {
   const limit = (state: any) => `balance ${eth(state.balance)}${state.pending ? ' · pending operation' : ''}`;
   switch (method) {
     case 'wallet.hello':
-      return `${result.methods?.length ?? 0} methods · ${result.practice ? 'practice in ' : ''}${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
+      return `${result.methods?.length ?? 0} methods · ${result.asset?.symbol} with ${result.asset?.decimals} decimals`;
     case 'wallet.info':
       return `${result.alias ? '@' + result.alias : '~' + (result.uname ?? 'unknown')} · bankroll ${eth(result.bankroll)}`;
     case 'wallet.round':

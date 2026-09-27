@@ -55,9 +55,9 @@ bet has no odds, and so no return.
   casino bets.
 - **Paid back**: what the bets paid, the sum of their payouts over the sum of their stakes.
 
-Over a handful of bets the second figure is luck, and over many it follows the first. Practice bets are in neither: the
-wallet keeps no record of them. The wallet records the return of every casino bet and does not refuse a bet that returns
-little ([trust model](../overview/trust-model.md#what-a-game-can-and-cannot-do)).
+Over a handful of bets the second figure is luck, and over many it follows the first. The wallet records the return of
+every casino bet and does not refuse a bet that returns little
+([trust model](../overview/trust-model.md#what-a-game-can-and-cannot-do)).
 
 These figures measure the bets a game placed, not the game. A step with two outcomes, as in Dice and Mines, is one bet
 whose return is the step's. A step with more, as in Plinko or a slot, is collapsed: the page draws one bet between two
@@ -123,8 +123,8 @@ bets under **Developer bets** until what each was paid has been collected:
 Every 4 seconds while the wallet's tab is visible, and when you press **Check now**, the wallet asks the casino for your
 settled bets. For each, it checks the developer's signed `Settlement` against the bet you signed (its hash, its stake
 and its developer) and signs a credit for exactly what the settlement pays you, into your balance. If the game that
-placed the bet is open with ETH, the wallet sends it the settled receipt, and the payout raises the game's limit. A
-collected developer bet then appears in bet history.
+placed the bet is open, the wallet sends it the settled receipt, and the payout raises the game's limit. A collected
+developer bet then appears in bet history.
 
 Stakes with developers and payouts not yet collected are apart from your signed balance: they are not in the channel,
 and the contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).

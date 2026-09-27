@@ -45,8 +45,6 @@ carry trust of their own, set out below.
   receipts; it is not prevented. What the casino has signed, it cannot change.
 - **What it reports.** Commission, the bankroll figure it reports, the fund's share price and each developer's earnings
   tally are the casino's word.
-- **Practice.** Play money is the wallet's own, in the tab's memory: nothing about it is signed, sent to the casino or
-  settled anywhere.
 
 ## What you do yourself
 

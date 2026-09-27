@@ -356,8 +356,6 @@ export class WalletTransactions {
     if (this.recoveryOnly) return;
     const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening }, c);
     this.noteNames(reply);
-    // Money of its own: from here on this tab plays with its ETH.
-    this.preferPractice = false;
     this.updateBankroll(reply.bankroll);
   }
   async setupDemo(this: CasinoWallet) {

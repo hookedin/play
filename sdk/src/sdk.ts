@@ -5,8 +5,8 @@ export interface GameBalance {
   /** A signed operation awaits recovery in the wallet; no new bet or payment is possible. */
   pending: boolean;
 }
-/** What the wallet counts in, as a player reads it: the network's ETH, in practice as with money. Amounts on the bridge
- * are whole numbers of its smallest unit, as decimal strings. */
+/** What the wallet counts in, as a player reads it: the network's ETH. Amounts on the bridge are whole numbers of its
+ * smallest unit, as decimal strings. */
 export interface Asset {
   symbol: string;
   decimals: number;
@@ -25,9 +25,6 @@ export interface WalletLimits {
 export interface WalletHello {
   methods: string[];
   asset: Asset;
-  /** The wallet practices: the game plays with play money in ETH's amounts, which the wallet tops up by itself and
-   * settles casino bets and payments with, and it takes no developer bets. Nothing real is won or lost. */
-  practice: boolean;
   chainId: string;
   limits: WalletLimits;
 }
@@ -39,14 +36,13 @@ export interface WalletInfo {
   /** The alias they are shown by, written `@alias`; null unless they took one. */
   alias: string | null;
   chainId: string;
-  /** The casino's bankroll as last reported, or in practice the one the wallet prices against: what to price bets
-   * against, not a promise to admit them. */
+  /** The casino's bankroll as last reported: what to price bets against, not a promise to admit them. */
   bankroll: string;
   recommendedStake: string;
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
  * `invalid-request`, `unknown-method`, `busy`, `insufficient-funds`, `pending-operation`, `id-conflict`, `id-used`,
- * `game-closed`, `practice` and `failed`; a refusal by the casino carries the casino's code. */
+ * `game-closed` and `failed`; a refusal by the casino carries the casino's code. */
 export class HookedInError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -247,11 +243,11 @@ export const HookedIn = (() => {
   /** A deterministic payment to the bankroll. */
   const payment = (id: string, amount: string, group?: string): Promise<GameReceipt> =>
     call('game.payment', { id, amount, ...(group === undefined ? {} : { group }) });
-  /** Scope game storage to this page, and to the player or to practice: games sharing a host, accounts sharing a
-   * browser, and practice beside play must not see each other's state. It keys on the player's uname, so taking or
-   * giving up an alias does not lose what they had. */
+  /** Scope game storage to this page and to the player: games sharing a host and accounts sharing a browser must not
+   * see each other's state. It keys on the player's uname, so taking or giving up an alias does not lose what they
+   * had. */
   const storageScope = (wallet: WalletInfo | null | undefined) =>
-    `hookedin:${location.pathname}:${playerScope(wallet, greeted?.practice === true)}`;
+    `hookedin:${location.pathname}:${playerScope(wallet)}`;
 
   /** Read-only startup: what the wallet offers, who is playing and what the game may spend. */
   async function initializeGame({
@@ -268,7 +264,7 @@ export const HookedIn = (() => {
     };
     stakeInput.addEventListener('input', onEdit);
     try {
-      const { asset, practice } = await hello();
+      const { asset } = await hello();
       const wallet: WalletInfo = await call('wallet.info');
       const state = await balance();
       for (const label of assetLabels) label.textContent = asset.symbol;
@@ -282,7 +278,7 @@ export const HookedIn = (() => {
       ) {
         stakeInput.value = exactAmount(suggestedStake);
       }
-      return { wallet, state, asset: asset.symbol, practice, scope: storageScope(wallet) };
+      return { wallet, state, asset: asset.symbol, scope: storageScope(wallet) };
     } finally {
       stakeInput.removeEventListener('input', onEdit);
     }

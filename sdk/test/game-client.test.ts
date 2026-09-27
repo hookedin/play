@@ -451,7 +451,7 @@ test('a result recovered in the same tab updates the open game; a closed game ch
   assert.equal(w.availableBalance(), await w.balance());
 });
 
-test('saved round state belongs to one player, and practice to nobody', async () => {
+test('saved round state belongs to one player', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('a'));
@@ -488,9 +488,6 @@ test('saved round state belongs to one player, and practice to nobody', async ()
   const after = new RoundClient(renamed, createMines, undefined, { store, name: 'mines' });
   await after.restore();
   assert.equal(after['storageKey'], mine);
-  // Practice is kept apart from play, and is nobody's in particular.
-  w.setPractice(true);
-  assert.equal(await keyFor(w), 'hookedin:round:mines:31337:practice');
 });
 
 test('the bridge validates game requests without revisions or checkpoints', () => {
@@ -765,7 +762,7 @@ test('every sentence the round helper writes names what the wallet plays with, a
         return { funded: false, amount: null, balance: limit, pending: false };
       }
       if (method === 'wallet.hello' && ++greetings === 1) throw new Error('The wallet did not respond.');
-      return { bankroll: '5000000000000000', chainId: '1', asset: { symbol: 'ETH', decimals: 18 }, practice: true };
+      return { bankroll: '5000000000000000', chainId: '1', asset: { symbol: 'ETH', decimals: 18 } };
     },
     balance: async () => ({ balance: limit, pending: false }),
   };

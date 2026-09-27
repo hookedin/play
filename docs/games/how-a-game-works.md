@@ -56,25 +56,22 @@ the game's host: it frames the page and shows `icon.svg` as an image.
 A game never learns the player's balance. It gets a spending limit for the open tab: what the player lets it risk, plus
 its verified winnings.
 
-- With ETH, the wallet's own dialog is the only grant. A game asks with `HookedIn.requestFunds({ amount })`, where
-  `amount` is how much more it suggests; every word in the dialog is the wallet's. The reply says whether the player set
-  a limit (`funded`), the limit they chose (`amount`), and the resulting `balance` and `pending`.
+- A game starts with a limit of zero, and the wallet's own dialog is the only grant. It asks with
+  `HookedIn.requestFunds({ amount })`, where `amount` is how much more it suggests; every word in the dialog is the
+  wallet's. The reply says whether the player set a limit (`funded`), the limit they chose (`amount`), and the resulting
+  `balance` and `pending`. When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and
+  the reply says `funded: false`.
 - The wallet pushes `game.balance` with `{ balance, pending }` when the page loads and whenever either changes.
   `HookedIn.onBalance` hears it, and `HookedIn.balance()` resolves to the latest.
 - Every bet and payment must fit the limit. Verified winnings raise it; stakes and payments lower it.
-- The player can raise, lower or take back the limit at any time with **Set a limit** or **Change limit** above the
-  game.
+- In the dialog the player can also lower the limit, or take it all back.
 - Leaving the game, reloading or closing the tab releases the limit. The money never left the player's balance.
 - One game per wallet holds a limit at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](state-and-recovery.md#lost-replies)).
-- A game that [practices](../reference/bridge.md#practice) has no limit: it plays with play money the wallet keeps and
-  tops up by itself, and a game that asks for more gets it at once, without the dialog. The wallet settles casino bets
-  and payments itself, and a developer bet fails with `practice`. `wallet.hello` says so, and a game built on developer
-  bets shows its table and says that it plays with ETH.
 
 [`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the balance strip the house games show: the limit with an
-**Add funds** button, or in practice the play money.
+**Add funds** button.
 
 ## The bridge
 
@@ -94,31 +91,27 @@ every field, reply and error.
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
 HookedIn.onBalance(({ balance, pending }) => render(balance, pending)); // your page's own render
-const hello = await HookedIn.hello(); // the methods, the money, practice and the limits a bet is held to
+const hello = await HookedIn.hello(); // the methods, the money and the limits a bet is held to
 const info = await HookedIn.info(); // the player's names, the bankroll, a recommended stake
 ```
 
 `HookedIn.initializeGame({ stakeInput, assetLabels })` is the read-only startup the house games share: the greeting, the
 player, the first balance, the money's name on the page and the recommended stake in the stake field.
 
-## ETH and practice
+## ETH
 
-A game plays with the network's ETH, or [practices](../reference/bridge.md#practice) with the wallet's play money, with
-which nobody wins or loses anything real. Play money counts as ETH does, so the asset is the same either way:
-`asset.symbol` is what to show, `asset.decimals` is 18, and `practice` says which. Amounts on the bridge are decimal
-strings of whole wei. `HookedIn.parseAmount('0.001')` is `'1000000000000000'`; `formatAmount`, `exactAmount` and
-`stepStake` convert the other way. A game of casino bets and payments needs no code of its own for practice. A game of
-developer bets is watched in practice: it shows its table and says it plays with ETH. The player switches in the wallet,
-which releases the limit and reloads the game: a limit, a round and saved state belong to practice or to the player's
-ETH.
+A game plays with the network's ETH: `asset.symbol` is what to show, and `asset.decimals` is 18. Amounts on the bridge
+are decimal strings of whole wei. `HookedIn.parseAmount('0.001')` is `'1000000000000000'`; `formatAmount`,
+`exactAmount` and `stepStake` convert the other way.
 
 ## What a game learns about the player
 
 `wallet.info` answers `{ uname, alias, chainId, bankroll, recommendedStake }`. The uname, written `~uname`, is the
 player's for good; the alias, written `@alias`, is what they are called today, and `null` unless they took one.
 `HookedIn.showName(info)` writes either the way the wallet does. Key anything you save by the uname
-([storage](state-and-recovery.md#storage)). The player's address, channel and balances never cross the bridge.
-`bankroll` is the casino's bankroll as last reported: what to price bets against, not a promise to admit them.
+([storage](state-and-recovery.md#storage)): a player has none until their first deposit, and the wallet then loads the
+game again. The player's address, channel and balances never cross the bridge. `bankroll` is the casino's bankroll as
+last reported: what to price bets against, not a promise to admit them.
 
 ## Three operations
 

@@ -6,8 +6,7 @@ description: What HookedIn is, the parts it is made of, and where to start.
 HookedIn is a casino on Ethereum that your own wallet checks. You deposit ETH into a contract, then play with signed
 messages instead of transactions: the wallet signs each bet, the casino signs the result, and the wallet verifies
 that result and saves the evidence before it shows you anything. The contract settles your channel when it closes, with
-the casino's cooperation or without it. Every wallet can also practice at once with play money it keeps itself, which
-never reaches the casino. HookedIn runs on Sepolia (chain 11155111).
+the casino's cooperation or without it. HookedIn runs on Sepolia (chain 11155111).
 
 ## The parts
 

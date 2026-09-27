@@ -77,8 +77,8 @@ itself: copy it for a game of many decisions with a precomputed table.
 
 ## Roulette
 
-One wheel, shared by every player at the table, with ETH: each player's layout is one developer bet, and the wheel backs
-them all with its own casino bets, one binary step per round down a tree of the 37 pockets.
+One wheel, shared by every player at the table: each player's layout is one developer bet, and the wheel backs them all
+with its own casino bets, one binary step per round down a tree of the 37 pockets.
 [src/table.ts](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into what each pocket pays
 and is shared by page and server; [server/wheel.ts](https://github.com/hookedin/game-roulette/blob/main/server/wheel.ts)
 is the developer, and [server/worker.ts](https://github.com/hookedin/game-roulette/blob/main/server/worker.ts) the
@@ -87,8 +87,8 @@ Worker and its Durable Object. Its repository is a GitHub template that tests an
 
 ## Crash
 
-One rocket for every player, with ETH: each seat is a developer bet, and the room pays each escape from the developer's
-bank on its own word. A flight's ID is the hash of a secret the room reveals after the crash, so every crash point can
+One rocket for every player: each seat is a developer bet, and the room pays each escape from the developer's bank on
+its own word. A flight's ID is the hash of a secret the room reveals after the crash, so every crash point can
 be checked against the ID the seats signed.
 [src/rules.ts](https://github.com/hookedin/game-crash/blob/main/src/rules.ts) is the crash curve and the check, shared
 by page and server; [server/room.ts](https://github.com/hookedin/game-crash/blob/main/server/room.ts) is the developer,

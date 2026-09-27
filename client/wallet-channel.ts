@@ -78,10 +78,9 @@ export class ChannelClient extends WalletTransactions {
       free = BigInt(this.channel?.state.balance || 0) - committed;
     return free < 0n ? 0n : free;
   }
-  /** The signed balance minus what this tab's open game may still risk of it; never below zero. A practice game plays
-   * with play money, and holds none of it. */
+  /** The signed balance minus what this tab's open game may still risk of it; never below zero. */
   availableBalance(this: CasinoWallet) {
-    const limit = this.game && !this.game.practice ? BigInt(this.game.balance) : 0n,
+    const limit = this.game ? BigInt(this.game.balance) : 0n,
       available = BigInt(this.channel?.state.balance || 0) - limit;
     return available < 0n ? 0n : available;
   }
@@ -282,9 +281,9 @@ export class ChannelClient extends WalletTransactions {
     if (!same(hashState(this.domain, next), hashState(this.domain, response.state)))
       throw new Error('Result state differs from evidence');
     const game = c.pending?.game as GameIntent | undefined;
-    // The open game's limit follows its verified result. A result recovered after a reload, for a game since closed,
-    // or for a game now practicing, changes only the channel balance: the limit was already released.
-    if (game && this.game?.key === game.key && !this.game.practice) {
+    // The open game's limit follows its verified result. A result recovered after a reload, or for a game since closed,
+    // changes only the channel balance: the limit was already released.
+    if (game && this.game?.key === game.key) {
       const limit = BigInt(this.game.balance) + BigInt(next.balance) - BigInt(c.state.balance);
       this.game.balance = String(limit < 0n ? 0n : limit);
     }

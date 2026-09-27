@@ -35,7 +35,7 @@ export interface BetRow {
   receipt?: any;
 }
 
-/** Every bet this wallet or the casino lists is in ETH: practice is never recorded. */
+/** Every bet this wallet or the casino lists is in ETH. */
 const unit = 'ETH';
 /** A return in millionths, written as a percentage with four decimals. */
 export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;

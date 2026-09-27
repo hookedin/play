@@ -1,6 +1,6 @@
 ---
 title: How it works
-description: Channels, deposits, rounds, casino and developer bets, the bankroll, closing and practice, in one pass.
+description: Channels, deposits, rounds, casino and developer bets, the bankroll and closing, in one pass.
 sidebar:
   order: 1
 ---
@@ -146,14 +146,3 @@ to what you deposited it is protected principal: the contract returns `min(depos
 Anything above is **winnings**, owed from the shared bankroll and paid first in, first out as cash arrives. A
 cooperative close pays what it can at once; after a unilateral close, collecting is a separate transaction.
 [Closing and claims](../wallet/closing-and-claims.md) walks through each step.
-
-## Practice
-
-A wallet with no balance open **practices**, and so does a game the player switches to practice: the game plays
-with **play money** the wallet keeps in the tab's memory, in amounts the size of the network's ETH. It starts at 10,000
-of the network's recommended stakes and never runs out: an operation that would take more than it holds tops it back up
-first. The wallet settles a game's casino bets and payments itself, under the casino's own admission rule against a
-practice bankroll, with an outcome it draws, and a game that asks for money gets play money at once, without the
-wallet's dialog. Nothing about practice is signed, sent to the casino or recorded, and a reload starts again. Developer
-bets are placed with ETH only, so games built on them, such as roulette, are watched in practice. The strip above an
-open game says whether it practices ([practice or ETH](../wallet/getting-started.md#practice-or-eth)).

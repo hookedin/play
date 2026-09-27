@@ -22,11 +22,11 @@ Every time it starts, the wallet:
    with the immutable `owner` filled in, the owner to be the pinned operator, and the code's keccak-256 hash to match
    `runtimeHash` when the pin sets one.
 
-Practice and the game library do not wait for the second check; everything with ETH does. If the code or the owner
-differ, a banner says so, and the wallet only practices. The pinned deployment is the `deployment` of the
-configuration the wallet is built with, [config/production.json](../../config/production.json) for
-https://play.hookedin.com, served as `/config.js` ([deployment](../reference/deployment.md)). The checks are in
-[protocol/deployment.ts](../../protocol/deployment.ts) and [client/wallet.ts](../../client/wallet.ts).
+The game library does not wait for the second check; everything with ETH does. If the code or the owner differ, a banner
+says so, and nothing with ETH goes ahead. The pinned deployment is the `deployment` of the configuration the wallet is
+built with, [config/production.json](../../config/production.json) for https://play.hookedin.com, served as `/config.js`
+([deployment](../reference/deployment.md)). The checks are in [protocol/deployment.ts](../../protocol/deployment.ts) and
+[client/wallet.ts](../../client/wallet.ts).
 
 ## Reproduce the contract
 

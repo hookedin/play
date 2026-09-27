@@ -13,7 +13,7 @@ can publish games that anyone plays at its name.
 Every account has a **uname**: 24 characters of `23456789abcdefghijkmnopqrstvwxyz`, written with a tilde, such as
 `~3byt9ocwnnzaxanmiz3stocj`. The casino derives it from your address with a keyed hash whose key it keeps secret, so the
 uname does not reveal the address. It is the same for every channel your address opens, and it does not change. The
-casino first knows it at your first deposit; until then a wallet that practices has none.
+casino first knows it at your first deposit; until then your wallet has none.
 
 A uname is what games, developers and other players learn about you: a game gets it from
 [`wallet.info`](../reference/bridge.md#walletinfo), and the casino's public records name players by it.

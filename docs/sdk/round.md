@@ -75,11 +75,11 @@ again, since a redraw would change the game's odds. A step whose reply was lost 
 finds its receipt through `game.receipt`, and `action` sends it again, which the wallet answers with the same
 receipt.
 
-**Saving.** The store key is `hookedin:round:<name>:<chainId>:<uname>`, or `hookedin:round:<name>:<chainId>:practice`,
-from [`playerScope`](wire.md#playerscope). A saved round records its format, `HOOKEDIN/ROUND/5`, and its rules: the
-SHA-256 hash of the graph its setup builds, as JSON. A page cannot finish a round saved in another format or under other
-rules, a setup its rules refuse included. The next `restore`, `start` or `action` removes it and throws `This round was
-started under rules this game does not play. What it held is in your balance.`
+**Saving.** The store key is `hookedin:round:<name>:<chainId>:<uname>`, from [`playerScope`](wire.md#playerscope). A
+saved round records its format, `HOOKEDIN/ROUND/5`, and its rules: the SHA-256 hash of the graph its setup builds, as
+JSON. A page cannot finish a round saved in another format or under other rules, a setup its rules refuse included. The
+next `restore`, `start` or `action` removes it and throws
+`This round was started under rules this game does not play. What it held is in your balance.`
 
 **Pricing.** `start` prices the graph against the bankroll `wallet.info` reports. It reuses the saved round's plan when
 the setup is the same and the bankroll still covers the plan's `conservativeBankroll`. With `funding`, when the stake is
@@ -95,12 +95,12 @@ throws `The casino can only back about <amount> of payouts right now. Lower your
 restore(): Promise<RoundState | null>;
 ```
 
-Reads the saved round for this game and player, or practice, and applies any result the wallet settled meanwhile: for a
-pending step it asks `game.receipt` by the step's operation ID and applies the receipt it finds. It is the only method
-that looks a result up; `start` and `action` take the saved round as it stands. It resolves with the round's state, or
-`null` when none is saved. It asks the wallet for `wallet.info`, `wallet.hello` (until the wallet has answered it once)
-and the game's balance. It throws for a round saved under other rules (see saving above), when a receipt does not match
-the saved step, and with the bridge's errors. Its `onChange` listeners are called when it ends, whether or not it threw.
+Reads the saved round for this game and player, and applies any result the wallet settled meanwhile: for a pending step
+it asks `game.receipt` by the step's operation ID and applies the receipt it finds. It is the only method that looks a
+result up; `start` and `action` take the saved round as it stands. It resolves with the round's state, or `null` when
+none is saved. It asks the wallet for `wallet.info`, `wallet.hello` (until the wallet has answered it once) and the
+game's balance. It throws for a round saved under other rules (see saving above), when a receipt does not match the
+saved step, and with the bridge's errors. Its `onChange` listeners are called when it ends, whether or not it threw.
 
 #### `start`
 

@@ -23,12 +23,12 @@ chain needs one.
 
 ## Services
 
-| Service    | Address                          | What it is                                                                                                                                                                                                                                                                                          |
-| ---------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Website    | https://hookedin.com             | The public site, with the [bankroll](https://hookedin.com/bankroll/) and [players](https://hookedin.com/players/) pages                                                                                                                                                                             |
-| Wallet     | https://play.hookedin.com        | A static site built from this repository, served by a Cloudflare Worker ([wrangler.jsonc](../../wrangler.jsonc))                                                                                                                                                                                    |
-| Casino API | https://casino.hookedin.com      | The casino service, one process behind a TLS proxy: the [Casino API](../casino-api/index.md)                                                                                                                                                                                                        |
-| Games      | `https://<id>-game.hookedin.com` | Each house game, a Cloudflare Worker of its own: dice, mines, plinko and samson from [games/](../../games/), blackjack from [hookedin/game-blackjack](https://github.com/hookedin/game-blackjack), roulette and its server from [hookedin/game-roulette](https://github.com/hookedin/game-roulette) |
+| Service    | Address                          | What it is                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Website    | https://hookedin.com             | The public site, with the [bankroll](https://hookedin.com/bankroll/) and [players](https://hookedin.com/players/) pages                                                                                                                                                                                                                                                             |
+| Wallet     | https://play.hookedin.com        | A static site built from this repository, served by a Cloudflare Worker ([wrangler.jsonc](../../wrangler.jsonc))                                                                                                                                                                                                                                                                    |
+| Casino API | https://casino.hookedin.com      | The casino service, one process behind a TLS proxy: the [Casino API](../casino-api/index.md)                                                                                                                                                                                                                                                                                        |
+| Games      | `https://<id>-game.hookedin.com` | Each house game, a Cloudflare Worker of its own: dice, mines, plinko and samson from [games/](../../games/), blackjack from [hookedin/game-blackjack](https://github.com/hookedin/game-blackjack), roulette and crash with their servers from [hookedin/game-roulette](https://github.com/hookedin/game-roulette) and [hookedin/game-crash](https://github.com/hookedin/game-crash) |
 
 A local stack runs the same services on `127.0.0.1`: an Anvil chain on port 8545, the casino on 4183, the wallet on
 4184 (`npm run dev` serves the wallet alone) and the games in [games/](../../games/) on 4185.
@@ -60,7 +60,7 @@ On start the wallet:
 1. Reads [`GET /api/config`](../casino-api/public.md#get-apiconfig) and requires the chain it was built for, its own
    `protocol` ([the protocol revision](signed-messages.md#limits-and-the-protocol-revision)) and, when a deployment is
    pinned, the pinned contract and operator.
-2. Loads its saved account. Practice and the game library need nothing from the chain, so they work from here on.
+2. Loads its saved account. The game library needs nothing from the chain, so it works from here on.
 3. Meanwhile, the deployment check: it reads the contract's code at a confirmed block through its RPCs, and requires
    the runtime pinned in the release with the `owner` filled in, the pinned address, chain and operator, and the pinned
    `runtimeHash` when there is one.
@@ -68,8 +68,8 @@ On start the wallet:
    when the release pins none.
 
 Everything with ETH, such as a deposit, a bet or a close, waits for the deployment check. A check that fails, as it does
-on Sepolia for a wallet with neither a pinned deployment nor a saved one, is shown in a banner, and the wallet only
-practices until a reload checks again.
+on Sepolia for a wallet with neither a pinned deployment nor a saved one, is shown in a banner, and nothing with ETH
+goes ahead until a reload checks again.
 
 When the casino is unreachable, answers with an error or malformed data, or reports another chain, contract, operator
 or protocol, a wallet with a pinned deployment starts in **recovery mode**: play, deposits and withdrawals are off,

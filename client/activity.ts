@@ -145,7 +145,7 @@ export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
 /** What a developer bet asks of the player, said as plainly as the docs say it. */
 const DEVELOPER_BET =
   'Its stake went to the game’s developer when you placed it, and the developer settles it: what it pays is their word, and you trust them to pay it. Your wallet collects what they pay.';
-/** Every receipt this wallet keeps is in ETH: practice keeps none. */
+/** Every receipt this wallet keeps is in ETH. */
 const unit = 'ETH';
 /** A developer bet can have settled while what it was paid still waits to enter the channel balance. Its game goes by
  * the name its receipt kept, when this wallet has the receipt. */

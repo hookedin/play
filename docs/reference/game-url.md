@@ -45,7 +45,7 @@ A game opened by its URL alone is published by nobody. Its developer is the zero
 zero address and, as `name`, the URL as the URL parser normalises it, so no published game shares it. Nobody earns its
 commission, so the house keeps all of it, and it takes no developer bets. The wallet calls it by its host.
 
-A link grants no spending authority: with ETH, the player gives a game money in the wallet's own dialog
+A link grants no spending authority: the player gives a game money in the wallet's own dialog
 ([games and limits](../wallet/games-and-limits.md#giving-a-game-money)).
 
 ## Publishing

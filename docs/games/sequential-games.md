@@ -154,7 +154,7 @@ g − s + F < g = H − L <= M
 A player loss raises the bankroll, a payment raises it, and a step with no bet leaves it unchanged. So after at most k
 completed steps the bankroll is at least its starting amount less k × M, and through at most D steps it stays above the
 planning floor. The plan exposes this conservative requirement as `conservativeBankroll`; it can be far above a
-practical budget.
+realistic budget.
 
 The argument assumes no competing bets, owner withdrawals or other bankroll decreases between steps. Nothing locks a
 hand's future capacity: the casino serves other bets, and the owner can withdraw, between steps. Without that isolation,

@@ -21,7 +21,7 @@
   --accent-ink: #150f26;
   --positive: #6de3a4;
   --negative: #ef7d95;
-  --practice: #f0c35e;
+  --caution: #f0c35e;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --radius: 12px;
 }
@@ -581,7 +581,7 @@ main:has(> #page-play:not(.hidden)) {
 .notice {
   margin: 16px 0;
   padding: 12px 14px;
-  border-left: 2px solid var(--practice);
+  border-left: 2px solid var(--caution);
   border-radius: 0 8px 8px 0;
   background: #f0c35e0d;
   color: #d9c9a0;
@@ -953,65 +953,11 @@ main:has(> #page-play:not(.hidden)) > .banner {
   content: none;
 }
 
-/* A game: the strip that says what it plays with, and the frame. */
+/* A game: its frame, under the top bar. */
 #page-play {
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 60px);
-}
-.game-strip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 46px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--line);
-  background: var(--panel);
-  font-size: 13px;
-}
-.game-strip[data-mode='practice'] {
-  border-bottom-color: #4d3d18;
-  background: #1a160c;
-}
-.mode-switch {
-  display: flex;
-  flex: none;
-  padding: 3px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  background: var(--bg);
-}
-.mode-switch button {
-  height: 28px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-.mode-switch button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-#mode-practice[aria-pressed='true'] {
-  background: var(--practice);
-  color: #241a05;
-}
-.strip-note {
-  flex: 1;
-  min-width: 0;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.game-strip[data-mode='practice'] .strip-note {
-  color: #d9c393;
-}
-.game-strip .text-button {
-  flex: none;
 }
 .game-viewport {
   position: relative;
@@ -1021,7 +967,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .game-viewport iframe {
   flex: 1;
   width: 100%;
-  min-height: calc(100vh - 107px);
+  min-height: calc(100vh - 60px);
   border: 0;
   background: transparent;
 }
@@ -1844,16 +1790,8 @@ body:has(#page-play:not(.hidden)) .footer {
   #page-play {
     min-height: calc(100vh - 56px);
   }
-  .game-strip {
-    gap: 10px;
-    min-height: 44px;
-    padding: 5px 10px;
-  }
-  .strip-note {
-    visibility: hidden;
-  }
   .game-viewport iframe {
-    min-height: calc(100dvh - 101px);
+    min-height: calc(100dvh - 56px);
   }
   .page-head {
     flex-direction: column;
