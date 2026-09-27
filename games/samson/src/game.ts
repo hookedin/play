@@ -8,11 +8,9 @@ import {
   MACHINES,
   PAYING,
   PAYS,
-  distribution,
   evaluate,
   nodeOutcome,
   outcomeOf,
-  payoutStakes,
   sampleStops,
   slotGraph,
 } from './math.ts';
@@ -41,11 +39,10 @@ const NAMES: Record<string, string> = {
 /** A settled window with no win, shown before the first spin. */
 const IDLE = [36, 27, 57, 49, 26];
 const BIG = [
-  { from: 150, title: 'EPIC WIN' },
-  { from: 50, title: 'MEGA WIN' },
-  { from: 20, title: 'BIG WIN' },
+  { from: 150, title: 'Epic win' },
+  { from: 50, title: 'Mega win' },
+  { from: 20, title: 'Big win' },
 ];
-const AUTO = [0, 10, 25, 50, 100];
 
 const round = new RoundClient(HookedIn, slotGraph);
 (() => {
@@ -62,11 +59,17 @@ const round = new RoundClient(HookedIn, slotGraph);
     phase: 'connecting' | 'unavailable' | 'idle' | 'spinning' | 'presenting' | 'choosing' = 'connecting',
     asset = 'ETH',
     turbo = false,
+    /** Autoplay spins still to start. */
     auto = 0,
     /** The player has started this bonus in this tab; its remaining spins follow one another. */
     rolling = false,
     /** The bonus that just played its last spin, kept on screen until its summary closes. */
     closing: Saved['bonus'] = null,
+    /** Spin was pressed while the reels turned: land them at once. */
+    slam = false,
+    /** Spin was pressed during a celebration: finish it at once, and spin again when this spin is done. */
+    hurry = false,
+    again = false,
     skip = () => {};
 
   const persist = () => localStorage.setItem(storageKey, JSON.stringify(saved));
@@ -77,9 +80,10 @@ const round = new RoundClient(HookedIn, slotGraph);
     $('status').textContent = value;
     $('status').dataset.error = String(error);
   }
-  /** A pause the player can cut short by pressing spin. */
+  /** A pause the player can cut short by pressing Spin. */
   const pause = (ms: number) =>
     new Promise<void>(resolve => {
+      if (hurry) return resolve();
       const timer = setTimeout(resolve, reducedMotion ? Math.min(ms, 200) : ms);
       skip = () => {
         clearTimeout(timer);
@@ -88,42 +92,56 @@ const round = new RoundClient(HookedIn, slotGraph);
     });
 
   function render() {
-    const bonus = saved.bonus ?? closing,
-      idle = phase === 'idle',
-      resumable = Boolean(session && !session.terminal);
-    document.body.dataset.mode = bonus ? 'bonus' : 'base';
-    $('mode-label').textContent = bonus ? 'Honey Bonus · multiplier reels' : 'Out of the strong, something sweet';
-    $('feature-label').textContent = bonus
-      ? `Spin ${Math.min(bonus.played + 1, bonus.played + bonus.left)} of ${bonus.played + bonus.left} · won ${bonus.won}×`
+    // A finished bonus stays on screen until its summary closes; the next spin is already a base one.
+    const shown = saved.bonus ?? closing,
+      resumable = Boolean(session && !session.terminal),
+      // The bet can change while a win is still counted: the next spin reads it when it starts.
+      locked = (phase !== 'idle' && phase !== 'presenting') || auto > 0 || Boolean(saved.bonus) || resumable,
+      stop = auto > 0 || phase === 'spinning';
+    document.body.dataset.mode = shown ? 'bonus' : 'base';
+    $('mode-label').textContent = shown ? 'Honey Bonus' : 'Out of the strong, something sweet';
+    $('feature-label').textContent = shown
+      ? `Spin ${Math.min(shown.played + 1, shown.played + shown.left)} of ${shown.played + shown.left} · Won ${shown.won}×`
       : '';
-    $<HTMLButtonElement>('spin').disabled = phase === 'connecting' || phase === 'unavailable' || phase === 'choosing';
-    $('spin').dataset.phase = phase;
-    $('spin-label').textContent =
+    const spin = $<HTMLButtonElement>('spin');
+    spin.disabled = phase === 'connecting' || phase === 'unavailable' || phase === 'choosing';
+    spin.dataset.phase = phase;
+    spin.toggleAttribute('data-stop', stop);
+    spin.textContent =
       phase === 'connecting'
         ? 'Connecting…'
         : phase === 'unavailable'
           ? 'Offline'
-          : phase === 'spinning'
+          : stop
             ? 'Stop'
-            : phase === 'presenting'
-              ? 'Skip'
-              : resumable
-                ? 'Resume'
-                : bonus
-                  ? 'Bonus spin'
-                  : 'Spin';
-    for (const id of ['bet-down', 'bet-up', 'buy'] as const)
-      $<HTMLButtonElement>(id).disabled = !idle || Boolean(bonus) || resumable;
-    stakeInput.disabled = !idle || Boolean(bonus) || resumable;
-    if (bonus) stakeInput.value = HookedIn.exactAmount(bonus.stake);
-    $<HTMLButtonElement>('auto').disabled = phase === 'connecting' || phase === 'unavailable';
-    $('auto').textContent = auto ? `Auto · ${auto}` : 'Auto';
+            : resumable
+              ? 'Resume'
+              : saved.bonus
+                ? 'Bonus spin'
+                : 'Spin';
+    for (const id of ['bet-down', 'bet-up']) $<HTMLButtonElement>(id).disabled = locked;
+    stakeInput.disabled = locked;
+    $<HTMLButtonElement>('buy').disabled = locked || phase !== 'idle';
+    if (saved.bonus) stakeInput.value = HookedIn.exactAmount(saved.bonus.stake);
+    // Autoplay can be set up during a spin, and stopped whenever it runs.
+    $<HTMLButtonElement>('auto').disabled =
+      !auto &&
+      (phase === 'connecting' || phase === 'unavailable' || phase === 'choosing' || Boolean(shown) || resumable);
+    $('auto').textContent = auto ? `Stop · ${auto}` : 'Auto';
     $('auto').setAttribute('aria-pressed', String(auto > 0));
-    bank.setBusy(!idle);
+    if ($<HTMLButtonElement>('auto').disabled) autoMenu(false);
+    bank.setBusy(phase !== 'idle');
   }
+  /** The win meter, and the celebration's figures while one shows. */
   function showWin(stakes: number, stake: string) {
     $('win-multiple').textContent = stakes ? `${stakes}×` : '—';
     $('win-amount').textContent = stakes ? money(stakes, stake) : '';
+    $('big-amount').textContent = `${stakes}×`;
+    $('big-money').textContent = stakes ? money(stakes, stake) : '';
+  }
+  function celebrate(title: string | null) {
+    $('big-title').textContent = title ?? '';
+    $('big-win').classList.toggle('hidden', !title);
   }
 
   /** Apply a finished round to the game's own state exactly once, and read the reel stops that show it. */
@@ -193,8 +211,8 @@ const round = new RoundClient(HookedIn, slotGraph);
     };
   })();
 
-  /** Count the win up. Pressing spin jumps to the final figure. */
-  function countUp(stakes: number, stake: string, seconds: number, big: HTMLElement | null) {
+  /** Count the win up. Pressing Spin jumps to the final figure. */
+  function countUp(stakes: number, stake: string, seconds: number) {
     return new Promise<void>(resolve => {
       const start = performance.now();
       let done = false,
@@ -203,16 +221,13 @@ const round = new RoundClient(HookedIn, slotGraph);
         if (done) return;
         done = true;
         showWin(stakes, stake);
-        if (big) big.textContent = `${stakes}×`;
         resolve();
       };
       skip = finish;
       const step = (now: number) => {
         if (done) return;
         const x = Math.min(1, (now - start) / (seconds * 1000));
-        const value = Math.max(1, Math.round(stakes * (1 - (1 - x) ** 2)));
-        showWin(value, stake);
-        if (big) big.textContent = `${value}×`;
+        showWin(Math.max(1, Math.round(stakes * (1 - (1 - x) ** 2))), stake);
         if (now - lastTick > 70) {
           sound.tick();
           lastTick = now;
@@ -220,7 +235,7 @@ const round = new RoundClient(HookedIn, slotGraph);
         if (x === 1) finish();
         else requestAnimationFrame(step);
       };
-      if (reducedMotion) finish();
+      if (reducedMotion || hurry) finish();
       else requestAnimationFrame(step);
     });
   }
@@ -232,6 +247,7 @@ const round = new RoundClient(HookedIn, slotGraph);
       throw new Error('The reels do not match the settled result.');
     phase = 'presenting';
     render();
+    const speed = turbo ? 0.4 : 1;
     if (result.win) {
       const win = result.win,
         tier = BIG.find(level => pay >= level.from),
@@ -250,69 +266,70 @@ const round = new RoundClient(HookedIn, slotGraph);
       $('win-line').classList.remove('hidden');
       sound.win(tier ? 3 - BIG.indexOf(tier) : 0);
       if (tier) {
-        $('big-title').textContent = tier.title;
-        $('big-win').classList.remove('hidden');
+        celebrate(tier.title);
         coins.burst(40 + 40 * (3 - BIG.indexOf(tier)));
       }
-      await countUp(pay, stake, tier ? 3.2 : pay >= 5 ? 1.2 : 0.5, tier ? $('big-amount') : null);
-      if (tier) await pause(1400);
-      $('big-win').classList.add('hidden');
-      message(`Won ${pay}× your bet: ${money(pay, stake)}.`);
-    } else {
-      showWin(0, stake);
-      message(triggered ? 'Three honeycombs.' : 'No win this spin.');
-    }
+      await countUp(pay, stake, (tier ? 3.2 : pay >= 5 ? 1.2 : 0.5) * speed);
+      if (tier) await pause(1400 * speed);
+      celebrate(null);
+      message(`You won ${money(pay, stake)}, ${pay}× your bet.`);
+    } else message(triggered ? 'Three honeycombs!' : 'No win this spin.');
     if (triggered) {
       for (const [reel, row] of result.scatterCells) reels.cell(reel, row).classList.add('scatter-hit');
       sound.bonus();
-      await pause(900);
+      await pause(900 * speed);
     }
   }
+  /** The last bonus spin has played: show what the whole bonus paid. */
+  async function summarize(bonus: NonNullable<Saved['bonus']>) {
+    celebrate('Honey Bonus');
+    if (bonus.won) {
+      sound.win(1);
+      await countUp(bonus.won, bonus.stake, turbo ? 0.8 : 2);
+    } else showWin(0, bonus.stake);
+    await pause(turbo ? 800 : 1800);
+    celebrate(null);
+    message(bonus.won ? `The Honey Bonus paid ${money(bonus.won, bonus.stake)}.` : 'The Honey Bonus paid nothing.');
+  }
 
-  /** The bonus offer, a bought bonus, or the closing summary. Resolves with the player's choice. */
-  function feature(options: { eyebrow: string; title: string; text: string; play: string; skip?: string }) {
+  /** Offer the Honey Bonus. Resolves with whether the player plays it. */
+  function offer(stake: string, bought: boolean) {
     phase = 'choosing';
+    again = false;
     render();
-    $('feature-eyebrow').textContent = options.eyebrow;
-    $('feature-title').textContent = options.title;
-    $('feature-text').textContent = options.text;
-    $('feature-play').textContent = options.play;
-    $('feature-skip').textContent = options.skip ?? '';
-    $('feature-skip').classList.toggle('hidden', !options.skip);
-    $('feature').classList.remove('hidden');
-    $('feature-play').focus();
+    const price = money(BONUS_SPINS, stake);
+    $('offer-eyebrow').textContent = bought ? 'Buy bonus' : 'Three honeycombs';
+    $('offer-text').textContent = bought
+      ? `${BONUS_SPINS} spins on the bonus reels, where wilds multiply wins by 2 and 3. Each spin is one bet: ${price} in all.`
+      : `You won ${price}. Spend it on ${BONUS_SPINS} spins on the bonus reels, where wilds multiply wins by 2 and 3, or keep it.`;
+    $('offer-play').textContent = bought ? `Buy for ${price}` : `Play ${BONUS_SPINS} spins`;
+    $('offer-keep').textContent = bought ? 'Cancel' : 'Keep it';
+    $('offer').classList.remove('hidden');
+    // The card takes focus, not a button, so a Space pressed to spin chooses nothing.
+    $('offer-card').focus();
     return new Promise<boolean>(resolve => {
       const choose = (play: boolean) => {
-        $('feature').classList.add('hidden');
-        $('feature-play').onclick = $('feature-skip').onclick = null;
+        $('offer').classList.add('hidden');
+        $('offer-play').onclick = $('offer-keep').onclick = null;
         phase = 'idle';
         render();
         resolve(play);
       };
-      $('feature-play').onclick = () => choose(true);
-      $('feature-skip').onclick = () => choose(false);
+      $('offer-play').onclick = () => choose(true);
+      $('offer-keep').onclick = () => choose(false);
     });
   }
-  const bonusOffer = (stake: string, bought: boolean) =>
-    feature({
-      eyebrow: bought ? 'Buy the bonus' : 'Three honeycombs',
-      title: 'Honey Bonus',
-      text: bought
-        ? `${BONUS_SPINS} spins on the multiplier reels, where jawbone wilds carry ×2 and ×3. It costs ${money(BONUS_SPINS, stake)}: ${money(1, stake)} a spin.`
-        : `You won ${money(BONUS_SPINS, stake)}, the price of ${BONUS_SPINS} spins on the multiplier reels, where jawbone wilds carry ×2 and ×3. Play them, or keep the cash.`,
-      play: 'Play bonus ↗',
-      skip: bought ? 'Not now' : 'Keep the prize',
-    });
 
   async function spin() {
-    if (phase === 'spinning') return reels.quickStop();
-    if (phase === 'presenting') return skip();
     if (phase !== 'idle') return;
     sound.unlock();
     phase = 'spinning';
+    slam = hurry = again = false;
+    skip = () => {};
     reels.clearMarks();
     $('win-line').classList.add('hidden');
     showWin(0, '0');
+    message('');
     render();
     const before = saved.shown ?? { mode: 'base' as Mode, stops: IDLE };
     let moving = false,
@@ -329,7 +346,6 @@ const round = new RoundClient(HookedIn, slotGraph);
       const stake = session.setup.stake,
         machine = MACHINES[session.setup.mode === 'bonus' ? 'bonus' : 'base'];
       if (saved.bonus) rolling = true;
-      message(machine.name === 'bonus' ? 'Bonus spin…' : 'Good luck.');
       // The wallet settles while the reels turn; the balance waits for the reels before it moves.
       bank.hold(true);
       reels.spin(machine, turbo);
@@ -344,11 +360,11 @@ const round = new RoundClient(HookedIn, slotGraph);
         saved = { ...saved, bonus: null };
         persist();
       }
-      await new Promise(resolve => setTimeout(resolve, Math.max(0, (turbo ? 250 : 750) - (performance.now() - began))));
+      if (!slam) await pause(Math.max(0, (turbo ? 250 : 750) - (performance.now() - began)));
       const view = evaluate(machine, stops),
         honey = new Set(view.scatterCells.map(([reel]) => reel));
       let hush = () => {};
-      await reels.stop(machine, stops, {
+      const stopping = reels.stop(machine, stops, {
         turbo,
         // Honeycombs on reels one and three: the last reel keeps the player waiting.
         suspense: honey.has(0) && honey.has(2) ? { 4: 1.6 } : undefined,
@@ -359,12 +375,14 @@ const round = new RoundClient(HookedIn, slotGraph);
           if (honey.has(reel)) sound.scatter(reel / 2 + 1);
         },
       });
+      if (slam) reels.quickStop();
+      await stopping;
       moving = false;
       await present(view, key, stake);
       bank.hold(false);
       if (outcomeOf(key).bonus && machine.name === 'base') {
         auto = 0;
-        if (await bonusOffer(stake, false)) rolling = true;
+        if (await offer(stake, false)) rolling = true;
         else {
           saved = { ...saved, bonus: null };
           persist();
@@ -373,20 +391,14 @@ const round = new RoundClient(HookedIn, slotGraph);
       } else if (outcomeOf(key).bonus) message(`${BONUS_SPINS} more bonus spins.`);
       if (ended) {
         rolling = false;
-        await feature({
-          eyebrow: `${ended.played} bonus spins`,
-          title: ended.won ? `${ended.won}× won` : 'Bonus complete',
-          text: ended.won
-            ? `The Honey Bonus paid ${money(ended.won, ended.stake)} in total.`
-            : 'No win this time. The honeycombs will be back.',
-          play: 'Continue',
-        });
+        await summarize(ended);
       }
     } catch (error: any) {
       failed = true;
       auto = 0;
       rolling = false;
       if (moving) await reels.stop(MACHINES[before.mode], before.stops, { turbo: true });
+      celebrate(null);
       try {
         session = await round.restore();
       } catch {}
@@ -397,13 +409,31 @@ const round = new RoundClient(HookedIn, slotGraph);
       phase = 'idle';
       render();
     }
-    if (!failed) setTimeout(next, turbo ? 250 : 600);
+    if (failed) return;
+    if (again) void spin();
+    else setTimeout(next, turbo ? 250 : 600);
   }
   /** The next automatic spin: the rest of a bonus the player started, or autoplay. */
   function next() {
     if (phase !== 'idle' || !(saved.bonus ? rolling : auto > 0)) return;
     if (!saved.bonus) auto--;
     void spin();
+  }
+  /** The Spin button and Space: spin, land the reels, or cut a celebration short and spin again. During autoplay it
+   * reads Stop: it ends autoplay and lands the reels. */
+  function press() {
+    const stopping = auto > 0;
+    auto = 0;
+    if (phase === 'idle' && !stopping) void spin();
+    else if (phase === 'spinning') {
+      slam = true;
+      skip();
+      reels.quickStop();
+    } else if (phase === 'presenting' && !stopping) {
+      hurry = again = true;
+      skip();
+    }
+    render();
   }
 
   function paytable() {
@@ -419,42 +449,30 @@ const round = new RoundClient(HookedIn, slotGraph);
         pays.className = 'pay-values';
         pays.append(
           Object.assign(document.createElement('strong'), { textContent: NAMES[symbol] }),
-          ...[5, 4, 3].map(length =>
-            Object.assign(document.createElement('span'), {
-              textContent: `${length} · ${PAYS[symbol][length - 3]}×`,
-            }),
-          ),
+          ...[5, 4, 3].flatMap(length => [
+            Object.assign(document.createElement('span'), { textContent: String(length) }),
+            Object.assign(document.createElement('b'), { textContent: `${PAYS[symbol][length - 3]}×` }),
+          ]),
         );
         row.append(cell, pays);
         return row;
       }),
     );
-    $('bonus-prize').textContent = `${BONUS_SPINS}×`;
-    $('bonus-count').textContent = String(BONUS_SPINS);
-    const facts: [string, string][] = [];
-    for (const machine of Object.values(MACHINES)) {
-      const { counts, total } = distribution(machine);
-      let returned = 0n,
-        hits = 0,
-        best = 0;
-      for (const [key, ways] of counts) {
-        returned += BigInt(ways) * BigInt(payoutStakes(key));
-        if (payoutStakes(key)) hits += ways;
-        best = Math.max(best, payoutStakes(key));
-      }
-      const label = machine.name === 'base' ? 'Main reels' : 'Bonus reels';
-      facts.push(
-        [`${label} · return to player`, `${(Number((returned * 1000000n) / BigInt(total)) / 10000).toFixed(4)}%`],
-        [`${label} · winning spins`, `1 in ${(total / hits).toFixed(2)}`],
-        [`${label} · top win`, `${best.toLocaleString('en')}×`],
-      );
-    }
-    $('facts').replaceChildren(
-      ...facts.flatMap(([term, value]) => [
-        Object.assign(document.createElement('dt'), { textContent: term }),
-        Object.assign(document.createElement('dd'), { textContent: value }),
-      ]),
-    );
+    for (const element of document.querySelectorAll('[data-bonus]')) element.textContent = String(BONUS_SPINS);
+  }
+  let opener: Element | null = null;
+  /** Open or close the paytable; closing returns focus to where it was: a button for the keyboard, none for a click. */
+  function showPaytable(open: boolean) {
+    if (open) opener = document.activeElement;
+    $('paytable').classList.toggle('hidden', !open);
+    document.querySelector('main')!.inert = open;
+    if (open) return $('paytable-close').focus();
+    $('paytable-close').blur();
+    if (opener instanceof HTMLButtonElement) opener.focus();
+  }
+  function autoMenu(open: boolean) {
+    $('auto-menu').classList.toggle('hidden', !open);
+    $('auto').setAttribute('aria-expanded', String(open));
   }
 
   async function recover() {
@@ -495,13 +513,22 @@ const round = new RoundClient(HookedIn, slotGraph);
     render();
   }
 
-  $('spin').addEventListener('click', () => void spin());
+  $('spin').addEventListener('click', press);
+  // A button clicked with the mouse lets go of focus, so Space spins rather than pressing it again.
+  document.addEventListener('pointerup', event => {
+    if (event.pointerType === 'mouse' && document.activeElement instanceof HTMLButtonElement)
+      document.activeElement.blur();
+  });
   document.addEventListener('keydown', event => {
-    if (event.code !== 'Space' || event.repeat || event.target instanceof HTMLInputElement) return;
-    if (event.target instanceof HTMLButtonElement) return;
+    if (event.key === 'Escape') {
+      if (!$('paytable').classList.contains('hidden')) showPaytable(false);
+      autoMenu(false);
+    }
+    if (event.code !== 'Space' || event.repeat) return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
     if (!$('paytable').classList.contains('hidden') || phase === 'choosing') return;
     event.preventDefault();
-    void spin();
+    press();
   });
   $('bet-up').addEventListener('click', () => HookedIn.stepStake(stakeInput, true));
   $('bet-down').addEventListener('click', () => HookedIn.stepStake(stakeInput, false));
@@ -509,13 +536,22 @@ const round = new RoundClient(HookedIn, slotGraph);
     turbo = !turbo;
     $('turbo').setAttribute('aria-pressed', String(turbo));
   });
-  // Cycle to a count; play starts after a moment, and pressing it during play stops it.
-  let autoTimer = 0;
   $('auto').addEventListener('click', () => {
-    clearTimeout(autoTimer);
-    auto = phase === 'idle' ? (AUTO[(AUTO.indexOf(auto) + 1) % AUTO.length] ?? 0) : 0;
-    if (auto) autoTimer = window.setTimeout(next, 1200);
+    if (!auto) return autoMenu($('auto-menu').classList.contains('hidden'));
+    // Stop autoplay; the spin under way finishes as it would.
+    auto = 0;
     render();
+  });
+  $('auto-menu').addEventListener('click', event => {
+    const spins = Number((event.target as HTMLElement).dataset.spins);
+    if (!spins) return;
+    autoMenu(false);
+    auto = spins;
+    next();
+    render();
+  });
+  document.addEventListener('click', event => {
+    if (!(event.target as Element).closest('#auto, #auto-menu')) autoMenu(false);
   });
   $('buy').addEventListener('click', async () => {
     if (phase !== 'idle' || saved.bonus) return;
@@ -525,35 +561,22 @@ const round = new RoundClient(HookedIn, slotGraph);
     } catch (error: any) {
       return message(error.message, true);
     }
-    if (!(await bonusOffer(stake, true))) return;
+    if (!(await offer(stake, true))) return;
     saved = { ...saved, bonus: { left: BONUS_SPINS, played: 0, won: 0, stake } };
     persist();
     render();
     void spin();
   });
+  const renderMute = () => $('mute').setAttribute('aria-pressed', String(sound.muted));
   $('mute').addEventListener('click', () => {
     sound.setMuted(!sound.muted);
     sound.unlock();
     renderMute();
   });
-  const renderMute = () => {
-    $('mute').textContent = sound.muted ? 'Sound off' : 'Sound on';
-    $('mute').setAttribute('aria-pressed', String(sound.muted));
-  };
-  $('info').addEventListener('click', () => {
-    $('paytable').classList.remove('hidden');
-    $('paytable-close').focus();
-  });
-  const closePaytable = () => {
-    $('paytable').classList.add('hidden');
-    $('info').focus();
-  };
-  $('paytable-close').addEventListener('click', closePaytable);
+  $('info').addEventListener('click', () => showPaytable(true));
+  $('paytable-close').addEventListener('click', () => showPaytable(false));
   $('paytable').addEventListener('click', event => {
-    if (event.target === $('paytable')) closePaytable();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !$('paytable').classList.contains('hidden')) closePaytable();
+    if (event.target === $('paytable')) showPaytable(false);
   });
 
   reels.show(MACHINES.base, IDLE);

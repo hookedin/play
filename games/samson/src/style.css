@@ -1,29 +1,43 @@
 :root {
   --gold: #f2c45a;
-  --gold-deep: #a9741c;
   --ember: #ff8a3c;
-  --night: #0b1114;
   --accent: #f2c45a;
 }
 main {
   max-width: 980px;
   padding: 14px 24px 16px;
 }
-.game-head {
-  margin-bottom: 10px;
-}
 .head-tools {
   display: flex;
   gap: 8px;
 }
-.bank {
-  margin: 0 0 10px;
-  padding: 9px 14px;
+#mute {
+  width: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+#mute svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#mute .speaker {
+  fill: currentColor;
+}
+#mute[aria-pressed='true'] .waves,
+#mute[aria-pressed='false'] .cross {
+  display: none;
 }
 
 /* The cabinet */
 .cabinet {
   position: relative;
+  margin-top: 12px;
   border-radius: 20px;
   padding: 12px 14px 14px;
   background:
@@ -53,7 +67,7 @@ body[data-mode='bonus'] .cabinet {
   text-transform: uppercase;
   color: var(--gold);
 }
-.marquee-side:last-child {
+#feature-label {
   color: #ffd9b0;
   font-variant-numeric: tabular-nums;
 }
@@ -231,7 +245,7 @@ body[data-mode='bonus'] .reel {
   padding: 7px 16px;
   border-radius: 999px;
   border: 1px solid rgba(242, 196, 90, 0.7);
-  background: rgba(8, 12, 13, 0.88);
+  background: rgba(8, 12, 13, 0.92);
   color: #ffe9b0;
   font-size: 12px;
   font-weight: 700;
@@ -251,24 +265,32 @@ body[data-mode='bonus'] .reel {
 }
 .overlay {
   position: absolute;
-  inset: 7px;
-  border-radius: 9px;
   display: grid;
   place-items: center;
   align-content: center;
   gap: 4px;
-  background: radial-gradient(circle, rgba(10, 8, 2, 0.72), rgba(6, 9, 10, 0.9));
-  z-index: 3;
   text-align: center;
 }
-.overlay.hidden,
-.win-line.hidden {
-  display: none;
+/* A celebration lets the winning symbols glow through, and the next spin cuts it short. */
+.celebration {
+  inset: 7px;
+  z-index: 3;
+  border-radius: 9px;
+  background: radial-gradient(circle, rgba(10, 8, 2, 0.7), rgba(6, 9, 10, 0.35) 75%);
+  pointer-events: none;
+}
+/* The bonus offer covers the whole cabinet: nothing else can be pressed until the player chooses. */
+#offer {
+  inset: 0;
+  z-index: 7;
+  border-radius: inherit;
+  background: rgba(6, 9, 10, 0.78);
 }
 .big-title {
-  font-size: clamp(30px, 7vw, 64px);
+  font-size: clamp(28px, 7vw, 60px);
   font-weight: 900;
   letter-spacing: 2px;
+  text-transform: uppercase;
   background: linear-gradient(180deg, #fff6c8, #f2c45a 45%, #b9791a);
   -webkit-background-clip: text;
   background-clip: text;
@@ -282,60 +304,64 @@ body[data-mode='bonus'] .reel {
   color: #fff;
   font-variant-numeric: tabular-nums;
 }
+.big-money {
+  color: #ffe9b0;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 @keyframes slam {
   from {
     transform: scale(2.4);
     opacity: 0;
   }
 }
-.feature-card {
-  width: min(440px, 88%);
-  padding: 24px 26px 22px;
+.offer-card {
+  width: min(440px, 92%);
+  padding: 22px 24px 20px;
   border-radius: 16px;
   border: 1px solid rgba(255, 170, 80, 0.6);
   background: linear-gradient(180deg, #2c1b10, #150e0a);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  outline: 0;
   animation: slam 0.35s cubic-bezier(0.2, 1.3, 0.4, 1);
 }
-.feature-eyebrow {
+.offer-eyebrow {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--ember);
 }
-.feature-title {
-  margin: 6px 0 10px;
-  font-size: 30px;
+.offer-title {
+  margin: 4px 0 8px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.5px;
   color: #ffe2a8;
 }
-.feature-text {
-  margin: 0 0 18px;
+.offer-text {
+  margin: 0 0 16px;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: #e6d6c4;
 }
-.feature-actions {
+.offer-actions {
   display: flex;
   gap: 10px;
   justify-content: center;
 }
-.feature-actions button {
+.offer-actions button {
   height: 44px;
   padding: 0 18px;
-}
-.feature-actions .hidden {
-  display: none;
 }
 
 /* The console */
 .console {
   display: grid;
-  grid-template-columns: minmax(200px, 1.3fr) minmax(130px, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 190px auto;
   gap: 14px;
-  align-items: center;
+  align-items: end;
   margin-top: 14px;
 }
 .console-label {
@@ -350,36 +376,61 @@ body[data-mode='bonus'] .reel {
 .meter-value {
   height: 44px;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 14px;
+  align-items: baseline;
+  gap: 10px;
+  padding: 11px 14px 0;
   border-radius: 8px;
   border: 1px solid rgba(242, 196, 90, 0.3);
   background: #0a0f10;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .meter-value strong {
   font-size: 18px;
-  line-height: 1.1;
   color: var(--gold);
 }
 .meter-value span {
-  font-size: 10px;
-  color: var(--muted);
-  white-space: nowrap;
+  color: #e8dcc0;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .side-buttons {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  align-self: end;
 }
-.side-buttons #buy {
+.side-buttons .tool {
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#buy {
   grid-column: 1 / -1;
   color: #ffd9b0;
   border-color: rgba(255, 138, 60, 0.45);
+}
+.auto-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 6;
+  width: 250px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(242, 196, 90, 0.45);
+  background: #131b1d;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+.auto-menu .console-label {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
 }
 .spin {
   width: 86px;
@@ -405,15 +456,11 @@ body[data-mode='bonus'] .reel {
 .spin:active:not(:disabled) {
   transform: scale(0.95);
 }
-.spin[data-phase='spinning'],
-.spin[data-phase='presenting'] {
+.spin[data-stop] {
   background: radial-gradient(circle at 35% 28%, #ffd0b0, #ff8a3c 45%, #a8410f);
 }
 .status {
-  margin-top: 12px;
-}
-.foot {
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 /* Paytable */
@@ -425,25 +472,26 @@ body[data-mode='bonus'] .reel {
   place-items: center;
   padding: 16px;
   background: rgba(4, 7, 8, 0.78);
-  overflow: auto;
-}
-.sheet.hidden {
-  display: none;
 }
 .sheet-card {
   width: min(760px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: 100%;
   overflow: auto;
-  padding: 20px 22px 22px;
+  padding: 0 22px 22px;
   border-radius: 16px;
   border: 1px solid rgba(242, 196, 90, 0.35);
   background: #131b1d;
 }
+/* The way out stays in view while the table scrolls. */
 .sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  padding: 16px 0 12px;
+  background: #131b1d;
 }
 .sheet-head h2 {
   margin: 0;
@@ -471,14 +519,20 @@ body[data-mode='bonus'] .reel {
 }
 .pay-values {
   display: grid;
-  gap: 2px;
-  font-size: 11px;
+  grid-template-columns: auto auto;
+  gap: 2px 10px;
+  font-size: 12px;
   color: #cfd8d4;
   font-variant-numeric: tabular-nums;
 }
 .pay-values strong {
+  grid-column: 1 / -1;
   font-size: 12px;
   color: #fff;
+}
+.pay-values b {
+  color: var(--gold);
+  text-align: right;
 }
 .pay-notes {
   display: grid;
@@ -506,46 +560,61 @@ body[data-mode='bonus'] .reel {
   margin-top: 14px;
   padding-left: 18px;
 }
-.facts {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 6px 16px;
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-}
-.facts dt {
-  color: var(--muted);
-}
-.facts dd {
-  margin: 0;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
 
-@media (max-width: 720px) {
+/* Below 760px the console's four columns leave the bet field too narrow: it stacks beside the Spin button. */
+@media (max-width: 760px) {
   main {
-    padding: 14px 12px;
+    padding: 12px 12px 16px;
+  }
+  .edition {
+    display: none;
+  }
+  .cabinet {
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+  /* The tagline is a flourish; the bonus counter is not. */
+  body[data-mode='base'] .marquee {
+    display: none;
+  }
+  .marquee {
+    padding: 2px 4px 8px;
+  }
+  .reel-frame {
+    width: min(100%, calc(44vh * 5 / 3 + 26px));
+    padding: 5px;
+    border-radius: 12px;
+  }
+  .celebration {
+    inset: 5px;
+  }
+  /* Square cells: on a phone the width sets the reels' size. */
+  .reel {
+    aspect-ratio: 1 / 3;
   }
   .console {
-    grid-template-columns: 1fr auto;
-  }
-  .bet {
-    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+    margin-top: 12px;
   }
   .spin {
     grid-column: 2;
     grid-row: 1 / span 2;
-    width: 84px;
-    height: 84px;
+    align-self: center;
+    width: min(90px, 24vw);
+    height: min(90px, 24vw);
   }
   .side-buttons {
     grid-column: 1 / -1;
     grid-template-columns: repeat(3, 1fr);
   }
-  .side-buttons #buy {
+  #buy {
     grid-column: auto;
+  }
+  .auto-menu {
+    left: 0;
+    width: auto;
   }
   .pay-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -553,22 +622,22 @@ body[data-mode='bonus'] .reel {
   .pay-notes {
     grid-template-columns: 1fr;
   }
-  .edition {
-    display: none;
+  .sheet {
+    padding: 10px;
   }
-  .tool {
-    padding: 0 9px;
+  .sheet-card {
+    padding: 0 14px 16px;
+  }
+  .pay-row {
+    padding: 8px;
+    gap: 8px;
+  }
+  .cell.mini {
+    width: 48px;
+    height: 48px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cell.win .art,
-  .cell.scatter-hit .art,
-  .cell.win:before,
-  .reel.suspense,
-  .big-title,
-  .feature-card {
-    animation: none;
-  }
   .reel.blur .reel-band {
     filter: none;
   }

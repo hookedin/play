@@ -7,7 +7,8 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 ## How to play
 
 1. With ETH, add funds to the game from your wallet with **Add funds**. Practice needs none.
-2. Set the bet and spin.
+2. Set the bet with − and +, and press **Spin** or Space. Press again to land the reels, or to cut a win short and spin again.
+3. **Turbo** spins faster. **Auto** plays 10 to 100 spins and stops at a bonus; **Stop** ends it.
 
 Rules:
 

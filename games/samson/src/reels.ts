@@ -187,13 +187,9 @@ export function mountReels(root: HTMLElement, reducedMotion: boolean) {
     quickStop() {
       quick?.();
     },
-    get stopping() {
-      return quick !== null;
-    },
     cell: (reel: number, row: number) => reels[reel].cells[row + 1],
     clearMarks() {
       for (const reel of reels) for (const cell of reel.cells) cell.classList.remove('win', 'dim', 'scatter-hit');
     },
-    element: (reel: number) => reels[reel].element,
   };
 }
