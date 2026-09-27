@@ -995,24 +995,24 @@ Publishes a game under the channel's player, or takes it down.
 The player becomes the game's developer: it earns the game's commission and settles its developer bets, and the game's
 key is [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with another URL
 moves the game and keeps its key. Publishing takes an open channel; taking a game down, with a `null` `url`, works from
-any channel. A profile holds at most 100 games. The wallet opens the game only if its manifest names this developer
-([the manifest](../reference/manifest.md)).
+any channel. A profile holds at most 100 games. A `url` the URL parser cannot read is refused with `invalid`,
+"A game is the URL of its page" ([game URL](../reference/game-url.md)).
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field | Type           | Meaning                                                                                                                                                                                                |
-| ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`     | string         | 1 to 32 of `a-z`, `0-9` and `-`, starting with a letter or digit                                                                                                                                       |
-| `url`      | string or null | The manifest's URL: `https`, or `http` for `localhost`, `127.0.0.1` or `[::1]`; at most 300 characters; no user name and no fragment; kept as the URL parser normalises it. `null` takes the game down |
+| Body field | Type           | Meaning                                                                                                                                                                                                        |
+| ---------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | string         | 1 to 32 of `a-z`, `0-9` and `-`, starting with a letter or digit                                                                                                                                               |
+| `url`      | string or null | The game's URL: `https`, or `http` for `localhost`, `127.0.0.1` or `[::1]`; at most 300 characters; no user name or password and no fragment; kept as the URL parser normalises it. `null` takes the game down |
 
 The reply is the player's [profile](public.md#get-apiplayersname).
 
 ```json title="Request"
 {
   "name": "wheel",
-  "url": "https://wheel.example/manifest.json"
+  "url": "https://wheel.example/"
 }
 ```
 
@@ -1029,7 +1029,7 @@ The reply is the player's [profile](public.md#get-apiplayersname).
   "games": [
     {
       "name": "wheel",
-      "url": "https://wheel.example/manifest.json",
+      "url": "https://wheel.example/",
       "key": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
     }

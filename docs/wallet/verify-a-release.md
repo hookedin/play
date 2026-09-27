@@ -11,19 +11,19 @@ sources.
 
 ## What the wallet checks on start
 
-Before it funds anything, every time it starts, the wallet:
+Every time it starts, the wallet:
 
-1. requires its RPC to be on the chain it is built for, Sepolia (11155111);
-2. reads [`GET /api/config`](../casino-api/public.md#get-apiconfig) and requires the casino's `protocol` to equal its
-   own, the hash of every signed structure and shared rule in [protocol.ts](../../protocol/protocol.ts), and the
-   casino's chain, contract and owner to equal its pinned deployment; otherwise it starts in
-   [recovery mode](backups-and-recovery.md#recovery-mode);
-3. reads the code at the pinned contract address, at a block both of its RPCs agree on, and requires it to equal the
-   runtime pinned in [client/contract-artifact.ts](../../client/contract-artifact.ts) with the immutable `owner` filled
-   in, the owner to be the pinned operator, and the code's keccak-256 hash to match `runtimeHash` when the pin sets one;
-4. requires `CHALLENGE_PERIOD()` to return 86400.
+1. reads [`GET /api/config`](../casino-api/public.md#get-apiconfig) and requires the casino's chain to be the one it is
+   built for, Sepolia (11155111), its `protocol` to equal the wallet's own, the hash of every signed structure and
+   shared rule in [protocol.ts](../../protocol/protocol.ts), and its contract and owner to equal the pinned deployment;
+   otherwise it starts in [recovery mode](backups-and-recovery.md#recovery-mode);
+2. reads the code at the pinned contract address, at a block both of its RPCs agree on, and requires both RPCs to be on
+   that chain, the code to equal the runtime pinned in [client/contract-artifact.ts](../../client/contract-artifact.ts)
+   with the immutable `owner` filled in, the owner to be the pinned operator, and the code's keccak-256 hash to match
+   `runtimeHash` when the pin sets one.
 
-If the code or the owner differ, the wallet does not start. The pinned deployment is the `deployment` of the
+Practice and the game library do not wait for the second check; everything with ETH does. If the code or the owner
+differ, a banner says so, and the wallet only practices. The pinned deployment is the `deployment` of the
 configuration the wallet is built with, [config/production.json](../../config/production.json) for
 https://play.hookedin.com, served as `/config.js` ([deployment](../reference/deployment.md)). The checks are in
 [protocol/deployment.ts](../../protocol/deployment.ts) and [client/wallet.ts](../../client/wallet.ts).
@@ -84,10 +84,10 @@ and output, of the runtime pin and of the report, so a package records exactly w
 
 `npm test` needs Node 24.4 or later, Foundry's `anvil` on `PATH` (or named by `ANVIL_BIN`) and an installed Google
 Chrome. It builds everything, type-checks every TypeScript source and test, checks the committed
-[test vectors](../../vectors/protocol.json) and the blackjack funding table, and runs every suite in [test/](../../test/),
-[sdk/test/](../../sdk/test/) and each game's `test/`. Chain-writing tests start disposable Anvil
-deployments with [testing/contract.ts](../../testing/contract.ts), which signs evidence by hand, so the contract is
-tested with no casino at all. The main suites:
+[test vectors](../../vectors/protocol.json), and runs every suite in [test/](../../test/), [sdk/test/](../../sdk/test/)
+and each game's `test/`. Chain-writing tests start disposable Anvil deployments with
+[testing/contract.ts](../../testing/contract.ts), which signs evidence by hand, so the contract is tested with no casino
+at all. The main suites:
 
 | Suites                                                                                                 | What they hold                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

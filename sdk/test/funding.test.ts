@@ -4,7 +4,7 @@ import { compileGame, fraction, loadFundedGame, UINT256_MAX } from '../src/engin
 import { admits } from '../src/admits.ts';
 import { RoundClient } from '../src/round.ts';
 
-// The committed blackjack table itself is checked against the one full compile in sequential-games.test.ts.
+// A table as a game commits it: the required cash of every action, at one scale.
 const graph = (scale: bigint) => ({
   root: 'start',
   nodes: [

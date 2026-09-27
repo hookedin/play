@@ -120,11 +120,11 @@ bets under **Developer bets** until what each was paid has been collected:
 | Payout collected          | The payout is in your channel                                                 |
 | Settled · no payout       | Settled for nothing: there is nothing to collect                              |
 
-Every 4 seconds while the wallet is open, and when you press **Check results and collect payouts**, the wallet asks the
-casino for your settled bets. For each, it checks the developer's signed `Settlement` against the bet you signed (its
-hash, its stake and its developer) and signs a credit for exactly what the settlement pays you, into your channel. If
-the game that placed the bet is open with ETH, the wallet sends it the settled receipt, and the payout raises the game's
-limit. A collected developer bet then appears in bet history.
+Every 4 seconds while the wallet's tab is visible, and when you press **Check results and collect payouts**, the wallet
+asks the casino for your settled bets. For each, it checks the developer's signed `Settlement` against the bet you
+signed (its hash, its stake and its developer) and signs a credit for exactly what the settlement pays you, into your
+channel. If the game that placed the bet is open with ETH, the wallet sends it the settled receipt, and the payout
+raises the game's limit. A collected developer bet then appears in bet history.
 
 Stakes with developers and payouts not yet collected are apart from your signed balance: they are not in the channel,
 and the contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).

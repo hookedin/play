@@ -372,7 +372,7 @@ export class ChannelClient extends WalletTransactions {
    * game's developer, who settles it. Asking again with the same ID returns the receipt as it stands; the wallet
    * checks and collects what the developer paid once it has settled the bet. */
   async placeDeveloperBet(this: CasinoWallet, input: DeveloperBetInput, operationId: string, game: GameIntent) {
-    // A game loaded straight from its manifest is published by nobody, so nobody takes its developer bets.
+    // A game opened by its URL alone is published by nobody, so nobody takes its developer bets.
     if (this.requireGame().identity.slug === undefined)
       throw gameError('invalid-request', 'A game published nowhere takes no developer bets');
     // Its meta is what makes the debit a developer bet: without it, the stake would pay the bankroll.

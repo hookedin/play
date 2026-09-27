@@ -1,4 +1,4 @@
-import type { Block, Contract, JsonRpcApiProviderOptions, Networkish, TransactionReceipt } from 'ethers';
+import type { Block, Contract, TransactionReceipt } from 'ethers';
 import type { Integer } from './types.ts';
 export type ChainBlock = Pick<Block, 'number' | 'hash' | 'timestamp'>;
 export interface ObserverOptions {
@@ -17,18 +17,17 @@ export interface Observation {
   reorg: { previous: Pick<ChainBlock, 'number' | 'hash'>; replacementHash: string } | null;
 }
 import { canonicalJSON, plain } from './protocol.ts';
-import { FetchRequest, JsonRpcProvider } from 'ethers';
+import { FetchRequest, JsonRpcProvider, Network } from 'ethers';
 
 export const RPC_TIMEOUT_MS = 10000;
-/** Bound the transport itself: a late response cannot resume a failed read. */
-export function createRpcProvider(
-  url: string,
-  network: Networkish | undefined = undefined,
-  options: JsonRpcApiProviderOptions = {},
-) {
+/** Bound the transport itself: a late response cannot resume a failed read. Given the chain it serves, the provider
+ * skips its own detection round trip; every observation checks the chain ID anyway. */
+export function createRpcProvider(url: string, chainId: Integer | undefined = undefined) {
   const request = new FetchRequest(url);
   request.timeout = RPC_TIMEOUT_MS;
-  return new JsonRpcProvider(request, network, { cacheTimeout: -1, ...options });
+  return chainId === undefined
+    ? new JsonRpcProvider(request, undefined, { cacheTimeout: -1 })
+    : new JsonRpcProvider(request, Network.from(BigInt(chainId)), { cacheTimeout: -1, staticNetwork: true });
 }
 
 export const blockReference = (block: Pick<ChainBlock, 'hash'>) => ({ blockHash: block.hash, requireCanonical: true });

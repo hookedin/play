@@ -3,8 +3,7 @@ import type { GameIdentity } from '../protocol/game-types.ts';
 /** The game an operation is for, as a bet or a payment signs it: its key, which stays the same wherever the game
  * is served. */
 export function gameRef(identity: GameIdentity): string {
-  for (const url of [identity.manifestURL, identity.entryURL])
-    if (!['http:', 'https:'].includes(new URL(url).protocol)) throw new Error('Game URLs must use HTTP(S)');
+  if (!['http:', 'https:'].includes(new URL(identity.url).protocol)) throw new Error('Game URLs must use HTTP(S)');
   if (!/^0x[0-9a-f]{64}$/.test(identity.key)) throw new Error('A game key is a lowercase 32-byte hash');
   return identity.key;
 }

@@ -103,9 +103,6 @@ h3 {
 .hidden {
   display: none !important;
 }
-.muted {
-  color: var(--muted);
-}
 .brand {
   display: flex;
   flex-shrink: 0;
@@ -457,38 +454,19 @@ main {
 }
 .game-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 26px 18px;
 }
 .game-card {
-  padding: 0;
-  border: 1px solid #2b303e;
-  border-radius: 11px;
-  background: #121722;
-  overflow: hidden;
+  display: block;
+  color: inherit;
   text-align: left;
-  transition:
-    transform 0.18s,
-    border-color 0.18s;
 }
-.game-card:hover {
-  transform: translateY(-5px);
-  border-color: #73628c;
-}
-.second i:nth-child(2) {
-  grid-column: 3;
-}
-.second i:nth-child(3) {
-  grid-column: 2;
-  grid-row: 2;
-}
-.second i:nth-child(4) {
-  grid-column: 1;
-  grid-row: 3;
-}
-.second i:nth-child(5) {
-  grid-column: 3;
-  grid-row: 3;
+.game-card:hover .game-icon {
+  transform: translateY(-4px);
+  box-shadow:
+    0 12px 26px #00000080,
+    0 0 0 2px #73628c;
 }
 .custom-game-row {
   display: flex;
@@ -578,11 +556,6 @@ main {
 .app-footer a {
   color: #8d95a7;
 }
-.footer-dot {
-  font-size: 4px;
-  vertical-align: middle;
-  margin: 0 6px;
-}
 .banner {
   padding: 13px 16px;
   margin-bottom: 23px;
@@ -663,26 +636,8 @@ main {
   font-size: 10px;
   color: #81899c;
 }
-.security-note {
-  display: flex;
-  gap: 8px;
-  font-size: 9px;
-  color: #707d93;
-  line-height: 1.8;
-  margin-top: 23px;
-}
-.security-note span {
-  color: #a0a4b7;
-  font-size: 17px;
-}
 .wallet-intro {
   margin-bottom: 33px;
-}
-.wallet-overview {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  gap: 22px;
-  margin-bottom: 24px;
 }
 .wallet-balance-card {
   background: linear-gradient(125deg, #322842, #242032);
@@ -712,36 +667,6 @@ main {
   color: #a496b5;
   margin-top: 11px;
 }
-.wallet-native {
-  display: flex;
-  justify-content: space-between;
-  border-top: 1px solid #4b3b5e;
-  padding-top: 20px;
-  margin-top: 28px;
-  font-size: 10px;
-  color: #a99aba;
-}
-.wallet-native strong {
-  font-weight: 500;
-  color: #d5c8e8;
-}
-.wallet-identity {
-  border: 1px solid #2d3546;
-  background: #131923;
-  padding: 30px;
-  border-radius: 11px;
-  min-width: 0;
-}
-.wallet-identity h2 {
-  font-size: 18px;
-  margin-bottom: 17px;
-}
-.wallet-identity code {
-  display: block;
-  font-size: 12px;
-  color: #adb8cc;
-  overflow-wrap: anywhere;
-}
 .identity-actions {
   display: flex;
   align-items: center;
@@ -753,11 +678,6 @@ main {
   line-height: 1.7;
   color: #6f7b90;
   margin-top: 20px;
-}
-.wallet-actions-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px;
 }
 .surface {
   border: 1px solid #2a3242;
@@ -780,20 +700,6 @@ main {
 }
 .surface .input-row input + .button {
   flex: 0;
-}
-.local-chain-details {
-  display: flex;
-  gap: 25px;
-  font-size: 10px;
-  color: #748198;
-  margin-top: 25px;
-  padding-top: 20px;
-  border-top: 1px solid #273143;
-}
-.local-chain-details strong {
-  color: #a2afc3;
-  font-weight: 400;
-  margin-left: 8px;
 }
 .key-field {
   font-family: ui-monospace, monospace;
@@ -915,9 +821,6 @@ main {
   h1 {
     font-size: 47px;
   }
-  .game-grid {
-    gap: 12px;
-  }
   .library-footer {
     gap: 12px;
     font-size: 8px;
@@ -925,17 +828,8 @@ main {
   .library-footer a {
     font-size: 8px;
   }
-  .wallet-overview {
-    grid-template-columns: 1fr;
-  }
   .wallet-balance-card {
     padding: 24px;
-  }
-  .wallet-identity {
-    padding: 24px;
-  }
-  .wallet-actions-grid {
-    gap: 16px;
   }
   .surface {
     padding: 23px;
@@ -966,9 +860,6 @@ main {
   .section-note {
     display: none;
   }
-  .game-grid {
-    gap: 10px;
-  }
   .custom-game-row {
     padding: 18px;
     gap: 12px;
@@ -990,9 +881,6 @@ main {
   }
   .library-footer a {
     margin-left: 0;
-  }
-  .wallet-actions-grid {
-    grid-template-columns: 1fr;
   }
   .app-footer span:nth-child(2) {
     display: none;
@@ -1078,15 +966,6 @@ main {
   .section-heading h2 {
     font-size: 17px;
   }
-  .game-grid {
-    grid-template-columns: 1fr;
-  }
-  .game-card {
-    display: grid;
-    grid-template-columns: 115px 1fr;
-    grid-template-rows: 1fr auto;
-    min-height: 128px;
-  }
   .custom-game-row {
     flex-wrap: wrap;
     padding: 19px;
@@ -1118,16 +997,9 @@ main {
     padding: 11px 13px;
     flex-wrap: wrap;
   }
-  .wallet-overview {
-    gap: 15px;
-  }
   .wallet-balance-card,
-  .wallet-identity,
   .surface {
     padding: 22px;
-  }
-  .wallet-identity code {
-    font-size: 10px;
   }
   .identity-actions {
     gap: 13px;
@@ -1259,16 +1131,6 @@ main {
     overflow: clip;
   }
 }
-.trust-note {
-  font-size: 12px;
-  line-height: 1.8;
-  color: #aeb6c7;
-  margin: 24px 0 8px;
-  padding: 15px 18px;
-  border-left: 2px solid #766199;
-  background: #141722;
-  border-radius: 0 6px 6px 0;
-}
 .banner.warning {
   flex-wrap: wrap;
   gap: 10px;
@@ -1279,12 +1141,6 @@ main {
 }
 .banner.warning .button {
   flex: 0 1 auto;
-}
-#evidence-reports {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
 }
 
 /* Wallet funding: receive ETH, then add it to the shared playing balance. */
@@ -2013,33 +1869,43 @@ main {
   border: 0;
 }
 
-.catalog-card {
-  padding: 32px 24px;
-  min-height: 180px;
-  display: block;
-}
-.catalog-card h3 {
-  font-size: 24px;
-}
-.catalog-card p {
-  font-size: 12px;
-  color: #939bad;
-  line-height: 1.8;
-  margin-top: 16px;
-}
-/* Linkable games, the wallet's funding dialog and the developer log. */
-.game-card {
-  display: block;
-  color: inherit;
+.game-card h3 {
+  font-size: 15px;
+  margin-top: 11px;
 }
 .catalog-link {
   display: block;
-  margin-top: 18px;
+  margin-top: 4px;
   font:
     10px/1.6 ui-monospace,
     SFMono-Regular,
     monospace;
   color: #8f86ad;
+}
+/* A game's icon: the icon.svg beside its page, over the game's initial, which shows when it has none. */
+.game-icon {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border-radius: 22%;
+  overflow: hidden;
+  background: linear-gradient(145deg, #2b3142, #121620);
+  color: #8f86ad;
+  font-size: 44px;
+  font-weight: 700;
+  transition:
+    transform 0.18s,
+    box-shadow 0.18s;
+}
+.game-icon::before {
+  content: attr(data-initial);
+  grid-area: 1 / 1;
+}
+.game-icon img {
+  grid-area: 1 / 1;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 /* The page behind an open dialog stays put. */
 html:has(dialog[open]) {
@@ -2066,16 +1932,6 @@ html:has(dialog[open]) {
 .fund-dialog h2 {
   font-size: 20px;
   letter-spacing: -0.6px;
-}
-.fund-reason {
-  font-size: 12px;
-  line-height: 1.8;
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-left: 2px solid var(--purple);
-  background: #1b1c2c;
-  border-radius: 0 8px 8px 0;
-  color: #cdd3e2;
 }
 .fund-note {
   font-size: 12px;
@@ -2112,9 +1968,6 @@ html:has(dialog[open]) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: 18px;
-}
-.fund-dialog .security-note {
   margin-top: 18px;
 }
 .game-activity-actions {
@@ -2231,15 +2084,20 @@ html:has(dialog[open]) {
   gap: 1.25rem;
 }
 
-/* Until the framed game paints, the viewport is blank; say which game is on its way. */
+/* Until the framed game paints, its icon and name say which game is on its way. */
 .game-loading {
   position: absolute;
   inset: 0;
   display: grid;
   place-content: center;
+  justify-items: center;
+  gap: 14px;
   margin: 0;
   color: var(--muted);
   pointer-events: none;
+}
+.game-loading .game-icon {
+  width: 128px;
 }
 .game-viewport {
   position: relative;
@@ -2458,15 +2316,6 @@ button.bet-row:hover {
   font-size: 10px;
   color: var(--muted);
 }
-.bet-tag {
-  font-size: 8px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  border: 1px solid #373645;
-  border-radius: 4px;
-  padding: 2px 5px;
-  color: #9590a5;
-}
 .bet-figure {
   display: flex;
   flex-direction: column;
@@ -2674,7 +2523,7 @@ button.bet-row:hover {
 /* A game card's way into that game's public record; the card itself opens the game. */
 .catalog-record {
   display: block;
-  margin-top: 8px;
+  margin-top: 2px;
   font-size: 10px;
   color: #b5a8e5;
 }

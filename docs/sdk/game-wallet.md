@@ -86,7 +86,7 @@ player already carried out on another channel.
 | `replaceChannel(of?)`        | `Promise<void>`         | The player of `of`, `wallet` by default, closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                                                  |
 | `reload()`                   | `Promise<CasinoWallet>` | A wallet started afresh from what this one saved, as a reload of the page starts one                                                                                                                    |
 | `forget()`                   | `Promise<CasinoWallet>` | A wallet that has lost every receipt, as one restored from an older backup has                                                                                                                          |
-| `identity(name?, declared?)` | `GameIdentity`          | A game as the fixture's developer published it, named `test` by default; `declared` holds anything its manifest says otherwise. Every name given here is published                                      |
+| `identity(name?, declared?)` | `GameIdentity`          | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about the game. Every name given here is published                                                 |
 
 The wallet's own methods a test calls, from [client/wallet-games.ts](../../client/wallet-games.ts) and
 [client/wallet-channel.ts](../../client/wallet-channel.ts):

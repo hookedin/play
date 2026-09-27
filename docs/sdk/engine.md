@@ -1,6 +1,6 @@
 ---
 title: Engine
-description: Reference for @hookedin/play/sdk/engine, which prices finite multi-step games exactly and plays each step as at most one casino bet, and for the precomputed blackjack table.
+description: Reference for @hookedin/play/sdk/engine, which prices finite multi-step games exactly and plays each step as at most one casino bet.
 sidebar:
   order: 3
 ---
@@ -25,9 +25,6 @@ plan.requiredCash; // 960001n: the least cash that finances the first reveal
 plan.conservativeBankroll; // 1000009120000n
 evaluatePolicy(plan, optimalExpectedValuePolicy(plan)).netEV; // { n: -40000n, d: 1n }: best play returns 96%
 ```
-
-In a clone of play, `npm run demo:blackjack` and `npm run demo:mines` trace a game on the command line. They simulate
-outcomes with Web Crypto and use reference accounting; they place no wagers.
 
 ## rational.ts
 
@@ -497,8 +494,10 @@ export interface FundingTable {
 ```
 
 Prices computed at build time: the plan's parameters, and each decision node's actions' `requiredCash`, in the graph's
-action order, keyed by node ID. They price a game; they are not settlement authority.
-[`blackjackFunding`](#blackjackfunding) is one.
+action order, keyed by node ID. They price a game; they are not settlement authority. Blackjack's
+[src/funding.ts](https://github.com/hookedin/game-blackjack/blob/main/src/funding.ts) is one: every action of its 14,055
+decision nodes at a 1,000,000-wei stake, with a planning floor of 256 stakes and a one-wei grid, which
+`npm run generate` writes in its repository.
 
 ### `compileGame`
 
@@ -526,9 +525,10 @@ or `Funding table does not match the game` when the table was not made for this 
 is not a positive uint256.
 
 ```ts
-import { createBlackjack, loadFundedGame } from '@hookedin/play/sdk/engine';
-import { blackjackFunding } from '@hookedin/play/sdk/generated/blackjack-funding';
+import { loadFundedGame } from '@hookedin/play/sdk/engine';
 import { admits } from '@hookedin/play/sdk/admits';
+import { createBlackjack } from './rules.ts'; // blackjack's rules and table, in its own repository
+import { blackjackFunding } from './funding.ts';
 
 const plan = loadFundedGame(createBlackjack({ stake: 3_000_000n }), blackjackFunding, 3n, admits);
 plan.conservativeBankroll; // 2016000000n: 672 stakes
@@ -744,149 +744,6 @@ export function rngFromBytes(fill: (bytes: Uint8Array<ArrayBuffer>) => void): Ra
 A `RandomBelow` from a secure byte source such as `crypto.getRandomValues`, unbiased by rejection sampling. Throws a
 `TypeError` when `fill` is not a function; the function it returns throws a `RangeError` for a limit below `1n`.
 
-## blackjack.ts
-
-Blackjack as a graph: infinite deck, dealer stands on soft 17, dealer peeks for blackjack, 3:2 naturals, double on any
-first two cards including after a split, one split, one card to each split ace, no surrender, and insurance at half the
-stake paying 2:1. Both split hands settle against one dealer. [Sequential games](../games/sequential-games.md) states
-the rules' sources and the exact edge of optimal play.
-
-### `CardRank`
-
-```ts
-export type CardRank = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-```
-
-A card's value: `1` is an ace, and `10` stands for ten, jack, queen and king.
-
-### `BlackjackHand`
-
-```ts
-export interface BlackjackHand {
-  readonly total: number;
-  readonly soft: boolean;
-}
-```
-
-A hand's best total, with at most one ace counted as eleven, and whether one is.
-
-### `BlackjackResult`
-
-```ts
-export interface BlackjackResult {
-  readonly total: number;
-  readonly multiplier: 1 | 2;
-}
-```
-
-A finished hand: `total` is its standing total, with 16 for every total below 17, 22 for a bust and 23 for a natural;
-`multiplier` is 2 after a double.
-
-### `BlackjackState`
-
-```ts
-export interface BlackjackState extends BlackjackHand {
-  readonly phase: 'first' | 'second' | 'upcard' | 'insurance' | 'peek' | 'player' | 'split-deal' | 'hole' | 'dealer';
-  readonly dealerUpcard: CardRank | 0;
-  readonly pair: CardRank | 0;
-  readonly firstTwo: boolean;
-  readonly split: boolean;
-  readonly pendingSplit: CardRank | 0;
-  readonly completed: readonly BlackjackResult[];
-  readonly multiplier: 1 | 2;
-}
-```
-
-The public state a node ID encodes. `phase` is what comes next: the player's first and second cards, the dealer's
-upcard, the insurance offer (an ace up), the peek (a ten up), the player's decision, a split hand's second card, the
-dealer's hole card or the dealer's draws. `total` and `soft` are the player's hand, or the dealer's in the `hole` and
-`dealer` phases. `dealerUpcard` is `0` before the upcard and in the `dealer` phase; `pair` is the rank the player may
-split, or `0`; `firstTwo` means the hand holds its first two cards, so it may double; `split` marks a split hand and
-`pendingSplit` the rank of the split hand still to play; `completed` holds the finished hands.
-
-### `DealerResult`
-
-```ts
-export type DealerResult = 'natural' | 'bust' | 17 | 18 | 19 | 20 | 21;
-```
-
-How the dealer's hand ends.
-
-### `DealerOutcome`
-
-```ts
-export interface DealerOutcome {
-  readonly result: DealerResult;
-  readonly probability: Rational;
-}
-```
-
-One way the dealer's hand ends, and its exact probability.
-
-### `cardProbability`
-
-```ts
-export function cardProbability(rank: CardRank): Rational;
-```
-
-The chance of drawing `rank` from the infinite deck: 1/13, or 4/13 for `10`. Throws a `RangeError` for a rank outside
-1 to 10.
-
-### `addCard`
-
-```ts
-export function addCard(hand: BlackjackHand, rank: CardRank): BlackjackHand;
-```
-
-The hand with one more card. `addCard({ total: 11, soft: true }, 10)` is `{ total: 21, soft: true }`, and
-`addCard({ total: 16, soft: false }, 1)` is `{ total: 17, soft: false }`. Throws a `RangeError` for an invalid rank, or
-a hand that is bust or not a valid best total.
-
-### `dealerDistribution`
-
-```ts
-export function dealerDistribution(upcard: CardRank): readonly DealerOutcome[];
-```
-
-The exact distribution of the dealer's final hand from an upcard, standing on soft 17, with the two-card natural apart
-from a later 21. It is unconditional: the game's graph checks for a dealer blackjack before the player acts and deals the
-hole card on that condition.
-
-### `blackjackState`
-
-```ts
-export function blackjackState(id: string): BlackjackState | undefined;
-```
-
-The public state a blackjack decision node's ID encodes, or `undefined` for any other ID, such as a payout node's.
-
-### `createBlackjack`
-
-```ts
-export function createBlackjack({ stake }: { readonly stake: bigint }): GameGraph;
-```
-
-The graph of one hand for `stake`, a positive even bigint so that a natural's 3:2 is exact; a `RangeError` otherwise. It
-has 14,065 nodes at any stake.
-
-| Action              | Phase                                                                                       | `additionalCash` |
-| ------------------- | ------------------------------------------------------------------------------------------- | ---------------- |
-| `deal`              | `first`, `second`, `upcard`: each of the player's first two cards, then the dealer's upcard | –                |
-| `decline-insurance` | `insurance`: an ace up                                                                      | –                |
-| `insurance`         | `insurance`                                                                                 | half the stake   |
-| `peek`              | `peek`: a ten up                                                                            | –                |
-| `stand`, `hit`      | `player`                                                                                    | –                |
-| `double`            | `player`, on a hand's first two cards                                                       | the stake        |
-| `split`             | `player`, on a pair, once                                                                   | the stake        |
-| `deal-split`        | `split-deal`: a split hand's second card                                                    | –                |
-| `reveal`            | `hole`: the dealer's hole card                                                              | –                |
-| `dealer-hit`        | `dealer`                                                                                    | –                |
-
-Decision node IDs start `blackjack:v1:`, and [`blackjackState`](#blackjackstate) reads them. A terminal node
-`blackjack:payout:<n>` pays `n` half-stakes. Every drawn card keeps its face and suit in its outcome's label:
-`player:<hand>:<face>:<suit>` or `dealer:<face>:<suit>`, with faces 1 to 13 and suits 0 to 3; the peek's outcomes are
-`no-blackjack` and `dealer-blackjack:<face>:<suit>`.
-
 ## mines.ts
 
 ### `createMines`
@@ -912,21 +769,3 @@ to `tiles - mines` positive bigints.
 
 The house's [mines](../../games/mines/) pays 1.20, 1.56 and 2.28 times the stake on five tiles with one mine: cashing
 out after one, two or three safe picks returns exactly 96%, 93.6% and 91.2%.
-
-## blackjack-funding
-
-`import { blackjackFunding } from '@hookedin/play/sdk/generated/blackjack-funding';` is the precomputed price table for
-[`createBlackjack`](#createblackjack). It is Node-safe data, about 1 MB.
-
-### `blackjackFunding`
-
-```ts
-export const blackjackFunding: FundingTable;
-```
-
-The required cash of every action of the blackjack graph's 14,055 decision nodes, compiled at a 1,000,000-wei stake with
-a planning floor of 256 stakes and a one-wei grid. Its `initialCash` is `1000000n`, its `bankrollFloor` `256000000n` and
-its `conservativeBankroll` `672000000n`, 672 stakes. [`loadFundedGame`](#loadfundedgame) scales it exactly to any stake
-divisible by 1,000,000 wei, and `RoundClient` does so when the bankroll covers 672 stakes; other stakes and smaller
-bankrolls are priced in the page. In play, `npm run generate:blackjack` regenerates it, and `npm test` fails when it
-does not match the rules and the compiler.

@@ -54,10 +54,10 @@ it.
 
 ## Origins
 
-The wallet frames the game's entry page, and the entry page's origin is the game's. It accepts a message only from that
-frame's window and that origin, and posts every reply and event to that origin alone: a frame that has navigated to
-another origin is not the game, and hears nothing. It answers only the open game. A game accepts only messages whose
-`source` is `window.parent`, as the SDK does.
+The wallet frames the game's page, at its [URL](game-url.md), and that page's origin is the game's. It accepts a message
+only from that frame's window and that origin, and posts every reply and event to that origin alone: a frame that has
+navigated to another origin is not the game, and hears nothing. It answers only the open game. A game accepts only
+messages whose `source` is `window.parent`, as the SDK does.
 
 When the frame loads a page, a reload included, the wallet forgets the page before it as soon as the new page greets
 it: its queued requests are dropped, and replies to its requests are not sent. An operation the wallet already signed
@@ -90,7 +90,8 @@ A wallet with no funded channel practices, and so does one whose player chose to
 and names the money `TEST`. It plays with test coins it keeps in the tab's memory, 100 at the start and 100 more once it
 holds fewer than 10, and a reload starts again at 100. It settles `game.casinoBet` and `game.payment` itself, with the
 same receipts and retry rules, holding a casino bet to the casino's own rule against a practice bankroll of ten million
-coins and drawing its outcome itself. It signs nothing, sends the casino nothing and records nothing. It takes no
+coins and drawing its outcome itself, and gives a game that asks for money test coins at once
+([`game.requestFunds`](#gamerequestfunds)). It signs nothing, sends the casino nothing and records nothing. It takes no
 developer bets: a developer's server settles them at the casino, so `game.developerBet` is refused with `practice`. When
 what the wallet plays with changes, because the player switched or a channel opened or closed, the wallet takes back the
 game's balance and loads its page again, so a page is greeted once for each money.
@@ -302,8 +303,8 @@ The result is the bet's receipt at once: `open`, with `bet`, the hash that names
 or `rejected` when the casino did not take it. The same request again returns the receipt as it stands. Once the
 developer has settled the bet, the wallet checks the developer's signed settlement, collects what it pays into the
 channel, raises the game's balance by it while the game is open, and pushes the settled receipt as a
-[`game.receipt`](#gamereceipt-1) event. A game loaded straight from its manifest is published by nobody and takes no
-developer bets: `invalid-request`. The developer's side is the [developer kit](../sdk/developer.md).
+[`game.receipt`](#gamereceipt-1) event. A game opened by its URL alone is published by nobody and takes no developer
+bets: `invalid-request`. The developer's side is the [developer kit](../sdk/developer.md).
 
 ```json title="Request"
 {
@@ -367,21 +368,22 @@ The result is the payment's receipt, `settled` or `rejected`. It carries no amou
 
 ### `game.requestFunds`
 
-Asks the player for money. The wallet opens its own dialog, in its own words, where the player sets how much of their
+Asks for money. With ETH, the wallet opens its own dialog, in its own words, where the player sets how much of their
 playing balance the game may risk, or declines. The game passes it an amount and nothing else, and only the player's
-confirmation there grants a game money. The reply comes once the player has decided. In [practice](#practice) the amount
-is in test coins, and the dialog also shows the player the way to ETH.
+confirmation there grants a game money. The reply comes once the player has decided. In [practice](#practice) the
+wallet asks nothing: the game gets test coins at once, what it asked for, or ten coins more without an amount, as far as
+the practice balance goes.
 
-| Param    | Type           | Meaning                                                                                                                  |
-| -------- | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `amount` | decimal string | Optional: how much more than the game holds. The dialog suggests the game's balance plus this, up to the playing balance |
+| Param    | Type           | Meaning                                                                                                                                                          |
+| -------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `amount` | decimal string | Optional: how much more than the game holds. The dialog suggests the game's balance plus this, up to the playing balance; in practice the game gets that at once |
 
-| Result field | Type                     | Meaning                                                                                   |
-| ------------ | ------------------------ | ----------------------------------------------------------------------------------------- |
-| `funded`     | `boolean`                | Whether the player set a limit                                                            |
-| `amount`     | decimal string or `null` | The limit the player set, which may be lower than the game had; `null` when they declined |
-| `balance`    | decimal string           | The game's balance after it                                                               |
-| `pending`    | `boolean`                | Whether an operation of this game awaits recovery                                         |
+| Result field | Type                     | Meaning                                                                              |
+| ------------ | ------------------------ | ------------------------------------------------------------------------------------ |
+| `funded`     | `boolean`                | Whether a limit was set                                                              |
+| `amount`     | decimal string or `null` | The limit set, which may be lower than the game had; `null` when the player declined |
+| `balance`    | decimal string           | The game's balance after it                                                          |
+| `pending`    | `boolean`                | Whether an operation of this game awaits recovery                                    |
 
 The player can raise or lower the limit from the wallet's top bar at any time as well, and [`game.balance`](#gamebalance)
 reports every change.
@@ -400,7 +402,7 @@ reports every change.
 
 ## Events
 
-The wallet sends these unasked, with `event` in place of an envelope ID, to the entry page's origin.
+The wallet sends these unasked, with `event` in place of an envelope ID, to the game's origin.
 
 ### `game.balance`
 
@@ -420,8 +422,8 @@ only: leaving the game, reloading or closing the tab releases it, and the money 
 ### `game.receipt`
 
 A developer bet this game placed has been settled by its developer and collected by the wallet. The wallet looks for
-settled bets every 4 seconds, and at once when the game asks [`game.receipt`](#gamereceipt) about an open one; it sends
-the event while the game is open.
+settled bets every 4 seconds while its tab is visible, and at once when the game asks [`game.receipt`](#gamereceipt)
+about an open one; it sends the event while the game is open.
 
 | Field     | Type                | Meaning                                         |
 | --------- | ------------------- | ----------------------------------------------- |

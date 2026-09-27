@@ -63,6 +63,5 @@ export async function verifyDeployment({
     contractAddress: address,
     operator: values.owner,
     runtimeHash: keccak256(code),
-    abi: artifact.abi,
   };
 }

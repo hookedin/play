@@ -4,8 +4,6 @@ interface ActiveGame {
   /** What the page was greeted with: test coins to practice with, or ETH. It restarts when that changes. */
   practice: boolean;
   identity: GameIdentity;
-  manifest: { name: string; developer: string };
-  manifestURL: string;
   /** The wallet path that reopens this game. */
   path: string;
   frame: HTMLIFrameElement;
@@ -16,16 +14,16 @@ interface ActiveGame {
   pushed: string | null;
 }
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
- * the name it has in their profile. Any other manifest is linkable by its URL alone. */
-type GameRoute = { owner: string; name: string } | { manifest: string };
+ * the name it has in their profile. Any other game is linkable by its URL alone. */
+type GameRoute = { owner: string; name: string } | { url: string };
 /** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
 type Published = { key: string; developer: string };
-import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
+import { formatEther, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { gameReceipt, PRACTICE_REFILL_BELOW } from './wallet-games.ts';
 import { developerBetStatus } from './game-account.ts';
 import { withLock } from './storage.ts';
-import { json, verifyEvidence, gameKey, same } from '../protocol/protocol.ts';
+import { json, verifyEvidence, gameKey } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { activityJSON, createActivityEntry, filterActivity, receiptSummary, developerBetSummary } from './activity.ts';
 import type { BetRow } from './bets.ts';
@@ -111,7 +109,7 @@ const wallet = new CasinoWallet({
   onGameReceipt: (game, receipt) => {
     if (!active || active.key !== game.key || !active.frame.contentWindow || active.pushed === null) return;
     const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.id, receipt) };
-    active.frame.contentWindow.postMessage(message, new URL(active.identity.entryURL).origin);
+    active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
     gameLog.log('event', 'game.receipt', { description: describeReceipt(message.receipt), payload: message });
   },
 });
@@ -192,9 +190,7 @@ const pagePaths: Record<string, string> = {
   activity: '/activity',
 };
 const gamePath = (route: GameRoute) =>
-  'manifest' in route
-    ? `/games/custom?manifest=${encodeURIComponent(route.manifest)}`
-    : `/${route.owner}/${route.name}`;
+  'url' in route ? `/games/custom?url=${encodeURIComponent(route.url)}` : `/${route.owner}/${route.name}`;
 /** How a player is written: an alias wears `@`, a uname wears `~`. */
 const showName = (names: { uname?: string | null; alias?: string | null } | null) =>
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
@@ -221,7 +217,7 @@ function showPage(page: string) {
     link.classList.toggle('active', link.dataset.page === page || (page === 'play' && link.dataset.page === 'library'));
   document.title =
     page === 'play' && active
-      ? `${active.manifest.name} — HookedIn`
+      ? `${active.identity.name} — HookedIn`
       : page === 'profile'
         ? `${$('profile-name').textContent} — HookedIn`
         : `HookedIn — ${PAGE_TITLES[page] ?? page}`;
@@ -288,7 +284,7 @@ function navigate(page: string, push = true, path = pagePaths[page]) {
 }
 /** Every page has a URL: `/`, `/account`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`,
  * `/activity`, `/@<alias>` or `/~<uname>` for a player, the same and `/<game>` for a game they
- * publish, `/games/<key>` for a game's public record, and `/games/custom?manifest=<url>`. */
+ * publish, `/games/<key>` for a game's public record, and `/games/custom?url=<url>`. */
 function parseRoute(url: URL): string | GameRoute | { profile: string } | { record: string } | { unknown: string } {
   // A player's sigil survives a link that encodes it: `encodeURIComponent` writes `@` as `%40`, and the
   // static host decodes the path the same way before it serves this page.
@@ -298,7 +294,7 @@ function parseRoute(url: URL): string | GameRoute | { profile: string } | { reco
   } catch {}
   const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
-  if (pathname === '/games/custom') return { manifest: url.searchParams.get('manifest') || '' };
+  if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
   const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
   if (record) return { record: record[1]!.toLowerCase() };
   const page = Object.entries(pagePaths).find(([, path]) => path === pathname)?.[0];
@@ -317,7 +313,7 @@ async function route(push = false) {
   if ('record' in target) return void openGameRecord(target.record, push);
   if (active && active.path === gamePath(target)) return showPage('play');
   const opened = await task(async () => {
-    if ('manifest' in target) await loadGame(target.manifest, target, push);
+    if ('url' in target) await loadGame(target.url, target, push);
     else {
       const published = await wallet.api(`/api/players/${target.owner}/${target.name}`);
       if (!published.url) throw new Error('This game is not published at that name.');
@@ -356,7 +352,7 @@ function renderMoney() {
     // A limit granted in one money answers this question until the game gives it back.
     option.disabled = uiBusy || wallet.busy || holding || needsChannel;
     option.title = holding
-      ? `Take back what ${active!.manifest.name} holds to play with something else.`
+      ? `Take back what ${active!.identity.name} holds to play with something else.`
       : needsChannel
         ? 'Add ETH to your playing balance in My wallet to play with it.'
         : '';
@@ -367,8 +363,8 @@ function renderMoney() {
   button.title = !active
     ? ''
     : holding
-      ? `Take back what ${active.manifest.name} still holds, or change what it may play with.`
-      : `Choose what ${active.manifest.name} may play with.`;
+      ? `Take back what ${active.identity.name} still holds, or change what it may play with.`
+      : `Choose what ${active.identity.name} may play with.`;
   button.disabled = uiBusy;
 }
 /** The play page shows no wallet controls: the game displays its balance and asks for money through the dialog. */
@@ -391,7 +387,7 @@ function renderGameAccount() {
   if (active.pushed !== null && pushed !== active.pushed && active.frame.contentWindow) {
     active.pushed = pushed;
     const message = { hookedin: true, event: 'game.balance', ...balance };
-    active.frame.contentWindow.postMessage(message, new URL(active.identity.entryURL).origin);
+    active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
     gameLog.log('event', 'game.balance', {
       description: `balance ${formatEther(balance.balance)} ${units()}${balance.pending ? ' · pending operation' : ''}`,
       payload: message,
@@ -414,7 +410,7 @@ const limitSetting = () => `hookedin:v1:${network}:${wallet.practicing ? 'practi
  * its reach, because those three numbers are the whole of what is being authorized. */
 function renderFundDialog() {
   if (!active) return;
-  const name = active.manifest.name,
+  const name = active.identity.name,
     practice = wallet.practicing;
   $('fund-eyebrow').textContent = practice ? 'YOU ARE AUTHORIZING · TEST COINS' : 'YOU ARE AUTHORIZING';
   const limit = BigInt(wallet.game?.balance || '0');
@@ -469,6 +465,16 @@ function renderFundDialog() {
         ? `Take back ${formatEther(limit - amount)} ${units()}`
         : `Allow up to ${formatEther(amount)} ${units()}`;
 }
+/** Test coins are not money, so a game asking for some gets them without a dialog, as far as the balance goes:
+ * what it asked for, or ten coins more. */
+async function practiceFunds(requested?: bigint) {
+  const total = wallet.playableBalance(),
+    wanted = BigInt(wallet.game?.balance || '0') + (requested && requested > 0n ? requested : 10n ** 19n),
+    amount = wanted > total ? total : wanted;
+  await wallet.setGameLimit(String(amount));
+  logGameActivity('Test coins given to the game', { amount: String(amount) });
+  return amount;
+}
 let fundRequest: { resolve: (amount: bigint | null) => void } | null = null;
 /** Opened by the game's request for money, or by the player from the top bar. `take` is the player
  * asking for their money back, so the dialog opens at nothing with the confirmation still to make. */
@@ -478,10 +484,10 @@ function openFundDialog({ amount, asked = false, take = false }: { amount?: bigi
   const dialog = $<HTMLDialogElement>('fund-dialog');
   // The game page shows nothing but the game, so the dialog that grants it money says who it is.
   $('fund-who').textContent =
-    `${active.manifest.name}, served from ${new URL(active.frame.src).host}. ` +
+    `${active.identity.name}, served from ${new URL(active.frame.src).host}. ` +
     (active.identity.slug === undefined
       ? 'Nobody publishes it, so no developer earns from it.'
-      : `Its developer, ${active.manifest.developer}, earns half of each casino bet’s fee, and takes and settles its developer bets.`);
+      : `Its developer, ${active.identity.developer}, earns half of each casino bet’s fee, and takes and settles its developer bets.`);
   const total = wallet.playableBalance(),
     limit = BigInt(wallet.game?.balance || '0'),
     requested = amount && amount > 0n ? limit + amount : 0n,
@@ -892,7 +898,7 @@ function safeURL(value: string, base: string | undefined = undefined) {
   try {
     url = new URL(value, base);
   } catch {
-    throw new Error('Enter the full URL of the game manifest, starting with https://.');
+    throw new Error('Enter the full URL of the game, starting with https://.');
   }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('Games must use an HTTP or HTTPS URL without credentials.');
@@ -905,94 +911,38 @@ function endpoint(value: string) {
   return url.href.replace(/\/$/, '');
 }
 
-async function readManifest(response: Response) {
-  const limit = 16384;
-  if (Number(response.headers.get('content-length')) > limit) {
-    await response.body?.cancel();
-    throw new Error('Game manifest is too large.');
-  }
-  if (!response.body) throw new Error('The game manifest is empty.');
-  const reader = response.body.getReader(),
-    decoder = new TextDecoder('utf-8', { fatal: true });
-  let length = 0,
-    text = '';
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > limit) {
-        await reader.cancel();
-        throw new Error('Game manifest is too large.');
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-    text += decoder.decode();
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error('That URL does not answer with a game manifest. It must serve the manifest JSON itself.');
-    }
-  } finally {
-    reader.releaseLock();
-  }
+/** A game's address, checked before the wallet frames it: HTTP(S) without credentials, and never the wallet's own
+ * origin, where a frame could lift its own sandbox and read the wallet's storage. */
+function gameURL(value: string) {
+  const url = safeURL(value);
+  if (url.origin === location.origin) throw new Error('Games cannot be served from the wallet’s own origin.');
+  return url;
+}
+/** The icon a game is shown by: icon.svg beside its page. */
+const iconURL = (url: string) => new URL('icon.svg', url).href;
+/** How a game is named in the wallet: the name it is published under, in words. */
+const gameTitle = (name: string) => name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ');
+
+/** A game's icon: icon.svg beside its page, over the game's initial, which shows when it has none. */
+function gameIcon(url: string, name: string) {
+  const tile = document.createElement('span'),
+    image = document.createElement('img');
+  tile.className = 'game-icon';
+  tile.dataset.initial = name.charAt(0).toUpperCase();
+  image.src = iconURL(url);
+  image.alt = '';
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  image.addEventListener('error', () => image.remove(), { once: true });
+  tile.append(image);
+  return tile;
 }
 
-/**
- * Fetch a manifest and check everything the wallet needs before it will frame the game. Opening a
- * game and publishing one ask the same question, so a game published from this wallet is one this
- * wallet could open.
- */
-async function fetchGame(url: string) {
-  const manifestURL = safeURL(url);
-  // The game keeps its own origin, so it may persist its round state at its host. A same-origin frame
-  // could remove its own sandbox and read the wallet's storage, so the wallet's origin is never framed.
-  if (manifestURL.origin === location.origin) throw new Error('Games cannot be served from the wallet’s own origin.');
-  let response;
-  try {
-    response = await fetch(manifestURL, {
-      credentials: 'omit',
-      cache: 'no-store',
-      signal: AbortSignal.timeout(12_000),
-    });
-  } catch {
-    // A host that is down, a name that does not resolve, and a missing CORS header all land here.
-    throw new Error(`${manifestURL.host} did not answer. Check the URL, that the host is up, and its CORS headers.`);
-  }
-  if (!response.ok) throw new Error('The game manifest could not be loaded. Check its URL and CORS headers.');
-  const manifest = await readManifest(response);
-  if (
-    !manifest ||
-    typeof manifest.name !== 'string' ||
-    !manifest.name.length ||
-    manifest.name.length > 80 ||
-    typeof manifest.entry !== 'string' ||
-    typeof manifest.developer !== 'string'
-  )
-    throw new Error('A game manifest needs a name, entry URL, and developer address.');
-  let developer;
-  try {
-    developer = getAddress(manifest.developer);
-  } catch {
-    throw new Error(`The manifest's developer, ${String(manifest.developer).slice(0, 60)}, is not an address.`);
-  }
-  if (developer === ZeroAddress) throw new Error('The developer cannot be the zero address.');
-  const entry = safeURL(manifest.entry, response.url);
-  if (entry.origin === location.origin || new URL(response.url).origin === location.origin)
-    throw new Error('Games cannot be served from the wallet’s own origin.');
-  return { manifestURL, manifest, developer, entry };
-}
-
-/** Open a game. A published one comes with what its profile records: its key, and its developer, whom its
- * manifest must name too or it is not the game its developer published. A game loaded straight from its manifest
- * is its manifest's developer's, under its URL. */
+/** Open a game. A published one comes with what its profile records: its key, and its developer, the account that
+ * publishes it. A game opened by its URL alone is nobody's: it has the key of that URL, and takes no developer bets. */
 async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: Published) {
-  const { manifestURL, manifest, developer, entry } = await fetchGame(url);
-  const slug = 'manifest' in gameRoute ? undefined : gameRoute.name;
-  if (slug !== undefined && !same(developer, published?.developer))
-    throw new Error(
-      `${manifestURL.host} serves a manifest that names another developer than ${gamePath(gameRoute)} was published with.`,
-    );
+  const entry = gameURL(url);
+  const slug = 'url' in gameRoute ? undefined : gameRoute.name;
   closeGame();
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -1001,16 +951,15 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     'allow',
     "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; payment 'none'; fullscreen 'none'",
   );
-  frame.title = `${manifest.name} — sandboxed game`;
   const currentGeneration = ++generation;
   const identity: GameIdentity = {
-    manifestURL: manifestURL.href,
-    entryURL: entry.href,
-    key: published?.key ?? gameKey({ developer, name: manifestURL.href }),
-    developer,
+    url: entry.href,
+    key: published?.key ?? gameKey({ developer: ZeroAddress, name: entry.href }),
+    developer: published?.developer ?? ZeroAddress,
     ...(slug === undefined ? {} : { slug }),
-    name: manifest.name,
+    name: slug === undefined ? entry.host : gameTitle(slug),
   };
+  frame.title = `${identity.name} — sandboxed game`;
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
   const isCurrent = () =>
     active?.generation === currentGeneration &&
@@ -1023,8 +972,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     channelId: wallet.channelId,
     practice: wallet.practicing,
     identity,
-    manifest: { ...manifest, developer },
-    manifestURL: manifestURL.href,
     path,
     frame,
     generation: currentGeneration,
@@ -1037,18 +984,17 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   gameLog.clear();
   $<HTMLInputElement>('game-activity-search').value = '';
   logGameActivity('Game opened', {
-    manifestURL: manifestURL.href,
-    entryURL: entry.href,
+    url: entry.href,
     origin: entry.origin,
     sandbox: frame.getAttribute('sandbox'),
-    developer,
+    developer: identity.developer,
     channelId: active.channelId,
     gameKey: key,
     path,
   });
   frame.addEventListener('load', () => {
     if (!isCurrent()) return;
-    logGameActivity('Game iframe loaded', { entryURL: entry.href });
+    logGameActivity('Game iframe loaded', { url: entry.href });
     active!.pushed = '';
     renderGameAccount();
   });
@@ -1067,7 +1013,9 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
         throw gameError('busy', 'The wallet is processing another operation.');
       if (method === 'game.requestFunds') {
         const requested = params.amount === undefined ? undefined : BigInt(params.amount);
-        const amount = await openFundDialog({ amount: requested, asked: true });
+        const amount = wallet.practicing
+          ? await practiceFunds(requested)
+          : await openFundDialog({ amount: requested, asked: true });
         if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
         return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
       }
@@ -1078,9 +1026,12 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     onError: message => toast(message, true),
   });
   frame.src = entry.href;
-  const loading = document.createElement('p');
+  // The game's icon stands in for it until its page has loaded.
+  const loading = document.createElement('div'),
+    label = document.createElement('p');
   loading.className = 'game-loading';
-  loading.textContent = `Loading ${manifest.name}…`;
+  label.textContent = `Loading ${identity.name}…`;
+  loading.append(gameIcon(entry.href, identity.name), label);
   frame.addEventListener('load', () => loading.remove(), { once: true });
   $('frame-slot').replaceChildren(loading, frame);
   showPage('play');
@@ -1098,26 +1049,21 @@ for (const button of document.querySelectorAll<HTMLElement>('[data-page]'))
 $<HTMLButtonElement>('game-funds').addEventListener('click', () => {
   if (active) void openFundDialog({ take: BigInt(wallet.game?.balance || '0') > 0n });
 });
-/** One card for a published game, read from its manifest. */
-async function gameCard(route: GameRoute, url: string, published: Published) {
-  const manifest = await readManifest(
-    await fetch(safeURL(url), { credentials: 'omit', signal: AbortSignal.timeout(12000) }),
-  );
+/** One card for a published game: its icon and the name it is published under. */
+function gameCard(route: { owner: string; name: string }, game: Published & { name: string; url: string }) {
   const card = document.createElement('a'),
     title = document.createElement('h3'),
-    description = document.createElement('p'),
     link = document.createElement('span');
-  card.className = 'game-card catalog-card';
+  card.className = 'game-card';
   card.href = gamePath(route);
-  title.textContent = String(manifest.name).slice(0, 80);
-  description.textContent = String(manifest.description || 'Independent game').slice(0, 220);
+  title.textContent = gameTitle(game.name);
   link.className = 'catalog-link';
-  link.textContent = 'manifest' in route ? new URL(url).host : `${route.owner}/${route.name}`;
-  card.append(title, description, link);
+  link.textContent = `${route.owner}/${route.name}`;
+  card.append(gameIcon(game.url, title.textContent), title, link);
   // A bet's receipt names its game only by this key, so remembering the card is what lets a line of
   // history be opened again, and its public record found.
-  const key = published.key;
-  knownGames.set(key.toLowerCase(), { route, url, ...published, name: title.textContent });
+  const key = game.key;
+  knownGames.set(key.toLowerCase(), { route, ...game, name: title.textContent });
   const record = document.createElement('span');
   record.className = 'catalog-record';
   record.textContent = 'Every bet ↗';
@@ -1130,34 +1076,30 @@ async function gameCard(route: GameRoute, url: string, published: Published) {
   card.append(record);
   card.addEventListener('click', event => {
     event.preventDefault();
-    task(() => loadGame(url, route, true, published));
+    task(() => loadGame(game.url, route, true, game));
   });
   return card;
 }
-/** How many of a profile's games a page will fetch the manifest of. The rest stay reachable by
- * their own URL: a profile holds a hundred games, all of them addresses its owner chose. */
-const SHOWN_GAMES = 32;
-/** Every game a profile publishes, as cards. A manifest that cannot be read is left out. */
-async function profileCards(owner: string, games: (Published & { name: string; url: string })[]) {
-  const cards = await Promise.all(
-    games.slice(0, SHOWN_GAMES).map(game => gameCard({ owner, name: game.name }, game.url, game).catch(() => null)),
-  );
-  return cards.filter(card => card !== null);
-}
-/** The library is what `@hookedin` publishes, and whatever this account publishes itself. */
+/** Every game a profile publishes, as cards. */
+const profileCards = (owner: string, games: (Published & { name: string; url: string })[]) =>
+  games.map(game => gameCard({ owner, name: game.name }, game));
+/** The library is what `@hookedin` publishes, and whatever this account publishes itself. It needs nothing of the
+ * wallet but the casino's address, so it shows before the wallet has started. */
 async function loadLibrary() {
   const list = $('game-library');
   try {
-    const house = await wallet.api(`/api/players/@${HOUSE}`);
+    const response = await fetch(`${casinoURL}/api/players/@${HOUSE}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!response.ok) throw new Error();
+    const house = await response.json();
     const mine = wallet.alias === HOUSE ? [] : (wallet.profile?.games ?? []);
-    const cards = [
-      ...(await profileCards('@' + HOUSE, house.games)),
-      ...(await profileCards(showName(wallet.profile), mine)),
-    ];
+    const cards = [...profileCards('@' + HOUSE, house.games), ...profileCards(showName(wallet.profile), mine)];
     $('library-count').textContent = $('library-heading-count').textContent = String(cards.length);
     list.replaceChildren(...cards);
   } catch {
-    list.textContent = 'Game catalog unavailable. You can load a custom manifest below.';
+    list.textContent = 'The game catalog is unavailable. You can still open a game by its URL below.';
   }
 }
 /** Anybody's page: their names, what they have played, and the games they publish. */
@@ -1189,7 +1131,7 @@ async function openProfile(name: string, push = true) {
     note.textContent = `Staked ${eth(profile.stats.staked, 4)} ETH · won ${eth(profile.stats.won, 4)} ETH`;
     card.append(label, amount, note);
     $('profile-stats').replaceChildren(card);
-    const cards = await profileCards(showName(profile), profile.games);
+    const cards = profileCards(showName(profile), profile.games);
     if (cards.length) games.replaceChildren(...cards);
     else games.textContent = `${showName(profile)} publishes no games.`;
   } catch (error: any) {
@@ -1562,7 +1504,7 @@ $<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
   const url = URL.createObjectURL(new Blob([gameLog.export()], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `hookedin-game-log-${active?.manifest.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'session'}.json`;
+  link.download = `hookedin-game-log-${active?.identity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'session'}.json`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
@@ -1595,12 +1537,12 @@ $<HTMLInputElement>('activity-search').addEventListener('input', () => {
 });
 $<HTMLButtonElement>('open-custom').addEventListener('click', () => {
   $<HTMLFormElement>('custom-form').classList.toggle('hidden');
-  if (!$<HTMLFormElement>('custom-form').classList.contains('hidden')) $<HTMLInputElement>('manifest-url').focus();
+  if (!$<HTMLFormElement>('custom-form').classList.contains('hidden')) $<HTMLInputElement>('custom-url').focus();
 });
 $<HTMLFormElement>('custom-form').addEventListener('submit', event => {
   event.preventDefault();
-  const manifest = $<HTMLInputElement>('manifest-url').value.trim();
-  task(() => loadGame(manifest, { manifest }));
+  const url = $<HTMLInputElement>('custom-url').value.trim();
+  task(() => loadGame(url, { url }));
 });
 $<HTMLButtonElement>('setup-wallet').addEventListener('click', () =>
   task(async () => {
@@ -1619,7 +1561,7 @@ $<HTMLFormElement>('fund-form').addEventListener('submit', event => {
     await wallet.setGameLimit(String(amount));
     localStorage.setItem(limitSetting(), String(amount));
     logGameActivity('Spending limit set; the game may risk it until you leave', wallet.game);
-    toast(`${active.manifest.name} may play with up to ${formatEther(amount)} ${units()}.`);
+    toast(`${active.identity.name} may play with up to ${formatEther(amount)} ${units()}.`);
     $<HTMLDialogElement>('fund-dialog').close(String(amount));
   });
 });
@@ -1881,12 +1823,7 @@ $<HTMLButtonElement>('publish-game').addEventListener('click', () =>
       url = $<HTMLInputElement>('game-url-input');
     const published = name.value.trim();
     if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-    // Anyone who opens this card has to be able to play it, so it is loaded before it is published, and a wallet
-    // plays it only if its manifest names the account that published it: its developer.
-    const { manifestURL, developer } = await fetchGame(url.value.trim());
-    if (!same(developer, wallet.address))
-      throw new Error(`This manifest names another developer, ${developer}: publish it from that account.`);
-    await wallet.publishGame(published, manifestURL.href);
+    await wallet.publishGame(published, gameURL(url.value.trim()).href);
     name.value = url.value = '';
     await loadLibrary();
     toast(`Published at ${showName(wallet)}/${published}.`);
@@ -1961,6 +1898,7 @@ const startup = Promise.withResolvers<void>();
 /** Games opened by an early click wait here, so their session opens against the started wallet. */
 const walletStarted = startup.promise;
 
+void loadLibrary();
 try {
   await wallet.start().finally(startup.resolve);
   $('connection-banner').classList.toggle('hidden', !wallet.recoveryOnly);
@@ -1969,12 +1907,18 @@ try {
       'Recovery mode: the casino is unavailable or its configuration changed. Your trusted deployment remains available for deposits, evidence export, unilateral close, challenge and claims. Playing requires the casino. Reload to reconnect.';
     $('connection-banner').classList.add('warning');
   }
+  // Practice plays while the deployment is checked; everything with ETH waits for the check, and a failed one shows here.
+  wallet.verified.catch((error: any) => {
+    $('connection-banner').textContent =
+      `${error.shortMessage || error.message} Practice still works; playing with ETH does not. Reload to check again; if it persists, check Connected services in My wallet.`;
+    $('connection-banner').classList.add('warning');
+    $('connection-banner').classList.remove('hidden');
+  });
   renderWallet();
   renderActivity();
   void refreshActivity();
   if (wallet.pending || wallet.needsOpening)
     toast('A saved operation needs recovery. Use Retry same request to finish safely.');
-  await loadLibrary();
   await route();
 } catch (error: any) {
   $('connection-banner').textContent =

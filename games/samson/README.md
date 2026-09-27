@@ -2,7 +2,7 @@
 
 A five-reel, three-row, 243-ways slot for [HookedIn](https://play.hookedin.com). Jawbone wilds, honeycomb scatters, and a bonus on its own reels where the wilds multiply. It is the showcase reference game: the whole payout distribution is counted exactly from the reel strips, and a spin is at most one bet, the whole stake against one pay, drawn so that spins pay exactly as the reels do.
 
-Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) and choose Samson's Gold. It is hosted at `samson-game.hookedin.com`.
+Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) and choose Samson. It is hosted at `samson-game.hookedin.com`.
 
 ## How to play
 
@@ -85,13 +85,13 @@ Each bet's own return, which the wallet measures and keeps, is lower than the ma
 | [src/sound.ts](src/sound.ts)                                     | Synthesized sound, built on the SDK's `createSynth`. There are no audio files              |
 | [src/symbols/](src/symbols/)                                     | Ten SVG symbols, the only image assets                                                     |
 | [src/index.html](src/index.html), [src/style.css](src/style.css) | The page and the paytable                                                                  |
-| [src/manifest.json](src/manifest.json)                           | What the wallet reads to load the game                                                     |
+| [src/icon.svg](src/icon.svg)                                     | The icon the wallet shows the game by: a square SVG of one symbol                          |
 
 ## Fairness
 
 The game page is untrusted by design. It runs in a sandboxed iframe on its own origin and talks to the wallet only through `postMessage`.
 
-- **The game never holds keys.** It sends the wallet a bet: a stake, a chance and a prize. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. Money reaches the game only through the wallet's own **Add funds** dialog, and leaving the game returns the rest.
+- **The game never holds keys.** It sends the wallet a bet: a stake, a chance and a prize. The wallet checks the bet against the spending limit the player gave this game, signs the exact terms with the channel key and sends them to the casino. ETH reaches the game only through the wallet's own dialog, and leaving the game returns the rest.
 - **Nobody picks the outcome.** Every casino bet is on a round. The casino fixes the round's secret first and names the round by the secret's hash. The wallet picks its seed only after it has that name, signs the round and the seed's hash into the bet, and reveals the seed with the settlement. The outcome is the low 64 bits of `keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))`.
 - **The wallet verifies.** It checks that the revealed secret hashes to the round it signed, recomputes the outcome, pays the prize itself if the outcome is below the chance, and checks the casino's signature on the new balance. Only then does the game receive its receipt: `settled`.
 - **The game never sees future entropy.** It learns the outcome only from a completed receipt. It cannot supply the seed and cannot see the secret early. A bet the casino declines comes back with the round's secret, so the wallet shows at once what it would have paid.
@@ -109,12 +109,12 @@ npm ci
 node sdk/bin/hookedin-game.js serve games/samson
 ```
 
-This builds the game into `dist/` and serves it at `http://127.0.0.1:4185` (set `PORT` to move it). Then:
+This builds the game into `dist/` and serves it at `http://127.0.0.1:4185/` (set `PORT` to move it). Then:
 
 1. Open the wallet at [play.hookedin.com](https://play.hookedin.com).
-2. Go to **Games**, choose **Add a custom game** and load `http://127.0.0.1:4185/manifest.json`.
+2. Go to **Games**, choose **Open a game by URL** and open `http://127.0.0.1:4185/`.
 
-A game served from your own machine works against any HookedIn wallet and casino, because the wallet loads the manifest and the page from your browser. Testing against a fully local stack needs the casino server, which is private; its `npm run dev` serves this game with the others. Most developers should use the public Sepolia deployment at play.hookedin.com.
+A game served from your own machine works against any HookedIn wallet and casino, because your browser loads both the wallet and the page. Testing against a fully local stack needs the casino server, which is private; its `npm run dev` serves this game with the others. Most developers should use the public Sepolia deployment at play.hookedin.com.
 
 Every page load rebuilds the game, so reload to see a change.
 
@@ -124,23 +124,23 @@ Start a repository from [game-template](https://github.com/hookedin/game-templat
 
 ### What to change first
 
-- [src/manifest.json](src/manifest.json): `id`, `name`, `description`, and `developer` (your address).
+- [src/icon.svg](src/icon.svg): the icon the wallet shows your game by, a square SVG of one symbol that fills the square, with no rounded background of its own: the wallet rounds its corners ([the icon](../../docs/reference/game-url.md#the-icon)).
 - The theme: the SVGs in [src/symbols/](src/symbols/), the copy in [src/index.html](src/index.html), the styles, and the tones in [src/sound.ts](src/sound.ts). None of these touch the maths.
 - The maths: `MACHINES` and `PAYS` in [src/math.ts](src/math.ts). Any change to a strip or a pay changes the return, so update the expected fractions and `FLOOR` in the test. A reel window may show at most one wild or scatter; the counter enforces this. Keep the distinct payouts few, or spins will be slow to price.
 
-You earn half the commission on every bet placed through your game. It accrues to the manifest's `developer` address on wins and losses alike and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
+You earn half the commission on every bet placed through your game once you publish it. It accrues to the account that publishes it, on wins and losses alike, and is never an extra charge to the player. See [pricing and commission](../../docs/reference/economics.md).
 
 ## Deploy
 
 The build writes `dist/`: plain static files. Whenever `main` is pushed, this repository's [deploy workflow](../../.github/workflows/deploy.yml) publishes them to Cloudflare by running `npx wrangler deploy` in `games/samson`, with [wrangler.jsonc](wrangler.jsonc). To publish by hand: `node ../../sdk/bin/hookedin-game.js build && npx wrangler deploy`, in `games/samson`. A repository made from game-template deploys itself; [its README](https://github.com/hookedin/game-template#deploy) says how.
 
-Any static host works. It must send the headers in `dist/_headers`, which Cloudflare applies by itself. The one that matters most is `Access-Control-Allow-Origin: *`: the wallet fetches `manifest.json` from a different origin and refuses a game whose manifest it cannot read. The file also sets the page's Content-Security-Policy. Do not host the game on the wallet's own origin; the wallet refuses that too.
+Any static host works. It must send the headers in `dist/_headers`, which Cloudflare applies by itself, among them the page's Content-Security-Policy. Do not host the game on the wallet's own origin; the wallet refuses that.
 
-Your game is then playable by anyone who loads `https://your-host/manifest.json` as a custom game, or through the link `https://play.hookedin.com/games/custom?manifest=<encoded manifest URL>`.
+Your game is then playable by anyone who opens its URL, such as `https://your-host/`, with **Open a game by URL**, or through the link `https://play.hookedin.com/games/custom?url=<encoded game URL>`.
 
 ## Get listed
 
-Publish it yourself: in the wallet, open **My games** and give the game a name and this manifest's URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
+Publish it yourself: in the wallet of the account that is to earn its commission, open **My games** and give the game a name and its URL. It is then at `@<your name>/<game name>` for anyone with a wallet. The library the casino ships with is what `@hookedin` publishes, from [catalog.json](../../catalog.json) in this repository; open an issue or a pull request to be in it.
 
 ## Tests
 

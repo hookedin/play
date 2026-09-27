@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="#3b2468"/><stop offset="1" stop-color="#120a26"/></linearGradient>
+<radialGradient id="glow" cx="0.5" cy="0.42" r="0.62"><stop offset="0" stop-color="#c9a3ff" stop-opacity="0.55"/><stop offset="1" stop-color="#c9a3ff" stop-opacity="0"/></radialGradient>
+<filter id="lift" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#000" flood-opacity="0.45"/></filter>
+
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<rect width="512" height="512" fill="url(#glow)"/>
+<g filter="url(#lift)"><polygon points="172,150 108,216 200,216" fill="#f3e7ff"/><polygon points="172,150 256,150 200,216" fill="#dcc2ff"/><polygon points="256,150 312,216 200,216" fill="#c49bff"/><polygon points="256,150 340,150 312,216" fill="#e7d6ff"/><polygon points="340,150 404,216 312,216" fill="#b98af7"/><polygon points="108,216 200,216 256,400" fill="#9b62ef"/><polygon points="200,216 312,216 256,400" fill="#c7a0ff"/><polygon points="312,216 404,216 256,400" fill="#7440d6"/></g><path d="M396 104 C400 132 408 140 436 144 C408 148 400 156 396 184 C392 156 384 148 356 144 C384 140 392 132 396 104 Z" fill="#fff"/>
+</svg>

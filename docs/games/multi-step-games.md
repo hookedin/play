@@ -148,20 +148,22 @@ rounds.
 Pricing a large graph in the page takes time. The constructor's third argument is a
 [`FundingTable`](../sdk/engine.md#fundingtable): each action's required cash at one stake. `RoundClient` uses it,
 scaled by an exact integer, when the stake is a multiple of the table's `initialCash` and the bankroll covers its
-`conservativeBankroll` times that multiple; otherwise it prices in the page with `compileGameAsync`. Blackjack passes
-the committed table:
+`conservativeBankroll` times that multiple; otherwise it prices in the page with `compileGameAsync`.
+[Blackjack](https://github.com/hookedin/game-blackjack) passes the table it commits:
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
-import { createBlackjack } from '@hookedin/play/sdk/engine';
-import { blackjackFunding } from '@hookedin/play/sdk/generated/blackjack-funding';
+import { createBlackjack } from './rules.ts';
+import { blackjackFunding } from './funding.ts';
 
 const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: BigInt(setup.stake) }), blackjackFunding);
 ```
 
-A table is right only for the rules it was generated from;
-[sdk/scripts/blackjack-funding.ts](../../sdk/scripts/blackjack-funding.ts) generates blackjack's.
+A table is right only for the rules it was generated from. Blackjack's
+[scripts/funding.ts](https://github.com/hookedin/game-blackjack/blob/main/scripts/funding.ts) compiles its rules with
+`compileGame` and writes every action's `requiredCash` into `src/funding.ts`: `npm run generate` runs it, and `npm test`
+fails when the table does not match the rules.
 
 ## Changing the rules
 
@@ -179,8 +181,8 @@ The cash it leaves out is the player's all the same ([`mountBank`](../sdk/bank-a
 
 - [Mines](../../games/mines/): `createMines({ tiles, mines, cashouts })`, reveal or cash out. The simplest graph where
   the player decides when to stop.
-- [Blackjack](../../games/blackjack/): `createBlackjack({ stake })` with the precomputed table; doubles, splits and
-  insurance through `additionalCash`, and the cards redrawn from `state.events`.
+- [Blackjack](https://github.com/hookedin/game-blackjack): `createBlackjack({ stake })` with the precomputed table;
+  doubles, splits and insurance through `additionalCash`, and the cards redrawn from `state.events`.
 - [Dice](../../games/dice/): one decision with two outcomes, [src/rules.ts](../../games/dice/src/rules.ts).
 - [Plinko](../../games/plinko/): one decision whose outcomes are the buckets,
   [src/tables.ts](../../games/plinko/src/tables.ts), with the ball's path drawn from `state.settlement.draw`.

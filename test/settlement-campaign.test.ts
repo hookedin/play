@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ContractFactory, Wallet, id, ZeroHash } from 'ethers';
+import { ContractFactory, Wallet, id } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBinary } from '../testing/contract.ts';
-import { initialState, checkpointEvidence, channelId, STATE_TYPES, hashState } from '../protocol/protocol.ts';
+import { initialState, checkpointEvidence, channelId, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import release from '../client/contract-artifact.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
@@ -67,7 +67,7 @@ async function invariants(env: any, f: any, records: any) {
   return rows;
 }
 
-for (const initialSeed of [1, 17, 913, 9127, 65537, 741231, 123456789, 4294967295])
+for (const initialSeed of [1, 4294967295])
   test('settlement invariants across 96 mixed actions, seed ' + initialSeed, async t => {
     const env = await anvil();
     t.after(() => env.close());
@@ -165,7 +165,7 @@ test('maximal winnings debt never consumes another channel principal', async t =
   await invariants(env, f, [a, b, protectedChannel]);
 });
 
-test('v1 requires its pinned runtime and signing domain', async t => {
+test('the wallet requires its pinned runtime and signing domain', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env);

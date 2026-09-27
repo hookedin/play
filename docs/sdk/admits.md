@@ -42,6 +42,29 @@ bankroll that is not a positive bigint, and rethrows any error other than a `Ran
 The bankroll a game prices against is the one `wallet.info` reports, and the casino decides against its bankroll when
 the bet arrives: a bet admitted here can still be declined, with a signed rejection that leaves the balance unchanged.
 
+### `assessBet`
+
+```ts
+export function assessBet({ bankroll, bet }: { bankroll: bigint; bet: BetTerms }): Readonly<{
+  bankroll: bigint;
+  maxFee: bigint;
+  fee: bigint;
+  liability: bigint;
+}>;
+```
+
+The casino's assessment of a bet at `bankroll`, which `admits` runs: a bet it throws for is one the casino declines.
+`maxFee` is the most commission that keeps the criterion, the smaller root of the quadratic in
+[extracting and splitting the excess](../reference/economics.md#extracting-and-splitting-the-excess), checked exactly;
+`fee` is the commission charged, `maxFee` rounded down to an even number of wei so that it splits equally between the
+game's developer and the casino; `liability` is what the bankroll can lose on the bet, its net win when that is
+positive, plus `fee`; and `bankroll` is the one given. Throws a `RangeError` for a malformed bet, a bankroll that is not
+a positive uint256, a net win not below the bankroll, or a bet that fails the criterion with no commission at all.
+
+```ts
+assessBet({ bankroll: 10n ** 12n, bet }); // { bankroll: 1000000000000n, maxFee: 9n, fee: 8n, liability: 988n }
+```
+
 ## Measured return
 
 ### `describeBet`

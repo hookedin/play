@@ -143,7 +143,8 @@ and paid first in, first out as cash arrives. Collecting is a separate transacti
 
 A wallet without a funded channel **practices**: it plays with **test coins** (symbol TEST, 18 decimals) that it keeps
 in the tab's memory, 100 at the start and 100 more once it holds fewer than 10. It settles a game's casino bets and
-payments itself, under the casino's own admission rule against a practice bankroll, with an outcome it draws. Nothing
-about practice is signed, sent to the casino or recorded, and a reload starts again at 100. Developer bets are placed
-with ETH only, so games built on them, such as roulette, are watched in practice. The top bar switches between ETH and
-test coins ([getting started](../wallet/getting-started.md#practice)).
+payments itself, under the casino's own admission rule against a practice bankroll, with an outcome it draws, and a game
+that asks for money gets test coins at once, without the wallet's dialog. Nothing about practice is signed, sent to the
+casino or recorded, and a reload starts again at 100. Developer bets are placed with ETH only, so games built on them,
+such as roulette, are watched in practice. The top bar switches between ETH and test coins
+([getting started](../wallet/getting-started.md#practice)).

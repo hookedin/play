@@ -1,18 +1,18 @@
 /** What the wallet knows about a game: where it is served, its key, its developer, and, for this tab only, a
  * spending limit. */
 export interface GameIdentity {
-  manifestURL: string;
-  entryURL: string;
-  /** Made from its developer and the name they published it under; a game loaded straight from its manifest has
-   * the key of its manifest's developer and URL. */
+  /** The page the wallet frames: a game is its URL. */
+  url: string;
+  /** Made from its developer and the name they published it under; a game opened by its URL alone has the key of
+   * nobody's game at that URL. */
   key: string;
-  /** The account that publishes it, which its manifest names too: it earns the game's commission, and its bank
-   * takes the game's developer bets, which it settles. */
+  /** The account that publishes it: it earns the game's commission, and its bank takes the game's developer bets,
+   * which it settles. The zero address for a game opened by its URL alone. */
   developer: string;
-  /** The name its developer published it under. A game loaded straight from its manifest has none, and takes no
-   * developer bets. */
+  /** The name its developer published it under. A game opened by its URL alone has none, and takes no developer
+   * bets. */
   slug?: string;
-  /** What the game calls itself. */
+  /** What the wallet calls it. */
   name: string;
 }
 /** The open game in this tab. Never persisted: closing the tab or leaving the game releases the limit. */

@@ -134,14 +134,19 @@ The account whose ETH opens a channel, the channel's `player`. It signs the tran
 A game's identity, `keccak256(abi.encode(developer, name))`, the same wherever the game is served. See
 [game keys](signed-messages.md#game-keys).
 
+### Game URL
+
+The page the wallet frames: a game is its URL. A published game is at the URL its profile records; a game opened by its
+URL alone is published by nobody. See [game URL](game-url.md).
+
 ### Group
 
 A label of up to 64 characters that ties a game's bets and payments together, such as the steps of one hand or the bets
 of one spin. The player signs it, and bet history shows a group as one row.
 
-### Manifest
+### Icon
 
-The JSON file that tells the wallet a game's name, entry page and developer. See [the manifest](manifest.md).
+`icon.svg` beside a game's page: the square tile the wallet shows the game by. See [the icon](game-url.md#the-icon).
 
 ### Meta
 
@@ -208,8 +213,9 @@ A developer's signed statement of what a developer bet pays its player and gives
 
 ### Spending limit
 
-The money the player lets the open game play with in the tab, set in the wallet's own dialog. It signs nothing and is
-released when the game closes. See [games and limits](../wallet/games-and-limits.md).
+The money the open game may play with in the tab: ETH the player allows in the wallet's own dialog, or in practice test
+coins the game gets when it asks. It signs nothing and is released when the game closes. See
+[games and limits](../wallet/games-and-limits.md).
 
 ### Stake
 

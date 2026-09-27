@@ -12,8 +12,10 @@ takes you from a first visit to a withdrawal.
 
 On your first visit the wallet generates a **funding account**, an Ethereum key it keeps in this browser. Until you
 deposit, the wallet practices: you can play at once with 100 TEST, test coins it keeps itself ([practice](#practice)).
-Once you open a funded channel, the casino gives the account a **uname** such as `~3byt9ocwnnzaxanmiz3stocj`
-([names](names-and-publishing.md)).
+Practice and the game library need nothing from the chain, so they work at once; everything with ETH waits until the
+wallet has checked the casino's contract on-chain, and a banner says so if that check fails
+([what the wallet checks](verify-a-release.md#what-the-wallet-checks-on-start)). Once you open a funded channel, the
+casino gives the account a **uname** such as `~3byt9ocwnnzaxanmiz3stocj` ([names](names-and-publishing.md)).
 
 The top bar holds the library (**Games**), your **Bets** and your **Activity**, the balance this tab plays with, the
 **ETH** and **TEST** switch, and **My account**, which leads to every other page: My wallet, My games, Bet history,
@@ -34,9 +36,9 @@ Changing accounts closes the open game. Back up every account you fund
 
 ## Practice
 
-1. Pick a game in the library.
-2. The game asks for money, and the wallet's own dialog opens. It names the game, the host serving it and its
-   developer. Choose how much the game may play with and press **Allow**.
+1. Pick a game's tile in the library: its icon above its name.
+2. The game asks for money and gets test coins at once: what it asked for, or ten more, as far as yours go. With ETH,
+   the wallet's own dialog asks you first ([give a game money](#give-a-game-money)).
 3. Play. The game shows each result as it would with money.
 
 Test coins are the wallet's own, kept in this tab's memory: the wallet settles a game's casino bets and payments itself,
@@ -48,7 +50,8 @@ them, such as roulette, can be watched in practice and played once you have depo
 ## Deposit ETH
 
 1. On **My wallet**, under **Receive ETH**, copy your deposit address and send Sepolia ETH to it from another wallet or
-   a faucet. **Wallet funds** shows what has arrived. It updates every 4 seconds, or at once with **Check now**.
+   a faucet. **Wallet funds** shows what has arrived. It updates every 4 seconds while the tab is visible, or at once
+   with **Check now**.
 2. Under **Open a funded channel**, enter an amount and press **Open a funded channel**. **Max** fills in everything
    except 0.001 ETH, which stays for future network fees, and this deposit's fee.
 
@@ -71,9 +74,10 @@ switching then reloads the game with the other money.
 ## Give a game money
 
 While a game is open, the top bar shows **Give this game money** or **Take money back** in place of your balance, and
-both open the wallet's dialog. The limit you set is the most the game may put at risk. The money stays in your channel,
-a win raises the limit and a loss lowers it, and leaving the game, reloading or closing the tab takes back whatever is
-left. [Games and limits](games-and-limits.md#giving-a-game-money) explains the dialog.
+both open the wallet's dialog, which with ETH also opens when the game asks. The limit you set is the most the game may
+put at risk. The money stays in your channel, a win raises the limit and a loss lowers it, and leaving the game,
+reloading or closing the tab takes back whatever is left. [Games and limits](games-and-limits.md#giving-a-game-money)
+explains the dialog.
 
 ## Withdraw
 

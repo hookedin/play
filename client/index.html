@@ -6,12 +6,13 @@
     <meta name="color-scheme" content="dark" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self' http: https:; frame-src http: https:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self' http: https:; frame-src http: https:; img-src 'self' data: http: https:; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>HookedIn — Independent game wallet</title>
     <link rel="icon" type="image/svg+xml" href="/brand/hookedin-mark.svg" />
     <link rel="stylesheet" href="/style.css" />
     <script type="module" src="/main.js"></script>
+    <link rel="modulepreload" href="/vendor/ethers.js" />
   </head>
   <body>
     <div class="workspace">
@@ -99,27 +100,21 @@
             <div class="custom-symbol">⌘</div>
             <div>
               <h3>Built something different?</h3>
-              <p>Load any game manifest. The same wallet permissions apply.</p>
+              <p>Open any game by its URL. The same wallet permissions apply.</p>
             </div>
-            <button id="open-custom" class="button secondary">Add a custom game <span>+</span></button>
+            <button id="open-custom" class="button secondary">Open a game by URL <span>+</span></button>
           </div>
           <form id="custom-form" class="custom-form hidden">
-            <label for="manifest-url">Game manifest URL</label>
+            <label for="custom-url">Game URL</label>
             <div class="input-row">
-              <input
-                id="manifest-url"
-                type="url"
-                placeholder="https://your-game.example/manifest.json"
-                required
-              /><button class="button primary" type="submit">Load game</button>
+              <input id="custom-url" type="url" placeholder="https://your-game.example/" required /><button
+                class="button primary"
+                type="submit"
+              >
+                Open game
+              </button>
             </div>
-            <p>Manifests declare the game entry URL and its developer.</p>
           </form>
-          <p class="trust-note">
-            The casino controls its bankroll and whether it returns a signed result. Winnings are not guaranteed. Check
-            your wallet regularly: challenge any stale closure before its 24-hour deadline or the older balance can
-            become final. Keep current recovery evidence.
-          </p>
           <div class="library-footer">
             <span><span class="tiny-shield">◇</span> Sandboxed games</span
             ><span><span class="tiny-shield">✓</span> Locally verified outcomes</span
@@ -422,9 +417,9 @@
             <div class="eyebrow">PUBLISHED UNDER YOUR NAME</div>
             <h2>Games you publish</h2>
             <p>
-              A game you publish is reachable at your name, and anyone may play it with their own wallet. Its manifest
-              names this account as its developer: you earn its commission, your bank takes its developer bets, and your
-              key settles them. Publishing needs a funded ETH channel; taking one down never does.
+              A game you publish is reachable at your name, and anyone may play it with their own wallet. A game is its
+              URL, shown by the <code>icon.svg</code> beside it. You earn its commission, your bank takes its developer
+              bets, and your key settles them. Publishing needs a funded ETH channel; taking one down never does.
             </p>
             <label for="game-name-input"
               >Games you publish <span id="profile-game-count" class="subtle-count">0/100</span></label
@@ -434,7 +429,7 @@
                 id="game-url-input"
                 type="url"
                 autocomplete="off"
-                placeholder="https://your-game.example/manifest.json"
+                placeholder="https://your-game.example/"
               /><button id="publish-game" class="button secondary" type="button">Publish</button>
             </div>
             <div id="my-games"></div>

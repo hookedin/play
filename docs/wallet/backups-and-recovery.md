@@ -136,11 +136,11 @@ run. It needs:
 HOOKEDIN_RELAYER_KEY=0x... npm run watchtower -- --deployment trusted.json --evidence channel.json --journal .private/watchtower.json
 ```
 
-On start it checks the deployed code and owner against the pinned artifact and the manifest. Then, every 4 seconds, it
-reads the bundle again, observes the chain through both RPCs, and sends `challengeClose` when the contract holds a close
-older than the bundle's evidence and the deadline has not passed. It prints one JSON line per check, with its alerts and
-the relayer's balance; `--once` runs a single check and exits. Transactions are saved in the journal before they are
-sent, and a lock beside the journal keeps a second watchtower out. It cannot start a close, needs neither the channel key
-nor the funding key, and knows only what the bundle holds.
+On start it checks the deployed code and owner against the pinned artifact and the deployment manifest. Then, every 4
+seconds, it reads the bundle again, observes the chain through both RPCs, and sends `challengeClose` when the contract
+holds a close older than the bundle's evidence and the deadline has not passed. It prints one JSON line per check, with
+its alerts and the relayer's balance; `--once` runs a single check and exits. Transactions are saved in the journal
+before they are sent, and a lock beside the journal keeps a second watchtower out. It cannot start a close, needs
+neither the channel key nor the funding key, and knows only what the bundle holds.
 
 Its alerts, and what each means, are in [the CLI reference](../reference/cli.md#alerts).

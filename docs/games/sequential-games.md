@@ -185,8 +185,10 @@ surrender.
 
 ## Blackjack rules and completed-hand edge
 
-The game implements the rules [Stake Originals Blackjack](https://stake.com/casino/games/blackjack) publishes under
-Game Info → Rules (read on 2026-09-17), doubling after a split included. Stake's
+[Blackjack](https://github.com/hookedin/game-blackjack) is a repository of its own: `createBlackjack` in its
+[src/rules.ts](https://github.com/hookedin/game-blackjack/blob/main/src/rules.ts) builds the graph. It implements the
+rules [Stake Originals Blackjack](https://stake.com/casino/games/blackjack) publishes under Game Info → Rules (read on
+2026-09-17), doubling after a split included. Stake's
 [card-generation documentation](https://stake.com/provably-fair/game-events) specifies independent draws from unlimited
 decks.
 
@@ -214,9 +216,9 @@ The optimal completed-hand net return per initial stake is exactly:
 ```
 
 That is a **0.5703880122736% house edge**, or **99.4296119877264%** paid back on an initial-bet basis, matching Stake's
-rounded 0.57% and 99.43%. It is not a claim that every strategy has that edge, nor that the edge is exactly
-57/10,000. Optimal play declines insurance. The independent oracle in
-[games/blackjack/test/blackjack-rules.test.ts](../../games/blackjack/test/blackjack-rules.test.ts) computes dealer
+rounded 0.57% and 99.43%. It is not a claim that every strategy has that edge, nor that the edge is exactly 57/10,000.
+Optimal play declines insurance. The independent oracle in
+[test/rules.test.ts](https://github.com/hookedin/game-blackjack/blob/main/test/rules.test.ts) computes dealer
 probabilities from raw totals and ace counts, and stand, hit, double and split values, without the game graph,
 continuation pricing or commission code.
 
@@ -232,20 +234,20 @@ depth of 52 steps, a greatest cash of 8 ETH and a required root cash of 0.994297
 1 ETH, which keeps its stated payouts and edge. Extra wagers are why the greatest total stake and the expected gross
 return exceed S.
 
-A page loads the committed [funding table](../../sdk/src/generated/blackjack-funding.ts) and does not price in the
-browser. `npm run generate:blackjack` generates it from the same rules graph and exact compiler, at a 1,000,000-wei
-stake, a 256-stake planning floor and a 1-wei quantum. It stores only each action's required cash, not another copy of
-the rules or every possible bet. `loadFundedGame` scales these amounts by an exact integer, builds steps as they are
-used and keeps the runtime risk checks; probabilities and terminal payouts are unchanged. The table's root requires
-0.999452 stakes; the player still contributes exactly one stake. It holds the least cash `priceTransition` finds for
-each of the 28,229 actions.
+A page loads the committed [funding table](https://github.com/hookedin/game-blackjack/blob/main/src/funding.ts) and does
+not price in the browser. `npm run generate` generates it from the same rules graph and exact compiler, at a
+1,000,000-wei stake, a 256-stake planning floor and a 1-wei quantum. It stores only each action's required cash, not
+another copy of the rules or every possible bet. `loadFundedGame` scales these amounts by an exact integer, builds steps
+as they are used and keeps the runtime risk checks; probabilities and terminal payouts are unchanged. The table's root
+requires 0.999452 stakes; the player still contributes exactly one stake. It holds the least cash `priceTransition`
+finds for each of the 28,229 actions.
 
 The table serves stakes divisible by 1,000,000 wei (0.000000000001 ETH) when the starting bankroll covers 672 stakes:
 the 256-stake floor plus the 52 × 8-stake conservative allowance. Exact integer scaling keeps the Kelly ratios; the
 casino calculates actual commissions at admission rather than scaling them. `npm test` regenerates the table byte for
 byte and checks that every blackjack action collapses into bets the casino admits, reaching each class of successors at
-its stated odds. Regenerate the table with any rule or pricing change; `npm run generate:blackjack -- --check` checks
-it without writing.
+its stated odds. Regenerate the table with any rule or pricing change; `npm run generate -- --check` checks it without
+writing.
 
 Other stake increments and smaller starting capital use `compileGameAsync`, which yields between batches of states. A
 later round reuses its plan while the live bankroll covers the conservative requirement. The game keeps its own

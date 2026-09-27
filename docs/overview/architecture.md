@@ -172,6 +172,11 @@ tabs. Each channel owns its pending operation across reorgs and changes of selec
 follows from the channel's on-chain status. A funding key is committed before its receiving address is shown. Small
 settings use Web Storage.
 
+The wallet is ready once it has the casino's configuration and its saved account: practice and the game library need
+nothing from the chain. The deployment check, the contract's code and owner read through both RPCs, runs meanwhile,
+and everything with ETH waits for it; a failed check leaves the wallet practicing, with a banner saying why. A hidden
+tab does not poll the chain ([deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
+
 A game's spending limit is a reservation against the signed channel balance, held only in the open tab's memory
 ([games and limits](../wallet/games-and-limits.md#giving-a-game-money)). It signs nothing, so the player can set it
 while an operation is pending, up to the balance less what that operation has committed. A result recovered after a
@@ -183,30 +188,32 @@ game account in the contract or at the casino.
 
 Encrypted backups hold only the selected account
 ([backups and recovery](../wallet/backups-and-recovery.md#encrypted-backups)); keys alone cannot rebuild signed
-balances. Observations of the active channel commit under the action lock. Bankroll figures and bounded reads of older
-channels run outside it and merge into the latest durable revision, so slow optional reads make progress without
-holding up play. A persistence failure blocks every further action until the wallet reloads from durable state.
-Retrying an operation compares every term against the saved one, and looking up a receipt is explicit. Each transaction
-journal latches a failed write and keeps only the pending transaction and the latest completion.
+balances. Observations of the active channel commit under the action lock. Bounded reads of older channels run outside
+it and merge into the latest durable revision, so slow optional reads make progress without holding up play. The
+bankroll figure a game is told comes from the casino's replies to the channel: its activation, the reconciliation as the
+wallet starts, and every bet. A persistence failure blocks every further action until the wallet reloads from durable
+state. Retrying an operation compares every term against the saved one, and looking up a receipt is explicit. Each
+transaction journal latches a failed write and keeps only the pending transaction and the latest completion.
 
 ## Games
 
-A manifest states what the wallet holds a game to, and nothing about what a game pays back: a figure a game promised
-would be unverifiable, because nothing bounds how often a game wagers the money it holds. What a player gets instead is
-measured: the wallet computes the exact return of every casino bet it signs from that bet's own chance and prize, and
-the casino publishes the same figure for every casino bet placed in a game
-([measured return](../wallet/bets-and-receipts.md#measured-return)). A developer bet has no odds and so no such figure.
-Every bound a game must respect (the size of the outcome space, how large a bet's meta and a group may be) is part of
-the protocol revision: `wallet.hello` reports them to a game and `GET /api/config` to a developer, so a game reads them
-rather than carrying copies.
+A game states nothing about what it pays back: a figure a game promised would be unverifiable, because nothing bounds
+how often a game wagers the money it holds. What a player gets instead is measured: the wallet computes the exact return
+of every casino bet it signs from that bet's own chance and prize, and the casino publishes the same figure for every
+casino bet placed in a game ([measured return](../wallet/bets-and-receipts.md#measured-return)). A developer bet has no
+odds and so no such figure. Every bound a game must respect (the size of the outcome space, how large a bet's meta and a
+group may be) is part of the protocol revision: `wallet.hello` reports them to a game and `GET /api/config` to a
+developer, so a game reads them rather than carrying copies.
 
-A game owns its rules, state transitions and persistence. Its frame keeps its host's origin (`allow-scripts
-allow-same-origin`) and stores its rounds there, keyed by the player's name, or by practice. The wallet never frames its
-own origin, and its host forbids framing it at all. Each game is its own site, known by its key, made from its developer
-and the name they publish it under in their profile at the casino (`@alias/game` or `~uname/game`). The developer is the
-account that publishes it: it earns the game's commission, its bank takes the stakes of the game's developer bets and
-its key settles them, so a game's server holds everything that account holds. The wallet refuses a game whose manifest
-names another developer. Where a game is served can change while its key stays, so a game keeps its history.
+A game owns its rules, state transitions and persistence. A game is its URL, the page the wallet frames
+([game URL](../reference/game-url.md)). Its frame keeps its host's origin (`allow-scripts allow-same-origin`) and stores
+its rounds there, keyed by the player's name, or by practice. The wallet never frames its own origin, and its host
+forbids framing it at all. Each game is its own site, known by its key, made from its developer and the name they
+publish it under in their profile at the casino (`@alias/game` or `~uname/game`). The developer is the account that
+publishes it: it earns the game's commission, its bank takes the stakes of the game's developer bets and its key settles
+them, so a game's server holds everything that account holds. A game opened by its URL alone is published by nobody:
+its key is made from the zero address and its URL, nobody earns its commission, and it takes no developer bets. Where a
+game is served can change while its key stays, so a game keeps its history.
 
 A game places at most [one casino bet per step](#settled-trade-offs), priced with the casino's own admission rule. A
 step with two outcomes is one bet. A single-player game collapses a step with more in the page
@@ -291,7 +298,7 @@ changes nothing that is deployed. Recovery runs the archived artifact without co
 `npm run build` writes the wallet to `dist/` as one readable `main.js` with its source map, `vendor/ethers.js`
 byte-identical to the npm release of ethers, and `config.js` with the deployment's settings, so each can be checked on
 its own. `npm run audit:package` archives every file git tracks, the compiler input and output and the tests' gas
-report, with a manifest of their hashes ([verify a release](../wallet/verify-a-release.md)).
+report, with `source-manifest.json`, the hashes of them all ([verify a release](../wallet/verify-a-release.md)).
 
 Wallet release credentials are kept apart from the casino's hosting: the wallet is a static site that shares nothing
 with the service but the public protocol. Fencing hosts, and drills for lost storage, stale restores, nonces, RPCs and

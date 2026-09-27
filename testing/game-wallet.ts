@@ -192,9 +192,8 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       alias: null,
       signer: player,
       mode: 'demo',
-      operator: owner.address,
       domain: d,
-      config: { contractAddress: casino },
+      config: { contractAddress: casino, operator: owner.address },
       verifiedChainId: 31337n,
       reportedBankroll: String(bankroll),
       channelId: first.opening.channelId,
@@ -205,7 +204,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       if (!wallet.channel) throw new Error('No channel');
     };
     wallet.api = async (path, body) => {
-      if (path === '/api/metrics') return { bankroll: String(bankroll) };
       const channelRound = /^\/api\/channels\/(0x[0-9a-f]{64})\/round$/.exec(path);
       if (channelRound) {
         if (!own.has(channelRound[1]!)) own.set(channelRound[1]!, createRound());
@@ -513,7 +511,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       return reload();
     },
     /** A game as its developer published it: the game this fixture's developer serves is `test`. `declared` is
-     * anything its manifest says otherwise. Every game named here is published. */
+     * anything else about it. Every game named here is published. */
     identity: (name = game.name, declared: Partial<GameIdentity> = {}): GameIdentity => {
       const key = gameKey({ developer: developerKey.address, name });
       published.add(key.toLowerCase());
@@ -521,8 +519,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         name,
         slug: name,
         key,
-        manifestURL: `https://${name}.example/manifest.json`,
-        entryURL: `https://${name}.example/`,
+        url: `https://${name}.example/`,
         developer: developerKey.address,
         ...declared,
       };

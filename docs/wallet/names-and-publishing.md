@@ -45,14 +45,12 @@ profile** on My account opens yours. The casino's list of players is at https://
 
 A game you publish is reachable at your name, and anyone can play it with their own wallet.
 
-1. Host the game and its manifest, with the manifest's `developer` set to this account's address
-   ([publishing](../games/publishing.md)).
-2. On **My games**, under **Games you publish**, enter a name and the manifest's URL, and press **Publish**.
+1. Host the game, with its [icon](../reference/game-url.md#the-icon) beside its page
+   ([publishing](../games/publishing.md)). Its URL is the address of its page.
+2. On **My games**, under **Games you publish**, enter a name and the game's URL, and press **Publish**.
 
-The wallet first loads the manifest exactly as it would to play the game, and refuses one whose `developer` is another
-address: publish it from that account instead.
-
-The name, the URL and the account must meet [the publishing rules](../reference/manifest.md#publishing).
+The wallet fetches nothing first. The name, the URL and the account must meet
+[the publishing rules](../reference/game-url.md#publishing).
 
 The game is then at `/@alias/name`, or `/~uname/name` without an alias, and it appears in your own library. Its
 [key](../reference/signed-messages.md#game-keys) is made from who publishes the game and the name, never from where the
@@ -64,7 +62,7 @@ Publishing makes this account the game's developer. It earns half of each casino
 takes the stakes of the game's developer bets, and its key settles them ([earnings](../games/earnings.md),
 [developer bets](../games/developer-bets.md)). **Your bank**, on My games, is that bank: **Deposit** moves money into it
 from your channel, and **Withdraw** takes it back, collected into your channel. Your address is public once you publish:
-the manifest names it, and so does your profile at the casino.
+your profile at the casino names it as the developer of your games.
 
 The library every wallet shows is what `@hookedin` publishes; [publishing](../games/publishing.md) explains how a game
 joins it.

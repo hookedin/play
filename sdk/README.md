@@ -12,22 +12,19 @@ It is documented with the rest of HookedIn, at <https://hookedin.com/docs>:
 ## Layout
 
 ```text
-bin/hookedin-game.js                 build and serve command
-src/sdk.ts                           HookedIn wallet bridge
-src/round.ts                         RoundClient
-src/bank.ts                          mountBank balance strip
-src/synth.ts                         createSynth
-src/admits.ts                        the casino's admission rule
-src/outcome.ts                       a round's outcome and what a casino bet pays on it
-src/developer.ts                     createDeveloper, for a game's own server
-src/steps.ts                         binary steps, for a game whose players share a draw
-src/wire.ts                          types shared by the page and the server
-src/engine/                          exact continuation pricing, blackjack and mines rules
-src/generated/blackjack-funding.ts   precomputed blackjack prices
-scripts/blackjack-funding.ts         generator for that table
-scripts/demos/                       command-line blackjack and mines demos
-shared.css                           shared styles
-test/                                bridge, round helper and engine tests
+bin/hookedin-game.js   build and serve command
+src/sdk.ts             HookedIn wallet bridge
+src/round.ts           RoundClient
+src/bank.ts            mountBank balance strip
+src/synth.ts           createSynth
+src/admits.ts          the casino's admission rule
+src/outcome.ts         a round's outcome and what a casino bet pays on it
+src/developer.ts       createDeveloper, for a game's own server
+src/steps.ts           binary steps, for a game whose players share a draw
+src/wire.ts            types shared by the page and the server
+src/engine/            exact continuation pricing, mines rules
+shared.css             shared styles
+test/                  bridge, round helper and engine tests
 ```
 
 ## License

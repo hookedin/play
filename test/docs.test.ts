@@ -72,7 +72,7 @@ test('every name each SDK entry point exports has its entry, and nothing else', 
   const pages: Record<string, string[]> = {
     'sdk/hookedin.md': ['sdk/src/sdk.ts'],
     'sdk/round.md': ['sdk/src/round.ts'],
-    'sdk/engine.md': ['sdk/src/engine/index.ts', 'sdk/src/generated/blackjack-funding.ts'],
+    'sdk/engine.md': ['sdk/src/engine/index.ts'],
     'sdk/developer.md': ['sdk/src/developer.ts'],
     'sdk/steps.md': ['sdk/src/steps.ts'],
     'sdk/admits.md': ['sdk/src/admits.ts'],

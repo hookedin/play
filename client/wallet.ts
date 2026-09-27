@@ -67,7 +67,6 @@ import { fundingAccounts, readFundingAccounts } from './funding-accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
 import { encryptBackup, decryptBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
-import { gameAmount } from './game-account.ts';
 import { MIN_GAS_RESERVE, channelRecord, picked } from './wallet-transactions.ts';
 import { GameSessions } from './wallet-games.ts';
 export { MIN_GAS_RESERVE } from './wallet-transactions.ts';
@@ -135,13 +134,16 @@ export class CasinoWallet extends GameSessions {
   declare witnessProvider: JsonRpcProvider | undefined;
   declare observer: ChainObserver;
   declare timer: ReturnType<typeof setInterval> | undefined;
+  /** The deployment check: the contract's code and operator, read from two independent RPCs. */
+  declare verified: Promise<void>;
+  /** The deployment check, then the current account's first chain observation and casino reconciliation. */
+  declare synced: Promise<void>;
   declare savedFundingAddresses: string[];
   declare signer: Signer;
   declare address: string;
   declare contract: Contract;
   declare reader: Contract;
   declare storageKey: string;
-  declare operator: string;
   declare domain: Domain;
   declare lastChainCheck: number;
   /** The account's channel: what deposits, play, closes and recovery are about. */
@@ -222,6 +224,10 @@ export class CasinoWallet extends GameSessions {
       this.config?.isLocalDevelopment === true
     );
   }
+  /** The casino's signing key: the contract's owner, as the deployment check read it. */
+  get operator(): string {
+    return this.config.operator;
+  }
   get gasReserve() {
     return MIN_GAS_RESERVE;
   }
@@ -261,7 +267,6 @@ export class CasinoWallet extends GameSessions {
     this.verifiedChainId = actualChain;
   }
   async start() {
-    const key = `config:${this.expectedChainId}:${this.casinoURL}`;
     const pinKey = `deployment:${this.expectedChainId}:${this.casinoURL}`;
     const trusted = this.trustedDeployment || (await this.storage.get(pinKey));
     let advertised, serviceError;
@@ -278,14 +283,13 @@ export class CasinoWallet extends GameSessions {
     } catch (error: any) {
       serviceError = error.message;
     }
-    const cached = await this.storage.get(key);
     if (trusted) {
       if (!trusted.rpcUrl && this.network !== 'local')
         throw new Error('Install a deployment manifest with independently chosen RPC URLs');
       this.config = {
         ...(!serviceError ? advertised : {}),
         ...trusted,
-        rpcUrl: trusted.rpcUrl || cached?.rpcUrl || advertised?.rpcUrl,
+        rpcUrl: trusted.rpcUrl || advertised?.rpcUrl,
         isLocalDevelopment: !serviceError && advertised?.isLocalDevelopment === true,
       };
     } else {
@@ -296,39 +300,40 @@ export class CasinoWallet extends GameSessions {
     this.recoveryOnly = Boolean(serviceError);
     this.validateConfiguredNetwork();
     this.config.confirmations = this.expectedChainId === 11155111n ? 2 : 1;
-    this.provider = createRpcProvider(this.config.rpcUrl);
+    this.provider = createRpcProvider(this.config.rpcUrl, this.expectedChainId);
     if (this.network !== 'local') {
       requireIndependentRpc(this.config.rpcUrl, this.config.witnessRpcUrl);
-      this.witnessProvider = createRpcProvider(this.config.witnessRpcUrl);
+      this.witnessProvider = createRpcProvider(this.config.witnessRpcUrl, this.expectedChainId);
     }
+    this.provider.pollingInterval = this.network === 'local' ? 100 : 3000;
     this.observer = new ChainObserver({
       provider: this.provider,
       witnessProvider: this.witnessProvider,
       chainId: this.expectedChainId,
       finality: this.config.confirmations || 1,
     });
-    const deployment = await verifyDeployment({
+    // Practice needs neither the chain nor this check, so the wallet is ready as soon as its account is loaded.
+    // Everything that touches ETH waits for it, through synced.
+    this.verified = verifyDeployment({
       observer: this.observer,
       provider: this.provider,
       address: this.config.contractAddress,
       chainId: this.expectedChainId,
       expected: trusted,
+    }).then(async deployment => {
+      this.config.operator = deployment.operator;
+      await this.storage.put(pinKey, {
+        ...deployment,
+        rpcUrl: this.config.rpcUrl,
+        witnessRpcUrl: this.config.witnessRpcUrl,
+      });
     });
-    this.config.abi = trustedArtifact.abi;
-    this.config.operator = deployment.operator;
-    await this.storage.put(pinKey, {
-      ...deployment,
-      rpcUrl: this.config.rpcUrl,
-      witnessRpcUrl: this.config.witnessRpcUrl,
-      abi: undefined,
-    });
-    this.provider.pollingInterval = this.network === 'local' ? 100 : 3000;
+    this.verified.catch(() => {});
     const vault = await fundingAccounts(this.storage, this.expectedChainId, { create: true });
     await this.useSigner(new Wallet(vault.accounts[vault.selected!], this.provider), 'demo', { select: false });
-    await this.storage.put(key, this.config);
-    // The single observation loop; the page only re-renders from wallet state.
+    // The single observation loop; the page only re-renders from wallet state. A hidden tab does not poll.
     this.timer = setInterval(() => {
-      if (!this.busy)
+      if (!this.busy && !globalThis.document?.hidden)
         void this.refresh()
           .then(() => this.collectPayouts())
           .catch(() => {});
@@ -336,7 +341,10 @@ export class CasinoWallet extends GameSessions {
     this.timer.unref?.();
     return this;
   }
+  /** Switch to an account. Its saved state loads at once; its first look at the chain and the casino follows the
+   * deployment check, in synced. */
   async useSigner(signer: Signer, mode: string, { select = true } = {}) {
+    await this.synced?.catch(() => {});
     this.requireDurableState();
     if (this.busy || this.pending || this.needsOpening || this.transactionIntent)
       throw new Error('Recover the pending operation before changing wallets');
@@ -344,12 +352,13 @@ export class CasinoWallet extends GameSessions {
     try {
       await this.refreshing?.catch(() => {});
       this.requireDurableState();
-      await this.assertNetwork({ signer });
+      // A browser wallet on another network is turned away at once. The wallet's own keys use the casino's RPC,
+      // whose chain every observation checks.
+      if (signer.provider !== this.provider) await this.assertNetwork({ signer });
       const address = getAddress(await signer.getAddress());
       this.developerEarnings = null;
-      const contract = new Contract(this.config.contractAddress, this.config.abi, signer);
+      const contract = new Contract(this.config.contractAddress, trustedArtifact.abi, signer);
       const reader = contract.connect(this.provider) as Contract;
-      if ((await reader.CHALLENGE_PERIOD()) !== 86400n) throw new Error('Unexpected channel contract');
       const storageKey =
         'wallet:' +
         this.expectedChainId +
@@ -372,19 +381,28 @@ export class CasinoWallet extends GameSessions {
           contract,
           reader,
           storageKey,
-          operator: this.config.operator,
           domain: domain(this.expectedChainId, this.config.contractAddress),
           lastChainCheck: 0,
         });
         this.hydrate(await this.storage.get(storageKey));
-        await this.refreshLocked();
-        if (this.channel?.key) await this.reconcile().catch(() => {});
       };
       await withLock('hookedin:channel:' + storageKey, true, run);
     } finally {
       this.busy = false;
       this.render();
     }
+    this.synced = this.sync();
+    this.synced.catch(() => {});
+  }
+  /** The account's first look at the chain and its channel's at the casino, once the deployment check has passed.
+   * Nothing else with ETH runs meanwhile: every such path waits for it. Practice never does. */
+  async sync() {
+    await this.verified;
+    await this.withChannelLock(true, async () => {
+      await this.refreshLocked();
+      if (this.channel?.key) await this.reconcile().catch(() => {});
+    });
+    this.render();
   }
   hydrate(saved: any) {
     if (saved && saved.schema !== 'HOOKEDIN/WALLET-STATE/1') throw new Error('Unsupported wallet state');
@@ -576,6 +594,7 @@ export class CasinoWallet extends GameSessions {
     });
   }
   async refresh({ channelId }: { channelId?: string | null } = {}) {
+    await this.synced;
     this.requireDurableState();
     if (this.busy) return this.publicState;
     if (this.refreshing) {
@@ -678,14 +697,7 @@ export class CasinoWallet extends GameSessions {
       reader = this.reader,
       observer = this.observer;
     const current = () => this.storageKey === storageKey && this.reader === reader;
-    const errors: Record<string, string | undefined> = {};
-    const report = (part: string, error: any = undefined) => {
-      if (!current()) return;
-      errors[part] = error?.message;
-      this.detailsError = Object.values(errors).filter(Boolean).join('; ') || null;
-      this.render();
-    };
-    // Only these short commits join the action lock. Merge into the latest
+    // Only this short commit joins the action lock. Merge into the latest
     // durable record so unrelated active-channel refreshes cannot starve history.
     const commit = async (apply: () => void) => {
       while (this.refreshing) await this.refreshing.catch(() => {});
@@ -703,74 +715,46 @@ export class CasinoWallet extends GameSessions {
         if (this.refreshing === pending) this.refreshing = null;
       }
     };
+    // Channels this account closed before, and the transactions its activity lists: read a few at a time.
     this.detailsRefreshing = (async () => {
-      const bankrollBefore = this.reportedBankroll;
-      await Promise.all([
-        (async () => {
-          try {
-            const observation = await observer.observe();
-            if (!current()) return;
-            const keys = Object.keys(this.channels).filter(key => key !== this.channelId);
-            const cursor = (this.monitorCursor || 0) % (keys.length || 1);
-            const selected = Array.from(
-              { length: Math.min(keys.length, HISTORICAL_CHANNEL_BATCH) },
-              (_, i) => keys[(cursor + i) % keys.length],
-            );
-            const before = new Map(selected.map(key => [key, json(this.channels[key])]));
-            const history = this.history;
-            const historyBefore = new Map(history.map(entry => [entry.operationId, json(entry)]));
-            // Share the eight-read budget between old claims and activity.
-            const records = await this.observeChannels(selected, observation.block);
-            const activity = new Map(
-              (await this.observeTransactionHistory(observation.block, history)).map(entry => [
-                entry.operationId,
-                entry,
-              ]),
-            );
-            await observer.corroborate('wallet activity block', async rpc => {
-              await requireCanonicalBlock(rpc, observation.block);
-              return observation.block.hash;
-            });
-            await commit(() => {
-              this.applyChannelObservations(
-                records.filter(([key]) => key !== this.channelId && before.get(key) === json(this.channels[key])),
-              );
-              this.history = this.history.map(entry =>
-                activity.has(entry.operationId) && historyBefore.get(entry.operationId) === json(entry)
-                  ? activity.get(entry.operationId)
-                  : entry,
-              );
-              this.monitorCursor = (cursor + HISTORICAL_CHANNEL_BATCH) % (keys.length || 1);
-              this.detailsObservedAt = Date.now();
-            });
-            report('activity');
-          } catch (error) {
-            report('activity', error);
-          }
-        })(),
-        (async () => {
-          if (this.recoveryOnly || !this.uname) return;
-          try {
-            await this.refreshProfile();
-            report('profile');
-          } catch (error) {
-            report('profile', error);
-          }
-        })(),
-        (async () => {
-          if (this.recoveryOnly) return;
-          try {
-            const { bankroll } = await this.api('/api/metrics');
-            gameAmount(bankroll, false);
-            await commit(() => {
-              if (this.reportedBankroll === bankrollBefore) this.reportedBankroll = bankroll;
-            });
-            report('bankroll');
-          } catch (error) {
-            report('bankroll', error);
-          }
-        })(),
-      ]);
+      try {
+        const observation = await observer.observe();
+        if (!current()) return this.publicState;
+        const keys = Object.keys(this.channels).filter(key => key !== this.channelId);
+        const cursor = (this.monitorCursor || 0) % (keys.length || 1);
+        const selected = Array.from(
+          { length: Math.min(keys.length, HISTORICAL_CHANNEL_BATCH) },
+          (_, i) => keys[(cursor + i) % keys.length],
+        );
+        const before = new Map(selected.map(key => [key, json(this.channels[key])]));
+        const history = this.history;
+        const historyBefore = new Map(history.map(entry => [entry.operationId, json(entry)]));
+        // Share the eight-read budget between old claims and activity.
+        const records = await this.observeChannels(selected, observation.block);
+        const activity = new Map(
+          (await this.observeTransactionHistory(observation.block, history)).map(entry => [entry.operationId, entry]),
+        );
+        await observer.corroborate('wallet activity block', async rpc => {
+          await requireCanonicalBlock(rpc, observation.block);
+          return observation.block.hash;
+        });
+        await commit(() => {
+          this.applyChannelObservations(
+            records.filter(([key]) => key !== this.channelId && before.get(key) === json(this.channels[key])),
+          );
+          this.history = this.history.map(entry =>
+            activity.has(entry.operationId) && historyBefore.get(entry.operationId) === json(entry)
+              ? activity.get(entry.operationId)
+              : entry,
+          );
+          this.monitorCursor = (cursor + HISTORICAL_CHANNEL_BATCH) % (keys.length || 1);
+          this.detailsObservedAt = Date.now();
+        });
+        if (current()) this.detailsError = null;
+      } catch (error: any) {
+        if (current()) this.detailsError = error.message;
+      }
+      this.render();
       return this.publicState;
     })().finally(() => {
       this.detailsRefreshing = null;
@@ -778,6 +762,7 @@ export class CasinoWallet extends GameSessions {
     return this.detailsRefreshing;
   }
   async exclusive<T>(fn: () => T | Promise<T>, { wait = false } = {}) {
+    await this.synced;
     if (wait && this.busy && this.actionDone) await this.actionDone;
     this.requireDurableState();
     if (this.busy) throw new Error('Wallet is busy or storage needs recovery');

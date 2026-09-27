@@ -23,7 +23,6 @@ is no WebSocket or event stream: clients poll.
 | [`GET /api/config`](public.md#get-apiconfig)                         | The deployment, the protocol revision and the limits                          |
 | [`GET /api/status`](public.md#get-apistatus)                         | Health, the books, developer earnings, the last observed block and the commit |
 | [`GET /`](public.md#get-)                                            | The same as `GET /api/status`, outside the request budgets                    |
-| [`GET /api/metrics`](public.md#get-apimetrics)                       | Health and the books                                                          |
 | [`GET /api/fund`](public.md#get-apifund)                             | The bankroll fund, signed                                                     |
 | [`GET /api/players`](public.md#get-apiplayers)                       | Every player's public record, the most played first                           |
 | [`GET /api/players/:name`](public.md#get-apiplayersname)             | One player's public record                                                    |

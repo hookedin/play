@@ -5,8 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { Wallet } from 'ethers';
-import { anvil, deployment, signedIncrease, open, step } from '../testing/contract.ts';
+import { anvil, deployment, signedIncrease, open } from '../testing/contract.ts';
 import { json } from '../protocol/protocol.ts';
 test('independent CLI closes, challenges, finalizes and collects without casino API or channel key', async t => {
   const env = await anvil();

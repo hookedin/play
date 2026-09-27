@@ -121,12 +121,12 @@ declined bet comes back `rejected`.
 
 ## Measured return
 
-No game states what it pays back, and the manifest has no field for it: nothing bounds how often a game wagers the
-money it holds, so a stated return would read as a guarantee it is not. What a player gets is measured. The wallet
-works out the exact return of every casino bet from its terms before it signs, `prize × chance / (2^64 × stake)`, and
-keeps the figure with the bet in the player's history. The casino publishes the same figure for every casino bet in
-your game ([`GET /api/games/:key`](../casino-api/public.md#get-apigameskey)), which the wallet shows as the game's
-public record ([bets and receipts](../wallet/bets-and-receipts.md)).
+No game states what it pays back: nothing bounds how often a game wagers the money it holds, so a stated return would
+read as a guarantee it is not. What a player gets is measured. The wallet works out the exact return of every casino bet
+from its terms before it signs, `prize × chance / (2^64 × stake)`, and keeps the figure with the bet in the player's
+history. The casino publishes the same figure for every casino bet in your game
+([`GET /api/games/:key`](../casino-api/public.md#get-apigameskey)), which the wallet shows as the game's public record
+([bets and receipts](../wallet/bets-and-receipts.md)).
 
 [`betReturn(bet)`](../sdk/admits.md#betreturn) is that computation: the expected payout in millionths of the stake,
 rounded to the nearest. [`describeBet(bet)`](../sdk/admits.md#describebet) gives the most a bet can pay and its

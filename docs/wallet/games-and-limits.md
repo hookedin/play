@@ -5,47 +5,47 @@ sidebar:
   order: 2
 ---
 
-Every game is a site of its own, run in a sandboxed frame inside the wallet. A game spends only what you allow it in
-the wallet's own dialog, and learns almost nothing about you.
+Every game is a site of its own, known by its URL and run in a sandboxed frame inside the wallet. A game spends only
+the ETH you allow it in the wallet's own dialog, and learns almost nothing about you.
 
 ## The library
 
-The library at `/` lists the games `@hookedin` publishes and the games your own account publishes. Each card is read
-from the game's manifest, and **Every bet** on it opens the game's public record
-([a game's public record](bets-and-receipts.md#a-games-public-record)). The library reads at most 32 games of each
-profile; the rest stay reachable at their own URL.
+The library at `/` lists the games `@hookedin` publishes and the games your own account publishes. Each is a square
+tile, the game's [icon](../reference/game-url.md#the-icon), or the first letter of its name when it has none, above the
+name it is published under, and **Every bet** on it opens the game's public record
+([a game's public record](bets-and-receipts.md#a-games-public-record)).
 
-**Add a custom game** opens any game by the URL of its manifest.
+**Open a game by URL** opens any game by the URL of its page: enter it as the **Game URL** and choose **Open game**.
 
 ## Opening a game
 
-| URL                            | Opens                                                   |
-| ------------------------------ | ------------------------------------------------------- |
-| `/@alias/game`                 | The game published as `game` by the player `@alias`     |
-| `/~uname/game`                 | The same, for a player named by their uname             |
-| `/games/custom?manifest=<url>` | The game whose manifest is at `<url>`, published or not |
+| URL                       | Opens                                               |
+| ------------------------- | --------------------------------------------------- |
+| `/@alias/game`            | The game published as `game` by the player `@alias` |
+| `/~uname/game`            | The same, for a player named by their uname         |
+| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game |
 
-For a published game, the wallet asks the casino which manifest the profile names
-([`GET /api/players/:name/:game`](../casino-api/public.md#get-apiplayersnamegame)), fetches it, and refuses the game if
-the manifest names another developer than the account that published it. Every manifest must answer within 12 seconds,
-fit in 16 KiB, allow cross-origin reads, and name the game's entry page and its developer, and neither the manifest nor
-the entry page may be served from the wallet's own origin. [The manifest reference](../reference/manifest.md) has every
-rule.
+For a published game, the wallet asks the casino which URL the profile records
+([`GET /api/players/:name/:game`](../casino-api/public.md#get-apiplayersnamegame)) and frames that page; the account
+that published it is its developer, and the wallet calls it by the name it is published under. The wallet refuses a
+URL that is not `http:` or `https:`, carries a user name or password, or is on the wallet's own origin.
+[The game URL reference](../reference/game-url.md) has every rule.
 
-A game opened straight from its manifest is published by nobody: no developer earns its commission, and it takes no
-developer bets. Its key is made from its manifest's developer and URL, which no published game can share.
+A game opened by its URL alone is published by nobody, and the wallet calls it by its host: no developer earns its
+commission, the house keeps all of it, and it takes no developer bets. Its key is made from the zero address and its
+URL, which no published game can share.
 
-An open game has the whole page under the top bar, and **Games** in the top bar leads back to the library. A game loads
-without an open channel: it sees a limit of zero, and its bets fail until you give it money.
+An open game has the whole page under the top bar, and **Games** in the top bar leads back to the library. While it
+loads, the wallet shows its icon. A game starts with a limit of zero, and its bets fail until it is given money.
 
 ## Giving a game money
 
-A game gets money only through the wallet's spending-limit dialog. The dialog opens when the game asks, suggesting an
+A game gets ETH only through the wallet's spending-limit dialog. The dialog opens when the game asks, suggesting an
 amount and nothing else, or when you press **Give this game money** or **Take money back** in the top bar. Every word
 in it is the wallet's own.
 
 The dialog names the game, the host it is served from, and the developer who earns half of each casino bet's commission
-and settles its developer bets. It shows three figures:
+and settles its developer bets, or that nobody publishes it. It shows three figures:
 
 | Figure               | Meaning                                                       |
 | -------------------- | ------------------------------------------------------------- |
@@ -68,8 +68,10 @@ The limit caps what the game may risk; it moves no money:
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
   has already committed.
 
-While the tab [practices](getting-started.md#practice), the limit is in test coins, and the dialog offers the way to
-ETH: **Or play with your ETH** once your channel is open, **Or set up your wallet to play with ETH** before.
+While the tab [practices](getting-started.md#practice), the limit is in test coins, and a game that asks for some gets
+them at once, without the dialog: what it asked for, or ten more, as far as your test coins go. The dialog, from the top
+bar, offers the way to ETH: **Or play with your ETH** once your channel is open, **Or set up your wallet to play with
+ETH** before.
 
 ## One funded game at a time
 
@@ -94,7 +96,7 @@ A game never sees your address, your channels, your balances, your keys or the w
 round or the wallet's seed before the result. It cannot ask for any signature but its own bets and payments, cannot
 spend beyond its limit, and cannot choose who earns its commission. The frame runs with
 `sandbox="allow-scripts allow-same-origin"`, no referrer, and no camera, microphone, geolocation, clipboard, payment or
-fullscreen, and the wallet answers only the origin of the game's entry page. A game keeps its own state at its own
+fullscreen, and the wallet answers only the origin of the game's page. A game keeps its own state at its own
 origin. [The bridge reference](../reference/bridge.md) has every method.
 
 ## What a game does with its limit

@@ -253,8 +253,8 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
   });
 }
 /** A game's key: the one value its bets, its commission and its public record are kept under, made from its
- * developer and the name they publish it under, so it is the same wherever the game is served. A game loaded
- * straight from its manifest has the key of its manifest's developer and URL. */
+ * developer and the name they publish it under, so it is the same wherever the game is served. A game opened by
+ * its URL alone has the key of the zero address and that URL. */
 export const gameKey = ({ developer, name }: GameName) =>
   keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [developer, name]));
 export const memo = (details: Details) => hashJSON(details);

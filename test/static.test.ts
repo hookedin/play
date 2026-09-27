@@ -60,7 +60,7 @@ test('wallet routes resolve to the client page without exposing other files', as
     '/@hookedin/dice',
     '/%40hookedin/dice',
     `/games/0x${'ab'.repeat(32)}`,
-    '/games/custom?manifest=https://x.example/m.json',
+    '/games/custom?url=https://x.example/',
   ])
     assert.equal(await (await fetch(base + route)).text(), page, route);
   for (const route of [

@@ -121,7 +121,7 @@ The wallet checks:
 - every rejection, and the round it reveals;
 - developer settlements, share statements, bank statements and the fund's quote, by their signatures and what they
   refer to;
-- game manifests and every bridge request.
+- game URLs and every bridge request.
 
 It takes on the casino's word: commission, the bankroll figure, the fund's equity and total shares, the developer
 earnings tally and a developer bank's balance. It takes on the developer's word what a developer bet pays and which bet

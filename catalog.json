@@ -1,23 +1,11 @@
 {
   "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4",
   "games": {
-    "samson": {
-      "url": "https://samson-game.hookedin.com/manifest.json"
-    },
-    "plinko": {
-      "url": "https://plinko-game.hookedin.com/manifest.json"
-    },
-    "dice": {
-      "url": "https://dice-game.hookedin.com/manifest.json"
-    },
-    "blackjack": {
-      "url": "https://blackjack-game.hookedin.com/manifest.json"
-    },
-    "mines": {
-      "url": "https://mines-game.hookedin.com/manifest.json"
-    },
-    "roulette": {
-      "url": "https://roulette-game.hookedin.com/manifest.json"
-    }
+    "samson": "https://samson-game.hookedin.com/",
+    "plinko": "https://plinko-game.hookedin.com/",
+    "dice": "https://dice-game.hookedin.com/",
+    "blackjack": "https://blackjack-game.hookedin.com/",
+    "mines": "https://mines-game.hookedin.com/",
+    "roulette": "https://roulette-game.hookedin.com/"
   }
 }

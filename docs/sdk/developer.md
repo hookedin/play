@@ -11,8 +11,8 @@ casino's public API. [Developer bets](../games/developer-bets.md) is the guide, 
 [roulette](https://github.com/hookedin/game-roulette/tree/main/server) as the worked example; roulette walks each spin
 with [binary steps](steps.md).
 
-The kit signs with the developer's key: the key of the account the game is published from, whose address the manifest
-names as its `developer`. A server holding it holds everything that account holds: its games, their commission and its
+The kit signs with the developer's key: the key of the account the game is published from, which publishing makes the
+game's developer. A server holding it holds everything that account holds: its games, their commission and its
 bank. A developer who wants their server to hold less publishes the game from an account of its own.
 
 ```ts
@@ -342,8 +342,8 @@ export const gameKey: ({ developer, name }: GameName) => string;
 ```
 
 A game's key: `keccak256(abi.encode(address developer, string name))`, in lower-case hex. `developer` is the account
-that publishes the game and `name` the name it is published under; a game loaded straight from its manifest has the key
-of its manifest's developer and its manifest URL as the name. Bets, commission and the public record are kept under it.
+that publishes the game and `name` the name it is published under; a game opened by its URL alone has the key of the
+zero address and its URL as the name. Bets, commission and the public record are kept under it.
 
 ```ts
 gameKey({ developer: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', name: 'my-game' });

@@ -1,6 +1,6 @@
 ---
 title: How a game works
-description: What a game owns and what the wallet owns, the manifest, the sandbox, the spending limit and the bridge.
+description: What a game owns and what the wallet owns, its URL, the sandbox, the spending limit and the bridge.
 sidebar:
   order: 2
 ---
@@ -22,51 +22,43 @@ The casino admits each casino bet against its bankroll and signs each result; it
 ([how it works](../overview/how-it-works.md)). A game never sees a key and signs nothing. It cannot ask for arbitrary
 signatures, supply a bet's seed, see a round's secret before the reveal, or choose who earns its commission.
 
-## The manifest
+## The game's URL
 
-The wallet loads a game from its manifest: a JSON file on the game's host naming the page to frame and the account
-that publishes the game.
+A game is its URL: the page the wallet frames, such as `https://dice-game.hookedin.com/`. Beside it, the game may serve
+`icon.svg`, a square SVG the wallet shows as the game's tile in the library and while it loads.
 
-```json
-{
-  "name": "Coin flip",
-  "description": "Heads doubles your stake.",
-  "entry": "./index.html",
-  "developer": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
-}
-```
-
-`developer` is the account you publish the game from. It earns the game's [commission](earnings.md), its bank takes
-the stakes of the game's [developer bets](developer-bets.md), and its key settles them. There is no field for what a
-game pays back: a player's return is [measured](casino-bets.md#measured-return) from the bets themselves. Every rule is
-in the [manifest reference](../reference/manifest.md).
+The account that [publishes](publishing.md) the game is its developer. It earns the game's
+[commission](earnings.md), its bank takes the stakes of the game's [developer bets](developer-bets.md), and its key
+settles them. A game opened by its URL alone is published by nobody: nobody earns its commission, and it takes no
+developer bets. Nothing states what a game pays back: a player's return is [measured](casino-bets.md#measured-return)
+from the bets themselves. Every rule is in the [game URL reference](../reference/game-url.md).
 
 ## The sandbox
 
-The wallet frames the entry page with `sandbox="allow-scripts allow-same-origin"`, `referrerpolicy="no-referrer"` and a
+The wallet frames the page with `sandbox="allow-scripts allow-same-origin"`, `referrerpolicy="no-referrer"` and a
 permissions policy that turns off the camera, microphone, geolocation, clipboard, payment and fullscreen. The page
 keeps its own origin, so its `localStorage`, IndexedDB and cookies are its own.
 
 A game can run scripts, use its origin's storage, fetch from its origin and post messages to the wallet. It cannot
 reach the wallet's page, storage or keys, or a browser wallet extension; navigate the top window, open popups, submit
-forms, show `alert` or `confirm` dialogs, or start downloads. The wallet refuses a manifest or entry page on its own
-origin, and its host forbids framing its pages.
+forms, show `alert` or `confirm` dialogs, or start downloads. The wallet refuses a game on its own origin, and its host
+forbids framing its pages.
 
 The build writes a Content-Security-Policy into the game's [`_headers`](../reference/cli.md#the-_headers-file) that
 keeps the page to its own origin: scripts, styles, fonts, workers and requests from there only, and images from there
 or as `data:` URLs. So there are no inline `<script>` or `<style>` elements, no scripts from a CDN and no third-party
 requests: bundle what you need, and run a server on the page's own origin
-([one Worker](developer-bets.md#one-cloudflare-worker)). The policy is the game's own. What the wallet needs is CORS on
-the manifest, which it fetches from another origin.
+([one Worker](developer-bets.md#one-cloudflare-worker)). The policy is the game's own. The wallet needs no header from
+the game's host: it frames the page and shows `icon.svg` as an image.
 
 ## The spending limit
 
 A game never learns the player's balance. It gets a spending limit for the open tab: what the player lets it risk, plus
 its verified winnings.
 
-- The wallet's own dialog is the only grant. A game asks with `HookedIn.requestFunds({ amount })`, where `amount` is how
-  much more it suggests; every word in the dialog is the wallet's. The reply says whether the player set a limit
-  (`funded`), the limit they chose (`amount`), and the resulting `balance` and `pending`.
+- With ETH, the wallet's own dialog is the only grant. A game asks with `HookedIn.requestFunds({ amount })`, where
+  `amount` is how much more it suggests; every word in the dialog is the wallet's. The reply says whether the player set
+  a limit (`funded`), the limit they chose (`amount`), and the resulting `balance` and `pending`.
 - The wallet pushes `game.balance` with `{ balance, pending }` when the page loads and whenever either changes.
   `HookedIn.onBalance` hears it, and `HookedIn.balance()` resolves to the latest.
 - Every bet and payment must fit the limit. Verified winnings raise it; stakes and payments lower it.
@@ -76,21 +68,23 @@ its verified winnings.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](state-and-recovery.md#lost-replies)).
 - A wallet with no funded channel [practices](../reference/bridge.md#practice): the limit is in test coins the wallet
-  keeps, it settles casino bets and payments itself, and a developer bet fails with `practice`. `wallet.hello` says so,
-  and a game built on developer bets shows its table and says that it plays with ETH.
+  keeps, and a game that asks for some gets them at once, without the dialog. The wallet settles casino bets and
+  payments itself, and a developer bet fails with `practice`. `wallet.hello` says so, and a game built on developer bets
+  shows its table and says that it plays with ETH.
 
 [`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the limit as the balance strip the house games show, with an
 **Add funds** button.
 
 ## The bridge
 
-The page posts `{ hookedin: true, id, method, params }` to its parent window; the wallet answers the entry page's
-origin, and only it, with `{ hookedin: true, id, result }` or `{ hookedin: true, id, error: { code, message } }`.
-`wallet.hello`, `wallet.info` and `game.receipt` are answered at once. Anything that signs or asks the player waits its
-turn, in the order asked, up to 32 at a time. The [`HookedIn`](../sdk/hookedin.md#hookedin) object wraps all of it: a
-typed method per call, and a `HookedInError` with a stable `code` for every refusal. The seven methods are
-[`wallet.hello`](../reference/bridge.md#wallethello), [`wallet.info`](../reference/bridge.md#walletinfo),
-[`game.receipt`](../reference/bridge.md#gamereceipt), [`game.casinoBet`](../reference/bridge.md#gamecasinobet),
+The page posts `{ hookedin: true, id, method, params }` to its parent window; the wallet answers the page's origin,
+and only it, with `{ hookedin: true, id, result }` or `{ hookedin: true, id, error: { code, message } }`.
+`wallet.hello`, `wallet.info`, `wallet.round` and `game.receipt` are answered at once. Anything that signs or asks the
+player waits its turn, in the order asked, up to 32 at a time. The [`HookedIn`](../sdk/hookedin.md#hookedin) object
+wraps all of it: a typed method per call, and a `HookedInError` with a stable `code` for every refusal. The eight
+methods are [`wallet.hello`](../reference/bridge.md#wallethello), [`wallet.info`](../reference/bridge.md#walletinfo),
+[`wallet.round`](../reference/bridge.md#walletround), [`game.receipt`](../reference/bridge.md#gamereceipt),
+[`game.casinoBet`](../reference/bridge.md#gamecasinobet),
 [`game.developerBet`](../reference/bridge.md#gamedeveloperbet), [`game.payment`](../reference/bridge.md#gamepayment)
 and [`game.requestFunds`](../reference/bridge.md#gamerequestfunds); the [bridge reference](../reference/bridge.md) has
 every field, reply and error.

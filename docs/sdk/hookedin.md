@@ -175,10 +175,11 @@ requestFunds: (options?: { amount?: bigint | string }) =>
   >;
 ```
 
-Asks the player for money with [`game.requestFunds`](../reference/bridge.md#gamerequestfunds). `amount` is how much more
-than the game holds, in smallest units: a suggestion the wallet's own dialog shows. It resolves once the player has
-decided: `funded` says whether they set a limit, `amount` is the limit they chose (`null` if they declined), and
-`balance` and `pending` are the game's state after it.
+Asks for money with [`game.requestFunds`](../reference/bridge.md#gamerequestfunds). `amount` is how much more than the
+game holds, in smallest units. With ETH it is a suggestion the wallet's own dialog shows, and the call resolves once the
+player has decided: `funded` says whether they set a limit, `amount` is the limit they chose (`null` if they declined),
+and `balance` and `pending` are the game's state after it. In practice the wallet asks nothing: the game gets test coins
+at once, `amount` more, or ten coins more without one, as far as the practice balance goes.
 
 #### `receipt`
 

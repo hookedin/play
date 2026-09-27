@@ -18,8 +18,8 @@ The deployment the casino runs, the protocol revision it speaks and the limits i
 **Auth:** none · **Idempotent:** yes
 
 A wallet checks `protocol` and a developer's server `developerProtocol` against its own before it signs anything. The
-wallet takes nothing else on trust from this reply: it checks [the deployment it pins](../reference/deployment.md#how-the-wallet-pins-its-deployment)
-on-chain and uses its own ABI.
+wallet takes nothing else on trust from this reply: it checks
+[the deployment it pins](../reference/deployment.md#how-the-wallet-pins-its-deployment) on-chain.
 
 | Response field       | Type           | Meaning                                                                                                                                 |
 | -------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -29,7 +29,6 @@ on-chain and uses its own ABI.
 | `contractAddress`    | address        | The HookedInCasino contract                                                                                                             |
 | `protocol`           | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#limits-and-the-protocol-revision), the hash of everything a wallet and the casino agree on |
 | `developerProtocol`  | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                     |
-| `abi`                | array          | The contract's full ABI in ethers' JSON format (left out of the example)                                                                |
 | `confirmations`      | number         | The confirmations a deposit needs: 2 on Sepolia, 1 on Anvil                                                                             |
 | `operator`           | address        | The contract's owner: the casino's signing address                                                                                      |
 | `clientUrl`          | string         | The wallet's origin                                                                                                                     |
@@ -174,53 +173,6 @@ The same reply as [`GET /api/status`](#get-apistatus), outside every request bud
 
 **Auth:** none · **Idempotent:** yes
 
-### `GET /api/metrics`
-
-The casino's health and books: the reply of [`GET /api/status`](#get-apistatus) without `developers`, `block` and
-`commit`.
-
-**Auth:** none · **Idempotent:** yes
-
-The wallet reads `bankroll` from it as a hint of what the casino can take.
-
-```json title="Response"
-{
-  "status": "ready",
-  "lastCheck": 1790384229470,
-  "stale": false,
-  "lastProgress": 1790384229470,
-  "observationError": null,
-  "disputes": {
-    "alerts": [],
-    "pending": null
-  },
-  "channels": 2,
-  "signingLogRecords": 45,
-  "signingLogDigest": "ea07b2f0cc5ec97a5d3753ade8cc51aaacc0624fa8307a73d0ebe390f5d15a6d",
-  "queueDepth": 0,
-  "chainId": "31337",
-  "casino": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "cash": "102000000000001000000",
-  "protectedPrincipal": "2000000000000000000",
-  "reservedWinnings": "0",
-  "unpaidWinnings": "0",
-  "activeLiabilities": "1901918503517716823",
-  "finalizedLiabilities": "0",
-  "commissions": "0",
-  "escrow": "0",
-  "banks": "91000000000000000",
-  "houseFeesEarned": "18503517716823",
-  "reserved": "0",
-  "equity": "100007081496483283177",
-  "unreservedBankroll": "100007081496483283177",
-  "bankroll": "100007081496483283177",
-  "houseCash": "100000000000001000000",
-  "withdrawableHouse": "100000000000001000000"
-}
-```
-
-**Errors:** [`rate-limited`](index.md#errors) (429)
-
 ## The bankroll fund
 
 ### `GET /api/fund`
@@ -297,37 +249,37 @@ GET /api/players?limit=10
     "games": [
       {
         "name": "blackjack",
-        "url": "https://blackjack-game.hookedin.com/manifest.json",
+        "url": "https://blackjack-game.hookedin.com/",
         "key": "0xa4a5f04dd39304e1e96cb65fe2a08306c237de7acbaa18284fc69037af1f6f4d",
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       },
       {
         "name": "dice",
-        "url": "https://dice-game.hookedin.com/manifest.json",
+        "url": "https://dice-game.hookedin.com/",
         "key": "0x1c610e909ab30b59687e87b9f4b639e0af4cf4e1c6250e2318d82002df54b31a",
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       },
       {
         "name": "mines",
-        "url": "https://mines-game.hookedin.com/manifest.json",
+        "url": "https://mines-game.hookedin.com/",
         "key": "0x151243d2e0773fafed2b7c96b97191c1c4bb6b58161341339ed5680762bfd24e",
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       },
       {
         "name": "plinko",
-        "url": "https://plinko-game.hookedin.com/manifest.json",
+        "url": "https://plinko-game.hookedin.com/",
         "key": "0xde42855f3967a4d0ab4c1d07f2a4dfa587b40e591780a481734b7694db550d57",
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       },
       {
         "name": "roulette",
-        "url": "https://roulette-game.hookedin.com/manifest.json",
+        "url": "https://roulette-game.hookedin.com/",
         "key": "0xcbeeba9565065726460bfd9797d8d3b3c9b898aea88b887f10b59797b1afb185",
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       },
       {
         "name": "samson",
-        "url": "https://samson-game.hookedin.com/manifest.json",
+        "url": "https://samson-game.hookedin.com/",
         "key": "0x8d26b589e9975e96518a3105dd2d924c645f49fad850d83e168021a0704ad6b3",
         "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4"
       }
@@ -345,7 +297,7 @@ GET /api/players?limit=10
     "games": [
       {
         "name": "wheel",
-        "url": "https://wheel.example/manifest.json",
+        "url": "https://wheel.example/",
         "key": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
         "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
       }
@@ -366,13 +318,13 @@ One player's public record, their profile.
 | ------ | ------ | ------------------------------------ |
 | `name` | string | `~` and a uname, or `@` and an alias |
 
-| Response field | Type           | Meaning                                                                                                                                                                                                 |
-| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`        | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                |
-| `alias`        | string or null | The alias they took                                                                                                                                                                                     |
-| `since`        | number         | When the casino first knew them, in milliseconds                                                                                                                                                        |
-| `stats`        | object         | `{plays, staked, won}`: how many bets of theirs have settled (a number), what those bets staked and what they paid                                                                                      |
-| `games`        | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the manifest's URL, `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
+| Response field | Type           | Meaning                                                                                                                                                                                                                         |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`        | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                        |
+| `alias`        | string or null | The alias they took                                                                                                                                                                                                             |
+| `since`        | number         | When the casino first knew them, in milliseconds                                                                                                                                                                                |
+| `stats`        | object         | `{plays, staked, won}`: how many bets of theirs have settled (a number), what those bets staked and what they paid                                                                                                              |
+| `games`        | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../reference/game-url.md), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
 
 ```json title="Response"
 {
@@ -408,7 +360,7 @@ The reply is the player's names and the game's entry in their profile: `{uname, 
   "uname": "biop5et6ov6i5sn3c6p7vxhx",
   "alias": "studio",
   "name": "wheel",
-  "url": "https://wheel.example/manifest.json",
+  "url": "https://wheel.example/",
   "key": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
   "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 }

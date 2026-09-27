@@ -50,13 +50,13 @@ export class RoundClient {
 }
 ```
 
-| Parameter | Type                        | Meaning                                                                                                       |
-| --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `bridge`  | `RoundBridge`               | How it reaches the wallet: `HookedIn` in a page, a [test bridge](game-wallet.md#testbridge) in a test         |
-| `graph`   | `(setup: any) => GameGraph` | Builds the game's graph for a setup, the object `start` is given. Called once per distinct setup in a page    |
-| `funding` | `FundingTable`              | Precomputed action prices, such as [`blackjackFunding`](engine.md#blackjackfunding)                           |
-| `store`   | `RoundStore`                | Where the round is saved. `localStorage` by default                                                           |
-| `name`    | `string`                    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
+| Parameter | Type                        | Meaning                                                                                                               |
+| --------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `bridge`  | `RoundBridge`               | How it reaches the wallet: `HookedIn` in a page, a [test bridge](game-wallet.md#testbridge) in a test                 |
+| `graph`   | `(setup: any) => GameGraph` | Builds the game's graph for a setup, the object `start` is given. Called once per distinct setup in a page            |
+| `funding` | `FundingTable`              | Precomputed action prices, such as [blackjack's](https://github.com/hookedin/game-blackjack/blob/main/src/funding.ts) |
+| `store`   | `RoundStore`                | Where the round is saved. `localStorage` by default                                                                   |
+| `name`    | `string`                    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location`         |
 
 Each action of a round is at most one operation, whose [group](../reference/bridge.md#gamecasinobet) is the round's
 `id`:

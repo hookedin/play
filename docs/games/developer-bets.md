@@ -16,8 +16,8 @@ players so ([trust model](../overview/trust-model.md)).
 
 ## Your key and your bank
 
-Your server signs with the key of the account you publish the game from, the address the manifest names as
-`developer`. The casino lets only that key settle the game's developer bets and place the casino bets that back them.
+Your server signs with the key of the account you publish the game from: publishing makes that account the game's
+developer. The casino lets only that key settle the game's developer bets and place the casino bets that back them.
 The server therefore holds everything the account holds: its games, their commission and its bank. A developer who
 wants the server to hold less publishes the game from an account of its own.
 
@@ -54,12 +54,13 @@ const receipt = await HookedIn.developerBet({
   to your server, or `rejected`.
 - A developer bet is final: there is no taking it back, no deadline and no refund. It stays open until you settle it,
   and the game's public record counts the open ones.
-- Only a published game takes developer bets. A game opened from a bare manifest URL is refused with `invalid-request`
+- Only a published game takes developer bets. A game opened by its URL alone is refused with `invalid-request`
   ([publishing](publishing.md)).
 - Once you settle a bet, the wallet checks your signed settlement and collects what it pays into the player's channel.
   While the game is open, it raises the game's limit by that and pushes the receipt, `settled` with its `payout`, as a
-  `game.receipt` event. The wallet looks every 4 seconds; a page that hears from your server that a bet has settled
-  calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload, `HookedIn.receipt(id)` finds the bet.
+  `game.receipt` event. The wallet looks every 4 seconds while its tab is visible; a page that hears from your server
+  that a bet has settled calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload,
+  `HookedIn.receipt(id)` finds the bet.
 - Until the wallet collects it, what a bet is paid is the casino's promise, outside the principal the contract
   protects.
 
@@ -361,6 +362,6 @@ all of this in place, tested and deployed on every push; its `wrangler.jsonc`, f
   const developer = await createDeveloper({ casinoURL: env.CASINO_URL, key: env.DEVELOPER_KEY, name: env.GAME_NAME });
   ```
 
-- Developer bets need a published game, so publish it under `GAME_NAME` from the developer's wallet to play it:
-  locally, at the Worker's own manifest URL, such as `http://127.0.0.1:8790/manifest.json` for roulette under
+- Developer bets need a published game, so publish it under `GAME_NAME` from the wallet of the account whose key the
+  Worker holds to play it: locally, at the Worker's own URL, such as `http://127.0.0.1:8790/` for roulette under
   `wrangler dev` ([publishing](publishing.md)).

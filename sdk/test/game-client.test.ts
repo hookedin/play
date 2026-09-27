@@ -14,8 +14,7 @@ import { validateRequest } from '../../client/bridge.ts';
 import { RoundClient } from '../src/round.ts';
 import type { RoundStore } from '../src/round.ts';
 import type { GameReceipt } from '../../protocol/game-types.ts';
-import { createBlackjack, createMines } from '../src/engine/index.ts';
-import { blackjackFunding } from '../src/generated/blackjack-funding.ts';
+import { createMines } from '../src/engine/index.ts';
 
 const odds = { chance: '9000000000000000000', prize: '20' };
 const terms = (id = 'op-0') => ({ id, stake: '10', ...odds });
@@ -558,46 +557,41 @@ for (const boundary of ['request', 'settlement'])
     assert.equal(f.settlements(), 1);
   });
 
-for (const name of ['mines', 'blackjack'])
-  test(name + ' runs its own rules through the wallet bridge and its own storage, including reload', async () => {
-    const allocation = name === 'blackjack' ? '1000000' : '100000';
-    const f = await gameWallet(),
-      w = f.wallet;
-    w.openGame(f.identity(name));
-    await w.setGameLimit(allocation);
-    const bridge = bridgeFor(f, w),
-      store = memoryStore();
-    const graph = (setup: any) =>
-      name === 'blackjack'
-        ? createBlackjack({ stake: BigInt(setup.stake) })
-        : createMines({ tiles: 5, mines: 1, cashouts: [1200n, 1560n, 2280n] });
-    const stake = name === 'blackjack' ? '1000000' : '1000',
-      funding = name === 'blackjack' ? blackjackFunding : undefined;
-    let round = new RoundClient(bridge, graph, funding, { store, name }),
-      state = await round.start({ stake });
-    if (funding) assert.equal(round['plan']!.bankrollFloor, funding.bankrollFloor);
-    const before = await w.balance();
-    // What a bank shows: the limit without the cash inside the unfinished round.
-    const shown = () => BigInt(w.gameLimit().balance) - round.inHand();
-    assert.equal(shown(), BigInt(allocation) - BigInt(stake));
-    for (let i = 0; !state.terminal && i < 64; i++) {
-      state = await round.action(state.actions.find(a => ['stand', 'cash-out'].includes(a)) ?? state.actions[0]);
-      if (i === 2) round = new RoundClient(bridge, graph, funding, { store, name });
-      state = (await round.restore())!;
-      if (!state.terminal)
-        assert.equal(
-          shown(),
-          BigInt(allocation) - BigInt(state.contributed),
-          'the bank shows the limit without the cash inside the unfinished round',
-        );
-    }
-    assert.equal(state.terminal, true);
-    assert.equal(round.inHand(), 0n);
-    assert.equal(await w.balance(), before - BigInt(state.contributed) + BigInt(state.cash));
-    assert.equal(w.gameLimit().balance, String(BigInt(allocation) - BigInt(state.contributed) + BigInt(state.cash)));
-    assert.equal(store.map.size, 1, 'the round lives under one key per player');
-    assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
-  });
+test('mines runs its own rules through the wallet bridge and its own storage, including reload', async () => {
+  const name = 'mines',
+    allocation = '100000';
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity(name));
+  await w.setGameLimit(allocation);
+  const bridge = bridgeFor(f, w),
+    store = memoryStore();
+  const graph = () => createMines({ tiles: 5, mines: 1, cashouts: [1200n, 1560n, 2280n] });
+  const stake = '1000';
+  let round = new RoundClient(bridge, graph, undefined, { store, name }),
+    state = await round.start({ stake });
+  const before = await w.balance();
+  // What a bank shows: the limit without the cash inside the unfinished round.
+  const shown = () => BigInt(w.gameLimit().balance) - round.inHand();
+  assert.equal(shown(), BigInt(allocation) - BigInt(stake));
+  for (let i = 0; !state.terminal && i < 64; i++) {
+    state = await round.action(state.actions.find(a => ['stand', 'cash-out'].includes(a)) ?? state.actions[0]);
+    if (i === 2) round = new RoundClient(bridge, graph, undefined, { store, name });
+    state = (await round.restore())!;
+    if (!state.terminal)
+      assert.equal(
+        shown(),
+        BigInt(allocation) - BigInt(state.contributed),
+        'the bank shows the limit without the cash inside the unfinished round',
+      );
+  }
+  assert.equal(state.terminal, true);
+  assert.equal(round.inHand(), 0n);
+  assert.equal(await w.balance(), before - BigInt(state.contributed) + BigInt(state.cash));
+  assert.equal(w.gameLimit().balance, String(BigInt(allocation) - BigInt(state.contributed) + BigInt(state.cash)));
+  assert.equal(store.map.size, 1, 'the round lives under one key per player');
+  assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
+});
 
 test('encrypted backups carry no game state and restore the channel evidence alone', async () => {
   const f = await gameWallet(),

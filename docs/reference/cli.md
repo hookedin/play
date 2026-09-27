@@ -26,24 +26,22 @@ its message and exits with status 1.
 
 For each folder, `build`:
 
-1. reads `src/manifest.json`, with its `developer` replaced by `HOOKEDIN_DEVELOPER` when that is set, and refuses a
-   `developer` that is not `0x` and 40 hex digits, or is the zero address;
-2. deletes `dist/`;
-3. bundles `src/game.ts` with esbuild into `dist/game.js`: an ES module for ES2022, with a source map and legal
-   comments inline;
-4. copies every file in `src/` whose name does not end in `.ts`, folders included;
-5. with `HOOKEDIN_DEVELOPER` set, writes that developer into `dist/manifest.json`;
-6. adds `shared.css` and `brand/hookedin-mark.svg` from the SDK, and writes `_headers`.
+1. deletes `dist/`;
+2. bundles `src/game.ts` with esbuild into `dist/game.js`: a minified ES module for ES2022, with a source map;
+3. copies every file in `src/` whose name does not end in `.ts`, folders included: the page, its styles, `icon.svg`
+   and other images;
+4. adds `shared.css` and `brand/hookedin-mark.svg` from the SDK, and writes `_headers`.
 
-It prints `Built <name> into <dir>/dist/ (developer <address>)`.
+It prints `Built <dir>/dist/`. `dist/index.html` is the page the wallet frames, and `dist/icon.svg` the icon it shows
+the game by ([game URL](game-url.md)).
 
-| File in `dist/`                               | From                                    |
-| --------------------------------------------- | --------------------------------------- |
-| `game.js`, `game.js.map`                      | `src/game.ts` and everything it imports |
-| `index.html`, `manifest.json`, styles, images | Copied from `src/`                      |
-| `shared.css`                                  | The SDK's shared styles                 |
-| `brand/hookedin-mark.svg`                     | The HookedIn mark                       |
-| `_headers`                                    | Written by the build                    |
+| File in `dist/`                                | From                                    |
+| ---------------------------------------------- | --------------------------------------- |
+| `game.js`, `game.js.map`                       | `src/game.ts` and everything it imports |
+| `index.html`, `icon.svg`, styles, other images | Copied from `src/`                      |
+| `shared.css`                                   | The SDK's shared styles                 |
+| `brand/hookedin-mark.svg`                      | The HookedIn mark                       |
+| `_headers`                                     | Written by the build                    |
 
 ### The `_headers` file
 
@@ -52,18 +50,17 @@ In the format Cloudflare applies to static assets; any other host sends the same
 ```text
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; worker-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'
-  Access-Control-Allow-Origin: *
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
 ```
 
-The policy lets the page load from and talk to its own origin only, with images also as `data:` URLs.
-`Access-Control-Allow-Origin: *` lets the wallet read the manifest from another origin.
+The policy lets the page load from and talk to its own origin only, with images also as `data:` URLs. The wallet needs
+no header of its own: it only frames the page and shows `icon.svg` as an image.
 
 ### `serve`
 
-`serve` builds the game, then serves its `dist/` at `http://127.0.0.1:4185`, and prints the manifest URL to add as a
-custom game.
+`serve` builds the game, then serves its `dist/` at `http://127.0.0.1:4185/`, and prints that address with the way to
+open it: "In the wallet, choose Games → Open a game by URL and paste that address."
 
 - A request for a page, a path ending in `/` or `.html`, builds the game again first, so a change shows on reload. A
   failed build answers 500 with its message.
@@ -73,10 +70,9 @@ custom game.
 
 ### `hookedin-game` variables
 
-| Variable             | Used by          | Meaning                                                                                                    |
-| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| `HOOKEDIN_DEVELOPER` | `build`, `serve` | The developer address the built manifest names in place of its own, such as a local casino's house account |
-| `PORT`               | `serve`          | The port to serve on. Default `4185`                                                                       |
+| Variable | Used by | Meaning                              |
+| -------- | ------- | ------------------------------------ |
+| `PORT`   | `serve` | The port to serve on. Default `4185` |
 
 ## `npm run recover`
 

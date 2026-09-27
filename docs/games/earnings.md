@@ -6,8 +6,8 @@ sidebar:
 ---
 
 You earn half the commission on every casino bet placed in a game you publish. The casino keeps the tally for the
-address the manifest names as `developer`, and an ordinary HookedIn wallet opened from that address collects it by
-itself.
+address of the account that publishes the game, its developer, and an ordinary HookedIn wallet opened from that address
+collects it by itself.
 
 ## Commission
 
@@ -37,15 +37,14 @@ after admission admits the largest bets and charges only the surplus: a
 
 ## Collecting
 
-The tally is kept per address. Open a HookedIn wallet whose account is the `developer` address: import its key, or
-connect the browser wallet that holds it ([open the wallet](../wallet/getting-started.md#open-the-wallet)). With a
+The tally is kept per address. Open a HookedIn wallet whose account is the one that publishes the game: import its key,
+or connect the browser wallet that holds it ([open the wallet](../wallet/getting-started.md#open-the-wallet)). With a
 channel open, the wallet collects what the tally owes by itself, as a credit its own channel key signs, into that
 channel. Nobody at the casino approves or sends anything, and the wallet page shows what your games have earned and how
 much of it is collected.
 
 Nothing moves on-chain and the bankroll does not change: money the casino owed you becomes your signed balance, which
-settles like any other ([closing and claims](../wallet/closing-and-claims.md)). Commission owed to an address that never
-opens a channel is never collected, so name an address you can open a wallet from.
+settles like any other ([closing and claims](../wallet/closing-and-claims.md)).
 
 The casino also lists what each game earned, by its published name, with the tally in your channel's
 [payouts](../casino-api/channels.md#get-apichannelsidpayouts).

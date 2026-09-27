@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { Wallet, id, keccak256 } from 'ethers';
 import { TransactionJournal } from '../protocol/transaction-journal.ts';
 import { confirmedNonce, confirmedReceipt, findNonceTransaction } from '../protocol/transaction-recovery.ts';
-import { CasinoWallet } from '../client/wallet.ts';
-import { MemoryStore } from '../client/storage.ts';
 
 test('journal retries reject changed intent before confirmation or broadcast, including after reload', async () => {
   const signer = Wallet.createRandom(),

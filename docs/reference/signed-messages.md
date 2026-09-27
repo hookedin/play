@@ -267,8 +267,8 @@ gameKey = keccak256(abi.encode(address developer, string name))
 ```
 
 `developer` is the account that publishes the game and `name` the name it is published under (1 to 32 of `a-z`, `0-9`
-and `-`, starting with a letter or digit). A game opened straight from its manifest takes the manifest's `developer`
-and, as `name`, the manifest's URL as the URL parser normalises it, so no published game shares its key. The key is
+and `-`, starting with a letter or digit). A game opened by its [URL](game-url.md) alone takes the zero address as
+`developer` and, as `name`, its URL as the URL parser normalises it, so no published game shares its key. The key is
 lowercase hex in details and in the API. The vectors' game, developer `0x4444444444444444444444444444444444444444` and
 name `roulette`, has the key `0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d`.
 

@@ -27,7 +27,7 @@ export interface Checkpoint {
   balance: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
- * under; or, for a game loaded straight from its manifest, that manifest's developer and URL. */
+ * under; or, for a game opened by its URL alone, the zero address and that URL. */
 export interface GameName {
   developer: string;
   name: string;
