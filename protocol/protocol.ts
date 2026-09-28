@@ -523,6 +523,8 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   const state = Number(evidence.step.operation.kind)
     ? verifyStep(d, evidence.base, evidence.step, opening.player, operator)
     : evidence.base;
+  if (BigInt(state.balance) >= MAX_BALANCE || BigInt(state.withdrawn) >= MAX_BALANCE)
+    throw new Error('Balance exceeds the protocol maximum');
   // The details beside a step say what it meant, and are only as good as the memo it signed.
   if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))
     throw new Error('Details differ from the operation they describe');

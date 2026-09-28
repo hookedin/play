@@ -211,11 +211,11 @@ The `deployment` object of a wallet configuration, such as the one in
 Each alert is `{ channelId?, severity, reason, remaining?, detail? }`, where `remaining` is the seconds left before the
 challenge deadline.
 
-| `reason`                      | Severity                                      | Meaning                                                                                            |
-| ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `stale-close`                 | `warning`; `critical` with under an hour left | The channel is closing on an older state than the evidence. A challenge is sent                    |
-| `missed-deadline`             | `critical`                                    | The channel is closing on an older state than the evidence, and the deadline has passed            |
-| `conflicting-sequence`        | `critical`                                    | The closing state has the evidence's sequence and a different hash                                 |
-| `finalized-state-differs`     | `critical`                                    | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged |
-| `channel-defense-failed`      | `critical`                                    | Reading or verifying the channel failed; `detail` says why                                         |
-| `recovery-transaction-failed` | `critical`                                    | The challenge could not be sent; `detail` says why                                                 |
+| `reason`                      | Severity                                      | Meaning                                                                                                                                    |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stale-close`                 | `warning`; `critical` with under an hour left | The channel is closing on an older state than the evidence. A challenge is sent                                                            |
+| `missed-deadline`             | `critical`                                    | The channel is closing on an older state than the evidence, and the deadline has passed                                                    |
+| `conflicting-sequence`        | `critical`                                    | The closing state has the evidence's sequence and a different hash                                                                         |
+| `finalized-state-differs`     | `critical`                                    | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged                                         |
+| `channel-defense-failed`      | `critical`                                    | Reading or verifying the channel failed, or the chain cannot settle the evidence (it took in a deposit a reorg removed); `detail` says why |
+| `recovery-transaction-failed` | `critical`                                    | The challenge could not be sent; `detail` says why                                                                                         |

@@ -107,13 +107,26 @@ export class DisputeWorker {
       });
       if (jobs.length && beforeChallenge) await beforeChallenge();
       const pending = this.outbox.state.pending;
-      if (pending) {
-        await this.outbox.submit(pending.action, null);
-      } else if (!pending && jobs.length) {
-        const { bundle, state } = jobs[0];
-        const tx = await this.contract.challengeClose.populateTransaction(bundle.evidence);
-        await this.outbox.submit('challenge:' + state.channelId + ':' + state.sequence, tx);
-      }
+      if (pending) await this.outbox.submit(pending.action, null);
+      else
+        for (const { bundle, state } of jobs) {
+          // Signatures alone do not establish that this chain can settle the evidence: a deposit can be orphaned. The
+          // most urgent challenge it can settle goes out; one it cannot is reported and blocks no other.
+          try {
+            await this.observer.contractRead(this.contract, 'challengeClose', [bundle.evidence], observation.block);
+          } catch (error: any) {
+            this.alerts.push({
+              channelId: state.channelId,
+              severity: 'critical',
+              reason: 'channel-defense-failed',
+              detail: error.shortMessage || error.message,
+            });
+            continue;
+          }
+          const tx = await this.contract.challengeClose.populateTransaction(bundle.evidence);
+          await this.outbox.submit('challenge:' + state.channelId + ':' + state.sequence, tx);
+          break;
+        }
     } catch (error: any) {
       this.alerts.push({
         severity: 'critical',

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { id, Signature, verifyTypedData, Wallet, ZeroAddress, ZeroHash } from 'ethers';
+import { ContractFactory, id, Signature, verifyTypedData, Wallet, ZeroAddress, ZeroHash } from 'ethers';
+import { loadArtifact } from '../protocol/deployment.ts';
 import {
   anvil,
   deployment,
@@ -20,6 +21,7 @@ import {
   operation,
   OP_TYPES,
   STATE_TYPES,
+  verifyEvidence,
 } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 
@@ -189,6 +191,89 @@ test('a withdrawal the contract never paid comes back with the close, its deposi
   assert.equal((await f.contract.claims(ch.opening.channelId)).paid, 1500n);
 });
 
+test('withdrawal ordering and a newer challenge preserve the exact settlement entitlement', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    ch = await open(f, env.wallets[1], 100n),
+    recipient = env.wallets[2].address,
+    loss = await step(f, ch, 2, 60n),
+    lossEvidence = await countersigned(f, ch, loss),
+    win = await signedIncrease(f, { ...ch, ...loss }, 100n),
+    first = await step(f, { ...ch, ...win }, 5, 30n, { recipient }),
+    second = await step(f, { ...ch, state: first.state, evidence: await countersigned(f, ch, first) }, 5, 60n, {
+      recipient,
+    });
+  await (await f.contract.deposit(ch.player.address, { value: 20n })).wait();
+  await (await f.contract.fundBankroll({ value: 100n })).wait();
+  const permutations = (items: string[]): string[][] =>
+    items.length
+      ? items.flatMap(item => permutations(items.filter(other => other !== item)).map(rest => [item, ...rest]))
+      : [[]];
+  const orders = permutations(['first', 'second', 'close', 'challenge']).filter(
+    order => order.indexOf('close') < order.indexOf('challenge'),
+  );
+  assert.equal(orders.length, 12);
+  for (const order of orders) {
+    const snapshot = await env.provider.send('evm_snapshot', []);
+    let paid = 0n,
+      closing = false,
+      challenged = false;
+    for (const action of order) {
+      if (action === 'close') {
+        await (await f.contract.startClose(lossEvidence)).wait();
+        closing = true;
+      } else if (action === 'challenge') {
+        await (await f.contract.challengeClose(second.evidence)).wait();
+        challenged = true;
+      } else {
+        await (await f.contract.withdraw(action === 'first' ? first.evidence : second.evidence)).wait();
+        paid += action === 'first' ? 30n : 60n;
+      }
+      const c = await f.contract.channels(ch.state.channelId);
+      assert.equal(c.paidOut, paid, order.join(', '));
+      assert.equal(c.principal, 120n - paid);
+      if (closing) {
+        // Economic oracle: deposits 120, loss 60, win 100, minus actual payments. The stale close omits the win.
+        const due: bigint = 120n - 60n + (challenged ? 100n : 0n) - paid;
+        assert.equal(c.closingBalance, due > 0n ? due : 0n, order.join(', '));
+      }
+    }
+    await env.provider.send('evm_increaseTime', [86401]);
+    await env.provider.send('evm_mine', []);
+    await (await f.contract.finalizeClose(ch.state.channelId)).wait();
+    const claim = await f.contract.claims(ch.state.channelId);
+    assert.deepEqual([claim.amount, claim.protectedRemaining, claim.winningsRemaining], [70n, 30n, 40n]);
+    await (await f.contract.claim(ch.state.channelId)).wait();
+    assert.equal((await f.contract.claims(ch.state.channelId)).paid + paid, 160n);
+    assert.equal(await f.contract.withdrawableHouse(), 60n);
+    assert.equal(await env.provider.send('evm_revert', [snapshot]), true);
+  }
+});
+
+test("a self-transfer paid during closing protects its funds in the account's next channel", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    ch = await open(f, env.wallets[1], 100n),
+    win = await signedIncrease(f, ch, 50n),
+    transfer = await step(f, { ...ch, ...win }, 6, 150n, { recipient: ch.player.address });
+  await (await f.contract.fundBankroll({ value: 50n })).wait();
+  await (await f.contract.startClose(transfer.evidence)).wait();
+  await (await f.contract.withdraw(transfer.evidence)).wait();
+  const nextId = await f.contract.channelOf(ch.player.address),
+    next = await f.contract.channels(nextId),
+    closing = await f.contract.channels(ch.state.channelId);
+  assert.notEqual(nextId, ch.state.channelId);
+  assert.deepEqual([next.deposited, next.principal, closing.principal, closing.closingBalance], [150n, 150n, 0n, 0n]);
+  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_mine', []);
+  await (await f.contract.finalizeClose(ch.state.channelId)).wait();
+  assert.equal((await f.contract.claims(ch.state.channelId)).amount, 0n);
+  assert.equal(await f.contract.protectedPrincipal(), 150n);
+  assert.equal(await f.contract.withdrawableHouse(), 0n);
+});
+
 test('a bet settles on-chain, and only strictly newer evidence challenges a close', async t => {
   const env = await anvil();
   t.after(() => env.close());
@@ -310,6 +395,38 @@ test('balances are capped below 2^128 so aggregate debt cannot overflow and bloc
   assert.equal(await f.contract.unpaidWinnings(), max - 1n + 9n - 20n);
 });
 
+test('offline evidence and the contract enforce the same checkpoint amount bounds', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    ch = await open(f, env.wallets[1], 1n),
+    cap = 1n << 128n;
+  for (const field of ['balance', 'withdrawn']) {
+    for (const amount of [cap - 1n, cap, (1n << 256n) - 1n]) {
+      const state = { ...ch.state, [field]: String(amount) },
+        evidence = checkpointEvidence(
+          state,
+          await ch.player.signTypedData(f.d, STATE_TYPES, state),
+          await f.owner.signTypedData(f.d, STATE_TYPES, state),
+        ),
+        bundle = {
+          chainId: env.chainId,
+          casino: String(f.contract.target),
+          operator: f.owner.address,
+          opening: ch.opening,
+          evidence,
+        };
+      if (amount < cap) {
+        assert.equal((await f.contract.supported(evidence))[field], amount);
+        assert.equal(verifyEvidence(bundle).state[field as 'balance' | 'withdrawn'], String(amount));
+      } else {
+        await assert.rejects(f.contract.supported(evidence), reverts('InvalidState'));
+        assert.throws(() => verifyEvidence(bundle), /Balance exceeds the protocol maximum/);
+      }
+    }
+  }
+});
+
 test('packed deadlines cannot wrap and shorten the challenge period', async t => {
   const env = await anvil();
   t.after(() => env.close());
@@ -350,6 +467,44 @@ test('contract check: FIFO accounting survives allocation limits with 20 unpaid 
   assert.equal(await f.contract.reservedWinnings(), 0n);
   assert.equal(await f.contract.protectedPrincipal(), 0n);
   assert.equal(await env.provider.getBalance(await f.contract.getAddress()), 0n);
+});
+
+test('a rejecting winnings recipient keeps its allocation while junior claims collect', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    senior = await open(f, env.wallets[1], 1n),
+    win = await signedIncrease(f, senior, 10n),
+    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
+    receiver: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.owner).deploy(
+      f.contract.target,
+    );
+  await receiver.waitForDeployment();
+  await forceClose(f, env, senior, win.evidence);
+  await (await f.contract.claim(senior.state.channelId)).wait();
+  // With no winnings allocated, the beneficiary can name a recipient before any ETH is sent to it.
+  await (await f.contract.connect(senior.player).claimTo(senior.state.channelId, receiver.target)).wait();
+  const junior = await open(f, env.wallets[2], 1n),
+    juniorWin = await signedIncrease(f, junior, 10n);
+  await forceClose(f, env, junior, juniorWin.evidence);
+  await (await f.contract.fundBankroll({ value: 20n })).wait();
+  assert.equal(await f.contract.allocatedWinnings(senior.state.channelId), 10n);
+  const before = await f.contract.claims(senior.state.channelId);
+  const rejected = await f.contract.claim(senior.state.channelId, { gasLimit: 500000n });
+  await assert.rejects(rejected.wait());
+  assert.deepEqual((await f.contract.claims(senior.state.channelId)).toArray(), before.toArray());
+  assert.equal(await f.contract.allocatedWinnings(senior.state.channelId), 10n);
+  assert.equal(await f.contract.reservedWinnings(), 20n);
+  assert.equal(await f.contract.unpaidWinnings(), 20n);
+  await (await f.contract.claim(junior.state.channelId)).wait();
+  assert.equal((await f.contract.claims(junior.state.channelId)).paid, 11n);
+  assert.equal(await f.contract.reservedWinnings(), 10n);
+  assert.equal(await f.contract.withdrawableHouse(), 0n);
+  await assert.rejects(f.contract.claimTo.staticCall(senior.state.channelId, f.owner.address), reverts('Unauthorized'));
+  await (await f.contract.connect(senior.player).claimTo(senior.state.channelId, senior.player.address)).wait();
+  assert.equal((await f.contract.claims(senior.state.channelId)).paid, 11n);
+  assert.equal(await f.contract.unpaidWinnings(), 0n);
+  assert.equal(await f.contract.reservedWinnings(), 0n);
 });
 
 test('the account countersigns the checkpoint a step reached', async t => {
