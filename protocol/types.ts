@@ -166,7 +166,6 @@ export interface OnchainClaim {
   paid: string;
   protectedRemaining: string;
   winningsRemaining: string;
-  finalizedAt: string;
 }
 /** A signed casino response: an executed step, or a joint rejection checkpoint above the request. */
 export interface OperationResponse {

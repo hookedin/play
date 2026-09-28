@@ -846,7 +846,7 @@ function renderClaims() {
   // address being typed keeps its text and focus.
   const describe = (claim: any) => {
     const unpaid = BigInt(claim.amount) - BigInt(claim.paid),
-      ready = BigInt(claim.protectedRemaining) + BigInt(claim.allocatedWinnings || '0');
+      ready = BigInt(claim.collectable || '0');
     return (
       `Channel ${short(claim.channelId)}: ${plainEth(unpaid)} ETH still owed of ${plainEth(claim.amount)} ETH. ` +
       (ready > 0n

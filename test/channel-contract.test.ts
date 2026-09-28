@@ -439,7 +439,7 @@ test('packed deadlines cannot wrap and shorten the challenge period', async t =>
   assert.equal((await f.contract.channels(ch.opening.channelId)).status, 1n);
 });
 
-test('contract check: FIFO accounting survives allocation limits with 20 unpaid claims', async t => {
+test('the winnings queue pays in finalization order, and any claim collects what house cash reaches at once', async t => {
   const env = await anvil(),
     f = await deployment(env);
   t.after(() => env.close());
@@ -451,25 +451,28 @@ test('contract check: FIFO accounting survives allocation limits with 20 unpaid 
     ids.push(c.opening.channelId);
   }
   assert.equal(await f.contract.unpaidWinnings(), 200n);
+  assert.equal(await f.contract.queuedWinnings(), 200n);
+  // 127 of house cash covers the first twelve claims' winnings and 7 of the thirteenth's, oldest first.
   await (await f.contract.fundBankroll({ value: 127n })).wait();
-  assert.equal(await f.contract.reservedWinnings(), 80n);
+  for (let i = 0; i < 20; i++)
+    assert.equal(await f.contract.collectable(ids[i]), 1n + (i < 12 ? 10n : i === 12 ? 7n : 0n));
+  // The last claim collects its principal, and the thirteenth what is covered of it, each in one call.
   await (await f.contract.claim(ids[19])).wait();
   assert.equal((await f.contract.claims(ids[19])).paid, 1n);
-  for (let i = 0; i < 20; i++)
-    assert.equal(await f.contract.allocatedWinnings(ids[i]), i < 12 ? 10n : i === 12 ? 7n : 0n);
-  assert.equal(await f.contract.reservedWinnings(), 127n);
+  await (await f.contract.claim(ids[12])).wait();
+  assert.equal((await f.contract.claims(ids[12])).paid, 8n);
+  assert.equal(await f.contract.collectable(ids[12]), 0n);
+  for (let i = 0; i < 12; i++) assert.equal(await f.contract.collectable(ids[i]), 11n);
   assert.equal(await f.contract.withdrawableHouse(), 0n);
   await (await f.contract.fundBankroll({ value: 73n })).wait();
-  await (await f.contract.allocateWinnings(64)).wait();
   for (const channelId of [...ids].reverse()) await (await f.contract.claim(channelId)).wait();
   for (const channelId of ids) assert.equal((await f.contract.claims(channelId)).paid, 11n);
   assert.equal(await f.contract.unpaidWinnings(), 0n);
-  assert.equal(await f.contract.reservedWinnings(), 0n);
   assert.equal(await f.contract.protectedPrincipal(), 0n);
   assert.equal(await env.provider.getBalance(await f.contract.getAddress()), 0n);
 });
 
-test('a rejecting winnings recipient keeps its allocation while junior claims collect', async t => {
+test('a rejecting winnings recipient keeps its share while junior claims collect', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
@@ -482,29 +485,28 @@ test('a rejecting winnings recipient keeps its allocation while junior claims co
   await receiver.waitForDeployment();
   await forceClose(f, env, senior, win.evidence);
   await (await f.contract.claim(senior.state.channelId)).wait();
-  // With no winnings allocated, the beneficiary can name a recipient before any ETH is sent to it.
+  // With no house cash to reach its winnings, the beneficiary can name a recipient before any ETH is sent to it.
   await (await f.contract.connect(senior.player).claimTo(senior.state.channelId, receiver.target)).wait();
   const junior = await open(f, env.wallets[2], 1n),
     juniorWin = await signedIncrease(f, junior, 10n);
   await forceClose(f, env, junior, juniorWin.evidence);
   await (await f.contract.fundBankroll({ value: 20n })).wait();
-  assert.equal(await f.contract.allocatedWinnings(senior.state.channelId), 10n);
+  assert.equal(await f.contract.collectable(senior.state.channelId), 10n);
   const before = await f.contract.claims(senior.state.channelId);
   const rejected = await f.contract.claim(senior.state.channelId, { gasLimit: 500000n });
   await assert.rejects(rejected.wait());
   assert.deepEqual((await f.contract.claims(senior.state.channelId)).toArray(), before.toArray());
-  assert.equal(await f.contract.allocatedWinnings(senior.state.channelId), 10n);
-  assert.equal(await f.contract.reservedWinnings(), 20n);
+  assert.equal(await f.contract.collectable(senior.state.channelId), 10n);
   assert.equal(await f.contract.unpaidWinnings(), 20n);
   await (await f.contract.claim(junior.state.channelId)).wait();
   assert.equal((await f.contract.claims(junior.state.channelId)).paid, 11n);
-  assert.equal(await f.contract.reservedWinnings(), 10n);
+  // The senior's share stays covered: nothing is left for the house.
+  assert.equal(await f.contract.collectable(senior.state.channelId), 10n);
   assert.equal(await f.contract.withdrawableHouse(), 0n);
   await assert.rejects(f.contract.claimTo.staticCall(senior.state.channelId, f.owner.address), reverts('Unauthorized'));
   await (await f.contract.connect(senior.player).claimTo(senior.state.channelId, senior.player.address)).wait();
   assert.equal((await f.contract.claims(senior.state.channelId)).paid, 11n);
   assert.equal(await f.contract.unpaidWinnings(), 0n);
-  assert.equal(await f.contract.reservedWinnings(), 0n);
 });
 
 test('the account countersigns the checkpoint a step reached', async t => {

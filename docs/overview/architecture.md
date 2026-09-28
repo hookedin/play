@@ -84,9 +84,9 @@ transaction pays, and a rejected transfer reverts that collection and keeps the 
 derived from the original amount less the principal and winnings remaining. The beneficiary can redirect collection.
 Every channel finalizes once.
 
-Finalized winnings are allocated first in, first out. A recipient that rejects payment keeps its allocation without
-stopping later cash from reaching the claims behind it. Funding and collection allocate at most eight entries, and an
-explicit `allocateWinnings` at most 64. Every deposit and signed balance is below 2^128 wei, so the uint256 total of
+Finalized winnings are paid first in, first out, and any claim collects what cash covers of it in one call, however far
+back it waits. A recipient that rejects payment keeps its share without stopping later cash from reaching the claims
+behind it. Every deposit and signed balance is below 2^128 wei, so the uint256 total of
 winnings debt cannot overflow and block another channel's finalization, whatever balances the owner signs.
 
 House cash, which pays the owner's own withdrawals and players' withdrawals beyond their channels' principal, excludes

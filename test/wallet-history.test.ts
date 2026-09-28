@@ -41,7 +41,7 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
         const status = key === keys[current] ? 2 : keys.includes(key) ? 3 : 0;
         return { status, closingSequence: 0n, closingBalance: 0n, deadline: 999n };
       }
-      if (method === 'allocatedWinnings') return 0n;
+      if (method === 'collectable') return 0n;
       if (method === 'claims') return { amount: 10n, paid: 10n, protectedRemaining: 0n, winningsRemaining: 0n };
       throw new Error(method);
     },

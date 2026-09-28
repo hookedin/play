@@ -650,21 +650,13 @@ export class CasinoWallet extends GameSessions {
       let claim = null;
       if (Number(value.status) === 3) {
         // Two reads of one block, asked together.
-        const [terms, allocated] = await Promise.all([
+        const [terms, collectable] = await Promise.all([
           this.observer.contractRead(this.reader, 'claims', [key], block),
-          this.observer.contractRead(this.reader, 'allocatedWinnings', [key], block),
+          this.observer.contractRead(this.reader, 'collectable', [key], block),
         ]);
         claim = {
-          ...picked(terms, [
-            'beneficiary',
-            'stateHash',
-            'amount',
-            'paid',
-            'protectedRemaining',
-            'winningsRemaining',
-            'finalizedAt',
-          ]),
-          allocatedWinnings: String(allocated),
+          ...picked(terms, ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining']),
+          collectable: String(collectable),
         };
       }
       return [key, onchain, claim];

@@ -31,36 +31,36 @@ async function settle(f: any, env: any, ch: any) {
 async function invariants(env: any, f: any, records: any) {
   let principal = 0n,
     debt = 0n,
-    allocated = 0n;
+    covered = 0n;
   const rows = await Promise.all(
     records.map(async (ch: any) => {
       const channelId = ch.state.channelId;
-      const [c, claim, reserved] = await Promise.all([
+      const [c, claim, collectable] = await Promise.all([
         f.contract.channels(channelId),
         f.contract.claims(channelId),
-        f.contract.allocatedWinnings(channelId),
+        f.contract.collectable(channelId),
       ]);
       principal += c.status < 3n ? c.principal : claim.protectedRemaining;
       debt += claim.winningsRemaining;
-      allocated += reserved;
-      assert.ok(reserved <= claim.winningsRemaining);
+      // Collecting pays the claim's principal, and no more winnings than it is owed.
+      assert.ok(collectable >= claim.protectedRemaining);
+      assert.ok(collectable <= claim.protectedRemaining + claim.winningsRemaining);
+      covered += BigInt(collectable) - BigInt(claim.protectedRemaining);
       if (c.status === 3n) assert.equal(claim.amount, claim.paid + claim.protectedRemaining + claim.winningsRemaining);
       return { ch, c, claim };
     }),
   );
-  const [p, unpaid, reserved, cash, free, withdrawal] = await Promise.all([
+  const [p, unpaid, cash, withdrawal] = await Promise.all([
     f.contract.protectedPrincipal(),
     f.contract.unpaidWinnings(),
-    f.contract.reservedWinnings(),
     env.provider.getBalance(await f.contract.getAddress()),
-    f.contract.houseCash(),
     f.contract.withdrawableHouse(),
   ]);
   assert.equal(p, principal);
   assert.equal(unpaid, debt);
-  assert.equal(reserved, allocated);
-  assert.ok(cash >= principal + allocated);
-  assert.equal(free, cash - principal - allocated);
+  assert.ok(cash >= principal);
+  // House cash covers the winnings owed as far as it goes, and the claims collect exactly what it covers.
+  assert.equal(covered, debt < cash - principal ? debt : cash - principal);
   assert.equal(withdrawal, cash > principal + debt ? cash - principal - debt : 0n);
   return rows;
 }
@@ -201,7 +201,7 @@ test('the wallet requires its pinned runtime and signing domain', async t => {
   await assert.rejects(verifyDeployment(args));
 });
 
-test('gas profile covers full-width evidence, bounded queues, forced ETH and exhausted recipient gas', async t => {
+test('gas profile covers full-width evidence, a long winnings queue, forced ETH and exhausted recipient gas', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
@@ -220,19 +220,12 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     records.push(ch);
   }
   await (await force(72n)).waitForDeployment();
-  (gas as any).allocate64 = String((await (await f.contract.allocateWinnings(64)).wait()).gasUsed);
-  (gas as any).claimAllocating8 = String(
-    (await (await f.contract.claim(records.at(-1)!.state.channelId)).wait()).gasUsed,
-  );
+  // The last claim in the queue collects at once, at the cost of the first.
+  (gas as any).claimFirst = String((await (await f.contract.claim(records[0].state.channelId)).wait()).gasUsed);
+  (gas as any).claimBehind71 = String((await (await f.contract.claim(records.at(-1)!.state.channelId)).wait()).gasUsed);
+  assert.equal((await f.contract.claims(records.at(-1)!.state.channelId)).winningsRemaining, 0n);
+  assert.ok(BigInt((gas as any).claimBehind71) <= (BigInt((gas as any).claimFirst) * 11n) / 10n);
   await invariants(env, f, records);
-  // A fresh queue makes fundBankroll exercise its automatic eight-entry bound.
-  for (let i = 0; i < 8; i++) {
-    const ch = await channel(f, env.wallets[2], 1n);
-    await transition(f, ch, 'checkpoint', 1n);
-    await settle(f, env, ch);
-    records.push(ch);
-  }
-  (gas as any).fundAllocating8 = String((await (await f.contract.fundBankroll({ value: 8n })).wait()).gasUsed);
   const ch = await channel(f, env.wallets[3], 1n),
     max = (1n << 128n) - 1n;
   const base = { ...ch.state, sequence: '2', balance: String(max / 8n) };
@@ -289,9 +282,8 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
   assert.equal((await f.contract.claims(message.channelId)).protectedRemaining, 100n);
   await (await (receiver as any).redirect(message.channelId, env.wallets[5].address)).wait();
   assert.equal((await f.contract.claims(message.channelId)).paid, 100n);
-  for (const name of ['claimAllocating8', 'challengeWide', 'finalizeGasBurner'])
+  for (const name of ['claimBehind71', 'challengeWide', 'finalizeGasBurner'])
     assert.ok((BigInt((gas as any)[name]) * 12n) / 10n < 2000000n, name + ' exceeds operational gas budget');
-  assert.ok(BigInt((gas as any).allocate64) < 16000000n);
   fs.mkdirSync('build', { recursive: true });
   fs.writeFileSync(
     'build/settlement-gas.json',

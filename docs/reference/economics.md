@@ -202,10 +202,10 @@ bankroll's equity, and no separate release of house commission can be counted tw
 A game's payment is a debit that lowers the player's signed balance by its amount and raises the accounting bankroll
 by the same amount. It settles on no round, accrues no commission and moves no ETH.
 
-Unallocated winnings cash excludes protected principal and winnings already reserved, and the house cash that pays the
-owner's withdrawals, and players' withdrawals beyond their channels' principal, excludes every finalized unpaid winning.
-Finalization order sets the order of [allocation](contract.md#the-winnings-queue), and protected principal stays apart.
-A recipient that refuses payment keeps its allocation without blocking later funded claims. The casino takes on a
+Finalized winnings are paid out of the contract's cash beyond protected principal, in the order their claims finalized
+([the winnings queue](contract.md#the-winnings-queue)), and the house cash that pays the owner's withdrawals, and
+players' withdrawals beyond their channels' principal, excludes every finalized unpaid winning. A recipient that refuses
+payment keeps its share without blocking later covered claims. The casino takes on a
 withdrawal or transfer only as large as the contract can pay now beside the withdrawals owed already, and declines a
 larger one. That is the principal the channel will still hold once the withdrawals owed from it are paid, plus the house
 cash no finalized claim counts on, `pool cash − protectedPrincipal − unpaidWinnings`, less what the withdrawals owed

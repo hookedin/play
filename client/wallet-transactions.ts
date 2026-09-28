@@ -333,7 +333,7 @@ export class WalletTransactions {
         // What a claim paid, and where: this account's address, or the one it named.
         if (event?.name === 'ClaimPayment') {
           amount = String(event.args.amount);
-          to = event.args.beneficiary;
+          to = event.args.recipient;
         }
       } catch {}
     }

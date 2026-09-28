@@ -2,7 +2,7 @@ import type { JsonRpcProvider, InterfaceAbi, BlockTag } from 'ethers';
 import type { EvidenceBundle } from './types.ts';
 import { Contract } from 'ethers';
 import { verifyEvidence, domain, hashState, same, plain, owed } from './protocol.ts';
-import { blockReference, readContract, requireCanonicalBlock } from './chain-observer.ts';
+import { readContract, requireCanonicalBlock } from './chain-observer.ts';
 
 /** Settlement needs current contract state, never historical event availability. */
 export async function inspectEvidence(
@@ -19,15 +19,12 @@ export async function inspectEvidence(
   if (!block?.hash) throw new Error('Recovery block unavailable');
   const read = (method: string, ...args: unknown[]) => readContract(provider, contract, method, args, block);
   const channelId = verified.state.channelId;
-  const [owner, supported, channel, claim, cash, principal, reserved, allocated, recipient] = await Promise.all([
+  const [owner, supported, channel, claim, collectable, recipient] = await Promise.all([
     read('owner'),
     read('supported', bundle.evidence),
     read('channels', channelId),
     read('claims', channelId),
-    provider.send('eth_getBalance', [bundle.casino, blockReference(block)]).then(BigInt),
-    read('protectedPrincipal'),
-    read('reservedWinnings'),
-    read('allocatedWinnings', channelId),
+    read('collectable', channelId),
     read('claimRecipient', channelId),
   ]);
   if (!same(owner, bundle.operator)) throw new Error('Evidence operator differs from contract owner');
@@ -42,8 +39,6 @@ export async function inspectEvidence(
   await requireCanonicalBlock(provider, block);
   const finalized = Number(channel.status) === 3,
     remaining = BigInt(claim.amount) - BigInt(claim.paid);
-  const houseCash = cash - principal - reserved,
-    collectable = claim.protectedRemaining + allocated;
   return plain({
     ...verified,
     chainObservationsVerified: true,
@@ -63,25 +58,22 @@ export async function inspectEvidence(
     // withdrew that the contract has not paid.
     owed: owed(verified.state, channel.deposited, channel.paidOut),
     claim: Object.fromEntries(
-      ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining', 'finalizedAt'].map(
-        key => [key, claim[key]],
-      ),
+      ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining'].map(key => [
+        key,
+        claim[key],
+      ]),
     ),
     remaining,
-    houseCash,
-    reservedWinnings: reserved,
-    allocatedWinnings: allocated,
     recipient,
-    allocatedCollectable: collectable,
+    // What collecting pays now: the claim's principal, and as much of its winnings as house cash reaches.
+    collectable,
     paymentStatus: !finalized
       ? 'not finalized'
       : !remaining
         ? 'no unpaid amount'
         : collectable > 0n
-          ? 'claim has funds reserved for collection'
-          : houseCash > 0n
-            ? 'unpaid; FIFO allocation pending'
-            : 'unpaid; no unallocated house liquidity',
+          ? 'collectable now'
+          : 'unpaid; house cash does not reach it yet',
     classification: !finalized
       ? 'signed balance; no finalized payment obligation'
       : !remaining

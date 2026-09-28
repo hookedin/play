@@ -15,7 +15,7 @@ import {
 
 /** The contract and the TypeScript derivation are hand-mirrored; feed both the same
  * evidence for every kind and every invalid branch and require identical verdicts. */
-test('contract derive and deriveState agree on every operation kind and invalid encoding', async t => {
+test('the contract and deriveState agree on every operation kind and invalid encoding', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env);
@@ -23,9 +23,8 @@ test('contract derive and deriveState agree on every operation kind and invalid 
     b = await open(f, env.wallets[2], 1000n);
   const agree = async (ch: any, evidence: any) => {
     const local = deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret, evidence.step.seed);
-    const onchain = await f.contract.derive(evidence.base, evidence.step);
+    const onchain = await f.contract.supported(evidence);
     assert.equal(hashState(f.d, onchain.toObject()), hashState(f.d, local));
-    assert.equal((await f.contract.supported(evidence)).balance, BigInt(local.balance));
     ch.state = local;
     ch.evidence = checkpointEvidence(
       local,
@@ -52,7 +51,6 @@ test('contract derive and deriveState agree on every operation kind and invalid 
       () => deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret, evidence.step.seed),
       reason,
     );
-    await assert.rejects(f.contract.derive(evidence.base, evidence.step));
     await assert.rejects(f.contract.supported(evidence));
   };
   // Valid transitions: a bet, a debit, a credit, a deposit, a withdrawal and a transfer. The memo means nothing to either

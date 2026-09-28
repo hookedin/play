@@ -66,46 +66,45 @@ The casino's health, its books, what developers have earned, the last observed b
 
 **Auth:** none · **Idempotent:** yes
 
-| Response field      | Type           | Meaning                                                                                                                                                                                                                                                     |
-| ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`            | string         | Chain observation: `starting`, `reconciling`, `ready` or `error`. The casino signs only when `ready`                                                                                                                                                        |
-| `lastCheck`         | number         | When the last observation finished, in milliseconds                                                                                                                                                                                                         |
-| `stale`             | boolean        | `true` when `status` is not `ready` or the last observation is more than 60 seconds old                                                                                                                                                                     |
-| `lastProgress`      | number         | When the chain was last seen to advance, in milliseconds                                                                                                                                                                                                    |
-| `observationError`  | string or null | Why the last observation failed                                                                                                                                                                                                                             |
-| `alerts`            | array          | What is wrong, below                                                                                                                                                                                                                                        |
-| `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight, or `null`: a challenge, a payout, or an idle channel's close, finalization or collection                                                                                                              |
-| `channels`          | number         | Channels open or closing                                                                                                                                                                                                                                    |
-| `signingLogRecords` | number         | Records in the casino's signing history                                                                                                                                                                                                                     |
-| `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                                                                                                                                                  |
-| `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                                                                                                                                     |
-| `chainId`           | string         | The chain                                                                                                                                                                                                                                                   |
-| `casino`            | address        | The contract                                                                                                                                                                                                                                                |
-| The books           | strings        | The books, below                                                                                                                                                                                                                                            |
-| `developers`        | array          | `{developer, earned, collected, outstanding}` for each developer: the commission a developer has earned, collected and still to collect                                                                                                                     |
-| `block`             | object or null | The last observed confirmed block: `{cash, protectedPrincipal, reservedWinnings, unpaidWinnings, operatorBalance, blockNumber, blockHash, timestamp}`, the contract's balances and the casino key's, with the block's number, hash and time in Unix seconds |
-| `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                                                                                                                                            |
+| Response field      | Type           | Meaning                                                                                                                                                                                                                                   |
+| ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`            | string         | Chain observation: `starting`, `reconciling`, `ready` or `error`. The casino signs only when `ready`                                                                                                                                      |
+| `lastCheck`         | number         | When the last observation finished, in milliseconds                                                                                                                                                                                       |
+| `stale`             | boolean        | `true` when `status` is not `ready` or the last observation is more than 60 seconds old                                                                                                                                                   |
+| `lastProgress`      | number         | When the chain was last seen to advance, in milliseconds                                                                                                                                                                                  |
+| `observationError`  | string or null | Why the last observation failed                                                                                                                                                                                                           |
+| `alerts`            | array          | What is wrong, below                                                                                                                                                                                                                      |
+| `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight, or `null`: a challenge, a payout, or an idle channel's close, finalization or collection                                                                                            |
+| `channels`          | number         | Channels open or closing                                                                                                                                                                                                                  |
+| `signingLogRecords` | number         | Records in the casino's signing history                                                                                                                                                                                                   |
+| `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                                                                                                                                |
+| `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                                                                                                                   |
+| `chainId`           | string         | The chain                                                                                                                                                                                                                                 |
+| `casino`            | address        | The contract                                                                                                                                                                                                                              |
+| The books           | strings        | The books, below                                                                                                                                                                                                                          |
+| `developers`        | array          | `{developer, earned, collected, outstanding}` for each developer: the commission a developer has earned, collected and still to collect                                                                                                   |
+| `block`             | object or null | The last observed confirmed block: `{cash, protectedPrincipal, unpaidWinnings, operatorBalance, blockNumber, blockHash, timestamp}`, the contract's balances and the casino key's, with the block's number, hash and time in Unix seconds |
+| `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                                                                                                                          |
 
 The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
 
-| Field                                                      | Meaning                                                                                                                                         |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cash`                                                     | Pool cash: the contract's balance                                                                                                               |
-| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                       |
-| `activeLiabilities`                                        | What open and closing channels are owed: their signed balances, and the deposits they have not taken in                                         |
-| `openWinnings`                                             | What open and closing channels are owed above the deposits the contract holds for them, their `principal`: winnings, which only house cash pays |
-| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                                                                           |
-| `commissions`                                              | Developer commission earned and not yet collected                                                                                               |
-| `escrow`                                                   | Payouts awarded and not yet collected                                                                                                           |
-| `banks`                                                    | Everything in developers' banks                                                                                                                 |
-| `withdrawals`                                              | Withdrawals and transfers the casino has taken on and the contract has not yet paid, until their channel's claim holds them                     |
-| `houseFeesEarned`                                          | The casino's own commission, in total                                                                                                           |
-| `reserved`                                                 | The worst cases of the casino bets being decided                                                                                                |
-| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                                                                               |
-| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                                                                         |
-| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                                                                              |
-| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`                                                         |
-| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                   |
+| Field                                  | Meaning                                                                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cash`                                 | Pool cash: the contract's balance                                                                                                               |
+| `protectedPrincipal`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                       |
+| `activeLiabilities`                    | What open and closing channels are owed: their signed balances, and the deposits they have not taken in                                         |
+| `openWinnings`                         | What open and closing channels are owed above the deposits the contract holds for them, their `principal`: winnings, which only house cash pays |
+| `finalizedLiabilities`                 | The unpaid winnings and principal of finalized claims                                                                                           |
+| `commissions`                          | Developer commission earned and not yet collected                                                                                               |
+| `escrow`                               | Payouts awarded and not yet collected                                                                                                           |
+| `banks`                                | Everything in developers' banks                                                                                                                 |
+| `withdrawals`                          | Withdrawals and transfers the casino has taken on and the contract has not yet paid, until their channel's claim holds them                     |
+| `houseFeesEarned`                      | The casino's own commission, in total                                                                                                           |
+| `reserved`                             | The worst cases of the casino bets being decided                                                                                                |
+| `equity`                               | The bankroll before reservations: what fund shares are a claim on                                                                               |
+| `unreservedBankroll`                   | `equity − reserved`; it can be negative                                                                                                         |
+| `bankroll`                             | `max(0, unreservedBankroll)`: what admission measures bets against                                                                              |
+| `withdrawableHouse`                    | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                   |
 
 `alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
 left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older checkpoint than the
@@ -133,7 +132,6 @@ alert, like `observationError`, names no channel.
   "casino": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
   "cash": "102000000000001000000",
   "protectedPrincipal": "2000000000000000000",
-  "reservedWinnings": "0",
   "unpaidWinnings": "0",
   "activeLiabilities": "1904018503517611900",
   "openWinnings": "0",
@@ -147,7 +145,6 @@ alert, like `observationError`, names no channel.
   "equity": "100004981496483388100",
   "unreservedBankroll": "100004981496483388100",
   "bankroll": "100004981496483388100",
-  "houseCash": "100000000000001000000",
   "withdrawableHouse": "100000000000001000000",
   "developers": [
     {
@@ -160,7 +157,6 @@ alert, like `observationError`, names no channel.
   "block": {
     "cash": "102000000000001000000",
     "protectedPrincipal": "2000000000000000000",
-    "reservedWinnings": "0",
     "unpaidWinnings": "0",
     "operatorBalance": "9899995456193946133109",
     "blockNumber": 5,

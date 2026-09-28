@@ -114,7 +114,7 @@ evidence.
 | `acknowledged`    | boolean                | Whether `state` is countersigned, or the base, which needs no signature                                                                                                                                                  |
 | `lastResponse`    | object or null         | The reply that produced `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `bankroll` and `nextRound`; `null` at the base                                                             |
 | `onchain`         | object or null         | The contract's record of the channel, `{player, deposited, principal, paidOut, status, deadline, closingSequence, closingHash, closingBalance}`, in decimal strings (see [`channels`](../reference/contract.md#storage)) |
-| `claim`           | object or null         | A finalized channel's claim, `{beneficiary, stateHash, amount, paid, protectedRemaining, winningsRemaining, finalizedAt}` (see [`claims`](../reference/contract.md#views)); absent or `null` before                      |
+| `claim`           | object or null         | A finalized channel's claim, `{beneficiary, stateHash, amount, paid, protectedRemaining, winningsRemaining}` (see [`claims`](../reference/contract.md#views)); absent or `null` before                                   |
 | `bankroll`        | string                 | The bankroll, a hint                                                                                                                                                                                                     |
 
 ```json title="Response"

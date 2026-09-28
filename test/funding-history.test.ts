@@ -16,7 +16,7 @@ test('confirmed transaction receipts report actual claim payment and preserve ol
     interface: {
       parseLog: () => ({
         name: 'ClaimPayment',
-        args: { beneficiary: wallet.address, amount: 3n },
+        args: { recipient: wallet.address, amount: 3n },
       }),
     },
   } as any;

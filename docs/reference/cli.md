@@ -123,16 +123,15 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
   channel's status, challenge deadline and closing state, the deposits the contract holds for the channel
   (`principal`) and what it has paid out of the channel (`paidOut`), the signed balance, what a close on the evidence
   is owed (`owed`: that balance plus any deposit it has not taken in and what it withdrew that the contract has not
-  paid, less what the contract paid out that it did not withdraw), the claim with what is paid and what remains, and
-  how the claim stands against the contract's cash, as `paymentStatus`:
+  paid, less what the contract paid out that it did not withdraw), the claim with what is paid and what remains, what
+  collecting pays now (`collectable`), and how the claim stands, as `paymentStatus`:
 
-  | `paymentStatus`                           | Meaning                                                                             |
-  | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-  | `not finalized`                           | There is no claim yet                                                               |
-  | `no unpaid amount`                        | The claim is paid in full                                                           |
-  | `claim has funds reserved for collection` | `claim` pays them                                                                   |
-  | `unpaid; FIFO allocation pending`         | The contract has free house cash; `claim` reserves it for the oldest winnings first |
-  | `unpaid; no unallocated house liquidity`  | Nothing is free to pay it until the contract holds more house cash                  |
+  | `paymentStatus`                            | Meaning                                                                                                              |
+  | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+  | `not finalized`                            | There is no claim yet                                                                                                |
+  | `no unpaid amount`                         | The claim is paid in full                                                                                            |
+  | `collectable now`                          | `claim` pays `collectable`                                                                                           |
+  | `unpaid; house cash does not reach it yet` | The [winnings queue](contract.md#the-winnings-queue) pays the claims ahead of it first; it waits for more house cash |
 
 - Every other action inspects first, and sends nothing when its end is already reached, unless the journal holds a
   pending transaction, which it resumes. It prints the inspection again once done.

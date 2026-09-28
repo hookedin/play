@@ -154,19 +154,18 @@ Finalizing records a claim for what the close is owed, in two parts:
 **Waiting to be paid**, on the Wallet page, lists every claim of this account that is still owed something, 20 at a
 time, those of older channels included, with what it is owed and what can be collected now:
 
-- **Collect** sends `claim(channelId)`, which anyone may send. It pays the claim's protected principal and the winnings
-  reserved for it to the claim's recipient: your account, unless you have redirected it.
+- **Collect** sends `claim(channelId)`, which anyone may send. It pays the claim's protected principal and whatever of
+  its winnings house cash reaches to the claim's recipient: your account, unless you have redirected it.
 - **Collect there**, with an address beside it, sends `claimTo(channelId, recipient)`, which only your account may send.
   It makes `recipient` the claim's recipient, for this collection and every later one, and pays.
 - **Export evidence** saves the recovery bundle of its channel.
 
-Winnings are paid as the contract has cash for them. Its house cash is its balance less protected principal and the
-winnings it has already reserved, and it reserves that cash for the oldest unpaid winnings first. Each collection, and
-each payment into the bankroll through `fundBankroll`, reserves for up to 8 claims in the queue; anyone can call
-`allocateWinnings` for up to 64. The owner's `withdrawHouse`, and a withdrawal beyond its channel's deposits, pay only
-out of cash beyond every finalized claim's winnings, so neither takes cash ahead of the queue. Cash reserved for a claim
-stays with that claim, and a claim can be collected again as more is reserved for it. The owner can never withdraw
-protected principal or finalized winnings.
+Winnings are paid as the contract has cash for them. Its house cash, its balance less protected principal, covers the
+queue from the oldest unpaid winnings on, and a claim collects what of its winnings is covered in one call, however far
+back it waits. The owner's `withdrawHouse`, and a withdrawal beyond its channel's deposits, pay only out of cash beyond
+every finalized claim's winnings, so neither takes cash ahead of the queue. Cash covering a claim stays with that claim,
+and a claim can be collected again as more cash arrives. The owner can never withdraw protected principal or finalized
+winnings.
 
 The payment is sent with 100,000 gas. A recipient that rejects it, or needs more gas to accept it, makes the collection
 revert and leaves the claim whole: collect to another address.

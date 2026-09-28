@@ -37,6 +37,8 @@ contract HookedInCasino {
 
     uint256 public protectedPrincipal;
     uint256 public unpaidWinnings;
+    /// Every finalized claim's winnings, in the order the claims finalized: the queue house cash pays them in.
+    uint256 public queuedWinnings;
     bool transient private entered;
 
     /// `deposited` is how much of the channel's on-chain deposits the balance has taken in, and `withdrawn` how much it
@@ -102,13 +104,14 @@ contract HookedInCasino {
         uint256 closingBalance;
     }
 
+    /// What a finalized channel still owes, and to whom. What it was owed is the channel's `closingBalance`, on its
+    /// `closingHash`.
     struct Claim {
         address recipient;
-        bytes32 stateHash;
-        uint256 amount;
         uint256 protectedRemaining;
         uint256 winningsRemaining;
-        uint256 finalizedAt;
+        // Where the claim's winnings end in the queue: `queuedWinnings` once they joined it.
+        uint256 queueEnd;
     }
 
     mapping(bytes32 => Channel) public channels;
@@ -117,11 +120,6 @@ contract HookedInCasino {
     mapping(address => uint256) public channelIndex;
     /// Whether a withdrawal or transfer, by the hash of its operation, has been paid.
     mapping(bytes32 => bool) public withdrawals;
-    mapping(bytes32 => uint256) public allocatedWinnings;
-    mapping(bytes32 => bytes32) public nextClaim;
-    bytes32 public firstClaim;
-    bytes32 private lastClaim;
-    uint256 public reservedWinnings;
     event ChannelOpened(bytes32 indexed channelId, address indexed player);
     event ChannelDeposit(bytes32 indexed channelId, uint256 amount, uint256 deposited);
     event Withdrawal(bytes32 indexed withdrawalId, bytes32 indexed channelId, address indexed recipient, uint256 amount);
@@ -135,11 +133,9 @@ contract HookedInCasino {
         uint256 protectedAmount,
         uint256 winnings
     );
-    event ClaimPayment(bytes32 indexed channelId, address indexed beneficiary, uint256 amount, uint256 totalPaid);
-    event ClaimShortfall(bytes32 indexed channelId, uint256 remaining);
+    event ClaimPayment(bytes32 indexed channelId, address indexed recipient, uint256 amount, uint256 totalPaid);
     event BankrollFunded(address indexed funder, uint256 amount);
     event HouseWithdrawal(address indexed recipient, uint256 amount);
-    event WinningsAllocated(bytes32 indexed channelId, uint256 amount);
     event ClaimRecipientChanged(bytes32 indexed channelId, address indexed recipient);
     error Unauthorized();
     error InvalidTerms();
@@ -231,13 +227,9 @@ contract HookedInCasino {
     function fundBankroll() external payable nonReentrant {
         if (msg.value == 0) revert InvalidTerms();
         emit BankrollFunded(msg.sender, msg.value);
-        _allocate(8);
     }
 
-    function houseCash() public view returns (uint256) {
-        return address(this).balance - protectedPrincipal - reservedWinnings;
-    }
-
+    // What no deposit and no unpaid winning is owed.
     function withdrawableHouse() public view returns (uint256) {
         uint256 owed = protectedPrincipal + unpaidWinnings;
         return address(this).balance > owed ? address(this).balance - owed : 0;
@@ -261,7 +253,7 @@ contract HookedInCasino {
         if (op.kind != KIND_WITHDRAWAL && op.kind != KIND_TRANSFER) revert InvalidTerms();
         Checkpoint memory s = supported(evidence);
         Channel storage c = channels[s.channelId];
-        if (c.status != STATUS_OPEN && c.status != STATUS_CLOSING) revert InvalidState();
+        if (c.status == STATUS_FINALIZED) revert InvalidState();
         bytes32 withdrawalId = hashOperation(op);
         if (withdrawals[withdrawalId]) revert InvalidState();
         withdrawals[withdrawalId] = true;
@@ -279,10 +271,6 @@ contract HookedInCasino {
             (bool ok,) = op.recipient.call{value: op.amount}("");
             if (!ok) revert TransferFailed();
         }
-    }
-
-    function derive(Checkpoint calldata base, Step calldata step) public view returns (Checkpoint memory next) {
-        return _derive(base, hashState(base), step);
     }
 
     // Every field an operation kind does not use must be zero, so each signed
@@ -307,19 +295,22 @@ contract HookedInCasino {
         next.transitionHash = keccak256(abi.encode(operationHash, step.secret));
         bool casinoBet = op.kind == KIND_CASINO_BET;
         bool pays = op.kind == KIND_WITHDRAWAL || op.kind == KIND_TRANSFER;
+        if (op.amount == 0 || op.amount >= MAX_BALANCE) revert InvalidTerms();
+        // Only a withdrawal or a transfer names a recipient: never nobody, and never this contract.
+        if (pays ? op.recipient == address(0) || op.recipient == address(this) : op.recipient != address(0)) {
+            revert InvalidTerms();
+        }
         // A casino bet names two hashes: its round, the hash of a secret the casino fixed first, and the hash
         // of a seed. Only that secret and that seed settle it, and every bet on one round and seed
         // shares one outcome. Whoever holds one of the two cannot know the outcome before both are out.
-        // Every field another kind does not use must be zero; only a withdrawal or a transfer names a recipient.
+        // Any other kind leaves all of it zero.
         if (
-            (casinoBet ? op.chance == 0 || op.prize == 0 || op.prize >= MAX_BALANCE || op.seedHash == bytes32(0)
-                    || op.round == bytes32(0)
-                    || keccak256(abi.encodePacked(step.secret)) != op.round
+            casinoBet
+                ? op.chance == 0 || op.prize == 0 || op.prize >= MAX_BALANCE || op.round == bytes32(0)
+                    || op.seedHash == bytes32(0) || keccak256(abi.encodePacked(step.secret)) != op.round
                     || keccak256(abi.encodePacked(step.seed)) != op.seedHash
-                : op.chance != 0 || op.prize != 0 || op.seedHash != bytes32(0) || op.round != bytes32(0)
-                    || step.secret != bytes32(0) || step.seed != bytes32(0))
-                || (pays ? op.recipient == address(0) || op.recipient == address(this) : op.recipient != address(0))
-                || op.amount == 0 || op.amount >= MAX_BALANCE
+                : op.chance != 0 || op.prize != 0 || op.round != bytes32(0) || op.seedHash != bytes32(0)
+                    || step.secret != bytes32(0) || step.seed != bytes32(0)
         ) revert InvalidTerms();
         if (op.kind == KIND_CREDIT) {
             // The casino attests what the credit collects. Principal and liquidity do not move.
@@ -339,7 +330,6 @@ contract HookedInCasino {
         } else {
             revert InvalidTerms();
         }
-        if (next.balance >= MAX_BALANCE || next.withdrawn >= MAX_BALANCE) revert InvalidTerms();
         if (_signer(hashState(next), step.casinoSignature) != owner) {
             revert InvalidState();
         }
@@ -415,33 +405,43 @@ contract HookedInCasino {
         bytes32 stateHash = c.closingHash;
         uint256 balance = c.closingBalance;
         uint256 principal = balance < c.principal ? balance : c.principal;
+        uint256 winnings = balance - principal;
         protectedPrincipal = protectedPrincipal - c.principal + principal;
-        // The claim holds the principal from here on.
+        // The claim holds the principal from here on, and its winnings join the queue behind every claim before it.
         c.principal = 0;
-        unpaidWinnings += balance - principal;
-        _claims[channelId] = Claim(c.player, stateHash, balance, principal, balance - principal, block.timestamp);
-        if (balance > principal) {
-            if (lastClaim == bytes32(0)) firstClaim = channelId;
-            else nextClaim[lastClaim] = channelId;
-            lastClaim = channelId;
-        }
-        emit ClaimEstablished(channelId, c.player, stateHash, balance, principal, balance - principal);
+        unpaidWinnings += winnings;
+        queuedWinnings += winnings;
+        _claims[channelId] = Claim(c.player, principal, winnings, queuedWinnings);
+        emit ClaimEstablished(channelId, c.player, stateHash, balance, principal, winnings);
     }
 
     function claims(bytes32 channelId) external view returns (
         address beneficiary, bytes32 stateHash, uint256 amount, uint256 paid,
-        uint256 protectedRemaining, uint256 winningsRemaining, uint256 finalizedAt
+        uint256 protectedRemaining, uint256 winningsRemaining
     ) {
+        Channel storage ch = channels[channelId];
+        if (ch.status != STATUS_FINALIZED) return (ch.player, bytes32(0), 0, 0, 0, 0);
         Claim storage c = _claims[channelId];
-        return (channels[channelId].player, c.stateHash, c.amount, _paid(c), c.protectedRemaining, c.winningsRemaining, c.finalizedAt);
+        return (ch.player, ch.closingHash, ch.closingBalance, _paid(channelId), c.protectedRemaining, c.winningsRemaining);
     }
 
     function claimRecipient(bytes32 channelId) external view returns (address) {
         return _claims[channelId].recipient;
     }
 
-    function _paid(Claim storage c) private view returns (uint256) {
-        return c.amount - c.protectedRemaining - c.winningsRemaining;
+    function _paid(bytes32 channelId) private view returns (uint256) {
+        Claim storage c = _claims[channelId];
+        return channels[channelId].closingBalance - c.protectedRemaining - c.winningsRemaining;
+    }
+
+    /// What collecting the claim pays now: its principal, and as much of its winnings as house cash reaches. House cash
+    /// pays the queue in order, all but the unpaid winnings at its end that it cannot cover.
+    function collectable(bytes32 channelId) public view returns (uint256) {
+        Claim storage c = _claims[channelId];
+        uint256 cash = address(this).balance - protectedPrincipal;
+        uint256 reached = queuedWinnings - (unpaidWinnings > cash ? unpaidWinnings - cash : 0);
+        uint256 waiting = c.queueEnd > reached ? c.queueEnd - reached : 0;
+        return c.protectedRemaining + (c.winningsRemaining > waiting ? c.winningsRemaining - waiting : 0);
     }
 
     function claim(bytes32 channelId) external nonReentrant {
@@ -459,54 +459,22 @@ contract HookedInCasino {
         _pay(channelId);
     }
 
-    // Permissionless bounded allocation. Failed recipients cannot obstruct junior
-    // claims: allocated ETH is reserved for the senior claim until it can collect.
-    function allocateWinnings(uint256 limit) external nonReentrant {
-        if (limit == 0 || limit > 64) revert InvalidTerms();
-        _allocate(limit);
-    }
-
-    function _allocate(uint256 limit) private {
-        uint256 cash = houseCash();
-        for (uint256 i; i < limit && firstClaim != bytes32(0) && cash != 0; i++) {
-            bytes32 channelId = firstClaim;
-            uint256 due = _claims[channelId].winningsRemaining - allocatedWinnings[channelId];
-            uint256 amount = due < cash ? due : cash;
-            allocatedWinnings[channelId] += amount;
-            reservedWinnings += amount;
-            cash -= amount;
-            emit WinningsAllocated(channelId, amount);
-            if (amount == due) {
-                firstClaim = nextClaim[channelId];
-                if (firstClaim == bytes32(0)) lastClaim = bytes32(0);
-                delete nextClaim[channelId];
-            } else {
-                break;
-            }
-        }
-    }
-
-    // Invariant outside a guarded call: cash >= protectedPrincipal + reservedWinnings.
-    // A rejected transfer reverts this collection, preserving every liability and allocation.
+    // Only the covered front of the queue collects, and what it collects leaves the cash covering the rest as it was, so
+    // a recipient that refuses payment keeps its share without holding up the claims behind it. A refused payment
+    // reverts the collection.
     function _pay(bytes32 channelId) private {
-        _allocate(8);
         Claim storage c = _claims[channelId];
+        uint256 amount = collectable(channelId);
+        if (amount == 0) return;
         uint256 principal = c.protectedRemaining;
-        uint256 winnings = allocatedWinnings[channelId];
-        uint256 amount = principal + winnings;
-        if (amount != 0) {
-            c.protectedRemaining = 0;
-            c.winningsRemaining -= winnings;
-            protectedPrincipal -= principal;
-            unpaidWinnings -= winnings;
-            allocatedWinnings[channelId] = 0;
-            reservedWinnings -= winnings;
-            (bool ok,) = payable(c.recipient).call{value: amount, gas: 100000}("");
-            if (!ok) revert TransferFailed();
-            emit ClaimPayment(channelId, c.recipient, amount, _paid(c));
-        }
-        uint256 remaining = c.protectedRemaining + c.winningsRemaining;
-        if (remaining != 0) emit ClaimShortfall(channelId, remaining);
+        uint256 winnings = amount - principal;
+        c.protectedRemaining = 0;
+        c.winningsRemaining -= winnings;
+        protectedPrincipal -= principal;
+        unpaidWinnings -= winnings;
+        (bool ok,) = payable(c.recipient).call{value: amount, gas: 100000}("");
+        if (!ok) revert TransferFailed();
+        emit ClaimPayment(channelId, c.recipient, amount, _paid(channelId));
     }
 
 }
