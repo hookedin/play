@@ -59,7 +59,7 @@ casino bet's, its bank takes the game's developer bets, and its key settles them
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Name     | 1 to 32 lower-case letters, digits or hyphens, not starting with a hyphen: `^[a-z0-9][a-z0-9-]{0,31}$`                                                                 |
 | URL      | At most 300 characters. `https:`, or `http:` only for `localhost`, `127.0.0.1` or `[::1]`. No user name or password, no fragment. Kept as the URL parser normalises it |
-| Account  | Has an open channel that is not closing                                                                                                                                |
+| Account  | Has an open channel                                                                                                                                                    |
 | Profile  | Holds at most 100 games. Publishing a name again points it at another URL                                                                                              |
 | Removing | Needs no open channel                                                                                                                                                  |
 

@@ -1,14 +1,14 @@
 ---
 title: Channel endpoints
-description: The wallet's routes, for registering a channel, placing operations, acknowledging, closing, collecting what is owed, the fund, the developer bank and the profile.
+description: The wallet's routes, for registering a channel, placing operations, acknowledging, collecting what is owed, the fund, the developer bank and the profile.
 sidebar:
   order: 2
 ---
 
 Every route here concerns one channel, `:id`, and needs [channel access](index.md#authentication): a token signed by the
-channel's key. The checkpoints, operations and statements they carry are specified on
-[Signed messages](../reference/signed-messages.md). The examples come from one session: a player, `@alice`, plays the
-game `wheel` of a developer, `@studio`, which also holds a developer bank.
+channel's account, which signs everything on its channel. The checkpoints, operations and statements they carry are
+specified on [Signed messages](../reference/signed-messages.md). The examples come from one session: a player, `@alice`,
+plays the game `wheel` of a developer, `@studio`, which also holds a developer bank.
 
 ## Opening and reading a channel
 
@@ -18,30 +18,30 @@ Registers a channel with the casino, or returns it if the casino already knows i
 
 **Auth:** channel access · **Idempotent:** yes: a known channel is returned as it stands
 
-A channel is opened on-chain first, and its deposit must be confirmed (2 blocks on Sepolia, 1 on Anvil). The casino
-reads it at its last observed block and requires the same funding account, channel key and genesis hash as the opening,
-whose deposit the channel ID fixes. The channel may hold more than that by then, from
-[deposits](../reference/contract.md#functions-that-change-state) since. The token is the channel key's, for `:id`. A
-channel the casino knows is authenticated and returned with no chain read. Registering a channel counts against
+An account's channel opens on-chain with the first [deposit](../reference/contract.md#functions-that-change-state) into
+it, whoever sends it, and that deposit must be confirmed (2 blocks on Sepolia, 1 on Anvil). The casino reads the channel
+at its last observed block and requires it open, for the account the opening names. The channel starts from its
+[base](../reference/signed-messages.md#the-base), all zero: the balance takes the deposit in afterwards, with a
+[deposit operation](#post-apichannelsidoperations). The token is the account's, for `:id`. A channel the casino knows is
+authenticated and returned with no chain read. Registering a channel counts against
 [budgets](index.md#budgets-and-queues) of its own.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field | Type   | Meaning                                                                                                                        |
-| ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| `opening`  | object | `{channelId, player, signer, deposit}`: [the opening](../reference/signed-messages.md#channel-ids), whose `channelId` is `:id` |
+| Body field | Type   | Meaning                                                                                                                                                                            |
+| ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids), the account and how many of its channels started closing before it; `channelId` is `:id` |
 
 The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows it.
 
 ```json title="Request"
 {
   "opening": {
-    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
+    "channelId": "0x14e04a66bf74771820a7400ff6cf065175b3d7eb25805a5bd1633b161af5d101",
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
-    "deposit": "1000000000000000000"
+    "index": "0"
   }
 }
 ```
@@ -49,20 +49,20 @@ The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows 
 ```json title="Response"
 {
   "opening": {
-    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
+    "channelId": "0x14e04a66bf74771820a7400ff6cf065175b3d7eb25805a5bd1633b161af5d101",
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
-    "deposit": "1000000000000000000"
+    "index": "0"
   },
-  "uname": "biop5et6ov6i5sn3c6p7vxhx",
+  "uname": "8h3hh3edgejmtdp2owso4ak7",
   "alias": null,
   "state": {
-    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
+    "channelId": "0x14e04a66bf74771820a7400ff6cf065175b3d7eb25805a5bd1633b161af5d101",
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "1000000000000000000",
-    "deposited": "1000000000000000000"
+    "balance": "0",
+    "deposited": "0",
+    "withdrawn": "0"
   },
   "playerSignature": "0x",
   "casinoSignature": "0x",
@@ -70,22 +70,22 @@ The reply is the channel as [`GET /api/channels/:id`](#get-apichannelsid) shows 
   "lastResponse": null,
   "onchain": {
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
-    "deposit": "1000000000000000000",
-    "initialHash": "0xe490968fbbb7134715e45020d1212e2c868cb89808c64e62954bb541e812a14b",
+    "deposited": "1000000000000000000",
+    "principal": "1000000000000000000",
+    "paidOut": "0",
     "status": "1",
     "deadline": "0",
     "closingSequence": "0",
     "closingHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "closingBalance": "0"
   },
-  "closing": false,
   "bankroll": "100000000000001000000"
 }
 ```
 
-`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel that is not confirmed
-or differs on-chain, and a chain that moved on during the check ("Chain observation advanced; retry activation").
+`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel the confirmed chain
+does not show open for that account ("Channel is not open on-chain or differs from registration"), and a chain that
+moved on during the check ("Chain observation advanced; retry activation").
 
 **Errors:** [`unauthorized`](index.md#errors) (401), [`refused`](index.md#errors) (409),
 [`rate-limited`](index.md#errors) (429), [`busy`](index.md#errors) (429), [`paused`](index.md#errors) (503),
@@ -104,37 +104,36 @@ evidence.
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Response field    | Type                   | Meaning                                                                                                                                                                                                                 |
-| ----------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opening`         | object                 | `{channelId, player, signer, deposit}`                                                                                                                                                                                  |
-| `uname`, `alias`  | string, string or null | The player's names                                                                                                                                                                                                      |
-| `state`           | Checkpoint             | The latest checkpoint                                                                                                                                                                                                   |
-| `playerSignature` | string                 | The channel key's countersignature of `state`; `0x` until given                                                                                                                                                         |
-| `casinoSignature` | string                 | The casino's signature of `state`; `0x` for the genesis                                                                                                                                                                 |
-| `acknowledged`    | boolean                | Whether `state` is countersigned                                                                                                                                                                                        |
-| `lastResponse`    | object or null         | The reply that produced `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `bankroll` and `nextRound`                                                                                |
-| `onchain`         | object or null         | The contract's record of the channel, `{player, signer, deposit, initialHash, status, deadline, closingSequence, closingHash, closingBalance}`, in decimal strings (see [`channels`](../reference/contract.md#storage)) |
-| `claim`           | object or null         | A finalized channel's claim, `{beneficiary, stateHash, amount, paid, protectedRemaining, winningsRemaining, finalizedAt}` (see [`claims`](../reference/contract.md#views)); absent or `null` before                     |
-| `closing`         | boolean                | Whether the casino has signed a `Close` for the channel; it takes no more operations                                                                                                                                    |
-| `bankroll`        | string                 | The bankroll, a hint                                                                                                                                                                                                    |
+| Response field    | Type                   | Meaning                                                                                                                                                                                                                  |
+| ----------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `opening`         | object                 | `{channelId, player, index}`                                                                                                                                                                                             |
+| `uname`, `alias`  | string, string or null | The player's names                                                                                                                                                                                                       |
+| `state`           | Checkpoint             | The latest checkpoint                                                                                                                                                                                                    |
+| `playerSignature` | string                 | The account's countersignature of `state`; `0x` until given                                                                                                                                                              |
+| `casinoSignature` | string                 | The casino's signature of `state`; `0x` at the base                                                                                                                                                                      |
+| `acknowledged`    | boolean                | Whether `state` is countersigned, or the base, which needs no signature                                                                                                                                                  |
+| `lastResponse`    | object or null         | The reply that produced `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `bankroll` and `nextRound`; `null` at the base                                                             |
+| `onchain`         | object or null         | The contract's record of the channel, `{player, deposited, principal, paidOut, status, deadline, closingSequence, closingHash, closingBalance}`, in decimal strings (see [`channels`](../reference/contract.md#storage)) |
+| `claim`           | object or null         | A finalized channel's claim, `{beneficiary, stateHash, amount, paid, protectedRemaining, winningsRemaining, finalizedAt}` (see [`claims`](../reference/contract.md#views)); absent or `null` before                      |
+| `bankroll`        | string                 | The bankroll, a hint                                                                                                                                                                                                     |
 
 ```json title="Response"
 {
   "opening": {
-    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
+    "channelId": "0x14e04a66bf74771820a7400ff6cf065175b3d7eb25805a5bd1633b161af5d101",
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
-    "deposit": "1000000000000000000"
+    "index": "0"
   },
-  "uname": "biop5et6ov6i5sn3c6p7vxhx",
+  "uname": "8h3hh3edgejmtdp2owso4ak7",
   "alias": null,
   "state": {
-    "channelId": "0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000",
+    "channelId": "0x14e04a66bf74771820a7400ff6cf065175b3d7eb25805a5bd1633b161af5d101",
     "sequence": "0",
     "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "balance": "1000000000000000000",
-    "deposited": "1000000000000000000"
+    "balance": "0",
+    "deposited": "0",
+    "withdrawn": "0"
   },
   "playerSignature": "0x",
   "casinoSignature": "0x",
@@ -142,16 +141,15 @@ evidence.
   "lastResponse": null,
   "onchain": {
     "player": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "signer": "0xf4dF6cDF07c42Ce606f5c9aB49FA0e3D332B6De8",
-    "deposit": "1000000000000000000",
-    "initialHash": "0xe490968fbbb7134715e45020d1212e2c868cb89808c64e62954bb541e812a14b",
+    "deposited": "1000000000000000000",
+    "principal": "1000000000000000000",
+    "paidOut": "0",
     "status": "1",
     "deadline": "0",
     "closingSequence": "0",
     "closingHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "closingBalance": "0"
   },
-  "closing": false,
   "bankroll": "100000000000001000000"
 }
 ```
@@ -184,7 +182,7 @@ only before a channel's first casino bet or after losing track. The body is igno
 
 ```json title="Response"
 {
-  "id": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9"
+  "id": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064"
 }
 ```
 
@@ -192,27 +190,27 @@ only before a channel's first casino bet or after losing track. The body is igno
 
 ### `POST /api/channels/:id/operations`
 
-Submits one signed operation, a casino bet, a debit, a credit or a deposit, and answers with the casino's signed result
-or its signed rejection.
+Submits one signed operation, a casino bet, a debit, a credit, a deposit, a withdrawal or a transfer, and answers with
+the casino's signed result or its signed rejection.
 
 **Auth:** channel access · **Idempotent:** yes, by operation ID
 
 The casino takes one operation of a channel at a time, in order. Each reply must be acknowledged before the next
-operation: the next request carries `acknowledgment`, the channel key's signature of the reply's `state` with that
-state's hash, unless the wallet already posted it to [`…/ack`](#post-apichannelsidack). The exact request sent again
-returns the recorded reply; see [retries](index.md#operations-and-retries).
+operation: the next request carries `acknowledgment`, the account's signature of the reply's `state` with that state's
+hash, unless the wallet already posted it to [`…/ack`](#post-apichannelsidack). The exact request sent again returns
+the recorded reply; see [retries](index.md#operations-and-retries).
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field       | Type      | Meaning                                                                                                                                                          |
-| ---------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `request`        | Operation | The signed [operation](../reference/signed-messages.md#transitions), with exactly its fields; `channelId` is `:id`                                               |
-| `details`        | Details   | What it means: [details](../reference/signed-messages.md#details-and-memo) whose hash is `request.memo`                                                          |
-| `signature`      | string    | The channel key's EIP-712 signature of `request`                                                                                                                 |
-| `acknowledgment` | object    | `{stateHash, signature}`: the hash of the channel's latest checkpoint and the channel key's signature of it; required while the previous reply is unacknowledged |
-| `seed`           | bytes32   | A casino bet's seed, whose hash `request.seedHash` signs                                                                                                         |
+| Body field       | Type      | Meaning                                                                                                                                                      |
+| ---------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `request`        | Operation | The signed [operation](../reference/signed-messages.md#transitions), with exactly its fields; `channelId` is `:id`                                           |
+| `details`        | Details   | What it means: [details](../reference/signed-messages.md#details-and-memo) whose hash is `request.memo`                                                      |
+| `signature`      | string    | The account's EIP-712 signature of `request`                                                                                                                 |
+| `acknowledgment` | object    | `{stateHash, signature}`: the hash of the channel's latest checkpoint and the account's signature of it; required while the previous reply is unacknowledged |
+| `seed`           | bytes32   | A casino bet's seed, whose hash `request.seedHash` signs                                                                                                     |
 
 What the casino checks and answers, by operation:
 
@@ -225,11 +223,26 @@ What the casino checks and answers, by operation:
 | Bank deposit, kind 2        | `{id, counterparty: BANK_ID}`                            | Moves the amount into the bank of the channel's own account                                                                                                                                                                                                                                                           | `statement`: the `BankStatement`                                                                     |
 | Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                       | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                                       | –                                                                                                    |
 | Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID or the bet's hash}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                                        | –                                                                                                    |
-| Deposit, kind 4             | `{id}`                                                   | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposit covers the state's `deposited` plus the amount. When it has not seen that, it reads the chain again, and refuses with `unconfirmed` if it still has not, signing nothing | –                                                                                                    |
+| Deposit, kind 4             | `{id}`                                                   | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposits cover the state's `deposited` plus the amount. When it has not seen that, it reads the chain again, and refuses with `unconfirmed` if it still has not, signing nothing | –                                                                                                    |
+| Withdrawal, kind 5          | `{id}`                                                   | Has the contract pay the amount to the operation's `recipient`, as below; declines one larger than it can take on now ("At most … ETH can be withdrawn now"), and one to an address that would refuse a plain payment from the contract ("That address does not accept a payment from the contract")                  | –                                                                                                    |
+| Transfer, kind 6            | `{id}`                                                   | Has the contract deposit the amount into the current channel of the operation's `recipient`, opening one if it has none, as below; declines one larger than it can take on now. The wallet's lock-in is one to the account itself                                                                                     | –                                                                                                    |
 
 A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already
 carried out on another channel is declined with `used: true`. A developer bet is known afterwards by the hash of its
-operation, which [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) takes.
+operation, which [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) takes. So are a withdrawal and a
+transfer: the contract's `withdrawals` says whether it has paid one.
+
+The contract pays each withdrawal or transfer once, when anyone sends it the reply's `evidence`, the operation and the
+casino's signature after it ([`withdraw`](../reference/contract.md#functions-that-change-state)): out of the deposits it
+holds for the channel first and house cash for the rest, all or nothing. The casino takes on one no larger than the
+deposits the channel will still hold once the withdrawals owed from it are paid, plus what is left of
+`withdrawableHouse` ([the books](public.md#get-apistatus)) once the withdrawals owed have taken what their channels'
+deposits do not cover, and declines a larger one, naming that sum. A withdrawal its channel's deposits cover needs no
+house cash. The casino sends the withdrawals it owes as soon as it takes them on, oldest first and one owner transaction
+at a time. One the contract cannot pay yet, short of house cash, waits while the next is tried, and goes again on every
+check of the chain until the chain shows it paid, whoever sent it, or its channel's close final; while none can be paid,
+`/api/status` raises `withdrawal-unpaid`. One still unpaid when its channel's close is final comes back to the account
+with the close.
 
 | Response field    | Type       | Meaning                                                                                                                                             |
 | ----------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -255,24 +268,29 @@ A casino bet, and its signed result:
 ```json title="Request"
 {
   "request": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
-    "sequence": "1",
+    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+    "sequence": "2",
     "kind": 1,
     "amount": "1000000000000000",
+    "recipient": "0x0000000000000000000000000000000000000000",
     "chance": "9131138316486228049",
     "prize": "2000000000000000",
-    "round": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9",
-    "seedHash": "0xf95f7e3bc56f388acb608f28410489b3ae466f494521a2de7dee7e01247166bc",
-    "memo": "0xfa22ab1e93a122f6bbaf309a0bc12974a1d6e3fccf6c61eec46f2ab580bb7916"
+    "round": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064",
+    "seedHash": "0xea1d67f022cb78a665653c306d850cb8364022e300a1979e0a828c11d579b74f",
+    "memo": "0x3961ce1ce0c4af6107dc57d15c2529aee4dfc895d15466e59b4c0f97fd553b55"
   },
   "details": {
-    "id": "0x07f8d268f497cba8348ca4ea632f74b4545327b7b1bc57ac4d5f21ab381eb142",
+    "id": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "group": "hand-1"
   },
-  "signature": "0x310f61f0e595d2cab47c737aac5af28d5b297a943fbf843a6ecf80027341763e3e68b1792042276bb1e3eebf63a3cdbcdc1b6f436451235c38b5907adf4891381c",
-  "seed": "0x0e7c738595fef8c566df866eaa72eaaa65b04ffb1a7eeda049efc91d7fdb2221"
+  "signature": "0xd7fb858d156249da5fdb9f8440bcf0ab3e0fc64a2c0a83a5d42fb112d813b4f303f37d91e4c97ae6c77e2af808b21ffa0e82a22e95c62bc191bd180869b5390c1b",
+  "acknowledgment": {
+    "stateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+    "signature": "0x0b4d21d70375db74b5d5140399236706b832c96416b09386503684c2ba5f7fcd02d17c7ae4ef47ff9eb05221be13339dc3be076443022bf06740c39a52d249c41b"
+  },
+  "seed": "0x15a0475949567258453e0333760f324a2f243ef9f573009e0c42b40452deecc6"
 }
 ```
 
@@ -280,54 +298,57 @@ A casino bet, and its signed result:
 {
   "status": "signed",
   "state": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "sequence": "1",
-    "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
-    "transitionHash": "0x020c50b991fa94180f2fd157d752507789eaad1473072f49a7e5e69ad63af98d",
-    "balance": "999000000000000000",
-    "deposited": "1000000000000000000"
+    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "sequence": "2",
+    "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+    "transitionHash": "0xe56cfe8518544aaeb907795cb359008a92ea6defe0a07e2ce6b799025b5865e7",
+    "balance": "1001000000000000000",
+    "deposited": "1000000000000000000",
+    "withdrawn": "0"
   },
-  "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c",
+  "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b",
   "evidence": {
     "base": {
-      "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-      "sequence": "0",
-      "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+      "sequence": "1",
+      "previousStateHash": "0x03a4949cf8dab89441a8dd3d97a00ba70241378963de55b71d4904f9947faaf7",
+      "transitionHash": "0x55d7d3aaec36d5dcc2f93931ea03c9f8af126ae418902c57be007f663070a546",
       "balance": "1000000000000000000",
-      "deposited": "1000000000000000000"
+      "deposited": "1000000000000000000",
+      "withdrawn": "0"
     },
-    "playerSignature": "0x",
-    "casinoSignature": "0x",
+    "playerSignature": "0x0b4d21d70375db74b5d5140399236706b832c96416b09386503684c2ba5f7fcd02d17c7ae4ef47ff9eb05221be13339dc3be076443022bf06740c39a52d249c41b",
+    "casinoSignature": "0xe9bbcfbbe3301f83cc24c02ddaac74d545baf2eaded6aa2cb7f8774809c02a2474205687f4e17d9088a44abf35a66dd3e3636a8d0cad822dbfc1aa52a10e1dcf1b",
     "step": {
       "operation": {
-        "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-        "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
-        "sequence": "1",
+        "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+        "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+        "sequence": "2",
         "kind": 1,
         "amount": "1000000000000000",
+        "recipient": "0x0000000000000000000000000000000000000000",
         "chance": "9131138316486228049",
         "prize": "2000000000000000",
-        "round": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9",
-        "seedHash": "0xf95f7e3bc56f388acb608f28410489b3ae466f494521a2de7dee7e01247166bc",
-        "memo": "0xfa22ab1e93a122f6bbaf309a0bc12974a1d6e3fccf6c61eec46f2ab580bb7916"
+        "round": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064",
+        "seedHash": "0xea1d67f022cb78a665653c306d850cb8364022e300a1979e0a828c11d579b74f",
+        "memo": "0x3961ce1ce0c4af6107dc57d15c2529aee4dfc895d15466e59b4c0f97fd553b55"
       },
-      "authorization": "0x310f61f0e595d2cab47c737aac5af28d5b297a943fbf843a6ecf80027341763e3e68b1792042276bb1e3eebf63a3cdbcdc1b6f436451235c38b5907adf4891381c",
-      "seed": "0x0e7c738595fef8c566df866eaa72eaaa65b04ffb1a7eeda049efc91d7fdb2221",
-      "secret": "0xabdbef940391493561a42b5576c188839c7376294258c4de39d4c4452118b673",
-      "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c"
+      "authorization": "0xd7fb858d156249da5fdb9f8440bcf0ab3e0fc64a2c0a83a5d42fb112d813b4f303f37d91e4c97ae6c77e2af808b21ffa0e82a22e95c62bc191bd180869b5390c1b",
+      "seed": "0x15a0475949567258453e0333760f324a2f243ef9f573009e0c42b40452deecc6",
+      "secret": "0xd4e24340d8948ea05a2e977910ee74f150ff1866f01423c0e429f913e71fe236",
+      "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b"
     }
   },
   "details": {
-    "id": "0x07f8d268f497cba8348ca4ea632f74b4545327b7b1bc57ac4d5f21ab381eb142",
+    "id": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "group": "hand-1"
   },
-  "operationId": "0x07f8d268f497cba8348ca4ea632f74b4545327b7b1bc57ac4d5f21ab381eb142",
+  "operationId": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
   "commission": "9990000998000",
   "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "bankroll": "99999985014999503000",
-  "nextRound": "0x8c3264f83c5bbb9fe48be555ccd793f911ef663066971bf495f7f9e019d19139"
+  "bankroll": "99997985014999503000",
+  "nextRound": "0x1bec23aaea291a614dc96efa7a96a0fd6a0020219eb6c0755e70b52f58fd1c1e"
 }
 ```
 
@@ -337,27 +358,28 @@ rejection reveals the round's secret and names the next round.
 ```json title="Request"
 {
   "request": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "previousStateHash": "0xa959347273365dd6d3c634256dfbbe4db6e7d303bab27f61f513462fd23eef9b",
-    "sequence": "2",
+    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "previousStateHash": "0xbb5ab2e2aa8df65bc80421a47d5a6dc0ec65fcc2fb54688a6c8cdf56d13dfd5d",
+    "sequence": "3",
     "kind": 1,
     "amount": "1000000000000000",
+    "recipient": "0x0000000000000000000000000000000000000000",
     "chance": "9223372036854775808",
     "prize": "2000000000000000",
-    "round": "0x8c3264f83c5bbb9fe48be555ccd793f911ef663066971bf495f7f9e019d19139",
-    "seedHash": "0x809e5c713fe8d387a697f4f5d7442819d190cc11da9432171db7ffa0850918d0",
-    "memo": "0xe874f410e33de0333b90435bb72d380da6f9cb76d2dd2816d5f6ab0f4df709ec"
+    "round": "0x1bec23aaea291a614dc96efa7a96a0fd6a0020219eb6c0755e70b52f58fd1c1e",
+    "seedHash": "0x7753a7d311a581c221a1c3cdf571037d0a8047e5f17ce8b4056c582bb72c288c",
+    "memo": "0xa0214a9d31981b7ff7699fb4cd3ac8fa5be6c5e14391a3d20866101465d8963f"
   },
   "details": {
-    "id": "0xa2b147194be992451b15908fddbc416c14c7509cae5ee2cd6a34fc9f5ea47fe6",
+    "id": "0xe55e3e09482a48fb40c70077e3f99d173414177d500ed4638179160bf7ce2806",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3"
   },
-  "signature": "0xd384ee18627936072251e9c1bac369cc0e9e1f3a64ff4696f116ecd253639be73506ec3738e139628c824cf7326a04280cfdc952343a36d76dcd6551f7da64fe1b",
+  "signature": "0x9710d443d3c6d113fc5a8eba764ee649d51700b0d0061fc702e1ed639257c7410a2a99f1e3037fbe1e2b83c4e36ba99a5d32577ed309e11bf80fd03b84438efd1c",
   "acknowledgment": {
-    "stateHash": "0xa959347273365dd6d3c634256dfbbe4db6e7d303bab27f61f513462fd23eef9b",
-    "signature": "0x9ad43b0deb9eb2a01ded1c8d65fd27ca0bda08aea2b3954045bb0005dd1414905bbf91adc2e6040181d0134903b61faa04d07616343810cb7d45c6e50bea13981c"
+    "stateHash": "0xbb5ab2e2aa8df65bc80421a47d5a6dc0ec65fcc2fb54688a6c8cdf56d13dfd5d",
+    "signature": "0x0e670bacfff91885dd82c3d6cb7bc854f1f8c2988a2930e1f86898a9b6f69cf8064d66ce308981a7b9e1d4cff3ea02eea9a245919a302855a348b0acd750118d1b"
   },
-  "seed": "0x41023df3fbb98208620a3a5747feb389abbe16fb65707b90fb2d31670d029425"
+  "seed": "0x8eddff43f7149caec170c85a98ba858824e139874e456b69a49ec844919d2747"
 }
 ```
 
@@ -366,43 +388,46 @@ rejection reveals the round's secret and names the next round.
   "status": "rejected",
   "reason": "The bankroll cannot take this casino bet",
   "request": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "previousStateHash": "0xa959347273365dd6d3c634256dfbbe4db6e7d303bab27f61f513462fd23eef9b",
-    "sequence": "2",
+    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "previousStateHash": "0xbb5ab2e2aa8df65bc80421a47d5a6dc0ec65fcc2fb54688a6c8cdf56d13dfd5d",
+    "sequence": "3",
     "kind": 1,
     "amount": "1000000000000000",
+    "recipient": "0x0000000000000000000000000000000000000000",
     "chance": "9223372036854775808",
     "prize": "2000000000000000",
-    "round": "0x8c3264f83c5bbb9fe48be555ccd793f911ef663066971bf495f7f9e019d19139",
-    "seedHash": "0x809e5c713fe8d387a697f4f5d7442819d190cc11da9432171db7ffa0850918d0",
-    "memo": "0xe874f410e33de0333b90435bb72d380da6f9cb76d2dd2816d5f6ab0f4df709ec"
+    "round": "0x1bec23aaea291a614dc96efa7a96a0fd6a0020219eb6c0755e70b52f58fd1c1e",
+    "seedHash": "0x7753a7d311a581c221a1c3cdf571037d0a8047e5f17ce8b4056c582bb72c288c",
+    "memo": "0xa0214a9d31981b7ff7699fb4cd3ac8fa5be6c5e14391a3d20866101465d8963f"
   },
   "details": {
-    "id": "0xa2b147194be992451b15908fddbc416c14c7509cae5ee2cd6a34fc9f5ea47fe6",
+    "id": "0xe55e3e09482a48fb40c70077e3f99d173414177d500ed4638179160bf7ce2806",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3"
   },
-  "operationId": "0xa2b147194be992451b15908fddbc416c14c7509cae5ee2cd6a34fc9f5ea47fe6",
+  "operationId": "0xe55e3e09482a48fb40c70077e3f99d173414177d500ed4638179160bf7ce2806",
   "state": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "sequence": "3",
-    "previousStateHash": "0xa959347273365dd6d3c634256dfbbe4db6e7d303bab27f61f513462fd23eef9b",
-    "transitionHash": "0xa262900681d266388a0f304a73585f7b735ac12a67c983141e3acac853c066ea",
-    "balance": "999000000000000000",
-    "deposited": "1000000000000000000"
+    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "sequence": "4",
+    "previousStateHash": "0xbb5ab2e2aa8df65bc80421a47d5a6dc0ec65fcc2fb54688a6c8cdf56d13dfd5d",
+    "transitionHash": "0xb0cd096d0a856c4a3c6310a143c7b95ea7a9d59a665990725a89b373349f03b7",
+    "balance": "1001000000000000000",
+    "deposited": "1000000000000000000",
+    "withdrawn": "0"
   },
-  "casinoSignature": "0x964cbf1f7187376516b175222c69d194f11b36ffe1ea921904b39bbfdb37a75a4df4dae5225ded059a5f0924da7b6cb0e81dfcb842fc2e2ad16c387b7cc1f7041c",
+  "casinoSignature": "0xb7a1dfc739c0392212979f8604d6cb0fecd5bff530ff5a3beea05526d5e3019b02c4f7662d4bfe809772acac660703440642f0027581654757d18d3bcb469c821b",
   "commission": "0",
   "evidence": {
     "base": {
-      "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-      "sequence": "1",
-      "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
-      "transitionHash": "0x020c50b991fa94180f2fd157d752507789eaad1473072f49a7e5e69ad63af98d",
-      "balance": "999000000000000000",
-      "deposited": "1000000000000000000"
+      "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+      "sequence": "2",
+      "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+      "transitionHash": "0xe56cfe8518544aaeb907795cb359008a92ea6defe0a07e2ce6b799025b5865e7",
+      "balance": "1001000000000000000",
+      "deposited": "1000000000000000000",
+      "withdrawn": "0"
     },
-    "playerSignature": "0x9ad43b0deb9eb2a01ded1c8d65fd27ca0bda08aea2b3954045bb0005dd1414905bbf91adc2e6040181d0134903b61faa04d07616343810cb7d45c6e50bea13981c",
-    "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c",
+    "playerSignature": "0x0e670bacfff91885dd82c3d6cb7bc854f1f8c2988a2930e1f86898a9b6f69cf8064d66ce308981a7b9e1d4cff3ea02eea9a245919a302855a348b0acd750118d1b",
+    "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b",
     "step": {
       "operation": {
         "channelId": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -410,8 +435,9 @@ rejection reveals the round's secret and names the next round.
         "sequence": 0,
         "kind": 0,
         "amount": 0,
-        "chance": "0",
-        "prize": "0",
+        "recipient": "0x0000000000000000000000000000000000000000",
+        "chance": 0,
+        "prize": 0,
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -422,9 +448,9 @@ rejection reveals the round's secret and names the next round.
       "casinoSignature": "0x"
     }
   },
-  "secret": "0xfabbf538387e242c434304dbc3997e33f4431b2ad37b07e7f8101d422f80a860",
-  "bankroll": "100000995005000501000",
-  "nextRound": "0x7fbdac4494d19c3f940c382c938d9e538f3a2bfe37cc5117a4bd84c5a6bfca72"
+  "secret": "0xd4277ff4f53826dd17729dac2f6de0a4cf366ea2199e193e4be8c88283c66fee",
+  "bankroll": "99998995005000501000",
+  "nextRound": "0x4c4387619801cb4a41198fe442d6c06cbdea8c006f8d37ae9031e56f19c2dc78"
 }
 ```
 
@@ -443,7 +469,10 @@ A developer bet's details, whose `meta` is the game's own JSON:
 ```
 
 `invalid` with `400` answers fields other than the operation's, details that do not hash to the memo, a missing
-seed and a debit's unknown counterparty; with `409`, details that break [the details rules](../reference/signed-messages.md#details-and-memo).
+seed, a debit's unknown counterparty, a withdrawal or a transfer whose `recipient` is not an address, or is zero or the
+contract, and a nonzero `recipient` on any other operation ("Only a withdrawal or a transfer names a recipient, and
+never the contract"); with `409`, details that break
+[the details rules](../reference/signed-messages.md#details-and-memo).
 `refused` answers a `request.channelId` other than `:id`, a bad signature or acknowledgment signature, an operation
 that is not the channel's next, an amount above the balance, and a casino bet whose chance or prize breaks the rules.
 
@@ -472,50 +501,53 @@ The reply is the operation's reply as recorded, without `bankroll` and `nextRoun
 {
   "status": "signed",
   "state": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "sequence": "1",
-    "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
-    "transitionHash": "0x020c50b991fa94180f2fd157d752507789eaad1473072f49a7e5e69ad63af98d",
-    "balance": "999000000000000000",
-    "deposited": "1000000000000000000"
+    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "sequence": "2",
+    "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+    "transitionHash": "0xe56cfe8518544aaeb907795cb359008a92ea6defe0a07e2ce6b799025b5865e7",
+    "balance": "1001000000000000000",
+    "deposited": "1000000000000000000",
+    "withdrawn": "0"
   },
-  "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c",
+  "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b",
   "evidence": {
     "base": {
-      "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-      "sequence": "0",
-      "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+      "sequence": "1",
+      "previousStateHash": "0x03a4949cf8dab89441a8dd3d97a00ba70241378963de55b71d4904f9947faaf7",
+      "transitionHash": "0x55d7d3aaec36d5dcc2f93931ea03c9f8af126ae418902c57be007f663070a546",
       "balance": "1000000000000000000",
-      "deposited": "1000000000000000000"
+      "deposited": "1000000000000000000",
+      "withdrawn": "0"
     },
-    "playerSignature": "0x",
-    "casinoSignature": "0x",
+    "playerSignature": "0x0b4d21d70375db74b5d5140399236706b832c96416b09386503684c2ba5f7fcd02d17c7ae4ef47ff9eb05221be13339dc3be076443022bf06740c39a52d249c41b",
+    "casinoSignature": "0xe9bbcfbbe3301f83cc24c02ddaac74d545baf2eaded6aa2cb7f8774809c02a2474205687f4e17d9088a44abf35a66dd3e3636a8d0cad822dbfc1aa52a10e1dcf1b",
     "step": {
       "operation": {
-        "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-        "previousStateHash": "0xcb111ba55bbeaa605bb7ac185746a75098a4593b93cb1155c99e8e52fd8ae9e2",
-        "sequence": "1",
+        "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+        "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
+        "sequence": "2",
         "kind": 1,
         "amount": "1000000000000000",
+        "recipient": "0x0000000000000000000000000000000000000000",
         "chance": "9131138316486228049",
         "prize": "2000000000000000",
-        "round": "0xb39efcd8ebe6465b195d6ac2970c5217d2e183abc34c799aa8bfa303c3acacb9",
-        "seedHash": "0xf95f7e3bc56f388acb608f28410489b3ae466f494521a2de7dee7e01247166bc",
-        "memo": "0xfa22ab1e93a122f6bbaf309a0bc12974a1d6e3fccf6c61eec46f2ab580bb7916"
+        "round": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064",
+        "seedHash": "0xea1d67f022cb78a665653c306d850cb8364022e300a1979e0a828c11d579b74f",
+        "memo": "0x3961ce1ce0c4af6107dc57d15c2529aee4dfc895d15466e59b4c0f97fd553b55"
       },
-      "authorization": "0x310f61f0e595d2cab47c737aac5af28d5b297a943fbf843a6ecf80027341763e3e68b1792042276bb1e3eebf63a3cdbcdc1b6f436451235c38b5907adf4891381c",
-      "seed": "0x0e7c738595fef8c566df866eaa72eaaa65b04ffb1a7eeda049efc91d7fdb2221",
-      "secret": "0xabdbef940391493561a42b5576c188839c7376294258c4de39d4c4452118b673",
-      "casinoSignature": "0x712b1e6f10ef39a7ef770e96c5287f19f1036f19742c6798bea7169c193b9051080275ae7849d59fca353ab6359975e623ea3d4c5bc2ddc995595355204c735e1c"
+      "authorization": "0xd7fb858d156249da5fdb9f8440bcf0ab3e0fc64a2c0a83a5d42fb112d813b4f303f37d91e4c97ae6c77e2af808b21ffa0e82a22e95c62bc191bd180869b5390c1b",
+      "seed": "0x15a0475949567258453e0333760f324a2f243ef9f573009e0c42b40452deecc6",
+      "secret": "0xd4e24340d8948ea05a2e977910ee74f150ff1866f01423c0e429f913e71fe236",
+      "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b"
     }
   },
   "details": {
-    "id": "0x07f8d268f497cba8348ca4ea632f74b4545327b7b1bc57ac4d5f21ab381eb142",
+    "id": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "group": "hand-1"
   },
-  "operationId": "0x07f8d268f497cba8348ca4ea632f74b4545327b7b1bc57ac4d5f21ab381eb142",
+  "operationId": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
   "commission": "9990000998000",
   "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 }
@@ -541,12 +573,12 @@ answers `{"acknowledged": true}` all the same.
 | Body field  | Type    | Meaning                                                               |
 | ----------- | ------- | --------------------------------------------------------------------- |
 | `stateHash` | bytes32 | The hash of the channel's latest checkpoint, the last reply's `state` |
-| `signature` | string  | The channel key's EIP-712 signature of that checkpoint                |
+| `signature` | string  | The account's EIP-712 signature of that checkpoint                    |
 
 ```json title="Request"
 {
-  "stateHash": "0x39156d11000824d5abff6f9dbc3287ba4eeed648ed8bdbf02c719c046241509c",
-  "signature": "0xe5a9331b7f0f48796657442e197d810ad476fec751d74df0843e4ebe2b9dd1a63b512fcea59f58c5ba0001a6095e6feec5523ba90c9c818e3416ea43f116a34b1b"
+  "stateHash": "0xbb5ab2e2aa8df65bc80421a47d5a6dc0ec65fcc2fb54688a6c8cdf56d13dfd5d",
+  "signature": "0x0e670bacfff91885dd82c3d6cb7bc854f1f8c2988a2930e1f86898a9b6f69cf8064d66ce308981a7b9e1d4cff3ea02eea9a245919a302855a348b0acd750118d1b"
 }
 ```
 
@@ -559,92 +591,6 @@ answers `{"acknowledged": true}` all the same.
 `unacknowledged` answers a hash that is not the latest checkpoint's, and `refused` a bad signature.
 
 **Errors:** [`unacknowledged`](index.md#errors) (409), [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors) (401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503), [`too-large`](index.md#errors) (413)
-
-## Closing
-
-### `POST /api/channels/:id/close`
-
-Asks for the casino's `Close` signature over the channel's latest checkpoint and the address to pay, to close it at
-once on-chain with `cooperativeClose`, which pays that address in the same transaction.
-
-**Auth:** channel access · **Idempotent:** yes
-
-The body carries evidence of the channel's latest checkpoint, either the last reply's evidence or the latest jointly
-signed checkpoint with the empty step, the address to pay, and the funding account's
-[`Close`](../reference/signed-messages.md#close) signature of the channel, that checkpoint's hash and the address. The
-casino checks that the evidence yields its latest checkpoint and that the funding account signed, records the channel
-as closing, so that it takes no more operations, and signs.
-The wallet then calls [`cooperativeClose`](../reference/contract.md#functions-that-change-state) with both signatures.
-
-| Path | Type    | Meaning     |
-| ---- | ------- | ----------- |
-| `id` | bytes32 | The channel |
-
-| Body field  | Type     | Meaning                                                                                                                 |
-| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `evidence`  | Evidence | [Evidence](../reference/signed-messages.md#evidence) of the latest checkpoint                                           |
-| `recipient` | address  | Where the close pays: any address but zero and the contract                                                             |
-| `signature` | string   | The `Close` of `{channelId, stateHash, recipient}` signed by the funding account, `opening.player`, not the channel key |
-
-| Response field | Type   | Meaning                             |
-| -------------- | ------ | ----------------------------------- |
-| `message`      | object | `{channelId, stateHash, recipient}` |
-| `signature`    | string | The casino's `Close` signature      |
-
-```json title="Request"
-{
-  "evidence": {
-    "base": {
-      "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-      "sequence": "8",
-      "previousStateHash": "0x4b50de24e2c162784bd97161b6137926ee06832337e8f0470b4bc0ced254a146",
-      "transitionHash": "0xc7a0466a9b9906cc5f28f2d8fe420bb034ec0fd679305df42cdef0ff7b8f7172",
-      "balance": "991900000000000000",
-      "deposited": "1000000000000000000"
-    },
-    "playerSignature": "0x5d61d4e9d0641ccbda471882a0c2a389be37e36c3b18361848e2d98eae84db8175dc10003384263e0199cce95112273296c9fc17f347c015dbeebfe0435df99b1c",
-    "casinoSignature": "0xcc40131e943130644dab7fe411806a3c0c46b493e7573df6499dbc7ee85fdba103f362e4ca4ebcd9ad0b4482707c35fad7ffb4d00c580e07275de09a1c3b1d5a1b",
-    "step": {
-      "operation": {
-        "channelId": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "previousStateHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "sequence": 0,
-        "kind": 0,
-        "amount": 0,
-        "chance": "0",
-        "prize": "0",
-        "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "memo": "0x0000000000000000000000000000000000000000000000000000000000000000"
-      },
-      "authorization": "0x",
-      "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
-      "casinoSignature": "0x"
-    }
-  },
-  "recipient": "0x8f6d3C1B2a4e5F7091c2d3E4f5A6b7C8d9e0f1a2",
-  "signature": "0xea7f2322aa67b2256896ba696a18201fa7ac2ce0f434eb8f3e66e2a5e2b0c1713b7088b71003ead04ccabbcca980c13b7ead5f63c05e65556808c2e4f08bf4c61c"
-}
-```
-
-```json title="Response"
-{
-  "message": {
-    "channelId": "0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78",
-    "stateHash": "0xb71fe8b5af210c2660a10dd0ec6d40ca608090aeb54356c682b494ff375fe0d0",
-    "recipient": "0x8f6d3C1B2a4e5F7091c2d3E4f5A6b7C8d9e0f1a2"
-  },
-  "signature": "0x5762910f655e34cd69cd3d9a06b81b35ab3675bc9335ace1e3a858e8e11094c348f2268f210782e27e092162107a6ba869f4311d774044831e08b90e5643ba181b"
-}
-```
-
-`invalid` answers a recipient that is not an address, is zero or is the contract. `refused` answers evidence of any
-other checkpoint ("Recover the latest checkpoint before closing") and a signature that is not the funding account's.
-
-**Errors:** [`invalid`](index.md#errors) (400), [`refused`](index.md#errors) (409), [`unauthorized`](index.md#errors)
-(401), [`busy`](index.md#errors) (429), [`rate-limited`](index.md#errors) (429), [`paused`](index.md#errors) (503),
-[`too-large`](index.md#errors) (413)
 
 ## Payouts and developer bets
 
@@ -673,7 +619,7 @@ rest. Payouts belong to the account, so any of its channels lists and collects t
 | `games`        | array   | Earnings only: `{game, earned, name}` for each game that earned it, the most first; `name` is the name the game is published under, or `null`                                                                                 |
 
 ```text title="Request"
-GET /api/channels/0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a84000/payouts
+GET /api/channels/0x14e04a66bf74771820a7400ff6cf065175b3d7eb25805a5bd1633b161af5d101/payouts
 ```
 
 ```json title="Response"
@@ -681,20 +627,20 @@ GET /api/channels/0x676222516382297b6d36412c216f14b4a3caa4cdff151c22f0eed69467a8
   {
     "source": "0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc",
     "index": 0,
-    "amount": "18503517716823",
-    "earned": "18503517716823",
+    "amount": "18503517611900",
+    "earned": "18503517611900",
     "collected": "0",
     "games": [
       {
         "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
-        "earned": "18503517716823",
+        "earned": "18503517611900",
         "name": "wheel"
       }
     ]
   },
   {
     "source": "0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263",
-    "index": 2,
+    "index": 32,
     "amount": "10000000000000000"
   }
 ]
@@ -723,24 +669,24 @@ and a settled one adds `payout`, what its settlement pays the player, and `settl
 `true` once a positive payout has been credited to a channel; a payout of `"0"` needs no collecting and stays `false`.
 
 ```text title="Request"
-GET /api/channels/0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283cf78/developer-bets?status=settled&after=0
+GET /api/channels/0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034/developer-bets?status=settled&after=0
 ```
 
 ```json title="Response"
 {
   "bets": [
     {
-      "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
+      "bet": "0x54dcdb0c1c8051ddf0b7cb98f3e2d04b97f53c2b9eaeaafdec2b7a0f198df40d",
       "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
       "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
       "status": "settled",
       "stake": "1000000000000000",
       "collected": false,
       "payout": "0",
-      "settledAt": 1790384229614
+      "settledAt": 1790585368584
     }
   ],
-  "cursor": "33000",
+  "cursor": "31000",
   "more": false
 }
 ```
@@ -749,8 +695,9 @@ GET /api/channels/0xc371347813a907f3f2f2b8b31acd535791ef417fb74d4a1173d48198c283
 
 ## The bankroll fund
 
-A holding belongs to the channel's funding account, so it outlives any one channel. [The bankroll fund](../wallet/bankroll-fund.md)
-explains investing; an investment is an [operation](#post-apichannelsidoperations).
+A holding belongs to the channel's account, so it outlives any one channel.
+[The bankroll fund](../wallet/bankroll-fund.md) explains investing; an investment is an
+[operation](#post-apichannelsidoperations).
 
 ### `GET /api/channels/:id/fund`
 
@@ -766,7 +713,7 @@ The casino answers this while paused.
 
 | Response field | Type           | Meaning                                                                                                       |
 | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------- |
-| `holder`       | address        | The channel's funding account                                                                                 |
+| `holder`       | address        | The channel's account                                                                                         |
 | `shares`       | string         | The shares held                                                                                               |
 | `sequence`     | number         | The number of the latest statement; 0 before any                                                              |
 | `statement`    | object or null | The latest [`ShareStatement`](../reference/signed-messages.md#bankroll-fund-messages), `{message, signature}` |
@@ -783,11 +730,11 @@ The casino answers this while paused.
       "sequence": "1",
       "shares": "10000000000000000",
       "amount": "10000000000000000",
-      "equity": "100002081496483283177",
-      "totalShares": "100002081496483283177",
-      "cause": "0xd99d6a6fc6eb8e6b50ed346d5b5624cf6853697318668c76c8318097a3555bf5"
+      "equity": "99999981496483388100",
+      "totalShares": "99999981496483388100",
+      "cause": "0x8d74fa437b02817bea70458451554e18d53b23685b1118d0057473f6e4f1af18"
     },
-    "signature": "0x5b8cfa746f3fd2dbf47bae38ae8479c10deba30d49122490bea251c076bc78252a1b6be8e69001274eb3f16c73d9afdd1d5f96bd67726316b8b94b95cd5444471b"
+    "signature": "0x63599632ce2c03cb5bb738f8d61744808f794993a5a11b526d9445d0927be7a27f05cb71c3be3f7af9e133170b0f707fb983dfe97455bb1cf9223be1011b81e11c"
   },
   "value": "10000000000000000"
 }
@@ -801,10 +748,10 @@ Burns shares at the current price; what they are worth leaves the bankroll and i
 
 **Auth:** channel access · **Idempotent:** yes, by statement: the same `Redeem` again returns its statement while it is the holding's latest
 
-The `Redeem` is signed by the key of an open channel of the holder, and its `sequence` is the holding's plus one. The
-amount must be more than zero and within the unreserved bankroll; a larger redemption is refused until the casino bets
-counting on that money settle. The amount is owed at once: [`…/payouts`](#get-apichannelsidpayouts) lists it under
-`FUND_ID`, to be collected with a credit.
+The `Redeem` names the channel's own account as its holder, which signs it on its open channel, and its `sequence` is
+the holding's plus one. The amount must be more than zero and within the unreserved bankroll; a larger redemption is
+refused until the casino bets counting on that money settle. The amount is owed at once:
+[`…/payouts`](#get-apichannelsidpayouts) lists it under `FUND_ID`, to be collected with a credit.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
@@ -813,7 +760,7 @@ counting on that money settle. The amount is owed at once: [`…/payouts`](#get-
 | Body field  | Type   | Meaning                                                                                              |
 | ----------- | ------ | ---------------------------------------------------------------------------------------------------- |
 | `message`   | object | The [`Redeem`](../reference/signed-messages.md#bankroll-fund-messages): `{holder, shares, sequence}` |
-| `signature` | string | The channel key's EIP-712 signature of `message`                                                     |
+| `signature` | string | The account's EIP-712 signature of `message`                                                         |
 
 | Response field | Type   | Meaning                                                                                       |
 | -------------- | ------ | --------------------------------------------------------------------------------------------- |
@@ -826,7 +773,7 @@ counting on that money settle. The amount is owed at once: [`…/payouts`](#get-
     "shares": "5000000000000000",
     "sequence": "2"
   },
-  "signature": "0x66ba4bfb54faf7a19c6a9fee393627a06116d319cd5e25d621c89e285f0fbad41a289bc9241f4555b9705eeed8d3a64319047c89b046e893cb8a80db6bd7d9ab1c"
+  "signature": "0x09cec4f31400e1f03272a8ba473fd256a25520885f2f961cb93a6b0b695beffd00af4e782086d805c9d2de1914fbe9c8343b23986656f34d61012274477715bb1c"
 }
 ```
 
@@ -838,11 +785,11 @@ counting on that money settle. The amount is owed at once: [`…/payouts`](#get-
       "sequence": "2",
       "shares": "5000000000000000",
       "amount": "5000000000000000",
-      "equity": "100012081496483283177",
-      "totalShares": "100012081496483283177",
+      "equity": "100009981496483388100",
+      "totalShares": "100009981496483388100",
       "cause": "0xe59cfada6bf7c1559c04a07651ffebf8840c423bdcb5fa32d7e4af72c006b62b"
     },
-    "signature": "0x6dc457bd54f914874fd646eb3cbd988430e22b1f2def70a226786dfd1d00add56f13919e8d63c82fd0bf08e56cb14a6fefd9e1fa48910f0086b02cf30517428a1c"
+    "signature": "0xea6a33f3d1a24b45524a2657be2b167734b4cfac87258e546f04b6e7e1ecaa143716c08c0ae35f28d64bb15f24fabf568e22d0e40aa6bb0c8a7803346679006a1c"
   }
 }
 ```
@@ -857,7 +804,7 @@ than are held, shares worth nothing, and an amount the bankroll cannot release y
 ## The developer bank
 
 A developer's bank holds its money at the casino: the stakes of its games' developer bets go in, its settlements and
-casino bets are paid from it. It belongs to the channel's funding account. A deposit is an
+casino bets are paid from it. It belongs to the channel's account. A deposit is an
 [operation](#post-apichannelsidoperations).
 
 ### `GET /api/channels/:id/bank`
@@ -891,9 +838,9 @@ The casino answers this while paused.
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
       "sequence": "1",
       "balance": "100000000000000000",
-      "cause": "0x8fe78efba9627ab4d3cefcf345599b103c587beb5e0455d56de0132a295ec5d2"
+      "cause": "0x12aaa521dd723ee91de745552fd895c0ac4da5cc8f35bf8e74a44493f3e1a813"
     },
-    "signature": "0x25239399c0f84b32c13664d2d2ce0b2f1d0b18167b7248e9fe63622977bead1069c9680ac630aa83f8572609f9d419a06838bc5ec0bf33c7a19e032ebb104f381b"
+    "signature": "0xdcc693fbe340257fe3ff07bf4589d692857a796383bcc433dba245280e3650e83e88949c8f949851854431966a46750698723aa193430e34f18fa56ac00937381b"
   }
 }
 ```
@@ -904,21 +851,21 @@ The casino answers this while paused.
 
 Takes money out of the account's bank; it is owed at once and collected with a credit.
 
-**Auth:** channel access · **Idempotent:** yes, by statement: the same `Withdraw` again returns its statement while it is the bank's latest
+**Auth:** channel access · **Idempotent:** yes, by statement: the same `BankWithdraw` again returns its statement while
+it is the bank's latest
 
-The `Withdraw` names the channel's own account, is signed by the channel's key, and its `sequence` is the bank's plus
-one. Nothing in a bank is reserved: any amount up to the balance may leave at any time.
-[`…/payouts`](#get-apichannelsidpayouts) then lists it under `BANK_ID`, indexed by its record in the signing history,
-since every bank counts its own `sequence`.
+The `BankWithdraw` names the channel's own account, which signs it, and its `sequence` is the bank's plus one. Nothing
+in a bank is reserved: any amount up to the balance may leave at any time. [`…/payouts`](#get-apichannelsidpayouts) then
+lists it under `BANK_ID`, indexed by its record in the signing history, since every bank counts its own `sequence`.
 
 | Path | Type    | Meaning     |
 | ---- | ------- | ----------- |
 | `id` | bytes32 | The channel |
 
-| Body field  | Type   | Meaning                                                                                                    |
-| ----------- | ------ | ---------------------------------------------------------------------------------------------------------- |
-| `message`   | object | The [`Withdraw`](../reference/signed-messages.md#developer-bank-messages): `{developer, amount, sequence}` |
-| `signature` | string | The channel key's EIP-712 signature of `message`                                                           |
+| Body field  | Type   | Meaning                                                                                                        |
+| ----------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `message`   | object | The [`BankWithdraw`](../reference/signed-messages.md#developer-bank-messages): `{developer, amount, sequence}` |
+| `signature` | string | The account's EIP-712 signature of `message`                                                                   |
 
 | Response field | Type   | Meaning                                                                                     |
 | -------------- | ------ | ------------------------------------------------------------------------------------------- |
@@ -931,7 +878,7 @@ since every bank counts its own `sequence`.
     "amount": "10000000000000000",
     "sequence": "2"
   },
-  "signature": "0xfd79e48a771efe536c51d4a9c5846d7f114fb391bf23f84dc72dbbdb50337b7577573ff27e7e54e4a2aa70e1f7a0aa345440c39f8c7fad4da1c934699e8270771b"
+  "signature": "0x59ce2609dcd4d4347356d3cebec939c0e1df3bdde9cdb63783c8337a3a3d30d74a6da474f518758e2511184267d3c939d871b67896b42fde0eb47f166eca82a31b"
 }
 ```
 
@@ -942,9 +889,9 @@ since every bank counts its own `sequence`.
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
       "sequence": "2",
       "balance": "91000000000000000",
-      "cause": "0xe11342a24d1be99ed677a164fc5a73cdc2c6266e826a7e934ed548c530b25c53"
+      "cause": "0xae4b7b8ab43e358c97f1a7c881463b83053bc606a5a1ae444373baa5ff6d5378"
     },
-    "signature": "0x35884abb79a8f16a3931d1c95cb4fe689414cf86bc5fe05b16456b49e8823303781ad7b33fa4cc15df1ebc50086177b01809d837064911fbeae5b3b4763054661b"
+    "signature": "0x020a66cfcfba4572eae84461d1000891b783b307ba54df09710ae6350810c2017d9d3978f1f5ab2b738e8cf1f6cd6937c793f968c3b35e89b23914814baf1af11b"
   }
 }
 ```
@@ -989,9 +936,9 @@ The reply is the player's [profile](public.md#get-apiplayersname).
 
 ```json title="Response"
 {
-  "uname": "biop5et6ov6i5sn3c6p7vxhx",
+  "uname": "8h3hh3edgejmtdp2owso4ak7",
   "alias": "studio",
-  "since": 1790384228636,
+  "since": 1790585368360,
   "stats": {
     "plays": 0,
     "staked": "0",
@@ -1035,9 +982,9 @@ The reply is the player's [profile](public.md#get-apiplayersname).
 
 ```json title="Response"
 {
-  "uname": "biop5et6ov6i5sn3c6p7vxhx",
+  "uname": "8h3hh3edgejmtdp2owso4ak7",
   "alias": "studio",
-  "since": 1790384228636,
+  "since": 1790585368360,
   "stats": {
     "plays": 0,
     "staked": "0",

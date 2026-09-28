@@ -79,8 +79,8 @@ open it: "In the wallet, choose Open a game by its URL and paste that address."
 
 [scripts/verify-evidence.ts](../../scripts/verify-evidence.ts) verifies a channel's evidence bundle and, given an RPC,
 reads the channel on-chain and sends the contract call that closes, challenges, finalizes or collects it. It needs no
-casino API and no channel key. When to use it: [backups and recovery](../wallet/backups-and-recovery.md). `npm run`
-runs it from play's root, so relative paths are read from there.
+casino API. When to use it: [backups and recovery](../wallet/backups-and-recovery.md). `npm run` runs it from play's
+root, so relative paths are read from there.
 
 ```sh
 npm run recover -- channel.json --rpc https://ethereum-sepolia-rpc.publicnode.com --action inspect
@@ -107,21 +107,24 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
 
 ### Recovery actions
 
-| Action      | Contract call                                               | Who may send it                                      | Sends nothing when                                       |
-| ----------- | ----------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
-| `inspect`   | None                                                        | Anyone                                               | –                                                        |
-| `start`     | `startClose(evidence)`                                      | The channel's funding account, or the casino's owner | The channel is closing or finalized                      |
-| `challenge` | `challengeClose(evidence)`                                  | Anyone                                               | The closing state is at the evidence's sequence or later |
-| `finalize`  | `finalizeClose(channelId)`                                  | Anyone, from the challenge deadline                  | The channel is finalized                                 |
-| `claim`     | `claim(channelId)`, or `claimTo(channelId, to)` with `--to` | Anyone; `claimTo` only the channel's funding account | The claim is paid in full                                |
+| Action      | Contract call                                               | Who may send it                              | Sends nothing when                                       |
+| ----------- | ----------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------- |
+| `inspect`   | None                                                        | Anyone                                       | –                                                        |
+| `start`     | `startClose(evidence)`                                      | The channel's account, or the casino's owner | The channel is closing or finalized                      |
+| `challenge` | `challengeClose(evidence)`                                  | Anyone                                       | The closing state is at the evidence's sequence or later |
+| `finalize`  | `finalizeClose(channelId)`                                  | Anyone, from the challenge deadline          | The channel is finalized                                 |
+| `claim`     | `claim(channelId)`, or `claimTo(channelId, to)` with `--to` | Anyone; `claimTo` only the channel's account | The claim is paid in full                                |
 
 - Without `--rpc`, `inspect` checks the bundle's signatures against the identity it claims and prints the verified
-  state.
+  state. Evidence on the channel's [base](signed-messages.md#the-base) has no signatures to check: it prints
+  `unsignedBase: true`.
 - With `--rpc`, `inspect` also checks, at one canonical block, the chain ID, that the contract's owner is the bundle's
-  operator, that the registered player, signer and opening state match the bundle, and that the contract supports its
-  evidence. It prints the channel's status, challenge deadline and closing state, the signed balance, what a close on
-  the evidence is owed (`owed`: that balance plus any deposit it has not taken in), the claim with what is paid and what
-  remains, and how the claim stands against the contract's cash, as `paymentStatus`:
+  operator, that the registered player matches the bundle, and that the contract supports its evidence. It prints the
+  channel's status, challenge deadline and closing state, the deposits the contract holds for the channel
+  (`principal`) and what it has paid out of the channel (`paidOut`), the signed balance, what a close on the evidence
+  is owed (`owed`: that balance plus any deposit it has not taken in and what it withdrew that the contract has not
+  paid, less what the contract paid out that it did not withdraw), the claim with what is paid and what remains, and
+  how the claim stands against the contract's cash, as `paymentStatus`:
 
   | `paymentStatus`                           | Meaning                                                                             |
   | ----------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -169,9 +172,9 @@ npm run watchtower -- --deployment trusted.json --evidence channel.json --journa
 | `--journal FILE`    | Required. The transaction journal. A lock file beside it, its path with `.lock`, keeps a second instance out |
 | `--once`            | Run one tick and exit, with status 1 if it failed                                                            |
 
-| Variable               | Meaning                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------- |
-| `HOOKEDIN_RELAYER_KEY` | Required. The key that sends and pays for challenges, funded apart from any funding or settlement key |
+| Variable               | Meaning                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------- |
+| `HOOKEDIN_RELAYER_KEY` | Required. The key that sends and pays for challenges, funded apart from the account it defends |
 
 ### The deployment file
 
@@ -201,7 +204,7 @@ The `deployment` object of a wallet configuration, such as the one in
   the hash of the journal's pending transaction or `null`. A failed tick prints `{ severity: "critical", reason }` to
   standard error, and the next tick runs as usual.
 - `SIGINT` and `SIGTERM` stop it after the current tick.
-- It cannot start a close, and needs neither the channel key nor the funding key.
+- It cannot start a close, and does not need the account's key.
 
 ### Alerts
 

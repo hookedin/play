@@ -64,6 +64,15 @@ const plainEth = (value: string | number | bigint | undefined) =>
     .replace(/(\.\d*?)0+$/, '$1')
     .replace(/\.$/, '');
 const short = (value: string | null | undefined) => (value ? `${value.slice(0, 8)}…${value.slice(-6)}` : '—');
+/** A typed amount of ETH, in wei: null for anything that is not an amount above zero. */
+const ethAmount = (text: string) => {
+  try {
+    const value = parseEther(text);
+    return value > 0n ? value : null;
+  } catch {
+    return null;
+  }
+};
 /** What each operation the wallet signs is, as the banner of a saved one names it. */
 const OPERATIONS: Record<string, string> = {
   'casino-bet': 'casino bet',
@@ -75,6 +84,7 @@ const OPERATIONS: Record<string, string> = {
   divest: 'bankroll payout',
   withdrawn: 'bank withdrawal',
   earnings: 'earnings payout',
+  withdrawal: 'withdrawal',
 };
 /** A saved operation in words: what it is, the ID the casino knows it by and the sequence it was signed at, and what the
  * last attempt to send it ran into. */
@@ -518,12 +528,12 @@ function renderWallet() {
     // What the deposit address holds, read from the chain: until it has been, there is nothing to show.
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
     status = Number(state.channelStatus),
-    closing = Boolean(wallet.channel) && !wallet.funded;
+    closing = status === 2 || Boolean(wallet.channel?.closing);
   for (const id of ['balance-amount', 'sheet-balance']) $(id).textContent = plainEth(balance);
   $('balance-note').textContent = arriving
-    ? `${plainEth(arriving)} ETH of it is on its way in from your deposit address.`
-    : status === 2
-      ? 'Closing: once its 24-hour window ends, finish the close under Recovery and collect it.'
+    ? `${plainEth(arriving)} ETH of it is on its way into your balance.`
+    : state.closingChannelId && !state.channelId
+      ? 'Your last balance is closing: finish the close under Recovery once its 24 hours are up, and collect it. A deposit opens your next balance.'
       : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
@@ -549,60 +559,75 @@ function renderWallet() {
           : wallet.recoveryOnly
             ? `The casino is unavailable, so ETH sent here waits at this address.${held}`
             : wallet.forceClosed
-              ? `Your last balance was closed without the casino, so ETH here waits for you to add it or withdraw it.${held}`
+              ? `Your last balance is closed or closing, so ETH here waits for you to add it to a new balance or withdraw it.${held}`
               : closing
                 ? `Your balance is closing: ETH sent here waits until you choose what to do with it.${held}`
-                : 'Waiting for ETH. It goes into your balance by itself.';
+                : !wallet.autoDeposit
+                  ? `ETH sent here stays at this address: adding it to your balance by itself is off in Settings.${held}`
+                  : 'Waiting for ETH. All of it goes into your balance by itself.';
   if ($('deposit-status').textContent !== depositStatus) $('deposit-status').textContent = depositStatus;
-  const addable = wallet.forceClosed && !wallet.recoveryOnly && atAddress > wallet.gasReserve;
+  const addable = (wallet.forceClosed || !wallet.autoDeposit) && !wallet.recoveryOnly && !closing && atAddress > 0n;
   $('add-to-balance').classList.toggle('hidden', !addable);
   $<HTMLButtonElement>('add-to-balance').disabled = busy || !ready;
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
 
-  // Withdraw: the whole balance through a close that pays the address entered; with none open, what the deposit
-  // address holds.
+  // Withdraw: any part of the signed balance, or all of it, which the casino then pays to the address entered; with
+  // no balance open, what the deposit address holds.
   const to = $<HTMLInputElement>('withdraw-to').value.trim(),
     valid = isAddress(to),
     own = valid && same(to, wallet.address),
-    c = wallet.channel,
-    amount = c ? balance : atAddress;
+    c = status === 1 && !closing ? wallet.channel : null,
+    into = Boolean(c) && $<HTMLInputElement>('withdraw-transfer').checked,
+    signed = BigInt(c?.state.balance || 0),
+    typed = $<HTMLInputElement>('withdraw-amount').value.trim(),
+    wanted = typed ? ethAmount(typed) : null,
+    amount = c ? (wanted ?? signed) : atAddress;
+  $('withdraw-amount-field').classList.toggle('hidden', !c);
+  $('withdraw-transfer-field').classList.toggle('hidden', !c);
   $<HTMLButtonElement>('withdraw').disabled =
     busy ||
     !ready ||
     !valid ||
     own ||
-    amount === 0n ||
-    (Boolean(c) && (status !== 1 || Boolean(wallet.pending) || wallet.recoveryOnly));
-  $('withdraw').textContent = amount > 0n ? `Withdraw ${plainEth(amount)} ETH` : 'Withdraw';
+    !amount ||
+    amount > (c ? signed : atAddress) ||
+    Boolean(wallet.channel && status === 2) ||
+    (Boolean(c) && (Boolean(wallet.pending) || wallet.recoveryOnly));
+  $('withdraw').textContent = amount
+    ? into
+      ? `Put ${plainEth(amount)} ETH into their balance`
+      : `Withdraw ${plainEth(amount)} ETH`
+    : 'Withdraw';
   $('withdraw-help').textContent = !ready
     ? 'Connecting to your wallet…'
-    : c && wallet.recoveryOnly
-      ? 'The casino is unavailable: close without it under Wallet → Recovery.'
-      : c && status === 2
-        ? 'Your balance is closing: once its 24-hour window ends, finish the close under Recovery and collect it.'
+    : wallet.channel && closing
+      ? 'Your balance is closing: once its 24-hour window ends, finish the close under Recovery and collect it.'
+      : c && wallet.recoveryOnly
+        ? 'The casino is unavailable: close without it under Wallet → Recovery.'
         : wallet.pending?.kind === 'taken-in'
           ? 'A deposit is on its way into your balance. Withdraw once it has arrived.'
           : wallet.pending
             ? 'Finish the operation in flight first.'
-            : amount === 0n
-              ? 'Nothing to withdraw: your balance is empty.'
-              : to && !valid
-                ? 'Enter an address: 0x and 40 hexadecimal characters.'
-                : own
-                  ? 'That is your deposit address: withdraw to another.'
-                  : c?.closing
-                    ? 'Your withdrawal started and did not finish: withdraw again to finish it.'
-                    : c
-                      ? `Your whole balance goes to this address in one transaction.${active ? ' The open game gives back what it holds.' : ''}`
-                      : 'Everything at your deposit address goes to this address. The network fee comes out of it.';
+            : c && typed && amount === null
+              ? 'Enter an amount of ETH, such as 0.01.'
+              : !(c ? signed : atAddress)
+                ? 'Nothing to withdraw: your balance is empty.'
+                : amount && amount > (c ? signed : atAddress)
+                  ? `Your balance holds ${plainEth(signed)} ETH.`
+                  : to && !valid
+                    ? 'Enter an address: 0x and 40 hexadecimal characters.'
+                    : own
+                      ? 'That is your deposit address: withdraw to another.'
+                      : c
+                        ? `Your balance pays it now, and the contract ${into ? "puts it into that account's HookedIn balance, opening one if it has none" : 'sends it to this address'}.${amount === signed ? (active ? ' The open game gives back what it holds.' : '') : ' The rest stays in your balance.'}`
+                        : 'Everything at your deposit address goes to this address. The network fee comes out of it.';
   $('withdraw-help').classList.toggle('check-failed', Boolean(to) && (!valid || own));
 
   $('pending-banner').classList.toggle(
     'hidden',
-    !((wallet.pending && wallet.pending.kind !== 'taken-in') || wallet.needsOpening || wallet.transactionIntent) ||
-      busy,
+    !((wallet.pending && wallet.pending.kind !== 'taken-in') || wallet.transactionIntent) || busy,
   );
   const challengeExpired = Date.now() / 1000 >= Number(state.deadline);
   $('challenge-banner').classList.toggle('hidden', !state.needsChallenge);
@@ -614,13 +639,13 @@ function renderWallet() {
   $<HTMLButtonElement>('challenge-now').disabled = busy || !state.needsChallenge || challengeExpired;
   $('pending-summary').textContent = wallet.transactionIntent
     ? 'A transaction is waiting for confirmation. Retry checks it, and Speed up resends it with a higher fee.'
-    : wallet.needsOpening
-      ? 'Your deposit needs finishing. Its keys are saved: retry to complete it.'
-      : wallet.pending
-        ? pendingSummary(wallet.pending)
-        : '';
+    : wallet.pending
+      ? pendingSummary(wallet.pending)
+      : '';
   $<HTMLButtonElement>('speed-up-transaction').classList.toggle('hidden', !wallet.transactionIntent);
   $<HTMLButtonElement>('speed-up-transaction').disabled = busy || !wallet.transactionIntent;
+  $<HTMLInputElement>('auto-deposit').checked = wallet.autoDeposit;
+  $<HTMLInputElement>('auto-deposit').disabled = busy;
   $<HTMLButtonElement>('export-evidence').disabled = busy || !wallet.channel;
   $<HTMLButtonElement>('start-close').disabled = busy || !wallet.channel || Number(state.channelStatus) !== 1;
   for (const id of ['import-wallet', 'recover-wallet']) $<HTMLButtonElement>(id).disabled = busy;
@@ -731,7 +756,12 @@ function renderActivity() {
       if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
       if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
       if (receipt.to) facts.push(['To', receipt.to]);
+      if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
+      // One the contract has not paid yet can be sent by this account too, as the casino does once house cash covers it.
+      if (receipt.withdrawal && !receipt.paid && !receipt.returned)
+        facts.push(['Payment', payNow(receipt.operationId)]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
+      if (receipt.paidIn) facts.push(['Paid in', transactionLink(receipt.paidIn, receipt.paidIn)]);
       if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
       item = createActivityEntry({
         ...presentation,
@@ -750,30 +780,57 @@ function renderActivity() {
   for (const row of existing.values()) row.remove();
   filterActivity(list, $<HTMLInputElement>('activity-search').value, $('activity-empty'), $('activity-visible-count'));
 }
-/** The balance's channel, for recovery: its state on the chain, and the close, challenge and collect a player can do
- * without the casino. */
+/** A button that has the contract pay a withdrawal or transfer now, sent from this account. */
+function payNow(operationId: string) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'button small';
+  button.textContent = 'Pay it now';
+  button.addEventListener('click', () =>
+    task(async () => {
+      await wallet.payWithdrawal(operationId);
+      toast('Paid on-chain.');
+    }),
+  );
+  return button;
+}
+/** The balance's channel and any whose close is under way, for recovery: their state on the chain, and the lock in,
+ * close, challenge and collect a player can do without the casino. */
 function renderRecovery() {
-  const state = wallet.publicState;
-  const open = Boolean(state.channelId),
-    status = Number(state.channelStatus);
-  $('channel-status').textContent = state.channelId
-    ? `Channel ${short(state.channelId)} · ${status === 2 ? 'closing' : status === 1 ? 'open' : 'opening'}`
-    : wallet.missingChannel
-      ? 'This account has a balance open that this browser has no evidence for: import its recovery bundle.'
-      : 'No balance open.';
-  $('channel-observation').classList.toggle('hidden', !open);
-  $('channel-observation').textContent =
-    `Deposited ${plainEth(state.protectedDeposit || '0')} ETH, protected by the contract. Last checked ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'never: refresh before acting'} · saved sequence ${state.savedSequence || '0'}${status === 2 ? ` · the close proposes sequence ${state.closingSequence || '0'}, ${plainEth(state.balanceAtRisk || '0')} ETH less than yours` : ''}${state.challengePending ? ' · a challenge is on its way' : ''}.`;
-  $('challenge-deadline').textContent = Number(state.deadline)
-    ? `The close can be challenged until ${new Date(Number(state.deadline) * 1000).toLocaleString()}.`
-    : '';
-  const busy = uiBusy || wallet.busy;
-  $<HTMLButtonElement>('channel-export').disabled = !wallet.channel || busy;
-  $<HTMLButtonElement>('channel-start-close').disabled = !wallet.channel || status !== 1 || busy;
-  $<HTMLButtonElement>('channel-challenge').disabled =
-    !state.needsChallenge || Date.now() / 1000 >= Number(state.deadline) || busy;
-  $<HTMLButtonElement>('channel-finalize').disabled =
-    status !== 2 || Date.now() / 1000 < Number(state.deadline) || busy;
+  const state = wallet.publicState,
+    busy = uiBusy || wallet.busy,
+    open = Number(state.channelStatus) === 1 && !wallet.channel?.closing,
+    closing = state.closingChannelId,
+    deadline = Number(state.deadline);
+  $('channel-status').textContent = wallet.missingChannel
+    ? "This balance was played in another browser: restore that wallet's backup, or import its recovery bundle."
+    : [
+        state.channelId ? `Channel ${short(state.channelId)} · ${open ? 'open' : 'closing'}` : 'No balance open',
+        closing ? `channel ${short(closing)} · closing` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+  $('channel-observation').classList.toggle('hidden', !state.channelId && !closing);
+  $('channel-observation').textContent = [
+    open
+      ? `The contract holds ${plainEth(state.principal || '0')} ETH of your deposits for this balance, at saved sequence ${state.savedSequence || '0'}.`
+      : '',
+    closing
+      ? `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${plainEth(state.balanceAtRisk || '0')} ETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
+      : '',
+    `Last checked ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'never: refresh before acting'}.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  $('challenge-deadline').textContent =
+    closing && deadline ? `The close can be challenged until ${new Date(deadline * 1000).toLocaleString()}.` : '';
+  $<HTMLButtonElement>('channel-export').disabled = !(wallet.channel || wallet.closingChannel) || busy;
+  // Locking in moves winnings into the deposits: with none above them, there is nothing to lock in.
+  $<HTMLButtonElement>('channel-lock').disabled =
+    !open || BigInt(state.balance || 0) <= BigInt(state.principal || 0) || Boolean(wallet.pending) || busy;
+  $<HTMLButtonElement>('channel-start-close').disabled = !open || busy;
+  $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
+  $<HTMLButtonElement>('channel-finalize').disabled = !closing || Date.now() / 1000 < deadline || busy;
 }
 let claimLimit = 20;
 let claimsShown = '';
@@ -1178,7 +1235,7 @@ function renderProfile() {
   $<HTMLAnchorElement>('wallet-name-link').href = name ? profilePath(name) : '/';
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
-    $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.channel?.key || Boolean(wallet.pending);
+    $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.funded || Boolean(wallet.pending);
   $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !open;
   $('clear-alias').classList.toggle('hidden', !wallet.alias);
   $('alias-note').textContent = !open
@@ -1215,7 +1272,7 @@ function renderProfile() {
 }
 /** This account's bank as a developer, as the casino has it now. */
 async function refreshBank() {
-  if (!wallet.channel?.key) return void ($('bank-balance').textContent = '—');
+  if (!wallet.channel?.registered) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();
   $('bank-balance').textContent = `${formatEther(balance)} ETH`;
 }
@@ -1606,6 +1663,16 @@ $<HTMLButtonElement>('speed-up-transaction').addEventListener('click', () =>
     toast('Sent again with a higher fee. Retry to check for confirmation.');
   }),
 );
+$<HTMLInputElement>('auto-deposit').addEventListener('change', () => {
+  // Read before the task renders the page again from the wallet, which still has the old setting.
+  const on = $<HTMLInputElement>('auto-deposit').checked;
+  void task(async () => {
+    await wallet.setAutoDeposit(on);
+    toast(
+      on ? 'ETH that arrives goes into your balance by itself.' : 'ETH that arrives stays at your deposit address.',
+    );
+  });
+});
 $<HTMLButtonElement>('add-to-balance').addEventListener('click', () =>
   task(async () => {
     const before = BigInt(wallet.publicState.balance || 0);
@@ -1613,27 +1680,35 @@ $<HTMLButtonElement>('add-to-balance').addEventListener('click', () =>
     funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
   }),
 );
-$<HTMLInputElement>('withdraw-to').addEventListener('input', () => renderWallet());
+for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-transfer'])
+  $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw').addEventListener('click', () =>
   task(async () => {
     const to = getAddress($<HTMLInputElement>('withdraw-to').value.trim()),
-      channelId = wallet.channelId;
-    closeGame();
-    if (!$('page-play').classList.contains('hidden')) {
-      showPage('library');
-      history.replaceState(null, '', '/');
+      typed = $<HTMLInputElement>('withdraw-amount').value.trim(),
+      open = Number(wallet.publicState.channelStatus) === 1 && !wallet.channel?.closing,
+      transfer = open && $<HTMLInputElement>('withdraw-transfer').checked,
+      amount = open && typed ? ethAmount(typed) : null;
+    if (open && typed && amount === null) throw new Error('Enter an amount of ETH, such as 0.01.');
+    // A partial withdrawal leaves the open game its limit; a whole one takes back what the game holds.
+    if (!amount || amount >= BigInt(wallet.channel?.state.balance || 0)) {
+      closeGame();
+      if (!$('page-play').classList.contains('hidden')) {
+        showPage('library');
+        history.replaceState(null, '', '/');
+      }
     }
-    const hash = await wallet.withdraw(to);
-    // What the transaction paid, as its receipt says, and what a close still owes, as the contract does.
-    const paid = BigInt(wallet.history.find(entry => entry.operationId === 'tx:' + hash)?.amount ?? 0),
-      claim = channelId && wallet.publicState.claims.find((c: any) => c.channelId === channelId),
-      unpaid = claim ? BigInt(claim.amount) - BigInt(claim.paid) : 0n;
+    const receipt = await wallet.withdraw(to, amount ?? undefined, { transfer });
     $<HTMLInputElement>('withdraw-to').value = '';
+    $<HTMLInputElement>('withdraw-amount').value = '';
+    $<HTMLInputElement>('withdraw-transfer').checked = false;
     $<HTMLDialogElement>('wallet-dialog').close();
     toast(
-      unpaid > 0n
-        ? `${plainEth(paid)} ETH went to ${short(to)}. ${plainEth(unpaid)} ETH of winnings follows as the bankroll has the cash: see Wallet.`
-        : `Withdrew ${plainEth(paid)} ETH to ${short(to)}.`,
+      transfer
+        ? `Put ${plainEth(receipt.amount)} ETH into ${short(to)}'s balance: the contract pays it in, and Activity shows when it has.`
+        : receipt.withdrawal
+          ? `Withdrew ${plainEth(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
+          : `Withdrew ${plainEth(receipt.amount)} ETH to ${short(to)}.`,
     );
   }),
 );
@@ -1668,8 +1743,20 @@ $<HTMLButtonElement>('divest').addEventListener('click', () =>
     await refreshFund();
   }),
 );
+// The open balance's bundle, and the bundle of any channel still closing beside it.
 $<HTMLButtonElement>('channel-export').addEventListener('click', () =>
-  task(async () => downloadEvidence(await wallet.exportEvidence())),
+  task(async () => {
+    for (const channelId of new Set([wallet.channelId, wallet.closingChannel?.state.channelId]))
+      if (channelId) downloadEvidence(await wallet.exportEvidence(channelId));
+  }),
+);
+$<HTMLButtonElement>('channel-lock').addEventListener('click', () =>
+  task(async () => {
+    // All of the balance goes out and back in: the open game gives back what it holds.
+    closeGame();
+    await wallet.lockIn();
+    toast('Locking in: all of your balance comes back in as deposits, which the contract holds.');
+  }),
 );
 $<HTMLButtonElement>('channel-start-close').addEventListener('click', () =>
   task(async () => {
@@ -1822,7 +1909,7 @@ $<HTMLSelectElement>('network-mode').value = network;
 $('network-name').textContent = wallet.networkName;
 $('deposit-instructions').textContent = `Send ${wallet.networkName} ETH to your deposit address`;
 $('deposit-note').textContent =
-  `ETH sent on another network does not arrive. ${formatEther(wallet.gasReserve)} ETH stays at this address to pay network fees.`;
+  'ETH sent on another network does not arrive. What arrives here goes into your balance less the network fee of adding it.';
 for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-casino-link]')) link.href = casinoURL;
 if (settingsWarning) toast(settingsWarning, true);
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
@@ -1852,7 +1939,7 @@ try {
   renderWallet();
   renderActivity();
   void refreshActivity();
-  if ((wallet.pending && wallet.pending.kind !== 'taken-in') || wallet.needsOpening)
+  if (wallet.pending && wallet.pending.kind !== 'taken-in')
     toast('An operation is saved and unfinished. Use Retry above to finish it safely.');
   await route();
 } catch (error: any) {

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { id, ZeroAddress, ZeroHash } from 'ethers';
+import { ZeroAddress } from 'ethers';
 import { CasinoWallet, HISTORICAL_CHANNEL_BATCH } from '../client/wallet.ts';
+import { channelId } from '../protocol/protocol.ts';
 import { MemoryStore } from '../client/storage.ts';
 
 test('historical polling stays bounded, sweeps all evidence and prioritizes reorged active channels', async () => {
@@ -12,7 +13,9 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
   wallet.recoveryOnly = true;
   wallet.reader = {} as any;
   wallet.assertNetwork = async () => {};
-  const keys = Array.from({ length: 513 }, (_, i) => id('history-' + i));
+  // The account's channels, each after a close started on the one before: the last is closing, and the account's
+  // current channel is the next, unopened.
+  const keys = Array.from({ length: 513 }, (_, i) => channelId(ZeroAddress, i));
   for (const key of keys)
     wallet.channels[key] = {
       opening: { deposit: '10' },
@@ -20,7 +23,7 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
       onchain: { status: 3 },
       claim: { amount: '10', paid: '10' },
     } as any;
-  let active = keys.at(-1),
+  let current = keys.length - 1,
     reads: any[] = [],
     fail = false;
   const seen = new Set();
@@ -30,37 +33,41 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
     accept: async () => {},
     corroborate: async (_: any, read: any) => read({ getBlock: async () => ({ hash: 'canonical' }) }),
     contractRead: async (_: any, method: any, [key]: any) => {
-      if (method === 'activeChannel') return active;
+      if (method === 'channelIndex') return BigInt(current + 1);
       if (fail) throw new Error('RPC unavailable');
       if (method === 'channels') {
         reads.push(key);
         seen.add(key);
-        return { status: key === active ? 2 : 3, closingSequence: 0n, closingBalance: 0n, deadline: 999n };
+        const status = key === keys[current] ? 2 : keys.includes(key) ? 3 : 0;
+        return { status, closingSequence: 0n, closingBalance: 0n, deadline: 999n };
       }
       if (method === 'allocatedWinnings') return 0n;
       if (method === 'claims') return { amount: 10n, paid: 10n, protectedRemaining: 0n, winningsRemaining: 0n };
       throw new Error(method);
     },
   } as any;
+  const active = keys[current];
   await wallet.refresh();
   await wallet.refreshDetails();
-  assert.equal(wallet.channelId, active);
+  assert.deepEqual([wallet.channelId, wallet.publicState.closingChannelId], [null, active]);
   assert.equal(wallet.publicState.needsChallenge, true);
   assert.ok(reads.includes(active));
+  // Each round reads the current channel, the closing one and one batch of the rest.
   for (let i = 0; i < Math.ceil(keys.length / HISTORICAL_CHANNEL_BATCH); i++) {
     reads = [];
     await wallet.refresh();
     await wallet.refreshDetails();
-    assert.ok(reads.length <= HISTORICAL_CHANNEL_BATCH + 1);
+    assert.ok(reads.length <= HISTORICAL_CHANNEL_BATCH + 2);
     assert.ok(reads.includes(active));
   }
-  assert.equal(seen.size, keys.length);
+  // Every channel the account had, and its current one.
+  assert.equal(seen.size, keys.length + 1);
   reads = [];
   await wallet.refresh({ channelId: keys[400] });
   await wallet.refreshDetails();
   assert.ok(reads.includes(keys[400]));
-  assert.ok(reads.length <= HISTORICAL_CHANNEL_BATCH + 2);
-  active = ZeroHash;
+  assert.ok(reads.length <= HISTORICAL_CHANNEL_BATCH + 3);
+  current = keys.length;
   const cursor = wallet.monitorCursor;
   fail = true;
   await assert.rejects(wallet.refresh(), /RPC unavailable/);

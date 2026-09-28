@@ -148,11 +148,15 @@ test('invalid odds, unbacked bets, excessive fees, and uint256 overflow are reje
 test('signed operation binds every field and deployment domain', () => {
   const v = buildVectors(),
     d = domain(v.identity.chainId, v.identity.casino),
-    request = v.operations[0].operation,
+    request = v.operations[1].operation,
     digest = hashOperation(d, request);
   for (const [field, value] of Object.entries(request)) {
     const changed =
-      typeof value === 'string' && value.startsWith('0x') ? secret0 : String(BigInt(value as string) + 1n);
+      typeof value !== 'string' || !value.startsWith('0x')
+        ? String(BigInt(value as string) + 1n)
+        : value.length === 42
+          ? player
+          : secret0;
     assert.notEqual(hashOperation(d, { ...request, [field]: changed }), digest, field);
   }
   // A chance is 64 bits: one past the outcome space cannot even be signed.
@@ -161,7 +165,7 @@ test('signed operation binds every field and deployment domain', () => {
   assert.notEqual(hashOperation({ ...d, verifyingContract: player }, request), digest);
 });
 test('outcome depends only on the round, and a bet pays its prize exactly when the outcome is below its chance', () => {
-  const { operation: request, seed } = buildVectors().operations[0],
+  const { operation: request, seed } = buildVectors().operations[1],
     result = outcome(seed, secret0);
   const expected = keccak256(
     AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), seed, secret0]),

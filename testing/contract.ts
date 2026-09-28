@@ -2,16 +2,15 @@
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { ContractFactory, JsonRpcProvider, HDNodeWallet, id, Wallet, ZeroHash } from 'ethers';
+import { ContractFactory, JsonRpcProvider, HDNodeWallet, id, ZeroHash } from 'ethers';
 import {
   domain,
   channelId,
   ACCESS_TYPES,
   STATE_TYPES,
   OP_TYPES,
-  CLOSE_TYPES,
   hashState,
-  initialState,
+  baseState,
   operation,
   deriveState,
   roundId,
@@ -78,8 +77,8 @@ export async function deployment(env: any) {
   };
 }
 let count = 0;
-export function openingFor(player: string, signer: string, deposit: any) {
-  return { channelId: channelId(player, signer, deposit), player, signer, deposit: String(deposit) };
+export function openingFor(player: string, index: any = 0) {
+  return { channelId: channelId(player, index), player, index: String(index) };
 }
 export async function accessFor(d: any, opening: any, signer: any) {
   const message = { channelId: opening.channelId, expiresAt: Math.floor(Date.now() / 1000) + 120 };
@@ -101,22 +100,40 @@ export function assessBinary({ bankroll, stake, netWin, chance }: Record<string,
     casinoFee: risk.fee / 2n,
   };
 }
-export async function open(f: any, player: any, deposit = 1000n, overrides: any = {}) {
-  const used = Number((await f.contract.channels(channelId(player.address, player.address, deposit))).status);
-  const signer = used ? Wallet.createRandom() : player;
-  const opening = openingFor(player.address, overrides.signer || signer.address, deposit);
-  await (await f.contract.connect(player).openChannel(opening.signer, { value: deposit })).wait();
-  const state = initialState(opening);
-  return {
-    opening,
+/** Deposit into an account's channel, from the account or anyone else: the account's first deposit opens it. The
+ * channel is at its base, which takes nothing in: its deposit is owed to a close all the same. */
+export async function fund(f: any, player: any, deposit = 1000n, from = player) {
+  const address = player.address ?? player.target,
+    opening = openingFor(address, await f.contract.channelIndex(address));
+  await (await f.contract.connect(from).deposit(address, { value: deposit })).wait();
+  const base = baseState(opening.channelId);
+  return { opening, state: base, player, base: checkpointEvidence(base), evidence: checkpointEvidence(base) };
+}
+/** A funded channel whose balance has taken its deposit in: a deposit operation, countersigned by the account. */
+export async function open(f: any, player: any, deposit = 1000n, from = player) {
+  const ch = await fund(f, player, deposit, from),
+    taken = await step(f, ch, 4, deposit);
+  return { ...ch, state: taken.state, evidence: await countersigned(f, ch, taken) };
+}
+/** The checkpoint a step reached, as both sides sign it: the account countersigns the casino's signed result. */
+export async function countersigned(f: any, ch: any, { state, evidence }: any) {
+  return checkpointEvidence(
     state,
-    player,
-    key: overrides.signer ? undefined : signer.privateKey,
-    evidence: checkpointEvidence(state),
-  };
+    await ch.player.signTypedData(f.d, STATE_TYPES, state),
+    evidence.step?.casinoSignature !== '0x' && Number(evidence.step?.operation.kind)
+      ? evidence.step.casinoSignature
+      : evidence.casinoSignature,
+  );
+}
+/** A close without the other side: started with `evidence`, then finalized once the challenge period is over. */
+export async function forceClose(f: any, env: any, ch: any, evidence = ch.evidence, by = ch.player) {
+  await (await f.contract.connect(by).startClose(evidence)).wait();
+  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_mine', []);
+  return (await f.contract.finalizeClose(evidence.base.channelId)).wait();
 }
 export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) {
-  const signer = ch.key ? new Wallet(ch.key) : ch.player;
+  const signer = ch.player;
   // A bet names its round, the hash of a secret. `secret` settles it on a round shared with
   // another channel; otherwise every bet gets a round of its own.
   const { secret: shared, seed: given, ...terms } = extra as any;
@@ -144,26 +161,6 @@ export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) 
   };
   return { state: next, evidence };
 }
-/** Close with both signatures, paying the player or the recipient they name. */
-export async function closeCoop(f: any, ch: any, evidence = ch.evidence, recipient = ch.player.address) {
-  const state = Number(evidence.step.operation.kind)
-    ? deriveState(f.d, evidence.base, evidence.step.operation, evidence.step.secret, evidence.step.seed)
-    : evidence.base;
-  const message = {
-    channelId: state.channelId,
-    stateHash: hashState(f.d, state),
-    recipient,
-  };
-  return (
-    await f.contract.cooperativeClose(
-      evidence,
-      recipient,
-      await ch.player.signTypedData(f.d, CLOSE_TYPES, message),
-      await f.owner.signTypedData(f.d, CLOSE_TYPES, message),
-    )
-  ).wait();
-}
-
 // Joint checkpoints exercise settlement balances without a privileged credit operation.
 export async function signedIncrease(f: any, ch: any, amount: any) {
   const state = {
@@ -173,7 +170,7 @@ export async function signedIncrease(f: any, ch: any, amount: any) {
     transitionHash: id('checkpoint:' + ++count),
     balance: String(BigInt(ch.state.balance) + amount),
   };
-  const signer = ch.key ? new Wallet(ch.key) : ch.player;
+  const signer = ch.player;
   return {
     state,
     evidence: checkpointEvidence(

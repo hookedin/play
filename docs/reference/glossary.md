@@ -7,8 +7,14 @@ sidebar:
 
 ### Access token
 
-A short-lived signature that authenticates a request to the casino: `Access` by a channel key for a channel's routes,
+A short-lived signature that authenticates a request to the casino: `Access` by an account for its channel's routes,
 `DeveloperAccess` by a developer for a developer's. See [access tokens](signed-messages.md#access-tokens).
+
+### Account
+
+A player's Ethereum account, whose address is their [deposit address](#deposit-address) and whose key the wallet holds.
+It is its channel's `player`, and its key signs everything on the channel: operations, checkpoints and access tokens.
+See [the two keys of a channel](contract.md#the-two-keys-of-a-channel).
 
 ### Acknowledgment
 
@@ -45,6 +51,11 @@ The casino's money for backing casino bets, after every obligation. See
 Shares of the bankroll that anyone with a balance can buy and sell back at the bankroll's own price. A share is a
 statement the casino signs. See [the bankroll fund](../wallet/bankroll-fund.md).
 
+### Base
+
+The checkpoint a channel starts from, zero but for its channel ID. It needs no signature: every other checkpoint that
+settles is signed by both sides. See [the base](signed-messages.md#the-base).
+
 ### Binary steps
 
 How the bankroll backs a game whose players share one draw, such as roulette: its developer walks a balanced tree over
@@ -71,23 +82,21 @@ How many of the 2^64 outcomes win a casino bet, from 1 to 2^64 − 1: the bet wi
 
 ### Channel
 
-A running balance between a player and the casino, backed on-chain by the ETH the player deposited. See
+A running balance between a player's account and the casino, backed on-chain by the deposits the contract holds for it,
+its [principal](#principal), and by the shared bankroll above them. An account plays on one at a time, which stays open
+through every withdrawal until a close starts; its next deposit then opens the next. See
 [channels](../overview/how-it-works.md#channels).
-
-### Channel key
-
-The key the wallet generates for a channel, which signs its operations, checkpoints and access tokens. Its address is
-the channel's `signer`.
 
 ### Checkpoint
 
-A channel's state at a sequence number: the hash of the state before it, the hash of what led to it, the balance, and
-how much of the channel's deposits the balance has taken in. The casino signs each; the player countersigns.
+A channel's state at a sequence number: the hash of the state before it, the hash of what led to it, the balance, how
+much of the channel's deposits the balance has taken in, and how much it has paid out in withdrawals and transfers. The
+casino signs each; the player countersigns.
 
 ### Claim
 
-What a finalized channel is owed on-chain: protected principal up to what was deposited, and winnings above it, paid
-first in, first out. See [closing and claims](../wallet/closing-and-claims.md).
+What a finalized channel is owed on-chain: principal up to the channel's [principal](#principal), and winnings above
+it, paid first in, first out. See [closing and claims](../wallet/closing-and-claims.md).
 
 ### Collapse
 
@@ -107,14 +116,16 @@ developer bet. See [counterparties](signed-messages.md#counterparties).
 
 ### Deposit
 
-Moving ETH from a player's deposit address into their balance, which the wallet does by itself as ETH arrives. The
-first opens a channel; a later one adds to the open channel, and the balance takes it in with a deposit operation,
-kind 4, once the casino has seen it confirmed. See [getting started](../wallet/getting-started.md#deposit).
+ETH paid into an account's current channel with the contract's `deposit`, by anyone, or by a [transfer](#transfer):
+the wallet deposits by itself the ETH that arrives at the deposit address. The account's first deposit opens its
+channel, and once a close starts, its next deposit opens the next. The balance takes each deposit in with a deposit
+operation, kind 4, once the casino has seen it confirmed. See [getting started](../wallet/getting-started.md#deposit).
 
 ### Deposit address
 
-The address of a player's funding account, where they send ETH to play. The wallet puts what arrives into their
-balance and keeps 0.001 ETH there for network fees. See [getting started](../wallet/getting-started.md#deposit).
+The address of a player's account, where they send ETH to play. The wallet puts all that arrives into their balance,
+less the network fee of adding it; with the Deposits setting off, it stays there, to pay for transactions the account
+sends itself. See [getting started](../wallet/getting-started.md#deposit).
 
 ### Details
 
@@ -138,13 +149,8 @@ its own. See [earnings](../games/earnings.md).
 
 ### Evidence
 
-The signed proof of a channel's state that settles it on-chain: a jointly signed checkpoint, or one and a step after it.
-See [evidence](signed-messages.md#evidence).
-
-### Funding account
-
-The account whose ETH opens a channel, the channel's `player`. It signs the transactions and the cooperative close, and
-its address is the player's [deposit address](#deposit-address).
+The proof of a channel's state that settles it on-chain, or has a withdrawal paid: the channel's [base](#base) or a
+jointly signed checkpoint, alone or with a step after it. See [evidence](signed-messages.md#evidence).
 
 ### Game key
 
@@ -165,6 +171,12 @@ of one spin. The player signs it, and bet history shows a group as one row.
 
 `icon.svg` beside a game's page: the square tile the wallet shows the game by. See [the icon](game-url.md#the-icon).
 
+### Lock in
+
+A [transfer](#transfer) of the whole balance into the account's own channel, which the wallet's **Lock in my balance**
+asks for: the channel's [principal](#principal) pays back what it covers and house cash the rest, the winnings, so all
+of the balance comes back in as deposits the contract holds. See [withdrawals](contract.md#withdrawals).
+
 ### Meta
 
 A developer bet's own JSON object, saying what the bet is, or a developer's casino bet's. Whoever places the bet signs
@@ -172,7 +184,7 @@ it; the casino keeps it and never reads it.
 
 ### Operation
 
-A signed change to a channel's balance: a casino bet, a debit, a credit or a deposit. See
+A signed change to a channel's balance: a casino bet, a debit, a credit, a deposit, a withdrawal or a transfer. See
 [channels](../overview/how-it-works.md#channels).
 
 ### Operation ID
@@ -189,6 +201,12 @@ chance. See [the outcome](signed-messages.md#the-outcome).
 
 A debit a game asks for to the bankroll: a fixed amount, on no round, with no commission. See
 [payments](../overview/how-it-works.md#payments).
+
+### Principal
+
+The deposits the contract holds for a channel, its `principal`: every deposit as it arrives, less what withdrawals were
+paid out of them. The owner cannot withdraw it; withdrawals are paid out of it first, and a close's claim is protected
+principal up to it. See [withdrawals](contract.md#withdrawals).
 
 ### Prize
 
@@ -237,6 +255,12 @@ is released when the game closes. See [games and limits](../wallet/games-and-lim
 
 What a bet pays to enter.
 
+### Transfer
+
+Moving part or all of the balance into another account's balance: an operation, kind 6, naming that account, which the
+balance pays at once and the contract deposits into the account's current channel, opening one if it has none. See
+[withdrawals](contract.md#withdrawals).
+
 ### Uname
 
 The name the casino derives for every player from an address it never publishes, written `~3byt9ocwnnzaxanmiz3stocj`.
@@ -249,5 +273,8 @@ A process that watches one channel from its exported evidence and challenges a s
 
 ### Withdraw
 
-Moving the whole balance to an address the player names: a cooperative close, which pays it there in the same
-transaction, as far as it can. See [getting started](../wallet/getting-started.md#withdraw).
+Moving part or all of the balance to an address the player names: an operation, kind 5, naming the address, which the
+balance pays at once. The contract pays it when anyone sends the operation and the casino's signature of the balance
+after it, as the casino does straight away: out of the channel's [principal](#principal) first and house cash for the
+rest, under the withdrawal's ID, the hash of the operation, which anyone can look up. The channel stays open with the
+rest. See [getting started](../wallet/getting-started.md#withdraw).

@@ -13,11 +13,12 @@ export type Json<T> = 0 extends 1 & T
         ? { [K in keyof T]: Json<T[K]> }
         : T;
 
+/** A channel as its account knows it: the account, which signs for it, and which of the account's channels it is. */
 export interface Opening {
   channelId: string;
   player: string;
-  signer: string;
-  deposit: Integer;
+  /** 0 for the account's first channel, and one more after each a close ended. */
+  index: Integer;
 }
 export interface Checkpoint {
   channelId: string;
@@ -27,6 +28,8 @@ export interface Checkpoint {
   balance: Integer;
   /** How much of the channel's on-chain deposits the balance has taken in. A close adds the rest. */
   deposited: Integer;
+  /** How much the balance has paid out in withdrawals and transfers. A close adds what the contract did not pay. */
+  withdrawn: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
  * under; or, for a game opened by its URL alone, the zero address and that URL. */
@@ -43,8 +46,8 @@ export interface Details {
   game?: string;
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a settled developer
-   * bet or a developer's earnings. A game's payment pays the bankroll and names nothing. */
+  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a settled developer bet
+   * or a developer's earnings. A game's payment pays the bankroll and names nothing. */
   counterparty?: string;
   /** A developer bet's meta: the game's own JSON, saying what the bet is, which the casino keeps and never reads. A
    * debit that names its game and carries meta is a developer bet: a bet against the game's developer, whose bank
@@ -97,6 +100,8 @@ export interface Operation {
   kind: Integer;
   /** A casino bet's stake, paid to enter; otherwise the amount debited or credited. */
   amount: Integer;
+  /** Whom a withdrawal pays, or whose current channel a transfer deposits into; the zero address for any other kind. */
+  recipient: string;
   /** A casino bet's probability, counted in outcomes out of 2^64: it wins when its round's outcome is below this. */
   chance: Integer;
   /** What a casino bet pays when it wins. */
@@ -142,9 +147,12 @@ export interface Deployment {
 /** On-chain channel storage as the service and wallet project it (decimal strings). */
 export interface OnchainChannel {
   player: string;
-  signer: string;
-  deposit: string;
-  initialHash: string;
+  /** Everything ever deposited into the channel: what a state is owed is worked out from it. */
+  deposited: string;
+  /** The deposits the contract still holds for the channel, which withdrawals are paid out of first. */
+  principal: string;
+  /** Everything the contract has paid out of the channel in withdrawals and transfers. */
+  paidOut: string;
   status: string;
   deadline: string;
   closingSequence: string;
@@ -260,6 +268,7 @@ export interface ChannelRow {
   claim?: OnchainClaim | null;
   observedAt?: number;
   observedBlock?: number;
-  closing: boolean;
   lastResponse?: OperationResponse | null;
+  /** When the casino last signed for the channel, or registered it: how long it has been idle. */
+  activeAt?: number;
 }

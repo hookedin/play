@@ -2,10 +2,10 @@
 import type { Domain, Opening, Checkpoint, Operation, EvidenceBundle } from '../protocol/types.ts';
 import type { Store } from '../client/storage.ts';
 import type { CasinoWallet, WalletChannel } from '../client/wallet.ts';
-import { initialState, operation, deriveState, verifyEvidence, plain } from '../protocol/protocol.ts';
+import { baseState, operation, deriveState, verifyEvidence, plain } from '../protocol/protocol.ts';
 
 function checkProtocol(d: Domain, opening: Opening, state: Checkpoint, op: Operation, bundle: EvidenceBundle) {
-  initialState(opening);
+  baseState(opening.channelId);
   deriveState(d, state, op);
   verifyEvidence(bundle);
   operation(d, state, { amount: 1n, kind: 2 });

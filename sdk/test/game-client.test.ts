@@ -3,13 +3,7 @@ import assert from 'node:assert/strict';
 import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { MemoryStore } from '../../client/storage.ts';
 import { decryptBackup } from '../../client/backup.ts';
-import {
-  hashState,
-  initialState,
-  rejectionCheckpoint,
-  STATE_TYPES,
-  checkpointEvidence,
-} from '../../protocol/protocol.ts';
+import { rejectionCheckpoint, STATE_TYPES, checkpointEvidence } from '../../protocol/protocol.ts';
 import { validateRequest } from '../../client/bridge.ts';
 import { RoundClient } from '../src/round.ts';
 import type { RoundStore } from '../src/round.ts';
@@ -380,7 +374,7 @@ test('a game learns how its operations ended and never whose they were', async (
       [],
       `${r.id} ${r.status}`,
     );
-  const player = [w.channelId!, f.player.address, w.channel!.opening.signer].map(hex => hex.slice(2).toLowerCase());
+  const player = [w.channelId!, f.player.address].map(hex => hex.slice(2).toLowerCase());
   for (const r of replies)
     for (const secret of player) assert.doesNotMatch(JSON.stringify(r).toLowerCase(), new RegExp(secret));
   const statuses = replies.filter(r => r.status).map(r => `${r.id} ${r.kind} ${r.status} ${r.payout ?? ''}`);
@@ -632,7 +626,7 @@ test('importing newer financial evidence needs no game bookkeeping', async () =>
   restored.hydrate(before);
   await restored.storage.put(w.storageKey, before);
   restored.reader = {
-    channels: async () => ({ status: 1, initialHash: hashState(w.domain, initialState(w.channel!.opening)) }),
+    channels: async () => ({ status: 1, player: f.player.address }),
   } as any;
   restored.refresh = async () => ({});
   await restored.importEvidence(bundle);
@@ -956,8 +950,9 @@ test('a rejected game action survives a lost reply and reload without resampling
   assert.equal(result.events.length, 1);
   for (const field of ['amount', 'chance', 'prize']) assert.deepEqual(attempts[1][field], attempts[0][field]);
   assert.notEqual(attempts[1].memo, attempts[0].memo);
-  assert.equal(attempts[0].sequence, '1');
-  assert.equal(attempts[1].sequence, '3');
+  // The stub's channel has taken its deposit in at sequence 1; a declined step takes two sequences.
+  assert.equal(attempts[0].sequence, '2');
+  assert.equal(attempts[1].sequence, '4');
 });
 
 test('the state carries the setup its round was started with, across a reload', async () => {

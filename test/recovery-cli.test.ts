@@ -7,14 +7,12 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { anvil, deployment, signedIncrease, open } from '../testing/contract.ts';
 import { json } from '../protocol/protocol.ts';
-test('independent CLI closes, challenges, finalizes and collects without casino API or channel key', async t => {
+test('independent CLI closes, challenges, finalizes and collects without the casino API', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
-    ch = await open(f, env.wallets[1], 1000n, {
-      signer: env.wallets[4].address,
-    }),
-    credit = await signedIncrease(f, { ...ch, player: env.wallets[4] }, 500n);
+    ch = await open(f, env.wallets[1], 1000n),
+    credit = await signedIncrease(f, ch, 500n);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-cli-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // Recovery uses the archived wallet artifact without compiler output.
@@ -72,7 +70,7 @@ test('independent CLI closes, challenges, finalizes and collects without casino 
   assert.equal(((await cli('start')) as any).channelStatus, '2');
   bundle.evidence = credit.evidence;
   fs.writeFileSync(evidenceFile, json(bundle));
-  assert.equal(((await cli('challenge')) as any).closingSequence, '1');
+  assert.equal(((await cli('challenge')) as any).closingSequence, '2');
   const deadline = (await f.contract.channels(ch.state.channelId)).deadline;
   await env.provider.send('evm_setNextBlockTimestamp', [Number(deadline)]);
   await env.provider.send('evm_mine', []);

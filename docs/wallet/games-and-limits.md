@@ -62,6 +62,8 @@ The limit caps what the game may risk; it moves no money:
   suggestion.
 - Every verified result of the game's own operations moves it: a win raises it and a loss lowers it. A game can lose
   everything it holds, its winnings included, and not a wei more.
+- A withdrawal or a transfer lowers it to what stays in your balance, if it was more; taking out everything, or locking
+  in, closes the game.
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
   has already committed.
 

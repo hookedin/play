@@ -1,7 +1,7 @@
 import type { JsonRpcProvider, InterfaceAbi, BlockTag } from 'ethers';
 import type { EvidenceBundle } from './types.ts';
 import { Contract } from 'ethers';
-import { verifyEvidence, domain, initialState, hashState, same, plain, owed } from './protocol.ts';
+import { verifyEvidence, domain, hashState, same, plain, owed } from './protocol.ts';
 import { blockReference, readContract, requireCanonicalBlock } from './chain-observer.ts';
 
 /** Settlement needs current contract state, never historical event availability. */
@@ -32,11 +32,10 @@ export async function inspectEvidence(
   ]);
   if (!same(owner, bundle.operator)) throw new Error('Evidence operator differs from contract owner');
   const d = domain(bundle.chainId, bundle.casino);
+  // `supported` takes the channel's zero checkpoint unsigned, and any other only signed by both sides.
   if (
     !Number(channel.status) ||
     !same(channel.player, bundle.opening.player) ||
-    !same(channel.signer, bundle.opening.signer) ||
-    !same(channel.initialHash, hashState(d, initialState(bundle.opening))) ||
     !same(hashState(d, supported.toObject()), hashState(d, verified.state))
   )
     throw new Error('Opening or evidence differs from the registered channel');
@@ -54,11 +53,15 @@ export async function inspectEvidence(
     channelId,
     channelStatus: channel.status,
     challengeDeadline: channel.deadline,
+    // The deposits the contract still holds for the channel, and what it has paid out of it.
+    principal: channel.principal,
+    paidOut: channel.paidOut,
     closingSequence: channel.closingSequence,
     closingStateHash: channel.closingHash,
     signedBalance: verified.state.balance,
-    // What a close with this evidence would be owed: the signed balance and the deposits it has not taken in.
-    owed: owed(verified.state, channel.deposit),
+    // What a close with this evidence would be owed: the signed balance, the deposits it has not taken in, and what it
+    // withdrew that the contract has not paid.
+    owed: owed(verified.state, channel.deposited, channel.paidOut),
     claim: Object.fromEntries(
       ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining', 'finalizedAt'].map(
         key => [key, claim[key]],

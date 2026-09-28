@@ -40,9 +40,9 @@ wallet takes nothing else on trust from this reply: it checks
 ```json title="Response"
 {
   "chainId": "31337",
-  "rpcUrl": "http://127.0.0.1:53087",
+  "rpcUrl": "http://127.0.0.1:57772",
   "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "protocol": "0x319a7023d2f8ced461cfc7257cce3f82b425e3eb62d55347b87cf0383ce0fe8a",
+  "protocol": "0x07cfa9359080708b8adb4e87c883b429bc48747a7c76986e9dc6968ed9dc48c8",
   "developerProtocol": "0xf5bd44c475a9e6e0136b45e0fb337e44a37298c63003b0c8f7fd74d6838a6d65",
   "confirmations": 1,
   "operator": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -66,65 +66,68 @@ The casino's health, its books, what developers have earned, the last observed b
 
 **Auth:** none · **Idempotent:** yes
 
-| Response field      | Type           | Meaning                                                                                                                                                                                                              |
-| ------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`            | string         | Chain observation: `starting`, `reconciling`, `ready` or `error`. The casino signs only when `ready`                                                                                                                 |
-| `lastCheck`         | number         | When the last observation finished, in milliseconds                                                                                                                                                                  |
-| `stale`             | boolean        | `true` when `status` is not `ready` or the last observation is more than 60 seconds old                                                                                                                              |
-| `lastProgress`      | number         | When the chain was last seen to advance, in milliseconds                                                                                                                                                             |
-| `observationError`  | string or null | Why the last observation failed                                                                                                                                                                                      |
-| `disputes`          | object         | `{alerts, pending}`: the casino's defence of closing channels, below                                                                                                                                                 |
-| `channels`          | number         | Channels open or closing                                                                                                                                                                                             |
-| `signingLogRecords` | number         | Records in the casino's signing history                                                                                                                                                                              |
-| `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                                                                                                           |
-| `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                                                                                              |
-| `chainId`           | string         | The chain                                                                                                                                                                                                            |
-| `casino`            | address        | The contract                                                                                                                                                                                                         |
-| The books           | strings        | The books, below                                                                                                                                                                                                     |
-| `developers`        | array          | `{developer, earned, collected, outstanding}` for each developer: the commission a developer has earned, collected and still to collect                                                                              |
-| `block`             | object or null | The last observed confirmed block: `{cash, protectedPrincipal, reservedWinnings, unpaidWinnings, blockNumber, blockHash, timestamp}`, the contract's balances with the block's number, hash and time in Unix seconds |
-| `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                                                                                                     |
+| Response field      | Type           | Meaning                                                                                                                                                                                                                                                     |
+| ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`            | string         | Chain observation: `starting`, `reconciling`, `ready` or `error`. The casino signs only when `ready`                                                                                                                                                        |
+| `lastCheck`         | number         | When the last observation finished, in milliseconds                                                                                                                                                                                                         |
+| `stale`             | boolean        | `true` when `status` is not `ready` or the last observation is more than 60 seconds old                                                                                                                                                                     |
+| `lastProgress`      | number         | When the chain was last seen to advance, in milliseconds                                                                                                                                                                                                    |
+| `observationError`  | string or null | Why the last observation failed                                                                                                                                                                                                                             |
+| `alerts`            | array          | What is wrong, below                                                                                                                                                                                                                                        |
+| `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight, or `null`: a challenge, a payout, or an idle channel's close, finalization or collection                                                                                                              |
+| `channels`          | number         | Channels open or closing                                                                                                                                                                                                                                    |
+| `signingLogRecords` | number         | Records in the casino's signing history                                                                                                                                                                                                                     |
+| `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                                                                                                                                                  |
+| `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                                                                                                                                     |
+| `chainId`           | string         | The chain                                                                                                                                                                                                                                                   |
+| `casino`            | address        | The contract                                                                                                                                                                                                                                                |
+| The books           | strings        | The books, below                                                                                                                                                                                                                                            |
+| `developers`        | array          | `{developer, earned, collected, outstanding}` for each developer: the commission a developer has earned, collected and still to collect                                                                                                                     |
+| `block`             | object or null | The last observed confirmed block: `{cash, protectedPrincipal, reservedWinnings, unpaidWinnings, operatorBalance, blockNumber, blockHash, timestamp}`, the contract's balances and the casino key's, with the block's number, hash and time in Unix seconds |
+| `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                                                                                                                                            |
 
 The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
 
-| Field                                                      | Meaning                                                                                                 |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `cash`                                                     | Pool cash: the contract's balance                                                                       |
-| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                               |
-| `activeLiabilities`                                        | What open and closing channels are owed: their signed balances, and the deposits they have not taken in |
-| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                                   |
-| `commissions`                                              | Developer commission earned and not yet collected                                                       |
-| `escrow`                                                   | Payouts awarded and not yet collected                                                                   |
-| `banks`                                                    | Everything in developers' banks                                                                         |
-| `houseFeesEarned`                                          | The casino's own commission, in total                                                                   |
-| `reserved`                                                 | The worst cases of the casino bets being decided                                                        |
-| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                                       |
-| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                                 |
-| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                                      |
-| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`                 |
-| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`           |
+| Field                                                      | Meaning                                                                                                                                         |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cash`                                                     | Pool cash: the contract's balance                                                                                                               |
+| `protectedPrincipal`, `reservedWinnings`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                       |
+| `activeLiabilities`                                        | What open and closing channels are owed: their signed balances, and the deposits they have not taken in                                         |
+| `openWinnings`                                             | What open and closing channels are owed above the deposits the contract holds for them, their `principal`: winnings, which only house cash pays |
+| `finalizedLiabilities`                                     | The unpaid winnings and principal of finalized claims                                                                                           |
+| `commissions`                                              | Developer commission earned and not yet collected                                                                                               |
+| `escrow`                                                   | Payouts awarded and not yet collected                                                                                                           |
+| `banks`                                                    | Everything in developers' banks                                                                                                                 |
+| `withdrawals`                                              | Withdrawals and transfers the casino has taken on and the contract has not yet paid, until their channel's claim holds them                     |
+| `houseFeesEarned`                                          | The casino's own commission, in total                                                                                                           |
+| `reserved`                                                 | The worst cases of the casino bets being decided                                                                                                |
+| `equity`                                                   | The bankroll before reservations: what fund shares are a claim on                                                                               |
+| `unreservedBankroll`                                       | `equity − reserved`; it can be negative                                                                                                         |
+| `bankroll`                                                 | `max(0, unreservedBankroll)`: what admission measures bets against                                                                              |
+| `houseCash`                                                | `max(0, cash − protectedPrincipal − reservedWinnings)`, as the contract's `houseCash()`                                                         |
+| `withdrawableHouse`                                        | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                   |
 
-`disputes.alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining`
-the seconds left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older
-checkpoint than the casino holds, and the casino challenges it), `missed-deadline`, `conflicting-sequence`,
-`finalized-state-differs`, `invalid-evidence`, `channel-defense-failed` or `recovery-transaction-failed`. An alert, like
-`observationError`, names no channel. `disputes.pending` is the hash of the casino's challenge transaction in flight, or
-`null`.
+`alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
+left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older checkpoint than the
+casino holds, and the casino challenges it), `missed-deadline`, `conflicting-sequence`, `finalized-state-differs`,
+`invalid-evidence`, `channel-defense-failed`, `recovery-transaction-failed`, `winnings-exceed-cash` (open channels have
+won more than house cash can pay now, [as a withdrawal counts it](channels.md#post-apichannelsidoperations), so not
+every winner can withdraw now), `operator-gas-low` (the key that sends challenges and withdrawals holds less than 0.01
+ETH for their gas) or `withdrawal-unpaid` (no withdrawal owed can be paid now; `detail` says why the oldest cannot). An
+alert, like `observationError`, names no channel.
 
 ```json title="Response"
 {
   "status": "ready",
-  "lastCheck": 1790384229470,
+  "lastCheck": 1790585368720,
   "stale": false,
-  "lastProgress": 1790384229470,
+  "lastProgress": 1790585368451,
   "observationError": null,
-  "disputes": {
-    "alerts": [],
-    "pending": null
-  },
+  "alerts": [],
+  "ownerTransaction": null,
   "channels": 2,
-  "signingLogRecords": 45,
-  "signingLogDigest": "ea07b2f0cc5ec97a5d3753ade8cc51aaacc0624fa8307a73d0ebe390f5d15a6d",
+  "signingLogRecords": 42,
+  "signingLogDigest": "d882cb69589fed49bcb07553f7e002eba3a75813e49324c320cffb9562c878ad",
   "queueDepth": 0,
   "chainId": "31337",
   "casino": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
@@ -132,23 +135,25 @@ checkpoint than the casino holds, and the casino challenges it), `missed-deadlin
   "protectedPrincipal": "2000000000000000000",
   "reservedWinnings": "0",
   "unpaidWinnings": "0",
-  "activeLiabilities": "1901918503517716823",
+  "activeLiabilities": "1904018503517611900",
+  "openWinnings": "0",
   "finalizedLiabilities": "0",
   "commissions": "0",
   "escrow": "0",
   "banks": "91000000000000000",
-  "houseFeesEarned": "18503517716823",
+  "withdrawals": "0",
+  "houseFeesEarned": "18503517611900",
   "reserved": "0",
-  "equity": "100007081496483283177",
-  "unreservedBankroll": "100007081496483283177",
-  "bankroll": "100007081496483283177",
+  "equity": "100004981496483388100",
+  "unreservedBankroll": "100004981496483388100",
+  "bankroll": "100004981496483388100",
   "houseCash": "100000000000001000000",
   "withdrawableHouse": "100000000000001000000",
   "developers": [
     {
       "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-      "earned": "18503517716823",
-      "collected": "18503517716823",
+      "earned": "18503517611900",
+      "collected": "18503517611900",
       "outstanding": "0"
     }
   ],
@@ -157,9 +162,10 @@ checkpoint than the casino holds, and the casino challenges it), `missed-deadlin
     "protectedPrincipal": "2000000000000000000",
     "reservedWinnings": "0",
     "unpaidWinnings": "0",
+    "operatorBalance": "9899995456193946133109",
     "blockNumber": 5,
-    "blockHash": "0x9b42c5877f3e5b6777a69af83675786db7ca5876d479d834a7fff58c07f59724",
-    "timestamp": 1790384229
+    "blockHash": "0xbc6d2838089ec64bf4eb5d45bf46dd49a9eddc50edaa9a2c8f95e24477737b60",
+    "timestamp": 1790585368
   },
   "commit": null
 }
@@ -190,13 +196,13 @@ The bankroll fund's state, signed by the casino: a quote it can be held to.
 {
   "message": {
     "sequence": "1",
-    "totalShares": "100012081496483283177",
-    "houseShares": "100002081496483283177",
-    "equity": "100012081496483283177",
+    "totalShares": "100009981496483388100",
+    "houseShares": "99999981496483388100",
+    "equity": "100009981496483388100",
     "overdrawn": "0",
-    "at": "1790384229"
+    "at": "1790585368"
   },
-  "signature": "0xab8859d0bb2978d7382b81e54c65eeccd6b4aa1b4b94a7747d8807bf3832680e307781b0e39e856f976f6d355a7296fe9ed4dc5f3d1720b75d45504adc444f161b"
+  "signature": "0x16533937683de6690ad9d7093df9b50e4d3146cf41a60ca920fd8446dcdae6ba2f2bb7b93aa6d5c46633282639fa08d8252ba8a5ce38ba1fe8eec7458d9787501b"
 }
 ```
 
@@ -227,20 +233,20 @@ GET /api/players?limit=10
 ```json title="Response"
 [
   {
-    "uname": "zi26admbshgt8yfa6xfxs97r",
+    "uname": "dvfetrdww8dtgwivi4mrtrty",
     "alias": "alice",
-    "since": 1790384229155,
+    "since": 1790585368456,
     "stats": {
       "plays": 2,
       "staked": "2000000000000000",
-      "won": "0"
+      "won": "2000000000000000"
     },
     "games": []
   },
   {
-    "uname": "n8n53e3qt8qrb9992eika6tv",
+    "uname": "kgs2a7nq42atyxcpifrqnw45",
     "alias": "hookedin",
-    "since": 1790384228471,
+    "since": 1790585368298,
     "stats": {
       "plays": 0,
       "staked": "0",
@@ -292,9 +298,9 @@ GET /api/players?limit=10
     ]
   },
   {
-    "uname": "biop5et6ov6i5sn3c6p7vxhx",
+    "uname": "8h3hh3edgejmtdp2owso4ak7",
     "alias": "studio",
-    "since": 1790384228636,
+    "since": 1790585368360,
     "stats": {
       "plays": 0,
       "staked": "0",
@@ -334,13 +340,13 @@ One player's public record, their profile.
 
 ```json title="Response"
 {
-  "uname": "zi26admbshgt8yfa6xfxs97r",
+  "uname": "dvfetrdww8dtgwivi4mrtrty",
   "alias": "alice",
-  "since": 1790384229155,
+  "since": 1790585368456,
   "stats": {
     "plays": 2,
     "staked": "2000000000000000",
-    "won": "0"
+    "won": "2000000000000000"
   },
   "games": []
 }
@@ -363,7 +369,7 @@ The reply is the player's names and the game's entry in their profile: `{uname, 
 
 ```json title="Response"
 {
-  "uname": "biop5et6ov6i5sn3c6p7vxhx",
+  "uname": "8h3hh3edgejmtdp2owso4ak7",
   "alias": "studio",
   "name": "wheel",
   "url": "https://wheel.example/",
@@ -425,7 +431,7 @@ GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf
     "bets": 2,
     "players": 1,
     "staked": "2000000000000000",
-    "paid": "0",
+    "paid": "2000000000000000",
     "expected": "18262276632972456098000000000000000",
     "priced": "1000000000000000"
   },
@@ -433,24 +439,24 @@ GET /api/games/0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf
     {
       "index": 2,
       "kind": "developer",
-      "uname": "zi26admbshgt8yfa6xfxs97r",
+      "uname": "dvfetrdww8dtgwivi4mrtrty",
       "alias": "alice",
-      "group": "5b1f3d9a0c2e47f6a8d4e1b7c9f0a3d2e6b8c1f4a7d0e3b6c9f2a5d8e1b4c7f0",
+      "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
       "stake": "1000000000000000",
       "payout": "0",
-      "at": 1790384229614
+      "at": 1790585368584
     },
     {
       "index": 1,
       "kind": "casino",
-      "uname": "zi26admbshgt8yfa6xfxs97r",
+      "uname": "dvfetrdww8dtgwivi4mrtrty",
       "alias": "alice",
       "group": "hand-1",
       "stake": "1000000000000000",
       "chance": "9131138316486228049",
       "prize": "2000000000000000",
-      "payout": "0",
-      "at": 1790384229511
+      "payout": "2000000000000000",
+      "at": 1790585368499
     }
   ]
 }
@@ -502,7 +508,7 @@ how to check one.
       "covered": "0x2b9e0f3c7a1d5e8b4f6a9c2d0e7b3f1a8c5d9e2b6f0a4c7d1e3b8f5a9c2d6e0b",
       "side": "left"
     },
-    "signature": "0xc589853547d41893c31690f5479d2e15b6cb5ef43f5bf3e3c3de8e81cc3931d62ea510476f8041050c592144a95a4f4b99f604cee4793b0fbff84aa4261d6a491b",
+    "signature": "0x4ea3a2c14eb3d6abcd9733f43d71fbac9ba458193187cae6f71427b3ca63dfab4244e9525980e79ca3ecc202e818ae0090a828e7d19bca07c271a6e832de5c971b",
     "accepted": true,
     "payout": "0"
   }
@@ -537,11 +543,11 @@ One developer bet, by its hash.
 
 ```json title="Response"
 {
-  "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
+  "bet": "0x54dcdb0c1c8051ddf0b7cb98f3e2d04b97f53c2b9eaeaafdec2b7a0f198df40d",
   "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
   "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
   "stake": "1000000000000000",
-  "placedAt": 1790384229582,
+  "placedAt": 1790585368544,
   "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
   "status": "settled",
   "meta": {
@@ -551,10 +557,10 @@ One developer bet, by its hash.
   "settlement": {
     "player": "0",
     "casino": "0",
-    "signature": "0x1c07c1a140cca0e79dbc18dd2cce9134c445d0212ac0835a49e6625ad7875d652864892203f5471e5a2b7d7dd5f91da446d010ced98da1ca878dca7ed04d91101b"
+    "signature": "0x066e90a90dbaaa2bc844a2759a34990991530fbb6e0e5e9a31107ae1e07aaff32685d88b43d3ee09a5a61236c07bbaa192f8a845da4448ca8ae30418090272c01b"
   },
-  "settledAt": 1790384229614,
-  "uname": "zi26admbshgt8yfa6xfxs97r",
+  "settledAt": 1790585368584,
+  "uname": "dvfetrdww8dtgwivi4mrtrty",
   "alias": "alice"
 }
 ```
@@ -577,7 +583,7 @@ A page of one game's developer bets, open or settled, as its developer reads the
 
 The reply is `{bets, cursor, more}`, each bet as [`GET /api/developer-bets/:bet`](#get-apideveloper-betsbet) shows
 it. Open bets come in hash order and settled ones in the order they settled; [pages](index.md#pages) says how to walk
-them. A settled page's cursor is a decimal string, such as `"33000"`.
+them. A settled page's cursor is a decimal string, such as `"31000"`.
 
 ```text title="Request"
 GET /api/developer-bets?game=0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3&status=open&group=21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c
@@ -587,22 +593,22 @@ GET /api/developer-bets?game=0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae
 {
   "bets": [
     {
-      "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
+      "bet": "0x54dcdb0c1c8051ddf0b7cb98f3e2d04b97f53c2b9eaeaafdec2b7a0f198df40d",
       "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
       "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
       "stake": "1000000000000000",
-      "placedAt": 1790384229582,
+      "placedAt": 1790585368544,
       "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
       "status": "open",
       "meta": {
         "seedHash": "0x467bb18de40adce17a7bbde01c6cfc7ae8d1a069eae727ca981584b7869a1497",
         "pick": "red"
       },
-      "uname": "zi26admbshgt8yfa6xfxs97r",
+      "uname": "dvfetrdww8dtgwivi4mrtrty",
       "alias": "alice"
     }
   ],
-  "cursor": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
+  "cursor": "0x54dcdb0c1c8051ddf0b7cb98f3e2d04b97f53c2b9eaeaafdec2b7a0f198df40d",
   "more": false
 }
 ```

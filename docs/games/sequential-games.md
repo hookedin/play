@@ -176,7 +176,7 @@ randomness of its own.
 
 At a settled step the player can stop and keep the current continuation cash: a
 [settled trade-off](../overview/architecture.md#settled-trade-offs). Keeping that signed balance needs no favourable
-future outcome; withdrawing ETH still needs the channel closed, and its winnings depend on the casino's liquidity.
+future outcome; withdrawing it as ETH needs the casino's house cash only for what exceeds the channel's deposits.
 Stopping changes the policy, and so the terminal distribution, compared with playing to the graph's terminals. Stopping
 cannot cancel a signed request still pending: recover its exact result or verified rejection, or resolve it by closing
 the channel, before abandoning the action. A clock or an HTTP error cannot establish cancellation. The blackjack rules

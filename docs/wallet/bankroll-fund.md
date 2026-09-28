@@ -26,7 +26,7 @@ issue. With the very first investment, the bankroll the house built before it be
 wei. The wallet shows shares with 18 decimals, like ETH, so a whole share began at 1 ETH, and its price is what the
 bankroll has made or lost since.
 
-Your holding belongs to your funding account's address, not to a channel, so it outlives every channel you open. The
+Your holding belongs to your account's address, not to a channel, so it outlives each of your account's channels. The
 fund takes ETH only, so buying and selling need an open balance. An amount too small to buy a share, or a bankroll with
 nothing left, is declined with a signed rejection, and your balance is unchanged.
 
@@ -51,8 +51,8 @@ prove.
 ## Selling shares
 
 Under **Sell shares worth**, enter an amount, or press **All**, and press **Sell shares**. The wallet converts the
-amount to shares at the quoted price and signs a `Redeem` of them with your channel key. Its `sequence` is the number of
-the statement it will produce, so it works once; the wallet saves it before sending, and asking again returns the
+amount to shares at the quoted price and signs a `Redeem` of them with your account's key. Its `sequence` is the number
+of the statement it will produce, so it works once; the wallet saves it before sending, and asking again returns the
 recorded statement. The casino burns the shares at the price of that moment:
 
 ```text
@@ -80,6 +80,9 @@ the price does not move. The house cannot give up shares it does not have: what 
 loss every holder bears, and the quote reports it as `overdrawn` from then on. The Bankroll page then says how much
 more the owner has withdrawn than its own shares covered.
 
-While your balance is open, the contract still protects everything you deposited into it, so the owner cannot withdraw
-it. That protection ends when the channel closes, and your shares remain the casino's promise
-([trust model](../overview/trust-model.md#fund-shares-are-the-casinos-promise)).
+Investing moves no ETH on-chain: the deposits the contract holds for your channel stay as they were, out of the owner's
+reach, until a withdrawal is paid out of them or a close settles the channel, which pays them only up to what your lower
+balance is owed and returns the rest to house cash
+([claims and collection](closing-and-claims.md#claims-and-collection)). The casino closes a channel that holds more
+deposits than it is owed once nobody has played on it for 7 days ([idle channels](closing-and-claims.md#idle-channels)).
+Your shares remain the casino's promise ([trust model](../overview/trust-model.md#fund-shares-are-the-casinos-promise)).

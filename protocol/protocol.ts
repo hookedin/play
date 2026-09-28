@@ -60,22 +60,19 @@ export function hashJSON(context: unknown) {
 }
 export const STATE_TYPES = {
   Checkpoint: fields(
-    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited',
+    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn',
   ),
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
+    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
   ),
-};
-export const CLOSE_TYPES = {
-  Close: fields('bytes32 channelId,bytes32 stateHash,address recipient'),
 };
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
 /** A game's developer settles its game's developer bets, opens its rounds and places its casino bets from its bank,
- * and proves itself with its own key, as a channel does with its signer. */
+ * and proves itself with its own key, as an account does on its channel. */
 export const DEVELOPER_ACCESS_TYPES = {
   DeveloperAccess: fields('address developer,uint256 expiresAt'),
 };
@@ -107,15 +104,14 @@ export const domain = (chainId: Integer, casino: string) => ({
 });
 export const hashState = (d: Domain, s: Checkpoint) => TypedDataEncoder.hash(d, STATE_TYPES, s);
 export const hashOperation = (d: Domain, s: Operation) => TypedDataEncoder.hash(d, OP_TYPES, s);
-export const channelId = (player: string, signer: string, deposit: Integer) =>
-  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'address', 'uint256'], [player, signer, deposit]));
+/** An account's channel: its first has `index` 0, and each one a close ends is followed by the next. */
+export const channelId = (player: string, index: Integer) =>
+  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [player, index]));
 export function validateOpening(opening: Opening) {
   if (
-    opening.channelId !== channelId(opening.player, opening.signer, opening.deposit) ||
-    same(opening.signer, ZeroAddress) ||
+    !/^(0|[1-9][0-9]{0,77})$/.test(String(opening.index)) ||
     same(opening.player, ZeroAddress) ||
-    BigInt(opening.deposit) <= 0n ||
-    BigInt(opening.deposit) >= MAX_BALANCE
+    opening.channelId !== channelId(opening.player, opening.index)
   )
     throw new Error('Invalid channel opening');
 }
@@ -151,19 +147,19 @@ export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequ
 /** A developer's bank: the developer's money at the casino. Every developer bet on the developer's games pays its
  * stake into it, and it pays the settlements and the casino bets the developer's key signs. A deposit is a debit that
  * names it, from the developer's own channel, answered with a statement of the balance; money leaves it only by the
- * developer's own signed `Withdraw`, settlement or casino bet. */
+ * developer's own signed `BankWithdraw`, settlement or casino bet. */
 export const BANK_ID = id('HOOKEDIN/BANK');
 /** The casino signs the balance of a developer's bank after every deposit and withdrawal. `cause` is the hash of the
- * developer's signed deposit or `Withdraw`. */
+ * developer's signed deposit or `BankWithdraw`. */
 export const BANK_TYPES = {
   BankStatement: fields('address developer,uint256 sequence,uint256 balance,bytes32 cause'),
 };
 /** A developer takes money out of their bank. `sequence` is the statement it will produce, so it works once. */
-export const WITHDRAW_TYPES = {
-  Withdraw: fields('address developer,uint256 amount,uint256 sequence'),
+export const BANK_WITHDRAW_TYPES = {
+  BankWithdraw: fields('address developer,uint256 amount,uint256 sequence'),
 };
-export const hashWithdraw = (d: Domain, s: { developer: string; amount: Integer; sequence: Integer }) =>
-  TypedDataEncoder.hash(d, WITHDRAW_TYPES, s);
+export const hashBankWithdraw = (d: Domain, s: { developer: string; amount: Integer; sequence: Integer }) =>
+  TypedDataEncoder.hash(d, BANK_WITHDRAW_TYPES, s);
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
   if (BigInt(amount) <= 0n) throw new Error('Invalid investment');
@@ -214,8 +210,6 @@ export function verifyShareStatement(
     throw new Error('Share statement does not match the redemption');
   return burned;
 }
-export const hashClose = (d: Domain, s: { channelId: string; stateHash: string; recipient: string }) =>
-  TypedDataEncoder.hash(d, CLOSE_TYPES, s);
 /** A signature in the one form the contract recovers: 65 bytes, v 27 or 28. ethers recovers a compact one or a v of 0
  * or 1 as well, and each side keeps the other's signatures as they came, as its evidence. */
 export function assertSignature(
@@ -228,21 +222,35 @@ export function assertSignature(
   if (!/^0x[0-9a-f]{128}1[bc]$/i.test(signature) || !same(verifyTypedData(d, types, message, signature), expected))
     throw new Error('Invalid signature');
 }
-export function initialState(opening: Pick<Opening, 'channelId' | 'deposit'>) {
+/** The checkpoint a channel starts from: all zero but its ID. The contract takes it with no signature. */
+export function baseState(channelId: string): Checkpoint {
   return {
-    channelId: opening.channelId,
+    channelId,
     sequence: '0',
     previousStateHash: ZeroHash,
     transitionHash: ZeroHash,
-    balance: String(opening.deposit),
-    deposited: String(opening.deposit),
+    balance: '0',
+    deposited: '0',
+    withdrawn: '0',
   };
 }
-/** What a close of the channel in `state` pays: its balance, and whatever of the channel's on-chain `deposit` it has not
- * taken in yet. The contract works it out the same way, and refuses a state that has taken in more. */
-export function owed(state: Pick<Checkpoint, 'balance' | 'deposited'>, deposit: Integer) {
-  if (BigInt(state.deposited) > BigInt(deposit)) throw new Error('The state has taken in more than was deposited');
-  return BigInt(state.balance) + BigInt(deposit) - BigInt(state.deposited);
+/** Whether evidence is its channel's base, unsigned. */
+export const unsignedBase = (evidence: Evidence) =>
+  evidence.playerSignature === '0x' &&
+  evidence.casinoSignature === '0x' &&
+  canonicalJSON(plain(evidence.base)) === canonicalJSON(baseState(evidence.base.channelId));
+/** What a close of the channel in `state` is owed: its balance, whatever of the channel's on-chain `deposited` it has
+ * not taken in yet, and what it withdrew that the contract has not paid, less what the contract paid out (`paidOut`)
+ * that it did not withdraw; never below nothing. The contract works it out the same way, and refuses a state that has
+ * taken in more than was deposited. */
+export function owed(
+  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
+  deposited: Integer,
+  paidOut: Integer,
+) {
+  if (BigInt(state.deposited) > BigInt(deposited)) throw new Error('The state has taken in more than was deposited');
+  const due = BigInt(state.balance) + BigInt(deposited) - BigInt(state.deposited) + BigInt(state.withdrawn);
+  return due > BigInt(paidOut) ? due - BigInt(paidOut) : 0n;
 }
 export function operation(d: Domain, base: Checkpoint, values: Partial<Operation>) {
   return plain({
@@ -251,6 +259,7 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     sequence: BigInt(base.sequence) + 1n,
     kind: 0,
     amount: 0,
+    recipient: ZeroAddress,
     chance: 0n,
     prize: 0n,
     round: ZeroHash,
@@ -284,9 +293,10 @@ export const LIMITS = {
   group: MAX_GROUP,
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
- * developer bet, whose meta alone says what it is) or what it pays into (an investment, a bank deposit); a credit
- * what it collects from; a deposit nothing but itself. Only what names a game carries a group. Every field is in one
- * form, so one meaning has one memo. */
+ * developer bet, whose meta alone says what it is) or what it pays into (an investment or a bank deposit); a credit
+ * what it collects from; a deposit, a withdrawal and a transfer nothing but themselves, a withdrawal's and a
+ * transfer's recipient being in the operation. Only what names a game carries a group. Every field is in one form, so
+ * one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
@@ -306,7 +316,7 @@ export function checkDetails(kind: number, details: Details) {
         ? named !== counterparty
         : kind === KIND.credit
           ? counterparty && !named
-          : kind === KIND.deposit && !counterparty && !named)
+          : [KIND.deposit, KIND.withdrawal, KIND.transfer].includes(kind as 4) && !counterparty && !named)
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
@@ -353,8 +363,9 @@ export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigin
   value < BigInt(bet.chance) ? BigInt(bet.prize) : 0n;
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
  * the operation itself; a developer bet is a debit that pays its stake to its developer's bank; a deposit takes in
- * money the player deposited into the channel on-chain. */
-export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3, deposit: 4 } as const;
+ * money the player deposited into the channel on-chain; a withdrawal takes out what the contract pays its recipient,
+ * and a transfer what the contract deposits into its recipient's current channel. */
+export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3, deposit: 4, withdrawal: 5, transfer: 6 } as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
   if (
     !same(base.channelId, op.channelId) ||
@@ -375,9 +386,9 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     amount = uint256(BigInt(op.amount));
   const casinoBet = kind === KIND.casinoBet,
     credit = kind === KIND.credit,
-    deposit = kind === KIND.deposit;
-  if (![KIND.casinoBet, KIND.debit, KIND.credit, KIND.deposit].includes(kind as 1))
-    throw new Error('Unknown operation');
+    deposit = kind === KIND.deposit,
+    pays = kind === KIND.withdrawal || kind === KIND.transfer;
+  if (!Object.values(KIND).includes(kind as 1) || kind === KIND.none) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A casino bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
   const chance = BigInt(op.chance),
@@ -398,6 +409,10 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
         !same(op.round, ZeroHash) ||
         !same(secret, ZeroHash) ||
         !same(seed, ZeroHash)) ||
+    // Only a withdrawal or a transfer names a recipient: an account, never the contract.
+    (pays
+      ? same(op.recipient, ZeroAddress) || same(op.recipient, d.verifyingContract)
+      : !same(op.recipient, ZeroAddress)) ||
     amount === 0n ||
     amount >= MAX_BALANCE
   )
@@ -408,7 +423,11 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
           ? 'Invalid credit'
           : deposit
             ? 'Invalid deposit'
-            : 'Invalid debit',
+            : kind === KIND.withdrawal
+              ? 'Invalid withdrawal'
+              : kind === KIND.transfer
+                ? 'Invalid transfer'
+                : 'Invalid debit',
     );
   if (credit || deposit) {
     next.balance = String(balance + amount);
@@ -418,19 +437,23 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     if (amount > balance)
       throw new Error(casinoBet ? 'Invalid casino bet commitment or balance' : 'Insufficient balance');
     next.balance = String(balance - amount + (casinoBet ? betPayout(op, outcome(seed, secret).value) : 0n));
+    // A withdrawal or a transfer counts what it takes out, so a close can tell what the contract never paid.
+    if (pays) next.withdrawn = String(BigInt(base.withdrawn) + amount);
   }
-  if (BigInt(next.balance) >= MAX_BALANCE) throw new Error('Balance exceeds the protocol maximum');
+  if (BigInt(next.balance) >= MAX_BALANCE || BigInt(next.withdrawn) >= MAX_BALANCE)
+    throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
-/** A joint checkpoint above an authorized casino bet or debit supersedes it without consuming entropy or money. */
+/** A joint checkpoint above an authorized casino bet, debit, withdrawal or transfer supersedes it without consuming
+ * entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
-    ![KIND.casinoBet, KIND.debit].includes(Number(op.kind) as 1) ||
+    ![KIND.casinoBet, KIND.debit, KIND.withdrawal, KIND.transfer].includes(Number(op.kind) as 1) ||
     !same(op.channelId, base.channelId) ||
     !same(op.previousStateHash, hashState(d, base)) ||
     BigInt(op.sequence) !== BigInt(base.sequence) + 1n
   )
-    throw new Error('Rejection must identify the next casino bet or debit');
+    throw new Error('Rejection must identify the next casino bet, debit, withdrawal or transfer');
   return {
     ...base,
     sequence: String(uint256(BigInt(op.sequence) + 1n)),
@@ -456,6 +479,7 @@ export const emptyStep = (): Step => ({
     sequence: 0,
     kind: 0,
     amount: 0,
+    recipient: ZeroAddress,
     chance: 0,
     prize: 0,
     round: ZeroHash,
@@ -479,6 +503,7 @@ export function checkpointEvidence(state: Checkpoint, playerSignature = '0x', ca
 export function verifyEvidence(bundle: EvidenceBundle): {
   state: Checkpoint;
   signaturesValid: boolean;
+  unsignedBase: boolean;
   chainObservationsVerified: boolean;
   limitation: string;
 } {
@@ -486,15 +511,17 @@ export function verifyEvidence(bundle: EvidenceBundle): {
     { opening, operator, evidence } = bundle;
   validateOpening(opening);
   if (!same(evidence.base.channelId, opening.channelId)) throw new Error('Evidence channel differs');
-  if (!same(hashState(d, evidence.base), hashState(d, initialState(opening)))) {
-    assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, opening.signer);
+  // The channel's base needs no signature.
+  const base = unsignedBase(evidence);
+  if (!base) {
+    assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, opening.player);
     assertSignature(d, STATE_TYPES, evidence.base, evidence.casinoSignature, operator);
   }
   // A checkpoint-only proof carries the canonical empty step: one meaning, one encoding.
   if (!Number(evidence.step.operation.kind) && !isEmptyStep(d, evidence.step))
     throw new Error('Checkpoint evidence must carry an empty step');
   const state = Number(evidence.step.operation.kind)
-    ? verifyStep(d, evidence.base, evidence.step, opening.signer, operator)
+    ? verifyStep(d, evidence.base, evidence.step, opening.player, operator)
     : evidence.base;
   // The details beside a step say what it meant, and are only as good as the memo it signed.
   if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))
@@ -502,14 +529,15 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   return {
     state,
     signaturesValid: true,
+    unsignedBase: base,
     chainObservationsVerified: false,
     limitation:
-      'Opening identity and deposit require independent on-chain verification. A signed balance is a claim on the shared bankroll. Only a finalized on-chain claim establishes payment due. Inspect payments and remaining debt through an independent RPC.',
+      'The channel and its deposits require independent on-chain verification. A signed balance is a claim on the shared bankroll. Only a finalized on-chain claim establishes payment due. Inspect payments and remaining debt through an independent RPC.',
   };
 }
 /** A developer's commission. It accrues to the developer's address, the developer's own channel shows
  * what that address has earned and collected, and it is collected like redeemed shares: a credit that
- * names this as its counterparty, signed by the key of that channel. */
+ * names this as its counterparty, signed by the developer's account. */
 export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
 const encoded = (all: Record<string, TypedDataField[]>[]) =>
   all.map(types => TypedDataEncoder.from(types).encodeType(Object.keys(types)[0])).join('');
@@ -520,7 +548,6 @@ export const PROTOCOL = id(
   encoded([
     STATE_TYPES,
     OP_TYPES,
-    CLOSE_TYPES,
     ACCESS_TYPES,
     DEVELOPER_ACCESS_TYPES,
     SETTLEMENT_TYPES,
@@ -529,7 +556,7 @@ export const PROTOCOL = id(
     FUND_TYPES,
     REDEEM_TYPES,
     BANK_TYPES,
-    WITHDRAW_TYPES,
+    BANK_WITHDRAW_TYPES,
   ]) +
     canonicalJSON({
       kinds: KIND,

@@ -1,6 +1,6 @@
 import type { Integer, Checkpoint, Operation } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
-import { hexlify, randomBytes, ZeroHash, id } from 'ethers';
+import { getAddress, hexlify, randomBytes, ZeroAddress, ZeroHash, id } from 'ethers';
 import type { Details, PlayerDeveloperBets, PublicDeveloperBet } from '../protocol/types.ts';
 import {
   canonicalJSON,
@@ -31,9 +31,9 @@ import {
   REDEEM_TYPES,
   SETTLEMENT_TYPES,
   BANK_TYPES,
-  WITHDRAW_TYPES,
+  BANK_WITHDRAW_TYPES,
   BANK_ID,
-  hashWithdraw,
+  hashBankWithdraw,
   settleStep,
   checkpointEvidence,
   MAX_PAYOUTS,
@@ -112,8 +112,8 @@ export class ChannelClient extends WalletTransactions {
     // A deposit on its way into the balance goes first: nothing else is signed before the casino has signed it.
     if (kind !== 'taken-in' && this.pending?.kind === 'taken-in') await this.takeDeposits();
     const intent = {
-      // A developer bet, a payment and an investment are debits, a payout collected is a credit, and money deposited
-      // into the channel is taken in with a deposit.
+      // A developer bet, a payment and an investment are debits, a payout collected is a credit, money deposited into
+      // the channel is taken in with a deposit, and a withdrawal or a transfer names its recipient.
       kind:
         (
           {
@@ -122,6 +122,9 @@ export class ChannelClient extends WalletTransactions {
             'developer-bet': KIND.debit,
             invest: KIND.debit,
             bank: KIND.debit,
+            withdrawal: KIND.withdrawal,
+            transfer: KIND.transfer,
+            'lock-in': KIND.transfer,
             divest: KIND.credit,
             earnings: KIND.credit,
             'developer-bet-payout': KIND.credit,
@@ -130,13 +133,14 @@ export class ChannelClient extends WalletTransactions {
           } as Record<string, number>
         )[kind] || 0,
       amount: BigInt(kind === 'casino-bet' ? input.stake : input.amount),
+      recipient: input.recipient ? getAddress(input.recipient) : ZeroAddress,
       chance: kind === 'casino-bet' ? BigInt(input.chance) : 0n,
       prize: kind === 'casino-bet' ? BigInt(input.prize) : 0n,
     };
     if (!intent.kind) throw new Error('Unknown wallet operation');
     // What the operation means, signed as its memo. A casino bet, a developer bet and a payment are always the open
     // game's, so which game that is has one source of truth: the session this wallet has open; the game may give
-    // them a group. An investment, a deposit and a payout name what they pay into or collect from.
+    // them a group. An investment, a bank deposit and a payout name what they pay into or collect from.
     const details: Details = plain({
       id: id(operationId),
       ...(['casino-bet', 'payment', 'developer-bet'].includes(kind)
@@ -149,6 +153,7 @@ export class ChannelClient extends WalletTransactions {
     const matches = (operation: Operation, signed: Details) => {
       if (
         (['kind', 'amount', 'chance', 'prize'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
+        !same(operation.recipient, intent.recipient) ||
         canonicalJSON(signed) !== canonicalJSON(details)
       )
         throw gameError('id-conflict', 'Operation ID is bound to a different intent (terms or game)');
@@ -182,6 +187,7 @@ export class ChannelClient extends WalletTransactions {
       const request = operation(this.domain, this.channel!.state, {
         kind: intent.kind,
         amount: intent.amount,
+        recipient: intent.recipient,
         chance: intent.chance,
         prize: intent.prize,
         round,
@@ -196,7 +202,7 @@ export class ChannelClient extends WalletTransactions {
         operationId,
         request,
         details,
-        signature: await this.channelSigner().signTypedData(this.domain, OP_TYPES, request),
+        signature: await this.signer.signTypedData(this.domain, OP_TYPES, request),
       };
       await this.save();
     };
@@ -308,7 +314,7 @@ export class ChannelClient extends WalletTransactions {
       rejected && casinoBet && !lost ? betPayout(op, outcome(c.pending.seed, response.secret).value) : null;
     c.state = next;
     c.casinoSignature = rejected ? response.casinoSignature : step.casinoSignature;
-    c.playerSignature = await this.channelSigner().signTypedData(this.domain, STATE_TYPES, next);
+    c.playerSignature = await this.signer.signTypedData(this.domain, STATE_TYPES, next);
     c.lastResponse = rejected
       ? { ...response, evidence: checkpointEvidence(next, c.playerSignature, c.casinoSignature) }
       : { ...response, evidence: { ...response.evidence, step } };
@@ -326,8 +332,12 @@ export class ChannelClient extends WalletTransactions {
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null,
       banked =
         kind === 'bank' && !rejected ? this.bankStatement(response.statement, hashOperation(this.domain, op)) : null,
-      // A developer bet is known by the hash of the operation that placed it.
-      developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null;
+      // A developer bet is known by the hash of the operation that placed it, and a withdrawal or transfer is paid under it.
+      developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null,
+      withdrawal =
+        ['withdrawal', 'transfer', 'lock-in'].includes(kind) && !rejected
+          ? hashOperation(this.domain, op).toLowerCase()
+          : null;
     const receipt = plain({
       kind,
       operationId,
@@ -351,6 +361,8 @@ export class ChannelClient extends WalletTransactions {
       amount: rejected ? '0' : op.amount,
       details,
       ...(developerBet ? { bet: developerBet } : {}),
+      // Where it goes: the contract pays it under the withdrawal's ID, once anyone sends the proof.
+      ...(withdrawal ? { withdrawal, to: getAddress(op.recipient), paid: false } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
       commission,
       balance: next.balance,
@@ -573,7 +585,7 @@ export class ChannelClient extends WalletTransactions {
     const { balance, sequence } = await this.api(`/api/channels/${this.channelId}/bank`);
     return { balance: String(BigInt(balance)), sequence: Number(sequence) };
   }
-  /** Take money out of this account's bank: any balance, at any time. The signed `Withdraw` is saved
+  /** Take money out of this account's bank: any balance, at any time. The signed `BankWithdraw` is saved
    * before it is sent, and what it takes out is owed to this account, collected into the open channel. */
   async withdrawBank(this: CasinoWallet, amount: Integer) {
     return this.exclusive(async () => {
@@ -590,7 +602,7 @@ export class ChannelClient extends WalletTransactions {
         };
         held.withdrawing = {
           message,
-          signature: await this.channelSigner().signTypedData(this.domain, WITHDRAW_TYPES, message),
+          signature: await this.signer.signTypedData(this.domain, BANK_WITHDRAW_TYPES, message),
         };
         await this.save(undefined, { bank: held });
       }
@@ -606,7 +618,7 @@ export class ChannelClient extends WalletTransactions {
       }
       await this.save(undefined, {
         bank: {
-          ...this.bankStatement(statement, hashWithdraw(this.domain, request.message)),
+          ...this.bankStatement(statement, hashBankWithdraw(this.domain, request.message)),
           withdrawing: null,
           owed: [...(held.owed ?? []), String(request.message.amount)],
         },
@@ -697,7 +709,7 @@ export class ChannelClient extends WalletTransactions {
           ...this.fund,
           redeeming: {
             message,
-            signature: await this.channelSigner().signTypedData(this.domain, REDEEM_TYPES, message),
+            signature: await this.signer.signTypedData(this.domain, REDEEM_TYPES, message),
           },
         };
         await this.save();
@@ -753,14 +765,7 @@ export class ChannelClient extends WalletTransactions {
   async collectPayouts(this: CasinoWallet) {
     // Money deposited into the channel goes into the balance first: a waiting casino is asked again next time.
     if (!this.busy) await this.takeDeposits().catch(() => {});
-    if (
-      this.busy ||
-      this.pending ||
-      !this.channel?.key ||
-      this.channel.closing ||
-      Number(this.channel.onchain?.status) !== 1
-    )
-      return [];
+    if (this.busy || this.pending || !this.funded) return [];
     const channelId = this.channelId,
       collected: any[] = [];
     const due = await this.api(`/api/channels/${channelId}/payouts`);
@@ -844,7 +849,7 @@ export class ChannelClient extends WalletTransactions {
   }
   async reconcile(this: CasinoWallet) {
     const c = this.channel;
-    if (!c?.key) return;
+    if (!c?.registered) return;
     const reply = await this.api(`/api/channels/${c.state.channelId}`);
     this.noteNames(reply);
     if (same(hashState(this.domain, c.state), hashState(this.domain, reply.state))) {

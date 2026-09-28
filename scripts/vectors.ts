@@ -4,13 +4,12 @@ import type { Checkpoint, Details, Operation } from '../protocol/types.ts';
 import {
   domain,
   channelId,
-  initialState,
+  baseState,
   hashState,
   operation,
   hashOperation,
   deriveState,
   rejectionCheckpoint,
-  hashClose,
   canonicalJSON,
   memo,
   gameKey,
@@ -30,9 +29,8 @@ export function buildVectors() {
     chainId: 31337n,
     casino: '0x1111111111111111111111111111111111111111',
     player: '0x2222222222222222222222222222222222222222',
-    signer: '0x3333333333333333333333333333333333333333',
     developer: '0x4444444444444444444444444444444444444444',
-    // Where a withdrawal pays: any address the player names.
+    // Where a withdrawal pays, or whose balance a transfer funds: any account the player names.
     recipient: '0x5555555555555555555555555555555555555555',
   };
   const Q = OUTCOME_SPACE,
@@ -53,15 +51,9 @@ export function buildVectors() {
     at(100_000_000n, 9_100_000_000n, 9000n),
   ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
-  // The player's channel.
-  const deposit = 1_000_000_000n,
-    opening = {
-      channelId: channelId(identity.player, identity.signer, deposit),
-      player: identity.player,
-      signer: identity.signer,
-      deposit: String(deposit),
-    },
-    genesis = initialState(opening);
+  // The player's first channel, at its base.
+  const opening = { channelId: channelId(identity.player, 0), player: identity.player, index: '0' },
+    base = baseState(opening.channelId);
   // An operation on the checkpoint before it: its details, whose canonical JSON its memo hashes, the operation and its
   // hash, and the checkpoint it leads to with the seed and secret it settles with, zero but for a casino bet.
   const apply = (
@@ -85,6 +77,8 @@ export function buildVectors() {
     };
   };
   const game = gameKey({ developer: identity.developer, name: 'roulette' });
+  // A deposit, taking into the balance the money that opened the channel on-chain.
+  const opened = apply(base, { kind: KIND.deposit, amount: 1_000_000_000n }, { id: `0x${'81'.repeat(32)}` });
   // A casino bet on red: twice the stake on 18 of the 37 pockets. The round's secret is the first of these whose
   // outcome, with the bettor's seed, is below the bet's chance, so it pays.
   const red = { stake: 100_000_000n, chance: (Q / 37n) * 18n, prize: 200_000_000n },
@@ -94,7 +88,7 @@ export function buildVectors() {
   do secret = id(`HOOKEDIN/VECTOR/SECRET/${++n}`);
   while (outcome(seed, secret).value >= red.chance);
   const bet = apply(
-    genesis,
+    opened.next,
     {
       kind: KIND.casinoBet,
       amount: red.stake,
@@ -124,24 +118,33 @@ export function buildVectors() {
     { kind: KIND.credit, amount: 120_000_000n },
     { id: `0x${'84'.repeat(32)}`, counterparty: developerBet.hash },
   );
-  // A deposit, taking into the balance money deposited into the channel on-chain after it opened.
+  // Another deposit, taking in money deposited into the open channel later.
   const deposited = apply(payout.next, { kind: KIND.deposit, amount: 500_000_000n }, { id: `0x${'85'.repeat(32)}` });
-  const rejection = rejectionCheckpoint(d, genesis, bet.operation),
-    close = { channelId: opening.channelId, stateHash: deposited.nextHash, recipient: identity.recipient };
+  // A withdrawal paying the recipient, and a transfer into the recipient's balance: the contract pays each once,
+  // under the operation's hash.
+  const withdrawal = apply(
+    deposited.next,
+    { kind: KIND.withdrawal, amount: 700_000_000n, recipient: identity.recipient },
+    { id: `0x${'86'.repeat(32)}` },
+  );
+  const transfer = apply(
+    withdrawal.next,
+    { kind: KIND.transfer, amount: 60_000_000n, recipient: identity.recipient },
+    { id: `0x${'87'.repeat(32)}` },
+  );
+  const rejection = rejectionCheckpoint(d, opened.next, bet.operation);
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     identity,
     protocol: PROTOCOL,
     developerProtocol: DEVELOPER_PROTOCOL,
     opening,
-    genesis,
-    genesisHash: hashState(d, genesis),
-    operations: [bet, developerBet, payout, deposited],
+    base,
+    baseHash: hashState(d, base),
+    operations: [opened, bet, developerBet, payout, deposited, withdrawal, transfer],
     outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),
-    close,
-    closeHash: hashClose(d, close),
     cases,
   };
 }

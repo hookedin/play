@@ -92,7 +92,7 @@ round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it.
     "side": "left"
   },
   "seed": "0x677a5f560aadfc5627c98b34edd076d53481e76411befe62dd848cbed1fc9ed4",
-  "signature": "0xc589853547d41893c31690f5479d2e15b6cb5ef43f5bf3e3c3de8e81cc3931d62ea510476f8041050c592144a95a4f4b99f604cee4793b0fbff84aa4261d6a491b"
+  "signature": "0x4ea3a2c14eb3d6abcd9733f43d71fbac9ba458193187cae6f71427b3ca63dfab4244e9525980e79ca3ecc202e818ae0090a828e7d19bca07c271a6e832de5c971b"
 }
 ```
 
@@ -114,7 +114,7 @@ round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it.
       "covered": "0x2b9e0f3c7a1d5e8b4f6a9c2d0e7b3f1a8c5d9e2b6f0a4c7d1e3b8f5a9c2d6e0b",
       "side": "left"
     },
-    "signature": "0xc589853547d41893c31690f5479d2e15b6cb5ef43f5bf3e3c3de8e81cc3931d62ea510476f8041050c592144a95a4f4b99f604cee4793b0fbff84aa4261d6a491b",
+    "signature": "0x4ea3a2c14eb3d6abcd9733f43d71fbac9ba458193187cae6f71427b3ca63dfab4244e9525980e79ca3ecc202e818ae0090a828e7d19bca07c271a6e832de5c971b",
     "accepted": true,
     "payout": "0"
   }
@@ -155,10 +155,10 @@ shows it.
 {
   "settlements": [
     {
-      "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
+      "bet": "0x54dcdb0c1c8051ddf0b7cb98f3e2d04b97f53c2b9eaeaafdec2b7a0f198df40d",
       "player": "0",
       "casino": "0",
-      "signature": "0x1c07c1a140cca0e79dbc18dd2cce9134c445d0212ac0835a49e6625ad7875d652864892203f5471e5a2b7d7dd5f91da446d010ced98da1ca878dca7ed04d91101b"
+      "signature": "0x066e90a90dbaaa2bc844a2759a34990991530fbb6e0e5e9a31107ae1e07aaff32685d88b43d3ee09a5a61236c07bbaa192f8a845da4448ca8ae30418090272c01b"
     }
   ]
 }
@@ -167,11 +167,11 @@ shows it.
 ```json title="Response"
 [
   {
-    "bet": "0x002e95e1d24b469efc1f2ac0b2b12d40c4439861bbe8200979d604cff9db8c67",
+    "bet": "0x54dcdb0c1c8051ddf0b7cb98f3e2d04b97f53c2b9eaeaafdec2b7a0f198df40d",
     "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
     "group": "21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c",
     "stake": "1000000000000000",
-    "placedAt": 1790384229582,
+    "placedAt": 1790585368544,
     "developer": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
     "status": "settled",
     "meta": {
@@ -181,10 +181,10 @@ shows it.
     "settlement": {
       "player": "0",
       "casino": "0",
-      "signature": "0x1c07c1a140cca0e79dbc18dd2cce9134c445d0212ac0835a49e6625ad7875d652864892203f5471e5a2b7d7dd5f91da446d010ced98da1ca878dca7ed04d91101b"
+      "signature": "0x066e90a90dbaaa2bc844a2759a34990991530fbb6e0e5e9a31107ae1e07aaff32685d88b43d3ee09a5a61236c07bbaa192f8a845da4448ca8ae30418090272c01b"
     },
-    "settledAt": 1790384229614,
-    "uname": "zi26admbshgt8yfa6xfxs97r",
+    "settledAt": 1790585368584,
+    "uname": "dvfetrdww8dtgwivi4mrtrty",
     "alias": "alice"
   }
 ]

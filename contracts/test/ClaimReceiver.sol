@@ -9,8 +9,7 @@ contract ClaimReceiver {
     bool public reentryRejected;
     constructor(HookedInCasino target) { casino=target; controller=msg.sender; }
     function setMode(uint256 value) external { require(msg.sender==controller);mode=value; }
-    function open(address signer) external payable {require(msg.sender==controller);channelId=casino.openChannel{value:msg.value}(signer);}
-    function close(HookedInCasino.Evidence calldata evidence) external {require(msg.sender==controller);casino.startClose(evidence);}
+    function close(HookedInCasino.Evidence calldata evidence) external {require(msg.sender==controller);channelId=evidence.base.channelId;casino.startClose(evidence);}
     function redirect(bytes32 id, address recipient) external { require(msg.sender==controller); casino.claimTo(id, recipient); }
     function collectTwice(bytes32 id) external { require(msg.sender==controller); casino.claim(id); casino.claim(id); }
     receive() external payable {

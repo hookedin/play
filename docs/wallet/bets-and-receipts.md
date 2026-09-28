@@ -132,8 +132,22 @@ and the contract protects neither ([trust model](../overview/trust-model.md#deve
 ## Activity
 
 **Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, bankroll and
-bank movements, and transactions: **Deposited**, **Withdrawn** (a withdrawal or a collected claim), **Balance closed**
-and **Close challenged**. A row expands to its operation ID, channel, sequence and commission, and for a transaction
-its hash (linked to Sepolia Etherscan), its block and the address a withdrawal paid, with the raw JSON behind it. An off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**,
+bank movements, withdrawals and transfers, and transactions: **Deposited**, **Withdrawn** (a collected claim, or
+everything at the deposit address sent elsewhere), **Withdrawal sent** (one you sent with **Pay it now**),
+**Close started**, **Balance closed** and **Close challenged**. A row expands to its operation ID, channel, sequence and
+commission, and for a transaction its hash (linked to Sepolia Etherscan), its block and the address it paid, with the
+raw JSON behind it. An off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**,
 **Reverted**, **Replaced** or **Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100
 receipts, and the receipt of every developer bet still open.
+
+A withdrawal from your balance is titled **Withdrawal on its way**, with the status **Waiting to be paid** and its
+amount **To be paid**, until the contract has paid it; then it is **Withdrawn**, **Paid on-chain**, and its amount
+**Paid out**. A transfer into another balance is **Transfer on its way**, then **Put into a balance**, and a lock-in
+**Locking in**, then **Balance locked in** ([lock in your balance](closing-and-claims.md#lock-in-your-balance)); once
+paid, their amount is **Paid in**. Expanded, each shows the address it pays, as **To**, its **Withdrawal ID** (the hash
+of its operation) and, once paid, the transaction it was **Paid in**, linked to Sepolia Etherscan. Until then it offers
+**Pay it now**, which sends it to the contract from your account, paying the network fee from your deposit address. One
+still unpaid when its channel's close is finished is **Withdrawal returned**, **Returned with the close**, its amount
+**In the claim**: the close was owed it back ([claims](closing-and-claims.md#claims-and-collection)). When the wallet
+reads the chain for Activity, it asks the contract whether each withdrawal still owed has been paid, and looks for the
+payment among the last 10,000 blocks.

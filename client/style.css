@@ -238,6 +238,17 @@ input[type='file']::file-selector-button {
   opacity: 0;
   cursor: pointer;
 }
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
 label {
   display: block;
   margin: 18px 0 8px;

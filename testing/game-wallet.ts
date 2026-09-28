@@ -5,7 +5,8 @@ import { validateRequest } from '../client/bridge.ts';
 import { gameReceipt } from '../client/wallet-games.ts';
 import {
   domain,
-  initialState,
+  baseState,
+  hashState,
   channelId,
   STATE_TYPES,
   SETTLEMENT_TYPES,
@@ -99,23 +100,24 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     d = domain(31337, casino);
   let bankroll = capital,
     bank = funds;
-  /** A channel this player opens with `deposit`, jointly signed at its start. */
-  const openChannel = async (deposit = 1000000n) => {
-    const key = Wallet.createRandom(),
-      opening = {
-        channelId: channelId(player.address, key.address, deposit),
-        player: player.address,
-        signer: key.address,
-        deposit: String(deposit),
-      },
-      state = initialState(opening);
+  /** The player's channel number `index`, with `deposit` taken into its balance and jointly signed. */
+  const openChannel = async (deposit = 1000000n, index = 0) => {
+    const opening = { channelId: channelId(player.address, index), player: player.address, index: String(index) },
+      base = baseState(opening.channelId),
+      state = {
+        ...base,
+        sequence: '1',
+        previousStateHash: hashState(d, base),
+        balance: String(deposit),
+        deposited: String(deposit),
+      };
     return {
-      key: key.privateKey,
       opening,
       state: structuredClone(state),
-      playerSignature: await key.signTypedData(d, STATE_TYPES, state),
+      playerSignature: await player.signTypedData(d, STATE_TYPES, state),
       casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
-      onchain: { status: '1', deposit: String(deposit) },
+      registered: true,
+      onchain: { status: '1', deposited: String(deposit), principal: String(deposit), paidOut: '0' },
     };
   };
   const first = await openChannel();
@@ -495,7 +497,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     /** The player closes their channel and opens another. A game's operation IDs are theirs across both. */
     async replaceChannel(of = wallet) {
       const old = of.channels[of.channelId!]!,
-        next = await openChannel();
+        next = await openChannel(1000000n, Number(old.opening.index) + 1);
       of.channels[old.opening.channelId] = { ...old, onchain: { ...old.onchain, status: '3' } };
       of.channels[next.opening.channelId] = structuredClone(next);
       of.channelId = next.opening.channelId;

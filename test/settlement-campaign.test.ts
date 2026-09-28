@@ -1,34 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ContractFactory, Wallet, id } from 'ethers';
-import { anvil, deployment, signedIncrease, open, step, closeCoop, assessBinary } from '../testing/contract.ts';
-import { initialState, checkpointEvidence, channelId, STATE_TYPES } from '../protocol/protocol.ts';
+import { ContractFactory, id, Wallet } from 'ethers';
+import { anvil, deployment, signedIncrease, open, step, assessBinary } from '../testing/contract.ts';
+import { baseState, checkpointEvidence, channelId, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import release from '../client/contract-artifact.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 
-async function channel(f: any, player: any, deposit = 100n) {
-  const ch = await open(f, player, deposit);
-  const genesis = ch.evidence;
-  const state = { ...ch.state, sequence: '1' };
-  const evidence = checkpointEvidence(
-    state,
-    await new Wallet(ch.key).signTypedData(f.d, STATE_TYPES, state),
-    await f.owner.signTypedData(f.d, STATE_TYPES, state),
-  );
-  return { ...ch, state, evidence, genesis };
-}
+/** An account's channel with its deposit taken in, and its base: the state a stale close can still name. */
+const channel = (f: any, player: any, deposit = 100n) => open(f, player, deposit);
 async function transition(f: any, ch: any, kind: any, amount: any, extra = {}) {
   const result = kind === 'checkpoint' ? await signedIncrease(f, ch, amount) : await step(f, ch, kind, amount, extra);
   ch.state = result.state;
   ch.evidence = checkpointEvidence(
     result.state,
-    await new Wallet(ch.key).signTypedData(f.d, STATE_TYPES, result.state),
+    await ch.player.signTypedData(f.d, STATE_TYPES, result.state),
     kind === 'checkpoint' ? result.evidence.casinoSignature : result.evidence.step.casinoSignature,
   );
   return result.evidence;
+}
+/** A close without the casino, finalized once its challenge period is over. */
+async function settle(f: any, env: any, ch: any) {
+  await (await f.contract.connect(ch.player).startClose(ch.evidence)).wait();
+  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_mine', []);
+  await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
 }
 async function invariants(env: any, f: any, records: any) {
   let principal = 0n,
@@ -42,7 +40,7 @@ async function invariants(env: any, f: any, records: any) {
         f.contract.claims(channelId),
         f.contract.allocatedWinnings(channelId),
       ]);
-      principal += c.status < 3n ? c.deposit : claim.protectedRemaining;
+      principal += c.status < 3n ? c.principal : claim.protectedRemaining;
       debt += claim.winningsRemaining;
       allocated += reserved;
       assert.ok(reserved <= claim.winningsRemaining);
@@ -83,7 +81,7 @@ for (const initialSeed of [1, 4294967295])
       const who = 1 + random(6),
         player = env.wallets[who],
         ch = active.get(who),
-        choice = random(9);
+        choice = random(10);
       if (!ch) {
         const next = await channel(f, player, BigInt(10 + random(1000)));
         records.push(next);
@@ -99,8 +97,7 @@ for (const initialSeed of [1, 4294967295])
               await (await f.contract.challengeClose(ch.evidence)).wait();
               assert.equal((await f.contract.channels(ch.state.channelId)).deadline, c.deadline);
             } else await assert.rejects(f.contract.challengeClose(ch.evidence));
-          } else if (choice < 6) await closeCoop(f, ch);
-          else {
+          } else {
             await env.provider.send('evm_increaseTime', [86401]);
             await env.provider.send('evm_mine', []);
             await (await f.contract.finalizeClose(ch.state.channelId)).wait();
@@ -122,15 +119,34 @@ for (const initialSeed of [1, 4294967295])
               seed: id('seed:' + initialSeed + ':' + i),
             });
           } else await transition(f, ch, 'checkpoint', BigInt(1 + random(500)));
-        } else if (choice === 3) await (await f.contract.connect(player).startClose(ch.genesis)).wait();
-        else if (choice === 4) await closeCoop(f, ch);
+        } else if (choice === 3) await (await f.contract.connect(player).startClose(ch.base)).wait();
+        else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
+          // A withdrawal to an address, or a lock-in into the account's own channel, which anyone has paid: out of
+          // the channel's deposits first and house cash for the rest, all or nothing. One house cash cannot pay is at
+          // times left unpaid, for the close to return.
+          const amount = BigInt(1 + random(Number(ch.state.balance))),
+            lockIn = random(2) === 1,
+            before: bigint = (await f.contract.channels(ch.state.channelId)).principal,
+            paid = await transition(f, ch, lockIn ? 6 : 5, amount, {
+              recipient: lockIn ? player.address : Wallet.createRandom().address,
+            });
+          const short = amount - (amount < before ? amount : before) - (await f.contract.withdrawableHouse());
+          if (short > 0n) {
+            await assert.rejects(f.contract.withdraw(paid));
+            if (random(2)) await (await f.contract.fundBankroll({ value: short })).wait();
+          }
+          if (short <= 0n || (await f.contract.withdrawableHouse()) >= short) {
+            await (await f.contract.connect(env.wallets[8]).withdraw(paid)).wait();
+            const after = (await f.contract.channels(ch.state.channelId)).principal;
+            assert.equal(after, before - (amount < before ? amount : before) + (lockIn ? amount : 0n));
+          }
+        } else if (choice === 4)
+          // Somebody else deposits into the open channel.
+          await (await f.contract.connect(env.wallets[8]).deposit(player.address, { value: 7n })).wait();
         else if (choice === 5) await (await f.contract.fundBankroll({ value: BigInt(1 + random(500)) })).wait();
         else if (choice === 6) {
           const cash = await f.contract.withdrawableHouse();
-          if (cash)
-            await (
-              await f.contract.withdrawHouse(id('withdraw:' + initialSeed + ':' + i), f.owner.address, cash)
-            ).wait();
+          if (cash) await (await f.contract.withdrawHouse(f.owner.address, cash)).wait();
         } else {
           const closed = records.filter(record => ![...active.values()].includes(record));
           if (closed.length) {
@@ -156,9 +172,9 @@ test('maximal winnings debt never consumes another channel principal', async t =
     b = await channel(f, env.wallets[2], 1n),
     protectedChannel = await channel(f, env.wallets[3], 100n);
   await transition(f, a, 'checkpoint', (1n << 128n) - 2n);
-  await closeCoop(f, a);
+  await settle(f, env, a);
   await transition(f, b, 'checkpoint', 10n);
-  await closeCoop(f, b);
+  await settle(f, env, b);
   assert.equal(await f.contract.unpaidWinnings(), (1n << 128n) - 2n + 10n);
   await (await f.contract.fundBankroll({ value: 20n })).wait();
   await (await f.contract.claim(a.state.channelId)).wait();
@@ -173,11 +189,11 @@ test('the wallet requires its pinned runtime and signing domain', async t => {
   const args = { observer, provider: env.provider, address: f.contract.target, chainId: 31337 };
   assert.equal((await verifyDeployment(args)).operator, f.owner.address);
   const ch = await channel(f, env.wallets[1]);
-  const changed = { ...ch.state, sequence: '1', balance: '200' };
+  const changed = { ...ch.state, sequence: '2', balance: '200' };
   const wrongDomain = { ...f.d, version: 'unsupported' };
   const evidence = checkpointEvidence(
     changed,
-    await new Wallet(ch.key).signTypedData(wrongDomain, STATE_TYPES, changed),
+    await ch.player.signTypedData(wrongDomain, STATE_TYPES, changed),
     await f.owner.signTypedData(wrongDomain, STATE_TYPES, changed),
   );
   await assert.rejects(f.contract.supported(evidence));
@@ -200,7 +216,7 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
   for (let i = 0; i < 72; i++) {
     const ch = await channel(f, env.wallets[1], 1n);
     await transition(f, ch, 'checkpoint', 1n);
-    await closeCoop(f, ch);
+    await settle(f, env, ch);
     records.push(ch);
   }
   await (await force(72n)).waitForDeployment();
@@ -213,17 +229,17 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
   for (let i = 0; i < 8; i++) {
     const ch = await channel(f, env.wallets[2], 1n);
     await transition(f, ch, 'checkpoint', 1n);
-    await closeCoop(f, ch);
+    await settle(f, env, ch);
     records.push(ch);
   }
   (gas as any).fundAllocating8 = String((await (await f.contract.fundBankroll({ value: 8n })).wait()).gasUsed);
   const ch = await channel(f, env.wallets[3], 1n),
     max = (1n << 128n) - 1n;
-  const base = { ...ch.state, sequence: '1', balance: String(max / 8n) };
+  const base = { ...ch.state, sequence: '2', balance: String(max / 8n) };
   ch.state = base;
   ch.evidence = checkpointEvidence(
     base,
-    await new Wallet(ch.key).signTypedData(f.d, STATE_TYPES, base),
+    await ch.player.signTypedData(f.d, STATE_TYPES, base),
     await f.owner.signTypedData(f.d, STATE_TYPES, base),
   );
   // Exercise full-width casino bet terms.
@@ -245,13 +261,13 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     ...ch.evidence,
     step: {
       operation: op,
-      authorization: await new Wallet(ch.key).signTypedData(f.d, OP_TYPES, op),
+      authorization: await ch.player.signTypedData(f.d, OP_TYPES, op),
       seed,
       secret,
       casinoSignature: await f.owner.signTypedData(f.d, STATE_TYPES, next),
     },
   };
-  await (await f.contract.connect(ch.player).startClose(ch.genesis)).wait();
+  await (await f.contract.connect(ch.player).startClose(ch.base)).wait();
   (gas as any).challengeWide = String((await (await f.contract.challengeClose(evidence)).wait()).gasUsed);
   const receiverArtifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver');
   const receiver = await new ContractFactory(
@@ -260,15 +276,11 @@ test('gas profile covers full-width evidence, bounded queues, forced ETH and exh
     env.wallets[4],
   ).deploy(f.contract.target);
   await receiver.waitForDeployment();
-  const message = {
-    channelId: channelId(String(receiver.target), env.wallets[4].address, 100n),
-    player: receiver.target,
-    signer: env.wallets[4].address,
-    deposit: '100',
-  };
-  await (await (receiver as any).open(message.signer, { value: 100n })).wait();
+  // A contract account signs nothing, but anyone funds its channel and it closes from its base.
+  const message = { channelId: channelId(String(receiver.target), 0) };
+  await (await f.contract.connect(env.wallets[4]).deposit(receiver.target, { value: 100n })).wait();
   await (await (receiver as any).setMode(3)).wait();
-  await (await (receiver as any).close(checkpointEvidence(initialState(message)))).wait();
+  await (await (receiver as any).close(checkpointEvidence(baseState(message.channelId)))).wait();
   await env.provider.send('evm_increaseTime', [86401]);
   await env.provider.send('evm_mine', []);
   (gas as any).finalizeGasBurner = String(

@@ -43,7 +43,6 @@ is no WebSocket or event stream: clients poll.
 | [`POST /api/channels/:id/operations`](channels.md#post-apichannelsidoperations)                       | Submits a signed operation                       |
 | [`GET /api/channels/:id/operations/:operationId`](channels.md#get-apichannelsidoperationsoperationid) | The recorded reply to one operation              |
 | [`POST /api/channels/:id/ack`](channels.md#post-apichannelsidack)                                     | Countersigns the latest checkpoint               |
-| [`POST /api/channels/:id/close`](channels.md#post-apichannelsidclose)                                 | The casino's `Close` signature                   |
 | [`GET /api/channels/:id/payouts`](channels.md#get-apichannelsidpayouts)                               | What the casino owes the player                  |
 | [`GET /api/channels/:id/developer-bets`](channels.md#get-apichannelsiddeveloper-bets)                 | The account's developer bets                     |
 | [`GET /api/channels/:id/fund`](channels.md#get-apichannelsidfund)                                     | The player's shares in the bankroll fund         |
@@ -108,7 +107,7 @@ Two kinds of token travel in the `Authorization` header as `HookedIn <token>`, a
 
 | Token            | Message                                  | Signed by                                        | Routes                                                                                      |
 | ---------------- | ---------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Channel access   | `Access {channelId, expiresAt}`          | The channel key registered for the channel       | Every `/api/channels/:id/…` route                                                           |
+| Channel access   | `Access {channelId, expiresAt}`          | The channel's account                            | Every `/api/channels/:id/…` route                                                           |
 | Developer access | `DeveloperAccess {developer, expiresAt}` | The developer: the account that publishes a game | `POST /api/rounds`, `POST /api/rounds/:round/casino-bet`, `POST /api/developer-bets/settle` |
 
 The casino accepts a token whose `expiresAt` is not in the past and at most 120 seconds ahead. A token is not bound to
@@ -123,7 +122,7 @@ against the opening in its body. Opening a round needs a key whose account publi
 last game down still pays the bets placed on it.
 
 The token only says who is asking. What a request commits to is signed in its body: an operation, a `Redeem`, a
-`Withdraw`, a `Close`, a `Settlement` or a `BankCasinoBet`.
+`BankWithdraw`, a `Settlement` or a `BankCasinoBet`.
 
 ## Operations and retries
 
@@ -174,9 +173,9 @@ most 1,024 keys and drops the oldest to make room. A spent budget answers `429` 
 connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
 
 The casino does one thing at a time for each channel and for each shared thing a request touches: the bankroll fund, a
-round, a profile, the counterparty of a credit, a developer's bank. Each of these queues holds 8 waiting requests, a
-developer's bank 1,024, and at most 4,096 queues exist at once. At most four channel registrations run at once. A full
-queue or a fifth registration answers `429` with `busy`.
+round, a profile, the counterparty of a credit, a developer's bank, the house cash withdrawals are paid from. Each of
+these queues holds 8 waiting requests, a developer's bank 1,024, and at most 4,096 queues exist at once. At most four
+channel registrations run at once. A full queue or a fifth registration answers `429` with `busy`.
 
 ## Pauses
 

@@ -1,7 +1,7 @@
 import { BrowserStore } from '../client/storage.ts';
 import { CasinoWallet } from '../client/wallet.ts';
 import { Wallet, id } from 'ethers';
-import { domain, initialState, channelId, STATE_TYPES, plain, checkpointEvidence } from '../protocol/protocol.ts';
+import { domain, baseState, channelId, STATE_TYPES, plain, checkpointEvidence } from '../protocol/protocol.ts';
 import { decryptBackup } from '../client/backup.ts';
 const output = document.getElementById('result');
 try {
@@ -26,12 +26,7 @@ try {
     owner = Wallet.createRandom(),
     casino = Wallet.createRandom().address;
   const d = domain(31337, casino),
-    message = {
-      channelId: channelId(player.address, player.address, 1000n),
-      player: player.address,
-      signer: player.address,
-      deposit: '1000',
-    };
+    message = { channelId: channelId(player.address, 0), player: player.address, index: '0' };
   const opening = message;
   const makeWallet = () => {
     const w = new CasinoWallet({ network: 'local', storage });
@@ -49,8 +44,7 @@ try {
   const a = makeWallet();
   a.channels[message.channelId] = {
     opening,
-    state: plain(initialState(message)),
-    key: player.privateKey,
+    state: plain(baseState(message.channelId)),
     playerSignature: '0x',
     casinoSignature: '0x',
     onchain: { status: '1' },
@@ -117,9 +111,7 @@ try {
     balance: async () => 1000n,
     accept: async () => {},
     contractRead: async (_: any, method: any) =>
-      method === 'activeChannel'
-        ? observing.channelId
-        : { status: 2n, closingSequence: 0n, closingBalance: 0n, deadline: 9999999999n },
+      method === 'channelIndex' ? 0n : { status: 2n, closingSequence: 0n, closingBalance: 0n, deadline: 9999999999n },
     corroborate: async (_: any, read: any) => read({ getBlock: async () => block }),
   } as any;
   let releaseDetails, detailsStarted: any;

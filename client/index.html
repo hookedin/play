@@ -171,18 +171,20 @@
         <details class="card recovery">
           <summary>
             <h2>Recovery</h2>
-            <span class="muted">Close, challenge and collect without the casino</span>
+            <span class="muted">Lock in, close, challenge and collect</span>
           </summary>
           <p id="channel-status" class="mono">No balance open</p>
           <p id="channel-observation" class="muted"></p>
           <p id="challenge-deadline" class="muted"></p>
           <p class="muted">
             Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
-            challenge that close within 24 hours with your saved evidence. Keep a current recovery bundle somewhere
-            safe.
+            challenge that close within 24 hours with your saved evidence. The contract holds your deposits for it: Lock
+            in my balance makes all of it deposits, the bankroll paying in your winnings. Keep a current recovery bundle
+            somewhere safe.
           </p>
           <div class="actions">
             <button id="channel-export" class="button small" type="button">Export recovery bundle</button
+            ><button id="channel-lock" class="button small" type="button">Lock in my balance</button
             ><button id="channel-start-close" class="button small" type="button">Close without the casino</button
             ><button id="channel-challenge" class="button small" type="button">Challenge the close</button
             ><button id="channel-finalize" class="button small" type="button">Finish the close</button>
@@ -366,6 +368,17 @@
           <p id="alias-note" class="muted"></p>
           <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
         </section>
+        <section class="card" aria-labelledby="deposits-title">
+          <h2 id="deposits-title">Deposits</h2>
+          <label class="check"
+            ><input id="auto-deposit" type="checkbox" checked /> Add ETH that arrives at my deposit address to my
+            balance</label
+          >
+          <p class="muted">
+            On, everything that arrives goes in, less the network fee of adding it. Off, it stays at the address, to pay
+            for transactions you send yourself, such as closing without the casino.
+          </p>
+        </section>
         <section class="card" aria-labelledby="keys-title">
           <h2 id="keys-title">Keys and backups</h2>
           <p class="muted">This account's key is stored only in this browser.</p>
@@ -389,8 +402,8 @@
             /></label>
           </div>
           <p class="muted">
-            A backup holds this account's key, its balance's keys, its signed evidence and any operation in flight. Keep
-            it and its passphrase apart.
+            A backup holds this account's key, its signed evidence and any operation in flight. Keep it and its
+            passphrase apart.
           </p>
         </section>
         <section class="card" aria-labelledby="accounts-title">
@@ -502,8 +515,22 @@
         <p id="deposit-note" class="help"></p>
       </section>
       <section class="tab-panel" data-panel="withdraw" hidden>
+        <div id="withdraw-amount-field">
+          <label for="withdraw-amount">Amount (ETH)</label>
+          <input
+            id="withdraw-amount"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            placeholder="All of it"
+            spellcheck="false"
+          />
+        </div>
         <label for="withdraw-to">To</label>
         <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
+        <label id="withdraw-transfer-field" class="check"
+          ><input id="withdraw-transfer" type="checkbox" /> Put it into that account's HookedIn balance</label
+        >
         <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
       </section>

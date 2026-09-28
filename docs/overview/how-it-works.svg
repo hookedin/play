@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" role="img" aria-labelledby="title desc" font-family="system-ui, sans-serif">
   <title id="title">How HookedIn fits together</title>
-  <desc id="desc">In your browser, the game runs in a sandboxed iframe beside the wallet and talks to it over a message bridge. The wallet sends signed bets to the casino API and gets signed results back. The wallet sends deposits, closes, challenges and claims to the contract as transactions from your funding account. The casino watches the contract and can close a channel too.</desc>
+  <desc id="desc">In your browser, the game runs in a sandboxed iframe beside the wallet and talks to it over a message bridge. The wallet sends signed bets to the casino API and gets signed results back. The wallet sends deposits, closes, challenges and claims to the contract as transactions from your account. The casino sends the withdrawals it signs to the contract, which pays them, watches the contract and closes idle channels.</desc>
   <rect width="760" height="420" rx="12" fill="#121721"/>
 
   <g fill="none" stroke-width="1.5">
@@ -40,14 +40,15 @@
     <text x="492" y="252">backs casino bets from the bankroll</text>
     <text x="492" y="345" font-size="15" font-weight="600">HookedInCasino contract</text>
     <text x="492" y="366">holds deposits, settles closes</text>
-    <text x="492" y="384">pays claims</text>
+    <text x="492" y="384">pays withdrawals and claims</text>
   </g>
   <g fill="#a68cff" font-size="11">
     <text x="108" y="164">bridge: requests and receipts</text>
     <text x="386" y="206" text-anchor="middle">signed bets</text>
     <text x="386" y="266" text-anchor="middle">signed results</text>
+    <text x="598" y="301" text-anchor="end">sends withdrawals</text>
     <text x="622" y="301">watches, can close</text>
     <text x="316" y="352" text-anchor="middle">deposit · close · challenge · claim</text>
-    <text x="316" y="378" text-anchor="middle" fill-opacity="0.8">transactions from your funding account</text>
+    <text x="316" y="378" text-anchor="middle" fill-opacity="0.8">transactions from your account</text>
   </g>
 </svg>

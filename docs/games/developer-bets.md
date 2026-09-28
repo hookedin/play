@@ -270,7 +270,7 @@ One draw of a provably fair game, from the first request to the players' money, 
    token your key signs: the casino picks a secret for each, keeps it, and names the round by its hash. The server works
    out each round's seed hash and publishes the draw's ID, which commits to both.
 2. **Players bet.** Each page calls [`game.developerBet`](../reference/bridge.md#gamedeveloperbet) with the draw's ID
-   in its `group`. The player's wallet signs a debit with its channel key and sends it to
+   in its `group`. The player's wallet signs a debit with the account's key and sends it to
    [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations); the casino signs the
    channel's next state, records the bet with its meta, group and time, and puts the stake in your bank.
 3. **The server closes betting.** It reads the open bets in the group
@@ -288,7 +288,7 @@ One draw of a provably fair game, from the first request to the players' money, 
    ([`settle`](../sdk/developer.md#settle)).
 6. **The wallet collects.** Each player's wallet reads the settled bet
    ([`GET /api/developer-bets/:bet`](../casino-api/public.md#get-apideveloper-betsbet)), checks your signature over it,
-   signs a credit for exactly the player's amount with its channel key, and the casino signs the channel's next state.
+   signs a credit for exactly the player's amount with the account's key, and the casino signs the channel's next state.
    The wallet then pushes the settled receipt to the page ([events](../reference/bridge.md#events)).
 
 Anyone can then check the draw: [`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround) shows each

@@ -1,24 +1,12 @@
 import type { TransactionReceipt, TransactionResponse, TransactionRequest } from 'ethers';
-import type { Integer, Opening } from '../protocol/types.ts';
+import type { Integer } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
-import { Wallet, ZeroAddress, formatEther, getAddress, keccak256, Transaction } from 'ethers';
-import {
-  plain,
-  same,
-  channelId,
-  validateOpening,
-  CLOSE_TYPES,
-  assertSignature,
-  initialState,
-  hashState,
-} from '../protocol/protocol.ts';
+import { ZeroAddress, formatEther, getAddress, keccak256, Transaction } from 'ethers';
+import { plain, same, hashState } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { withLock } from './storage.ts';
-export const MIN_GAS_RESERVE = 1000000000000000n;
-/** The gas a deposit's fee is budgeted for: opening a channel takes the most, adding to one less. */
-export const DEPOSIT_GAS = 300000n;
 export const TRANSACTION_LIMITS = Object.freeze({
   gas: 2000000n,
   feePerGas: 200000000000n,
@@ -30,9 +18,9 @@ export const picked = (value: Record<string, any>, keys: string[]) =>
 export const channelRecord = (value: Record<string, any>) =>
   picked(value, [
     'player',
-    'signer',
-    'deposit',
-    'initialHash',
+    'deposited',
+    'principal',
+    'paidOut',
     'status',
     'deadline',
     'closingSequence',
@@ -40,7 +28,7 @@ export const channelRecord = (value: Record<string, any>) =>
     'closingBalance',
   ]);
 
-/** Everything that signs or recovers an on-chain transaction: deposits, closes, claims,
+/** Everything that signs or recovers an on-chain transaction: deposits, withdrawals, closes, claims,
  * challenges, fee limits, nonce recovery and confirmed-receipt bookkeeping. The wallet
  * class is a chain: `CasinoWallet` extends `GameSessions` extends `ChannelClient`
  * extends this, so each method declares `this: CasinoWallet`. */
@@ -55,7 +43,18 @@ export class WalletTransactions {
       const { address, signer, provider, contract } = this;
       const value = BigInt(overrides.value ?? 0);
       if (value < 0n) throw new Error('Transaction value cannot be negative.');
-      const fees = await this.transactionFees(method, args, value);
+      // A deposit of everything the address holds is priced before its value is known, and keeps that price.
+      const fees = overrides.gasLimit
+        ? {
+            maxCost: BigInt(overrides.gasLimit) * BigInt(overrides.maxFeePerGas!),
+            overrides: {
+              gasLimit: BigInt(overrides.gasLimit),
+              maxFeePerGas: BigInt(overrides.maxFeePerGas!),
+              maxPriorityFeePerGas: BigInt(overrides.maxPriorityFeePerGas!),
+              type: 2,
+            },
+          }
+        : await this.transactionFees(method, args, value);
       const [balance, latestNonce, pendingNonce] = await Promise.all([
         provider.getBalance(address, 'pending'),
         provider.send('eth_getTransactionCount', [address, 'latest']),
@@ -68,19 +67,9 @@ export class WalletTransactions {
       const nonce = Number(BigInt(pendingNonce));
       if (overrides.nonce != null && BigInt(overrides.nonce) !== BigInt(pendingNonce))
         throw new Error('The wallet nonce changed. Recover the pending operation before sending again.');
-      const reserve = [
-        'startClose',
-        'challengeClose',
-        'finalizeClose',
-        'claim',
-        'claimTo',
-        'cooperativeClose',
-      ].includes(method)
-        ? 0n
-        : MIN_GAS_RESERVE;
-      if (balance < value + fees.maxCost + reserve) {
+      if (balance < value + fees.maxCost) {
         throw new Error(
-          `Your address holds too little for this transaction: its fee can be up to ${formatEther(fees.maxCost)} ETH, and ${formatEther(MIN_GAS_RESERVE)} ETH stays there for network fees.`,
+          `Your address holds too little for this transaction: its fee can be up to ${formatEther(fees.maxCost)} ETH. Send that much ETH to ${address} first, with "Add ETH that arrives at my deposit address to my balance" off in Settings.`,
         );
       }
       await this.assertNetwork();
@@ -175,44 +164,40 @@ export class WalletTransactions {
         'Transaction exceeds wallet fee limits (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
       );
   }
-  /** What this account's address can put into its balance: everything beyond the gas reserve and a deposit's fee. */
+  /** What this account's address can put into its balance: everything but the deposit's own fee, priced once for both
+   * the amount and the transaction. */
   async depositable(this: CasinoWallet) {
     await this.assertNetwork();
     const [balance, fees] = await Promise.all([
       this.provider.getBalance(this.address, 'pending'),
-      this.provider.getFeeData(),
+      this.transactionFees('deposit', [this.address], 1n),
     ]);
-    if (!fees.maxFeePerGas) throw new Error('Network fees could not be estimated. Try again.');
-    this.checkTransactionBudget(DEPOSIT_GAS, fees.maxFeePerGas);
-    const fee = DEPOSIT_GAS * fees.maxFeePerGas,
-      rest = balance - MIN_GAS_RESERVE - fee;
-    this.depositFee = fee;
-    return { amount: rest > 0n ? rest : 0n, fee };
+    const rest = balance - fees.maxCost;
+    this.depositFee = fees.maxCost;
+    return { amount: rest > 0n ? rest : 0n, fee: fees.maxCost, overrides: fees.overrides };
   }
-  /** Move money from this account's address into its balance: into the open channel, which takes it in once the casino
-   * has seen it confirmed, or as the opening deposit of a new one. With no amount, everything the address can. */
+  /** Move money from this account's address into its channel: the contract opens the channel with the account's first
+   * deposit, and the balance takes the money in once the casino has seen it confirmed. With no amount, everything the
+   * address holds. */
   async deposit(this: CasinoWallet, amount?: Integer) {
-    const added = await this.exclusive(async () => {
-      if (amount === undefined) {
-        amount = (await this.depositable()).amount;
-        if (!amount) throw new Error('Your address holds too little to add after network fees.');
-      }
-      return this.depositLocked(amount);
+    await this.exclusive(async () => {
+      if (amount !== undefined) return this.depositLocked(amount);
+      const { amount: all, overrides } = await this.depositable();
+      if (!all) throw new Error('Your address holds too little to add after network fees.');
+      return this.depositLocked(all, overrides);
     });
-    if (added) {
-      await this.refresh();
-      await this.takeDeposits();
-    }
+    await this.refresh();
+    await this.takeDeposits();
   }
-  /** ETH sent to this account's address goes into its balance by itself, while the wallet `sweeps`. An amount smaller
-   * than its own fee stays where it is. */
+  /** ETH sent to this account's address goes into its balance by itself, all of it, while the wallet `sweeps`. An
+   * amount smaller than its own fee stays where it is. */
   async sweep(this: CasinoWallet) {
     if (!this.sweeps) return;
     const added = await this.exclusive(
       async () => {
         if (!this.sweeps) return null;
-        const { amount, fee } = await this.depositable();
-        return amount > fee ? this.depositLocked(amount) : null;
+        const { amount, fee, overrides } = await this.depositable();
+        return amount > fee ? this.depositLocked(amount, overrides) : null;
       },
       { wait: true },
     );
@@ -221,53 +206,26 @@ export class WalletTransactions {
       await this.takeDeposits();
     }
   }
-  /** A deposit, under the wallet's lock: true when it went into the open channel, for the casino to take in. While it
-   * runs, `depositing` says what it adds. */
-  async depositLocked(this: CasinoWallet, amount: Integer) {
+  /** A deposit into this account's channel, under the wallet's lock. While it runs, `depositing` says what it adds. */
+  async depositLocked(this: CasinoWallet, amount: Integer, fees: Record<string, any> = {}) {
     if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
       throw new Error('Deposit must be a positive uint256 amount');
     if (this.missingChannel)
       throw new Error(
-        'This account has a balance open that this browser holds no evidence for: import its recovery bundle first.',
+        'This account has a balance open that this browser holds no evidence for: restore its backup first.',
       );
-    if (this.pending && this.pending.kind !== 'taken-in')
+    // An operation waits for its channel; one a reorganisation took back to unopened opens again with a deposit.
+    if (this.pending && this.pending.kind !== 'taken-in' && Number(this.channel?.onchain?.status) === 1)
       throw new Error('Finish the saved operation before depositing.');
-    if (this.channel && !this.funded) throw new Error('Your balance is still closing. Deposit once it has closed.');
+    // Once the close is on-chain, a deposit opens the account's next channel.
+    if (this.channel?.closing) throw new Error('Your balance is closing. Deposit once the close is on-chain.');
     this.depositing = BigInt(amount);
     this.render();
     try {
-      await this.assertNetwork();
-      if (this.funded) {
-        this.onProgress('Adding ETH to your balance…');
-        const tx = await this.sendTransaction('deposit', [this.channelId], { value: BigInt(amount) });
-        await this.waitTransaction(tx);
-        return true;
-      }
-      const key = Wallet.createRandom().privateKey;
-      const signer = new Wallet(key).address;
-      const opening = {
-        channelId: channelId(this.address, signer, amount),
-        player: this.address,
-        signer,
-        deposit: String(amount),
-      };
-      const id = opening.channelId;
-      this.channelId = id;
-      this.channels[id] = {
-        key,
-        opening,
-        state: initialState(opening),
-        playerSignature: '0x',
-        casinoSignature: '0x',
-        onchain: { status: '0' },
-      };
-      await this.save();
       this.onProgress('Adding ETH to your balance…');
-      const tx = await this.sendTransaction('openChannel', [opening.signer], { value: BigInt(amount) });
+      const tx = await this.sendTransaction('deposit', [this.address], { value: BigInt(amount), ...fees });
       await this.waitTransaction(tx);
-      await this.activate();
-      await this.save();
-      return false;
+      return true;
     } finally {
       this.depositing = 0n;
     }
@@ -281,13 +239,14 @@ export class WalletTransactions {
       return pending.kind === 'taken-in'
         ? this.perform('taken-in', { amount: pending.request.amount }, pending.operationId)
         : null;
-    if (!this.funded || !c) return null;
-    const waiting = BigInt(c.onchain.deposit) - BigInt(c.state.deposited);
+    if (!this.funded || !c || !c.registered) return null;
+    const waiting = BigInt(c.onchain.deposited) - BigInt(c.state.deposited);
     if (waiting <= 0n) return null;
-    return this.perform('taken-in', { amount: waiting }, `taken-in:${c.onchain.deposit}`);
+    // Named for the state it follows, so each take-in has an ID of its own.
+    return this.perform('taken-in', { amount: waiting }, `taken-in:${c.state.channelId}:${c.state.sequence}`);
   }
   /** Send everything at this account's address, less the transfer's fee, to another address: how Withdraw empties it
-   * while no balance is open. Under the wallet's lock. */
+   * while no balance is open. Under the wallet's lock. Returns the transfer's receipt. */
   async transferAll(this: CasinoWallet, recipient: string) {
     await this.assertNetwork();
     const [fees, balance, gasLimit] = await Promise.all([
@@ -312,7 +271,7 @@ export class WalletTransactions {
     });
     const receipt = await tx.wait(this.config.confirmations || 1, 90000);
     if (!receipt || receipt.status !== 1) throw new Error('The transfer did not go through');
-    await this.save({
+    const saved = {
       kind: 'withdrawal',
       operationId: 'tx:' + receipt.hash,
       amount: String(amount),
@@ -322,37 +281,26 @@ export class WalletTransactions {
       blockHash: receipt.blockHash,
       status: 'confirmed',
       createdAt: new Date().toISOString(),
-    });
-    return receipt.hash;
+    };
+    await this.save(saved);
+    return saved;
   }
-  async verifyRegisteredOpening(this: CasinoWallet, opening: Opening) {
-    validateOpening(opening);
-    const observation = await this.observer.observe();
-    const value = await this.observer.contractRead(this.reader, 'channels', [opening.channelId], observation.block);
-    // The opening's deposit is in its channel ID and its first state; the channel may have taken more since.
-    if (
-      Number(value.status) !== 1 ||
-      !same(value.player, opening.player) ||
-      !same(value.signer, opening.signer) ||
-      !same(value.initialHash, hashState(this.domain, initialState(opening)))
-    )
-      throw new Error('Registered channel differs from the opening');
-    await this.observer.accept(observation);
-    return value;
-  }
+  /** Register this account's channel with the casino, which answers with the state it holds. A channel still at its
+   * base is taken up there; one the casino has seen played on needs this wallet's own evidence. */
   async activate(this: CasinoWallet) {
-    this.lastChainCheck = 0;
-    await this.assertNetwork();
-    const c = this.channel!,
-      opening = c.opening;
-    const value = await this.verifyRegisteredOpening(opening);
-    c.onchain = channelRecord(value);
-    this.lastChainCheck = Date.now();
-    await this.save();
+    const c = this.channel!;
     if (this.recoveryOnly) return;
-    const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening }, c);
+    const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening: c.opening }, c);
     this.noteNames(reply);
     this.updateBankroll(reply.bankroll);
+    if (c.registered) return;
+    if (!same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
+      this.missingChannel = c.state.channelId;
+      throw new Error("This balance was played in another browser: restore that wallet's backup to use it here.");
+    }
+    this.missingChannel = null;
+    c.registered = true;
+    await this.save();
   }
   /** The local chain's faucet fills this account's address, and the sweep puts it into the balance. */
   async setupDemo(this: CasinoWallet) {
@@ -382,7 +330,7 @@ export class WalletTransactions {
       if (status !== 'confirmed' || !same(log.address, intent?.to || this.config.contractAddress)) continue;
       try {
         const event = this.reader.interface.parseLog(log);
-        // What a close or a claim paid, and where: this account's address, or the one a withdrawal named.
+        // What a claim paid, and where: this account's address, or the one it named.
         if (event?.name === 'ClaimPayment') {
           amount = String(event.args.amount);
           to = event.args.beneficiary;
@@ -393,15 +341,17 @@ export class WalletTransactions {
       kind:
         status !== 'confirmed'
           ? 'transaction'
-          : ['openChannel', 'deposit'].includes(intent?.method)
+          : intent?.method === 'deposit'
             ? 'deposit'
-            : ['claim', 'claimTo', 'cooperativeClose'].includes(intent?.method)
+            : ['claim', 'claimTo'].includes(intent?.method)
               ? 'withdrawal'
-              : intent?.method === 'startClose'
-                ? 'close-started'
-                : intent?.method === 'finalizeClose'
-                  ? 'closure'
-                  : 'dispute',
+              : intent?.method === 'withdraw'
+                ? 'withdrawal-sent'
+                : intent?.method === 'startClose'
+                  ? 'close-started'
+                  : intent?.method === 'finalizeClose'
+                    ? 'closure'
+                    : 'dispute',
       operationId: 'tx:' + receipt.hash,
       amount,
       ...(to && !same(to, this.address) ? { to } : {}),
@@ -449,6 +399,7 @@ export class WalletTransactions {
     // and only fetch receipts again when their saved branch changed when first observed.
     const blocks = new Map();
     return mapBounded(history, async entry => {
+      if (entry.withdrawal && !entry.paid && !entry.returned) return this.withdrawalPaid(entry, block);
       if (!entry.txHash) return entry;
       if (entry.blockHash && entry.blockNumber <= block.number) {
         if (!blocks.has(entry.blockNumber))
@@ -538,36 +489,73 @@ export class WalletTransactions {
     await this.refresh();
     return hash;
   }
-  /** Withdraw to an address: the open balance, all of it, through a close that pays it there in the same transaction;
-   * with no balance open, everything at this account's address. */
-  async withdraw(this: CasinoWallet, to: string) {
+  /** Withdraw `amount` of the balance, or all of it: to an address, or with `transfer` into that account's HookedIn
+   * balance. The balance pays it at once, and the contract pays it once anyone sends the operation and the casino's
+   * signature after it, which the casino does straight away: out of the channel's deposits first and house cash for
+   * the rest. One house cash cannot pay now is declined, with why. With no balance open, everything at this account's
+   * address goes to the address. */
+  async withdraw(this: CasinoWallet, to: string, amount?: Integer, { transfer = false } = {}) {
     const recipient = getAddress(to.trim());
     if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
       throw new Error('A withdrawal cannot pay that address: name another.');
-    const result = await this.exclusive(async () => {
-      if (!this.channel) return this.transferAll(recipient);
-      if (this.channel.pending) throw new Error('Recover the pending operation or start unilateral closure');
+    const c = this.channel;
+    if (!c || Number(c.onchain?.status) !== 1 || c.closing) {
+      if (transfer) throw new Error('Open a balance before putting money into another.');
+      const receipt = await this.exclusive(() => this.transferAll(recipient));
+      await this.refresh();
+      return receipt;
+    }
+    const balance = BigInt(c.state.balance),
+      value = amount === undefined ? balance : BigInt(amount);
+    if (value <= 0n || value > balance) throw new Error('Not that much is in your balance.');
+    // The open game may risk no more than stays in the balance.
+    if (this.game && BigInt(this.game.balance) > balance - value) this.game.balance = String(balance - value);
+    const receipt = await this.perform(
+      transfer ? 'transfer' : 'withdrawal',
+      { amount: value, recipient },
+      crypto.randomUUID(),
+    );
+    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this withdrawal.');
+    return receipt;
+  }
+  /** Lock in the balance: transfer all of it into this account's own balance, so the contract holds all of it as
+   * deposits. The channel's deposits pay back what they cover, and house cash pays the rest, the winnings. */
+  async lockIn(this: CasinoWallet) {
+    const c = this.channel,
+      balance = BigInt(c?.state.balance || 0);
+    if (!c || Number(c.onchain?.status) !== 1 || c.closing || !balance) throw new Error('No balance to lock in.');
+    // All of it goes out and back in: the open game risks nothing meanwhile.
+    if (this.game) this.game.balance = '0';
+    const receipt = await this.perform('lock-in', { amount: balance, recipient: this.address }, crypto.randomUUID());
+    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined locking in.');
+    return receipt;
+  }
+  /** Have a withdrawal or transfer the contract has not paid yet paid now: this account sends its proof, and pays the
+   * fee. The casino sends it too, as soon as house cash covers it. */
+  async payWithdrawal(this: CasinoWallet, operationId: string) {
+    const entry = this.history.find(record => record.operationId === operationId);
+    if (!entry?.withdrawal || entry.paid) throw new Error('That withdrawal is not waiting to be paid.');
+    const hash = await this.exclusive(async () => {
       await this.assertNetwork();
-      const c = this.channel,
-        evidence = this.evidence(),
-        message = {
-          channelId: c.state.channelId,
-          stateHash: hashState(this.domain, c.state),
-          recipient,
-        };
-      // Once this signature is out, the casino can close with this state: nothing more is played on it.
-      c.closing = true;
-      await this.save();
-      this.onProgress('Withdrawing your balance…');
-      const signature = await this.signer.signTypedData(this.domain, CLOSE_TYPES, message);
-      const casino = await this.api(`/api/channels/${c.state.channelId}/close`, { evidence, signature, recipient }, c);
-      assertSignature(this.domain, CLOSE_TYPES, message, casino.signature, this.operator);
-      const tx = await this.sendTransaction('cooperativeClose', [evidence, recipient, signature, casino.signature]);
+      const tx = await this.sendTransaction('withdraw', [entry.proof]);
       await this.waitTransaction(tx);
       return tx.hash;
     });
-    await this.refresh();
-    return result;
+    await this.refreshDetails();
+    return hash;
+  }
+  /** Whether the contract has paid a withdrawal or transfer: it records the ID it paid under, and its event names the
+   * transaction, which is looked for among recent blocks. One never paid by the time its channel's close is final came
+   * back with the close. */
+  async withdrawalPaid(this: CasinoWallet, entry: any, block: ChainBlock) {
+    if (!(await this.observer.contractRead(this.reader, 'withdrawals', [entry.withdrawal], block)))
+      return Number(this.channels[entry.proof.base.channelId]?.onchain?.status) === 3
+        ? { ...entry, returned: true }
+        : entry;
+    const [event] = await this.reader
+      .queryFilter(this.reader.filters.Withdrawal(entry.withdrawal), Math.max(0, block.number - 10000), block.number)
+      .catch(() => []);
+    return { ...entry, paid: true, ...(event ? { paidIn: event.transactionHash } : {}) };
   }
   async startClose(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
@@ -595,7 +583,7 @@ export class WalletTransactions {
     await this.refresh({ channelId });
     return result;
   }
-  async finalizeClose(this: CasinoWallet, channelId = this.channelId) {
+  async finalizeClose(this: CasinoWallet, channelId = this.closingChannel?.state.channelId) {
     const result = await this.exclusive(async () => {
       const tx = await this.sendTransaction('finalizeClose', [channelId]);
       await this.waitTransaction(tx);
@@ -604,7 +592,7 @@ export class WalletTransactions {
     await this.refresh({ channelId });
     return result;
   }
-  async challengeClose(this: CasinoWallet, channelId = this.channelId) {
+  async challengeClose(this: CasinoWallet, channelId = this.closingChannel?.state.channelId) {
     const result = await this.exclusive(async () => {
       const tx = await this.sendTransaction('challengeClose', [this.evidence(this.channels[channelId!])]);
       await this.waitTransaction(tx);

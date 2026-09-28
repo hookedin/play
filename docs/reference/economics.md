@@ -15,15 +15,15 @@ A casino bet is a stake paid to enter and a prize it pays when the round's 64-bi
 bankroll it is one wager with two outcomes, and the casino's rule, the Kelly condition for that wager, has a closed
 form.
 
-| Symbol    | Meaning                                                                                                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B         | The unreserved accounting bankroll, positive: pool cash after active player balances, finalized claims, unpaid developer commissions, escrow, developer banks and reservations ([available capital](#available-capital-and-concurrency)) |
-| S         | The stake, debited from the player's balance                                                                                                                                                                                             |
-| G = S + W | The prize; W is what a win gains beyond the stake, negative when the prize is below the stake                                                                                                                                            |
-| Q = 2^64  | The size of the outcome space                                                                                                                                                                                                            |
-| t         | The chance: how many outcomes win, 1 to Q − 1                                                                                                                                                                                            |
-| p = t / Q | The probability that the bet wins                                                                                                                                                                                                        |
-| F         | The total commission, accrued on every completed casino bet                                                                                                                                                                              |
+| Symbol    | Meaning                                                                                                                                                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B         | The unreserved accounting bankroll, positive: pool cash after active player balances, finalized claims, unpaid developer commissions, escrow, developer banks, withdrawals owed and reservations ([available capital](#available-capital-and-concurrency)) |
+| S         | The stake, debited from the player's balance                                                                                                                                                                                                               |
+| G = S + W | The prize; W is what a win gains beyond the stake, negative when the prize is below the stake                                                                                                                                                              |
+| Q = 2^64  | The size of the outcome space                                                                                                                                                                                                                              |
+| t         | The chance: how many outcomes win, 1 to Q − 1                                                                                                                                                                                                              |
+| p = t / Q | The probability that the bet wins                                                                                                                                                                                                                          |
+| F         | The total commission, accrued on every completed casino bet                                                                                                                                                                                                |
 
 The house edge the player faces is `e = 1 − pG/S`. The chance is whole outcomes, so the probability is exactly `t/Q`:
 a game chooses `t`, and nothing is rounded afterwards.
@@ -164,14 +164,15 @@ from withdrawing on-chain.
 At a consistent confirmed block, the reported bankroll is:
 
 ```text
-max(0, pool cash − active player balances − finalized unpaid claims − accrued unpaid developer commissions − reservations − escrow − developer banks)
+max(0, pool cash − active player balances − finalized unpaid claims − accrued unpaid developer commissions − reservations − escrow − developer banks − withdrawals owed)
 ```
 
-An active player balance is what an open or closing channel is owed: its signed balance, and the deposits it has not
-taken in. Reservations are the worst cases of the casino bets being decided. Escrow is every payout awarded and not yet
-collected: money that has left the bankroll for a player who has not yet signed for it. Developer banks are the
-developers' own money, the stakes of their developer bets among it. [`GET /api/status`](../casino-api/public.md#get-apistatus)
-reports every term.
+An active player balance is an open or closing channel's signed balance and the deposits it has not taken in.
+Reservations are the worst cases of the casino bets being decided. Escrow is every payout awarded and not yet collected:
+money that has left the bankroll for a player who has not yet signed for it. Developer banks are the developers' own
+money, the stakes of their developer bets among it. Withdrawals owed are the withdrawals and transfers the casino has
+taken on and the contract has not yet paid. [`GET /api/status`](../casino-api/public.md#get-apistatus) reports every
+term.
 
 Anyone with a channel may add to this capital. An [investment](../wallet/bankroll-fund.md) is a debit from a channel
 into the bankroll that mints shares at `equity / totalShares`, where equity is the reported bankroll before
@@ -181,10 +182,17 @@ add to equity, and wins and developer commission take from it, pro rata. Investo
 exactly as the owner's funding does, and the owner's funding and withdrawals buy and sell house shares at the going
 price. A redemption never takes money a casino bet has reserved.
 
-Everything deposited into an open channel stays protected on-chain even after signed losses. On closure the protection
-becomes `min(deposits, what the close is owed)`, and the rest of a loss is released. A finalized unpaid claim takes the
-place of the channel's active liability. Claim payments reduce both cash and claim liabilities, and confirmed funding and
-withdrawals change cash. The casino reconciles each category without counting a channel and its claim twice.
+The contract holds every deposit as its channel's [principal](contract.md#withdrawals), which signed losses leave as it
+is. A withdrawal or transfer moves its amount from the channel's active liability to the withdrawals owed at once. Its
+payment, out of the channel's principal first and house cash for the rest, reduces the withdrawals owed and, for a
+withdrawal, cash; a transfer's stays in the contract as a deposit into its recipient's channel, an active liability
+again. What a player has lost stays in the principal until the channel closes: the casino closes a channel nobody has
+played on for 7 days whose principal is more than it is owed and from which no withdrawal is owed, so the loss comes
+back to house cash. On closure the protection becomes `min(principal, what the close is owed)`, and the rest of the
+principal is released. A finalized unpaid claim takes the place of the channel's active liability and of any
+withdrawal owed from it that the contract never paid, which the claim holds. Claim payments reduce both cash and claim
+liabilities, and the owner's confirmed funding and withdrawals change cash. The casino reconciles each category without
+counting a channel and its claim twice.
 
 A developer [collects](../games/earnings.md) commission into a channel of their own: the payable falls and the
 developer's signed balance rises by the same amount, so neither the bankroll nor any ETH moves. The casino's own earned
@@ -192,11 +200,15 @@ commission is a cumulative counter, not a second payable. Owner withdrawals redu
 bankroll's equity, and no separate release of house commission can be counted twice.
 
 A game's payment is a debit that lowers the player's signed balance by its amount and raises the accounting bankroll
-by the same amount. It settles on no round, accrues no commission and moves no ETH; the deposits stay protected
-on-chain until closure.
+by the same amount. It settles on no round, accrues no commission and moves no ETH.
 
-Unallocated winnings cash excludes protected principal and winnings already reserved, and owner withdrawals exclude
-every finalized unpaid winning. Finalization order sets the order of [allocation](contract.md#the-winnings-queue), and
-protected principal stays apart. A recipient that refuses payment keeps its allocation without blocking later funded
-claims. The casino's public cash balance does not show that private signed balances are covered: Kelly admission
-against the reported bankroll neither enforces the casino's solvency nor reserves capital for a whole game.
+Unallocated winnings cash excludes protected principal and winnings already reserved, and the house cash that pays the
+owner's withdrawals, and players' withdrawals beyond their channels' principal, excludes every finalized unpaid winning.
+Finalization order sets the order of [allocation](contract.md#the-winnings-queue), and protected principal stays apart.
+A recipient that refuses payment keeps its allocation without blocking later funded claims. The casino takes on a
+withdrawal or transfer only as large as the contract can pay now beside the withdrawals owed already, and declines a
+larger one. That is the principal the channel will still hold once the withdrawals owed from it are paid, plus the house
+cash no finalized claim counts on, `pool cash − protectedPrincipal − unpaidWinnings`, less what the withdrawals owed
+will take from it beyond their channels' principal. The casino's public cash balance does not show that private signed
+balances are covered: Kelly admission against the reported bankroll neither enforces the casino's solvency nor reserves
+capital for a whole game.
