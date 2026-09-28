@@ -21,13 +21,15 @@ import { FetchRequest, JsonRpcProvider, Network } from 'ethers';
 
 export const RPC_TIMEOUT_MS = 10000;
 /** Bound the transport itself: a late response cannot resume a failed read. Given the chain it serves, the provider
- * skips its own detection round trip; every observation checks the chain ID anyway. */
+ * skips its own detection round trip; every observation checks the chain ID anyway. Each call is a request of its own:
+ * every RPC answers those, while public ones cap what a batch may cost (Tenderly's refuses six contract calls in one). */
 export function createRpcProvider(url: string, chainId: Integer | undefined = undefined) {
   const request = new FetchRequest(url);
   request.timeout = RPC_TIMEOUT_MS;
+  const options = { cacheTimeout: -1, batchMaxCount: 1 };
   return chainId === undefined
-    ? new JsonRpcProvider(request, undefined, { cacheTimeout: -1 })
-    : new JsonRpcProvider(request, Network.from(BigInt(chainId)), { cacheTimeout: -1, staticNetwork: true });
+    ? new JsonRpcProvider(request, undefined, options)
+    : new JsonRpcProvider(request, Network.from(BigInt(chainId)), { ...options, staticNetwork: true });
 }
 
 export const blockReference = (block: Pick<ChainBlock, 'hash'>) => ({ blockHash: block.hash, requireCanonical: true });
@@ -83,7 +85,6 @@ export class ChainObserver {
     const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
     const tips = await Promise.all(
       providers.map(async provider => {
-        // Asked together, the two travel as one batched request.
         const [chain, tip] = await Promise.all([provider.send('eth_chainId', []), provider.getBlock('latest')]);
         if (BigInt(chain) !== this.chainId) throw new Error('Observation RPC is on another chain');
         if (!tip || !Number.isSafeInteger(tip.number) || !tip.hash || !Number.isSafeInteger(tip.timestamp))

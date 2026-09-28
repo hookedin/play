@@ -35,7 +35,7 @@ export async function verifyDeployment({
     throw new Error('Casino deployment differs from the pinned identity');
   const observation = await observer.observe();
   const contract = new Contract(address, artifact.abi, provider);
-  // The immutables and the code are independent reads of one block: asked together, they travel as one batch.
+  // The immutables and the code are independent reads of one block.
   const [code, ...read] = await Promise.all([
     observer.corroborate('contract bytecode', p =>
       p.send('eth_getCode', [address, { blockHash: observation.block.hash, requireCanonical: true }]),
