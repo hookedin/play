@@ -1,6 +1,6 @@
 import { formatEther } from 'ethers';
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
-import { plain } from '../protocol/protocol.ts';
+import { plain, same } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
 import { developerBetStatus } from './game-account.ts';
 
@@ -173,8 +173,11 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
     tone: (!settled ? 'neutral' : bet.payout === '0' ? 'neutral' : bet.collected ? 'positive' : 'warning') as Tone,
   };
 }
+/** A receipt as Activity shows it. `contract` is the deployment's: a withdrawal or a claim paid to it goes into the
+ * account's own channel as deposits. */
 export function receiptSummary(
   receipt: any,
+  contract: string,
 ): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
   if (receipt.status === 'rejected')
     return {
@@ -313,12 +316,12 @@ export function receiptSummary(
   if (receipt.kind === 'earnings')
     description = `Commission your games earned, collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
   // The contract makes a withdrawal or a lock-in a claim under its ID once the casino, or anyone, sends it, and pays
-  // what it can at once; anyone can see how it stands. A lock-in pays into the account's own channel. One read from a
-  // recovery bundle carries no balance.
+  // what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into the
+  // account's own channel.
   if (receipt.withdrawal) {
-    const lockIn = receipt.kind === 'lock-in';
+    const into = same(receipt.to, contract);
     status = receipt.paid
-      ? lockIn
+      ? into
         ? 'In as deposits'
         : 'Paid on-chain'
       : receipt.returned
@@ -327,13 +330,13 @@ export function receiptSummary(
           ? 'Part waits for the bankroll'
           : 'Waiting to be paid';
     tone = receipt.paid ? 'positive' : receipt.returned ? 'neutral' : 'warning';
-    amountLabel = receipt.paid ? (lockIn ? 'Locked in' : 'Paid out') : receipt.returned ? 'In the claim' : 'To be paid';
+    amountLabel = receipt.paid ? (into ? 'Locked in' : 'Paid out') : receipt.returned ? 'In the claim' : 'To be paid';
     description = [
-      lockIn
-        ? 'All of your balance, into your own channel as deposits the contract holds.'
-        : `From your balance to ${receipt.to}.`,
+      `${receipt.kind === 'lock-in' ? 'All of your balance' : 'From your balance'} ${
+        into ? 'into your own channel, as deposits the contract holds' : `to ${receipt.to}`
+      }.`,
       receipt.paid
-        ? lockIn
+        ? into
           ? 'The contract has put it in, and your balance takes it in as a deposit.'
           : 'The contract has paid it.'
         : receipt.returned
@@ -341,10 +344,8 @@ export function receiptSummary(
           : receipt.recorded
             ? `The contract still owes ${formatEther(receipt.owed)} ${unit} of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
             : "The contract makes it a claim under the withdrawal's ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.",
-      receipt.balance === undefined ? '' : `Balance ${formatEther(receipt.balance)} ${unit}`,
-    ]
-      .filter(Boolean)
-      .join(' ');
+      `Balance ${formatEther(receipt.balance)} ${unit}`,
+    ].join(' ');
   }
   const notice =
     receipt.status === 'orphaned'

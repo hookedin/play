@@ -64,6 +64,13 @@ const plainEth = (value: string | number | bigint | undefined) =>
     .replace(/(\.\d*?)0+$/, '$1')
     .replace(/\.$/, '');
 const short = (value: string | null | undefined) => (value ? `${value.slice(0, 8)}…${value.slice(-6)}` : '—');
+/** Where a claim pays, as a sentence says it: paying the contract puts it into the account's own channel. */
+const paidTo = (to: string) =>
+  same(to, wallet.config.contractAddress)
+    ? 'into your balance'
+    : same(to, wallet.address)
+      ? 'to your address'
+      : `to ${short(to)}`;
 /** A typed amount of ETH, in wei: null for anything that is not an amount above zero. */
 const ethAmount = (text: string) => {
   try {
@@ -744,16 +751,19 @@ function renderActivity() {
       const operation = receipt.proof?.step?.operation;
       const channelId = operation?.channelId || receipt.proof?.base?.channelId;
       const gameName = receipt.game?.name;
-      const presentation = receiptSummary(receipt);
+      const presentation = receiptSummary(receipt, wallet.config.contractAddress);
       const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
       if (channelId) facts.push(['Channel', channelId]);
       if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
       if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
-      if (receipt.to) facts.push(['To', receipt.to]);
+      if (receipt.to)
+        facts.push([
+          'To',
+          same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to,
+        ]);
       if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
-      // One the contract has not made a claim yet can be sent by this account too, with its proof, as the casino does
-      // straight away.
-      if (receipt.withdrawal && receipt.proof && !receipt.recorded && !receipt.returned)
+      // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away.
+      if (receipt.withdrawal && !receipt.recorded && !receipt.returned)
         facts.push(['Payment', sendNow(receipt.operationId)]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
       if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn, receipt.recordedIn)]);
@@ -843,7 +853,7 @@ function renderClaims() {
     const unpaid = BigInt(claim.amount) - BigInt(claim.paid),
       ready = BigInt(claim.collectable || '0');
     return (
-      `${claim.channelId ? `Channel ${short(claim.channelId)}` : `Withdrawal to ${short(claim.to)}`}: ${plainEth(unpaid)} ETH still owed of ${plainEth(claim.amount)} ETH. ` +
+      `${claim.channelId ? `Channel ${short(claim.channelId)}` : 'A withdrawal'}, paid ${paidTo(claim.to)}: ${plainEth(unpaid)} ETH still owed of ${plainEth(claim.amount)} ETH. ` +
       (ready > 0n
         ? `${plainEth(ready)} ETH can be collected now.`
         : `Its ${plainEth(claim.winningsRemaining)} ETH of winnings wait for the bankroll to have the cash.`)

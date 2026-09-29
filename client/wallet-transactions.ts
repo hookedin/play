@@ -538,7 +538,7 @@ export class WalletTransactions {
    * makes it a claim and pays it. The casino sends each straight away too. */
   async sendWithdrawal(this: CasinoWallet, operationId: string) {
     const entry = this.history.find(record => record.operationId === operationId);
-    if (!entry?.withdrawal || !entry.proof || entry.recorded || entry.returned)
+    if (!entry?.withdrawal || entry.recorded || entry.returned)
       throw new Error('That withdrawal is not waiting to be sent.');
     const hash = await this.exclusive(async () => {
       await this.assertNetwork();
@@ -550,23 +550,29 @@ export class WalletTransactions {
     return hash;
   }
   /** Where a withdrawal stands on-chain. Once sent it is a claim under its ID, whose event names the transaction that
-   * recorded it, looked for among recent blocks; it is paid once nothing of the claim remains, and until then what
-   * can be collected now is read with it. One never recorded by the time its channel's close is final came back with
-   * the close. A withdrawal paid or returned keeps the block it was read at (`settledAt`). */
+   * recorded it, looked for among recent blocks. It pays the claim's recipient, which its account can change, and is
+   * paid once nothing of the claim remains; until then what can be collected now is read with it. One never recorded
+   * by the time its channel's close is final came back with the close. A withdrawal paid or returned keeps the block it
+   * was read at (`settledAt`). */
   async withdrawalState(this: CasinoWallet, entry: any, block: ChainBlock) {
-    const [claim, collectable] = await Promise.all([
+    const op = entry.proof.step.operation,
+      here = { number: block.number, hash: block.hash };
+    const [claim, payable] = await Promise.all([
       this.observer.contractRead(this.reader, 'claims', [entry.withdrawal], block),
       this.observer.contractRead(this.reader, 'collectable', [entry.withdrawal], block),
     ]);
-    const here = { number: block.number, hash: block.hash };
+    // Nothing read of it before stands: a reorganisation can take back a recording, a payment or a new recipient.
+    const { recorded, owed, winningsRemaining, collectable, recordedIn, returned, settledAt, ...sent } = entry;
     if (same(claim.beneficiary, ZeroAddress)) {
-      // Not a claim, or not any more after a reorganisation: nothing read of one stands.
-      const { recorded, owed, winningsRemaining, collectable, recordedIn, returned, settledAt, ...unrecorded } = entry;
-      return Number(this.channels[entry.proof?.base.channelId]?.onchain?.status) === 3
-        ? { ...unrecorded, paid: false, returned: true, settledAt: here }
-        : { ...unrecorded, paid: false };
+      const channel = await this.observer.contractRead(this.reader, 'channels', [op.channelId], block);
+      return plain({
+        ...sent,
+        to: getAddress(op.recipient),
+        paid: false,
+        ...(Number(channel.status) === 3 ? { returned: true, settledAt: here } : {}),
+      });
     }
-    const [event] = entry.recordedIn
+    const [event] = recordedIn
       ? []
       : await this.reader
           .queryFilter(
@@ -575,17 +581,18 @@ export class WalletTransactions {
             block.number,
           )
           .catch(() => []);
-    const owed = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining),
-      { returned, settledAt, ...recorded } = entry;
+    const left = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
     return plain({
-      ...recorded,
+      ...sent,
+      // A withdrawal paid in full at once keeps no recipient of its own.
+      to: getAddress(same(claim.recipient, ZeroAddress) ? op.recipient : claim.recipient),
       recorded: true,
-      paid: !owed,
-      owed,
+      paid: !left,
+      owed: left,
       winningsRemaining: claim.winningsRemaining,
-      collectable,
-      ...(event ? { recordedIn: event.transactionHash } : {}),
-      ...(owed ? {} : { settledAt: here }),
+      collectable: payable,
+      recordedIn: event?.transactionHash ?? recordedIn,
+      ...(left ? {} : { settledAt: here }),
     });
   }
   async startClose(this: CasinoWallet) {

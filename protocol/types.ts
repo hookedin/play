@@ -135,8 +135,9 @@ export interface EvidenceBundle {
   operator: string;
   opening: Opening;
   evidence: Evidence;
-  /** The account's withdrawals the contract may still owe something, by ID: each is a claim of its own once recorded. */
-  withdrawals?: string[];
+  /** The evidence of each of the account's withdrawals the contract may still owe something: the operation the account
+   * signed and the casino's signature after it. Each is a claim of its own once recorded, under the operation's hash. */
+  withdrawals?: Evidence[];
 }
 export interface Deployment {
   chainId: Integer;
@@ -165,6 +166,8 @@ export interface OnchainChannel {
  * `closingBalance`, and `paid` what it has paid of that. */
 export interface OnchainClaim {
   beneficiary: string;
+  /** Whom collecting pays: the account unless it named another, the contract itself for its own channel. */
+  recipient: string;
   stateHash: string;
   amount: string;
   paid: string;

@@ -113,51 +113,56 @@ test('past the newest 100 receipts, a withdrawal or a lock-in stays until it is 
 });
 test('a withdrawal is read again when its claim is taken back, or the block that read it paid leaves the chain', async () => {
   const wallet = new CasinoWallet({ network: 'local', storage: new MemoryStore() });
-  let claim = {
-      beneficiary: '0x1111111111111111111111111111111111111111',
-      protectedRemaining: 0n,
-      winningsRemaining: 500n,
-    },
+  const account = '0x1111111111111111111111111111111111111111',
+    first = '0x5555555555555555555555555555555555555555',
+    elsewhere = '0x6666666666666666666666666666666666666666';
+  let claim = { beneficiary: account, recipient: first, protectedRemaining: 0n, winningsRemaining: 500n },
+    status = 1,
     chain: Record<number, string> = {};
   wallet.observer = {
-    contractRead: async (_: unknown, method: string) => (method === 'claims' ? claim : 0n),
+    contractRead: async (_: unknown, method: string) =>
+      method === 'claims' ? claim : method === 'channels' ? { status } : 0n,
     corroborate: async (_: string, read: any) => read({ getBlock: async (n: number) => ({ hash: chain[n] }) }),
   } as any;
   wallet.reader = { filters: { Withdrawal: () => ({}) }, queryFilter: async () => [] } as any;
-  wallet.channels = { channel: { onchain: { status: '1' } } } as any;
   const sent = {
     kind: 'withdrawal',
     operationId: 'sent',
     withdrawal: '0xaa',
     amount: '1500',
+    to: first,
     paid: false,
-    proof: { base: { channelId: 'channel' } },
+    proof: { base: { channelId: 'channel' }, step: { operation: { channelId: 'channel', recipient: first } } },
   };
   const observe = async (number: number, entry: any) => {
     chain[number] = '0x' + number;
     return (await wallet.observeTransactionHistory({ number, hash: '0x' + number } as any, [entry]))[0];
   };
   const recorded = await observe(10, sent);
-  assert.deepEqual([recorded.recorded, recorded.owed, recorded.paid], [true, '500', false]);
+  assert.deepEqual([recorded.recorded, recorded.owed, recorded.paid, recorded.to], [true, '500', false, first]);
+  // Its account redirected it: it pays elsewhere from now on.
+  claim = { ...claim, recipient: elsewhere };
+  assert.equal((await observe(11, recorded)).to, elsewhere);
   // A reorganisation took the claim back: nothing read of it stands, and it can be sent again.
-  claim = { ...claim, beneficiary: ZeroAddress };
-  assert.deepEqual(await observe(11, recorded), sent);
-  // Recorded again and collected: read paid at block 12, and not read again while that block stands.
-  claim = { ...claim, beneficiary: '0x1111111111111111111111111111111111111111', winningsRemaining: 0n };
-  const paid = await observe(12, sent);
-  assert.deepEqual([paid.paid, paid.settledAt], [true, { number: 12, hash: '0x12' }]);
-  claim = { ...claim, winningsRemaining: 500n };
-  assert.equal(await observe(13, paid), paid);
-  // The collection left the chain with block 12: the claim is owed 500 again.
-  chain[12] = '0xother';
-  const owed = await observe(14, paid);
+  claim = { ...claim, beneficiary: ZeroAddress, recipient: ZeroAddress };
+  assert.deepEqual(await observe(12, recorded), sent);
+  // Recorded again and paid in full at once, which keeps no recipient: read paid at block 13, and not read again while
+  // that block stands.
+  claim = { ...claim, beneficiary: account, winningsRemaining: 0n };
+  const paid = await observe(13, sent);
+  assert.deepEqual([paid.paid, paid.to, paid.settledAt], [true, first, { number: 13, hash: '0x13' }]);
+  claim = { ...claim, recipient: first, winningsRemaining: 500n };
+  assert.equal(await observe(14, paid), paid);
+  // The payment left the chain with block 13: the claim is owed 500 again.
+  chain[13] = '0xother';
+  const owed = await observe(15, paid);
   assert.deepEqual([owed.paid, owed.owed, owed.settledAt], [false, '500', undefined]);
   // Not recorded by the time its channel's close is final: the close returned it.
-  claim = { ...claim, beneficiary: ZeroAddress };
-  wallet.channels.channel.onchain.status = '3';
-  const returned = await observe(15, owed);
+  claim = { ...claim, beneficiary: ZeroAddress, recipient: ZeroAddress };
+  status = 3;
+  const returned = await observe(16, owed);
   assert.deepEqual(
     [returned.returned, returned.recorded, returned.settledAt],
-    [true, undefined, { number: 15, hash: '0x15' }],
+    [true, undefined, { number: 16, hash: '0x16' }],
   );
 });

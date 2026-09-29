@@ -1,7 +1,7 @@
 import type { JsonRpcProvider, InterfaceAbi, BlockTag } from 'ethers';
 import type { EvidenceBundle } from './types.ts';
 import { Contract, ZeroAddress, ZeroHash } from 'ethers';
-import { verifyEvidence, domain, hashState, same, plain, owed } from './protocol.ts';
+import { verifyEvidence, verifyStep, domain, hashState, hashOperation, same, plain, owed, KIND } from './protocol.ts';
 import { readContract, requireCanonicalBlock } from './chain-observer.ts';
 import { mapBounded } from './concurrency.ts';
 
@@ -23,7 +23,8 @@ export async function inspectEvidence(
     block = await provider.getBlock(blockTag);
   if (!block?.hash) throw new Error('Recovery block unavailable');
   const read = (method: string, ...args: unknown[]) => readContract(provider, contract, method, args, block);
-  const channelId = verified.state.channelId;
+  const d = domain(bundle.chainId, bundle.casino),
+    channelId = verified.state.channelId;
   const [owner, supported, channel, claim, collectable] = await Promise.all([
     read('owner'),
     read('supported', bundle.evidence),
@@ -31,24 +32,27 @@ export async function inspectEvidence(
     read('claims', channelId),
     read('collectable', channelId),
   ]);
-  // The account's withdrawals the bundle names, each a claim of its own once recorded. One never recorded is not owed
-  // to its recipient: a close returns it to the account.
-  const withdrawals = await mapBounded(bundle.withdrawals ?? [], async id => {
-    const [claim, collectable] = await Promise.all([read('claims', id), read('collectable', id)]),
+  // The account's withdrawals the bundle holds, each the account's operation with the casino's signature after it, and
+  // a claim of its own once recorded. One never recorded is not owed to its recipient: a close returns it.
+  const withdrawals = await mapBounded(bundle.withdrawals ?? [], async proof => {
+    const op = proof.step.operation;
+    if (Number(op.kind) !== KIND.withdrawal) throw new Error('A withdrawal in the bundle is not one');
+    verifyStep(d, proof.base, proof.step, bundle.opening.player, bundle.operator);
+    const id = hashOperation(d, op),
+      [claim, collectable] = await Promise.all([read('claims', id), read('collectable', id)]),
       recorded = !same(claim.beneficiary, ZeroAddress),
       remaining = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
-    if (recorded && !same(claim.beneficiary, bundle.opening.player))
-      throw new Error(`Withdrawal ${id} is another account's claim`);
     return {
       id,
-      recipient: claim.recipient,
+      amount: op.amount,
+      // Whom it pays: the claim's recipient once it holds one, which the account can change.
+      recipient: same(claim.recipient, ZeroAddress) ? op.recipient : claim.recipient,
       remaining,
       collectable,
       paymentStatus: recorded ? standing(remaining, collectable) : 'not recorded',
     };
   });
   if (!same(owner, bundle.operator)) throw new Error('Evidence operator differs from contract owner');
-  const d = domain(bundle.chainId, bundle.casino);
   // `supported` takes the channel's zero checkpoint unsigned, and any other only signed by both sides.
   if (
     !Number(channel.status) ||

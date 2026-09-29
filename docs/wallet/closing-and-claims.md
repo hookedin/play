@@ -158,8 +158,8 @@ A withdrawal is a claim too, under its ID, with its principal and winnings worke
 ([withdraw](#withdraw)).
 
 **Waiting to be paid**, on the Wallet page, lists every claim of this account that is still owed something, a closed
-balance's or a withdrawal's, 20 at a time, those of older channels included, with what it is owed and what can be
-collected now:
+balance's or a withdrawal's, 20 at a time, those of older channels included, with where it pays (to your address, to
+another, or into your balance when it pays the contract), what it is owed and what can be collected now:
 
 - **Collect** sends `claim(id)`, with the channel's ID or the withdrawal's, which anyone may send. It pays the claim's
   protected principal and whatever of its winnings house cash reaches to the claim's recipient: your account for a

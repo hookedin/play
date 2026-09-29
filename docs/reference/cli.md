@@ -94,7 +94,7 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
 | `<bundle>`           | The first argument: the evidence file exported from the wallet, at most 16 MiB                                |
 | `--rpc URL`          | The JSON-RPC endpoint to read and send through. Without it, only `inspect` runs, offline                      |
 | `--action NAME`      | `inspect` (the default), `start`, `challenge`, `finalize` or `claim`                                          |
-| `--claim ID`         | With `claim`: the claim to collect, the channel's (the default) or a withdrawal the bundle lists              |
+| `--claim ID`         | With `claim`: the claim to collect, the channel's (the default) or a withdrawal the bundle holds              |
 | `--to ADDRESS`       | With `claim`: pay the claim to this address, with `claimTo`                                                   |
 | `--block N`          | With `inspect`: read the chain at block `N` instead of the latest                                             |
 | `--journal PATH`     | The transaction journal. Default `.private/recovery-<channelId>.json`                                         |
@@ -126,8 +126,9 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
   evidence is owed (`owed`: that balance plus any deposit it has not taken in and what it withdrew that is not yet a
   claim, less what the channel's claims took that it did not withdraw), the channel's claim with what is paid and what
   remains, whom it pays (`recipient`), what collecting pays now (`collectable`), and how the claim stands, as
-  `paymentStatus`. For each withdrawal the bundle lists, `withdrawals` holds its `id`, `recipient`, what it still owes
-  (`remaining`), `collectable` and `paymentStatus`:
+  `paymentStatus`. It checks that the account signed each withdrawal the bundle holds and the casino the checkpoint
+  after it, and `withdrawals` holds, for each, its `id` (the hash of its operation), `amount`, whom it pays now
+  (`recipient`), what it still owes (`remaining`), `collectable` and `paymentStatus`:
 
   | `paymentStatus`                            | Meaning                                                                                                              |
   | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |

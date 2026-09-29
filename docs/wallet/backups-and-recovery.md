@@ -53,16 +53,17 @@ A backup of another account switches the wallet to that account.
 balance's channel, and one for a channel still closing beside it. **Export evidence** beside a closed balance's claim
 does the same for its channel, and the banner of a pending operation offers **Export recovery bundle** too. A bundle
 names the deployment (`chainId`, `casino`, `operator`), the channel's `opening` (its ID, the account and the channel's
-index) and its latest `evidence`, and lists the IDs of your withdrawals the contract may still owe something, from any
-of your channels (`withdrawals`; [the bundle's fields](../reference/signed-messages.md#evidence)). It holds no keys, no
-game data and no pricing. It changes with every operation, so export it again after you play or withdraw. Before
-anything is signed on a channel, its evidence is the channel's base, which needs no signatures.
+index) and its latest `evidence`, and holds the evidence of each of your withdrawals the contract may still owe
+something, from any of your channels (`withdrawals`; [the bundle's fields](../reference/signed-messages.md#evidence)).
+It holds no keys, no game data and no pricing. It changes with every operation, so export it again after you play or
+withdraw. Before anything is signed on a channel, its evidence is the channel's base, which needs no signatures.
 
 **Import a recovery bundle**, under Recovery, reads one back. The wallet refuses a bundle while an operation or a
 transaction is pending, when it belongs to another chain, contract, owner or account, when it is older than the saved
-checkpoint or differs from it at the same sequence, and when the contract has no such channel of this account. From an
-imported bundle the wallet can close, challenge, finalize and collect, and play on when it holds the latest state the
-casino has.
+checkpoint or differs from it at the same sequence, when the contract has no such channel of this account, and when a
+withdrawal in it is not one your account and the casino signed. From an imported bundle the wallet can close, challenge,
+finalize and collect, and play on when it holds the latest state the casino has. Its withdrawals join Activity like ones
+this browser sent, however the chain stands on them: **Waiting to be paid** lists any the contract still owes.
 
 ## When a reply is lost
 
@@ -120,7 +121,7 @@ npm ci
 
 3. If the close proposes an older state than yours, challenge it before the deadline: `--action challenge`.
 4. After the deadline, finalize: `--action finalize`.
-5. Collect: `--action claim`, or `--action claim --to ADDRESS` to be paid elsewhere. A withdrawal the bundle lists is
+5. Collect: `--action claim`, or `--action claim --to ADDRESS` to be paid elsewhere. A withdrawal the bundle holds is
    collected the same way with `--claim` and its ID; the inspection shows what each still owes.
 
 Each action inspects first and sends nothing when its end is already reached, and every transaction is saved in a

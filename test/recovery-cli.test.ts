@@ -109,7 +109,7 @@ test('the CLI inspects and collects a withdrawal the bundle lists, which a close
     operator: f.owner.address,
     opening: ch.opening,
     evidence: await countersigned(f, won, out),
-    withdrawals: [withdrawal],
+    withdrawals: [out.evidence],
   };
   await cli(bundle, 'start');
   await env.provider.send('evm_increaseTime', [86401]);
@@ -119,6 +119,7 @@ test('the CLI inspects and collects a withdrawal the bundle lists, which a close
   assert.deepEqual(closed.withdrawals, [
     {
       id: withdrawal,
+      amount: '1500',
       recipient,
       remaining: '500',
       collectable: '0',

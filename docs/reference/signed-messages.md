@@ -175,15 +175,15 @@ secret. Kind 0 appears nowhere else. The casino's replies carry evidence in this
 A wallet exports evidence as a bundle (`EvidenceBundle` in [types.ts](../../protocol/types.ts)), which the
 [recovery tools](cli.md) read:
 
-| Field         | Type     | Meaning                                                                                                                      |
-| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `chainId`     | string   | The chain, as a decimal string                                                                                               |
-| `casino`      | address  | The contract                                                                                                                 |
-| `operator`    | address  | The casino, the contract's owner                                                                                             |
-| `opening`     | object   | `{channelId, player, index}`                                                                                                 |
-| `evidence`    | Evidence | The latest evidence of the channel                                                                                           |
-| `details`     | Details  | Optional: the details of the step's operation, whose hash is its `memo`                                                      |
-| `withdrawals` | string[] | Optional: the IDs of the account's withdrawals the contract may still owe something ([withdrawals](contract.md#withdrawals)) |
+| Field         | Type       | Meaning                                                                                                                                                                 |
+| ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chainId`     | string     | The chain, as a decimal string                                                                                                                                          |
+| `casino`      | address    | The contract                                                                                                                                                            |
+| `operator`    | address    | The casino, the contract's owner                                                                                                                                        |
+| `opening`     | object     | `{channelId, player, index}`                                                                                                                                            |
+| `evidence`    | Evidence   | The latest evidence of the channel                                                                                                                                      |
+| `details`     | Details    | Optional: the details of the step's operation, whose hash is its `memo`                                                                                                 |
+| `withdrawals` | Evidence[] | Optional: the evidence of each of the account's withdrawals the contract may still owe something, whose step is the withdrawal ([withdrawals](contract.md#withdrawals)) |
 
 `verifyEvidence` in [protocol.ts](../../protocol/protocol.ts) checks a bundle's signatures. Evidence on the channel's
 base has none to check: it reports `unsignedBase: true`.

@@ -41,7 +41,7 @@ export interface GameIntent {
   /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
   developer: string;
 }
-import { Contract, Wallet, ZeroAddress, getAddress } from 'ethers';
+import { Contract, Wallet, getAddress } from 'ethers';
 import {
   domain,
   canonicalJSON,
@@ -57,6 +57,9 @@ import {
   hashState,
   checkpointEvidence,
   verifyEvidence,
+  verifyStep,
+  hashOperation,
+  KIND,
   assertProtocol,
   owed,
 } from '../protocol/protocol.ts';
@@ -603,7 +606,13 @@ export class CasinoWallet extends GameSessions {
       claims: [
         ...Object.values(this.channels)
           .filter(v => v.claim)
-          .map(v => ({ id: v.state.channelId, channelId: v.state.channelId, observedAt: v.observedAt, ...v.claim })),
+          .map(v => ({
+            id: v.state.channelId,
+            channelId: v.state.channelId,
+            to: v.claim.recipient,
+            observedAt: v.observedAt,
+            ...v.claim,
+          })),
         ...this.history
           .filter(entry => entry.withdrawal && entry.recorded && !entry.paid)
           .map(entry => ({
@@ -675,6 +684,7 @@ export class CasinoWallet extends GameSessions {
         const remaining = BigInt(terms.protectedRemaining) + BigInt(terms.winningsRemaining);
         claim = plain({
           beneficiary: terms.beneficiary,
+          recipient: terms.recipient,
           stateHash: onchain.closingHash,
           amount: onchain.closingBalance,
           paid: BigInt(onchain.closingBalance) - remaining,
@@ -1051,10 +1061,11 @@ export class CasinoWallet extends GameSessions {
         operator: this.operator,
         opening: c.opening,
         evidence: plain(this.evidence(c)),
-        // The account's withdrawals the contract may still owe something: each is collected under its own ID.
+        // The proofs of the account's withdrawals the contract may still owe something: each is collected under the
+        // hash of its operation.
         withdrawals: record.history
           .filter((entry: any) => entry.withdrawal && !entry.paid && !entry.returned)
-          .map((entry: any) => entry.withdrawal),
+          .map((entry: any) => entry.proof),
       });
     });
   }
@@ -1086,29 +1097,38 @@ export class CasinoWallet extends GameSessions {
       const registered = await this.reader.channels(channelId);
       if (!Number(registered.status) || !same(registered.player, this.address))
         throw new Error('Recovery evidence is not for a channel of this account on this contract');
-      // The bundle's withdrawals the contract still owes this account something join the activity, as ones this wallet
-      // sent do, for the chain to say how each stands. Another account's claim is refused; one that is no claim, or
-      // paid in full, is left out.
+      // The bundle's withdrawals join the activity as ones this wallet sent do, whatever the chain says of them now: it
+      // says how each stands from here on. Each must be this account's operation, followed by the casino's signature.
       const known = new Set(this.history.map(entry => entry.withdrawal)),
         withdrawals = [];
-      for (const id of new Set((bundle.withdrawals ?? []).map((id: string) => id.toLowerCase()))) {
+      for (const proof of bundle.withdrawals ?? []) {
+        const op = proof.step.operation;
+        let next;
+        try {
+          if (Number(op.kind) !== KIND.withdrawal) throw new Error('Not a withdrawal');
+          next = verifyStep(this.domain, proof.base, proof.step, this.address, this.operator);
+        } catch {
+          throw new Error('The bundle names a withdrawal that is not one this account and the casino signed');
+        }
+        const id = hashOperation(this.domain, op).toLowerCase();
         if (known.has(id)) continue;
-        const claim = await this.reader.claims(id);
-        if (same(claim.beneficiary, ZeroAddress)) continue;
-        if (!same(claim.beneficiary, this.address))
-          throw new Error("The bundle names a withdrawal that is another account's claim");
-        const owed = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
-        if (owed)
-          withdrawals.push({
-            kind: same(claim.recipient, this.config.contractAddress) ? 'lock-in' : 'withdrawal',
+        known.add(id);
+        withdrawals.push(
+          plain({
+            kind: same(op.recipient, this.config.contractAddress) ? 'lock-in' : 'withdrawal',
             operationId: 'withdrawal:' + id,
             status: 'signed',
+            verified: true,
+            proof,
+            stake: op.amount,
+            amount: op.amount,
             withdrawal: id,
-            to: claim.recipient,
-            amount: String(owed),
+            to: getAddress(op.recipient),
             paid: false,
+            balance: next.balance,
             createdAt: new Date().toISOString(),
-          });
+          }),
+        );
       }
       const evidence = bundle.evidence;
       this.channels[channelId] = {
