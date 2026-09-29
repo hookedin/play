@@ -241,17 +241,22 @@ export const unsignedBase = (evidence: Evidence) =>
   canonicalJSON(plain(evidence.base)) === canonicalJSON(baseState(evidence.base.channelId));
 /** What a close of the channel in `state` is owed: its balance, whatever of the channel's on-chain `deposited` it has
  * not taken in yet, and what it withdrew that is not yet a claim, less what the channel's claims took (`claimed`) that
- * it did not withdraw; never below nothing. The contract works it out the same way, and refuses a state that has taken
- * in more than was deposited. */
+ * it did not withdraw and what it took in that the chain does not hold; never below nothing. The contract works it out
+ * the same way. */
 export function owed(
   state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
   deposited: Integer,
   claimed: Integer,
 ) {
-  if (BigInt(state.deposited) > BigInt(deposited)) throw new Error('The state has taken in more than was deposited');
-  const due = BigInt(state.balance) + BigInt(deposited) - BigInt(state.deposited) + BigInt(state.withdrawn);
-  return due > BigInt(claimed) ? due - BigInt(claimed) : 0n;
+  const due = BigInt(state.balance) + BigInt(deposited) + BigInt(state.withdrawn),
+    taken = BigInt(state.deposited) + BigInt(claimed);
+  return due > taken ? due - taken : 0n;
 }
+/** Whether the contract has recorded the withdrawal `evidence` proves: it records a channel's withdrawals in the order
+ * they were signed, so once the channel's `claimed` has passed the `withdrawn` of the checkpoint the withdrawal
+ * follows. What stays owed of it is a claim under its ID; one paid in full at once leaves none. */
+export const withdrawalRecorded = (claimed: Integer, evidence: Evidence) =>
+  BigInt(claimed) > BigInt(evidence.base.withdrawn);
 export function operation(d: Domain, base: Checkpoint, values: Partial<Operation>) {
   return plain({
     channelId: base.channelId,

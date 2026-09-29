@@ -147,9 +147,10 @@ has recorded it with something still owed, which you collect under **Waiting to 
 **Paid out**. A lock-in is **Locking in**, then **Balance locked in**, **In as deposits**, its amount **Locked in**
 ([lock in your balance](closing-and-claims.md#lock-in-your-balance)). Expanded, each shows where it pays now, as **To**:
 an address, or your own channel for one that pays the contract, its **Withdrawal ID** (the hash of its operation) and,
-once recorded, the transaction it was **Recorded in**, linked to Sepolia Etherscan. Until it is sent it offers
-**Send it now**, which sends it to the contract from your account, paying the network fee from your deposit address. One
-nobody sent before its channel's close is finished is **Withdrawal returned**, **Returned with the close**, its amount
-**In the claim**: the close was owed it back. When the wallet reads the chain for Activity, it asks the contract how
-each withdrawal not yet paid or returned stands, and asks again about one that is once the block that said so has left
-the chain; it looks for the transaction that recorded each among the last 10,000 blocks.
+once recorded, the transaction it was **Recorded in**, linked to Sepolia Etherscan. Until it is sent, and once the
+withdrawals made before it from the same balance are, it offers **Send it now**, which sends it to the contract from
+your account, paying the network fee from your deposit address. One nobody sent before its channel's close is finished
+is **Withdrawal returned**, **Returned with the close**, its amount **In the claim**: the close was owed it back. When
+the wallet reads the chain for Activity, it asks the contract how each withdrawal not yet paid or returned stands, and
+asks again about one that is once the block that said so has left the chain; it looks for the transaction that recorded
+each among the last 10,000 blocks.

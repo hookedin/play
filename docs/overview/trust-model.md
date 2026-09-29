@@ -15,10 +15,12 @@ game, its developer and a bankroll fund share each carry trust of their own, set
   channel's principal, and the owner cannot withdraw it. Withdrawals are paid out of it first, and a close pays
   `min(owed, principal)` out of it in full. Only winnings above your deposits depend on the shared bankroll.
 - **Withdrawals are paid by the contract.** A withdrawal is an operation your account signs. With the casino's signature
-  of the balance after it, which your receipt keeps, anyone can have the contract record it, once, as a claim under the
-  hash of the operation, until the channel's close is final. The contract pays at once what your deposits and house cash
-  cover, and owes the rest, for anyone to collect; a recipient that refuses the payment leaves all of it owed. The
-  casino sends it at once, and you can send it yourself; one never recorded comes back to you with the close.
+  of the balance after it, which your receipt keeps, anyone can have the contract record it, once and after every
+  withdrawal you made before it, as a claim under the hash of the operation, until the channel's close is final. The
+  order decides what each takes of your deposits, so nobody can make a lock-in take less than it should. The contract
+  pays at once what your deposits and house cash cover, and owes the rest, for anyone to collect; a recipient that
+  refuses the payment leaves all of it owed. The casino sends it at once, and you can send it yourself; one never
+  recorded comes back to you with the close.
 - **Losses are real.** A close is owed your final balance, and the deposits above it return to house cash. Nothing
   refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no

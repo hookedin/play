@@ -762,8 +762,9 @@ function renderActivity() {
           same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to,
         ]);
       if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
-      // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away.
-      if (receipt.withdrawal && !receipt.recorded && !receipt.returned)
+      // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away: the
+      // oldest of its channel first, since the contract records them in order.
+      if (receipt.withdrawal && !receipt.recorded && !receipt.returned && wallet.nextToRecord(receipt))
         facts.push(['Payment', sendNow(receipt.operationId)]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
       if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn, receipt.recordedIn)]);

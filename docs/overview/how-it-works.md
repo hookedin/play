@@ -151,12 +151,12 @@ contract records and pays it on, with `withdraw`: anyone may send it, and the ca
 account's address is its deposit address, whose wallet puts what arrives there into its balance: that is how you fund a
 friend's balance.
 
-The contract makes each withdrawal a claim once, under the hash of its operation, and pays it out of the channel's
-deposits first. What it takes beyond them is winnings, which join the queue that house cash pays first in, first out
-([closing and claims](#closing-and-claims)): what house cash reaches is paid at once too, and anyone can collect the
-rest later. The casino takes a withdrawal on only when the channel's deposits and the house cash it can count on cover
-all of it, and otherwise declines it, leaving the balance unchanged, so a withdrawal is normally paid in full the moment
-it is sent. What a withdrawal of winnings trusts the casino for is in the
+The contract makes each withdrawal a claim once, in the order they were made, under the hash of its operation, and pays
+it out of the channel's deposits first. What it takes beyond them is winnings, which join the queue that house cash pays
+first in, first out ([closing and claims](#closing-and-claims)): what house cash reaches is paid at once too, and anyone
+can collect the rest later. The casino takes a withdrawal on only when the channel's deposits and the house cash it can
+count on cover all of it, and otherwise declines it, leaving the balance unchanged, so a withdrawal is normally paid in
+full the moment it is sent. What a withdrawal of winnings trusts the casino for is in the
 [trust model](trust-model.md#what-you-trust-the-casino-for).
 
 ## Closing and claims

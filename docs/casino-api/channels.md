@@ -226,10 +226,11 @@ What the casino checks and answers, by operation:
 | Deposit, kind 4             | `{id}`                                                   | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposits cover the state's `deposited` plus the amount. When it has not seen that, it reads the chain again, and refuses with `unconfirmed` if it still has not, signing nothing                                                                                                                                                                                                                | –                                                                                                    |
 | Withdrawal, kind 5          | `{id}`                                                   | Has the contract pay the amount to the operation's `recipient`, as below, or put it into the channel as deposits when that is the contract itself; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), and one to an address that would refuse the contract's payment, a call with 100,000 gas ("That address does not accept a payment from the contract"). The wallet funds another account with one to that account's address, and locks the balance in with one of the whole balance to the contract | –                                                                                                    |
 
-A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already
-carried out on another channel is declined with `used: true`. A developer bet is known afterwards by the hash of its
-operation, which [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) takes. So is a withdrawal: the
-contract's [`claims`](../reference/contract.md#storage) says whether it has recorded one, and what of it is still owed.
+A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already carried
+out on another channel is declined with `used: true`. A developer bet is known afterwards by the hash of its operation,
+which [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) takes. So is a withdrawal: the contract has
+recorded one once its channel's `claimed` has passed the `withdrawn` of the checkpoint it follows, and
+[`claims`](../reference/contract.md#storage) holds what of it is still owed.
 
 The contract makes each withdrawal a claim once, when anyone sends it the reply's `evidence`, the operation and the
 casino's signature after it ([`withdraw`](../reference/contract.md#functions-that-change-state)), and pays the recipient
@@ -239,9 +240,10 @@ it can pay all of it now, out of the channel's deposits it does not already owe 
 ([the books](public.md#get-apistatus)) once the withdrawals it owes have taken what their channels' deposits do not
 cover; it declines a larger one, naming that sum. So a withdrawal is normally paid in full the moment it is sent, and
 one its channel's deposits cover needs no house cash. The casino sends each withdrawal it takes on at once, oldest first
-and one owner transaction at a time, and owes it until the chain shows it recorded, whoever sent it, or its channel's
-close final without it; while one cannot be sent, `/api/status` raises `withdrawal-unsent`. One never recorded when its
-channel's close is final comes back to the account with the close.
+and one owner transaction at a time, a channel's in the order the contract records them, and owes it until the chain
+shows it recorded, whoever sent it, or its channel's close final without it; while one cannot be sent, `/api/status`
+raises `withdrawal-unsent`. One never recorded when its channel's close is final comes back to the account with the
+close.
 
 | Response field    | Type       | Meaning                                                                                                                                             |
 | ----------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |

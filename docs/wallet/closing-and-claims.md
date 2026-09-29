@@ -90,8 +90,9 @@ It also declines a withdrawal to an address that would refuse a payment from the
 contract's 100,000 gas: _That address does not accept a payment from the contract_. Withdrawing everything leaves the
 channel open with an empty balance.
 
-The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent.
-One not sent yet offers **Send it now** in its Activity entry, which sends it from your account, paying the network fee
+The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent. One
+not sent yet offers **Send it now** in its Activity entry once every withdrawal you made before it from that balance is
+sent, since the contract records them in the order you made them. It sends it from your account, paying the network fee
 from your deposit address ([fees and gas](#fees-and-gas)). A withdrawal can be sent until its channel's close is
 finished, which anyone can do 24 hours after the close starts. One nobody sent by then comes back to you with the close,
 not to its address: what your deposits cover is protected principal, and the rest winnings

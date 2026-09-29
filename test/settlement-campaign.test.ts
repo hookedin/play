@@ -133,13 +133,16 @@ for (const initialSeed of [1, 4294967295])
         else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
           // A withdrawal, to the account's address, another, or the contract itself as a lock-in, which anyone has
           // made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest owed in
-          // the winnings queue. One is at times never sent, for the close to return.
+          // the winnings queue. One is at times never sent, and then, as withdrawals record in the order they were
+          // signed, none after it: the close returns them.
           const amount = BigInt(1 + random(Number(ch.state.balance))),
             contract = await f.contract.getAddress(),
             recipient = [player.address, Wallet.createRandom().address, contract][random(3)],
             before: bigint = (await f.contract.channels(ch.state.channelId)).principal,
             sent = await transition(f, ch, 5, amount, { recipient });
-          if (random(4)) {
+          if (ch.behind) await assert.rejects(f.contract.withdraw.staticCall(sent));
+          else if (!random(4)) ch.behind = true;
+          else {
             await (await f.contract.connect(env.wallets[8]).withdraw(sent)).wait();
             const claimId = hashOperation(f.d, sent.step.operation),
               claim = await f.contract.claims(claimId),

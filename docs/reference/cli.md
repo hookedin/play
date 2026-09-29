@@ -124,7 +124,8 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
   channel's status, challenge deadline and closing state, the deposits the contract holds for the channel
   (`principal`) and what its withdrawals have made into claims (`claimed`), the signed balance, what a close on the
   evidence is owed (`owed`: that balance plus any deposit it has not taken in and what it withdrew that is not yet a
-  claim, less what the channel's claims took that it did not withdraw), the channel's claim with what is paid and what
+  claim, less what the channel's claims took that it did not withdraw and what it took in that the chain does not
+  hold), the channel's claim with what is paid and what
   remains, whom it pays (`recipient`), what collecting pays now (`collectable`), and how the claim stands, as
   `paymentStatus`. It checks that the account signed each withdrawal the bundle holds and the casino the checkpoint
   after it, and `withdrawals` holds, for each, its `id` (the hash of its operation), `amount`, whom it pays now

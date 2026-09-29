@@ -3,38 +3,34 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { anvil, deployment, open, step, signedIncrease } from '../testing/contract.ts';
+import { anvil, deployment, open, signedIncrease } from '../testing/contract.ts';
 import { verifyEvidence } from '../protocol/protocol.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 import { DisputeWorker } from '../protocol/dispute-worker.ts';
 
-test("a deposit orphaned by a reorg cannot block another channel's challenge", async t => {
+test("evidence this contract cannot settle blocks no other channel's challenge", async t => {
   const env = await anvil();
   t.after(() => env.close());
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const f = await deployment(env),
+    other = await deployment(env),
     bad = await open(f, env.wallets[1], 100n),
     good = await open(f, env.wallets[2], 100n),
-    win = await signedIncrease(f, good, 50n),
-    snapshot = await env.provider.send('evm_snapshot', []);
-  await (await f.contract.deposit(bad.player.address, { value: 100n })).wait();
-  const deposit = await step(f, bad, 4, 100n);
-  await env.provider.send('evm_revert', [snapshot]);
+    win = await signedIncrease(f, good, 50n);
+  // The same account's channel on another deployment has the same ID, and evidence signed for that contract.
+  const elsewhere = await open(other, env.wallets[1], 100n),
+    stale = await signedIncrease(other, elsewhere, 10n);
   await (await f.contract.startClose(bad.evidence)).wait();
   await (await f.contract.startClose(good.evidence)).wait();
   const bundles = [
-    { opening: bad.opening, evidence: deposit.evidence },
-    { opening: good.opening, evidence: win.evidence },
-  ].map(bundle => ({
-    ...bundle,
-    chainId: env.chainId,
-    casino: String(f.contract.target),
-    operator: f.owner.address,
-  }));
-  // Authentic evidence can become unusable on the canonical chain. It must not monopolize the submission queue.
+    { opening: bad.opening, evidence: stale.evidence, casino: String(other.contract.target) },
+    { opening: good.opening, evidence: win.evidence, casino: String(f.contract.target) },
+  ].map(bundle => ({ ...bundle, chainId: env.chainId, operator: f.owner.address }));
+  // Signed as it says, and not this contract's: it must not monopolize the submission queue.
+  assert.equal(elsewhere.opening.channelId, bad.opening.channelId);
   assert.equal(verifyEvidence(bundles[0]).signaturesValid, true);
-  await assert.rejects(f.contract.challengeClose.staticCall(deposit.evidence));
+  await assert.rejects(f.contract.challengeClose.staticCall(stale.evidence));
   const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId }),
     worker = new DisputeWorker({
       contract: f.contract,

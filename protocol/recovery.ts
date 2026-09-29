@@ -1,7 +1,18 @@
 import type { JsonRpcProvider, InterfaceAbi, BlockTag } from 'ethers';
 import type { EvidenceBundle } from './types.ts';
 import { Contract, ZeroAddress, ZeroHash } from 'ethers';
-import { verifyEvidence, verifyStep, domain, hashState, hashOperation, same, plain, owed, KIND } from './protocol.ts';
+import {
+  verifyEvidence,
+  verifyStep,
+  domain,
+  hashState,
+  hashOperation,
+  same,
+  plain,
+  owed,
+  withdrawalRecorded,
+  KIND,
+} from './protocol.ts';
 import { readContract, requireCanonicalBlock } from './chain-observer.ts';
 import { mapBounded } from './concurrency.ts';
 
@@ -39,8 +50,11 @@ export async function inspectEvidence(
     if (Number(op.kind) !== KIND.withdrawal) throw new Error('A withdrawal in the bundle is not one');
     verifyStep(d, proof.base, proof.step, bundle.opening.player, bundle.operator);
     const id = hashOperation(d, op),
-      [claim, collectable] = await Promise.all([read('claims', id), read('collectable', id)]),
-      recorded = !same(claim.beneficiary, ZeroAddress),
+      [claim, collectable, channel] = await Promise.all([
+        read('claims', id),
+        read('collectable', id),
+        read('channels', op.channelId),
+      ]),
       remaining = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
     return {
       id,
@@ -49,7 +63,7 @@ export async function inspectEvidence(
       recipient: same(claim.recipient, ZeroAddress) ? op.recipient : claim.recipient,
       remaining,
       collectable,
-      paymentStatus: recorded ? standing(remaining, collectable) : 'not recorded',
+      paymentStatus: withdrawalRecorded(channel.claimed, proof) ? standing(remaining, collectable) : 'not recorded',
     };
   });
   if (!same(owner, bundle.operator)) throw new Error('Evidence operator differs from contract owner');

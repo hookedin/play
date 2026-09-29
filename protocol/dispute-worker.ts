@@ -110,8 +110,9 @@ export class DisputeWorker {
       if (pending) await this.outbox.submit(pending.action, null);
       else
         for (const { bundle, state } of jobs) {
-          // Signatures alone do not establish that this chain can settle the evidence: a deposit can be orphaned. The
-          // most urgent challenge it can settle goes out; one it cannot is reported and blocks no other.
+          // Signatures alone do not establish that this contract can settle the evidence: a bundle can come from another
+          // deployment, whose channels have the same IDs. The most urgent challenge it can settle goes out; one it
+          // cannot is reported and blocks no other.
           try {
             await this.observer.contractRead(this.contract, 'challengeClose', [bundle.evidence], observation.block);
           } catch (error: any) {

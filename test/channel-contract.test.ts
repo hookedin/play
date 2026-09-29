@@ -48,8 +48,12 @@ test('a channel is its account: anyone deposits into it, the first deposit opens
   // The base needs no signature, and is owed every deposit it has not taken in; any other checkpoint needs both.
   assert.equal((await f.contract.supported(ch.base)).balance, 0n);
   await assert.rejects(f.contract.supported(checkpointEvidence({ ...ch.state, balance: '1' })));
-  const over = await step(f, ch, 4, 801n);
-  await assert.rejects(f.contract.connect(a).startClose.staticCall(over.evidence));
+  // A checkpoint that took in more than the chain holds pays no withdrawal.
+  const over = await step(f, ch, 4, 801n),
+    overdrawn = await step(f, { ...ch, state: over.state, evidence: await countersigned(f, ch, over) }, 5, 801n, {
+      recipient: c.address,
+    });
+  await assert.rejects(f.contract.withdraw.staticCall(overdrawn.evidence), reverts('InvalidState'));
   const taken = await step(f, ch, 4, 800n);
   assert.equal((await f.contract.supported(taken.evidence)).deposited, 800n);
   // Only the account, or the casino, starts a close.
@@ -187,7 +191,8 @@ test("a withdrawal pays any address, a friend's HookedIn address among them, and
   const mine = await f.contract.channels(ch.opening.channelId),
     claim = await f.contract.claims(hashOperation(f.d, locked.evidence.step.operation));
   assert.deepEqual([mine.deposited, mine.principal], [1900n, 900n]);
-  assert.deepEqual([claim.beneficiary, claim.protectedRemaining, claim.winningsRemaining], [a.address, 0n, 0n]);
+  // Paid in full at once, it leaves no claim: the channel's `claimed` records it.
+  assert.deepEqual([claim.beneficiary, mine.claimed], [ZeroAddress, 1300n]);
   assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings()], [900n, 0n]);
   assert.equal(await f.contract.withdrawableHouse(), 200n);
 });
@@ -212,6 +217,45 @@ test('a lock-in house cash cannot cover yet goes in as far as it reaches, and th
   await (await f.contract.connect(env.wallets[8]).claim(claimId)).wait();
   assert.deepEqual(await mine(), [2500n, 1500n]);
   assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings()], [1500n, 0n]);
+});
+
+test('a lock-in records after the withdrawals signed before it, so it locks in all that is left', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    contract = await f.contract.getAddress(),
+    ch = await open(f, env.wallets[1], 1000n);
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  // 500 won; 500 withdrawn to someone, then the other 1000 locked in.
+  const won = { ...ch, ...(await signedIncrease(f, ch, 500n)) },
+    out = await step(f, won, 5, 500n, { recipient: Wallet.createRandom().address }),
+    lock = await step(f, { ...ch, state: out.state, evidence: await countersigned(f, won, out) }, 5, 1000n, {
+      recipient: contract,
+    });
+  // Sent first, the lock-in would leave half of what it locks in unprotected: it waits for the withdrawal.
+  await assert.rejects(f.contract.withdraw.staticCall(lock.evidence), reverts('InvalidState'));
+  await (await f.contract.withdraw(out.evidence)).wait();
+  await (await f.contract.withdraw(lock.evidence)).wait();
+  const c = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual([c.principal, c.deposited, c.claimed], [1000n, 2000n, 1500n]);
+  // Once only.
+  await assert.rejects(f.contract.withdraw.staticCall(out.evidence), reverts('InvalidState'));
+});
+
+test('a close nets out what a checkpoint took in that the chain does not hold, so every signed checkpoint closes', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    ch = await open(f, env.wallets[1], 1000n);
+  // A take-in of 500 the chain does not hold (a reorganisation took the deposit back), then 300 won.
+  const phantom = await step(f, ch, 4, 500n),
+    taken = { ...ch, state: phantom.state, evidence: await countersigned(f, ch, phantom) },
+    won = await signedIncrease(f, taken, 300n);
+  // A stale close on the base is challenged with the latest checkpoint: owed its 1800 less the 500 never deposited.
+  await (await f.contract.connect(env.wallets[1]).startClose(ch.base)).wait();
+  assert.equal((await f.contract.channels(ch.opening.channelId)).closingBalance, 1000n);
+  await (await f.contract.challengeClose(won.evidence)).wait();
+  assert.equal((await f.contract.channels(ch.opening.channelId)).closingBalance, 1300n);
 });
 
 test('a close moves the account to its next channel at once, and withdrawals are paid until it is final', async t => {
@@ -266,7 +310,7 @@ test('a withdrawal nobody sent comes back with the close, its deposits protected
   assert.equal((await claimOf(f, ch.opening.channelId)).paid, 1500n);
 });
 
-test('withdrawal ordering and a newer challenge preserve the exact settlement entitlement', async t => {
+test('withdrawals are recorded in the order the account signed them, and with a newer challenge settle exactly', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
@@ -281,14 +325,16 @@ test('withdrawal ordering and a newer challenge preserve the exact settlement en
     });
   await (await f.contract.deposit(ch.player.address, { value: 20n })).wait();
   await (await f.contract.fundBankroll({ value: 100n })).wait();
+  // A withdrawal records only once every earlier one of its channel has.
+  await assert.rejects(f.contract.withdraw.staticCall(second.evidence), reverts('InvalidState'));
   const permutations = (items: string[]): string[][] =>
     items.length
       ? items.flatMap(item => permutations(items.filter(other => other !== item)).map(rest => [item, ...rest]))
       : [[]];
   const orders = permutations(['first', 'second', 'close', 'challenge']).filter(
-    order => order.indexOf('close') < order.indexOf('challenge'),
+    order => order.indexOf('close') < order.indexOf('challenge') && order.indexOf('first') < order.indexOf('second'),
   );
-  assert.equal(orders.length, 12);
+  assert.equal(orders.length, 6);
   for (const order of orders) {
     const snapshot = await env.provider.send('evm_snapshot', []);
     let paid = 0n,

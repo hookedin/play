@@ -95,7 +95,8 @@ is signed by both sides.
 withdrawals. Anyone can deposit into an account's current channel with the contract's `deposit`, and the balance takes
 that money in with a [deposit operation](#transitions); until then a close adds it to what the checkpoint is owed. A
 close also adds what the checkpoint withdrew that is not yet a claim, and takes off what the channel's claims took that
-the checkpoint did not withdraw ([finalization](contract.md#finalization)).
+the checkpoint did not withdraw and what it took in that the chain does not hold
+([finalization](contract.md#finalization)).
 
 ### Transitions
 

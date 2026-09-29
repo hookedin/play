@@ -3,7 +3,7 @@ import type { Integer } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { ZeroAddress, formatEther, getAddress, keccak256, Transaction } from 'ethers';
-import { plain, same, hashState } from '../protocol/protocol.ts';
+import { plain, same, hashState, withdrawalRecorded } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { withLock } from './storage.ts';
@@ -534,12 +534,26 @@ export class WalletTransactions {
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined locking in.');
     return receipt;
   }
+  /** Whether the contract would record this withdrawal next: it records a channel's withdrawals in the order they were
+   * signed, so one waits while an earlier one of its channel is not a claim yet. */
+  nextToRecord(this: CasinoWallet, entry: any) {
+    const { channelId, sequence } = entry.proof.base;
+    return !this.history.some(
+      other =>
+        other.withdrawal &&
+        !other.recorded &&
+        !other.returned &&
+        other.proof.base.channelId === channelId &&
+        BigInt(other.proof.base.sequence) < BigInt(sequence),
+    );
+  }
   /** Send a withdrawal the casino has not sent yet: this account sends its proof and pays the fee, and the contract
    * makes it a claim and pays it. The casino sends each straight away too. */
   async sendWithdrawal(this: CasinoWallet, operationId: string) {
     const entry = this.history.find(record => record.operationId === operationId);
     if (!entry?.withdrawal || entry.recorded || entry.returned)
       throw new Error('That withdrawal is not waiting to be sent.');
+    if (!this.nextToRecord(entry)) throw new Error('Send the withdrawal you made before it first.');
     const hash = await this.exclusive(async () => {
       await this.assertNetwork();
       const tx = await this.sendTransaction('withdraw', [entry.proof]);
@@ -549,22 +563,22 @@ export class WalletTransactions {
     await this.refreshDetails();
     return hash;
   }
-  /** Where a withdrawal stands on-chain. Once sent it is a claim under its ID, whose event names the transaction that
-   * recorded it, looked for among recent blocks. It pays the claim's recipient, which its account can change, and is
-   * paid once nothing of the claim remains; until then what can be collected now is read with it. One never recorded
-   * by the time its channel's close is final came back with the close. A withdrawal paid or returned keeps the block it
-   * was read at (`settledAt`). */
+  /** Where a withdrawal stands on-chain. Once sent it is recorded, as its channel's `claimed` shows, and its event names
+   * the transaction that recorded it, looked for among recent blocks. What stays owed of it is a claim under its ID,
+   * paying the claim's recipient, which its account can change; it is paid once nothing is owed, and until then what
+   * can be collected now is read with it. One never recorded by the time its channel's close is final came back
+   * with the close. A withdrawal paid or returned keeps the block it was read at (`settledAt`). */
   async withdrawalState(this: CasinoWallet, entry: any, block: ChainBlock) {
     const op = entry.proof.step.operation,
       here = { number: block.number, hash: block.hash };
-    const [claim, payable] = await Promise.all([
+    const [claim, payable, channel] = await Promise.all([
       this.observer.contractRead(this.reader, 'claims', [entry.withdrawal], block),
       this.observer.contractRead(this.reader, 'collectable', [entry.withdrawal], block),
+      this.observer.contractRead(this.reader, 'channels', [op.channelId], block),
     ]);
     // Nothing read of it before stands: a reorganisation can take back a recording, a payment or a new recipient.
     const { recorded, owed, winningsRemaining, collectable, recordedIn, returned, settledAt, ...sent } = entry;
-    if (same(claim.beneficiary, ZeroAddress)) {
-      const channel = await this.observer.contractRead(this.reader, 'channels', [op.channelId], block);
+    if (!withdrawalRecorded(channel.claimed, entry.proof)) {
       return plain({
         ...sent,
         to: getAddress(op.recipient),
@@ -584,7 +598,7 @@ export class WalletTransactions {
     const left = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
     return plain({
       ...sent,
-      // A withdrawal paid in full at once keeps no recipient of its own.
+      // A withdrawal paid in full at once leaves no claim, and so no recipient but its own.
       to: getAddress(same(claim.recipient, ZeroAddress) ? op.recipient : claim.recipient),
       recorded: true,
       paid: !left,
