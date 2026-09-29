@@ -70,8 +70,8 @@ its verified winnings.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](state-and-recovery.md#lost-replies)).
 
-[`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the balance strip the house games show: the limit with an
-**Add funds** button.
+[`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the balance strip the house games show: the limit, labelled
+**Game allowance**, with an **Adjust allowance** button.
 
 ## The bridge
 

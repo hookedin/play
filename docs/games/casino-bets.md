@@ -59,7 +59,7 @@ async function flip(stake: bigint) {
   const { balance } = await HookedIn.balance();
   if (BigInt(balance) < stake) {
     const funding = await HookedIn.requestFunds({ amount: 10n * stake - BigInt(balance) });
-    if (BigInt(funding.balance) < stake) throw new Error('Add funds to play.');
+    if (BigInt(funding.balance) < stake) throw new Error('Increase your game allowance to play.');
   }
   // Name the operation and save it before the wallet signs anything.
   const id = crypto.randomUUID();

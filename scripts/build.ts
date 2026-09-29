@@ -4,14 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const dist = path.join(root, 'dist');
 
 /**
- * Build the wallet into dist/, the directory a static host serves as is, and return the settings it ships with.
+ * Build the wallet into the chosen directory (dist/ by default), and return the settings it ships with.
  * Our own modules become one readable main.js with a source map. Two files stay separate so they can be checked
  * on their own: vendor/ethers.js is byte-identical to the npm release, and config.js is the deployment's settings.
  */
-export async function buildWallet() {
+export async function buildWallet(dist = path.join(root, 'dist')) {
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'vendor'), { recursive: true });
 

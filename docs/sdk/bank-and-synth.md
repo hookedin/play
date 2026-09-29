@@ -29,12 +29,12 @@ export function mountBank(
 };
 ```
 
-Draws the game's balance strip into `root`, replacing its children: the figure labelled **Balance** with the asset's
-symbol, and an **Add funds** button that asks the player for money with
+Draws the game's balance strip into `root`, replacing its children: the figure labelled **Game allowance** with the
+asset's symbol, and an **Adjust allowance** button that asks the player to set the game’s spending limit with
 [`HookedIn.requestFunds()`](hookedin.md#requestfunds), suggesting no amount. It follows every
 [`game.balance`](../reference/bridge.md#gamebalance) push. The figure reads `—` until the wallet has greeted the page,
-then the balance less anything withheld, never below zero. A status line under it speaks only when the player is
-needed: while the wallet's dialog is open, while an operation awaits recovery, or when asking for money failed.
+then the balance less anything withheld, never below zero. A status line under it speaks only when the player is needed:
+while the wallet's dialog is open, while an operation awaits recovery, or when asking for money failed.
 
 `root` gets the class `bank` and `aria-live="polite"`. Its `data-state` is `pending` while an operation awaits recovery,
 `empty` at a zero balance and `ready` otherwise. The children are `.bank-figure` (holding `.bank-label`, `.bank-amount`

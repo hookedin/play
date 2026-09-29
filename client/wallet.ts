@@ -77,6 +77,8 @@ import { encryptBackup, decryptBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { channelRecord } from './wallet-transactions.ts';
 import { GameSessions } from './wallet-games.ts';
+import { changeLimits, depositRemaining, playControls, restoreControls } from './play-controls.ts';
+import type { PlayControls, PlayLimits } from './play-controls.ts';
 export const HISTORICAL_CHANNEL_BATCH = 16;
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
   sepolia: { id: 11155111n, name: 'Sepolia', stake: '1000000000000' },
@@ -182,9 +184,10 @@ export class CasinoWallet extends GameSessions {
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
   reportedBankroll = '0';
-  /** Whether ETH that arrives at this account's address goes into its balance by itself: all of it, on by default. Off,
-   * it stays there, to pay for transactions the account sends itself. */
+  /** Whether ETH at this account's address goes into its balance up to its deposit limit. Off, it stays available
+   * for withdrawal and transaction fees. */
   autoDeposit = true;
+  controls: PlayControls = playControls();
   /** What a deposit under way is adding to the balance, from this account's address; nothing between deposits. */
   depositing = 0n;
   /** The fee the last deposit was priced at: the sweep leaves alone an address holding less than twice it, since a
@@ -418,6 +421,7 @@ export class CasinoWallet extends GameSessions {
       developerBetError: null,
       bank: saved?.bank || {},
       autoDeposit: saved?.autoDeposit ?? true,
+      controls: playControls(saved?.controls),
     });
   }
   get channel(): WalletChannel | null {
@@ -465,6 +469,7 @@ export class CasinoWallet extends GameSessions {
     const c = this.channel;
     return (
       this.autoDeposit &&
+      depositRemaining(this.controls) !== 0n &&
       !this.recoveryOnly &&
       !this.storageFailed &&
       !this.transactionIntent &&
@@ -477,6 +482,21 @@ export class CasinoWallet extends GameSessions {
   /** Turn on or off whether ETH that arrives at this account's address goes into its balance by itself. */
   async setAutoDeposit(on: boolean) {
     await this.exclusive(() => this.save(undefined, { autoDeposit: on }), { wait: true });
+  }
+  async setPlayLimits(limits: PlayLimits) {
+    await this.exclusive(() => this.save(undefined, { controls: changeLimits(this.controls, limits) }), { wait: true });
+  }
+  async pausePlay(durationMs: number) {
+    if (!Number.isSafeInteger(durationMs) || durationMs <= 0 || !Number.isSafeInteger(Date.now() + durationMs))
+      throw new Error('Choose a positive break duration.');
+    await this.exclusive(
+      () => {
+        const controls = playControls(this.controls);
+        controls.pausedUntil = Math.max(controls.pausedUntil, Date.now() + durationMs);
+        return this.save(undefined, { controls });
+      },
+      { wait: true },
+    );
   }
   requireDurableState() {
     if (this.storageFailed) throw new Error('Wallet storage needs recovery; reload from durable state');
@@ -511,6 +531,7 @@ export class CasinoWallet extends GameSessions {
         developerBetCursor: this.developerBetCursor,
         bank: this.bank,
         autoDeposit: this.autoDeposit,
+        controls: this.controls,
         ...changes,
         revision,
       });
@@ -997,7 +1018,11 @@ export class CasinoWallet extends GameSessions {
           throw new Error('Backup would discard or change a saved pending operation');
         if (old.closing) next.closing = true;
       }
-      const record = { ...value.record, revision: this.revision + 1 };
+      const record = {
+        ...value.record,
+        controls: restoreControls(this.controls, value.record.controls),
+        revision: this.revision + 1,
+      };
       try {
         await this.storage.commit([
           [this.storageKey, record],

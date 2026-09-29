@@ -63,7 +63,7 @@ Open the wallet as `https://play.hookedin.com/?log` to see every bridge message 
 
 ## Place a first bet
 
-1. Press **Add funds**: the wallet's own dialog asks how much the game may play with, and the probe prints the
+1. Press **Adjust allowance**: the wallet's own dialog asks how much the game may play with, and the probe prints the
    `game.balance` event that follows.
 2. Press **game.casinoBet · 50% to double**, then **Send**. The bet pays twice the stake on half the outcomes, which
    leaves the casino no edge, so it declines it: the receipt says `"status": "rejected"`, and the balance is unchanged.

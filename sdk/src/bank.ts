@@ -17,12 +17,12 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
   const amount = element<HTMLElement>('strong', 'bank-amount', '—'),
     asset = element<HTMLElement>('span', 'bank-asset'),
     status = element<HTMLElement>('span', 'bank-status'),
-    button = element<HTMLButtonElement>('button', 'bank-add', 'Add funds');
+    button = element<HTMLButtonElement>('button', 'bank-add', 'Adjust allowance');
   asset.setAttribute('data-asset', '');
   button.type = 'button';
   button.disabled = true;
   const figure = element<HTMLElement>('div', 'bank-figure');
-  const label = element<HTMLElement>('span', 'bank-label', 'Balance');
+  const label = element<HTMLElement>('span', 'bank-label', 'Game allowance');
   figure.append(label, amount, asset);
   root.className = 'bank';
   root.setAttribute('aria-live', 'polite');
@@ -47,7 +47,7 @@ export function mountBank(root: HTMLElement, options: { round?: RoundClient } = 
     status.hidden = !status.textContent;
     // Setting the limit signs nothing, so the player can do it while an operation is pending.
     button.disabled = busy || requesting;
-    button.textContent = requesting ? 'Waiting…' : 'Add funds';
+    button.textContent = requesting ? 'Waiting…' : 'Adjust allowance';
   }
   function update(balance: (Partial<GameBalance> & { balance: string }) | undefined) {
     if (!balance) return;

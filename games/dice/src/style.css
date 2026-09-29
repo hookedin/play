@@ -241,10 +241,6 @@
 .odd-box:focus-within {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
-/* The stake's quick buttons sit inside its field. */
-.input-wrap:has(.quick) {
-  padding-right: 5px;
-}
 .quick {
   flex: none;
   height: 36px;
@@ -270,6 +266,11 @@
   height: 48px;
   min-width: 88px;
 }
+@media (max-width: 900px) {
+  .controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media (max-width: 600px) {
   .stage {
     gap: 12px;
@@ -282,12 +283,5 @@
     width: 48px;
     height: 48px;
     padding: 9px;
-  }
-  .play {
-    grid-column: 1 / -1;
-  }
-  /* A phone keeps the stake's width for its digits; the profit beside it names the asset. */
-  .input-wrap [data-asset] {
-    display: none;
   }
 }

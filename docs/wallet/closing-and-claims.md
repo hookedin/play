@@ -165,9 +165,9 @@ another, or into your balance when it pays the contract), what it is owed and wh
 - **Collect** sends `claim(id)`, with the channel's ID or the withdrawal's, which anyone may send. It pays the claim's
   protected principal and whatever of its winnings house cash reaches to the claim's recipient: your account for a
   closed balance and the withdrawal's address for a withdrawal, unless you have redirected it.
-- **Collect there**, with an address beside it, sends `claimTo(id, recipient)`, which only your account may send. It
-  makes `recipient` the claim's recipient, for this collection and every later one, and pays. The contract's own
-  address puts what it pays into your balance's channel as deposits.
+- **Collect there**, with an address beside it and your wallet passphrase, sends `claimTo(id, recipient)`, which only
+  your account may send. It makes `recipient` the claim's recipient, for this collection and every later one, and pays.
+  The contract's own address puts what it pays into your balance's channel as deposits.
 - **Export evidence**, beside a closed balance's claim, saves the recovery bundle of its channel.
 
 Winnings are paid as the contract has cash for them. Its house cash, its balance less protected principal, covers the
@@ -187,7 +187,10 @@ the casino sends withdrawals and lock-ins to the contract, and pays their fees. 
 200 gwei per gas and 0.05 ETH in total fees, and stops before signing when the network's estimate is higher; the casino
 cannot raise these caps. A deposit's fee comes out of what it deposits. Every other transaction needs its fee at your
 deposit address, where the wallet keeps nothing back: with **Add ETH that arrives at my deposit address to my balance**
-on, what arrives goes into your balance while the channel is open. Turn it off under **Deposits** in Settings and send
-ETH to the address, or have somebody relay the transaction: anyone can send `withdraw`, `challengeClose`,
+on, what arrives goes into your balance while the channel is open, within your deposit limit. Starting **Close without
+the casino** turns that off, so ETH sent for its fee stays at the address even if starting the close fails. A failure
+before signing leaves the balance open, and the close can be tried again; a signed close keeps its saved transaction to
+retry. Recovery shows the ETH the address holds for fees. You can also turn it off under **Deposits** in Settings and
+send ETH to the address, or have somebody relay the transaction: anyone can send `withdraw`, `challengeClose`,
 `finalizeClose` and `claim`, and only your account or the casino can send `startClose`. A pending transaction shows
 **Retry** and **Speed up** ([when a reply is lost](backups-and-recovery.md#when-a-reply-is-lost)).

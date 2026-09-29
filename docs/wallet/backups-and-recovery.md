@@ -18,18 +18,37 @@ you fund, and a current recovery bundle of each channel.
 | Restores     | The whole account, in a wallet                                        | Settlement: closing, challenging, finalizing, collecting; play, when it holds the casino's latest state |
 | Made with    | **Download encrypted backup** on Settings                             | **Export recovery bundle** under Recovery on the Wallet page                                            |
 
+## Browser keys and locking
+
+The browser encrypts all saved account keys with your wallet passphrase. Signed evidence remains available in browser
+storage; encryption protects the keys at rest. Unlocking loads signing authority into the page, and **Lock wallet**
+discards it across open wallet tabs. The wallet locks after five minutes without activity. Withdrawals, redirected
+claims, showing a private key and downloading an encrypted backup ask for the wallet passphrase again.
+
+The wallet passphrase protects this browser's keys. The backup passphrase protects one downloaded file; they are
+separate credentials. Support cannot reset either. If you forget the wallet passphrase but have a checked backup and
+its backup passphrase, open the wallet in a fresh browser profile, choose a new wallet passphrase there, and restore
+the backup. Keep the original browser data until every account and its latest evidence are safely recovered.
+
 ## Encrypted backups
 
 On **Settings**, under **Keys and backups**, enter a passphrase of 12 to 1,024 characters as the **Backup passphrase**
-and press **Download encrypted backup**. The wallet downloads `hookedin-encrypted-wallet.json`. A backup holds only the
-account in use:
+and enter the wallet passphrase to authorize **Download encrypted backup**. The wallet downloads
+`hookedin-encrypted-wallet.json`. A backup holds only the account in use:
 
 - its key;
 - every channel's opening, latest evidence and pending operation;
 - its bankroll fund statements, developer bets and bank statements;
-- its latest 100 receipts, and the receipt of every developer bet still open.
+- its latest 100 receipts, and the receipt of every developer bet still open;
+- its play limits, breaks and recorded usage.
 
 It holds no game state. Back up every account you fund, each on its own: a key alone cannot rebuild a signed balance.
+
+After downloading, keep the backup passphrase in the field and select that saved file with **Check saved backup**. The
+wallet decrypts it and checks its account, deployment and recovery contents against the saved wallet. A matching file
+unlocks the Deposit tab's receiving controls. Downloading alone does not mark a backup checked. Save and check a fresh
+copy after playing or moving ETH; the backup status in Settings and on the Wallet page identifies changed evidence. A
+checked copy is a snapshot, not an automatic backup or a watchtower.
 
 | Property       | Value                                                                           |
 | -------------- | ------------------------------------------------------------------------------- |
@@ -45,7 +64,8 @@ pending. Before it writes anything, the wallet checks that:
 - every channel belongs to the backup's account, and all the evidence verifies;
 - it replaces no saved evidence with an older or conflicting checkpoint and changes no pending operation.
 
-A backup of another account switches the wallet to that account.
+A backup of another account switches the wallet to that account. Restoring preserves stricter saved play controls and
+the higher daily usage from the saved wallet and the backup; it does not shorten a break.
 
 ## Recovery bundles
 

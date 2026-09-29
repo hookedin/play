@@ -30,44 +30,50 @@ async function readHeaders(dir: string) {
  * `build`, when given, builds the directory again before every page load, so a change shows on reload.
  */
 export function createStaticServer(dir: string, config?: unknown, build?: () => Promise<unknown>) {
-  let built: Promise<unknown> = Promise.resolve();
+  let serving: Promise<void> = Promise.resolve();
   return http.createServer(async (req, res) => {
-    let headers = await readHeaders(dir);
-    if (req.method === 'OPTIONS') return void res.writeHead(204, headers).end();
-    if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, headers).end();
-    try {
-      const pathname = decodeURIComponent(new URL(req.url!, 'http://localhost').pathname);
-      if (
-        pathname.includes('\0') ||
-        pathname.split('/').some(p => p === '..' || p.startsWith('.') || p.startsWith('_'))
-      )
-        throw new Error('Invalid path');
-      if (build) {
-        // One build at a time: a page starts one, and everything requested meanwhile waits for it.
-        if (!path.extname(pathname) || pathname.endsWith('.html')) built = built.catch(() => {}).then(build);
-        const failure = await built.then(
-          () => null,
-          (error: Error) => error,
-        );
-        if (failure) return void res.writeHead(500, { 'Content-Type': 'text/plain' }).end(failure.message);
-        headers = await readHeaders(dir);
+    const respond = async () => {
+      let headers = await readHeaders(dir);
+      if (req.method === 'OPTIONS') return void res.writeHead(204, headers).end();
+      if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, headers).end();
+      try {
+        const pathname = decodeURIComponent(new URL(req.url!, 'http://localhost').pathname);
+        if (
+          pathname.includes('\0') ||
+          pathname.split('/').some(p => p === '..' || p.startsWith('.') || p.startsWith('_'))
+        )
+          throw new Error('Invalid path');
+        if (build) {
+          if (!path.extname(pathname) || pathname.endsWith('.html')) {
+            try {
+              await build();
+            } catch (error: any) {
+              return void res.writeHead(500, { 'Content-Type': 'text/plain' }).end(error.message);
+            }
+          }
+          headers = await readHeaders(dir);
+        }
+        let data: Buffer | string, type: string;
+        if (pathname === '/config.js' && config) {
+          data = `export default ${JSON.stringify(config)};`;
+          type = types['.js'];
+        } else {
+          // Wallet routes such as /wallet and /@hookedin/dice are client-side.
+          const file = path.join(dir, !path.extname(pathname) ? 'index.html' : pathname);
+          if (!(path.extname(file) in types)) throw new Error('Invalid file');
+          data = await fs.readFile(file);
+          type = types[path.extname(file)];
+        }
+        res.writeHead(200, { ...headers, 'Content-Type': type });
+        res.end(req.method === 'HEAD' ? undefined : data);
+      } catch {
+        res.writeHead(404, { ...headers, 'Content-Type': 'text/plain' }).end('Not found');
       }
-      let data: Buffer | string, type: string;
-      if (pathname === '/config.js' && config) {
-        data = `export default ${JSON.stringify(config)};`;
-        type = types['.js'];
-      } else {
-        // Wallet routes such as /wallet and /@hookedin/dice are client-side.
-        const file = path.join(dir, !path.extname(pathname) ? 'index.html' : pathname);
-        if (!(path.extname(file) in types)) throw new Error('Invalid file');
-        data = await fs.readFile(file);
-        type = types[path.extname(file)];
-      }
-      res.writeHead(200, { ...headers, 'Content-Type': type });
-      res.end(req.method === 'HEAD' ? undefined : data);
-    } catch {
-      res.writeHead(404, { ...headers, 'Content-Type': 'text/plain' }).end('Not found');
-    }
+    };
+    // Reading the built files belongs to the same queue as rebuilding them. A second tab must
+    // not clear the output directory while the first tab is reading its page or scripts.
+    if (build) await (serving = serving.catch(() => {}).then(respond));
+    else await respond();
   });
 }
 

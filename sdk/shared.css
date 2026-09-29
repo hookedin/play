@@ -122,6 +122,7 @@ h1 {
   align-items: end;
 }
 .field > label,
+.stake-heading > label,
 .field-label {
   display: block;
   color: var(--muted);
@@ -130,6 +131,23 @@ h1 {
   letter-spacing: 1.3px;
   font-weight: 600;
   margin: 0 0 10px;
+}
+.stake-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.stake-heading > label {
+  flex: 1;
+  margin: 0;
+}
+.stake-heading > button {
+  flex: none;
+  min-width: 44px;
+}
+.stake-field {
+  min-width: 0;
 }
 .input-wrap {
   height: 48px;
@@ -187,15 +205,18 @@ h1 {
 }
 .readout {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
-  height: 48px;
+  min-height: 48px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 13px;
   background: var(--panel);
 }
 .readout strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
   font-size: 16px;
   letter-spacing: -0.4px;
   font-weight: 500;
@@ -303,15 +324,6 @@ h1 {
   background: var(--panel);
   border-color: var(--line);
 }
-.bet-row {
-  display: grid;
-  grid-template-columns: 40px 1fr 40px;
-  gap: 6px;
-}
-.bet-row .input-wrap {
-  height: 44px;
-  min-width: 0;
-}
 .step {
   height: 44px;
   border-radius: 8px;
@@ -369,9 +381,10 @@ h1 {
 .bank-figure {
   flex: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
-  white-space: nowrap;
+  min-width: 0;
 }
 .bank-label {
   color: var(--muted);
@@ -382,6 +395,7 @@ h1 {
   margin-right: 6px;
 }
 .bank-amount {
+  overflow-wrap: anywhere;
   font-size: 18px;
   letter-spacing: -0.4px;
   font-weight: 600;
@@ -437,8 +451,11 @@ h1 {
     margin-top: 12px;
   }
   .controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
+  }
+  .bank-label {
+    flex-basis: 100%;
   }
   .controls > .primary:last-child {
     grid-column: 1/-1;

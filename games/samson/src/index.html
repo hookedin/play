@@ -46,15 +46,15 @@
           </div>
         </div>
         <div class="console">
-          <div>
-            <label class="console-label" for="stake">Bet</label>
-            <div class="bet-row">
+          <div class="stake-field">
+            <div class="stake-heading">
+              <label for="stake">Bet</label>
               <button class="step" id="bet-down" type="button" aria-label="Lower bet">−</button>
-              <div class="input-wrap">
-                <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Bet in ETH" />
-                <span data-asset>ETH</span>
-              </div>
               <button class="step" id="bet-up" type="button" aria-label="Raise bet">+</button>
+            </div>
+            <div class="input-wrap">
+              <input id="stake" inputmode="decimal" value="0.000001" autocomplete="off" aria-label="Bet in ETH" />
+              <span data-asset>ETH</span>
             </div>
           </div>
           <div>

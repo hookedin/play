@@ -957,7 +957,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
 #page-play {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - 88px);
 }
 .game-viewport {
   position: relative;
@@ -967,7 +967,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .game-viewport iframe {
   flex: 1;
   width: 100%;
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - 88px);
   border: 0;
   background: transparent;
 }
@@ -1780,10 +1780,10 @@ body:has(#page-play:not(.hidden)) .footer {
     margin-left: 0;
   }
   #page-play {
-    min-height: calc(100vh - 56px);
+    min-height: calc(100vh - 84px);
   }
   .game-viewport iframe {
-    min-height: calc(100dvh - 56px);
+    min-height: calc(100dvh - 84px);
   }
   .page-head {
     flex-direction: column;
@@ -1877,5 +1877,71 @@ body:has(#page-play:not(.hidden)) .footer {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+.test-network {
+  line-height: 16px;
+  position: sticky;
+  top: 60px;
+  z-index: 10;
+  background: var(--bg);
+  padding: 6px 12px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.deposit-qr {
+  display: block;
+  margin: 16px auto;
+  image-rendering: pixelated;
+  background: white;
+  border: 8px solid white;
+  border-radius: 8px;
+}
+.safety-note {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.safety-note p {
+  margin: 10px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.account-menu details {
+  padding: 8px 12px;
+}
+.account-menu details a {
+  padding-left: 0;
+}
+.account-menu > button {
+  margin: 8px 12px;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 400px) {
+  .topbar {
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .brand span {
+    display: none;
+  }
+  .wallet-button {
+    padding: 7px;
+    gap: 5px;
+  }
+  .wallet-button-amount {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 720px) {
+  .test-network {
+    top: 56px;
   }
 }

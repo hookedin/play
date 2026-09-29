@@ -18,10 +18,9 @@ const types = {
   '.png': 'image/png',
 };
 
-/** Build the game in `root` (its src/) into root/dist/. */
-export async function buildGame(root = process.cwd()) {
+/** Build the game in `root` (its src/) into the chosen output directory. */
+export async function buildGame(root = process.cwd(), dist = path.join(root, 'dist')) {
   const src = path.join(root, 'src');
-  const dist = path.join(root, 'dist');
   fs.rmSync(dist, { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'brand'), { recursive: true });
   await build({

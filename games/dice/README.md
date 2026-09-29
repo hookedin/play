@@ -6,7 +6,7 @@ Play it at [dice-game.hookedin.com](https://dice-game.hookedin.com/) through the
 
 ## How to play
 
-1. Add funds to the game from your wallet with **Add funds**.
+1. Set what the game may spend from your wallet with **Adjust allowance**.
 2. Set the win chance with the slider, from 10% to 90% in steps of 0.5%, or type it.
 3. Enter a stake, or halve or double it with **½** and **2×**, and press **Roll dice** or Space.
 

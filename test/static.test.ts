@@ -2,14 +2,16 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import fs from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createStaticServer } from '../scripts/static.ts';
 
 const dist = fileURLToPath(new URL('../dist', import.meta.url));
 
-async function serve(t: TestContext, config?: unknown) {
-  const server = createStaticServer(dist, config);
+async function serve(t: TestContext, config?: unknown, build?: () => Promise<unknown>, directory = dist) {
+  const server = createStaticServer(directory, config, build);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(
@@ -43,6 +45,35 @@ test('the built wallet is one module plus the untouched ethers release and its c
     sha(new Uint8Array(await (await fetch(base + '/vendor/ethers.js')).arrayBuffer())),
     sha(fs.readFileSync(new URL('../dist/ethers.min.js', import.meta.resolve('ethers')))),
   );
+});
+
+test('simultaneous tab reloads serve complete files throughout preview rebuilds', async t => {
+  const directory = fs.mkdtempSync(path.join(tmpdir(), 'hookedin-static-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let builds = 0;
+  const build = async () => {
+    builds++;
+    fs.rmSync(directory, { recursive: true, force: true });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    fs.mkdirSync(directory);
+    fs.writeFileSync(path.join(directory, 'index.html'), '<title>Wallet</title><script src="/main.js"></script>');
+    fs.writeFileSync(path.join(directory, 'main.js'), 'window.walletReady = true;');
+    fs.writeFileSync(path.join(directory, '_headers'), "/*\n  Content-Security-Policy: default-src 'self'\n");
+  };
+  const base = await serve(t, undefined, build, directory);
+  const replies = await Promise.all(Array.from({ length: 8 }, (_, i) => fetch(base + '/wallet?tab=' + i)));
+  assert.equal(builds, 8);
+  for (const reply of replies) {
+    assert.equal(reply.status, 200);
+    assert.match(await reply.text(), /<title>Wallet<\/title>/);
+    assert.match(reply.headers.get('content-security-policy')!, /default-src 'self'/);
+  }
+  const assets = await Promise.all([fetch(base + '/'), fetch(base + '/main.js'), fetch(base + '/settings')]);
+  assert.deepEqual(
+    assets.map(reply => reply.status),
+    [200, 200, 200],
+  );
+  assert.equal(await assets[1].text(), 'window.walletReady = true;');
 });
 
 test('wallet routes resolve to the client page without exposing other files', async t => {

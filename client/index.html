@@ -40,6 +40,7 @@
         <span class="avatar" aria-hidden="true">◈</span><span id="account-name" class="account-name">Account</span>
       </button>
     </header>
+    <p id="test-network" class="test-network" role="status"></p>
     <div id="account-menu" class="account-menu" popover>
       <div class="menu-head">
         <strong id="menu-name">Your account</strong><span id="menu-uname" class="handle"></span>
@@ -48,13 +49,19 @@
       <a href="/wallet" data-page="wallet">Wallet</a>
       <a href="/bets" data-page="bets">Bets</a>
       <a href="/activity" data-page="activity">Activity</a>
-      <a href="/games" data-page="games">My games</a>
-      <a href="/bankroll" data-page="bankroll">Bankroll</a>
+      <details>
+        <summary>Developer and bankroll</summary>
+        <a href="/games" data-page="games">My games</a>
+        <a href="/bankroll" data-page="bankroll">Bankroll</a>
+      </details>
       <a href="/settings" data-page="settings">Settings</a>
+      <a href="mailto:support@hookedin.com">Contact support</a>
+      <button id="lock-wallet" class="text-button" type="button">Lock wallet</button>
       <a id="menu-profile" href="/" class="hidden">Public profile</a>
     </div>
 
     <main>
+      <p id="play-pause-banner" class="banner warning hidden" role="status"></p>
       <div id="connection-banner" class="banner hidden" role="status"></div>
       <div id="challenge-banner" class="banner warning hidden" role="alert">
         <span id="challenge-summary"></span><button id="challenge-now" class="button small">Challenge the close</button>
@@ -151,6 +158,8 @@
           ><button class="button" type="button" data-wallet-tab="withdraw">Withdraw</button
           ><a class="text-button" href="/activity" data-page="activity">All activity →</a>
         </div>
+        <p id="balance-protection" class="help"></p>
+        <p id="backup-reminder" class="help" role="status"></p>
         <p id="developer-earnings" class="muted hidden"></p>
         <section id="claims" class="card hidden" aria-labelledby="claims-title">
           <h2 id="claims-title">Waiting to be paid</h2>
@@ -175,6 +184,7 @@
           </summary>
           <p id="channel-status" class="mono">No balance open</p>
           <p id="channel-observation" class="muted"></p>
+          <p id="recovery-gas" class="help"></p>
           <p id="challenge-deadline" class="muted"></p>
           <p class="muted">
             Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
@@ -344,6 +354,41 @@
 
       <section id="page-settings" class="page hidden">
         <h1>Settings</h1>
+        <section class="card" aria-labelledby="play-limits-title">
+          <h2 id="play-limits-title">Play limits and breaks</h2>
+          <p class="muted">
+            These controls apply to this account in this browser, across all games and tabs. They cannot prevent play in
+            another browser or account. Deposit limits cover ETH this browser adds from your deposit address; incoming
+            transfers cannot be blocked. Daily limits reset at 00:00 UTC. Withdrawals and recovery stay available.
+          </p>
+          <form id="play-limits-form">
+            <label for="limit-deposit">Daily deposits (ETH)</label
+            ><input id="limit-deposit" inputmode="decimal" placeholder="No limit" />
+            <label for="limit-loss">Daily losses (ETH)</label
+            ><input id="limit-loss" inputmode="decimal" placeholder="No limit" />
+            <label for="limit-minutes">Session length (minutes)</label
+            ><input id="limit-minutes" type="number" min="1" max="1440" step="1" placeholder="No limit" />
+            <p class="help">
+              A bet must fit within the remaining loss allowance. Wins do not undo losses; developer bets and payments
+              count their full stake. Sessions end with a 15-minute break. Lower limits apply now; increases or removal
+              wait 24 hours.
+            </p>
+            <button class="button small" type="submit">Save limits</button>
+          </form>
+          <p id="play-limits-status" class="help" role="status"></p>
+          <label for="play-pause">Pause deposits and play</label>
+          <select id="play-pause">
+            <option value="900000">15 minutes</option>
+            <option value="86400000">24 hours</option>
+            <option value="604800000">7 days</option>
+            <option value="2592000000">30 days</option>
+          </select>
+          <button id="pause-play" class="button small" type="button">Start break</button>
+          <p class="help">
+            A break cannot be shortened. For help, contact
+            <a href="mailto:support@hookedin.com">support@hookedin.com</a>.
+          </p>
+        </section>
         <section class="card" aria-labelledby="name-title">
           <h2 id="name-title">Your name</h2>
           <p class="muted">
@@ -381,7 +426,12 @@
         </section>
         <section class="card" aria-labelledby="keys-title">
           <h2 id="keys-title">Keys and backups</h2>
-          <p class="muted">This account's key is stored only in this browser.</p>
+          <p class="muted">
+            This browser encrypts your key with your wallet passphrase. Keep an encrypted backup: support cannot recover
+            your passphrase or key. The wallet locks after five minutes without activity.
+          </p>
+          <label for="key-password">Wallet passphrase to export a key or backup</label>
+          <input id="key-password" type="password" autocomplete="current-password" />
           <button id="export-key" class="text-button" type="button">Show this wallet's private key</button>
           <textarea id="exported-key" class="key-field hidden" readonly aria-label="Private key"></textarea>
           <p class="muted">
@@ -401,6 +451,10 @@
               >Restore a backup<input id="restore-backup" type="file" accept="application/json"
             /></label>
           </div>
+          <label class="button small file-button"
+            >Check saved backup<input id="verify-backup" type="file" accept="application/json"
+          /></label>
+          <p id="backup-status" class="help" role="status"></p>
           <p class="muted">
             A backup holds this account's key, its signed evidence and any operation in flight. Keep it and its
             passphrase apart.
@@ -475,6 +529,7 @@
     </main>
     <footer class="footer">
       <span>Games run sandboxed. Your wallet stays in control.</span>
+      <a href="mailto:support@hookedin.com">support@hookedin.com</a>
       <a href="https://hookedin.com/docs/" target="_blank" rel="noopener noreferrer">Docs ↗</a>
       <a href="https://github.com/hookedin/play" target="_blank" rel="noopener noreferrer">Source ↗</a>
     </footer>
@@ -483,6 +538,31 @@
     </div>
     <div id="toast" class="toast hidden" role="alert"></div>
 
+    <dialog id="unlock-dialog" class="sheet" aria-labelledby="unlock-title">
+      <form id="unlock-form">
+        <h2 id="unlock-title">Protect your wallet</h2>
+        <p id="unlock-help" class="help"></p>
+        <label for="unlock-password">Wallet passphrase</label>
+        <input
+          id="unlock-password"
+          type="password"
+          minlength="12"
+          maxlength="1024"
+          required
+          autocomplete="current-password"
+        />
+        <div id="unlock-confirm-field">
+          <label for="unlock-confirm">Confirm passphrase</label
+          ><input id="unlock-confirm" type="password" autocomplete="new-password" />
+        </div>
+        <p id="unlock-error" class="help check-failed" role="alert"></p>
+        <button id="unlock-submit" class="button primary full" type="submit">Continue</button>
+        <p class="help">
+          Your key stays in this browser. Support cannot reset this passphrase. Keep your encrypted backup and its
+          passphrase safe.
+        </p>
+      </form>
+    </dialog>
     <dialog id="wallet-dialog" class="sheet" aria-labelledby="wallet-title">
       <div class="sheet-head">
         <h2 id="wallet-title">Wallet</h2>
@@ -496,25 +576,54 @@
         ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
-        <label id="deposit-instructions" for="wallet-address"></label>
-        <div class="address">
-          <code id="wallet-address">Connecting…</code
-          ><button id="copy-address" class="button small" type="button" disabled>Copy</button>
+        <div id="deposit-safety" class="safety-note">
+          <strong>Back up before depositing</strong>
+          <p>
+            You control this wallet's key. Download an encrypted backup in Settings, then reopen the saved file to check
+            it. Save a fresh backup after playing.
+          </p>
+          <p>
+            Recovery can require a 24-hour challenge window, your latest evidence and ETH for network fees. Watch your
+            balance during that window. Winnings depend on available bankroll cash until you lock them in.
+          </p>
+          <button id="deposit-backup" class="button small" type="button">Back up wallet</button>
         </div>
-        <p id="deposit-status" role="status"></p>
-        <button id="add-to-balance" class="button primary full hidden" type="button">Add to balance</button>
-        <a
-          id="faucet-link"
-          class="text-button"
-          href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Get free Sepolia ETH ↗</a
-        >
-        <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
+        <div id="deposit-ready" hidden>
+          <label id="deposit-instructions" for="wallet-address"></label>
+          <div class="address">
+            <code id="wallet-address">Connecting…</code
+            ><button id="copy-address" class="button small" type="button" disabled>Copy</button>
+          </div>
+          <img id="deposit-qr" class="deposit-qr" width="180" height="180" alt="ETH deposit address QR code" />
+          <a id="deposit-link" class="text-button">Open in an Ethereum wallet</a>
+          <p id="deposit-status" role="status"></p>
+          <button id="add-to-balance" class="button primary full hidden" type="button">Add to balance</button>
+          <a
+            id="faucet-link"
+            class="text-button"
+            href="https://cloud.google.com/application/web3/faucet/ethereum/sepolia"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Get free Sepolia ETH ↗</a
+          >
+          <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
+          <p id="deposit-fee" class="help" role="status"></p>
+          <button id="estimate-deposit-fee" class="text-button" type="button">Estimate network fee</button>
+        </div>
         <p id="deposit-note" class="help"></p>
+        <p class="help">
+          Need help with a deposit or withdrawal? <a href="mailto:support@hookedin.com">Contact support</a>. Never send
+          your key, passphrase or backup.
+        </p>
       </section>
       <section class="tab-panel" data-panel="withdraw" hidden>
+        <div id="withdraw-source-field">
+          <label for="withdraw-source">Withdraw from</label
+          ><select id="withdraw-source">
+            <option value="balance">Game balance</option>
+            <option value="address">Deposit address · less network fee</option>
+          </select>
+        </div>
         <div id="withdraw-amount-field">
           <label for="withdraw-amount">Amount (ETH)</label>
           <input
@@ -522,12 +631,15 @@
             type="text"
             inputmode="decimal"
             autocomplete="off"
-            placeholder="All of it"
+            placeholder="Enter an amount"
             spellcheck="false"
           />
         </div>
+        <button id="withdraw-max" class="text-button" type="button">Max</button>
         <label for="withdraw-to">To</label>
         <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
+        <label for="withdraw-password">Wallet passphrase</label>
+        <input id="withdraw-password" type="password" autocomplete="current-password" />
         <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
       </section>

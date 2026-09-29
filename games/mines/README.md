@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Add funds to the game from your wallet with **Add funds**.
+1. Set what the game may spend from your wallet with **Adjust allowance**.
 2. Choose a stake and how many of the 25 tiles are mines, then **Bet** (or press Space).
 3. Pick tiles, or let **Random tile** pick one. A gem raises what you can cash out; a mine ends the round at zero.
 4. **Cash out** (or Space) after any gem, for what the button shows.

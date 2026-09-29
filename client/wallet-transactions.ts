@@ -7,6 +7,7 @@ import { plain, same, hashState, withdrawalRecorded } from '../protocol/protocol
 import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { withLock } from './storage.ts';
+import { depositRemaining, recordPlay } from './play-controls.ts';
 export const TRANSACTION_LIMITS = Object.freeze({
   gas: 2000000n,
   feePerGas: 200000000000n,
@@ -42,6 +43,9 @@ export class WalletTransactions {
       const { address, signer, provider, contract } = this;
       const value = BigInt(overrides.value ?? 0);
       if (value < 0n) throw new Error('Transaction value cannot be negative.');
+      const remaining = method === 'deposit' ? depositRemaining(this.controls) : null;
+      if (remaining !== null && value > remaining)
+        throw new Error('Your play controls limit deposits. ETH stays at your address for withdrawal or recovery.');
       // A deposit of everything the address holds is priced before its value is known, and keeps that price.
       const fees = overrides.gasLimit
         ? {
@@ -88,21 +92,33 @@ export class WalletTransactions {
         ...fees.overrides,
       };
       this.requireDurableState();
-      if (!this.storageKey) return contract[method](...args, pinnedOverrides);
+      // `send` pays ETH straight to the address it names, calling no contract.
+      const recipient = method === 'send' ? getAddress(args[0]) : null;
+      if (!this.storageKey)
+        return recipient
+          ? signer.sendTransaction({ to: recipient, ...pinnedOverrides })
+          : contract[method](...args, pinnedOverrides);
       if (this.transactionIntent) throw new Error('Recover the saved transaction before sending another');
       // Signed, then saved, then broadcast: a lost reply leaves exactly this transaction to look for or send again.
-      const raw = await signer.signTransaction(await contract[method].populateTransaction(...args, pinnedOverrides));
+      const raw = await signer.signTransaction(
+        recipient
+          ? { to: recipient, data: '0x', ...pinnedOverrides }
+          : await contract[method].populateTransaction(...args, pinnedOverrides),
+      );
       this.transactionIntent = {
         method,
         args: plain(args),
         value: String(value),
         nonce,
-        to: await contract.getAddress(),
-        data: contract.interface.encodeFunctionData(method, args),
+        to: recipient ?? (await contract.getAddress()),
+        data: recipient ? '0x' : contract.interface.encodeFunctionData(method, args),
         fees: plain(fees.overrides),
         raw,
         hash: keccak256(raw),
       };
+      // The signed close and its fence are one durable write. An estimate or signing failure leaves the channel
+      // usable; once signed, its evidence must stay frozen even if the transaction is replaced or reorganized out.
+      if (method === 'startClose') this.channels[args[0].base.channelId].closing = true;
       await this.save();
       return provider.broadcastTransaction(raw);
     };
@@ -163,8 +179,8 @@ export class WalletTransactions {
         'Transaction exceeds wallet fee limits (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
       );
   }
-  /** What this account's address can put into its balance: everything but the deposit's own fee, priced once for both
-   * the amount and the transaction. */
+  /** What this account's address can put into its balance within its deposit limit: everything but the deposit's own
+   * fee, priced once for both the amount and the transaction. */
   async depositable(this: CasinoWallet) {
     await this.assertNetwork();
     const [balance, fees] = await Promise.all([
@@ -173,7 +189,13 @@ export class WalletTransactions {
     ]);
     const rest = balance - fees.maxCost;
     this.depositFee = fees.maxCost;
-    return { amount: rest > 0n ? rest : 0n, fee: fees.maxCost, overrides: fees.overrides };
+    const allowance = depositRemaining(this.controls),
+      amount = rest > 0n ? rest : 0n;
+    return {
+      amount: allowance !== null && allowance < amount ? allowance : amount,
+      fee: fees.maxCost,
+      overrides: fees.overrides,
+    };
   }
   /** Move money from this account's address into its channel: the contract opens the channel with the account's first
    * deposit, and the balance takes the money in once the casino has seen it confirmed. With no amount, everything the
@@ -182,14 +204,19 @@ export class WalletTransactions {
     await this.exclusive(async () => {
       if (amount !== undefined) return this.depositLocked(amount);
       const { amount: all, overrides } = await this.depositable();
-      if (!all) throw new Error('Your address holds too little to add after network fees.');
+      if (!all)
+        throw new Error(
+          depositRemaining(this.controls) === 0n
+            ? 'Your play controls limit deposits. ETH stays at your address for withdrawal or recovery.'
+            : 'Your address holds too little to add after network fees.',
+        );
       return this.depositLocked(all, overrides);
     });
     await this.refresh();
     await this.takeDeposits();
   }
-  /** ETH sent to this account's address goes into its balance by itself, all of it, while the wallet `sweeps`. An
-   * amount smaller than its own fee stays where it is. */
+  /** ETH at this address goes into its balance within the deposit limit while the wallet `sweeps`. An amount smaller
+   * than its own fee stays where it is. */
   async sweep(this: CasinoWallet) {
     if (!this.sweeps) return;
     const added = await this.exclusive(
@@ -244,8 +271,8 @@ export class WalletTransactions {
     // Named for the state it follows, so each take-in has an ID of its own.
     return this.perform('taken-in', { amount: waiting }, `taken-in:${c.state.channelId}:${c.state.sequence}`);
   }
-  /** Send everything at this account's address, less the network fee, to another address: how Withdraw empties it
-   * while no balance is open. Under the wallet's lock. Returns the transaction's receipt. */
+  /** Send everything at this account's address, less the network fee, to another address, as a saved transaction like
+   * any other: how Withdraw empties the address. Under the wallet's lock. Returns the withdrawal's record. */
   async sendAll(this: CasinoWallet, recipient: string) {
     await this.assertNetwork();
     const [fees, balance, gasLimit] = await Promise.all([
@@ -259,8 +286,7 @@ export class WalletTransactions {
     const amount = balance - gasLimit * fees.maxFeePerGas;
     if (amount <= 0n) throw new Error('Your address holds too little to withdraw after network fees.');
     this.onProgress('Withdrawing…');
-    const tx = await this.signer.sendTransaction({
-      to: recipient,
+    const tx = await this.sendTransaction('send', [recipient], {
       value: amount,
       gasLimit,
       maxFeePerGas: fees.maxFeePerGas,
@@ -268,21 +294,8 @@ export class WalletTransactions {
       chainId: this.expectedChainId,
       type: 2,
     });
-    const receipt = await tx.wait(this.config.confirmations || 1, 90000);
-    if (!receipt || receipt.status !== 1) throw new Error('The withdrawal did not go through');
-    const saved = {
-      kind: 'withdrawal',
-      operationId: 'tx:' + receipt.hash,
-      amount: String(amount),
-      to: recipient,
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-      blockHash: receipt.blockHash,
-      status: 'confirmed',
-      createdAt: new Date().toISOString(),
-    };
-    await this.save(saved);
-    return saved;
+    const receipt = await this.waitTransaction(tx);
+    return this.history.find(entry => entry.txHash === receipt.hash);
   }
   /** Register this account's channel with the casino, which answers with the state it holds. A channel still at its
    * base is taken up there; one the casino has seen played on needs this wallet's own evidence. */
@@ -323,10 +336,12 @@ export class WalletTransactions {
     return receipt;
   }
   transactionRecord(this: CasinoWallet, receipt: TransactionReceipt, intent: any, status = 'confirmed') {
+    const sent = intent?.method === 'send';
     let amount = status === 'confirmed' ? intent?.value || '0' : '0',
-      to: string | undefined;
+      to: string | undefined = sent ? intent.to : undefined;
     for (const log of receipt.logs || []) {
-      if (status !== 'confirmed' || !same(log.address, intent?.to || this.config.contractAddress)) continue;
+      // ETH sent from the address calls no contract: whatever its recipient logs is not the casino's.
+      if (sent || status !== 'confirmed' || !same(log.address, intent?.to || this.config.contractAddress)) continue;
       try {
         const event = this.reader.interface.parseLog(log);
         // What a claim paid, and where: this account's address, or the one it named.
@@ -342,7 +357,7 @@ export class WalletTransactions {
           ? 'transaction'
           : intent?.method === 'deposit'
             ? 'deposit'
-            : ['claim', 'claimTo'].includes(intent?.method)
+            : ['claim', 'claimTo', 'send'].includes(intent?.method)
               ? 'withdrawal'
               : intent?.method === 'withdraw'
                 ? 'withdrawal-sent'
@@ -355,6 +370,7 @@ export class WalletTransactions {
       amount,
       ...(to && !same(to, this.address) ? { to } : {}),
       txHash: receipt.hash,
+      ...(receipt.fee === undefined ? {} : { fee: String(receipt.fee) }),
       blockNumber: receipt.blockNumber,
       blockHash: receipt.blockHash,
       intent,
@@ -363,7 +379,8 @@ export class WalletTransactions {
     };
   }
   async recordTransaction(this: CasinoWallet, receipt: TransactionReceipt, status = 'confirmed') {
-    await this.save(this.transactionRecord(receipt, this.transactionIntent, status), { transactionIntent: null });
+    const record = this.transactionRecord(receipt, this.transactionIntent, status);
+    await this.save(record, { transactionIntent: null, controls: recordPlay(this.controls, record) });
   }
   transactionRecovery(this: CasinoWallet) {
     return { provider: this.provider, observer: this.observer, confirmations: this.config.confirmations || 1 };
@@ -497,13 +514,14 @@ export class WalletTransactions {
    * account's balance. The balance pays it at once, and the contract makes it a claim once anyone sends the operation
    * and the casino's signature after it, which the casino does straight away: it pays the address what the channel's
    * deposits and house cash cover, and the rest as house cash arrives. One the casino cannot pay now is declined, with
-   * why. With no balance open, everything at this account's address goes to the address. */
-  async withdraw(this: CasinoWallet, to: string, amount?: Integer) {
+   * why. With `fromAddress`, or no balance open, everything at this account's address goes to the address instead,
+   * less the network fee. */
+  async withdraw(this: CasinoWallet, to: string, amount?: Integer, { fromAddress = false } = {}) {
     const recipient = getAddress(to.trim());
     if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
       throw new Error('A withdrawal cannot pay that address: name another.');
     const c = this.channel;
-    if (!c || Number(c.onchain?.status) !== 1 || c.closing) {
+    if (fromAddress || !c || Number(c.onchain?.status) !== 1 || c.closing) {
       const receipt = await this.exclusive(() => this.sendAll(recipient));
       await this.refresh();
       return receipt;
@@ -613,8 +631,8 @@ export class WalletTransactions {
     const result = await this.exclusive(async () => {
       if (!this.channel) throw new Error('No active channel');
       await this.assertNetwork();
-      this.channel.closing = true;
-      await this.save();
+      // Keep ETH added for the close's fees at the address, including after a failed estimate or gas check.
+      if (this.autoDeposit) await this.save(undefined, { autoDeposit: false });
       const tx = await this.sendTransaction('startClose', [this.evidence()]);
       await this.waitTransaction(tx);
       return tx.hash;

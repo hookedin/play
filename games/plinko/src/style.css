@@ -126,10 +126,6 @@ main {
   color: var(--accent);
   opacity: 1;
 }
-/* The bet's quick buttons sit inside its field. */
-.input-wrap:has(.quick) {
-  padding-right: 5px;
-}
 .quick {
   flex: none;
   height: 34px;

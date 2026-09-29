@@ -374,17 +374,16 @@ body[data-mode='bonus'] .reel {
   text-transform: uppercase;
 }
 .meter-value {
-  height: 44px;
+  min-height: 44px;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
-  padding: 11px 14px 0;
+  padding: 11px 14px;
   border-radius: 8px;
   border: 1px solid rgba(242, 196, 90, 0.3);
   background: #0a0f10;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
 }
 .meter-value strong {
   font-size: 18px;
@@ -393,8 +392,8 @@ body[data-mode='bonus'] .reel {
 .meter-value span {
   color: #e8dcc0;
   font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .side-buttons {
   position: relative;
@@ -561,8 +560,8 @@ body[data-mode='bonus'] .reel {
   padding-left: 18px;
 }
 
-/* Below 760px the console's four columns leave the bet field too narrow: it stacks beside the Spin button. */
-@media (max-width: 760px) {
+/* The bet takes a full row when four columns would hide its digits. */
+@media (max-width: 900px) {
   main {
     padding: 12px 12px 16px;
   }
@@ -600,10 +599,13 @@ body[data-mode='bonus'] .reel {
   }
   .spin {
     grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-row: 2;
     align-self: center;
     width: min(90px, 24vw);
     height: min(90px, 24vw);
+  }
+  .stake-field {
+    grid-column: 1 / -1;
   }
   .side-buttons {
     grid-column: 1 / -1;

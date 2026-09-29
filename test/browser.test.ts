@@ -89,5 +89,8 @@ test('storage, recovery, history and backups hold in a real browser, and two tab
     assert.equal(funding.simultaneousFundingSelection, true);
     assert.equal(funding.durableAccounts, 1);
     assert.equal(funding.atomicUpdates, 40);
+    assert.equal(funding.encryptedUpdates, 40);
+    assert.equal(funding.encryptedImports, 2);
+    assert.equal(funding.lockedKeys, true);
   }
 });

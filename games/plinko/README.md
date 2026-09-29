@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Add funds to the game from your wallet with **Add funds**.
+1. Set what the game may spend from your wallet with **Adjust allowance**.
 2. Choose the rows (8, 12 or 16), the risk (low, medium or high) and the bet.
 3. Press **Drop ball**, or Space. Each press queues another ball, up to 20 ahead. **Auto** makes one press drop 10, 50 or 100 balls; the button then reads **Stop** and ends the run after the ball under way.
 

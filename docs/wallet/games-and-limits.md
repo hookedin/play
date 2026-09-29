@@ -36,7 +36,9 @@ commission, the house keeps all of it, and it takes no developer bets. Its key i
 URL, which no published game can share.
 
 An open game fills the page under the top bar, and **Games** in the top bar leads back to the library. While it loads,
-the wallet shows its icon. It starts with a limit of zero, and its bets fail until it is given money.
+the wallet shows its icon. It starts with an allowance of zero, and its bets fail until you grant one. The wallet
+total stays visible in the top bar, while the game labels its spendable portion **Game allowance**. **Adjust
+allowance** opens the wallet dialog; it does not make another external deposit.
 
 ## Giving a game money
 
@@ -66,6 +68,27 @@ The limit caps what the game may risk; it moves no money:
   the game.
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
   has already committed.
+
+## Play limits and breaks
+
+Under Settings → **Play limits and breaks**, set a daily deposit limit, a daily loss limit and a session length, or
+start a break of 15 minutes, 24 hours, 7 days or 30 days. These controls cover the selected account in this browser,
+across its games and tabs. They are local controls, not an account-wide block enforced by the casino: another
+browser, browser profile or account can play independently. Clearing browser storage also removes local controls.
+
+- Daily usage resets at 00:00 UTC. Deposit limits cover ETH this browser sends from your deposit address into its
+  channel. Excess ETH stays at the address for recovery fees or withdrawal: choose **Deposit address** in the Withdraw
+  tab. Incoming transfers or deposits sent by somebody else cannot be blocked by this browser.
+- Each new bet must fit within the remaining loss allowance. A casino bet counts its loss after settlement; wins do
+  not subtract losses already counted. Developer bets and payments count their full stake, even if a developer later
+  pays or refunds a bet.
+- A session starts with a bet or payment. Once its time is up, new play waits for a 15-minute break; reopening the page
+  does not restart the session. A new session can start after that break.
+- Lower limits apply immediately. An increase or removal waits 24 hours. A timed break cannot be shortened through
+  these controls. Deposits and new play pause; withdrawals, recovery and settling an operation already signed remain
+  available.
+
+A game's allowance still limits that game's spending. It does not substitute for these daily and session controls.
 
 ## One game at a time
 
