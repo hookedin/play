@@ -90,13 +90,14 @@ through every withdrawal until a close starts; its next deposit then opens the n
 ### Checkpoint
 
 A channel's state at a sequence number: the hash of the state before it, the hash of what led to it, the balance, how
-much of the channel's deposits the balance has taken in, and how much it has paid out in withdrawals and transfers. The
-casino signs each; the player countersigns.
+much of the channel's deposits the balance has taken in, and how much it has paid out in withdrawals. The casino signs
+each; the player countersigns.
 
 ### Claim
 
-What a finalized channel is owed on-chain: principal up to the channel's [principal](#principal), and winnings above
-it, paid first in, first out. See [closing and claims](../wallet/closing-and-claims.md).
+What the contract owes on-chain: a finalized channel's close, under the channel's ID, or a withdrawal, under its own.
+Its principal comes out of the channel's [principal](#principal), and its winnings above it are paid first in, first
+out. See [closing and claims](../wallet/closing-and-claims.md).
 
 ### Collapse
 
@@ -116,10 +117,10 @@ developer bet. See [counterparties](signed-messages.md#counterparties).
 
 ### Deposit
 
-ETH paid into an account's current channel with the contract's `deposit`, by anyone, or by a [transfer](#transfer):
-the wallet deposits by itself the ETH that arrives at the deposit address. The account's first deposit opens its
-channel, and once a close starts, its next deposit opens the next. The balance takes each deposit in with a deposit
-operation, kind 4, once the casino has seen it confirmed. See [getting started](../wallet/getting-started.md#deposit).
+ETH paid into an account's current channel with the contract's `deposit`, by anyone: the wallet deposits by itself the
+ETH that arrives at the deposit address. The account's first deposit opens its channel, and once a close starts, its
+next deposit opens the next. The balance takes each deposit in with a deposit operation, kind 4, once the casino has
+seen it confirmed. See [getting started](../wallet/getting-started.md#deposit).
 
 ### Deposit address
 
@@ -149,7 +150,7 @@ its own. See [earnings](../games/earnings.md).
 
 ### Evidence
 
-The proof of a channel's state that settles it on-chain, or has a withdrawal paid: the channel's [base](#base) or a
+The proof of a channel's state that settles it on-chain, or records a withdrawal: the channel's [base](#base) or a
 jointly signed checkpoint, alone or with a step after it. See [evidence](signed-messages.md#evidence).
 
 ### Game key
@@ -173,9 +174,9 @@ of one spin. The player signs it, and bet history shows a group as one row.
 
 ### Lock in
 
-A [transfer](#transfer) of the whole balance into the account's own channel, which the wallet's **Lock in my balance**
-asks for: the channel's [principal](#principal) pays back what it covers and house cash the rest, the winnings, so all
-of the balance comes back in as deposits the contract holds. See [withdrawals](contract.md#withdrawals).
+A [withdrawal](#withdraw) of the whole balance to the contract itself, which the wallet's **Lock in my balance** asks
+for: the channel's [principal](#principal) pays back what it covers and house cash the rest, the winnings, and all of it
+goes into the account's channel as deposits the contract holds. See [withdrawals](contract.md#withdrawals).
 
 ### Meta
 
@@ -184,7 +185,7 @@ it; the casino keeps it and never reads it.
 
 ### Operation
 
-A signed change to a channel's balance: a casino bet, a debit, a credit, a deposit, a withdrawal or a transfer. See
+A signed change to a channel's balance: a casino bet, a debit, a credit, a deposit or a withdrawal. See
 [channels](../overview/how-it-works.md#channels).
 
 ### Operation ID
@@ -204,9 +205,9 @@ A debit a game asks for to the bankroll: a fixed amount, on no round, with no co
 
 ### Principal
 
-The deposits the contract holds for a channel, its `principal`: every deposit as it arrives, less what withdrawals were
-paid out of them. The owner cannot withdraw it; withdrawals are paid out of it first, and a close's claim is protected
-principal up to it. See [withdrawals](contract.md#withdrawals).
+The deposits the contract holds for a channel, its `principal`: every deposit as it arrives, less what withdrawals took
+of them. The owner cannot withdraw it; withdrawals are paid out of it first, and a close's claim is protected principal
+up to it. See [withdrawals](contract.md#withdrawals).
 
 ### Prize
 
@@ -255,12 +256,6 @@ is released when the game closes. See [games and limits](../wallet/games-and-lim
 
 What a bet pays to enter.
 
-### Transfer
-
-Moving part or all of the balance into another account's balance: an operation, kind 6, naming that account, which the
-balance pays at once and the contract deposits into the account's current channel, opening one if it has none. See
-[withdrawals](contract.md#withdrawals).
-
 ### Uname
 
 The name the casino derives for every player from an address it never publishes, written `~3byt9ocwnnzaxanmiz3stocj`.
@@ -274,7 +269,8 @@ A process that watches one channel from its exported evidence and challenges a s
 ### Withdraw
 
 Moving part or all of the balance to an address the player names: an operation, kind 5, naming the address, which the
-balance pays at once. The contract pays it when anyone sends the operation and the casino's signature of the balance
-after it, as the casino does straight away: out of the channel's [principal](#principal) first and house cash for the
-rest, under the withdrawal's ID, the hash of the operation, which anyone can look up. The channel stays open with the
-rest. See [getting started](../wallet/getting-started.md#withdraw).
+balance pays at once. Another account's address puts it into that account's balance. The contract makes it a
+[claim](#claim) under the withdrawal's ID, the hash of the operation, when anyone sends the operation and the casino's
+signature of the balance after it, as the casino does straight away, and pays at once what the channel's
+[principal](#principal) and house cash cover. The channel stays open with the rest. See
+[getting started](../wallet/getting-started.md#withdraw).

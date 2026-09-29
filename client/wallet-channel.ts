@@ -113,7 +113,7 @@ export class ChannelClient extends WalletTransactions {
     if (kind !== 'taken-in' && this.pending?.kind === 'taken-in') await this.takeDeposits();
     const intent = {
       // A developer bet, a payment and an investment are debits, a payout collected is a credit, money deposited into
-      // the channel is taken in with a deposit, and a withdrawal or a transfer names its recipient.
+      // the channel is taken in with a deposit, and a withdrawal names its recipient: a lock-in is one to the contract.
       kind:
         (
           {
@@ -123,8 +123,7 @@ export class ChannelClient extends WalletTransactions {
             invest: KIND.debit,
             bank: KIND.debit,
             withdrawal: KIND.withdrawal,
-            transfer: KIND.transfer,
-            'lock-in': KIND.transfer,
+            'lock-in': KIND.withdrawal,
             divest: KIND.credit,
             earnings: KIND.credit,
             'developer-bet-payout': KIND.credit,
@@ -332,12 +331,10 @@ export class ChannelClient extends WalletTransactions {
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null,
       banked =
         kind === 'bank' && !rejected ? this.bankStatement(response.statement, hashOperation(this.domain, op)) : null,
-      // A developer bet is known by the hash of the operation that placed it, and a withdrawal or transfer is paid under it.
+      // A developer bet is known by the hash of the operation that placed it, and a withdrawal is a claim under it.
       developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null,
       withdrawal =
-        ['withdrawal', 'transfer', 'lock-in'].includes(kind) && !rejected
-          ? hashOperation(this.domain, op).toLowerCase()
-          : null;
+        ['withdrawal', 'lock-in'].includes(kind) && !rejected ? hashOperation(this.domain, op).toLowerCase() : null;
     const receipt = plain({
       kind,
       operationId,
@@ -361,7 +358,7 @@ export class ChannelClient extends WalletTransactions {
       amount: rejected ? '0' : op.amount,
       details,
       ...(developerBet ? { bet: developerBet } : {}),
-      // Where it goes: the contract pays it under the withdrawal's ID, once anyone sends the proof.
+      // Where it goes: the contract records it as a claim under the withdrawal's ID once anyone sends the proof.
       ...(withdrawal ? { withdrawal, to: getAddress(op.recipient), paid: false } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
       commission,
@@ -629,14 +626,14 @@ export class ChannelClient extends WalletTransactions {
 
   // --- The bankroll fund -------------------------------------------------------------------
 
-  /** Invest in the casino's bankroll: a transfer from this channel that buys shares at the going
+  /** Invest in the casino's bankroll: a debit from this channel that buys shares at the going
    * price. The money becomes the casino's to bet with. A share is the casino's promise of a part of
    * the bankroll, not protected principal: the wallet can prove what it holds, never what it is worth. */
   async invest(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
     return this.perform('invest', { amount, source: FUND_ID }, operationId);
   }
   /** The statement for an investment this wallet just made. It is believed as far as it can be
-   * checked: the casino's signature, this exact transfer, and the shares its stated price implies.
+   * checked: the casino's signature, this exact debit, and the shares its stated price implies.
    * The checkpoint it came with is already signed and stands either way, so a statement that fails
    * is kept out and shown as an alert instead. */
   adoptStatement(this: CasinoWallet, statement: any, op: Operation) {

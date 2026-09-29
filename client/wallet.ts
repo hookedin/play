@@ -41,7 +41,7 @@ export interface GameIntent {
   /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
   developer: string;
 }
-import { Contract, Wallet, getAddress } from 'ethers';
+import { Contract, Wallet, ZeroAddress, getAddress } from 'ethers';
 import {
   domain,
   canonicalJSON,
@@ -72,7 +72,7 @@ import { fundingAccounts, readFundingAccounts } from './funding-accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
 import { encryptBackup, decryptBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
-import { channelRecord, picked } from './wallet-transactions.ts';
+import { channelRecord } from './wallet-transactions.ts';
 import { GameSessions } from './wallet-games.ts';
 export const HISTORICAL_CHANNEL_BATCH = 16;
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
@@ -429,7 +429,7 @@ export class CasinoWallet extends GameSessions {
   /** What a closing channel's latest saved state is owed beyond what its close proposes: what a challenge would win. */
   atRisk(closing: WalletChannel) {
     try {
-      const due = owed(closing.state, closing.onchain.deposited, closing.onchain.paidOut);
+      const due = owed(closing.state, closing.onchain.deposited, closing.onchain.claimed);
       return due > BigInt(closing.onchain.closingBalance) ? due - BigInt(closing.onchain.closingBalance) : 0n;
     } catch {
       return 0n;
@@ -486,10 +486,14 @@ export class CasinoWallet extends GameSessions {
     const outstanding = new Set(
       Object.values(changes.developerBets ?? this.developerBets).map((bet: any) => bet.operationId),
     );
+    // Past the newest 100, a receipt stays while more is to come of it: a developer bet not settled, and a withdrawal
+    // not paid or returned.
+    const open = (entry: any) =>
+      outstanding.has(entry.operationId) || (entry.withdrawal && !entry.paid && !entry.returned);
     const history = receipt
       ? [receipt, ...this.history.filter(r => r.operationId !== receipt.operationId)]
           .sort((a, b) => Date.parse(b.createdAt ?? '') - Date.parse(a.createdAt ?? ''))
-          .filter((entry, index) => index < 100 || outstanding.has(entry.operationId))
+          .filter((entry, index) => index < 100 || open(entry))
       : this.history;
     let record;
     try {
@@ -595,9 +599,22 @@ export class CasinoWallet extends GameSessions {
       // What the latest saved state is owed beyond what the close proposes.
       balanceAtRisk: closing ? String(this.atRisk(closing)) : '0',
       needsChallenge: Boolean(closing && BigInt(closing.state.sequence) > BigInt(closing.onchain.closingSequence)),
-      claims: Object.values(this.channels)
-        .filter(v => v.claim)
-        .map(v => ({ channelId: v.state.channelId, observedAt: v.observedAt, ...v.claim })),
+      // What the contract still owes: closed balances, under their channels, and withdrawals it has not paid in full.
+      claims: [
+        ...Object.values(this.channels)
+          .filter(v => v.claim)
+          .map(v => ({ id: v.state.channelId, channelId: v.state.channelId, observedAt: v.observedAt, ...v.claim })),
+        ...this.history
+          .filter(entry => entry.withdrawal && entry.recorded && !entry.paid)
+          .map(entry => ({
+            id: entry.withdrawal,
+            to: entry.to,
+            amount: entry.amount,
+            paid: String(BigInt(entry.amount) - BigInt(entry.owed)),
+            winningsRemaining: entry.winningsRemaining,
+            collectable: entry.collectable,
+          })),
+      ],
       chainId: String(this.expectedChainId),
       // Commission this account's games have earned, as the casino reports it to this channel.
       developerEarnings: this.developerEarnings,
@@ -654,10 +671,17 @@ export class CasinoWallet extends GameSessions {
           this.observer.contractRead(this.reader, 'claims', [key], block),
           this.observer.contractRead(this.reader, 'collectable', [key], block),
         ]);
-        claim = {
-          ...picked(terms, ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining']),
-          collectable: String(collectable),
-        };
+        // The claim is for what the close was owed, on the checkpoint it finalized.
+        const remaining = BigInt(terms.protectedRemaining) + BigInt(terms.winningsRemaining);
+        claim = plain({
+          beneficiary: terms.beneficiary,
+          stateHash: onchain.closingHash,
+          amount: onchain.closingBalance,
+          paid: BigInt(onchain.closingBalance) - remaining,
+          protectedRemaining: terms.protectedRemaining,
+          winningsRemaining: terms.winningsRemaining,
+          collectable,
+        });
       }
       return [key, onchain, claim];
     });
@@ -1027,7 +1051,10 @@ export class CasinoWallet extends GameSessions {
         operator: this.operator,
         opening: c.opening,
         evidence: plain(this.evidence(c)),
-        claim: c.claim,
+        // The account's withdrawals the contract may still owe something: each is collected under its own ID.
+        withdrawals: record.history
+          .filter((entry: any) => entry.withdrawal && !entry.paid && !entry.returned)
+          .map((entry: any) => entry.withdrawal),
       });
     });
   }
@@ -1059,6 +1086,30 @@ export class CasinoWallet extends GameSessions {
       const registered = await this.reader.channels(channelId);
       if (!Number(registered.status) || !same(registered.player, this.address))
         throw new Error('Recovery evidence is not for a channel of this account on this contract');
+      // The bundle's withdrawals the contract still owes this account something join the activity, as ones this wallet
+      // sent do, for the chain to say how each stands. Another account's claim is refused; one that is no claim, or
+      // paid in full, is left out.
+      const known = new Set(this.history.map(entry => entry.withdrawal)),
+        withdrawals = [];
+      for (const id of new Set((bundle.withdrawals ?? []).map((id: string) => id.toLowerCase()))) {
+        if (known.has(id)) continue;
+        const claim = await this.reader.claims(id);
+        if (same(claim.beneficiary, ZeroAddress)) continue;
+        if (!same(claim.beneficiary, this.address))
+          throw new Error("The bundle names a withdrawal that is another account's claim");
+        const owed = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
+        if (owed)
+          withdrawals.push({
+            kind: same(claim.recipient, this.config.contractAddress) ? 'lock-in' : 'withdrawal',
+            operationId: 'withdrawal:' + id,
+            status: 'signed',
+            withdrawal: id,
+            to: claim.recipient,
+            amount: String(owed),
+            paid: false,
+            createdAt: new Date().toISOString(),
+          });
+      }
       const evidence = bundle.evidence;
       this.channels[channelId] = {
         ...old,
@@ -1078,6 +1129,7 @@ export class CasinoWallet extends GameSessions {
           checked.state,
         );
       if (!this.channelId || this.channelId === channelId) this.channelId = channelId;
+      this.history = [...withdrawals, ...this.history];
       await this.save();
     });
     await this.refresh();

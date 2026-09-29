@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { ContractFactory, id, Wallet } from 'ethers';
-import { anvil, deployment, signedIncrease, open, step, assessBinary } from '../testing/contract.ts';
-import { baseState, checkpointEvidence, channelId, STATE_TYPES } from '../protocol/protocol.ts';
+import { anvil, deployment, signedIncrease, open, step, assessBinary, claimOf } from '../testing/contract.ts';
+import { baseState, checkpointEvidence, channelId, hashOperation, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import release from '../client/contract-artifact.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
@@ -28,7 +28,7 @@ async function settle(f: any, env: any, ch: any) {
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
 }
-async function invariants(env: any, f: any, records: any) {
+async function invariants(env: any, f: any, records: any, withdrawals: string[] = []) {
   let principal = 0n,
     debt = 0n,
     covered = 0n;
@@ -37,7 +37,7 @@ async function invariants(env: any, f: any, records: any) {
       const channelId = ch.state.channelId;
       const [c, claim, collectable] = await Promise.all([
         f.contract.channels(channelId),
-        f.contract.claims(channelId),
+        claimOf(f, channelId),
         f.contract.collectable(channelId),
       ]);
       principal += c.status < 3n ? c.principal : claim.protectedRemaining;
@@ -50,6 +50,15 @@ async function invariants(env: any, f: any, records: any) {
       return { ch, c, claim };
     }),
   );
+  // A withdrawal is a claim too, under its operation's hash.
+  for (const id of withdrawals) {
+    const [claim, collectable] = await Promise.all([f.contract.claims(id), f.contract.collectable(id)]);
+    principal += claim.protectedRemaining;
+    debt += claim.winningsRemaining;
+    assert.ok(collectable >= claim.protectedRemaining);
+    assert.ok(collectable <= claim.protectedRemaining + claim.winningsRemaining);
+    covered += BigInt(collectable) - BigInt(claim.protectedRemaining);
+  }
   const [p, unpaid, cash, withdrawal] = await Promise.all([
     f.contract.protectedPrincipal(),
     f.contract.unpaidWinnings(),
@@ -71,6 +80,7 @@ for (const initialSeed of [1, 4294967295])
     t.after(() => env.close());
     const f = await deployment(env);
     const records = [],
+      withdrawals: string[] = [],
       active = new Map();
     let seed = initialSeed;
     const random = (n: any) => {
@@ -121,24 +131,23 @@ for (const initialSeed of [1, 4294967295])
           } else await transition(f, ch, 'checkpoint', BigInt(1 + random(500)));
         } else if (choice === 3) await (await f.contract.connect(player).startClose(ch.base)).wait();
         else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
-          // A withdrawal to an address, or a lock-in into the account's own channel, which anyone has paid: out of
-          // the channel's deposits first and house cash for the rest, all or nothing. One house cash cannot pay is at
-          // times left unpaid, for the close to return.
+          // A withdrawal, to the account's address, another, or the contract itself as a lock-in, which anyone has
+          // made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest owed in
+          // the winnings queue. One is at times never sent, for the close to return.
           const amount = BigInt(1 + random(Number(ch.state.balance))),
-            lockIn = random(2) === 1,
+            contract = await f.contract.getAddress(),
+            recipient = [player.address, Wallet.createRandom().address, contract][random(3)],
             before: bigint = (await f.contract.channels(ch.state.channelId)).principal,
-            paid = await transition(f, ch, lockIn ? 6 : 5, amount, {
-              recipient: lockIn ? player.address : Wallet.createRandom().address,
-            });
-          const short = amount - (amount < before ? amount : before) - (await f.contract.withdrawableHouse());
-          if (short > 0n) {
-            await assert.rejects(f.contract.withdraw(paid));
-            if (random(2)) await (await f.contract.fundBankroll({ value: short })).wait();
-          }
-          if (short <= 0n || (await f.contract.withdrawableHouse()) >= short) {
-            await (await f.contract.connect(env.wallets[8]).withdraw(paid)).wait();
-            const after = (await f.contract.channels(ch.state.channelId)).principal;
-            assert.equal(after, before - (amount < before ? amount : before) + (lockIn ? amount : 0n));
+            sent = await transition(f, ch, 5, amount, { recipient });
+          if (random(4)) {
+            await (await f.contract.connect(env.wallets[8]).withdraw(sent)).wait();
+            const claimId = hashOperation(f.d, sent.step.operation),
+              claim = await f.contract.claims(claimId),
+              after = (await f.contract.channels(ch.state.channelId)).principal;
+            withdrawals.push(claimId);
+            // What a lock-in was paid went into the channel as deposits.
+            const locked = recipient === contract ? amount - claim.protectedRemaining - claim.winningsRemaining : 0n;
+            assert.equal(after, before - (amount < before ? amount : before) + locked);
           }
         } else if (choice === 4)
           // Somebody else deposits into the open channel.
@@ -159,7 +168,7 @@ for (const initialSeed of [1, 4294967295])
           }
         }
       }
-      const rows = await invariants(env, f, records);
+      const rows = await invariants(env, f, records, withdrawals);
       for (const [who, ch] of active) if (rows.find(row => row.ch === ch).c.status === 3n) active.delete(who);
     }
   });
@@ -281,7 +290,7 @@ test('gas profile covers full-width evidence, a long winnings queue, forced ETH 
   );
   assert.equal((await f.contract.claims(message.channelId)).protectedRemaining, 100n);
   await (await (receiver as any).redirect(message.channelId, env.wallets[5].address)).wait();
-  assert.equal((await f.contract.claims(message.channelId)).paid, 100n);
+  assert.equal((await claimOf(f, message.channelId)).paid, 100n);
   for (const name of ['claimBehind71', 'challengeWide', 'finalizeGasBurner'])
     assert.ok((BigInt((gas as any)[name]) * 12n) / 10n < 2000000n, name + ' exceeds operational gas budget');
   fs.mkdirSync('build', { recursive: true });

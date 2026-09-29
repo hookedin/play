@@ -34,8 +34,8 @@ confirmed on-chain. Until then a close adds it to what the channel is owed, so t
 **Sign.** Every change to the balance is an **operation** that the account signs, answered by a **checkpoint** that
 the casino signs: the channel's sequence number, the hash of the state before it, a hash of the operation that led to
 it, the balance after it, how much of the channel's deposits the balance has taken in, and how much it has paid out in
-withdrawals and transfers. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and
-saves it before the game hears anything. There are six kinds of operation, and the contract knows no others:
+withdrawals. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and saves it before
+the game hears anything. There are five kinds of operation, and the contract knows no others:
 
 | Kind         | Effect on the balance       | Used for                                                                                          |
 | ------------ | --------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -44,11 +44,10 @@ saves it before the game hears anything. There are six kinds of operation, and t
 | 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals |
 | 4 deposit    | + amount                    | Taking in money deposited into the open channel                                                   |
 | 5 withdrawal | − amount                    | Withdrawals, which the contract pays to the address the operation names                           |
-| 6 transfer   | − amount                    | Putting money into another account's balance, or locking in your own                              |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in
 its **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino
-check and keep them. A withdrawal or a transfer names whom it pays in the operation itself, as its `recipient`.
+check and keep them. A withdrawal names whom it pays in the operation itself, as its `recipient`.
 [Signed messages](../reference/signed-messages.md) has every field.
 
 **Settle.** A channel settles on-chain only when it closes. The contract accepts the latest balance both sides signed,
@@ -57,8 +56,9 @@ or the channel's base, either alone or followed by one operation the account aut
 evidence ([withdrawing](#withdrawing)).
 
 **Lock in.** The channel's principal is what the contract protects: withdrawals and a close are paid out of it first.
-What the balance holds above it, its winnings, is owed from the shared bankroll. **Lock in my balance** transfers the
-whole balance back into the channel, the bankroll paying in the winnings, so that all of it becomes principal.
+What the balance holds above it, its winnings, is owed from the shared bankroll. **Lock in my balance** withdraws the
+whole balance to the contract itself, the bankroll paying out the winnings, and the contract puts it into your channel
+as deposits, so that all of it becomes principal.
 
 ## Rounds
 
@@ -144,18 +144,19 @@ Anyone with a balance can move money from it into the bankroll and hold shares o
 
 ## Withdrawing
 
-A withdrawal takes part or all of the balance out, and the channel stays open. It is an operation that names the
-address to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play
-goes on from the lower balance. The operation and the casino's signature after it, which your receipt keeps, are what
-the contract pays on, with `withdraw`: anyone may send it, and the casino does straight away. The contract pays each
-withdrawal once, under the hash of its operation, and anyone can look up whether it has. A **transfer** puts the amount
-into another account's balance instead: the contract deposits it into that account's current channel, opening one if it
-has none, which is how you fund a friend's balance.
+A withdrawal takes part or all of the balance out, and the channel stays open. It is an operation that names the address
+to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play goes on
+from the lower balance. The operation and the casino's signature after it, which your receipt keeps, are what the
+contract records and pays it on, with `withdraw`: anyone may send it, and the casino does straight away. Another
+account's address is its deposit address, whose wallet puts what arrives there into its balance: that is how you fund a
+friend's balance.
 
-The contract pays out of the channel's deposits first and house cash for the rest, all or nothing. Short of house cash
-it pays nothing yet: the casino sends it again on every check of the chain, and you can with **Pay it now**. The casino
-takes a withdrawal on only when the channel's deposits and the house cash it can count on cover it, and otherwise
-declines it, leaving the balance unchanged. What a withdrawal of winnings trusts the casino for is in the
+The contract makes each withdrawal a claim once, under the hash of its operation, and pays it out of the channel's
+deposits first. What it takes beyond them is winnings, which join the queue that house cash pays first in, first out
+([closing and claims](#closing-and-claims)): what house cash reaches is paid at once too, and anyone can collect the
+rest later. The casino takes a withdrawal on only when the channel's deposits and the house cash it can count on cover
+all of it, and otherwise declines it, leaving the balance unchanged, so a withdrawal is normally paid in full the moment
+it is sent. What a withdrawal of winnings trusts the casino for is in the
 [trust model](trust-model.md#what-you-trust-the-casino-for).
 
 ## Closing and claims
@@ -166,8 +167,8 @@ replace the close's state before the deadline, and the deadline never moves. Aft
 closes a channel nobody has played on for 7 days whose principal is more than it is owed, finishes the close and
 collects it to the player's address, so what the player lost comes back to the bankroll.
 
-A close is owed the state's balance, plus any deposit it has not taken in and any withdrawal it made that the contract
-has not paid, less any the contract paid that it did not make. Finalizing records that as a **claim**. Up to the
+A close is owed the state's balance, plus any deposit it has not taken in and what it withdrew that is not yet a claim,
+less what the channel's claims took that it did not withdraw. Finalizing records that as a **claim**. Up to the
 channel's principal, it is protected: the contract returns `min(owed, principal)`, so losses reduce it. Anything above
 is **winnings**, owed from the shared bankroll and paid first in, first out as cash arrives. Collecting is a separate
 transaction. [Closing and claims](../wallet/closing-and-claims.md) walks through each step.

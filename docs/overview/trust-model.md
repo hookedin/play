@@ -14,24 +14,24 @@ game, its developer and a bankroll fund share each carry trust of their own, set
 - **Your deposits are protected up to your final balance.** The contract holds every deposit as it arrives, as your
   channel's principal, and the owner cannot withdraw it. Withdrawals are paid out of it first, and a close pays
   `min(owed, principal)` out of it in full. Only winnings above your deposits depend on the shared bankroll.
-- **Withdrawals are paid by the contract.** A withdrawal or a transfer is an operation your account signs. With the
-  casino's signature of the balance after it, which your receipt keeps, anyone can have the contract pay it, once, by
-  the hash of the operation: out of your deposits first and house cash for the rest, all or nothing. The casino sends it
-  at once, and you can send it yourself, until the channel's close is final; one never paid comes back to you with the
-  close.
+- **Withdrawals are paid by the contract.** A withdrawal is an operation your account signs. With the casino's signature
+  of the balance after it, which your receipt keeps, anyone can have the contract record it, once, as a claim under the
+  hash of the operation, until the channel's close is final. The contract pays at once what your deposits and house cash
+  cover, and owes the rest, for anyone to collect; a recipient that refuses the payment leaves all of it owed. The
+  casino sends it at once, and you can send it yourself; one never recorded comes back to you with the close.
 - **Losses are real.** A close is owed your final balance, and the deposits above it return to house cash. Nothing
   refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no
   signature, either alone or followed by one operation your account authorized and the casino signed, settled by the
   secret and seed that hash to what the bet named. A deposit that balance has not taken in is added to it, and so is a
-  withdrawal it made that the contract never paid; one the contract paid that it did not make is taken off. Every
-  signature is bound to the chain and to this contract.
+  withdrawal it made that never became a claim; one it did not make that became a claim is taken off. Every signature is
+  bound to the chain and to this contract.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
   claim, with no casino server involved. The challenge window is a fixed 24 hours, and a challenge never extends it. A
   close moves your account to its next channel at once, so a deposit opens a new balance while the old one closes.
-- **Winnings are recorded, and paid in order.** Finalizing records unpaid winnings permanently. The contract pays them
-  first in, first out as cash arrives, neither a later claim nor a withdrawal can take cash ahead of an earlier claim,
-  and the owner cannot withdraw them.
+- **Winnings are recorded, and paid in order.** Finalizing a close, or recording a withdrawal, records its unpaid
+  winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
+  of an earlier one, and the owner cannot withdraw them.
 - **The contract is fixed.** It cannot be upgraded or paused, and its owner is set once, by deploying it.
 
 [The contract reference](../reference/contract.md) has every function and the conditions it checks.
@@ -42,13 +42,14 @@ game, its developer and a bankroll fund share each carry trust of their own, set
   settlement signer. It controls the house bankroll, including through signed winning balances for accounts it controls:
   the bankroll is trusted to it, not protected from it.
 - **Paying winnings.** What your balance holds above your deposits, your winnings, is an unsecured claim on the shared
-  bankroll: a withdrawal of it waits for house cash, and a close's winnings wait in the queue. Neither replenishment nor
-  a payout deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is
-  covered. This is a deliberate choice of capital efficiency ([architecture](architecture.md#money-and-authority)).
+  bankroll: a withdrawal's winnings and a close's wait in the queue for house cash. Neither replenishment nor a payout
+  deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is covered. This
+  is a deliberate choice of capital efficiency ([architecture](architecture.md#money-and-authority)).
 - **Withdrawals beyond your deposits.** The casino takes on a withdrawal only when your deposits and the house cash it
-  can count on cover it, and declines it otherwise. Until one beyond your deposits is paid, all of it waits for house
-  cash, its deposit part too. If the channel's close becomes final first, the close returns it to you, not its
-  recipient: its deposit part as protected principal, and the rest, like any winnings, in the queue.
+  can count on cover it, and declines it otherwise, so a withdrawal is normally paid in full the moment it is sent. What
+  house cash does not cover by then waits in the queue like any winnings. One nobody sends before the channel's close is
+  final comes back with the close, to you and not its recipient: its deposit part as protected principal, and the rest,
+  like any winnings, in the queue.
 - **Admitting bets.** The casino sizes each casino bet against its bankroll with a Kelly rule and sets its commission.
   That is its own risk management: the contract does not enforce it and the wallet does not check it.
 - **Completing bets.** The casino can decline a casino bet, go offline or never answer, with no protocol penalty. A
@@ -69,11 +70,11 @@ game, its developer and a bankroll fund share each carry trust of their own, set
   of every account you fund: a key alone cannot rebuild an off-chain balance
   ([backups and recovery](../wallet/backups-and-recovery.md)).
 - **Take out or lock in what you win.** What your balance holds above your deposits is a claim on the shared bankroll
-  until the contract pays it. Withdraw it, or press **Lock in my balance**, under Wallet → Recovery: a transfer of all
-  of your balance into your own channel, the bankroll paying in your winnings, so that the contract holds all of it as
-  deposits. Either needs house cash for the winnings, and the casino declines it without.
+  until the contract pays it. Withdraw it, or press **Lock in my balance**, under Wallet → Recovery: a withdrawal of all
+  of your balance to the contract itself, the bankroll paying out your winnings, which the contract puts into your
+  channel as deposits it holds. Either needs house cash for the winnings, and the casino declines it without.
 - **Keep ETH for the exit.** The exit the contract enforces is a close. Closing, challenging, finalizing and collecting
-  are transactions, as is paying a withdrawal yourself, and your account pays their network fees from the deposit
+  are transactions, as is sending a withdrawal yourself, and your account pays their network fees from the deposit
   address, where the wallet keeps nothing back. To close without the casino, turn off **Add ETH that arrives at my
   deposit address to my balance** in Settings and send ETH there first; while a close is under way, what arrives stays
   at the address. Anyone can send a challenge, a finalization or a collection for you.
@@ -141,7 +142,7 @@ The wallet checks:
 - every rejection, and the round it reveals;
 - developer settlements, share statements, bank statements and the fund's quote, by their signatures and what
   they refer to;
-- whether the contract has paid each withdrawal and transfer, by its ID;
+- whether the contract has recorded each withdrawal, by its ID, and what it still owes of it;
 - game URLs and every bridge request.
 
 It takes on the casino's word: commission, the bankroll figure, the fund's equity and total shares, the developer

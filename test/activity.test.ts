@@ -99,3 +99,28 @@ test('diagnostic JSON handles bigint, malformed payloads and explicit preview tr
   assert.match(activityJSON(long, 30), /truncated at 30 characters/);
   assert.deepEqual(JSON.parse(activityJSON(long)), long, 'Saved receipt JSON is never truncated by default');
 });
+
+test('a withdrawal reads as paid once paid, and a lock-in as locking in until the contract has put it in', () => {
+  const sent = {
+    kind: 'withdrawal',
+    status: 'signed',
+    withdrawal: '0x' + 'a'.repeat(64),
+    to: '0x3333333333333333333333333333333333333333',
+    amount: '1500',
+    balance: '0',
+  };
+  const paid = receiptSummary({ ...sent, recorded: true, paid: true, owed: '0' });
+  assert.deepEqual([paid.title, paid.status, paid.amountLabel], ['Withdrawn', 'Paid on-chain', 'Paid out']);
+  assert.match(paid.description!, /The contract has paid it\. Balance 0\.0 ETH/);
+  const lockIn = { ...sent, kind: 'lock-in' },
+    waiting = receiptSummary(lockIn),
+    locked = receiptSummary({ ...lockIn, recorded: true, paid: true, owed: '0' });
+  assert.deepEqual([waiting.title, waiting.status, waiting.tone], ['Locking in', 'Waiting to be paid', 'warning']);
+  assert.deepEqual(
+    [locked.title, locked.status, locked.amountLabel, locked.tone],
+    ['Balance locked in', 'In as deposits', 'Locked in', 'positive'],
+  );
+  // One read from a recovery bundle has no balance to show.
+  const { balance, ...imported } = { ...sent, recorded: true, owed: '1500' };
+  assert.doesNotMatch(receiptSummary(imported).description!, /Balance/);
+});

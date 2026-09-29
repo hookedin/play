@@ -60,8 +60,8 @@ export class DisputeWorker {
         const { state } = verifyEvidence(bundle);
         const stateHash = hashState(domain(bundle.chainId, bundle.casino), state);
         if (Number(c.status) === 3) {
-          const claim = await this.observer.contractRead(this.contract, 'claims', [state.channelId], observation.block);
-          if (!same(claim.stateHash, stateHash))
+          // The channel finalized on its closing checkpoint.
+          if (!same(c.closingHash, stateHash))
             this.alerts.push({
               channelId: state.channelId,
               severity: 'critical',

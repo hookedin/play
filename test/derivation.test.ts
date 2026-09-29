@@ -53,7 +53,7 @@ test('the contract and deriveState agree on every operation kind and invalid enc
     );
     await assert.rejects(f.contract.supported(evidence));
   };
-  // Valid transitions: a bet, a debit, a credit, a deposit, a withdrawal and a transfer. The memo means nothing to either
+  // Valid transitions: a bet, a debit, a credit, a deposit and a withdrawal. The memo means nothing to either
   // verifier.
   const bet = await step(f, a, 1, 100n, { ...below(1n << 62n, 150n), seed: id('seed') });
   await agree(a, bet.evidence);
@@ -65,11 +65,11 @@ test('the contract and deriveState agree on every operation kind and invalid enc
   const deposit = await step(f, b, 4, 30n);
   await agree(b, deposit.evidence);
   assert.deepEqual([b.state.balance, b.state.deposited], ['1050', '1030']);
-  // A withdrawal and a transfer take their amount out, and name whom it goes to.
+  // A withdrawal takes its amount out, and names whom it goes to. There is no other kind.
   const recipient = '0x5555555555555555555555555555555555555555';
   await agree(b, (await step(f, b, 5, 40n, { recipient })).evidence);
-  await agree(b, (await step(f, b, 6, 50n, { recipient })).evidence);
-  assert.equal(b.state.balance, '960');
+  assert.equal(b.state.balance, '1010');
+  await disagreeNever(await craft(b, { kind: 6, amount: 10n, recipient }), /Unknown operation/);
   // Every field a kind does not use must be zero; both sides reject the same encodings.
   for (const [kind, reason] of [
     [2, /Invalid debit/],
@@ -77,18 +77,14 @@ test('the contract and deriveState agree on every operation kind and invalid enc
     [4, /Invalid deposit/],
   ] as const)
     await disagreeNever(await craft(a, { kind, amount: 10n, recipient }), reason);
-  for (const [kind, reason] of [
-    [5, /Invalid withdrawal/],
-    [6, /Invalid transfer/],
-  ] as const)
-    for (const nobody of [ZeroAddress, await f.contract.getAddress()])
-      await disagreeNever(await craft(a, { kind, amount: 10n, recipient: nobody }), reason);
+  await disagreeNever(await craft(a, { kind: 5, amount: 10n, recipient: ZeroAddress }), /Invalid withdrawal/);
+  // One to the contract itself, a lock-in, is a withdrawal like any other to both.
+  await agree({ ...b }, (await step(f, b, 5, 10n, { recipient: await f.contract.getAddress() })).evidence);
   for (const [kind, reason] of [
     [2, /Invalid debit/],
     [3, /Invalid credit/],
     [4, /Invalid deposit/],
     [5, /Invalid withdrawal/],
-    [6, /Invalid transfer/],
   ] as const) {
     const named = kind >= 5 ? { recipient } : {};
     const kindOf = (values: Record<string, unknown>) => ({ kind, ...named, ...values });

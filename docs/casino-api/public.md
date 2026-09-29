@@ -42,7 +42,7 @@ wallet takes nothing else on trust from this reply: it checks
   "chainId": "31337",
   "rpcUrl": "http://127.0.0.1:57772",
   "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "protocol": "0x07cfa9359080708b8adb4e87c883b429bc48747a7c76986e9dc6968ed9dc48c8",
+  "protocol": "0xb0f1b12a797e894955d59233d3b1d300c46f394cd3cb99d121ffd5570af6f54d",
   "developerProtocol": "0xf5bd44c475a9e6e0136b45e0fb337e44a37298c63003b0c8f7fd74d6838a6d65",
   "confirmations": 1,
   "operator": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
@@ -74,7 +74,7 @@ The casino's health, its books, what developers have earned, the last observed b
 | `lastProgress`      | number         | When the chain was last seen to advance, in milliseconds                                                                                                                                                                                  |
 | `observationError`  | string or null | Why the last observation failed                                                                                                                                                                                                           |
 | `alerts`            | array          | What is wrong, below                                                                                                                                                                                                                      |
-| `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight, or `null`: a challenge, a payout, or an idle channel's close, finalization or collection                                                                                            |
+| `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight, or `null`: a challenge, a withdrawal, or an idle channel's close, finalization or collection                                                                                        |
 | `channels`          | number         | Channels open or closing                                                                                                                                                                                                                  |
 | `signingLogRecords` | number         | Records in the casino's signing history                                                                                                                                                                                                   |
 | `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                                                                                                                                |
@@ -94,11 +94,11 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | `protectedPrincipal`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                       |
 | `activeLiabilities`                    | What open and closing channels are owed: their signed balances, and the deposits they have not taken in                                         |
 | `openWinnings`                         | What open and closing channels are owed above the deposits the contract holds for them, their `principal`: winnings, which only house cash pays |
-| `finalizedLiabilities`                 | The unpaid winnings and principal of finalized claims                                                                                           |
+| `claimLiabilities`                     | The unpaid winnings and principal of claims: finalized closes' and withdrawals'                                                                 |
 | `commissions`                          | Developer commission earned and not yet collected                                                                                               |
 | `escrow`                               | Payouts awarded and not yet collected                                                                                                           |
 | `banks`                                | Everything in developers' banks                                                                                                                 |
-| `withdrawals`                          | Withdrawals and transfers the casino has taken on and the contract has not yet paid, until their channel's claim holds them                     |
+| `withdrawals`                          | Withdrawals the casino has taken on, until the chain records them or their channel's close returns them                                         |
 | `houseFeesEarned`                      | The casino's own commission, in total                                                                                                           |
 | `reserved`                             | The worst cases of the casino bets being decided                                                                                                |
 | `equity`                               | The bankroll before reservations: what fund shares are a claim on                                                                               |
@@ -112,7 +112,7 @@ casino holds, and the casino challenges it), `missed-deadline`, `conflicting-seq
 `invalid-evidence`, `channel-defense-failed`, `recovery-transaction-failed`, `winnings-exceed-cash` (open channels have
 won more than house cash can pay now, [as a withdrawal counts it](channels.md#post-apichannelsidoperations), so not
 every winner can withdraw now), `operator-gas-low` (the key that sends challenges and withdrawals holds less than 0.01
-ETH for their gas) or `withdrawal-unpaid` (no withdrawal owed can be paid now; `detail` says why the oldest cannot). An
+ETH for their gas) or `withdrawal-unsent` (a withdrawal the casino took on could not be sent yet; `detail` says why). An
 alert, like `observationError`, names no channel.
 
 ```json title="Response"
@@ -135,7 +135,7 @@ alert, like `observationError`, names no channel.
   "unpaidWinnings": "0",
   "activeLiabilities": "1904018503517611900",
   "openWinnings": "0",
-  "finalizedLiabilities": "0",
+  "claimLiabilities": "0",
   "commissions": "0",
   "escrow": "0",
   "banks": "91000000000000000",
@@ -630,7 +630,7 @@ and one payment at a time.
 
 | Response field | Type    | Meaning                         |
 | -------------- | ------- | ------------------------------- |
-| `txHash`       | bytes32 | The transfer's transaction hash |
+| `txHash`       | bytes32 | The payment's transaction hash  |
 | `amount`       | string  | `"2000000000000000000"`, in wei |
 
 ```json title="Request"

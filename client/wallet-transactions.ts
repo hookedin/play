@@ -12,15 +12,14 @@ export const TRANSACTION_LIMITS = Object.freeze({
   feePerGas: 200000000000n,
   totalFee: 50000000000000000n,
 });
-export const picked = (value: Record<string, any>, keys: string[]) =>
-  plain(Object.fromEntries(keys.map(k => [k, value[k]])));
+const picked = (value: Record<string, any>, keys: string[]) => plain(Object.fromEntries(keys.map(k => [k, value[k]])));
 /** The durable projection of an on-chain channel record. */
 export const channelRecord = (value: Record<string, any>) =>
   picked(value, [
     'player',
     'deposited',
     'principal',
-    'paidOut',
+    'claimed',
     'status',
     'deadline',
     'closingSequence',
@@ -245,9 +244,9 @@ export class WalletTransactions {
     // Named for the state it follows, so each take-in has an ID of its own.
     return this.perform('taken-in', { amount: waiting }, `taken-in:${c.state.channelId}:${c.state.sequence}`);
   }
-  /** Send everything at this account's address, less the transfer's fee, to another address: how Withdraw empties it
-   * while no balance is open. Under the wallet's lock. Returns the transfer's receipt. */
-  async transferAll(this: CasinoWallet, recipient: string) {
+  /** Send everything at this account's address, less the network fee, to another address: how Withdraw empties it
+   * while no balance is open. Under the wallet's lock. Returns the transaction's receipt. */
+  async sendAll(this: CasinoWallet, recipient: string) {
     await this.assertNetwork();
     const [fees, balance, gasLimit] = await Promise.all([
       this.provider.getFeeData(),
@@ -270,7 +269,7 @@ export class WalletTransactions {
       type: 2,
     });
     const receipt = await tx.wait(this.config.confirmations || 1, 90000);
-    if (!receipt || receipt.status !== 1) throw new Error('The transfer did not go through');
+    if (!receipt || receipt.status !== 1) throw new Error('The withdrawal did not go through');
     const saved = {
       kind: 'withdrawal',
       operationId: 'tx:' + receipt.hash,
@@ -398,20 +397,25 @@ export class WalletTransactions {
     // Activity is capped at 100 entries. Share block checks across transactions
     // and only fetch receipts again when their saved branch changed when first observed.
     const blocks = new Map();
+    // Whether the block at `number` is still the one with `hash`, so that what was read there stands.
+    const canonical = async (number: number, hash: string) => {
+      if (!hash || number > block.number) return false;
+      if (!blocks.has(number))
+        blocks.set(
+          number,
+          this.observer.corroborate('transaction blocks', async p => (await p.getBlock(number))?.hash || null),
+        );
+      return (await blocks.get(number)) === hash;
+    };
     return mapBounded(history, async entry => {
-      if (entry.withdrawal && !entry.paid && !entry.returned) return this.withdrawalPaid(entry, block);
+      // A withdrawal is read again until it is paid or returned, and after that when the block that said so has left
+      // the chain.
+      if (entry.withdrawal)
+        return (entry.paid || entry.returned) && (await canonical(entry.settledAt?.number, entry.settledAt?.hash))
+          ? entry
+          : this.withdrawalState(entry, block);
       if (!entry.txHash) return entry;
-      if (entry.blockHash && entry.blockNumber <= block.number) {
-        if (!blocks.has(entry.blockNumber))
-          blocks.set(
-            entry.blockNumber,
-            this.observer.corroborate(
-              'transaction blocks',
-              async p => (await p.getBlock(entry.blockNumber))?.hash || null,
-            ),
-          );
-        if ((await blocks.get(entry.blockNumber)) === entry.blockHash && entry.status !== 'orphaned') return entry;
-      }
+      if ((await canonical(entry.blockNumber, entry.blockHash)) && entry.status !== 'orphaned') return entry;
       const receipt = await confirmedReceipt(this.transactionRecovery(), entry.txHash);
       if (!receipt || receipt.blockNumber > block.number)
         return { ...entry, status: 'orphaned', previousStatus: entry.previousStatus || entry.status };
@@ -489,19 +493,18 @@ export class WalletTransactions {
     await this.refresh();
     return hash;
   }
-  /** Withdraw `amount` of the balance, or all of it: to an address, or with `transfer` into that account's HookedIn
-   * balance. The balance pays it at once, and the contract pays it once anyone sends the operation and the casino's
-   * signature after it, which the casino does straight away: out of the channel's deposits first and house cash for
-   * the rest. One house cash cannot pay now is declined, with why. With no balance open, everything at this account's
-   * address goes to the address. */
-  async withdraw(this: CasinoWallet, to: string, amount?: Integer, { transfer = false } = {}) {
+  /** Withdraw `amount` of the balance, or all of it, to an address: another HookedIn account's address puts it into that
+   * account's balance. The balance pays it at once, and the contract makes it a claim once anyone sends the operation
+   * and the casino's signature after it, which the casino does straight away: it pays the address what the channel's
+   * deposits and house cash cover, and the rest as house cash arrives. One the casino cannot pay now is declined, with
+   * why. With no balance open, everything at this account's address goes to the address. */
+  async withdraw(this: CasinoWallet, to: string, amount?: Integer) {
     const recipient = getAddress(to.trim());
     if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
       throw new Error('A withdrawal cannot pay that address: name another.');
     const c = this.channel;
     if (!c || Number(c.onchain?.status) !== 1 || c.closing) {
-      if (transfer) throw new Error('Open a balance before putting money into another.');
-      const receipt = await this.exclusive(() => this.transferAll(recipient));
+      const receipt = await this.exclusive(() => this.sendAll(recipient));
       await this.refresh();
       return receipt;
     }
@@ -510,31 +513,33 @@ export class WalletTransactions {
     if (value <= 0n || value > balance) throw new Error('Not that much is in your balance.');
     // The open game may risk no more than stays in the balance.
     if (this.game && BigInt(this.game.balance) > balance - value) this.game.balance = String(balance - value);
-    const receipt = await this.perform(
-      transfer ? 'transfer' : 'withdrawal',
-      { amount: value, recipient },
-      crypto.randomUUID(),
-    );
+    const receipt = await this.perform('withdrawal', { amount: value, recipient }, crypto.randomUUID());
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this withdrawal.');
     return receipt;
   }
-  /** Lock in the balance: transfer all of it into this account's own balance, so the contract holds all of it as
-   * deposits. The channel's deposits pay back what they cover, and house cash pays the rest, the winnings. */
+  /** Lock in the balance: withdraw all of it to the contract itself, which puts it into this account's channel as
+   * deposits it holds, for the balance to take in. The channel's deposits pay back what they cover, and house cash pays
+   * the rest, the winnings. The casino sends it at once, and pays its fee. */
   async lockIn(this: CasinoWallet) {
     const c = this.channel,
       balance = BigInt(c?.state.balance || 0);
     if (!c || Number(c.onchain?.status) !== 1 || c.closing || !balance) throw new Error('No balance to lock in.');
     // All of it goes out and back in: the open game risks nothing meanwhile.
     if (this.game) this.game.balance = '0';
-    const receipt = await this.perform('lock-in', { amount: balance, recipient: this.address }, crypto.randomUUID());
+    const receipt = await this.perform(
+      'lock-in',
+      { amount: balance, recipient: this.config.contractAddress },
+      crypto.randomUUID(),
+    );
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined locking in.');
     return receipt;
   }
-  /** Have a withdrawal or transfer the contract has not paid yet paid now: this account sends its proof, and pays the
-   * fee. The casino sends it too, as soon as house cash covers it. */
-  async payWithdrawal(this: CasinoWallet, operationId: string) {
+  /** Send a withdrawal the casino has not sent yet: this account sends its proof and pays the fee, and the contract
+   * makes it a claim and pays it. The casino sends each straight away too. */
+  async sendWithdrawal(this: CasinoWallet, operationId: string) {
     const entry = this.history.find(record => record.operationId === operationId);
-    if (!entry?.withdrawal || entry.paid) throw new Error('That withdrawal is not waiting to be paid.');
+    if (!entry?.withdrawal || !entry.proof || entry.recorded || entry.returned)
+      throw new Error('That withdrawal is not waiting to be sent.');
     const hash = await this.exclusive(async () => {
       await this.assertNetwork();
       const tx = await this.sendTransaction('withdraw', [entry.proof]);
@@ -544,18 +549,44 @@ export class WalletTransactions {
     await this.refreshDetails();
     return hash;
   }
-  /** Whether the contract has paid a withdrawal or transfer: it records the ID it paid under, and its event names the
-   * transaction, which is looked for among recent blocks. One never paid by the time its channel's close is final came
-   * back with the close. */
-  async withdrawalPaid(this: CasinoWallet, entry: any, block: ChainBlock) {
-    if (!(await this.observer.contractRead(this.reader, 'withdrawals', [entry.withdrawal], block)))
-      return Number(this.channels[entry.proof.base.channelId]?.onchain?.status) === 3
-        ? { ...entry, returned: true }
-        : entry;
-    const [event] = await this.reader
-      .queryFilter(this.reader.filters.Withdrawal(entry.withdrawal), Math.max(0, block.number - 10000), block.number)
-      .catch(() => []);
-    return { ...entry, paid: true, ...(event ? { paidIn: event.transactionHash } : {}) };
+  /** Where a withdrawal stands on-chain. Once sent it is a claim under its ID, whose event names the transaction that
+   * recorded it, looked for among recent blocks; it is paid once nothing of the claim remains, and until then what
+   * can be collected now is read with it. One never recorded by the time its channel's close is final came back with
+   * the close. A withdrawal paid or returned keeps the block it was read at (`settledAt`). */
+  async withdrawalState(this: CasinoWallet, entry: any, block: ChainBlock) {
+    const [claim, collectable] = await Promise.all([
+      this.observer.contractRead(this.reader, 'claims', [entry.withdrawal], block),
+      this.observer.contractRead(this.reader, 'collectable', [entry.withdrawal], block),
+    ]);
+    const here = { number: block.number, hash: block.hash };
+    if (same(claim.beneficiary, ZeroAddress)) {
+      // Not a claim, or not any more after a reorganisation: nothing read of one stands.
+      const { recorded, owed, winningsRemaining, collectable, recordedIn, returned, settledAt, ...unrecorded } = entry;
+      return Number(this.channels[entry.proof?.base.channelId]?.onchain?.status) === 3
+        ? { ...unrecorded, paid: false, returned: true, settledAt: here }
+        : { ...unrecorded, paid: false };
+    }
+    const [event] = entry.recordedIn
+      ? []
+      : await this.reader
+          .queryFilter(
+            this.reader.filters.Withdrawal(entry.withdrawal),
+            Math.max(0, block.number - 10000),
+            block.number,
+          )
+          .catch(() => []);
+    const owed = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining),
+      { returned, settledAt, ...recorded } = entry;
+    return plain({
+      ...recorded,
+      recorded: true,
+      paid: !owed,
+      owed,
+      winningsRemaining: claim.winningsRemaining,
+      collectable,
+      ...(event ? { recordedIn: event.transactionHash } : {}),
+      ...(owed ? {} : { settledAt: here }),
+    });
   }
   async startClose(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
@@ -570,17 +601,18 @@ export class WalletTransactions {
     await this.refresh();
     return result;
   }
-  async claim(this: CasinoWallet, channelId: string, recipient?: string) {
+  /** Collect a claim: a closed balance's, under its channel's ID, or a withdrawal's, under the withdrawal's. */
+  async claim(this: CasinoWallet, id: string, recipient?: string) {
     const result = await this.exclusive(async () => {
-      this.onProgress('Collecting what the closed balance is owed…');
+      this.onProgress('Collecting what the claim is owed…');
       const tx = await this.sendTransaction(
         recipient ? 'claimTo' : 'claim',
-        recipient ? [channelId, getAddress(recipient)] : [channelId],
+        recipient ? [id, getAddress(recipient)] : [id],
       );
       await this.waitTransaction(tx);
       return tx.hash;
     });
-    await this.refresh({ channelId });
+    await this.refresh(this.channels[id] ? { channelId: id } : {});
     return result;
   }
   async finalizeClose(this: CasinoWallet, channelId = this.closingChannel?.state.channelId) {

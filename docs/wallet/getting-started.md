@@ -12,9 +12,9 @@ takes you from a first visit to a withdrawal.
 
 On your first visit the wallet makes your **account**, an Ethereum key it keeps in this browser, which signs everything
 you do with your money. Its address is your **deposit address**. To play, [deposit](#deposit) ETH: on Sepolia, free test
-ETH from a faucet the wallet links to, or have a player put some into your balance from theirs ([withdraw](#withdraw)).
-The game library needs nothing from the chain, so it works at once; everything with ETH waits until the wallet has
-checked the casino's contract on-chain, and a banner says so if that check fails
+ETH from a faucet the wallet links to, or have a player withdraw some from their balance to your deposit address
+([withdraw](#withdraw)). The game library needs nothing from the chain, so it works at once; everything with ETH waits
+until the wallet has checked the casino's contract on-chain, and a banner says so if that check fails
 ([what the wallet checks](verify-a-release.md#what-the-wallet-checks-on-start)). Your first deposit gives the account a
 **uname** such as `~3byt9ocwnnzaxanmiz3stocj` ([names](names-and-publishing.md)).
 
@@ -62,8 +62,8 @@ Once a deposit has its confirmations, the wallet asks the casino to sign a depos
 your balance. Until the casino has seen the deposit confirmed, the Wallet page shows the money as arriving, and the
 wallet asks again at its next check, every few seconds. The money is yours meanwhile: a close adds whatever the balance
 has not taken in to what the channel is owed. Anyone can deposit into your channel through the contract, naming your
-deposit address, and another player can put money from their balance into yours ([withdraw](#withdraw)): the wallet
-takes it in the same way.
+deposit address, and the wallet takes it in the same way; another player's withdrawal to your deposit address
+([withdraw](#withdraw)) goes in like any ETH sent there.
 
 Under **Deposits** in Settings, **Add ETH that arrives at my deposit address to my balance** is on unless you turn it
 off. Off, what arrives stays at the address, to pay for transactions your account sends itself, such as closing without
@@ -93,13 +93,12 @@ casino signs your balance after it at once: your balance pays it now, and you pl
 the contract pay the address, out of your deposits first and the bankroll for the rest. Withdrawing all of it closes the
 open game first; withdrawing part lowers the open game's limit to what stays, if it held more.
 
-Tick **Put it into that account's HookedIn balance** to give the amount to another player instead: the button reads
-**Put … ETH into their balance**, and the contract deposits it into their balance, opening one if they have none. To
-bring a friend in, enter their deposit address: they can play with no ETH of their own.
+To give the amount to another player, enter their deposit address: their wallet puts it into their balance. A friend
+you bring in this way can play with no ETH of their own.
 
 [Activity](bets-and-receipts.md#activity) shows the withdrawal as **Withdrawal on its way** until the contract has paid
-it, and then as **Withdrawn**. Your wallet keeps the proof the contract pays on, anyone can look up the payment on-chain
-by the withdrawal's ID, and one that waits for the bankroll's cash can be sent again with **Pay it now**
+it, and then as **Withdrawn**. Your wallet keeps the proof the contract pays on, anyone can look the withdrawal up
+on-chain by its ID, and one the casino has not sent yet you can send yourself with **Send it now**
 ([withdraw](closing-and-claims.md#withdraw)).
 
 The casino takes a withdrawal on only when the contract can pay all of it now, beside the other withdrawals it owes.

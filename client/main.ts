@@ -579,13 +579,11 @@ function renderWallet() {
     valid = isAddress(to),
     own = valid && same(to, wallet.address),
     c = status === 1 && !closing ? wallet.channel : null,
-    into = Boolean(c) && $<HTMLInputElement>('withdraw-transfer').checked,
     signed = BigInt(c?.state.balance || 0),
     typed = $<HTMLInputElement>('withdraw-amount').value.trim(),
     wanted = typed ? ethAmount(typed) : null,
     amount = c ? (wanted ?? signed) : atAddress;
   $('withdraw-amount-field').classList.toggle('hidden', !c);
-  $('withdraw-transfer-field').classList.toggle('hidden', !c);
   $<HTMLButtonElement>('withdraw').disabled =
     busy ||
     !ready ||
@@ -595,11 +593,7 @@ function renderWallet() {
     amount > (c ? signed : atAddress) ||
     Boolean(wallet.channel && status === 2) ||
     (Boolean(c) && (Boolean(wallet.pending) || wallet.recoveryOnly));
-  $('withdraw').textContent = amount
-    ? into
-      ? `Put ${plainEth(amount)} ETH into their balance`
-      : `Withdraw ${plainEth(amount)} ETH`
-    : 'Withdraw';
+  $('withdraw').textContent = amount ? `Withdraw ${plainEth(amount)} ETH` : 'Withdraw';
   $('withdraw-help').textContent = !ready
     ? 'Connecting to your wallet…'
     : wallet.channel && closing
@@ -621,7 +615,7 @@ function renderWallet() {
                     : own
                       ? 'That is your deposit address: withdraw to another.'
                       : c
-                        ? `Your balance pays it now, and the contract ${into ? "puts it into that account's HookedIn balance, opening one if it has none" : 'sends it to this address'}.${amount === signed ? (active ? ' The open game gives back what it holds.' : '') : ' The rest stays in your balance.'}`
+                        ? `Your balance pays it now, and the contract sends it to this address: another HookedIn account's address puts it into that balance.${amount === signed ? (active ? ' The open game gives back what it holds.' : '') : ' The rest stays in your balance.'}`
                         : 'Everything at your deposit address goes to this address. The network fee comes out of it.';
   $('withdraw-help').classList.toggle('check-failed', Boolean(to) && (!valid || own));
 
@@ -757,11 +751,12 @@ function renderActivity() {
       if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
       if (receipt.to) facts.push(['To', receipt.to]);
       if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
-      // One the contract has not paid yet can be sent by this account too, as the casino does once house cash covers it.
-      if (receipt.withdrawal && !receipt.paid && !receipt.returned)
-        facts.push(['Payment', payNow(receipt.operationId)]);
+      // One the contract has not made a claim yet can be sent by this account too, with its proof, as the casino does
+      // straight away.
+      if (receipt.withdrawal && receipt.proof && !receipt.recorded && !receipt.returned)
+        facts.push(['Payment', sendNow(receipt.operationId)]);
       if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
-      if (receipt.paidIn) facts.push(['Paid in', transactionLink(receipt.paidIn, receipt.paidIn)]);
+      if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn, receipt.recordedIn)]);
       if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
       item = createActivityEntry({
         ...presentation,
@@ -780,16 +775,16 @@ function renderActivity() {
   for (const row of existing.values()) row.remove();
   filterActivity(list, $<HTMLInputElement>('activity-search').value, $('activity-empty'), $('activity-visible-count'));
 }
-/** A button that has the contract pay a withdrawal or transfer now, sent from this account. */
-function payNow(operationId: string) {
+/** A button that has the contract make a withdrawal a claim and pay it now, sent from this account. */
+function sendNow(operationId: string) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'button small';
-  button.textContent = 'Pay it now';
+  button.textContent = 'Send it now';
   button.addEventListener('click', () =>
     task(async () => {
-      await wallet.payWithdrawal(operationId);
-      toast('Paid on-chain.');
+      await wallet.sendWithdrawal(operationId);
+      toast('Sent: the contract has it.');
     }),
   );
   return button;
@@ -848,7 +843,7 @@ function renderClaims() {
     const unpaid = BigInt(claim.amount) - BigInt(claim.paid),
       ready = BigInt(claim.collectable || '0');
     return (
-      `Channel ${short(claim.channelId)}: ${plainEth(unpaid)} ETH still owed of ${plainEth(claim.amount)} ETH. ` +
+      `${claim.channelId ? `Channel ${short(claim.channelId)}` : `Withdrawal to ${short(claim.to)}`}: ${plainEth(unpaid)} ETH still owed of ${plainEth(claim.amount)} ETH. ` +
       (ready > 0n
         ? `${plainEth(ready)} ETH can be collected now.`
         : `Its ${plainEth(claim.winningsRemaining)} ETH of winnings wait for the bankroll to have the cash.`)
@@ -871,9 +866,10 @@ function renderClaims() {
     collect.addEventListener('click', () =>
       task(async () => {
         const before = BigInt(claim.paid);
-        await wallet.claim(claim.channelId);
-        const after = wallet.publicState.claims.find((c: any) => c.channelId === claim.channelId);
-        const collected = BigInt(after?.paid ?? before) - before;
+        await wallet.claim(claim.id);
+        // A withdrawal paid in full leaves the list.
+        const after = wallet.publicState.claims.find((c: any) => c.id === claim.id);
+        const collected = BigInt(after?.paid ?? claim.amount) - before;
         toast(
           collected > 0n
             ? `Collected ${plainEth(collected)} ETH.`
@@ -884,8 +880,8 @@ function renderClaims() {
     const destination = document.createElement('input');
     destination.placeholder = 'Or another address, 0x…';
     destination.setAttribute('aria-label', 'Collect to another address');
-    destination.value = claimRecipients.get(claim.channelId) ?? '';
-    destination.addEventListener('input', () => claimRecipients.set(claim.channelId, destination.value));
+    destination.value = claimRecipients.get(claim.id) ?? '';
+    destination.addEventListener('input', () => claimRecipients.set(claim.id, destination.value));
     const redirect = document.createElement('button');
     redirect.className = 'text-button';
     redirect.type = 'button';
@@ -894,19 +890,23 @@ function renderClaims() {
     redirect.addEventListener('click', () =>
       task(async () => {
         const recipient = destination.value.trim();
-        await wallet.claim(claim.channelId, recipient);
+        await wallet.claim(claim.id, recipient);
         toast(`Collected what could be paid to ${short(recipient)}.`);
       }),
     );
-    const evidence = document.createElement('button');
-    evidence.className = 'text-button';
-    evidence.type = 'button';
-    evidence.textContent = 'Export evidence';
-    evidence.addEventListener('click', () =>
-      task(async () => downloadEvidence(await wallet.exportEvidence(claim.channelId))),
-    );
     row.className = 'claim-row';
-    row.append(text, collect, destination, redirect, evidence);
+    row.append(text, collect, destination, redirect);
+    // A closed balance's claim rests on its channel's evidence; a withdrawal's is on-chain already.
+    if (claim.channelId) {
+      const evidence = document.createElement('button');
+      evidence.className = 'text-button';
+      evidence.type = 'button';
+      evidence.textContent = 'Export evidence';
+      evidence.addEventListener('click', () =>
+        task(async () => downloadEvidence(await wallet.exportEvidence(claim.channelId))),
+      );
+      row.append(evidence);
+    }
     list.append(row);
   }
   if (claims.length > claimLimit) {
@@ -1680,14 +1680,13 @@ $<HTMLButtonElement>('add-to-balance').addEventListener('click', () =>
     funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
   }),
 );
-for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-transfer'])
+for (const id of ['withdraw-to', 'withdraw-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw').addEventListener('click', () =>
   task(async () => {
     const to = getAddress($<HTMLInputElement>('withdraw-to').value.trim()),
       typed = $<HTMLInputElement>('withdraw-amount').value.trim(),
       open = Number(wallet.publicState.channelStatus) === 1 && !wallet.channel?.closing,
-      transfer = open && $<HTMLInputElement>('withdraw-transfer').checked,
       amount = open && typed ? ethAmount(typed) : null;
     if (open && typed && amount === null) throw new Error('Enter an amount of ETH, such as 0.01.');
     // A partial withdrawal leaves the open game its limit; a whole one takes back what the game holds.
@@ -1698,17 +1697,14 @@ $<HTMLButtonElement>('withdraw').addEventListener('click', () =>
         history.replaceState(null, '', '/');
       }
     }
-    const receipt = await wallet.withdraw(to, amount ?? undefined, { transfer });
+    const receipt = await wallet.withdraw(to, amount ?? undefined);
     $<HTMLInputElement>('withdraw-to').value = '';
     $<HTMLInputElement>('withdraw-amount').value = '';
-    $<HTMLInputElement>('withdraw-transfer').checked = false;
     $<HTMLDialogElement>('wallet-dialog').close();
     toast(
-      transfer
-        ? `Put ${plainEth(receipt.amount)} ETH into ${short(to)}'s balance: the contract pays it in, and Activity shows when it has.`
-        : receipt.withdrawal
-          ? `Withdrew ${plainEth(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
-          : `Withdrew ${plainEth(receipt.amount)} ETH to ${short(to)}.`,
+      receipt.withdrawal
+        ? `Withdrew ${plainEth(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
+        : `Withdrew ${plainEth(receipt.amount)} ETH to ${short(to)}.`,
     );
   }),
 );
@@ -1755,7 +1751,9 @@ $<HTMLButtonElement>('channel-lock').addEventListener('click', () =>
     // All of the balance goes out and back in: the open game gives back what it holds.
     closeGame();
     await wallet.lockIn();
-    toast('Locking in: all of your balance comes back in as deposits, which the contract holds.');
+    toast(
+      'Locking in: all of your balance goes into deposits the contract holds, in one transaction the casino sends.',
+    );
   }),
 );
 $<HTMLButtonElement>('channel-start-close').addEventListener('click', () =>

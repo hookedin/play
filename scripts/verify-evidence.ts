@@ -17,7 +17,7 @@ let provider, unlock;
 try {
   if (!file)
     throw new Error(
-      'Usage: npm run recover -- bundle.json --rpc URL --action inspect|start|challenge|finalize|claim [--to ADDRESS]',
+      'Usage: npm run recover -- bundle.json --rpc URL --action inspect|start|challenge|finalize|claim [--claim ID] [--to ADDRESS]',
     );
   if (fs.statSync(file).size > 16 * 1024 * 1024) throw new Error('Use a minimal settlement bundle smaller than 16 MiB');
   const bundle = JSON.parse(fs.readFileSync(file, 'utf8')),
@@ -43,6 +43,12 @@ try {
         claim: option('--to') ? 'claimTo' : 'claim',
       };
       if (!methods[action]) throw new Error('Unknown recovery action');
+      // The claim to collect: the channel's, under its ID, or one of the bundle's withdrawals.
+      const claimId = option('--claim', observed.channelId)!,
+        claim = same(claimId, observed.channelId)
+          ? observed
+          : observed.withdrawals.find((w: { id: string }) => same(w.id, claimId));
+      if (!claim) throw new Error('The bundle lists no withdrawal ' + claimId);
       const walletFile = option('--wallet-file');
       const key = walletFile
         ? JSON.parse(fs.readFileSync(walletFile, 'utf8')).wallets[option('--role', 'player')!].privateKey
@@ -74,12 +80,14 @@ try {
       const achieved =
         (action === 'start' && Number(observed.channelStatus) >= 2) ||
         (action === 'finalize' && Number(observed.channelStatus) === 3) ||
-        (action === 'claim' && Number(observed.channelStatus) === 3 && observed.remaining === '0') ||
+        (action === 'claim' && claim.collectable === '0') ||
         (action === 'challenge' &&
           Number(observed.channelStatus) === 2 &&
           BigInt(observed.closingSequence) >= BigInt(observed.state.sequence));
       if (!achieved || outbox.state.pending) {
-        const params = ['start', 'challenge'].includes(action) ? [bundle.evidence] : [observed.channelId];
+        const params = ['start', 'challenge'].includes(action)
+          ? [bundle.evidence]
+          : [action === 'claim' ? claimId : observed.channelId];
         if (action === 'claim' && option('--to')) params.push(option('--to')!);
         const tx = await contract[methods[action]].populateTransaction(...params);
         const pending = await outbox.submit(action, tx);

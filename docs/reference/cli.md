@@ -94,6 +94,7 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
 | `<bundle>`           | The first argument: the evidence file exported from the wallet, at most 16 MiB                                |
 | `--rpc URL`          | The JSON-RPC endpoint to read and send through. Without it, only `inspect` runs, offline                      |
 | `--action NAME`      | `inspect` (the default), `start`, `challenge`, `finalize` or `claim`                                          |
+| `--claim ID`         | With `claim`: the claim to collect, the channel's (the default) or a withdrawal the bundle lists              |
 | `--to ADDRESS`       | With `claim`: pay the claim to this address, with `claimTo`                                                   |
 | `--block N`          | With `inspect`: read the chain at block `N` instead of the latest                                             |
 | `--journal PATH`     | The transaction journal. Default `.private/recovery-<channelId>.json`                                         |
@@ -107,13 +108,13 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
 
 ### Recovery actions
 
-| Action      | Contract call                                               | Who may send it                              | Sends nothing when                                       |
-| ----------- | ----------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------- |
-| `inspect`   | None                                                        | Anyone                                       | –                                                        |
-| `start`     | `startClose(evidence)`                                      | The channel's account, or the casino's owner | The channel is closing or finalized                      |
-| `challenge` | `challengeClose(evidence)`                                  | Anyone                                       | The closing state is at the evidence's sequence or later |
-| `finalize`  | `finalizeClose(channelId)`                                  | Anyone, from the challenge deadline          | The channel is finalized                                 |
-| `claim`     | `claim(channelId)`, or `claimTo(channelId, to)` with `--to` | Anyone; `claimTo` only the channel's account | The claim is paid in full                                |
+| Action      | Contract call                                 | Who may send it                              | Sends nothing when                                       |
+| ----------- | --------------------------------------------- | -------------------------------------------- | -------------------------------------------------------- |
+| `inspect`   | None                                          | Anyone                                       | –                                                        |
+| `start`     | `startClose(evidence)`                        | The channel's account, or the casino's owner | The channel is closing or finalized                      |
+| `challenge` | `challengeClose(evidence)`                    | Anyone                                       | The closing state is at the evidence's sequence or later |
+| `finalize`  | `finalizeClose(channelId)`                    | Anyone, from the challenge deadline          | The channel is finalized                                 |
+| `claim`     | `claim(id)`, or `claimTo(id, to)` with `--to` | Anyone; `claimTo` only the channel's account | Nothing of the claim can be collected now                |
 
 - Without `--rpc`, `inspect` checks the bundle's signatures against the identity it claims and prints the verified
   state. Evidence on the channel's [base](signed-messages.md#the-base) has no signatures to check: it prints
@@ -121,14 +122,17 @@ HOOKEDIN_RECOVERY_KEY=0x… npm run recover -- channel.json --rpc https://ethere
 - With `--rpc`, `inspect` also checks, at one canonical block, the chain ID, that the contract's owner is the bundle's
   operator, that the registered player matches the bundle, and that the contract supports its evidence. It prints the
   channel's status, challenge deadline and closing state, the deposits the contract holds for the channel
-  (`principal`) and what it has paid out of the channel (`paidOut`), the signed balance, what a close on the evidence
-  is owed (`owed`: that balance plus any deposit it has not taken in and what it withdrew that the contract has not
-  paid, less what the contract paid out that it did not withdraw), the claim with what is paid and what remains, what
-  collecting pays now (`collectable`), and how the claim stands, as `paymentStatus`:
+  (`principal`) and what its withdrawals have made into claims (`claimed`), the signed balance, what a close on the
+  evidence is owed (`owed`: that balance plus any deposit it has not taken in and what it withdrew that is not yet a
+  claim, less what the channel's claims took that it did not withdraw), the channel's claim with what is paid and what
+  remains, whom it pays (`recipient`), what collecting pays now (`collectable`), and how the claim stands, as
+  `paymentStatus`. For each withdrawal the bundle lists, `withdrawals` holds its `id`, `recipient`, what it still owes
+  (`remaining`), `collectable` and `paymentStatus`:
 
   | `paymentStatus`                            | Meaning                                                                                                              |
   | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-  | `not finalized`                            | There is no claim yet                                                                                                |
+  | `not finalized`                            | The channel's close is not final: there is no claim yet                                                              |
+  | `not recorded`                             | A withdrawal that never became a claim: a close returns it to the account                                            |
   | `no unpaid amount`                         | The claim is paid in full                                                                                            |
   | `collectable now`                          | `claim` pays `collectable`                                                                                           |
   | `unpaid; house cash does not reach it yet` | The [winnings queue](contract.md#the-winnings-queue) pays the claims ahead of it first; it waits for more house cash |

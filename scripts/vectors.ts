@@ -30,7 +30,7 @@ export function buildVectors() {
     casino: '0x1111111111111111111111111111111111111111',
     player: '0x2222222222222222222222222222222222222222',
     developer: '0x4444444444444444444444444444444444444444',
-    // Where a withdrawal pays, or whose balance a transfer funds: any account the player names.
+    // Where a withdrawal pays: any address the player names.
     recipient: '0x5555555555555555555555555555555555555555',
   };
   const Q = OUTCOME_SPACE,
@@ -120,17 +120,11 @@ export function buildVectors() {
   );
   // Another deposit, taking in money deposited into the open channel later.
   const deposited = apply(payout.next, { kind: KIND.deposit, amount: 500_000_000n }, { id: `0x${'85'.repeat(32)}` });
-  // A withdrawal paying the recipient, and a transfer into the recipient's balance: the contract pays each once,
-  // under the operation's hash.
+  // A withdrawal paying the recipient: the contract makes it a claim once, under the operation's hash.
   const withdrawal = apply(
     deposited.next,
     { kind: KIND.withdrawal, amount: 700_000_000n, recipient: identity.recipient },
     { id: `0x${'86'.repeat(32)}` },
-  );
-  const transfer = apply(
-    withdrawal.next,
-    { kind: KIND.transfer, amount: 60_000_000n, recipient: identity.recipient },
-    { id: `0x${'87'.repeat(32)}` },
   );
   const rejection = rejectionCheckpoint(d, opened.next, bet.operation);
   return {
@@ -141,7 +135,7 @@ export function buildVectors() {
     opening,
     base,
     baseHash: hashState(d, base),
-    operations: [opened, bet, developerBet, payout, deposited, withdrawal, transfer],
+    operations: [opened, bet, developerBet, payout, deposited, withdrawal],
     outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),

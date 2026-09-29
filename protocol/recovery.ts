@@ -1,8 +1,13 @@
 import type { JsonRpcProvider, InterfaceAbi, BlockTag } from 'ethers';
 import type { EvidenceBundle } from './types.ts';
-import { Contract } from 'ethers';
+import { Contract, ZeroAddress, ZeroHash } from 'ethers';
 import { verifyEvidence, domain, hashState, same, plain, owed } from './protocol.ts';
 import { readContract, requireCanonicalBlock } from './chain-observer.ts';
+import { mapBounded } from './concurrency.ts';
+
+/** How a claim stands: paid in full, collectable now, or waiting for house cash to reach its winnings. */
+const standing = (remaining: bigint, collectable: bigint) =>
+  !remaining ? 'no unpaid amount' : collectable > 0n ? 'collectable now' : 'unpaid; house cash does not reach it yet';
 
 /** Settlement needs current contract state, never historical event availability. */
 export async function inspectEvidence(
@@ -19,14 +24,29 @@ export async function inspectEvidence(
   if (!block?.hash) throw new Error('Recovery block unavailable');
   const read = (method: string, ...args: unknown[]) => readContract(provider, contract, method, args, block);
   const channelId = verified.state.channelId;
-  const [owner, supported, channel, claim, collectable, recipient] = await Promise.all([
+  const [owner, supported, channel, claim, collectable] = await Promise.all([
     read('owner'),
     read('supported', bundle.evidence),
     read('channels', channelId),
     read('claims', channelId),
     read('collectable', channelId),
-    read('claimRecipient', channelId),
   ]);
+  // The account's withdrawals the bundle names, each a claim of its own once recorded. One never recorded is not owed
+  // to its recipient: a close returns it to the account.
+  const withdrawals = await mapBounded(bundle.withdrawals ?? [], async id => {
+    const [claim, collectable] = await Promise.all([read('claims', id), read('collectable', id)]),
+      recorded = !same(claim.beneficiary, ZeroAddress),
+      remaining = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
+    if (recorded && !same(claim.beneficiary, bundle.opening.player))
+      throw new Error(`Withdrawal ${id} is another account's claim`);
+    return {
+      id,
+      recipient: claim.recipient,
+      remaining,
+      collectable,
+      paymentStatus: recorded ? standing(remaining, collectable) : 'not recorded',
+    };
+  });
   if (!same(owner, bundle.operator)) throw new Error('Evidence operator differs from contract owner');
   const d = domain(bundle.chainId, bundle.casino);
   // `supported` takes the channel's zero checkpoint unsigned, and any other only signed by both sides.
@@ -37,8 +57,10 @@ export async function inspectEvidence(
   )
     throw new Error('Opening or evidence differs from the registered channel');
   await requireCanonicalBlock(provider, block);
+  // A finalized channel's claim is for what its close was owed, on the checkpoint it finalized.
   const finalized = Number(channel.status) === 3,
-    remaining = BigInt(claim.amount) - BigInt(claim.paid);
+    amount = finalized ? BigInt(channel.closingBalance) : 0n,
+    remaining = BigInt(claim.protectedRemaining) + BigInt(claim.winningsRemaining);
   return plain({
     ...verified,
     chainObservationsVerified: true,
@@ -48,37 +70,34 @@ export async function inspectEvidence(
     channelId,
     channelStatus: channel.status,
     challengeDeadline: channel.deadline,
-    // The deposits the contract still holds for the channel, and what it has paid out of it.
+    // The deposits the contract still holds for the channel, and what its withdrawals have made into claims.
     principal: channel.principal,
-    paidOut: channel.paidOut,
+    claimed: channel.claimed,
     closingSequence: channel.closingSequence,
     closingStateHash: channel.closingHash,
     signedBalance: verified.state.balance,
     // What a close with this evidence would be owed: the signed balance, the deposits it has not taken in, and what it
-    // withdrew that the contract has not paid.
-    owed: owed(verified.state, channel.deposited, channel.paidOut),
-    claim: Object.fromEntries(
-      ['beneficiary', 'stateHash', 'amount', 'paid', 'protectedRemaining', 'winningsRemaining'].map(key => [
-        key,
-        claim[key],
-      ]),
-    ),
+    // withdrew that is not yet a claim.
+    owed: owed(verified.state, channel.deposited, channel.claimed),
+    claim: {
+      beneficiary: claim.beneficiary,
+      stateHash: finalized ? channel.closingHash : ZeroHash,
+      amount,
+      paid: amount - remaining,
+      protectedRemaining: claim.protectedRemaining,
+      winningsRemaining: claim.winningsRemaining,
+    },
     remaining,
-    recipient,
+    recipient: claim.recipient,
     // What collecting pays now: the claim's principal, and as much of its winnings as house cash reaches.
     collectable,
-    paymentStatus: !finalized
-      ? 'not finalized'
-      : !remaining
-        ? 'no unpaid amount'
-        : collectable > 0n
-          ? 'collectable now'
-          : 'unpaid; house cash does not reach it yet',
+    paymentStatus: finalized ? standing(remaining, collectable) : 'not finalized',
     classification: !finalized
       ? 'signed balance; no finalized payment obligation'
       : !remaining
         ? 'paid by this contract'
         : 'finalized unpaid claim',
+    withdrawals,
     limitation:
       'Contract balances at this canonical block; no historical payment log, solvency guarantee, or evidence of unrelated external payments.',
   });

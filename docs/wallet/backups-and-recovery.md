@@ -50,12 +50,13 @@ A backup of another account switches the wallet to that account.
 ## Recovery bundles
 
 **Export recovery bundle**, under Recovery on the Wallet page, saves `hookedin-channel-<channelId>.json` for your
-balance's channel, and one for a channel still closing beside it. **Export evidence** beside a claim does the same for a
-closed channel, and the banner of a pending operation offers **Export recovery bundle** too. A bundle names the deployment (`chainId`, `casino`, `operator`), the
-channel's `opening` (its ID, the account and the channel's index), its latest `evidence`, and its `claim` once it is
-finalized ([the bundle's fields](../reference/signed-messages.md#evidence)). It holds no keys, no game data and no
-pricing. It changes with every operation, so export it again after you play or withdraw. Before anything is signed on a
-channel, its evidence is the channel's base, which needs no signatures.
+balance's channel, and one for a channel still closing beside it. **Export evidence** beside a closed balance's claim
+does the same for its channel, and the banner of a pending operation offers **Export recovery bundle** too. A bundle
+names the deployment (`chainId`, `casino`, `operator`), the channel's `opening` (its ID, the account and the channel's
+index) and its latest `evidence`, and lists the IDs of your withdrawals the contract may still owe something, from any
+of your channels (`withdrawals`; [the bundle's fields](../reference/signed-messages.md#evidence)). It holds no keys, no
+game data and no pricing. It changes with every operation, so export it again after you play or withdraw. Before
+anything is signed on a channel, its evidence is the channel's base, which needs no signatures.
 
 **Import a recovery bundle**, under Recovery, reads one back. The wallet refuses a bundle while an operation or a
 transaction is pending, when it belongs to another chain, contract, owner or account, when it is older than the saved
@@ -87,7 +88,7 @@ replacement your account sent at the same nonce, and sends the exact saved trans
 
 When the casino does not answer, answers with errors, or reports another chain, contract, owner or protocol revision
 than the wallet's pinned deployment, the wallet starts in **recovery mode**. Evidence export and import, closing without
-the casino, challenges, finishing a close, collecting and **Pay it now** work; play, deposits, withdrawals from the
+the casino, challenges, finishing a close, collecting and **Send it now** work; play, deposits, withdrawals from the
 balance and locking in do not. Reload once the casino is back.
 
 The pinned deployment is the one the wallet is built with ([deployment](../reference/deployment.md)), or the one it
@@ -119,7 +120,8 @@ npm ci
 
 3. If the close proposes an older state than yours, challenge it before the deadline: `--action challenge`.
 4. After the deadline, finalize: `--action finalize`.
-5. Collect: `--action claim`, or `--action claim --to ADDRESS` to be paid elsewhere.
+5. Collect: `--action claim`, or `--action claim --to ADDRESS` to be paid elsewhere. A withdrawal the bundle lists is
+   collected the same way with `--claim` and its ID; the inspection shows what each still owes.
 
 Each action inspects first and sends nothing when its end is already reached, and every transaction is saved in a
 journal before it is sent, so running the command again resumes it rather than sending another. The CLI checks the

@@ -13,7 +13,7 @@ HookedIn runs on Sepolia (chain 11155111).
 
 | Part           | What it does                                                                                                                                                   | Where it lives                                                  |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Contract       | Holds deposits, pays withdrawals and transfers, settles closed channels and pays claims. It knows nothing of games                                             | [contracts/HookedInCasino.sol](../contracts/HookedInCasino.sol) |
+| Contract       | Holds deposits, pays withdrawals, settles closed channels and pays claims. It knows nothing of games                                                           | [contracts/HookedInCasino.sol](../contracts/HookedInCasino.sol) |
 | Wallet         | Holds your keys, signs exact bets, verifies every result, keeps the evidence and sends your on-chain transactions                                              | [client/](../client/), served at https://play.hookedin.com      |
 | Protocol       | The signed structures, hashes, state derivation, admission rule and recovery code the wallet and the casino share                                              | [protocol/](../protocol/)                                       |
 | Casino         | Names rounds, admits bets against its bankroll, signs results, has the contract pay withdrawals and keeps the books. The service is private; its API is public | [Casino API](casino-api/index.md)                               |

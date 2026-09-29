@@ -28,7 +28,7 @@ export interface Checkpoint {
   balance: Integer;
   /** How much of the channel's on-chain deposits the balance has taken in. A close adds the rest. */
   deposited: Integer;
-  /** How much the balance has paid out in withdrawals and transfers. A close adds what the contract did not pay. */
+  /** How much the balance has paid out in withdrawals. A close adds what did not become a claim. */
   withdrawn: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
@@ -100,7 +100,7 @@ export interface Operation {
   kind: Integer;
   /** A casino bet's stake, paid to enter; otherwise the amount debited or credited. */
   amount: Integer;
-  /** Whom a withdrawal pays, or whose current channel a transfer deposits into; the zero address for any other kind. */
+  /** Whom a withdrawal pays; the zero address for any other kind. */
   recipient: string;
   /** A casino bet's probability, counted in outcomes out of 2^64: it wins when its round's outcome is below this. */
   chance: Integer;
@@ -135,6 +135,8 @@ export interface EvidenceBundle {
   operator: string;
   opening: Opening;
   evidence: Evidence;
+  /** The account's withdrawals the contract may still owe something, by ID: each is a claim of its own once recorded. */
+  withdrawals?: string[];
 }
 export interface Deployment {
   chainId: Integer;
@@ -151,14 +153,16 @@ export interface OnchainChannel {
   deposited: string;
   /** The deposits the contract still holds for the channel, which withdrawals are paid out of first. */
   principal: string;
-  /** Everything the contract has paid out of the channel in withdrawals and transfers. */
-  paidOut: string;
+  /** Everything the channel's withdrawals have made into claims. */
+  claimed: string;
   status: string;
   deadline: string;
   closingSequence: string;
   closingHash: string;
   closingBalance: string;
 }
+/** A finalized channel's claim: its checkpoint and what it was owed are the channel's `closingHash` and
+ * `closingBalance`, and `paid` what it has paid of that. */
 export interface OnchainClaim {
   beneficiary: string;
   stateHash: string;

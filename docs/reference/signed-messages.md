@@ -92,10 +92,10 @@ no signature: a channel can close on it without the casino ever answering. Any o
 is signed by both sides.
 
 `deposited` is how much of the channel's deposits the balance has taken in, and `withdrawn` how much it has paid out in
-withdrawals and transfers. Anyone can deposit into an account's current channel, with the contract's `deposit` or a
-transfer, and the balance takes that money in with a [deposit operation](#transitions); until then a close adds it to
-what the checkpoint is owed. A close also adds what the checkpoint withdrew that the contract has not paid, and takes
-off what the contract paid out that the checkpoint did not withdraw ([finalization](contract.md#finalization)).
+withdrawals. Anyone can deposit into an account's current channel with the contract's `deposit`, and the balance takes
+that money in with a [deposit operation](#transitions); until then a close adds it to what the checkpoint is owed. A
+close also adds what the checkpoint withdrew that is not yet a claim, and takes off what the channel's claims took that
+the checkpoint did not withdraw ([finalization](contract.md#finalization)).
 
 ### Transitions
 
@@ -110,26 +110,23 @@ hash and `sequence` the base's plus one. Applied, it produces the next checkpoin
 | `transitionHash`    | `keccak256(abi.encode(bytes32 operationHash, bytes32 secret))`, with the round's secret for a casino bet and zero otherwise |
 | `balance`           | By kind, below                                                                                                              |
 | `deposited`         | The base's, plus `amount` for a deposit                                                                                     |
-| `withdrawn`         | The base's, plus `amount` for a withdrawal or a transfer                                                                    |
+| `withdrawn`         | The base's, plus `amount` for a withdrawal                                                                                  |
 
-| Kind       | `kind` | Balance                                                                       | `recipient`                                                  | `chance`, `prize`, `round`, `seedHash`                                                |
-| ---------- | ------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Casino bet | 1      | Base − `amount`, + `prize` when the [outcome](#the-outcome) is below `chance` | Zero                                                         | The bet's terms; `round = keccak256(secret)`; `seedHash = keccak256(seed)`; none zero |
-| Debit      | 2      | Base − `amount`                                                               | Zero                                                         | All zero                                                                              |
-| Credit     | 3      | Base + `amount`                                                               | Zero                                                         | All zero                                                                              |
-| Deposit    | 4      | Base + `amount`                                                               | Zero                                                         | All zero                                                                              |
-| Withdrawal | 5      | Base − `amount`                                                               | The address the contract pays                                | All zero                                                                              |
-| Transfer   | 6      | Base − `amount`                                                               | The account into whose current channel the contract deposits | All zero                                                                              |
-| None       | 0      | –                                                                             | –                                                            | Only in the [empty step](#evidence)                                                   |
+| Kind       | `kind` | Balance                                                                       | `recipient`                   | `chance`, `prize`, `round`, `seedHash`                                                |
+| ---------- | ------ | ----------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------- |
+| Casino bet | 1      | Base − `amount`, + `prize` when the [outcome](#the-outcome) is below `chance` | Zero                          | The bet's terms; `round = keccak256(secret)`; `seedHash = keccak256(seed)`; none zero |
+| Debit      | 2      | Base − `amount`                                                               | Zero                          | All zero                                                                              |
+| Credit     | 3      | Base + `amount`                                                               | Zero                          | All zero                                                                              |
+| Deposit    | 4      | Base + `amount`                                                               | Zero                          | All zero                                                                              |
+| Withdrawal | 5      | Base − `amount`                                                               | The address the contract pays | All zero                                                                              |
+| None       | 0      | –                                                                             | –                             | Only in the [empty step](#evidence)                                                   |
 
 Every transition holds to these rules, which the contract, the wallet and the casino apply alike:
 
-- `amount` is 1 to 2^128 − 1, and a casino bet's (its stake), a debit's, a withdrawal's or a transfer's is at most the
-  base balance.
+- `amount` is 1 to 2^128 − 1, and a casino bet's (its stake), a debit's or a withdrawal's is at most the base balance.
 - A casino bet's `chance` is 1 to 2^64 − 1, the winning outcomes out of 2^64, and its `prize` is 1 to 2^128 − 1: a sure
   loss or a sure win is no bet.
-- A withdrawal's or a transfer's `recipient` is neither the zero address nor the contract; every other kind's is the
-  zero address.
+- A withdrawal's `recipient` is neither the zero address nor the contract; every other kind's is the zero address.
 - The next `balance` and `withdrawn` are below 2^128.
 - Every field a kind does not use is zero, and every kind but a casino bet carries a zero seed and secret: one meaning,
   one encoding.
@@ -139,13 +136,13 @@ signed operation, the account's signature of it, the revealed seed and secret (z
 casino's signature of the next checkpoint. With its base, a step proves the next checkpoint on-chain without the
 player's countersignature. The player countersigns the next checkpoint and hands the casino that signature before the
 channel's next operation: the `acknowledgment` of
-[`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations). A withdrawal's or a
-transfer's step, with its base, is also what the contract pays it on ([withdrawals](contract.md#withdrawals)).
+[`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations). A withdrawal's step,
+with its base, is also what the contract records and pays it on ([withdrawals](contract.md#withdrawals)).
 
 ### Rejection checkpoints
 
-The casino declines a signed casino bet, debit, withdrawal or transfer by signing a checkpoint two above its base,
-with the balance unchanged:
+The casino declines a signed casino bet, debit or withdrawal by signing a checkpoint two above its base, with the
+balance unchanged:
 
 | Field               | Rejection checkpoint              |
 | ------------------- | --------------------------------- |
@@ -178,14 +175,15 @@ secret. Kind 0 appears nowhere else. The casino's replies carry evidence in this
 A wallet exports evidence as a bundle (`EvidenceBundle` in [types.ts](../../protocol/types.ts)), which the
 [recovery tools](cli.md) read:
 
-| Field      | Type     | Meaning                                                                 |
-| ---------- | -------- | ----------------------------------------------------------------------- |
-| `chainId`  | string   | The chain, as a decimal string                                          |
-| `casino`   | address  | The contract                                                            |
-| `operator` | address  | The casino, the contract's owner                                        |
-| `opening`  | object   | `{channelId, player, index}`                                            |
-| `evidence` | Evidence | The latest evidence of the channel                                      |
-| `details`  | Details  | Optional: the details of the step's operation, whose hash is its `memo` |
+| Field         | Type     | Meaning                                                                                                                      |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `chainId`     | string   | The chain, as a decimal string                                                                                               |
+| `casino`      | address  | The contract                                                                                                                 |
+| `operator`    | address  | The casino, the contract's owner                                                                                             |
+| `opening`     | object   | `{channelId, player, index}`                                                                                                 |
+| `evidence`    | Evidence | The latest evidence of the channel                                                                                           |
+| `details`     | Details  | Optional: the details of the step's operation, whose hash is its `memo`                                                      |
+| `withdrawals` | string[] | Optional: the IDs of the account's withdrawals the contract may still owe something ([withdrawals](contract.md#withdrawals)) |
 
 `verifyEvidence` in [protocol.ts](../../protocol/protocol.ts) checks a bundle's signatures. Evidence on the channel's
 base has none to check: it reports `unsignedBase: true`.
@@ -210,8 +208,7 @@ memo = keccak256(utf8(canonicalJSON(details)))
 | `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers               |
 
 No other key is allowed. `id`, `game` and `counterparty` are `0x` followed by 64 lowercase hex digits. `group` and
-`meta` appear only beside `game`. A withdrawal's or a transfer's recipient is in the operation, not in its details. By
-kind:
+`meta` appear only beside `game`. A withdrawal's recipient is in the operation, not in its details. By kind:
 
 | Kind          | Details                                  |
 | ------------- | ---------------------------------------- |
@@ -220,24 +217,22 @@ kind:
 | 3, credit     | `counterparty`, no `game`                |
 | 4, deposit    | Neither `game` nor `counterparty`        |
 | 5, withdrawal | Neither `game` nor `counterparty`        |
-| 6, transfer   | Neither `game` nor `counterparty`        |
 
 Each operation the wallet signs, and what its details hold:
 
-| Operation                                 | Kind | Details                                                                             |
-| ----------------------------------------- | ---- | ----------------------------------------------------------------------------------- |
-| Casino bet                                | 1    | `{id, game, group?}`                                                                |
-| Payment to the bankroll                   | 2    | `{id, game, group?}`                                                                |
-| Developer bet                             | 2    | `{id, game, group?, meta}`; the bet is known by the operation's hash                |
-| Investment in the bankroll fund           | 2    | `{id, counterparty: FUND_ID}`                                                       |
-| Deposit into the account's developer bank | 2    | `{id, counterparty: BANK_ID}`                                                       |
-| Collecting redeemed shares                | 3    | `{id, counterparty: FUND_ID}`                                                       |
-| Collecting a bank withdrawal              | 3    | `{id, counterparty: BANK_ID}`                                                       |
-| Collecting developer earnings             | 3    | `{id, counterparty: DEVELOPER_ID}`                                                  |
-| Collecting a developer bet's payout       | 3    | `{id, counterparty: <the bet's hash>}`                                              |
-| Taking in a deposit                       | 4    | `{id}`                                                                              |
-| Withdrawal                                | 5    | `{id}`; the operation names the address it pays as `recipient`                      |
-| Transfer, or locking in the balance       | 6    | `{id}`; the operation names the account as `recipient`, the player's own to lock in |
+| Operation                                 | Kind | Details                                                                                 |
+| ----------------------------------------- | ---- | --------------------------------------------------------------------------------------- |
+| Casino bet                                | 1    | `{id, game, group?}`                                                                    |
+| Payment to the bankroll                   | 2    | `{id, game, group?}`                                                                    |
+| Developer bet                             | 2    | `{id, game, group?, meta}`; the bet is known by the operation's hash                    |
+| Investment in the bankroll fund           | 2    | `{id, counterparty: FUND_ID}`                                                           |
+| Deposit into the account's developer bank | 2    | `{id, counterparty: BANK_ID}`                                                           |
+| Collecting redeemed shares                | 3    | `{id, counterparty: FUND_ID}`                                                           |
+| Collecting a bank withdrawal              | 3    | `{id, counterparty: BANK_ID}`                                                           |
+| Collecting developer earnings             | 3    | `{id, counterparty: DEVELOPER_ID}`                                                      |
+| Collecting a developer bet's payout       | 3    | `{id, counterparty: <the bet's hash>}`                                                  |
+| Taking in a deposit                       | 4    | `{id}`                                                                                  |
+| Withdrawal, or locking in the balance     | 5    | `{id}`; the operation names the address it pays as `recipient`, the contract to lock in |
 
 What the casino checks for each, and what it answers, is under
 [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations).
@@ -420,7 +415,7 @@ canonical JSON of the rules they apply alike. An `encodeType` string is a struct
 `Access(bytes32 channelId,uint256 expiresAt)`. The rules:
 
 ```text
-{"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"none":0,"transfer":6,"withdrawal":5},"limits":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
+{"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"none":0,"withdrawal":5},"limits":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
 `DEVELOPER_PROTOCOL` fixes only what a developer's server shares with the casino: the `encodeType` strings of
@@ -440,17 +435,17 @@ throws `protocol-mismatch`). A change to a structure only wallets sign moves `PR
 [vectors/protocol.json](../../vectors/protocol.json), written by [scripts/vectors.ts](../../scripts/vectors.ts), fixes
 the hashing and pricing rules in numbers.
 
-| Key                             | Contents                                                                                                                                                                                                                                            |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, the developer `0x4444…44` and the recipient `0x5555…55`                                                                                             |
-| `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#limits-and-the-protocol-revision)                                                                                                                                                                            |
-| `opening`                       | The opening of the player's first channel, whose `index` is `0`                                                                                                                                                                                     |
-| `base`, `baseHash`              | The channel's base, and its hash                                                                                                                                                                                                                    |
-| `operations`                    | Seven operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |
-| `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                     |
-| `rejection`, `rejectionHash`    | The checkpoint that declines the casino bet instead, and its hash                                                                                                                                                                                   |
-| `cases`                         | Four casino bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                       |
-| `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                  |
+| Key                             | Contents                                                                                                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, the developer `0x4444…44` and the recipient `0x5555…55`                                                                                           |
+| `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#limits-and-the-protocol-revision)                                                                                                                                                                          |
+| `opening`                       | The opening of the player's first channel, whose `index` is `0`                                                                                                                                                                                   |
+| `base`, `baseHash`              | The channel's base, and its hash                                                                                                                                                                                                                  |
+| `operations`                    | Six operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |
+| `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                   |
+| `rejection`, `rejectionHash`    | The checkpoint that declines the casino bet instead, and its hash                                                                                                                                                                                 |
+| `cases`                         | Four casino bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                     |
+| `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                |
 
 The operations:
 
@@ -464,8 +459,6 @@ The operations:
 5. A deposit of `500000000`, which takes in money deposited into the open channel later.
 6. A withdrawal of `700000000` to `identity.recipient`, which the operation names as its `recipient`, with details
    `{id}` alone, leaving a balance of `960000000` and `withdrawn` at `700000000`.
-7. A transfer of `60000000` into the balance of `identity.recipient`, named the same way, leaving `900000000` and
-   `withdrawn` at `760000000`.
 
 An independent implementation checks, with the domain of `identity`:
 

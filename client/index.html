@@ -155,8 +155,8 @@
         <section id="claims" class="card hidden" aria-labelledby="claims-title">
           <h2 id="claims-title">Waiting to be paid</h2>
           <p class="muted">
-            What a closed balance is still owed. Its winnings are paid as the bankroll has the cash, first come first
-            served.
+            What the contract still owes you: closed balances, and withdrawals it could not pay in full. Winnings are
+            paid as the bankroll has the cash, oldest first.
           </p>
           <div id="claim-list" class="claim-list"></div>
         </section>
@@ -179,8 +179,8 @@
           <p class="muted">
             Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
             challenge that close within 24 hours with your saved evidence. The contract holds your deposits for it: Lock
-            in my balance makes all of it deposits, the bankroll paying in your winnings. Keep a current recovery bundle
-            somewhere safe.
+            in my balance withdraws all of it into your own channel as deposits, the bankroll paying out your winnings.
+            Keep a current recovery bundle somewhere safe.
           </p>
           <div class="actions">
             <button id="channel-export" class="button small" type="button">Export recovery bundle</button
@@ -528,9 +528,6 @@
         </div>
         <label for="withdraw-to">To</label>
         <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
-        <label id="withdraw-transfer-field" class="check"
-          ><input id="withdraw-transfer" type="checkbox" /> Put it into that account's HookedIn balance</label
-        >
         <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
       </section>
