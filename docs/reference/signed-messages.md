@@ -128,7 +128,7 @@ Every transition holds to these rules, which the contract, the wallet and the ca
 - A casino bet's `chance` is 1 to 2^64 − 1, the winning outcomes out of 2^64, and its `prize` is 1 to 2^128 − 1: a sure
   loss or a sure win is no bet.
 - A withdrawal's `recipient` is neither the zero address nor the contract; every other kind's is the zero address.
-- The next `balance` and `withdrawn` are below 2^128.
+- The next `balance`, `deposited` and `withdrawn` are below 2^128.
 - Every field a kind does not use is zero, and every kind but a casino bet carries a zero seed and secret: one meaning,
   one encoding.
 
@@ -402,7 +402,7 @@ open channel, and `sequence` is the number of the statement it will produce, so 
 | Outcome space, which a chance counts in                       | 2^64, `18446744073709551616` (`OUTCOME_SPACE`) |
 | A bet's meta                                                  | 4,096 bytes of canonical JSON                  |
 | A group label                                                 | 64 UTF-16 code units                           |
-| Amounts, deposits, prizes, balances and `withdrawn`           | Below 2^128 (`MAX_BALANCE`)                    |
+| Amounts, deposits, prizes, balances, `deposited`, `withdrawn` | Below 2^128 (`MAX_BALANCE`)                    |
 | Canonical JSON and API request bodies                         | 1,000,000 bytes                                |
 | Settlements in one request, developer bets in one public page | 256                                            |
 | Payouts listed in one reply                                   | 256                                            |

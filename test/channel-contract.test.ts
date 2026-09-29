@@ -258,6 +258,43 @@ test('a close nets out what a checkpoint took in that the chain does not hold, s
   assert.equal((await f.contract.channels(ch.opening.channelId)).closingBalance, 1300n);
 });
 
+test('a recipient pays for what it returns, and a close owed nothing, or with no winnings, stores only what it needs', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
+    chatty: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.owner).deploy(
+      f.contract.target,
+    );
+  await chatty.waitForDeployment();
+  await (await chatty.setMode(4)).wait();
+  // Whatever a recipient returns is not copied: it costs the sender no more than the recipient's own gas.
+  const a = await open(f, env.wallets[1], 1000n),
+    b = await open(f, env.wallets[2], 1000n),
+    plain = await step(f, a, 5, 500n, { recipient: Wallet.createRandom().address }),
+    returning = await step(f, b, 5, 500n, { recipient: String(chatty.target) });
+  const gas = async (evidence: any) => (await (await f.contract.withdraw(evidence)).wait()).gasUsed;
+  const extra = (await gas(returning.evidence)) - (await gas(plain.evidence));
+  assert.ok(extra < 100000n, `a returning recipient cost ${extra} gas more`);
+  assert.equal(await env.provider.getBalance(String(chatty.target)), 500n);
+  // A close owed nothing leaves no claim; one owed only principal keeps no place in the winnings queue.
+  const lost = await open(f, env.wallets[4], 100n),
+    gone = await step(f, lost, 2, 100n);
+  await forceClose(f, env, { ...lost, evidence: await countersigned(f, lost, gone) });
+  assert.equal((await f.contract.claims(lost.opening.channelId)).beneficiary, ZeroAddress);
+  await assert.rejects(f.contract.claim.staticCall(lost.opening.channelId), reverts('InvalidState'));
+  const kept = await open(f, env.wallets[5], 100n);
+  await forceClose(f, env, kept);
+  const claim = await f.contract.claims(kept.opening.channelId);
+  assert.deepEqual([claim.protectedRemaining, claim.winningsRemaining, claim.queueEnd], [100n, 0n, 0n]);
+  // A close starts only on an open channel, and only its account or the owner starts one.
+  await assert.rejects(f.contract.startClose.staticCall(kept.evidence), reverts('InvalidState'));
+  await assert.rejects(f.contract.connect(env.wallets[6]).startClose.staticCall(a.evidence), reverts('Unauthorized'));
+  // The contract takes no payment of its own house cash.
+  await (await f.contract.fundBankroll({ value: 10n })).wait();
+  await assert.rejects(f.contract.withdrawHouse.staticCall(f.contract.target, 10n), reverts('TransferFailed'));
+});
+
 test('a close moves the account to its next channel at once, and withdrawals are paid until it is final', async t => {
   const env = await anvil();
   t.after(() => env.close());
@@ -529,7 +566,7 @@ test('offline evidence and the contract enforce the same checkpoint amount bound
   const f = await deployment(env),
     ch = await open(f, env.wallets[1], 1n),
     cap = 1n << 128n;
-  for (const field of ['balance', 'withdrawn']) {
+  for (const field of ['balance', 'deposited', 'withdrawn']) {
     for (const amount of [cap - 1n, cap, (1n << 256n) - 1n]) {
       const state = { ...ch.state, [field]: String(amount) },
         evidence = checkpointEvidence(
@@ -546,7 +583,7 @@ test('offline evidence and the contract enforce the same checkpoint amount bound
         };
       if (amount < cap) {
         assert.equal((await f.contract.supported(evidence))[field], amount);
-        assert.equal(verifyEvidence(bundle).state[field as 'balance' | 'withdrawn'], String(amount));
+        assert.equal(verifyEvidence(bundle).state[field as 'balance' | 'deposited' | 'withdrawn'], String(amount));
       } else {
         await assert.rejects(f.contract.supported(evidence), reverts('InvalidState'));
         assert.throws(() => verifyEvidence(bundle), /Balance exceeds the protocol maximum/);

@@ -441,7 +441,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     // A withdrawal counts what it takes out, so a close can tell what never became a claim.
     if (pays) next.withdrawn = String(BigInt(base.withdrawn) + amount);
   }
-  if (BigInt(next.balance) >= MAX_BALANCE || BigInt(next.withdrawn) >= MAX_BALANCE)
+  if ([next.balance, next.deposited, next.withdrawn].some(amount => BigInt(amount) >= MAX_BALANCE))
     throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
@@ -524,7 +524,7 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   const state = Number(evidence.step.operation.kind)
     ? verifyStep(d, evidence.base, evidence.step, opening.player, operator)
     : evidence.base;
-  if (BigInt(state.balance) >= MAX_BALANCE || BigInt(state.withdrawn) >= MAX_BALANCE)
+  if ([state.balance, state.deposited, state.withdrawn].some(amount => BigInt(amount) >= MAX_BALANCE))
     throw new Error('Balance exceeds the protocol maximum');
   // The details beside a step say what it meant, and are only as good as the memo it signed.
   if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))

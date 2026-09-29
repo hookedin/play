@@ -51,7 +51,8 @@ operation.
 
 The contract reads operations and signatures from calldata, reuses computed hashes, packs a channel's status and
 deadline with its player address, and uses a transient reentrancy guard. A claim stores its beneficiary and its current
-payout recipient; a withdrawal paid in full at once stores none, since its channel's `claimed` records it.
+payout recipient; a withdrawal paid in full at once stores none, since its channel's `claimed` records it, and nor does
+a close owed nothing.
 
 A channel holds ETH.
 
@@ -71,12 +72,13 @@ once, and the operation with the casino's signature of the checkpoint after it i
 in the order the account signed its channel's withdrawals, from a checkpoint whose deposits the chain holds. The claim
 takes the channel's principal first, so what the player has at risk does not change: the part of a balance above the
 channel's principal is a claim on the shared bankroll before and after, and joins the winnings queue. The contract pays
-at once what is covered, in one call with 100,000 gas, and a recipient that refuses it leaves all of it owed, so
-recording never depends on the recipient. A checkpoint counts what its balance has `withdrawn`, and the channel what its
-withdrawals have made into claims, so a close is owed back a withdrawal never recorded, and never one recorded. A
-withdrawal to the contract itself goes into the account's current channel as deposits: that locks a balance in. The
-casino takes a withdrawal on only when the channel's principal and the house cash it can count on cover all of it, and
-only to the contract or an address that accepts a payment from it with 100,000 gas; it declines the rest.
+at once what is covered, in one call with 100,000 gas whose return data it does not copy, and a recipient that refuses
+it leaves all of it owed, so recording never depends on the recipient. A checkpoint counts what its balance has
+`withdrawn`, and the channel what its withdrawals have made into claims, so a close is owed back a withdrawal never
+recorded, and never one recorded. A withdrawal to the contract itself goes into the account's current channel as
+deposits: that locks a balance in. The casino takes a withdrawal on only when the channel's principal and the house cash
+it can count on cover all of it, and only to the contract or an address that accepts a payment from it with 100,000 gas;
+it declines the rest.
 
 Only a close ends a channel, and starting one moves the account to its next channel at once: its next deposit opens a
 new channel while the old one closes. Finalization protects `min(owed, principal)`, so losses reduce the principal
@@ -87,9 +89,9 @@ Every channel finalizes once.
 
 Winnings are paid first in, first out, in the order their claims were recorded, a withdrawal's or a close's, and any
 claim collects what cash covers of it in one call, however far back it waits. A recipient that rejects payment keeps its
-share without stopping later cash from reaching the claims behind it. Every deposit and signed balance is below 2^128
-wei, so the uint256 total of winnings debt cannot overflow and block another channel's finalization or a withdrawal,
-whatever balances the owner signs.
+share without stopping later cash from reaching the claims behind it. Every deposit, and every signed balance, deposited
+and withdrawn total, is below 2^128 wei, so the uint256 total of winnings debt cannot overflow and block another
+channel's finalization or a withdrawal, whatever balances the owner signs.
 
 House cash, which pays the owner's own withdrawals, excludes all principal and unpaid winnings, and a player's
 withdrawal beyond its channel's principal joins the queue, so no withdrawal takes cash ahead of it. **Winnings on open

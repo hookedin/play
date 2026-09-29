@@ -5,8 +5,8 @@ pragma solidity ^0.8.28;
 /// Players must challenge stale closures within 24 hours to protect their latest balance.
 contract HookedInCasino {
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
-    // Every deposit, signed balance and withdrawn total is below 2^128 wei, so no realistic number of
-    // claims can overflow the uint256 aggregate debt and block a finalization or a withdrawal.
+    // Every deposit, and every signed balance, deposited and withdrawn total, is below 2^128 wei, so no realistic
+    // number of claims can overflow the uint256 aggregate debt and block a finalization or a withdrawal.
     uint256 public constant MAX_BALANCE = 1 << 128;
     uint8 private constant STATUS_UNOPENED = 0;
     uint8 private constant STATUS_OPEN = 1;
@@ -107,13 +107,13 @@ contract HookedInCasino {
     /// What the contract owes, and to whom: a finalized channel's close, under the channel's ID, or a withdrawal, under
     /// the hash of its operation. The beneficiary is the account, which may redirect it. A recipient that is this contract
     /// is the beneficiary's current channel: what the claim pays goes into it as deposits. A withdrawal paid in full at
-    /// once leaves no claim.
+    /// once, and a close owed nothing, leave no claim.
     struct Claim {
         address beneficiary;
         address recipient;
         uint256 protectedRemaining;
         uint256 winningsRemaining;
-        // Where the claim's winnings end in the queue: `queuedWinnings` once they joined it.
+        // Where the claim's winnings end in the queue: `queuedWinnings` once they joined it; 0 with no winnings.
         uint256 queueEnd;
     }
 
@@ -237,7 +237,7 @@ contract HookedInCasino {
     }
 
     function withdrawHouse(address payable recipient, uint256 amount) external onlyOwner nonReentrant {
-        if (recipient == address(0) || recipient == address(this) || amount == 0) revert InvalidTerms();
+        if (recipient == address(0) || amount == 0) revert InvalidTerms();
         if (amount > withdrawableHouse()) revert InsufficientBalance();
         (bool ok,) = recipient.call{value: amount}("");
         if (!ok) revert TransferFailed();
@@ -273,7 +273,9 @@ contract HookedInCasino {
         emit Withdrawal(id, s.channelId, op.recipient, op.amount);
         uint256 reached = _reached(queuedWinnings, winnings);
         if (_send(id, c.player, op.recipient, principal, reached)) (principal, winnings) = (0, winnings - reached);
-        if (principal + winnings != 0) claims[id] = Claim(c.player, op.recipient, principal, winnings, queuedWinnings);
+        if (principal + winnings != 0) {
+            claims[id] = Claim(c.player, op.recipient, principal, winnings, winnings != 0 ? queuedWinnings : 0);
+        }
     }
 
     // Every field an operation kind does not use must be zero, so each signed
@@ -354,7 +356,9 @@ contract HookedInCasino {
         } else {
             result = _derive(evidence.base, h, evidence.step);
         }
-        if (result.balance >= MAX_BALANCE || result.withdrawn >= MAX_BALANCE) revert InvalidState();
+        if (result.balance >= MAX_BALANCE || result.deposited >= MAX_BALANCE || result.withdrawn >= MAX_BALANCE) {
+            revert InvalidState();
+        }
     }
 
     // What a supported state is owed: its balance, the deposits it has not taken in, and what it withdrew that is not yet a
@@ -371,8 +375,8 @@ contract HookedInCasino {
     function startClose(Evidence calldata evidence) external nonReentrant {
         Checkpoint memory s = supported(evidence);
         Channel storage c = channels[s.channelId];
-        if (c.status != STATUS_OPEN || (msg.sender != c.player && msg.sender != owner)) revert Unauthorized();
-        if (block.timestamp > type(uint64).max - CHALLENGE_PERIOD) revert InvalidState();
+        if (c.status != STATUS_OPEN || block.timestamp > type(uint64).max - CHALLENGE_PERIOD) revert InvalidState();
+        if (msg.sender != c.player && msg.sender != owner) revert Unauthorized();
         c.status = STATUS_CLOSING;
         channelIndex[c.player] += 1;
         c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
@@ -405,11 +409,12 @@ contract HookedInCasino {
         uint256 principal = balance < c.principal ? balance : c.principal;
         uint256 winnings = balance - principal;
         protectedPrincipal = protectedPrincipal - c.principal + principal;
-        // The claim holds the principal from here on, and its winnings join the queue behind every claim before it.
+        // The claim holds the principal from here on, and its winnings join the queue behind every claim before it. A
+        // close owed nothing leaves no claim.
         c.principal = 0;
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
-        claims[channelId] = Claim(c.player, c.player, principal, winnings, queuedWinnings);
+        if (balance != 0) claims[channelId] = Claim(c.player, c.player, principal, winnings, winnings != 0 ? queuedWinnings : 0);
         emit CloseFinalized(channelId, c.player, stateHash, balance, principal, winnings);
     }
 
@@ -454,7 +459,8 @@ contract HookedInCasino {
     }
 
     // Pays a claim's principal and winnings: into its beneficiary's current channel when the recipient is this contract,
-    // and otherwise sent with 100,000 gas. Says whether the recipient took it; a refusal leaves all of it owed.
+    // and otherwise sent with 100,000 gas, whatever the recipient returns left uncopied so it costs the sender nothing.
+    // Says whether the recipient took it; a refusal leaves all of it owed.
     function _send(bytes32 id, address beneficiary, address recipient, uint256 principal, uint256 winnings)
         private
         returns (bool ok)
@@ -467,7 +473,9 @@ contract HookedInCasino {
             _deposit(beneficiary, amount);
             ok = true;
         } else {
-            (ok,) = payable(recipient).call{value: amount, gas: 100000}("");
+            assembly ("memory-safe") {
+                ok := call(100000, recipient, amount, 0, 0, 0, 0)
+            }
         }
         if (ok) emit ClaimPayment(id, recipient, amount);
         else (protectedPrincipal, unpaidWinnings) = (protectedPrincipal + principal, unpaidWinnings + winnings);
