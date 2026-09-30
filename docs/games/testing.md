@@ -49,10 +49,10 @@ start: a bet that settles, the same bet sent twice and placed once, and a bet wi
 
 ### `gameWallet`
 
-`gameWallet({ bankroll?, bank? })` resolves with a real `CasinoWallet` from play's client, with an in-memory store, a
-random player and one open channel of 1,000,000 wei on the local chain, 31337, wired to a stub casino in place of the
-network. `bankroll` is what the stub covers casino bets with, and `bank` what the developer's bank holds before any
-developer bet pays its stake in: 10^12 each by default.
+`gameWallet({ bankroll?, bank?, deposit? })` resolves with a real `CasinoWallet` from play's client, with an in-memory
+store, a random player and one open channel on the local chain, 31337, wired to a stub casino in place of the network.
+`bankroll` is what the stub covers casino bets with, and `bank` what the developer's bank holds before any developer bet
+pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
 
 | Member                       | What it is                                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |

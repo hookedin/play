@@ -116,7 +116,11 @@ export function worstReturn(plan: GamePlan) {
  * `bankroll` is what it covers casino bets with; `bank` is what the developer's bank holds before any developer bet
  * pays its stake into it.
  */
-export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds = 10n ** 12n } = {}) {
+export async function gameWallet({
+  bankroll: capital = 10n ** 12n,
+  bank: funds = 10n ** 12n,
+  deposit = 1000000n,
+} = {}) {
   const storage = new MemoryStore(),
     owner = Wallet.createRandom(),
     player = Wallet.createRandom(),
@@ -145,7 +149,7 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
       onchain: { status: '1', deposited: String(deposit), principal: String(deposit), claimed: '0' },
     };
   };
-  const first = await openChannel();
+  const first = await openChannel(deposit);
   // What the stub casino has signed, by channel and operation, and which channel each game operation ID was
   // carried out on: a game names its operations for its player, not for one channel.
   const responses = new Map<string, any>(),
