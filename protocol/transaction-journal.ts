@@ -104,7 +104,13 @@ export class TransactionJournal {
       persist,
       durable,
     });
-    const saved = initialState || (file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {});
+    let saved: any = initialState || {};
+    if (!initialState && file && fs.existsSync(file)) {
+      saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+      // What save() writes always holds both: any other file is not a journal to take over.
+      if (!saved || typeof saved !== 'object' || !('pending' in saved) || !('lastCompleted' in saved))
+        throw new Error('Not a transaction journal: ' + file);
+    }
     this.state = {
       signer: saved.signer,
       chainId: saved.chainId,

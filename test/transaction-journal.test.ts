@@ -206,3 +206,13 @@ test('a file journal stays bounded and keeps its pending transaction across a re
   assert.deepEqual(journal.state.pending, { ...pending, status: 'pending' });
   assert.equal(journal.state.lastCompleted!.action, 'test:99');
 });
+
+test('a journal refuses a file that is not one, and leaves it as it is', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-journal-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'channel.json'),
+    bundle = JSON.stringify({ casino: '0x' + '11'.repeat(20), evidence: [] });
+  fs.writeFileSync(file, bundle);
+  assert.throws(() => new TransactionJournal({ file, chainId: 31337 } as any), /Not a transaction journal/);
+  assert.equal(fs.readFileSync(file, 'utf8'), bundle);
+});
