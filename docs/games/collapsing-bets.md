@@ -188,7 +188,7 @@ outcome alone decides it. A collapsed step keeps that for the bet it places, and
 - **Each bet's measured return is its own.** A step bets only what it can lose, and the bets for the largest prizes
   carry more of the step's edge than the rest, so a collapsed game's bets pay back less of what they stake than the game
   does of its stake. At a bankroll far above the stake, Plinko's bets pay back from about 93% to over 99%, while each
-  board returns exactly 99% of the ball; Samson's Gold's lowest is the whole stake against the jackpot, at 95.1%. When
+  board returns exactly 99% of the ball; Samson's lowest is the whole stake against the jackpot, at 95.1%. When
   the bankroll is small beside a prize, the bet for it must carry more edge still for the bankroll to take it: at the
   least bankroll that backs Plinko's 16-row low board, its rarest bet pays back about 22%. A step whose outcomes are
   nothing or one win, as in Dice and Mines, is one bet whose return is the step's.

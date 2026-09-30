@@ -62,13 +62,13 @@ test('bet summaries show the payout against the stake and retain exact wei amoun
   const partial = receiptSummary({ ...receipt, payout: '400000000000000' }, contract);
   assert.deepEqual([partial.title, partial.amount, partial.tone], ['Casino bet lost', '−0.0006 ETH', 'negative']);
   const even = receiptSummary({ ...receipt, payout: receipt.stake }, contract);
-  assert.deepEqual([even.title, even.amount, even.tone], ['Casino bet broke even', '+0.0 ETH', 'neutral']);
+  assert.deepEqual([even.title, even.amount, even.tone], ['Casino bet broke even', '+0 ETH', 'neutral']);
 });
 
 test('reorged, reverted, replaced and unknown receipts never advertise a confirmed payment', () => {
   for (const status of ['orphaned', 'reverted', 'replaced', 'pending', undefined]) {
     const summary = receiptSummary({ kind: 'withdrawal', amount: '1000000000000000000', status }, contract);
-    assert.equal(summary.amount, '0.0 ETH');
+    assert.equal(summary.amount, '0 ETH');
     assert.equal(summary.amountLabel, 'No confirmed payment');
     assert.notEqual(summary.tone, 'positive');
     if (status === 'orphaned') assert.match(summary.notice!, /no longer confirmed/);
@@ -82,7 +82,7 @@ test('reorged, reverted, replaced and unknown receipts never advertise a confirm
 
 test('closures and actual collections remain distinct from off-chain payments', () => {
   const closure = receiptSummary({ kind: 'closure', amount: '0', status: 'confirmed' }, contract);
-  assert.equal(closure.amount, '0.0 ETH');
+  assert.equal(closure.amount, '0 ETH');
   assert.match(closure.notice!, /Collect it under Wallet → Waiting to be paid/);
   assert.equal(
     receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }, contract).amountLabel,
@@ -118,7 +118,7 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   };
   const paid = receiptSummary({ ...sent, recorded: true, paid: true, owed: '0' }, contract);
   assert.deepEqual([paid.title, paid.status, paid.amountLabel], ['Withdrawn', 'Paid on-chain', 'Paid out']);
-  assert.match(paid.description!, /^From your balance to 0x3333.*\. The contract has paid it\. Balance 0\.0 ETH$/);
+  assert.match(paid.description!, /^From your balance to 0x3333.*\. The contract has paid it\. Balance 0 ETH$/);
   const lockIn = { ...sent, kind: 'lock-in', to: contract },
     waiting = receiptSummary(lockIn, contract),
     locked = receiptSummary({ ...lockIn, recorded: true, paid: true, owed: '0' }, contract);

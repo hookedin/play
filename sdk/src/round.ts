@@ -222,7 +222,8 @@ export class RoundClient {
     const shortfall = required - BigInt(this.latest.allowance);
     const result = await this.call('game.requestAllowance', { amount: String(shortfall + 4n * stake) });
     this.latest = { allowance: result.allowance, pending: result.pending };
-    if (BigInt(this.latest.allowance) < required) throw new Error('Increase your game allowance to continue.');
+    if (BigInt(this.latest.allowance) < required)
+      throw new Error('Allow this game more ETH to play, or deposit if your balance is empty.');
   }
   /** Another tab of this game changed the round: reload it and tell the caller. Browser only. */
   watch(listener: () => void) {

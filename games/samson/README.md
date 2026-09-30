@@ -1,4 +1,4 @@
-# Samson's Gold
+# Samson
 
 A five-reel, three-row, 243-ways slot for [HookedIn](https://play.hookedin.com). Jawbone wilds, honeycomb scatters, and a bonus on its own reels where the wilds multiply. It is the showcase reference game: the whole payout distribution is counted exactly from the reel strips, and a spin is at most one bet, the whole stake against one pay, drawn so that spins pay exactly as the reels do.
 

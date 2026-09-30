@@ -10,9 +10,12 @@ back: every figure here is measured from bets that really happened.
 
 ## Bets
 
-**Bets**, `/bets`, lists every settled bet this wallet signed, newest first: each casino bet, and each developer bet
-once what it was paid has been collected, with its game, time, stake, payout, result and return. It is read from the
-receipts the wallet keeps ([Activity](#activity)); rejected requests and payments are not bets.
+**Bets**, `/bets`, lists every settled bet this wallet signed, newest first: each casino bet, each developer bet once
+what it was paid has been collected, and each payment a game made within a [group](#groups), with its game, time, what
+it put at risk, payout, result and return. **At risk** is what a casino bet staked, which can be less than the stake the
+game shows when the game keeps part of it back ([what is given up](../games/collapsing-bets.md#what-is-given-up)); a
+payment shows what it paid the house, and pays nothing back. It is read from the receipts the wallet keeps
+([Activity](#activity)); rejected requests, and payments outside a group, are not listed.
 
 Opening a casino bet shows everything its receipt holds: where the round's outcome landed against the bet's chance; the
 prize and chance you signed and the return they make; your seed and the casino's secret, checked again against the
@@ -36,9 +39,9 @@ bet has no odds, and so no return.
 
 **My games**, `/games`, adds up your bets, overall and game by game, two ways:
 
-- **Expected**: what the bets were worth, the sum of their expected payouts over the sum of their stakes, counting only
-  casino bets.
-- **Paid back**: what the bets paid, the sum of their payouts over the sum of their stakes.
+- **Expected**: what the bets were worth, the sum of their expected payouts over the sum of what they put at risk,
+  counting casino bets and a group's payments.
+- **Paid back**: what the bets paid, the sum of their payouts over the sum of what they put at risk.
 
 Over a handful of bets the second figure is luck, and over many it follows the first. These figures measure the bets a
 game placed, not the game: a game that collapses a step with many outcomes into one bet stakes only what the step can
@@ -48,9 +51,11 @@ lose, so its bets pay back less of what they stake than the game does of its sta
 ## Groups
 
 A game can give its bets and payments a **group**, a label of up to 64 characters that ties them together: the steps of
-one hand, the bets of one spin, one match. **Bets** shows the bets of one group in one game as a single row, with
-how many bets it holds and their net result; opening it lists each bet. Only the net is added up: a multi-step game
-stakes again what its last step paid, so adding its stakes or its payouts would count the same money more than once.
+one hand, the bets of one spin, one match. **Bets** shows the bets and payments of one group in one game as a single
+row, with how many it holds and their net result, so a round comes to what the game showed: a cash-out that pays the
+house part of what its bet won is that round's payment. Opening the row lists each one. Only the net is added up: a
+multi-step game stakes again what its last step paid, so adding its stakes or its payouts would count the same money
+more than once.
 
 ## Rejected bets
 

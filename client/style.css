@@ -1117,6 +1117,9 @@ main:has(> #page-play:not(.hidden)) > .banner {
   font-size: 13px;
   line-height: 1.5;
 }
+.tab-panel .button.full {
+  margin-top: 16px;
+}
 .tab-panel .text-button,
 .tab-panel .button.small {
   align-self: flex-start;
@@ -1354,6 +1357,11 @@ button.bet-row:hover {
 }
 .bet-group {
   grid-column: span 2;
+}
+.bet-group .bet-figure-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .bet-game {
   display: flex;

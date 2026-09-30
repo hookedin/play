@@ -1,4 +1,5 @@
-import { formatEther, getAddress, parseEther, ZeroAddress } from 'ethers';
+import { getAddress, parseEther, ZeroAddress } from 'ethers';
+import { ether } from './activity.ts';
 
 export interface WithdrawalInput {
   destination: string;
@@ -47,7 +48,7 @@ export function validateWithdrawal(input: WithdrawalInput): WithdrawalValidation
       error ??= typed
         ? 'Enter an ETH amount above zero, with at most 18 decimal places.'
         : 'Enter an amount or choose Max.';
-    else if (amount > input.maximum) error ??= `Your balance holds ${formatEther(input.maximum)} ETH.`;
+    else if (amount > input.maximum) error ??= `Your balance holds ${ether(input.maximum)} ETH.`;
   }
   if (input.maximum <= 0n) error ??= 'Nothing to withdraw: your balance is empty.';
   return { to, amount, error };

@@ -1,5 +1,5 @@
 /**
- * Samson's Gold: a five-reel, three-row, 243-ways slot whose whole payout distribution is counted
+ * Samson: a five-reel, three-row, 243-ways slot whose whole payout distribution is counted
  * exactly from its reel strips. Pure rules and arithmetic; no DOM, wallet or ambient randomness.
  *
  * A spin settles as at most one casino bet of two outcomes, the whole stake against one pay, drawn in the

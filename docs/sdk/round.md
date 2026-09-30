@@ -76,7 +76,7 @@ Starts a round at the graph's root with `setup.stake`, a decimal string of wei, 
 and is saved with the round. It throws `Recover the pending action first` while a step is pending, which `restore`
 resolves. It makes sure the game's allowance covers the stake, prices the graph, and saves the round under a fresh
 `id`, replacing a saved unfinished round, whose cash is in the game's allowance already. It places no bet; the first
-`action` does. It throws the pricing error above, `Increase your game allowance to continue.` when the player does not
+`action` does. It throws the pricing error above, `Allow this game more ETH to play, or deposit if your balance is empty.` when the player does not
 allow the game enough, and the bridge's errors.
 
 #### `action`
@@ -93,7 +93,7 @@ with its state unchanged.
 | `Illegal game action`                                                                          | The node does not offer the action                                            | –                                                                             |
 | `Retry the pending action first`                                                               | Another step is pending                                                       | Pending                                                                       |
 | A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The live bankroll is below the planning floor or does not admit the bet drawn | –                                                                             |
-| `Increase your game allowance to continue.`                                                    | The player did not allow the game enough                                      | –                                                                             |
+| `Allow this game more ETH to play, or deposit if your balance is empty.`                       | The player did not allow the game enough, or has nothing to allow             | –                                                                             |
 | The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                  | Pending, under a fresh operation ID                                           |
 | The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                        | Pending, under the same operation ID, so sending it again is the same request |
 
@@ -119,7 +119,7 @@ The cash inside an unfinished round, or `0n`: part of the game's allowance, and 
 
 Makes sure the game's allowance, as the last `restore`, `start` or `action` read it, covers `required`. When it does
 not, it asks the player for the shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
-`Increase your game allowance to continue.` if the allowance is still short.
+`Allow this game more ETH to play, or deposit if your balance is empty.` if the allowance is still short.
 
 #### `busy`
 

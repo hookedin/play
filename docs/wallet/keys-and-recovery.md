@@ -28,10 +28,10 @@ save your key, the wallet asks the browser to keep its storage rather than clear
 
 ## On another device
 
-Sign in with your passkey, or import your key, and the wallet takes up your balance from the casino: the latest state
-it holds of your channel, with the reply that signed it. The wallet checks that its evidence carries your own
-signatures and the casino's, and signs the state itself; a declined operation's state moves no money.
-[Bankroll shares](bankroll-fund.md#the-statements-your-wallet-checks) follow the same way.
+Sign in with your passkey, from the account menu or the Deposit tab, or import your key, and the wallet takes up your
+balance from the casino: the latest state it holds of your channel, with the reply that signed it. The wallet checks
+that its evidence carries your own signatures and the casino's, and signs the state itself; a declined operation's state
+moves no money. [Bankroll shares](bankroll-fund.md#the-statements-your-wallet-checks) follow the same way.
 
 What stays in the browser it happened in: receipts and activity, [play limits](getting-started.md#games-and-their-allowances),
 each game's saved state, the payout of a developer bet placed there, whose receipt is its proof, and a withdrawal the

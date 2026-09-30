@@ -1,4 +1,4 @@
-/** Samson's Gold sound cues, played on the shared synthesizer. */
+/** Samson sound cues, played on the shared synthesizer. */
 import { createSynth } from '@hookedin/play/sdk/synth';
 
 export function createSound() {

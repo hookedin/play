@@ -437,7 +437,7 @@ test('additional game wagers debit the allowance once and recover their cards an
   let round = new RoundClient(bridge, graph, undefined, { store });
   await round.start({ stake: '1000' });
   const before = await w.balance();
-  await assert.rejects(round.action('double'), /Increase your game allowance/);
+  await assert.rejects(round.action('double'), /Allow this game more ETH/);
   assert.equal(settlements, 0);
   assert.equal(
     JSON.parse(store.get(round['storageKey'])!).pending,
@@ -477,7 +477,7 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
   assert.deepEqual(requests, [{ amount: '5000' }], 'shortfall plus four stakes');
   assert.equal(w.gameAllowance().allowance, '1000');
   approve = false;
-  await assert.rejects(round.action('double'), /Increase your game allowance/);
+  await assert.rejects(round.action('double'), /Allow this game more ETH/);
   assert.deepEqual(requests.at(-1), { amount: '5000' });
   approve = true;
   const state = await round.action('double');

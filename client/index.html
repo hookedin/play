@@ -56,6 +56,7 @@
       </details>
       <a href="/settings" data-page="settings">Settings</a>
       <a href="mailto:support@hookedin.com">Contact support</a>
+      <button id="menu-sign-in" class="text-button" type="button" data-key="sign-in">Sign in with a passkey</button>
       <a id="menu-profile" href="/" class="hidden">Public profile</a>
     </div>
 
@@ -175,8 +176,9 @@
           <div>
             <h1>Bets</h1>
             <p class="muted">
-              Your bets among the latest 100 receipts this wallet keeps. Open one for its odds, its outcome and the
-              proof.
+              Your bets among the latest 100 receipts this wallet keeps, each with what it put at risk, which a game can
+              make less than its stake by keeping part back, and a round's steps together. Open one for its odds, its
+              outcome and the proof.
             </p>
           </div>
           <button id="refresh-bets" class="button small" type="button">Refresh ↻</button>
@@ -428,7 +430,7 @@
               Import
             </button>
           </div>
-          <p class="muted">Switching accounts closes the open game. Back up every account you fund, one by one.</p>
+          <p class="muted">Switching accounts closes the open game. Save the key of every account you fund.</p>
         </section>
       </section>
 
@@ -485,6 +487,7 @@
       <div class="money-card balance sheet-balance">
         <span class="label">Balance</span><strong><span id="sheet-balance">—</span> <small>ETH</small></strong>
       </div>
+      <p id="wallet-reason" class="help" hidden></p>
       <div class="tabs" role="tablist" aria-label="Move money">
         <button role="tab" type="button" data-tab="deposit" aria-selected="true">Deposit</button
         ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button>

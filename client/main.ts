@@ -1,4 +1,4 @@
-import { formatEther, parseEther, ZeroAddress } from 'ethers';
+import { parseEther, ZeroAddress } from 'ethers';
 import qrcode from 'qrcode-generator';
 import { CasinoWallet } from './wallet.ts';
 import { validateWithdrawal } from './withdrawal.ts';
@@ -12,6 +12,7 @@ import { attachGameBridge, gameError } from './bridge.ts';
 import {
   activityJSON,
   createActivityEntry,
+  ether,
   developerBetSummary,
   h,
   percent,
@@ -50,9 +51,9 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const eth = (value: string | number | bigint | undefined, precision = networkDefaults.precision) => {
   const wei = BigInt(value || 0),
     smallest = 10n ** BigInt(18 - precision);
-  if (wei > 0n && wei < smallest) return `<${formatEther(smallest)}`;
+  if (wei > 0n && wei < smallest) return `<${ether(smallest)}`;
   // Truncated, never rounded: the game shows the same digits of the same money.
-  return Number(formatEther(wei - (wei % smallest))).toLocaleString('en-US', {
+  return Number(ether(wei - (wei % smallest))).toLocaleString('en-US', {
     minimumFractionDigits: precision,
     maximumFractionDigits: precision,
   });
@@ -82,7 +83,7 @@ const ethAmount = (text: string) => {
 /** A saved operation in words: what it is, the ID the casino knows it by and the sequence it was signed at, and what the
  * last attempt to send it ran into. */
 function pendingSummary({ kind, request, details, game, operationId }: any) {
-  const what = `${formatEther(request.amount)} ETH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
+  const what = `${ether(request.amount)} ETH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
     failed = wallet.pendingError?.operationId === operationId ? wallet.pendingError : null;
   return (
     `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${request.sequence}). ` +
@@ -156,9 +157,9 @@ function markSaved() {
 function renderSafety() {
   const controls = playControls(wallet.controls),
     limits = controls.limits;
-  const describeLimit = (value: string | null) => (value === null ? 'no limit' : `${formatEther(value)} ETH`);
+  const describeLimit = (value: string | null) => (value === null ? 'no limit' : `${ether(value)} ETH`);
   $('play-limits-status').textContent =
-    `Today: ${formatEther(controls.deposited)} ETH deposited; ${formatEther(controls.lost)} ETH in losses. Limits: deposits ${describeLimit(limits.deposit)}, losses ${describeLimit(limits.loss)}, session ${limits.minutes === null ? 'no limit' : `${limits.minutes} minutes`}.${controls.pending ? ` Requested increases take effect ${new Date(controls.pending.at).toLocaleString()}.` : ''}`;
+    `Today: ${plainEth(controls.deposited)} ETH deposited; ${plainEth(controls.lost)} ETH in losses. Limits: deposits ${describeLimit(limits.deposit)}, losses ${describeLimit(limits.loss)}, session ${limits.minutes === null ? 'no limit' : `${limits.minutes} minutes`}.${controls.pending ? ` Requested increases take effect ${new Date(controls.pending.at).toLocaleString()}.` : ''}`;
   const now = Date.now(),
     sessionEnd = controls.sessionStarted + (limits.minutes ?? 0) * 60000;
   const sessionMessage =
@@ -180,8 +181,8 @@ function renderSafety() {
     $('export-key').textContent = "Show this wallet's private key";
     for (const id of ['withdraw-to', 'withdraw-amount']) $<HTMLInputElement>(id).value = '';
     $<HTMLSelectElement>('withdraw-source').value = 'balance';
-    $<HTMLInputElement>('limit-deposit').value = limits.deposit === null ? '' : formatEther(limits.deposit);
-    $<HTMLInputElement>('limit-loss').value = limits.loss === null ? '' : formatEther(limits.loss);
+    $<HTMLInputElement>('limit-deposit').value = limits.deposit === null ? '' : ether(limits.deposit);
+    $<HTMLInputElement>('limit-loss').value = limits.loss === null ? '' : ether(limits.loss);
     $<HTMLInputElement>('limit-minutes').value = String(limits.minutes ?? '');
   }
   const saved = localStorage.getItem(savedSetting()) !== null;
@@ -190,7 +191,8 @@ function renderSafety() {
   $('key-status').textContent = saved
     ? 'Saved. Sign in with your passkey, or import your key under Accounts, to open this account on another device.'
     : "This account's key is only in this browser. Save it with a passkey or a key file before you deposit.";
-  for (const button of document.querySelectorAll<HTMLElement>('[data-key="create"]')) button.hidden = saved;
+  for (const button of document.querySelectorAll<HTMLElement>('[data-key="create"], #menu-sign-in'))
+    button.hidden = saved;
   const uri = `ethereum:${wallet.address}@${wallet.expectedChainId}`;
   if (uri !== depositURI) {
     depositURI = uri;
@@ -209,7 +211,7 @@ function renderSafety() {
     remaining === 0n
       ? 'Your play break or daily deposit limit keeps incoming ETH at this address. You can withdraw it.'
       : fee > 0n
-        ? `Address balance ${formatEther(held)} ETH. Estimated maximum network fee ${formatEther(fee)} ETH. Up to ${formatEther(net)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}. The final fee is recorded in Activity.`
+        ? `Address balance ${ether(held)} ETH. Estimated maximum network fee ${ether(fee)} ETH. Up to ${ether(net)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}. The final fee is recorded in Activity.`
         : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
 }
 $('play-limits-form').addEventListener('submit', event => {
@@ -386,7 +388,7 @@ function renderFund() {
         : !f
           ? 'The casino is not reporting its bankroll right now.'
           : shares
-            ? `You hold ${formatEther(shares)} shares under the casino's signed statement number ${wallet.fund.sequence}.`
+            ? `You hold ${ether(shares)} shares under the casino's signed statement number ${wallet.fund.sequence}.`
             : open
               ? ''
               : 'Deposit into your balance to buy shares.';
@@ -494,27 +496,27 @@ function renderAllowanceDialog() {
     amount = parseEther($<HTMLInputElement>('allowance-amount').value.trim() || '0');
   } catch {}
   const valid = amount >= 0n && amount <= total;
-  $('allowance-total').textContent = `${formatEther(total)} ETH, your balance`;
+  $('allowance-total').textContent = `${plainEth(total)} ETH, your balance`;
   $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
   $('allowance-help').textContent = !valid
     ? amount > total
-      ? `That is more than your balance of ${formatEther(total)} ETH.`
+      ? `That is more than your balance of ${ether(total)} ETH.`
       : 'Enter an amount in ETH.'
     : total === 0n
       ? 'Your balance is empty. Deposit to play with ETH.'
       : amount === allowance
         ? `This is ${name}'s allowance now.`
         : amount > allowance
-          ? `${name} may play with ${formatEther(amount - allowance)} ETH more.`
-          : `${formatEther(allowance - amount)} ETH comes back to your balance.`;
+          ? `${name} may play with ${ether(amount - allowance)} ETH more.`
+          : `${ether(allowance - amount)} ETH comes back to your balance.`;
   $('allowance-help').classList.toggle('check-failed', !valid);
   $<HTMLButtonElement>('allowance-confirm').disabled = !valid || amount === allowance || uiBusy || wallet.busy;
   $('allowance-confirm').textContent = !valid
     ? 'Allow'
     : amount < allowance
-      ? `Take back ${formatEther(allowance - amount)} ETH`
-      : `Allow ${formatEther(amount)} ETH`;
+      ? `Take back ${ether(allowance - amount)} ETH`
+      : `Allow ${ether(amount)} ETH`;
 }
 let allowanceRequest: { resolve: (amount: bigint | null) => void } | null = null;
 /** Opened by the game's request for a larger allowance, which may suggest how much more. With nothing in the balance
@@ -523,7 +525,7 @@ function openAllowanceDialog(amount?: bigint) {
   if (!active) return Promise.resolve<bigint | null>(null);
   allowanceRequest?.resolve(null);
   if (wallet.playableBalance() === 0n && BigInt(wallet.game?.allowance || '0') === 0n) {
-    openWallet('deposit');
+    openWallet('deposit', `${active.identity.name} plays with ETH from your balance. Deposit some to play.`);
     return Promise.resolve<bigint | null>(null);
   }
   const dialog = $<HTMLDialogElement>('allowance-dialog');
@@ -541,7 +543,7 @@ function openAllowanceDialog(amount?: bigint) {
         : allowance > 0n
           ? allowance
           : BigInt(localStorage.getItem(allowanceSetting()) || networkDefaults.total);
-  $<HTMLInputElement>('allowance-amount').value = formatEther(suggested > total ? total : suggested);
+  $<HTMLInputElement>('allowance-amount').value = ether(suggested > total ? total : suggested);
   renderAllowanceDialog();
   if (!dialog.open) dialog.showModal();
   $<HTMLInputElement>('allowance-amount').select();
@@ -553,9 +555,11 @@ function openAllowanceDialog(amount?: bigint) {
 // --- The wallet: the balance, what comes in at the deposit address, and withdrawals -----------------------
 
 type WalletTab = 'deposit' | 'withdraw';
-/** The wallet's dialog, on one of its tabs. */
-function openWallet(tab: WalletTab = 'deposit') {
+/** The wallet's dialog, on one of its tabs, and why it opened when it was not the player's own click. */
+function openWallet(tab: WalletTab = 'deposit', reason = '') {
   $('account-menu').hidePopover?.();
+  $('wallet-reason').textContent = reason;
+  $('wallet-reason').hidden = !reason;
   selectTab(tab);
   const dialog = $<HTMLDialogElement>('wallet-dialog');
   if (!dialog.open) dialog.showModal();
@@ -590,7 +594,7 @@ function renderWallet() {
   for (const id of ['balance-amount', 'sheet-balance']) $(id).textContent = plainEth(balance);
   const protectedAmount = BigInt(state.principal || 0) < balance ? BigInt(state.principal || 0) : balance;
   $('balance-protection').textContent =
-    `${formatEther(protectedAmount)} ETH backed by your contract deposits. ${formatEther(balance - protectedAmount)} ETH above those deposits depends on available bankroll cash until locked in under Recovery.`;
+    `${plainEth(protectedAmount)} ETH backed by your contract deposits. ${plainEth(balance - protectedAmount)} ETH above those deposits depends on available bankroll cash until locked in under Recovery.`;
   renderSafety();
   $('balance-note').textContent = arriving
     ? `${plainEth(arriving)} ETH of it is on its way into your balance.`
@@ -601,7 +605,7 @@ function renderWallet() {
   // The tally the casino keeps for this account, collected into its balance.
   $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
   $('developer-earnings').textContent = earnings
-    ? `Your games have earned ${formatEther(earnings.earned)} ETH in commission; ${formatEther(earnings.collected)} ETH of it is collected into your balance.`
+    ? `Your games have earned ${ether(earnings.earned)} ETH in commission; ${ether(earnings.collected)} ETH of it is collected into your balance.`
     : '';
   $('faucet-link').classList.toggle('hidden', wallet.expectedChainId !== 11155111n);
   $('wallet-address').textContent = wallet.address;
@@ -652,7 +656,7 @@ function renderWallet() {
     Boolean(c && wallet.pending) ||
     Boolean(c && wallet.recoveryOnly);
   $('withdraw').textContent =
-    amount !== null ? `Withdraw ${formatEther(amount)} ETH` : c ? 'Withdraw' : 'Withdraw address funds';
+    amount !== null ? `Withdraw ${ether(amount)} ETH` : c ? 'Withdraw' : 'Withdraw address funds';
   $('withdraw-help').textContent = !ready
     ? 'Connecting to your wallet…'
     : wallet.channel && closing && !atAddress
@@ -665,7 +669,7 @@ function renderWallet() {
             ? 'Finish the operation in flight first.'
             : request.error ||
               (c
-                ? `The address receives ${formatEther(amount!)} ETH, with no fee taken out: another HookedIn account's address puts it into that balance. Check the full address before confirming.`
+                ? `The address receives ${ether(amount!)} ETH, with no fee taken out: another HookedIn account's address puts it into that balance. Check the full address before confirming.`
                 : 'All ETH at your deposit address is sent, less the network fee. This does not withdraw your balance. Keep enough gas at this address if you need recovery transactions.');
   $('withdraw-help').classList.toggle('check-failed', Boolean(request.error));
 
@@ -821,7 +825,7 @@ function activityEntry(receipt: any) {
   const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
   if (channelId) facts.push(['Channel', channelId]);
   if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
-  if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
+  if (receipt.commission !== undefined) facts.push(['Commission', `${ether(receipt.commission)} ETH`]);
   if (receipt.to)
     facts.push(['To', same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to]);
   if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
@@ -844,7 +848,7 @@ function activityEntry(receipt: any) {
         'Send it now',
       ),
     ]);
-  if (receipt.fee !== undefined) facts.push(['Network fee', `${formatEther(receipt.fee)} ETH`]);
+  if (receipt.fee !== undefined) facts.push(['Network fee', `${ether(receipt.fee)} ETH`]);
   if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash)]);
   if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn)]);
   if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
@@ -898,7 +902,7 @@ function renderRecovery() {
   $('channel-start-close').textContent =
     wallet.channel?.closing && Number(state.channelStatus) === 1 ? 'Retry close' : 'Close without the casino';
   $('recovery-gas').textContent =
-    `Your deposit address holds ${formatEther(state.nativeBalance || 0)} ETH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; change this in Settings when ready.' : ''}`;
+    `Your deposit address holds ${plainEth(state.nativeBalance || 0)} ETH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; change this in Settings when ready.' : ''}`;
   $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
   $<HTMLButtonElement>('channel-finalize').disabled = !closing || Date.now() / 1000 < deadline || busy;
 }
@@ -1286,7 +1290,7 @@ function renderProfile() {
 async function refreshBank() {
   if (!wallet.channel?.registered) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();
-  $('bank-balance').textContent = `${formatEther(balance)} ETH`;
+  $('bank-balance').textContent = `${ether(balance)} ETH`;
 }
 
 // --- What you play, and what it paid ---------------------------------------------------------
@@ -1311,8 +1315,9 @@ function toggleFavourite(key: string) {
   localStorage.setItem(favouriteSetting, JSON.stringify([...saved]));
   renderMyGames();
 }
-/** Every settled bet this wallet signed. A rejected request never became a bet, so it stays in
- * Activity; only a bet whose odds the wallet recorded can say what it was worth. */
+/** Every settled bet this wallet signed, and every payment a game's round made beside its bets. A rejected request
+ * never became a bet, so it stays in Activity; only a bet whose odds the wallet recorded can say what it was worth, and
+ * a payment pays nothing back. */
 function ownBets(): BetRow[] {
   return wallet.history
     .filter(
@@ -1320,7 +1325,9 @@ function ownBets(): BetRow[] {
         receipt.status === 'signed' &&
         ((receipt.kind === 'casino-bet' && receipt.expectedPayout !== undefined) ||
           // A developer bet is one once what it was paid is collected.
-          (receipt.kind === 'developer-bet' && receipt.payout !== undefined)),
+          (receipt.kind === 'developer-bet' && receipt.payout !== undefined) ||
+          // A round pays the house what cashing out leaves of what its bet paid, so the round comes to what it showed.
+          (receipt.kind === 'payment' && receipt.details?.group)),
     )
     .map((receipt: any) => ({
       at: Date.parse(receipt.createdAt),
@@ -1329,7 +1336,8 @@ function ownBets(): BetRow[] {
       ...(receipt.details?.group ? { group: receipt.details.group } : {}),
       stake: BigInt(receipt.stake),
       payout: BigInt(receipt.payout ?? 0),
-      expected: receipt.expectedPayout === undefined ? null : BigInt(receipt.expectedPayout),
+      expected:
+        receipt.kind === 'payment' ? 0n : receipt.expectedPayout === undefined ? null : BigInt(receipt.expectedPayout),
       maxPayout: receipt.maxPayout === undefined ? null : BigInt(receipt.maxPayout),
       operation: receipt.operationId,
       receipt,
@@ -1442,8 +1450,8 @@ function renderMyGames() {
         known = key ? knownGames.get(key) : undefined;
       const figures: [string, string, string?][] = [
         ['Bets', String(totals.bets)],
-        ['Staked', `${formatEther(totals.staked)} ETH`],
-        ['Paid back', `${formatEther(totals.paid)} ETH`],
+        ['At risk', `${ether(totals.staked)} ETH`],
+        ['Paid back', `${ether(totals.paid)} ETH`],
         ['Your result', signedEth(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
         ['Return of your bets', expected === null ? '—' : percent(expected)],
       ];
@@ -1598,7 +1606,7 @@ $<HTMLFormElement>('allowance-form').addEventListener('submit', event => {
     await holdGameAllowance();
     await wallet.setGameAllowance(String(amount));
     localStorage.setItem(allowanceSetting(), String(amount));
-    toast(`${active.identity.name} may play with up to ${formatEther(amount)} ETH.`);
+    toast(`${active.identity.name} may play with up to ${ether(amount)} ETH.`);
     $<HTMLDialogElement>('allowance-dialog').close(String(amount));
   });
 });
@@ -1625,7 +1633,7 @@ $('wallet-dialog')
   .querySelector('[data-close]')!
   .addEventListener('click', () => $<HTMLDialogElement>('wallet-dialog').close());
 $<HTMLInputElement>('allowance-slider').addEventListener('input', () => {
-  $<HTMLInputElement>('allowance-amount').value = formatEther(
+  $<HTMLInputElement>('allowance-amount').value = ether(
     sliderAmount(wallet.playableBalance(), $<HTMLInputElement>('allowance-slider').value),
   );
   renderAllowanceDialog();
@@ -1672,7 +1680,7 @@ act('add-to-balance', async () => {
 for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
-  $<HTMLInputElement>('withdraw-amount').value = formatEther(wallet.channel?.state.balance || 0);
+  $<HTMLInputElement>('withdraw-amount').value = ether(wallet.channel?.state.balance || 0);
   renderWallet();
 });
 act('withdraw', async () => {
@@ -1687,8 +1695,8 @@ act('withdraw', async () => {
   $<HTMLDialogElement>('wallet-dialog').close();
   toast(
     receipt.withdrawal
-      ? `Withdrew ${formatEther(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
-      : `Withdrew ${formatEther(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
+      ? `Withdrew ${ether(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
+      : `Withdrew ${ether(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
   );
 });
 act('invest', async () => {
@@ -1696,11 +1704,11 @@ act('invest', async () => {
   if (wallet.pending) throw new Error('Finish the operation in flight before buying shares.');
   const receipt = await wallet.invest(amount);
   if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this investment.');
-  toast(`Bought ${formatEther(receipt.shares)} shares for ${formatEther(amount)} ETH.`);
+  toast(`Bought ${ether(receipt.shares)} shares for ${ether(amount)} ETH.`);
   await refreshFund();
 });
 $<HTMLButtonElement>('divest-all').addEventListener('click', () => {
-  if (fundStatus) $<HTMLInputElement>('divest-amount').value = formatEther(fundStatus.value);
+  if (fundStatus) $<HTMLInputElement>('divest-amount').value = ether(fundStatus.value);
 });
 act('divest', async () => {
   const status = await wallet.fundStatus(),
@@ -1711,7 +1719,7 @@ act('divest', async () => {
   const shares = wanted >= BigInt(status.value) ? held : (wanted * BigInt(status.totalShares)) / BigInt(status.equity);
   if (!shares) throw new Error('That is less than one share.');
   const receipt = await wallet.redeem(shares);
-  toast(`Sold ${formatEther(shares)} shares for ${formatEther(receipt.amount)} ETH. It is on its way to your balance.`);
+  toast(`Sold ${ether(shares)} shares for ${ether(receipt.amount)} ETH. It is on its way to your balance.`);
   await wallet.collectPayouts();
   await refreshFund();
 });
@@ -1789,6 +1797,14 @@ act(
   },
   'Switched account.',
 );
+// A field with a button beside it does what the button does on Enter.
+for (const [field, button] of [
+  ['alias-input', 'pick-alias'],
+  ['import-key', 'import-wallet'],
+])
+  $(field).addEventListener('keydown', event => {
+    if (event.key === 'Enter') $(button).click();
+  });
 act(
   'pick-alias',
   async () => {
@@ -1814,14 +1830,14 @@ act('bank-deposit', async () => {
   const receipt = await wallet.depositBank(amount);
   if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
   $<HTMLInputElement>('bank-amount').value = '';
-  toast(`Put ${formatEther(amount)} ETH in your bank.`);
+  toast(`Put ${ether(amount)} ETH in your bank.`);
   await refreshBank();
 });
 act('bank-withdraw', async () => {
   const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
   await wallet.withdrawBank(amount);
   $<HTMLInputElement>('bank-amount').value = '';
-  toast(`Took ${formatEther(amount)} ETH out of your bank. It is on its way to your balance.`);
+  toast(`Took ${ether(amount)} ETH out of your bank. It is on its way to your balance.`);
   await wallet.collectPayouts();
   await refreshBank();
 });
@@ -1841,6 +1857,7 @@ $('test-network').textContent = `${wallet.networkName} · Test ETH only · Do no
 // The account is saved with a passkey, whose secret is its key, or as the key itself in a file.
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
   button.addEventListener('click', async () => {
+    $('account-menu').hidePopover?.();
     const how = button.dataset.key,
       playing = Boolean(active) && how !== 'file';
     await task(async () => {

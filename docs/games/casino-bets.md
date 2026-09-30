@@ -53,7 +53,8 @@ async function flip(stake: bigint) {
   const { allowance } = await HookedIn.allowance();
   if (BigInt(allowance) < stake) {
     const answer = await HookedIn.requestAllowance({ amount: 10n * stake - BigInt(allowance) });
-    if (BigInt(answer.allowance) < stake) throw new Error('Increase your game allowance to play.');
+    if (BigInt(answer.allowance) < stake)
+      throw new Error('Allow this game more ETH to play, or deposit if your balance is empty.');
   }
   // Name the operation and save it before the wallet signs anything.
   const id = crypto.randomUUID();
@@ -130,7 +131,7 @@ it, such as which bucket, card or reel stops, and check that the receipt's `payo
 picture and the money then cannot disagree. `RoundClient` keeps the value to draw from in `state.settlement.draw`, and
 [`seededRandom(BigInt(draw))`](../sdk/engine.md#seededrandom) reads it as a generator, so a reload shows the same
 result: [Plinko](../../games/plinko/src/tables.ts) draws its ball's path with it, and
-[Samson's Gold](../../games/samson/src/math.ts) its reel stops.
+[Samson](../../games/samson/src/math.ts) its reel stops.
 
 ## Payments
 

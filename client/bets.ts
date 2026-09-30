@@ -1,7 +1,6 @@
-import { formatEther } from 'ethers';
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { betPayout, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
-import { activityJSON, h, jsonBlock, percent, signedEth, timeOf } from './activity.ts';
+import { activityJSON, ether, h, jsonBlock, percent, signedEth, timeOf } from './activity.ts';
 
 /**
  * One settled bet, however it was read: from this wallet's own receipt, or from a game's public
@@ -19,6 +18,8 @@ export interface BetRow {
   who?: string | null;
   /** The label the game gave it, such as a hand or a match. */
   group?: string;
+  /** What it put at risk: what a casino bet staked, which can be less than the stake a game shows when the game keeps
+   * part of it back, or what a payment of the round paid the house. */
   stake: bigint;
   payout: bigint;
   /** The bet's expected payout, out of 2^64 stakes: what its own odds were worth. A developer bet has no
@@ -52,6 +53,8 @@ export interface BetTotals {
   priced: bigint;
   net: bigint;
 }
+/** What a row put at risk is called: a payment of a game's round is money paid to the house. */
+const stakeLabel = (row: BetRow) => (row.receipt?.kind === 'payment' ? 'Paid in' : 'At risk');
 /** Bets, added up. */
 export function betTotals(rows: readonly BetRow[]) {
   const totals: BetTotals = { bets: rows.length, staked: 0n, paid: 0n, expected: 0n, priced: 0n, net: 0n };
@@ -101,7 +104,7 @@ export function totalCards(totals: BetTotals) {
         null,
         `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
           `They paid back ${realised === null ? '—' : percent(realised)}: ` +
-          `${formatEther(totals.paid)} ETH for ${formatEther(totals.staked)} ETH staked.`,
+          `${ether(totals.paid)} ETH for ${ether(totals.staked)} ETH at risk.`,
       ),
       h('p', { className: `bet-net ${totals.net < 0n ? 'negative' : 'positive'}` }, signedEth(totals.net)),
     ),
@@ -125,12 +128,10 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const net = row.payout - row.stake,
     item = rowElement(row, net, onOpen && (() => onOpen(row)));
   item.append(
-    figure('Staked', `${formatEther(row.stake)} ETH`),
+    figure(stakeLabel(row), `${ether(row.stake)} ETH`),
     figure(
-      row.maxPayout === undefined || row.maxPayout === null
-        ? 'Paid'
-        : `Paid of up to ${formatEther(row.maxPayout)} ETH`,
-      `${formatEther(row.payout)} ETH`,
+      row.maxPayout === undefined || row.maxPayout === null ? 'Paid' : `Paid of up to ${ether(row.maxPayout)} ETH`,
+      `${ether(row.payout)} ETH`,
     ),
     figure('Result', signedEth(net), tone(net)),
     figure(
@@ -257,8 +258,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     h(
       'div',
       { className: 'bet-detail-figures' },
-      figure('Staked', `${formatEther(row.stake)} ETH`),
-      figure('Paid', `${formatEther(row.payout)} ETH`),
+      figure(stakeLabel(row), `${ether(row.stake)} ETH`),
+      figure('Paid', `${ether(row.payout)} ETH`),
       figure('Result', signedEth(net), tone(net)),
       figure(
         'Return of this bet',
@@ -278,8 +279,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       factList([
         ['Developer', hex(receipt.game?.developer)],
         ['The bet you signed', hex(JSON.stringify(receipt.details?.meta))],
-        ['Paid to you', `${formatEther(receipt.settlement.player)} ETH`],
-        ['Given to the casino', `${formatEther(receipt.settlement.casino)} ETH`],
+        ['Paid to you', `${ether(receipt.settlement.player)} ETH`],
+        ['Given to the casino', `${ether(receipt.settlement.casino)} ETH`],
         ['The developer’s signature', hex(receipt.settlement.signature)],
       ]),
     );
@@ -292,7 +293,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       h(
         'p',
         { className: 'bet-detail-note' },
-        'This receipt keeps no revealed round, so there is nothing to draw: only the amounts above are known.',
+        receipt.kind === 'payment'
+          ? 'A payment: the game paid this to the house out of what its round held. It has no odds and no round.'
+          : 'This receipt keeps no revealed round, so there is nothing to draw: only the amounts above are known.',
       ),
     );
   } else {
@@ -301,7 +304,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     const where = detailSection('Where the round landed');
     const band = h('div', {
         className: 'bet-space-band',
-        title: `Pays ${formatEther(revealed.prize)} ETH on ${chance(revealed.chance)} of outcomes`,
+        title: `Pays ${ether(revealed.prize)} ETH on ${chance(revealed.chance)} of outcomes`,
       }),
       mark = h('div', { className: 'bet-space-mark', title: `The outcome, ${landed}` });
     band.style.width = `${across(revealed.chance)}%`;
@@ -314,8 +317,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         { className: 'bet-detail-note' },
         `The round drew ${landed}, ${across(landed).toFixed(3)}% of the way across the space. ` +
           (won
-            ? `That is below the bet’s chance, so it pays its prize, ${formatEther(revealed.prize)} ETH.`
-            : `That is not below the bet’s chance, so it pays nothing of the ${formatEther(revealed.prize)} ETH it could have.`),
+            ? `That is below the bet’s chance, so it pays its prize, ${ether(revealed.prize)} ETH.`
+            : `That is not below the bet’s chance, so it pays nothing of the ${ether(revealed.prize)} ETH it could have.`),
       ),
     );
     body.append(where);
@@ -326,7 +329,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     );
     terms.append(
       factList([
-        ['Prize', `${formatEther(revealed.prize)} ETH`],
+        ['Prize', `${ether(revealed.prize)} ETH`],
         ['Chance', `${chance(revealed.chance)} · ${revealed.chance} of 2⁶⁴ outcomes`],
         ['Worth', `${percent(returnParts(row.stake, row.expected ?? 0n))} of the stake`],
       ]),
@@ -395,9 +398,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Game key', hex(receipt.details?.game)],
         ['Memo, the hash of the details above', hex(op.memo)],
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
-        ['Balance after it settled', `${formatEther(receipt.balance ?? 0)} ETH`],
+        ['Balance after it settled', `${ether(receipt.balance ?? 0)} ETH`],
         receipt.commission && BigInt(receipt.commission) > 0n
-          ? ['The game’s commission', `${formatEther(receipt.commission)} ETH`]
+          ? ['The game’s commission', `${ether(receipt.commission)} ETH`]
           : null,
         ['The state it moved from', hex(op.previousStateHash)],
         ['Your signature on it', hex(step.authorization)],
