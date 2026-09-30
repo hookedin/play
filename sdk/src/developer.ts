@@ -27,7 +27,6 @@ import {
   assertProtocol,
   DEVELOPER_ACCESS_TYPES,
   DEVELOPER_PROTOCOL,
-  LIMITS,
   SETTLEMENT_TYPES,
   BANK_CASINO_BET_TYPES,
   MAX_DEVELOPER_BETS,
@@ -37,9 +36,9 @@ import {
 import type { PublicDeveloperBet, Round } from '../../protocol/types.ts';
 
 export type { PublicDeveloperBet, Round };
-/** What a casino's `GET /api/config` names for this kit to use it, as `developerProtocol` and `limits`: a stub casino
- * in a server's test answers with them. */
-export { DEVELOPER_PROTOCOL, LIMITS };
+/** What a casino's `GET /api/config` names as `developerProtocol` for this kit to take it: a stub casino in a server's
+ * test answers with it. */
+export { DEVELOPER_PROTOCOL };
 /** What one developer bet is paid: `player` to its player and `casino` to the casino, both from the developer's bank,
  * which took the stake when the bet was placed. Give the casino about half of what the bet was expected to earn
  * you: that is the casino's policy, and nothing enforces it. */

@@ -96,18 +96,12 @@ settled ones come in the order they settled, so a saved `cursor` never misses on
 
 ## The protocol
 
-What a casino's [`GET /api/config`](../casino-api/public.md#get-apiconfig) names, as `developerProtocol` and `limits`,
-for [`createDeveloper`](#createdeveloper) to take it. A stub casino in your server's tests answers with these two.
-
 ### `DEVELOPER_PROTOCOL`
 
 The revision of the protocol a developer's server shares with the casino: the hash of the three structures it signs,
-the outcome rule and `LIMITS`. A change to what only a wallet signs leaves it alone.
-
-### `LIMITS`
-
-Every bound a bet is held to, `{ outcomeSpace, meta, group }`, as the casino's config and a wallet's
-[`wallet.hello`](../reference/bridge.md#wallethello) give them.
+the outcome rule and the bounds a bet is held to. A casino's [`GET /api/config`](../casino-api/public.md#get-apiconfig)
+names it as `developerProtocol`, and [`createDeveloper`](#createdeveloper) takes no other; a stub casino in your
+server's tests answers with it. A change to what only a wallet signs leaves it alone.
 
 ## Types
 
