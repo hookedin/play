@@ -42,15 +42,10 @@ test('journal retries reject changed intent before confirmation or broadcast, in
   };
   let journal = new TransactionJournal({
     ...config,
-    initialState: {
-      schema: 'HOOKEDIN/TRANSACTIONS/1',
-      casino: destination,
-      pending: { action: 'claim', raw, hash, updatedAt: Date.now(), attempts: [{ hash, raw }] },
-    },
+    initialState: { pending: { action: 'claim', raw, hash, updatedAt: Date.now(), attempts: [{ hash, raw }] } },
   } as any);
   journal.save();
   journal = new TransactionJournal({ ...config, initialState: durable } as any);
-  assert.equal(journal.state.casino, destination);
   for (mined of [false, true]) {
     for (const change of [{ to: signer.address }, { value: 2n }, { data: '0xabcd' }]) {
       await assert.rejects(journal.submit('claim', { ...request, ...change }), /different intent/);
@@ -100,7 +95,7 @@ for (const boundary of ['initial', 'replacement', 'completion'])
       fail = boundary === 'initial',
       broadcasts = 0,
       mined = false;
-    let durable = { schema: 'HOOKEDIN/TRANSACTIONS/1', pending: null, history: [] };
+    let durable = { pending: null };
     const block = { number: 10, hash: id('block') };
     const provider = {
       send: async (method: any) => (method === 'eth_chainId' ? '0x7a69' : '0x0'),

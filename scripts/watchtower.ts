@@ -3,7 +3,7 @@ import { Contract, Wallet } from 'ethers';
 import { ChainObserver, createRpcProvider, requireIndependentRpc } from '../protocol/chain-observer.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
 import { DisputeWorker } from '../protocol/dispute-worker.ts';
-import { acquireServerLock } from '../protocol/file-lock.ts';
+import { acquireFileLock } from '../protocol/file-lock.ts';
 import { json } from '../protocol/protocol.ts';
 import artifact from '../client/contract-artifact.ts';
 const args = process.argv.slice(2),
@@ -32,7 +32,7 @@ try {
     chainId: deployment.chainId,
     expected: deployment,
   });
-  unlock = acquireServerLock(arg('--journal') + '.lock');
+  unlock = acquireFileLock(arg('--journal') + '.lock');
   const signer = new Wallet(process.env.HOOKEDIN_RELAYER_KEY, provider);
   const contract = new Contract(deployment.contractAddress, artifact.abi, signer);
   const worker = new DisputeWorker({

@@ -11,11 +11,9 @@ export interface JournalEntry {
   attempts: { hash: string; raw: string }[];
   receipt?: Pick<TransactionReceipt, 'hash' | 'blockHash' | 'blockNumber' | 'status'> | null;
 }
-export interface JournalState {
-  schema: string;
+interface JournalState {
   signer?: string;
   chainId?: string;
-  casino?: string;
   pending: JournalEntry | null;
   lastCompleted: JournalEntry | null;
 }
@@ -106,15 +104,10 @@ export class TransactionJournal {
       persist,
       durable,
     });
-    const saved =
-      initialState ||
-      (file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { schema: 'HOOKEDIN/TRANSACTIONS/1' });
-    if (saved.schema !== 'HOOKEDIN/TRANSACTIONS/1') throw new Error('Unsupported transaction journal');
+    const saved = initialState || (file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {});
     this.state = {
-      schema: saved.schema,
       signer: saved.signer,
       chainId: saved.chainId,
-      casino: saved.casino,
       pending: saved.pending || null,
       lastCompleted: saved.lastCompleted || null,
     };

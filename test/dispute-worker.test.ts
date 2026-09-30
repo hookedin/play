@@ -29,7 +29,7 @@ test("evidence this contract cannot settle blocks no other channel's challenge",
   ].map(bundle => ({ ...bundle, chainId: env.chainId, operator: f.owner.address }));
   // Signed as it says, and not this contract's: it must not monopolize the submission queue.
   assert.equal(elsewhere.opening.channelId, bad.opening.channelId);
-  assert.equal(verifyEvidence(bundles[0]).signaturesValid, true);
+  assert.doesNotThrow(() => verifyEvidence(bundles[0]));
   await assert.rejects(f.contract.challengeClose.staticCall(stale.evidence));
   const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId }),
     worker = new DisputeWorker({

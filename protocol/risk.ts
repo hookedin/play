@@ -46,7 +46,7 @@ export const returnParts = (stake: bigint, expectedPayout: bigint) => {
 export const betReturn = (bet: BetTerms) => returnParts(bet.stake, describeBet(bet).expectedPayout);
 
 /** The largest integer whose square is at most `n`. */
-export function isqrt(n: bigint) {
+function isqrt(n: bigint) {
   if (n < 2n) return n;
   let x = 1n << BigInt((n.toString(2).length + 1) >> 1);
   for (let y = (x + n / x) >> 1n; y < x; y = (x + n / x) >> 1n) x = y;

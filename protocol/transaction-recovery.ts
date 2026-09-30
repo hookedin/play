@@ -1,6 +1,6 @@
 import type { JsonRpcProvider, TransactionResponse } from 'ethers';
 import type { ChainObserver, ChainBlock } from './chain-observer.ts';
-export interface RecoveryContext {
+interface RecoveryContext {
   provider: JsonRpcProvider;
   observer?: ChainObserver;
   confirmations?: number;

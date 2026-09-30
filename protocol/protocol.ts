@@ -235,7 +235,7 @@ export function baseState(channelId: string): Checkpoint {
   };
 }
 /** Whether evidence is its channel's base, unsigned. */
-export const unsignedBase = (evidence: Evidence) =>
+const unsignedBase = (evidence: Evidence) =>
   evidence.playerSignature === '0x' &&
   evidence.casinoSignature === '0x' &&
   canonicalJSON(plain(evidence.base)) === canonicalJSON(baseState(evidence.base.channelId));
@@ -473,7 +473,7 @@ export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner
   assertSignature(d, OP_TYPES, step.operation, step.authorization, playerSigner);
   return settleStep(d, base, step, casinoSigner);
 }
-export const emptyStep = (): Step => ({
+const emptyStep = (): Step => ({
   operation: {
     channelId: ZeroHash,
     previousStateHash: ZeroHash,
@@ -492,7 +492,7 @@ export const emptyStep = (): Step => ({
   secret: ZeroHash,
   casinoSignature: '0x',
 });
-export const isEmptyStep = (d: Domain, step: Step) =>
+const isEmptyStep = (d: Domain, step: Step) =>
   step.authorization === '0x' &&
   step.casinoSignature === '0x' &&
   same(step.secret, ZeroHash) &&
@@ -501,20 +501,14 @@ export const isEmptyStep = (d: Domain, step: Step) =>
 export function checkpointEvidence(state: Checkpoint, playerSignature = '0x', casinoSignature = '0x'): Evidence {
   return { base: state, playerSignature, casinoSignature, step: emptyStep() };
 }
-export function verifyEvidence(bundle: EvidenceBundle): {
-  state: Checkpoint;
-  signaturesValid: boolean;
-  unsignedBase: boolean;
-  chainObservationsVerified: boolean;
-  limitation: string;
-} {
+/** The checkpoint a bundle proves, once every signature in it checks out. */
+export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   const d = domain(bundle.chainId, bundle.casino),
     { opening, operator, evidence } = bundle;
   validateOpening(opening);
   if (!same(evidence.base.channelId, opening.channelId)) throw new Error('Evidence channel differs');
   // The channel's base needs no signature.
-  const base = unsignedBase(evidence);
-  if (!base) {
+  if (!unsignedBase(evidence)) {
     assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, opening.player);
     assertSignature(d, STATE_TYPES, evidence.base, evidence.casinoSignature, operator);
   }
@@ -529,14 +523,7 @@ export function verifyEvidence(bundle: EvidenceBundle): {
   // The details beside a step say what it meant, and are only as good as the memo it signed.
   if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))
     throw new Error('Details differ from the operation they describe');
-  return {
-    state,
-    signaturesValid: true,
-    unsignedBase: base,
-    chainObservationsVerified: false,
-    limitation:
-      'The channel and its deposits require independent on-chain verification. A signed balance is a claim on the shared bankroll. Only a finalized on-chain claim establishes payment due. Inspect payments and remaining debt through an independent RPC.',
-  };
+  return { state };
 }
 /** A developer's commission. It accrues to the developer's address, the developer's own channel shows
  * what that address has earned and collected, and it is collected like redeemed shares: a credit that

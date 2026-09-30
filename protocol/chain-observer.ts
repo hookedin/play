@@ -1,14 +1,13 @@
 import type { Block, Contract, TransactionReceipt } from 'ethers';
 import type { Integer } from './types.ts';
 export type ChainBlock = Pick<Block, 'number' | 'hash' | 'timestamp'>;
-export interface ObserverOptions {
+interface ObserverOptions {
   provider: JsonRpcProvider;
   witnessProvider?: JsonRpcProvider;
   chainId: Integer;
   finality?: number;
   now?: () => number;
   maxAgeMs?: number;
-  maxStallMs?: number;
 }
 export interface Observation {
   block: ChainBlock;
@@ -20,6 +19,8 @@ import { canonicalJSON, plain } from './protocol.ts';
 import { FetchRequest, JsonRpcProvider, Network } from 'ethers';
 
 export const RPC_TIMEOUT_MS = 10000;
+/** How long the confirmed chain may stand still before an observation counts as stale. */
+const MAX_STALL_MS = 60000;
 /** Bound the transport itself: a late response cannot resume a failed read. Given the chain it serves, the provider
  * skips its own detection round trip; every observation checks the chain ID anyway. Each call is a request of its own:
  * every RPC answers those, while public ones cap what a batch may cost (Tenderly's refuses six contract calls in one). */
@@ -33,7 +34,7 @@ export function createRpcProvider(url: string, chainId: Integer | undefined = un
 }
 
 export const blockReference = (block: Pick<ChainBlock, 'hash'>) => ({ blockHash: block.hash, requireCanonical: true });
-export async function readContract(
+async function readContract(
   provider: JsonRpcProvider,
   contract: Contract,
   method: string,
@@ -59,21 +60,12 @@ export class ChainObserver {
   declare finality: number;
   declare now: () => number;
   declare maxAgeMs: number;
-  declare maxStallMs: number;
   declare local: boolean;
   declare last: Pick<ChainBlock, 'number' | 'hash'> | null;
   declare lastProgress: number;
 
-  constructor({
-    provider,
-    witnessProvider,
-    chainId,
-    finality = 1,
-    now = Date.now,
-    maxAgeMs = 60000,
-    maxStallMs = 60000,
-  }: ObserverOptions) {
-    Object.assign(this, { provider, witnessProvider, chainId: BigInt(chainId), finality, now, maxAgeMs, maxStallMs });
+  constructor({ provider, witnessProvider, chainId, finality = 1, now = Date.now, maxAgeMs = 60000 }: ObserverOptions) {
+    Object.assign(this, { provider, witnessProvider, chainId: BigInt(chainId), finality, now, maxAgeMs });
     if (!Number.isSafeInteger(finality) || finality < 1) throw new Error('Invalid confirmation depth');
     this.local = this.chainId === 31337n;
     if (!this.local && (!witnessProvider || witnessProvider === provider))
@@ -117,7 +109,7 @@ export class ChainObserver {
       throw new Error('Confirmed block timestamp is stale');
     if (this.last && (height < this.last.number || (height === this.last.number && block.hash !== this.last.hash)))
       throw new Error('Observed chain regressed or reorganized; wait for a newer corroborated block');
-    if (!this.local && !advanced && this.now() - this.lastProgress > this.maxStallMs)
+    if (!this.local && !advanced && this.now() - this.lastProgress > MAX_STALL_MS)
       throw new Error('Confirmed chain has stopped advancing');
     let reorg = null;
     if (this.last && ancestors) {
@@ -143,7 +135,7 @@ export class ChainObserver {
     if (
       !this.local &&
       (observation.tips.some(t => this.now() - t.timestamp * 1000 > this.maxAgeMs) ||
-        (!advanced && this.now() - this.lastProgress > this.maxStallMs))
+        (!advanced && this.now() - this.lastProgress > MAX_STALL_MS))
     )
       throw new Error('Chain observation became stale during reads');
     const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
