@@ -28,6 +28,7 @@ import {
   FUND_ID,
   DEVELOPER_ID,
   FUND_TYPES,
+  SHARE_TYPES,
   REDEEM_TYPES,
   SETTLEMENT_TYPES,
   BANK_TYPES,
@@ -632,30 +633,33 @@ export class ChannelClient extends WalletTransactions {
   /** The statement for an investment this wallet just made. It is believed as far as it can be
    * checked: the casino's signature, this exact debit, and the shares its stated price implies.
    * The checkpoint it came with is already signed and stands either way, so a statement that fails
-   * is kept out and shown as an alert instead. */
+   * is kept out and shown as an alert instead. One that does not follow the wallet's last statement,
+   * as in a wallet restored from an older backup, is checked on its own and left for `syncFund`. */
   adoptStatement(this: CasinoWallet, statement: any, op: Operation) {
     const holder = this.channel!.opening.player,
       cause = hashOperation(this.domain, op);
     try {
-      const follows = Number(statement?.message?.sequence) === this.fund.sequence + 1,
-        minted = verifyShareStatement(this.domain, statement, this.operator, {
+      if (Number(statement?.message?.sequence) !== this.fund.sequence + 1) {
+        const minted = verifyShareStatement(this.domain, statement, this.operator, {
           holder,
           cause,
           amount: op.amount,
-          // A wallet restored from an older backup has missed statements: the casino's newer signed
-          // one is taken as it stands, unless it leaves fewer shares than this wallet can prove.
-          previous: follows
-            ? this.fund
-            : {
-                sequence: Number(statement.message.sequence) - 1,
-                shares:
-                  BigInt(statement.message.shares) -
-                  sharesFor(statement.message.amount, statement.message.equity, statement.message.totalShares),
-              },
+          previous: {
+            sequence: Number(statement.message.sequence) - 1,
+            shares:
+              BigInt(statement.message.shares) -
+              sharesFor(statement.message.amount, statement.message.equity, statement.message.totalShares),
+          },
         });
-      if (!follows && BigInt(statement.message.shares) - minted < BigInt(this.fund.shares))
-        throw new Error('The casino states fewer shares than its earlier signed statement');
-      const { alert, ...fund } = this.fund;
+        return { minted: String(minted), fund: this.fund };
+      }
+      const minted = verifyShareStatement(this.domain, statement, this.operator, {
+          holder,
+          cause,
+          amount: op.amount,
+          previous: this.fund,
+        }),
+        { alert, ...fund } = this.fund;
       return {
         minted: String(minted),
         fund: {
@@ -669,8 +673,71 @@ export class ChannelClient extends WalletTransactions {
       return { minted: '0', fund: { ...this.fund, alert: `Investment ${op.memo}: ${error.message}` } };
     }
   }
+  /** Take up the casino's latest statement of this account's holding when it is later than the wallet's: a wallet
+   * restored from an older backup, or sharing its account with another, has missed statements. The casino sends every
+   * `Redeem` this account signed with the statement it produced, and the later statement is taken only if every share
+   * it takes away is one of those redemptions this wallet has not seen, each checked: this account's signature, the
+   * casino's, and the price. What each of them sold for is owed to this account. Nothing is taken while an operation
+   * or a redemption is pending, whose own reply brings its statement; a statement that fails is kept out and shown as
+   * an alert. */
+  async syncFund(this: CasinoWallet) {
+    if (!this.channel?.registered || this.pending || this.fund.redeeming) return;
+    const { statement, redeems } = await this.api(`/api/channels/${this.channelId}/fund`);
+    if (!statement || Number(statement.message?.sequence) <= this.fund.sequence) return;
+    await this.exclusive(
+      () => {
+        const known = this.fund,
+          holder = this.channel!.opening.player;
+        if (this.pending || known.redeeming || Number(statement.message.sequence) <= known.sequence) return;
+        let fund: any;
+        try {
+          assertSignature(this.domain, SHARE_TYPES, statement.message, statement.signature, this.operator);
+          if (!same(statement.message.holder, holder)) throw new Error('The share statement is for another holder');
+          let burned = 0n;
+          const owed: string[] = [],
+            seen = new Set<number>();
+          for (const redeem of Array.isArray(redeems) ? redeems : []) {
+            const sequence = Number(redeem.statement.message.sequence);
+            if (sequence <= known.sequence) continue;
+            if (sequence > Number(statement.message.sequence) || seen.has(sequence))
+              throw new Error('A redemption does not belong to this holding');
+            seen.add(sequence);
+            assertSignature(this.domain, REDEEM_TYPES, redeem.request.message, redeem.request.signature, holder);
+            if (!same(redeem.request.message.holder, holder) || Number(redeem.request.message.sequence) !== sequence)
+              throw new Error('A redemption does not belong to this holding');
+            verifyShareStatement(this.domain, redeem.statement, this.operator, {
+              holder,
+              previous: {
+                sequence: sequence - 1,
+                shares: BigInt(redeem.statement.message.shares) + BigInt(redeem.request.message.shares),
+              },
+              cause: hashRedeem(this.domain, redeem.request.message),
+              burned: redeem.request.message.shares,
+            });
+            burned += BigInt(redeem.request.message.shares);
+            owed.push(String(redeem.statement.message.amount));
+          }
+          if (BigInt(statement.message.shares) < BigInt(known.shares) - burned)
+            throw new Error('The casino states fewer shares than this account redeemed');
+          const { alert, ...rest } = known;
+          fund = {
+            ...rest,
+            sequence: Number(statement.message.sequence),
+            shares: String(statement.message.shares),
+            statement,
+            owed: [...(known.owed || []), ...owed],
+          };
+        } catch (error: any) {
+          fund = { ...known, alert: `Share statement ${statement.message?.sequence}: ${error.message}` };
+        }
+        return this.save(undefined, { fund });
+      },
+      { wait: true },
+    );
+  }
   /** The fund as the casino states it, signed, with what this account's shares come to at that price. */
   async fundStatus(this: CasinoWallet) {
+    await this.syncFund();
     const { message, signature } = await this.api('/api/fund');
     assertSignature(this.domain, FUND_TYPES, message, signature, this.operator);
     return {
@@ -689,6 +756,8 @@ export class ChannelClient extends WalletTransactions {
    * asked for again; the casino's statement says what the shares fetched, and that money is then
    * collected into the open channel. */
   async redeem(this: CasinoWallet, shares: Integer) {
+    // A redemption follows the latest statement: a wallet that missed some takes them up before it signs.
+    await this.syncFund();
     return this.exclusive(async () => {
       this.ready();
       if (!this.fund.redeeming) {

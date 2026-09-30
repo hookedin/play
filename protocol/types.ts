@@ -255,12 +255,14 @@ export interface SignedStatement {
   message: Record<string, any>;
   signature: string;
 }
-/** One investor's holding, keyed by player address so it outlives any one channel. */
+/** One investor's holding, keyed by player address so it outlives any one channel, with every `Redeem` the investor
+ * signed and the statement it produced. */
 export interface FundHolder {
   holder: string;
   shares: string;
   sequence: number;
   statement: SignedStatement;
+  redeems: { request: SignedStatement; statement: SignedStatement }[];
 }
 /** The service projection of one channel. Everything financial here is replayable from the signing log. */
 export interface ChannelRow {
