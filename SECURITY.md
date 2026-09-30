@@ -14,7 +14,7 @@ A useful report says which component and revision is affected, what an attacker 
 
 - The settlement contract, [contracts/HookedInCasino.sol](contracts/HookedInCasino.sol): loss or freezing of protected principal, a withdrawal paid twice or out of cash a claim is owed, bypassing the challenge window, replay of evidence, incorrect winnings allocation, unauthorized withdrawals.
 - The wallet, [client/](client/): key exposure, accepting a result, rejection, payout or share statement it should refuse, losing or downgrading saved evidence, escaping the game iframe boundary, signing something other than what is shown.
-- The shared protocol and player-side tools, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, recovery CLI or watchtower failing to settle or challenge with valid evidence.
+- The shared protocol and the watchtower, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, the watchtower failing to challenge with valid evidence.
 - The game SDK and the house's games, [sdk/](sdk/) and [games/](games/): step pricing that disagrees with the risk rule, a game losing its saved round, a developer's server giving away the seed of its casino bet before it places it.
 - The build: anything that makes the published `dist/`, or a game's, differ from what these sources produce.
 
@@ -22,4 +22,4 @@ The casino service, the website and the games other developers publish are separ
 
 ## Not vulnerabilities
 
-The trust assumptions stated in [the trust model](docs/overview/trust-model.md) and [the architecture](docs/overview/architecture.md) are accepted design choices: one operator controls signing and the bankroll, the contract protects a balance only up to the deposits it holds for the channel, winnings above them are unsecured claims on the shared pool, a withdrawal's winnings wait for house cash like a close's, the player must challenge a stale close within 24 hours, the casino can withhold completion and decline withdrawals, a developer bet pays what its developer signs and whatever a game's own scheme promises beyond that is the game's, a developer bet is paid only if its developer pays, and bankroll fund shares are the casino's promise. Reports that restate these are welcome as design feedback in a public issue.
+The trust assumptions stated in [the trust model](docs/overview/trust-model.md) are accepted design choices; reports that restate them are welcome as design feedback in a public issue.
