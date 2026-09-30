@@ -34,10 +34,9 @@ A local stack runs the same services on `127.0.0.1`: an Anvil chain on port 8545
 
 ## How the wallet pins its deployment
 
-A wallet release carries its configuration as `config.js`, built from the JSON file that `HOOKEDIN_CLIENT_CONFIG` names:
-[config/production.json](../../config/production.json) for https://play.hookedin.com. Without the variable the build
-ships the defaults in [client/config.ts](../../client/config.ts): the casino at `http://127.0.0.1:4183` and no pinned
-deployment. `config.js` is part of the release and holds nothing secret.
+A wallet release carries its configuration as `config.js`, built from
+[config/production.json](../../config/production.json); a local launcher serves its own. `config.js` is part of the
+release and holds nothing secret.
 
 | Field                        | Type    | Meaning                                              |
 | ---------------------------- | ------- | ---------------------------------------------------- |
@@ -106,7 +105,7 @@ production configuration, the two ethers hashes are equal, `config.js` names the
 curl -s https://play.hookedin.com/vendor/ethers.js | shasum -a 256
 shasum -a 256 node_modules/ethers/dist/ethers.min.js
 curl -s https://play.hookedin.com/config.js
-HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build
+npm run build
 curl -s https://play.hookedin.com/main.js | shasum -a 256
 shasum -a 256 dist/main.js
 ```

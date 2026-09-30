@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { Wallet, id, keccak256 } from 'ethers';
 import { TransactionJournal } from '../protocol/transaction-journal.ts';
 import { confirmedNonce, confirmedReceipt, findNonceTransaction } from '../protocol/transaction-recovery.ts';
@@ -186,3 +189,20 @@ for (const operation of ['nonce', 'receipt', 'replacement'])
     );
     if (operation !== 'receipt') assert.equal(nonceReads, 1);
   });
+
+test('a file journal stays bounded and keeps its pending transaction across a restart', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-journal-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'outbox.json');
+  let journal = new TransactionJournal({ file, chainId: 31337 } as any);
+  for (let i = 0; i < 100; i++) {
+    journal.adopt({ action: 'test:' + i, raw: '0x' + 'ab'.repeat(200), attempts: [] } as any);
+    journal.finish('confirmed');
+  }
+  assert.ok(fs.statSync(file).size < 1000);
+  const pending = { action: 'pending', raw: '0xretained', attempts: [{ hash: id('attempt') }] };
+  journal.adopt(pending as any);
+  journal = new TransactionJournal({ file, chainId: 31337 } as any);
+  assert.deepEqual(journal.state.pending, { ...pending, status: 'pending' });
+  assert.equal(journal.state.lastCompleted!.action, 'test:99');
+});

@@ -114,7 +114,7 @@ with Node 24.4 or later, and serves at http://127.0.0.1:4184, where you restore 
 git clone https://github.com/hookedin/play
 cd play
 npm ci
-HOOKEDIN_CLIENT_CONFIG=config/production.json npm run dev
+npm run dev
 ```
 
 ## The watchtower

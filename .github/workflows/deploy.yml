@@ -13,7 +13,6 @@ jobs:
     permissions:
       contents: read
     env:
-      HOOKEDIN_CLIENT_CONFIG: config/production.json
       # Whether the token is set, not the token: only the step that publishes is given that.
       PUBLISH: ${{ github.ref == 'refs/heads/main' && secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:

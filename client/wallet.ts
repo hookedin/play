@@ -412,10 +412,6 @@ export class CasinoWallet extends GameSessions {
     const c = this.channel;
     return Boolean(c?.registered) && Number(c!.onchain?.status) === 1 && !c!.closing;
   }
-  /** What games count in, as a game is told it: the network's ETH, in units of 10^-18. */
-  get asset() {
-    return { symbol: 'ETH', decimals: 18 };
-  }
   get pending() {
     return this.channel?.pending || null;
   }

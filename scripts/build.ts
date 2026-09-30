@@ -42,11 +42,7 @@ export async function buildWallet(dist = path.join(root, 'dist')) {
     fs.copyFileSync(path.join(root, 'client', file), path.join(dist, file));
   fs.cpSync(path.join(root, 'brand'), path.join(dist, 'brand'), { recursive: true });
 
-  // HOOKEDIN_CLIENT_CONFIG names a JSON file with this deployment's settings; without it the defaults ship.
-  const configFile = process.env.HOOKEDIN_CLIENT_CONFIG;
-  const config = configFile
-    ? JSON.parse(fs.readFileSync(configFile, 'utf8'))
-    : (await import('../client/config.ts')).default;
+  const config = (await import('../client/config.ts')).default;
   fs.writeFileSync(path.join(dist, 'config.js'), `export default ${JSON.stringify(config)};\n`);
   return config;
 }

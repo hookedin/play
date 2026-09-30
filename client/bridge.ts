@@ -1,7 +1,7 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
 import { LIMITS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
-/** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
+/** Every method a game may call. */
 export const METHODS = [
   'wallet.hello',
   'wallet.info',

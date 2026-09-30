@@ -35,9 +35,11 @@ amount paid in or out, the fund's `equity` and `totalShares` immediately before,
 `cause` the hash of the investment or the `Redeem` you signed. The wallet keeps the latest statement and checks its
 signature, that it follows your last one, that its cause is what you signed, and that its shares and amount match that
 at its own price. It cannot check `equity` and `totalShares` themselves: players' balances are private, so the price is
-the casino's word. A statement that fails a check is not adopted, and the Bankroll page says why. A wallet restored from
-an older backup accepts the casino's later statement as it stands, unless it states fewer shares than the wallet can
-prove.
+the casino's word. A statement that fails a check is not adopted, and the Bankroll page says why. When the Bankroll page opens, and before
+every sale, the wallet also reads your latest statement from the casino
+([`GET /api/channels/:id/fund`](../casino-api/channels.md#get-apichannelsidfund)) and takes a later one if its
+signature holds and it states no fewer shares than the wallet can prove, unless a sale is pending or the wallet refused
+a statement: so a wallet restored from an older backup sells what you hold.
 
 ## Selling shares
 

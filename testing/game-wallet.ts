@@ -224,7 +224,6 @@ export async function gameWallet({
       signer: player,
       domain: d,
       config: { contractAddress: casino, operator: owner.address },
-      verifiedChainId: 31337n,
       reportedBankroll: String(bankroll),
       channelId: first.opening.channelId,
       channels: { [first.opening.channelId]: structuredClone(first) },
@@ -269,7 +268,7 @@ export async function gameWallet({
         return [...owed]
           .slice(0, MAX_PAYOUTS)
           .map(([source, amount]) => ({ source, index: 0, amount: String(amount) }));
-      if (!path.endsWith('/operations')) return {};
+      if (!path.endsWith('/operations')) throw refused(404, 'not-found', `The stub casino has no ${path}`);
       const { request, details, signature, seed } = body as any,
         recorded = `${request.channelId}:${details.id}`;
       if (responses.has(recorded)) return responses.get(recorded);

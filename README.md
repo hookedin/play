@@ -26,15 +26,15 @@ npm run dev      # build, then serve dist/ at http://127.0.0.1:4184
 npm test         # build, type-check, check the vectors, run every test suite (needs anvil and Chrome)
 ```
 
-`npm run dev` serves the wallet alone, built with the defaults in [client/config.ts](client/config.ts), which expect a casino service at `http://127.0.0.1:4183`, unless `HOOKEDIN_CLIENT_CONFIG` names another configuration; `PORT` moves it. To work on a game, `node sdk/bin/hookedin-game.js serve games/<id>` serves it at `http://127.0.0.1:4185/` and builds it again on every page load; in any wallet, choose **Open a game by its URL** and open that address.
+`npm run dev` serves the wallet alone, on the deployment [config/production.json](config/production.json) pins; `PORT` moves it. caserver's `npm run dev` serves it on a local stack instead. To work on a game, `node sdk/bin/hookedin-game.js serve games/<id>` serves it at `http://127.0.0.1:4185/` and builds it again on every page load; in any wallet, choose **Open a game by its URL** and open that address.
 
 Other commands: `npm run typecheck`, `npm run vectors` (regenerate the vectors), `npm run format`, and `npm run watchtower` ([the watchtower](docs/wallet/backups-and-recovery.md#the-watchtower)).
 
 ## Deploy
 
-Pushing to `main` releases the wallet: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs the whole test suite, builds with `HOOKEDIN_CLIENT_CONFIG=config/production.json`, publishes `dist/` as the static-assets Worker [wrangler.jsonc](wrangler.jsonc) describes, and publishes each game in [games/](games/) as the Worker its own `wrangler.jsonc` describes, at `https://<id>-game.hookedin.com`. Blackjack, roulette and crash publish themselves from their own repositories.
+Pushing to `main` releases the wallet: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs the whole test suite, builds, publishes `dist/` as the static-assets Worker [wrangler.jsonc](wrangler.jsonc) describes, and publishes each game in [games/](games/) as the Worker its own `wrangler.jsonc` describes, at `https://<id>-game.hookedin.com`. Blackjack, roulette and crash publish themselves from their own repositories.
 
-By hand: `HOOKEDIN_CLIENT_CONFIG=config/production.json npm run build && npx wrangler deploy` publishes the wallet, and `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`, a game.
+By hand: `npm run build && npx wrangler deploy` publishes the wallet, and `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`, a game.
 
 The wallet's routes, such as `/wallet` and `/@<alias>/<game>`, are client-side: `wrangler.jsonc` sets the single-page fallback, and `dist/_redirects` serves `/@<alias>` paths as written. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths. [config/production.json](config/production.json), the deployment the release pins, is published as `config.js` and holds nothing secret.
 
