@@ -343,8 +343,9 @@ and its ID keeps returning the rejection:
 | `group`        | `64`                     | The longest group label, in characters                                      |
 
 They are [part of the protocol revision](signed-messages.md#limits-and-the-protocol-revision): the casino reports the
-same numbers as `limits` in [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the developer kit exports
-them as [`LIMITS`](../sdk/developer.md#limits). A game reads them rather than carrying copies.
+same numbers as `limits` in [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the developer kit's
+[`DEVELOPER_PROTOCOL`](../sdk/developer.md#developer_protocol) hashes them. A game reads them rather than carrying
+copies.
 
 ## Errors
 
