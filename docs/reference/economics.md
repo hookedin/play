@@ -2,7 +2,7 @@
 title: Economics
 description: How the casino admits a casino bet by the Kelly criterion, sets and splits its commission, and counts the bankroll it admits against.
 sidebar:
-  order: 6
+  order: 4
 ---
 
 All amounts are integers in wei. A player's wallet chooses a stake, a chance and a prize. The casino admits the casino
@@ -15,15 +15,15 @@ A casino bet is a stake paid to enter and a prize it pays when the round's 64-bi
 bankroll it is one wager with two outcomes, and the casino's rule, the Kelly condition for that wager, has a closed
 form.
 
-| Symbol    | Meaning                                                                                                                                                                                                                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B         | The unreserved accounting bankroll, positive: pool cash after active player balances, unpaid claims, unpaid developer commissions, escrow, developer banks, withdrawals owed and reservations ([available capital](#available-capital-and-concurrency)) |
-| S         | The stake, debited from the player's balance                                                                                                                                                                                                            |
-| G = S + W | The prize; W is what a win gains beyond the stake, negative when the prize is below the stake                                                                                                                                                           |
-| Q = 2^64  | The size of the outcome space                                                                                                                                                                                                                           |
-| t         | The chance: how many outcomes win, 1 to Q − 1                                                                                                                                                                                                           |
-| p = t / Q | The probability that the bet wins                                                                                                                                                                                                                       |
-| F         | The total commission, accrued on every completed casino bet                                                                                                                                                                                             |
+| Symbol    | Meaning                                                                                       |
+| --------- | --------------------------------------------------------------------------------------------- |
+| B         | The unreserved bankroll, positive ([available capital](#available-capital-and-concurrency))   |
+| S         | The stake, debited from the player's balance                                                  |
+| G = S + W | The prize; W is what a win gains beyond the stake, negative when the prize is below the stake |
+| Q = 2^64  | The size of the outcome space                                                                 |
+| t         | The chance: how many outcomes win, 1 to Q − 1                                                 |
+| p = t / Q | The probability that the bet wins                                                             |
+| F         | The total commission, accrued on every completed casino bet, won or lost                      |
 
 The house edge the player faces is `e = 1 − pG/S`. The chance is whole outcomes, so the probability is exactly `t/Q`:
 a game chooses `t`, and nothing is rounded afterwards.
@@ -70,21 +70,9 @@ A casino bet has two outcomes, so the condition above is the whole of the casino
 independent integer-root oracle. The casino reserves the bet's liability, `max(W, 0) + F`: what the bankroll can lose
 on it.
 
-A game with more outcomes than two plays them as casino bets of two outcomes each. A single-player game collapses each
-step in the page ([collapsing bets](../games/collapsing-bets.md)): it draws, with its own randomness, one casino bet
-between two of the step's outcomes, or none, so that each outcome is reached exactly as often as the game's rules say.
-It prices the step at the least cash for which the step, as one wager, meets the Kelly condition over its outcomes,
-with `X_k` what the bankroll gains when outcome k is reached:
-
-```text
-sum_k  p_k × X_k / (B + X_k)  ≥  0        with every B + X_k > 0
-```
-
-Pricing weighs the bankroll's losses one part in 2^32 heavier, which leaves every bet room to round its chance to whole
-outcomes. Without that margin, the condition holds exactly when every bet the collapse can draw is one the casino
-admits. A game whose players share one draw, such as roulette, has its developer back the whole table with binary
-steps: one casino bet from its bank on each level of a balanced tree over the draw's outcomes, each admitted by itself
-([developer bets](../games/developer-bets.md)).
+A game with more outcomes than two plays them as casino bets of two outcomes each, each admitted by itself: a
+single-player game [collapses](../games/collapsing-bets.md) each step into one, and a shared draw is backed in
+[binary steps](../games/developer-bets.md#shared-games-binary-steps).
 
 The criterion is the expected logarithmic growth of
 [Edward Thorp's treatment of Kelly betting](https://web.williams.edu/Mathematics/sjmiller/public_html/341/handouts/Thorpe_KellyCriterion2007.pdf);
@@ -110,12 +98,9 @@ casino commission    = F / 2
 The developer is the account that publishes the game. A game nobody publishes has none, and all of its commission is
 the casino's. The rounding leaves under two wei in the bankroll. Every intermediate product is an exact integer.
 
-This defines excess profit as what can be removed while leaving the bankroll a Kelly-compliant residual wager. Charging
-only that excess is [a settled trade-off](../overview/architecture.md#settled-trade-offs). A casino bet is admitted
-when the condition holds with `F = 0`, and the left side falls as `F` grows, so a fee fixed first would turn away bets
-the bankroll could take; setting `F` afterwards admits every one of them and charges only the surplus. Subtracting two
-advertised edge percentages is not generally correct: it ignores how an outcome-independent commission changes the
-bankroll's exposure.
+This defines excess profit as what can be removed while leaving the bankroll a Kelly-compliant residual wager, which is
+[a settled trade-off](../overview/architecture.md#settled-trade-offs). Subtracting two advertised edge percentages is not
+generally correct: it ignores how an outcome-independent commission changes the bankroll's exposure.
 
 The integer examples in [the vectors](../../vectors/protocol.json) (`cases`), in six-decimal illustrative units:
 
@@ -131,82 +116,27 @@ conservative pricing uses `−101.000100` for a player win and `+98.999900` for 
 changes by `−100.500050` or `+99.499950`, because the casino keeps its half of the commission. Expected revenue is not a
 profit on every bet.
 
-Commission accrues on executed casino bets, won or lost. A declined request pays no commission and moves no money. A
-casino could decline bets by their outcome and no penalty would apply; each declined bet's revealed secret shows its
-outcome on the player's receipt. The probabilities here assume the casino does not do so.
-
-## Developer bets
-
-A [developer bet](../games/developer-bets.md) is not the bankroll's: its stake goes into its game developer's bank at
-the casino, and what it is paid comes out of that bank. The casino neither admits developer bets by Kelly nor prices
-their commission, and nothing in a bank is reserved. Whether the developer can pay is
-[outside HookedIn](../overview/architecture.md#settled-trade-offs): a batch of settlements the bank cannot pay is
-refused, and the bets stay open. The casino's part is what the developer's signed settlement gives it, which the casino
-keeps in its earnings. Its policy asks a developer for about half of what each developer bet is expected to earn them,
-as a casino bet's commission splits in two; nothing enforces it. A developer who wants the bankroll behind its
-developer bets places casino bets of its own on its rounds, which the bankroll admits and prices like any other: the
-developer pays their commission and earns half of it back, as for any casino bet of its game.
+A [developer bet](../games/developer-bets.md) is not the bankroll's: the casino neither admits it by Kelly nor prices
+its commission, and nothing in a developer's bank is reserved. The casino's part of it is what the developer's
+settlement gives it ([the casino's share](../games/developer-bets.md#the-casinos-share)).
 
 ## Available capital and concurrency
 
-Signed results change player balances and the casino's accounting off-chain. The casino keeps its half of every
-commission in the bankroll's equity: a player's loss adds `S − F/2` to the reported bankroll and a win takes
-`W + F/2`, the developer's half being owed to the developer (a game nobody publishes leaves all of `F` in the
-bankroll). Admission uses the conservative full-fee condition and reserves `max(W, 0) + F`. The casino decides
-admission from current capital less the other casino bets' reservations, and reserves the bet's worst case before it
-reads the round's secret; a casino bet it admits settles, with the commission its admission priced. Commission never
-changes the player's signed stake, net win or probability. A casino bet without capacity gets a jointly signed
-rejection checkpoint, with its balance unchanged and no commission, and its round is revealed at once, settling
-nothing; a developer's casino bet that does not fit is declined the same way and reveals its round. Reservations are
-per casino bet and last only while it is decided: they do not fund a whole future hand, and they do not stop the owner
-from withdrawing on-chain.
+The casino keeps its half of every commission in the bankroll's equity: a player's loss adds `S − F/2` to the bankroll
+and a win takes `W + F/2`, the developer's half being owed to the developer (a game nobody publishes leaves all of `F`
+in the bankroll). Admission uses the conservative full-fee condition and reserves `max(W, 0) + F` against current
+capital less the other casino bets' reservations, before it reads the round's secret, so a casino bet it admits settles
+with the commission its admission priced. One without capacity gets a signed rejection, with no commission, and its
+round revealed; a developer's casino bet that does not fit is declined the same way. Reservations last only while a bet
+is decided: they do not fund a whole future hand, and they do not stop the owner from withdrawing on-chain.
 
-At a consistent confirmed block, the reported bankroll is:
+At a consistent confirmed block, in the books that [`GET /api/status`](../casino-api/public.md#get-apistatus) reports
+and defines, the bankroll is:
 
 ```text
-max(0, pool cash − active player balances − unpaid claims − accrued unpaid developer commissions − reservations − escrow − developer banks − withdrawals owed)
+bankroll = max(0, cash − activeLiabilities − claimLiabilities − commissions − reserved − escrow − banks − withdrawals)
 ```
 
-An active player balance is an open or closing channel's signed balance and the deposits it has not taken in.
-Reservations are the worst cases of the casino bets being decided. Escrow is every payout awarded and not yet collected:
-money that has left the bankroll for a player who has not yet signed for it. Developer banks are the developers' own
-money, the stakes of their developer bets among it. Withdrawals owed are the withdrawals the casino has taken on and the
-chain has not yet recorded. [`GET /api/status`](../casino-api/public.md#get-apistatus) reports every term.
-
-Anyone with a channel may add to this capital. An [investment](../wallet/bankroll-fund.md) is a debit from a channel
-into the bankroll that mints shares at `equity / totalShares`, where equity is the reported bankroll before
-reservations; a redemption burns them at the same price and owes the player their worth, which counts as escrow until
-collected. Both leave every other share's price unchanged, so holders gain and lose only what the bankroll does: losses
-add to equity, and wins and developer commission take from it, pro rata. Investors widen what the Kelly rule admits
-exactly as the owner's funding does, and the owner's funding and withdrawals buy and sell house shares at the going
-price. A redemption never takes money a casino bet has reserved.
-
-The contract holds every deposit as its channel's [principal](contract.md#withdrawals), which signed losses leave as it
-is. A withdrawal moves its amount from the channel's active liability to the withdrawals owed at once. Recorded, it
-leaves the withdrawals owed: what the contract pays at once, out of the channel's principal first and house cash for the
-rest, reduces cash, and what it does not pay is an unpaid claim. What a player has lost stays in the principal until the
-channel closes: the casino closes a channel nobody has played on for 7 days whose principal is more than it is owed and
-from which no withdrawal is owed, so the loss comes back to house cash. On closure the protection becomes
-`min(principal, what the close is owed)`, and the rest of the principal is released. A close's unpaid claim takes the
-place of the channel's active liability and of any withdrawal owed from it that never became a claim, which the close's
-claim holds. Claim payments reduce both cash and claim liabilities, and the owner's confirmed funding and withdrawals
-change cash. The casino reconciles each category without counting a channel and its claim twice.
-
-A developer [collects](../games/earnings.md) commission into a channel of their own: the payable falls and the
-developer's signed balance rises by the same amount, so neither the bankroll nor any ETH moves. The casino's own earned
-commission is a cumulative counter, not a second payable. Owner withdrawals reduce observed pool cash and so the
-bankroll's equity, and no separate release of house commission can be counted twice.
-
-A game's payment is a debit that lowers the player's signed balance by its amount and raises the accounting bankroll
-by the same amount. It settles on no round, accrues no commission and moves no ETH.
-
-Winnings are paid out of the contract's cash beyond protected principal, in the order their claims were recorded, a
-withdrawal's when it is recorded and a close's when it finalizes ([the winnings queue](contract.md#the-winnings-queue)),
-and the house cash that pays the owner's withdrawals excludes every unpaid winning. A recipient that refuses payment
-keeps its share without blocking later covered claims. The casino takes on a withdrawal only as large as the contract
-can pay now beside the withdrawals owed already, and declines a larger one, so a withdrawal is normally paid in full the
-moment it is sent. What it can pay now is the principal the channel will still hold once the withdrawals owed from it
-are paid, plus the house cash no claim counts on, `pool cash − protectedPrincipal − unpaidWinnings`, less what the
-withdrawals owed will take from it beyond their channels' principal. The casino's public cash balance does not show that
-private signed balances are covered: Kelly admission against the reported bankroll neither enforces the casino's
-solvency nor reserves capital for a whole game.
+`equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a claim on, is the same without `reserved` or the
+floor at 0. Investors widen what the Kelly rule admits exactly as the owner's funding does. Kelly admission against the
+reported bankroll neither enforces the casino's solvency nor reserves capital for a whole game.

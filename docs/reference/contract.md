@@ -2,7 +2,7 @@
 title: The contract
 description: HookedInCasino function by function, with its constants, readable storage, callers, effects, reverts, events and custom errors.
 sidebar:
-  order: 5
+  order: 3
 ---
 
 [HookedInCasino](../../contracts/HookedInCasino.sol) holds every ETH deposit and the house's bankroll, and settles a
@@ -13,10 +13,8 @@ else: what an operation means is its `memo`, which the contract never reads. The
 
 ## Build
 
-Solidity `^0.8.28`, compiled with solc 0.8.37: optimizer on at 200 runs, the IR pipeline, EVM version Cancun, and no
-CBOR metadata ([scripts/compile.ts](../../scripts/compile.ts)). The wallet accepts only the runtime pinned in
-[client/contract-artifact.ts](../../client/contract-artifact.ts), with the immutable `owner` filled in;
-[Verify a release](../wallet/verify-a-release.md) reproduces it.
+The wallet accepts only the runtime pinned in [client/contract-artifact.ts](../../client/contract-artifact.ts), with the
+immutable `owner` filled in; [verify a release](deployment.md#verify-a-release) compiles it again.
 
 The constructor takes no arguments and makes the deploying account `owner`, which is immutable. There is no upgrade,
 pause or ownership transfer. There is no `receive` or `fallback` function, so a plain ETH transfer reverts: ETH enters
@@ -30,9 +28,6 @@ through `deposit` and `fundBankroll`, and any ETH forced in counts as house cash
 | `CHALLENGE_PERIOD()` | `uint256` | 86,400: the challenge window, in seconds                                                              |
 | `MAX_BALANCE()`      | `uint256` | 2^128: every deposit, amount, prize, balance, `deposited` and `withdrawn` is below it                 |
 | `OUTCOME_DOMAIN()`   | `bytes32` | `keccak256("HOOKEDIN/OUTCOME")`, `0xede2fdd26760847d3c92bb2ebf4da0fdbdf441ed687b86dc1257f1962e3857ff` |
-
-A channel's `status` is 0 unopened, 1 open, 2 closing or 3 finalized. Operation kinds are 0 none, 1 casino bet,
-2 debit, 3 credit, 4 deposit and 5 withdrawal.
 
 ## Storage
 
@@ -102,12 +97,8 @@ Whether the channel holds what a checkpoint has `deposited` is for a close to ch
   `hashState(base)`, or a `sequence` that is not the base's plus one.
 - `Unauthorized` when `authorization` is not the account's signature of the operation. A signature that is not 65
   bytes, has a high `s` or a `v` other than 27 or 28 is refused the same way.
-- `InvalidTerms` when the operation breaks [the transition rules](signed-messages.md#transitions): `amount` 0 or at
-  least 2^128; a withdrawal whose `recipient` is zero, or another kind with a nonzero `recipient`; a
-  casino bet with a `chance` of 0, a `prize` of 0 or at least 2^128, a zero `round` or `seedHash`, or a secret or seed
-  that does not hash to them; any other kind with a nonzero `chance`, `prize`, `round`, `seedHash`, seed or secret; a
-  casino bet, debit or withdrawal above the balance; a kind other than 1 to 5. A `chance` is a `uint64`, so its type
-  keeps it below 2^64.
+- `InvalidTerms` when the operation breaks [the transition rules](signed-messages.md#transitions), or its kind is not
+  1 to 5. A `chance` is a `uint64`, so its type keeps it below 2^64.
 - `InvalidState` when `casinoSignature` is not the owner's signature of the next checkpoint (`Unauthorized` when it is
   malformed).
 - `InvalidState` when the result's `balance`, `deposited` or `withdrawn` is at least 2^128.
@@ -126,45 +117,40 @@ Whether the channel holds what a checkpoint has `deposited` is for a close to ch
 | `claim(bytes32 id)`                                        | Anyone                   | Pays `collectable(id)`, the claim's remaining principal and whatever of its winnings house cash reaches, to its recipient in one call with 100,000 gas, or into the beneficiary's current channel as deposits when the recipient is the contract                                                                                                                                                                                                                                                                                                   | `InvalidState`: there is no claim under `id`. `TransferFailed`: the recipient refused the payment; nothing changes                                                                                                                                                                      | `ClaimPayment` when it pays                                 |
 | `claimTo(bytes32 id, address recipient)`                   | The beneficiary          | Sets the claim's recipient, then pays as `claim`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `Unauthorized`: there is no claim under `id`, or the caller is not its beneficiary. `InvalidTerms`: `recipient` is zero. `TransferFailed`                                                                                                                                               | `ClaimRecipientChanged`, then as `claim`                    |
 
-An account's current channel is `channelOf(player)`: its first, then, each time a close starts, the next, so it is never
-closing. Anyone may deposit into it, and the first deposit opens it; whoever funded it, the account alone signs for it.
-The balance takes a deposit in with a deposit operation the casino signs, and until then a close adds it to what the
-channel is owed. A channel stays open through every withdrawal: only a close ends it, and the account's next deposit
-opens its next channel while it closes.
-
 The challenge window is fixed. While a channel is closing, a challenge is possible until the deadline, and from the
 deadline on only `finalizeClose` is. A challenge never extends the window.
 
+Every signature the contract checks is recovered with `ecrecover`, so it must come from an externally owned account: a
+contract account can deposit, but cannot sign for a channel of its own. `deposit`, `withdraw`, `challengeClose`,
+`finalizeClose`, `claim` and `fundBankroll` are open to anyone, which lets a watchtower or any relayer pay out, defend
+and collect for a player.
+
 ### Withdrawals
 
-A withdrawal (kind 5) is an operation the account signs that takes `amount` from the balance and names a `recipient`
-([transitions](signed-messages.md#transitions)). The balance pays it at once, in the checkpoint the casino signs after
-it. `withdraw` records it on-chain on evidence whose step is that operation, with the casino's signature of that
-checkpoint, and anyone may send it:
+A withdrawal (kind 5) is an operation the account signs that takes `amount` from the balance and names a `recipient`;
+the balance pays it at once, in the checkpoint the casino signs after it. `withdraw` records it on evidence whose step
+is that operation, with the casino's signature of that checkpoint, and anyone may send it:
 
-- It makes each withdrawal a claim once, under the hash of its operation: `claims` holds what stays owed of it, and
-  `Withdrawal` says from which channel, to whom and how much.
+- It makes each withdrawal a claim once, under the hash of its operation, until the channel is finalized, whatever
+  checkpoint a close proposes: `claims` holds what stays owed of it, and `Withdrawal` says from which channel, to whom
+  and how much.
 - It records a channel's withdrawals in the order the account signed them: one only once the channel's `claimed` equals
-  the `withdrawn` of the checkpoint it follows, so every earlier one is a claim. The order decides what each takes of
-  the channel's `principal`, so no sender can make a later withdrawal, a lock-in above all, take what an earlier one
-  was due.
+  the `withdrawn` of the checkpoint it follows. The order decides what each takes of the channel's `principal`, so no
+  sender can make a later withdrawal, a lock-in above all, take what an earlier one was due.
 - It pays out only deposits the chain holds: a checkpoint that took in more than the channel's `deposited` records no
   withdrawal.
-- It records until the channel is finalized, whatever checkpoint a close proposes. It adds the amount to the channel's
-  `claimed`, and during a close takes it off `closingBalance`, to no less than 0.
-- The claim's principal is `min(amount, principal)`, out of the channel's `principal`; the rest is winnings, which join
-  the [winnings queue](#the-winnings-queue) behind every earlier claim.
-- It pays the recipient at once what is covered, the principal and whatever of the winnings house cash reaches, in one
-  call with 100,000 gas. What is not covered stays owed, for anyone to collect with `claim`. A recipient that refuses
-  the payment leaves all of it owed: recording never depends on the recipient, so nobody sends a withdrawal twice.
+- It adds the amount to the channel's `claimed`, and during a close takes it off `closingBalance`, to no less than 0.
+- The claim's principal is `min(amount, principal)`, out of the channel's `principal`, which leaves what is at risk
+  unchanged; the rest is winnings, which join the [winnings queue](#the-winnings-queue) behind every earlier claim. The
+  account, the claim's beneficiary, can redirect it with `claimTo`.
+- It pays the recipient at once what is covered, in one call with 100,000 gas; what is not stays owed, for anyone to
+  collect with `claim`. A recipient that refuses the payment leaves all of it owed: recording never depends on the
+  recipient, so nobody sends a withdrawal twice.
 - A withdrawal to the contract itself locks the balance in: what it pays goes into the account's current channel as
-  deposits, adding to its `deposited` and `principal`, and no ETH leaves the contract. The balance takes it in like any
-  deposit.
+  deposits, adding to its `deposited` and `principal`, and no ETH leaves the contract.
 
-Taking the channel's `principal` first leaves what is at risk unchanged: what a balance holds above it is owed from
-house cash before and after. The account, the claim's beneficiary, can redirect it with `claimTo`. A withdrawal never
-recorded comes back with the close, to the account and not its recipient: a checkpoint counts what its balance has
-`withdrawn`, and a close is owed what of it did not become a claim ([finalization](#finalization)).
+A withdrawal never recorded comes back with the close, to the account and not its recipient: a checkpoint counts what
+its balance has `withdrawn`, and a close is owed what of it did not become a claim ([finalization](#finalization)).
 
 ### Finalization
 
@@ -222,15 +208,3 @@ The first indexed topic is `withdrawalId` in `Withdrawal`, `claimId` in `ClaimPa
 | `InsufficientBalance()` | `withdrawableHouse()` is short of a house withdrawal                      |
 | `TransferFailed()`      | A recipient refused a house withdrawal or a collection                    |
 | `Reentrancy()`          | A guarded function was entered again during a call                        |
-
-## The two keys of a channel
-
-| Key                   | Is                                                                                                 | Signs                                                                                                       | Calls                                                                                                          |
-| --------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| The account, `player` | The player's account, whose address the wallet shows as the deposit address and whose key it holds | Every operation; its countersignature of every checkpoint; API `Access` tokens; `Redeem` and `BankWithdraw` | `startClose`, and `claimTo` as its claims' beneficiary; a close's claim pays it unless `claimTo` names another |
-| The owner             | The casino                                                                                         | Every checkpoint it produces                                                                                | `startClose`, `withdrawHouse`                                                                                  |
-
-Every signature the contract checks is recovered with `ecrecover`, so it must come from an externally owned account: a
-contract account can deposit, but cannot sign for a channel of its own. `deposit`, `withdraw`, `challengeClose`,
-`finalizeClose`, `claim` and `fundBankroll` are open to anyone, which lets a watchtower or any
-relayer pay out, defend and collect for a player.

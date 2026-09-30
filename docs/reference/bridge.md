@@ -49,14 +49,14 @@ refused under its ID when that ID is a safe integer, and dropped unanswered othe
 The `id` inside a bet's or a payment's parameters is different: it is the game's own durable name for the operation, 1
 to 64 letters, digits, `.`, `_`, `:` or `-`. The wallet keeps it for the player and the game, whichever channel the
 operation is signed on. The same request again returns the saved receipt, and other terms under the same ID are refused
-with `id-conflict`. [State and recovery](../games/state-and-recovery.md) shows how a game uses it.
+with `id-conflict`. [How a game works](../games/how-a-game-works.md) shows how a game uses it.
 
 ## Origins
 
-The wallet frames the game's page, at its [URL](game-url.md), and that page's origin is the game's. It accepts a message
-only from that frame's window and that origin, and posts every reply and event to that origin alone: a frame that has
-navigated to another origin is not the game, and hears nothing. It answers only the open game. A game accepts only
-messages whose `source` is `window.parent`, as the SDK does.
+The wallet frames the game's page, at its [URL](../games/publishing.md#the-games-url), and that page's origin is the
+game's. It accepts a message only from that frame's window and that origin, and posts every reply and event to that
+origin alone: a frame that has navigated to another origin is not the game, and hears nothing. It answers only the open
+game. A game accepts only messages whose `source` is `window.parent`, as the SDK does.
 
 When the frame loads a page, a reload included, the wallet forgets the page before it as soon as the new page greets
 it: its queued requests are dropped, and replies to its requests are not sent. An operation the wallet already signed
@@ -87,74 +87,22 @@ public record show a group as one.
 
 ### `wallet.hello`
 
-What this wallet offers, the asset it counts in, and the bounds it holds a bet to. Answered at once. It takes no
-parameters.
-
-| Result field | Type       | Meaning                                                                                          |
-| ------------ | ---------- | ------------------------------------------------------------------------------------------------ |
-| `methods`    | `string[]` | The methods this wallet offers: the eight on this page                                           |
-| `asset`      | object     | `{ symbol, decimals }`: `symbol` is `ETH` and `decimals` is 18                                   |
-| `chainId`    | `string`   | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil |
-| `limits`     | object     | The bounds a bet is held to: see [limits](#limits)                                               |
-
-```json title="Request"
-{ "hookedin": true, "id": 1, "method": "wallet.hello", "params": {} }
-```
-
-```json title="Reply"
-{
-  "hookedin": true,
-  "id": 1,
-  "result": {
-    "methods": [
-      "wallet.hello",
-      "wallet.info",
-      "wallet.round",
-      "game.receipt",
-      "game.casinoBet",
-      "game.developerBet",
-      "game.payment",
-      "game.requestFunds"
-    ],
-    "asset": { "symbol": "ETH", "decimals": 18 },
-    "chainId": "11155111",
-    "limits": { "outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64 }
-  }
-}
-```
+The page's first request. Answered at once, it takes no parameters and answers `{ limits }`, the bounds the wallet holds
+a bet to ([limits](#limits)).
 
 ### `wallet.info`
 
-Everything a game learns about the player, and what to price bets against. It takes no parameters. Answered once the
-wallet has first heard from the casino, so that a reloaded page learns the player's names. The player's address,
-channel and balances are not a game's to know. A page that asked is loaded again when the player is first named, at
+Everything a game learns about the player, and what to price bets against. It takes no parameters, and is answered
+once the wallet has first heard from the casino. A page that asked is loaded again when the player is first named, at
 their first deposit, so that it keys what it saves by that name.
 
 | Result field       | Type               | Meaning                                                                                                                                                                        |
 | ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. `null` until the casino knows the player, which it does from their first deposit. A game keys anything of its own by it |
 | `alias`            | `string` or `null` | The name the player is shown by, written `@alias`; `null` unless they took one                                                                                                 |
-| `chainId`          | `string`           | As in `wallet.hello`                                                                                                                                                           |
+| `chainId`          | `string`           | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil                                                                               |
 | `bankroll`         | decimal string     | The casino's bankroll as last reported: what to price bets against, not a promise to admit them                                                                                |
 | `recommendedStake` | decimal string     | A stake to start the stake field at: 10^12 wei on Sepolia and 10^15 on a local Anvil                                                                                           |
-
-```json title="Request"
-{ "hookedin": true, "id": 2, "method": "wallet.info", "params": {} }
-```
-
-```json title="Reply"
-{
-  "hookedin": true,
-  "id": 2,
-  "result": {
-    "uname": "3byt9ocwnnzaxanmiz3stocj",
-    "alias": "Bob",
-    "chainId": "11155111",
-    "bankroll": "4861203318520114210",
-    "recommendedStake": "1000000000000"
-  }
-}
-```
 
 ### `wallet.round`
 
@@ -171,15 +119,6 @@ share one draw, such as roulette, checks its developer's rounds with it: each se
 the seed hash its bet signed, and the outcomes lead where the game says. A round the casino does not know is refused
 with the casino's `not-found`.
 
-```json title="Request"
-{
-  "hookedin": true,
-  "id": 9,
-  "method": "wallet.round",
-  "params": { "id": "0x21742e7ebb87504e76dc12f5678a9d547a6639be06af6ec64e5cf010f990563c" }
-}
-```
-
 ### `game.receipt`
 
 The receipt of an earlier operation of this game, by the game's own ID. Answered at once.
@@ -193,35 +132,12 @@ it is still pending (the pushed `pending` says so), or this wallet has lost its 
 wallet also asks the casino about it; once its developer has settled it, the wallet collects what it pays and pushes the
 settled receipt as a [`game.receipt`](#gamereceipt-1) event.
 
-```json title="Request"
-{ "hookedin": true, "id": 7, "method": "game.receipt", "params": { "id": "coin-17" } }
-```
-
-```json title="Reply"
-{
-  "hookedin": true,
-  "id": 7,
-  "result": {
-    "id": "coin-17",
-    "kind": "casino-bet",
-    "status": "settled",
-    "stake": "1000000000000",
-    "chance": "9223372036854775808",
-    "prize": "1980000000000",
-    "group": "session-3",
-    "outcome": "4417924718259038112",
-    "payout": "1980000000000"
-  }
-}
-```
-
 ### `game.casinoBet`
 
-A casino bet: settled against the casino's bankroll in the one request, on the player's own round. The casino names the
-round before the wallet picks the seed, so neither knows the outcome before both are out. The game's balance drops by
-the stake, and rises by the prize when the round's 64-bit outcome is below the chance; the casino's commission is not
-charged to the player. The casino may decline the bet instead, with a signed checkpoint that leaves the balance
-unchanged.
+A casino bet: settled against the casino's bankroll in the one request, on the player's own
+[round](../overview/how-it-works.md#rounds). The game's balance drops by the stake, and rises by the prize when the
+round's 64-bit outcome is below the chance; the casino's commission is not charged to the player. The casino may
+decline the bet instead, with a signed checkpoint that leaves the balance unchanged.
 
 | Param    | Type           | Meaning                                          |
 | -------- | -------------- | ------------------------------------------------ |
@@ -233,24 +149,8 @@ unchanged.
 
 The outcome is a uniform integer below 2^64, so the bet wins with probability `chance / 2^64`. A chance of 0, or of
 2^64 or more, is refused with `invalid-request`: a sure loss or a sure win is no bet. So is a prize of 2^128 or more,
-which no balance can hold. The stake was paid to enter, so a
-win gains `prize − stake`, and a prize below the stake is a partial loss. The result is the bet's receipt, `settled` or
-`rejected`.
-
-```json title="Request"
-{
-  "hookedin": true,
-  "id": 4,
-  "method": "game.casinoBet",
-  "params": {
-    "id": "coin-17",
-    "stake": "1000000000000",
-    "chance": "9223372036854775808",
-    "prize": "1980000000000",
-    "group": "session-3"
-  }
-}
-```
+which no balance can hold. The stake was paid to enter, so a win gains `prize − stake`, and a prize below the stake is a
+partial loss. The result is the bet's [receipt](#receipt), `settled` or `rejected`:
 
 ```json title="Reply"
 {
@@ -335,23 +235,6 @@ A payment to the bankroll: the balance drops by `amount`, with no chance involve
 
 The result is the payment's receipt, `settled` or `rejected`. It carries no amount.
 
-```json title="Request"
-{
-  "hookedin": true,
-  "id": 6,
-  "method": "game.payment",
-  "params": { "id": "hand-9-insurance", "amount": "500000000000", "group": "hand-9" }
-}
-```
-
-```json title="Reply"
-{
-  "hookedin": true,
-  "id": 6,
-  "result": { "id": "hand-9-insurance", "kind": "payment", "status": "settled", "group": "hand-9" }
-}
-```
-
 ### `game.requestFunds`
 
 Asks for money. The wallet opens its own dialog, in its own words, where the player sets how much of their balance the
@@ -370,10 +253,6 @@ wallet opens its Deposit tab instead, and the reply says `funded: false` at once
 | `balance`    | decimal string           | The game's balance after it                                               |
 | `pending`    | `boolean`                | Whether an operation of this game awaits recovery                         |
 
-```json title="Request"
-{ "hookedin": true, "id": 3, "method": "game.requestFunds", "params": { "amount": "5000000000000" } }
-```
-
 ```json title="Reply"
 {
   "hookedin": true,
@@ -389,8 +268,7 @@ The wallet sends these unasked, with `event` in place of an envelope ID, to the 
 ### `game.balance`
 
 The game's balance: what it may still risk in this tab, including its winnings. The wallet sends it when the frame has
-loaded and whenever the balance or `pending` changes, so there is nothing to poll. A limit lives in the tab's memory
-only: leaving the game, reloading or closing the tab releases it, and the money never left the player's balance.
+loaded and whenever the balance or `pending` changes, so there is nothing to poll.
 
 | Field     | Type           | Meaning                                                                                                         |
 | --------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -407,26 +285,8 @@ A developer bet this game placed has been settled by its developer and collected
 settled bets every 4 seconds while its tab is visible, and at once when the game asks [`game.receipt`](#gamereceipt)
 about an open one; it sends the event while the game is open.
 
-| Field     | Type                | Meaning                                         |
-| --------- | ------------------- | ----------------------------------------------- |
-| `receipt` | [Receipt](#receipt) | The bet's receipt, `settled`, with its `payout` |
-
-```json
-{
-  "hookedin": true,
-  "event": "game.receipt",
-  "receipt": {
-    "id": "match-812-home",
-    "kind": "developer-bet",
-    "status": "settled",
-    "stake": "1000000000000",
-    "meta": { "pick": "home", "odds": "2.1" },
-    "group": "match-812",
-    "bet": "0x9ef313d092ad9d9f5f2ac313d77b5be958fdab15452b07fe9c2b5fc71fb804b0",
-    "payout": "2100000000000"
-  }
-}
-```
+It carries `receipt`, the bet's [receipt](#receipt) as `game.developerBet` answered it, now `settled` and with its
+`payout`.
 
 ## Receipt
 
@@ -482,10 +342,9 @@ and its ID keeps returning the rejection:
 | `meta`         | `4096`                   | The most bytes a developer bet's meta takes as canonical JSON               |
 | `group`        | `64`                     | The longest group label, in characters                                      |
 
-They are part of the protocol revision the wallet and its casino share, the same numbers the casino reports as
-`limits` in [`GET /api/config`](../casino-api/public.md#get-apiconfig) and the [developer kit](../sdk/developer.md#limits)
-reads: a wallet or a developer that holds other ones stops before it signs anything. A game reads them rather than
-carrying copies.
+They are [part of the protocol revision](signed-messages.md#limits-and-the-protocol-revision): the casino reports the
+same numbers as `limits` in [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the developer kit exports
+them as [`LIMITS`](../sdk/developer.md#limits). A game reads them rather than carrying copies.
 
 ## Errors
 
@@ -494,7 +353,7 @@ A refusal is `{ code, message }`. The wallet's codes:
 | `code`               | Meaning                                                                                                                                                 | What a game does                                                                                                                                                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid-request`    | The envelope or its parameters break a rule on this page, the envelope ID did not rise, or the request asks a developer bet of a game published nowhere | Fixes the request: sent again unchanged, it fails again                                                                                                                                                                                            |
-| `unknown-method`     | The wallet offers no such method                                                                                                                        | Keeps to the `methods` of `wallet.hello`                                                                                                                                                                                                           |
+| `unknown-method`     | The wallet offers no such method                                                                                                                        | Keeps to the methods on this page                                                                                                                                                                                                                  |
 | `busy`               | The player is doing something in the wallet, or 32 requests already wait                                                                                | Sends the same request again shortly                                                                                                                                                                                                               |
 | `insufficient-funds` | The stake or amount exceeds the game's balance                                                                                                          | Calls `game.requestFunds`, then sends the same request again                                                                                                                                                                                       |
 | `pending-operation`  | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the wallet finishes a deposit it is taking in by itself, and the player recovers anything else from the wallet's banner. When the pushed `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |

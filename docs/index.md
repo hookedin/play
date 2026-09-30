@@ -11,15 +11,15 @@ HookedIn runs on Sepolia (chain 11155111).
 
 ## The parts
 
-| Part           | What it does                                                                                                                                                   | Where it lives                                                  |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Contract       | Holds deposits, pays withdrawals, settles closed channels and pays claims. It knows nothing of games                                                           | [contracts/HookedInCasino.sol](../contracts/HookedInCasino.sol) |
-| Wallet         | Holds your keys, signs exact bets, verifies every result, keeps the evidence and sends your on-chain transactions                                              | [client/](../client/), served at https://play.hookedin.com      |
-| Protocol       | The signed structures, hashes, state derivation, admission rule and recovery code the wallet and the casino share                                              | [protocol/](../protocol/)                                       |
-| Casino         | Names rounds, admits bets against its bankroll, signs results, has the contract pay withdrawals and keeps the books. The service is private; its API is public | [Casino API](casino-api/index.md)                               |
-| Games          | Sites of their own, each known by its URL and run in a sandboxed frame inside the wallet. Four of the house's games are in this repository                     | [games/](../games/)                                             |
-| SDK            | `@hookedin/play/sdk`: the wallet bridge, a round helper, exact step pricing, a developer kit and the build tool                                                | [Packages and imports](sdk/index.md)                            |
-| Recovery tools | A recovery CLI and a watchtower that settle and defend a channel from its exported evidence                                                                    | [scripts/](../scripts/)                                         |
+| Part       | What it does                                                                                                                                                   | Where it lives                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Contract   | Holds deposits, pays withdrawals, settles closed channels and pays claims. It knows nothing of games                                                           | [contracts/HookedInCasino.sol](../contracts/HookedInCasino.sol) |
+| Wallet     | Holds your keys, signs exact bets, verifies every result, keeps the evidence and sends your on-chain transactions                                              | [client/](../client/), served at https://play.hookedin.com      |
+| Protocol   | The signed structures, hashes, state derivation and admission rule the wallet and the casino share                                                             | [protocol/](../protocol/)                                       |
+| Casino     | Names rounds, admits bets against its bankroll, signs results, has the contract pay withdrawals and keeps the books. The service is private; its API is public | [Casino API](casino-api/index.md)                               |
+| Games      | Sites of their own, each known by its URL and run in a sandboxed frame inside the wallet. Four of the house's games are in this repository                     | [games/](../games/)                                             |
+| SDK        | The wallet bridge, a round helper, exact step pricing, a developer kit and the build tool                                                                      | [Packages and imports](sdk/index.md)                            |
+| Watchtower | Challenges a stale close of your channel from its exported evidence, from a machine you run                                                                    | [The watchtower](wallet/backups-and-recovery.md#the-watchtower) |
 
 Everything a player has to trust is in this repository. The casino service is private, and a player does not have to
 trust its code: the wallet checks every signature, revealed secret and balance change against the public protocol, and

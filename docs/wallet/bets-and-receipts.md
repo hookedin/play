@@ -1,8 +1,8 @@
 ---
 title: Bets and receipts
-description: Your bet history, the return measured from each bet's own chance and prize, rejected bets, a game's public record and developer bets.
+description: Your bet history, the return measured from each bet's own chance and prize, rejected bets, a game's public record, developer bets and Activity.
 sidebar:
-  order: 3
+  order: 2
 ---
 
 The wallet keeps a receipt of everything it signs, and shows your bets from those receipts. No game states what it pays
@@ -10,30 +10,15 @@ back: every figure here is measured from bets that really happened.
 
 ## Bets
 
-**Bets** in the top bar, `/bets`, lists every settled bet this wallet signed, newest first: each casino bet, and each
-developer bet once what it was paid has been collected. A row shows the game, the time, the stake, what the bet paid
-(for a casino bet, of its prize), the result, and the **return of this bet**. Search finds bets by game, amount or
-operation ID.
+**Bets**, `/bets`, lists every settled bet this wallet signed, newest first: each casino bet, and each developer bet
+once what it was paid has been collected, with its game, time, stake, payout, result and return. It is read from the
+receipts the wallet keeps ([Activity](#activity)); rejected requests and payments are not bets.
 
-The list is read from the latest 100 receipts the wallet keeps, which hold every kind of operation; the receipts of
-developer bets still open are kept beyond those 100. Rejected requests and payments are not bets, and are listed in
-[Activity](#activity).
-
-## One bet in full
-
-Opening a casino bet shows everything its receipt holds:
-
-| Section                    | What it shows                                                                                                                                              |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where the round landed     | A bar across the outcome space: the band of outcomes that win, below the bet's chance, and a mark where the round's outcome landed                         |
-| The bet you signed         | Its prize, its chance, and what it was worth: its return                                                                                                   |
-| How the outcome was fixed  | Your seed and the casino's secret, each checked against the hash your bet signed, and the outcome worked out again from the two                            |
-| The record you both signed | The operation, channel, sequence, game key, memo, expected payout, the balance after it, its commission and both signatures, and the whole receipt as JSON |
-
-The checks under **How the outcome was fixed** are made again when you open the bet, from the receipt's own seed and
-secret; a tick means the value matches what the bet signed or, for the outcome, what the bet paid. A developer bet
-shows **How it settled** instead: its developer, the meta you signed, what the developer's signed settlement paid you
-and gave the casino, and the developer's signature.
+Opening a casino bet shows everything its receipt holds: where the round's outcome landed against the bet's chance; the
+prize and chance you signed and the return they make; your seed and the casino's secret, checked again against the
+hashes your bet signed, and the outcome worked out from the two; and the signed record itself, with its commission,
+both signatures and the whole receipt as JSON. A developer bet shows instead its developer, the meta you signed, what
+the developer's signed settlement paid you and gave the casino, and the developer's signature.
 
 ## Measured return
 
@@ -55,23 +40,10 @@ bet has no odds, and so no return.
   casino bets.
 - **Paid back**: what the bets paid, the sum of their payouts over the sum of their stakes.
 
-Over a handful of bets the second figure is luck, and over many it follows the first. The wallet records the return of
-every casino bet and does not refuse a bet that returns little
-([trust model](../overview/trust-model.md#what-a-game-can-and-cannot-do)).
-
-These figures measure the bets a game placed, not the game. A step with two outcomes, as in Dice and Mines, is one bet
-whose return is the step's. A step with more, as in Plinko or a slot, is collapsed: the page draws one bet between two
-of its outcomes ([collapsing bets](../games/collapsing-bets.md)). That bet stakes only what the step can lose, never the
-part of the stake it keeps either way, and the bets for the largest prizes carry more of the step's edge than the rest.
-So a collapsed game's bets pay back less of what they stake than the game does of its stake. Measured at a bankroll far
-above the stake, each Plinko board returns exactly 99% of the ball, and its bets pay back from about 93% to over 99%;
-Samson's Gold's lowest, the whole stake against the jackpot, pays back 95.1%. When the casino's bankroll is small beside
-a prize, the bet for it must carry more edge still for the bankroll to take it: at the least bankroll that backs
-Plinko's 16-row low board, its rarest bet pays back about 22%.
-
-My games lists the games you have played, your favourites first and then the most staked. A favourite is a note in this
-browser, never signed or sent anywhere. Each game links to its public record, and **Play** reopens a game the library
-has shown.
+Over a handful of bets the second figure is luck, and over many it follows the first. These figures measure the bets a
+game placed, not the game: a game that collapses a step with many outcomes into one bet stakes only what the step can
+lose, so its bets pay back less of what they stake than the game does of its stake
+([what is given up](../games/collapsing-bets.md#what-is-given-up)).
 
 ## Groups
 
@@ -93,13 +65,13 @@ would have paid well is a player's evidence of selective rejection.
 
 A game's operation that its player already carried out on another channel is declined too, marked `used`. The wallet
 then answers the game with `id-used`, so that it does not place the same bet again under another ID
-([state and recovery](../games/state-and-recovery.md)).
+([how a game works](../games/how-a-game-works.md)).
 
 ## A game's public record
 
 `/games/<key>` shows every settled bet anyone has placed in one game, as the casino recorded it, from
-[`GET /api/games/:key`](../casino-api/public.md#get-apigameskey). `key` is the game's key
-([publishing a game](names-and-publishing.md#publishing-a-game)). The page shows:
+[`GET /api/games/:key`](../casino-api/public.md#get-apigameskey); `key` is the game's
+[key](../reference/signed-messages.md#game-keys). The page shows:
 
 - the totals, expected and paid back, as on My games;
 - how many of the game's developer bets are open, and how many its developer has settled;
@@ -120,37 +92,24 @@ bets under **Developer bets** until what each was paid has been collected:
 | Payout collected          | The payout is in your balance                                                 |
 | Settled · no payout       | Settled for nothing: there is nothing to collect                              |
 
-Every 4 seconds while the wallet's tab is visible, and when you press **Check now**, the wallet asks the casino for your
-settled bets. For each, it checks the developer's signed `Settlement` against the bet you signed (its hash, its stake
-and its developer) and signs a credit for exactly what the settlement pays you, into your balance. If the game that
-placed the bet is open, the wallet sends it the settled receipt, and the payout raises the game's limit. A collected
-developer bet then appears in bet history.
-
-Stakes with developers and payouts not yet collected are apart from your signed balance: they are not in the channel,
-and the contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).
+The wallet asks the casino for your settled bets every 4 seconds while its tab is visible. For each, it checks the
+developer's signed `Settlement` against the bet you signed (its hash, its stake and its developer) and signs a credit
+for exactly what the settlement pays you, into your balance; the game that placed the bet hears of it while open, and
+the payout raises its limit. Stakes with developers and payouts not yet collected are apart from your signed balance: the
+contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).
 
 ## Activity
 
 **Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, bankroll and
-bank movements, withdrawals, and transactions: **Deposited**, **Withdrawn** (a collected claim, or everything at the
-deposit address sent elsewhere), **Withdrawal sent** (one you sent with **Send it now**), **Close started**, **Balance
-closed** and **Close challenged**. A row expands to its operation ID, channel, sequence and commission, and for a
-transaction its hash (linked to Sepolia Etherscan), its block and the address it paid, with the raw JSON behind it. An
-off-chain result reads **Signed off-chain**; a transaction reads **Confirmed on-chain**, **Reverted**, **Replaced** or
-**Unconfirmed · reorg**, as the wallet last observed it. The wallet keeps the latest 100 receipts, and beyond them every
-receipt more is to come of: a developer bet still open, and a withdrawal or lock-in not paid or returned.
+bank movements, withdrawals, and your deposits, closes, challenges and collections, each with its operation ID or its
+transaction and the raw JSON behind it. The wallet keeps the latest 100 receipts, and beyond them every receipt still to
+be settled: a developer bet still open, and a withdrawal or lock-in not yet paid or returned.
 
-A withdrawal from your balance is titled **Withdrawal on its way**, its amount **To be paid**, until the contract has
-paid it: its status is **Waiting to be paid** until it is sent, and **Part waits for the bankroll** once the contract
-has recorded it with something still owed, which you collect under **Waiting to be paid** on the Wallet page
-([claims](closing-and-claims.md#claims-and-collection)). Then it is **Withdrawn**, **Paid on-chain**, and its amount
-**Paid out**. A lock-in is **Locking in**, then **Balance locked in**, **In as deposits**, its amount **Locked in**
-([lock in your balance](closing-and-claims.md#lock-in-your-balance)). Expanded, each shows where it pays now, as **To**:
-an address, or your own channel for one that pays the contract, its **Withdrawal ID** (the hash of its operation) and,
-once recorded, the transaction it was **Recorded in**, linked to Sepolia Etherscan. Until it is sent, and once the
-withdrawals made before it from the same balance are, it offers **Send it now**, which sends it to the contract from
-your account, paying the network fee from your deposit address. One nobody sent before its channel's close is finished
-is **Withdrawal returned**, **Returned with the close**, its amount **In the claim**: the close was owed it back. When
-the wallet reads the chain for Activity, it asks the contract how each withdrawal not yet paid or returned stands, and
-asks again about one that is once the block that said so has left the chain; it looks for the transaction that recorded
-each among the last 10,000 blocks.
+A withdrawal is **Withdrawal on its way** until the contract has paid it, and **Withdrawn** after. What the contract
+recorded without the cash to pay it waits under **Waiting to be paid** on the Wallet page
+([claims and collection](closing-and-claims.md#claims-and-collection)), and one nobody sent before its channel's close
+was final is **Withdrawal returned**: the close was owed it back. Each shows its **Withdrawal ID**, the hash of its
+operation, and once recorded the transaction that recorded it. One the casino has not sent offers **Send it now** once
+every earlier withdrawal from that balance is sent, and sends it from your account
+([fees and gas](closing-and-claims.md#fees-and-gas)). The wallet asks the contract how each withdrawal not yet paid or
+returned stands, and looks for the transaction that recorded it among the last 10,000 blocks.

@@ -1,8 +1,8 @@
 ---
 title: Backups and recovery
-description: Encrypted backups, recovery bundles, lost replies, recovery mode, the recovery CLI and the watchtower.
+description: Encrypted backups, recovery bundles, lost replies, recovery mode and the watchtower.
 sidebar:
-  order: 6
+  order: 4
 ---
 
 Your signed evidence is what lets you settle without the casino. Keep two things: an encrypted backup of every account
@@ -18,37 +18,34 @@ you fund, and a current recovery bundle of each channel.
 | Restores     | The whole account, in a wallet                                        | Settlement: closing, challenging, finalizing, collecting; play, when it holds the casino's latest state |
 | Made with    | **Download encrypted backup** on Settings                             | **Export recovery bundle** under Recovery on the Wallet page                                            |
 
-## Browser keys and locking
+## Passphrases
 
-The browser encrypts all saved account keys with your wallet passphrase. Signed evidence remains available in browser
-storage; encryption protects the keys at rest. Unlocking loads signing authority into the page, and **Lock wallet**
-discards it across open wallet tabs. The wallet locks after five minutes without activity. Withdrawals, redirected
-claims, showing a private key and downloading an encrypted backup ask for the wallet passphrase again.
-
-The wallet passphrase protects this browser's keys. The backup passphrase protects one downloaded file; they are
-separate credentials. Support cannot reset either. If you forget the wallet passphrase but have a checked backup and
-its backup passphrase, open the wallet in a fresh browser profile, choose a new wallet passphrase there, and restore
-the backup. Keep the original browser data until every account and its latest evidence are safely recovered.
+The wallet passphrase encrypts this browser's keys; signed evidence stays readable in browser storage. Withdrawals,
+redirected claims, showing a private key and downloading an encrypted backup ask for it again. The backup passphrase
+protects one downloaded file; the two are separate, and support can reset neither. If you forget the wallet passphrase
+but have a checked backup and its backup passphrase, open the wallet in a fresh browser profile, choose a new wallet
+passphrase there, and restore the backup. Keep the original browser data until every account and its latest evidence
+are safely recovered.
 
 ## Encrypted backups
 
 On **Settings**, under **Keys and backups**, enter a passphrase of 12 to 1,024 characters as the **Backup passphrase**
-and enter the wallet passphrase to authorize **Download encrypted backup**. The wallet downloads
+and your wallet passphrase to authorize **Download encrypted backup**. The wallet downloads
 `hookedin-encrypted-wallet.json`. A backup holds only the account in use:
 
 - its key;
 - every channel's opening, latest evidence and pending operation;
 - its bankroll fund statements, developer bets and bank statements;
-- its latest 100 receipts, and the receipt of every developer bet still open;
+- its latest 100 receipts, and every receipt still to be settled: a developer bet still open, and a withdrawal not yet
+  paid or returned;
 - its play limits, breaks and recorded usage.
 
 It holds no game state. Back up every account you fund, each on its own: a key alone cannot rebuild a signed balance.
 
 After downloading, keep the backup passphrase in the field and select that saved file with **Check saved backup**. The
-wallet decrypts it and checks its account, deployment and recovery contents against the saved wallet. A matching file
-unlocks the Deposit tab's receiving controls. Downloading alone does not mark a backup checked. Save and check a fresh
-copy after playing or moving ETH; the backup status in Settings and on the Wallet page identifies changed evidence. A
-checked copy is a snapshot, not an automatic backup or a watchtower.
+wallet decrypts it and checks its account, deployment and recovery contents against the saved wallet; a matching file
+unlocks the Deposit tab's receiving controls. Save and check a fresh copy after playing or moving ETH: Settings and the
+Wallet page say when your evidence has changed since. A checked copy is a snapshot, not an automatic backup.
 
 | Property       | Value                                                                           |
 | -------------- | ------------------------------------------------------------------------------- |
@@ -64,26 +61,23 @@ pending. Before it writes anything, the wallet checks that:
 - every channel belongs to the backup's account, and all the evidence verifies;
 - it replaces no saved evidence with an older or conflicting checkpoint and changes no pending operation.
 
-A backup of another account switches the wallet to that account. Restoring preserves stricter saved play controls and
-the higher daily usage from the saved wallet and the backup; it does not shorten a break.
+A backup of another account switches the wallet to that account. Restoring keeps the stricter play controls and the
+higher daily usage of the saved wallet and the backup; it does not shorten a break.
 
 ## Recovery bundles
 
 **Export recovery bundle**, under Recovery on the Wallet page, saves `hookedin-channel-<channelId>.json` for your
-balance's channel, and one for a channel still closing beside it. **Export evidence** beside a closed balance's claim
-does the same for its channel, and the banner of a pending operation offers **Export recovery bundle** too. A bundle
-names the deployment (`chainId`, `casino`, `operator`), the channel's `opening` (its ID, the account and the channel's
-index) and its latest `evidence`, and holds the evidence of each of your withdrawals the contract may still owe
-something, from any of your channels (`withdrawals`; [the bundle's fields](../reference/signed-messages.md#evidence)).
-It holds no keys, no game data and no pricing. It changes with every operation, so export it again after you play or
-withdraw. Before anything is signed on a channel, its evidence is the channel's base, which needs no signatures.
+balance's channel, and one for a channel still closing beside it; **Export evidence** beside a closed balance's claim,
+and the banner of a pending operation, do the same. A bundle names the deployment, the channel and its latest evidence,
+and holds the evidence of each of your withdrawals the contract may still owe something
+([its fields](../reference/signed-messages.md#evidence)); it holds no keys, no game data and no pricing. It changes with
+every operation, so export it again after you play or withdraw.
 
-**Import a recovery bundle**, under Recovery, reads one back. The wallet refuses a bundle while an operation or a
-transaction is pending, when it belongs to another chain, contract, owner or account, when it is older than the saved
-checkpoint or differs from it at the same sequence, when the contract has no such channel of this account, and when a
-withdrawal in it is not one your account and the casino signed. From an imported bundle the wallet can close, challenge,
-finalize and collect, and play on when it holds the latest state the casino has. Its withdrawals join Activity like ones
-this browser sent, however the chain stands on them: **Waiting to be paid** lists any the contract still owes.
+**Import a recovery bundle**, under Recovery, reads one back while no operation or transaction is pending. The wallet
+refuses a bundle of another chain, contract, owner or account, one older than or conflicting with its saved checkpoint,
+one for a channel the contract does not hold for this account, and one holding a withdrawal your account and the casino
+did not sign. From an imported bundle the wallet can close, challenge, finalize and collect, and play on when it holds
+the latest state the casino has; its withdrawals join Activity like ones this browser sent.
 
 ## When a reply is lost
 
@@ -108,68 +102,55 @@ replacement your account sent at the same nonce, and sends the exact saved trans
 ## Recovery mode
 
 When the casino does not answer, answers with errors, or reports another chain, contract, owner or protocol revision
-than the wallet's pinned deployment, the wallet starts in **recovery mode**. Evidence export and import, closing without
-the casino, challenges, finishing a close, collecting and **Send it now** work; play, deposits, withdrawals from the
+than the wallet's [pinned deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment), the wallet starts
+in **recovery mode**. Evidence export and import, closing without the casino, challenges, finishing a close, collecting
+and **Send it now** work, against the pinned contract through the pinned RPCs; play, deposits, withdrawals from the
 balance and locking in do not. Reload once the casino is back.
 
-The pinned deployment is the one the wallet is built with ([deployment](../reference/deployment.md)), or the one it
-verified the last time it started in this browser. A wallet with neither cannot start without the casino.
-
-## The recovery CLI
-
-The recovery CLI settles a channel from its recovery bundle with no casino API, through an RPC you choose. It runs from
-a checkout of this repository, with Node 24.4 or later:
+Recovery needs play.hookedin.com no more than the casino: the same wallet builds from a checkout of this repository,
+with Node 24.4 or later, and serves at http://127.0.0.1:4184, where you restore your encrypted backup.
 
 ```sh
 git clone https://github.com/hookedin/play
 cd play
 npm ci
+HOOKEDIN_CLIENT_CONFIG=config/production.json npm run dev
 ```
-
-1. Inspect the channel. With no `--rpc`, the CLI only checks the bundle's signatures; the channel and its deposits need
-   the chain.
-
-   ```sh
-   npm run recover -- channel.json --rpc https://ethereum-sepolia-rpc.publicnode.com --action inspect
-   ```
-
-2. Start a close, with your account's key:
-
-   ```sh
-   HOOKEDIN_RECOVERY_KEY=0x... npm run recover -- channel.json --rpc URL --action start
-   ```
-
-3. If the close proposes an older state than yours, challenge it before the deadline: `--action challenge`.
-4. After the deadline, finalize: `--action finalize`.
-5. Collect: `--action claim`, or `--action claim --to ADDRESS` to be paid elsewhere. A withdrawal the bundle holds is
-   collected the same way with `--claim` and its ID; the inspection shows what each still owes.
-
-Each action inspects first and sends nothing when its end is already reached, and every transaction is saved in a
-journal before it is sent, so running the command again resumes it rather than sending another. The CLI checks the
-contract's owner, and the channel and the evidence against the contract, not the contract's code: run it against the
-contract address you trust. [The CLI reference](../reference/cli.md#npm-run-recover) has every flag, who may send each
-action and what an inspection reports.
 
 ## The watchtower
 
 The watchtower watches one channel from its recovery bundle and challenges a stale close for you, from a machine you
-run. It needs:
-
-- a deployment manifest you trust: `chainId`, `contractAddress`, `operator`, `rpcUrl` and, on Sepolia, a
-  `witnessRpcUrl` on another host. The `deployment` object of [config/production.json](../../config/production.json)
-  is one;
-- the channel's recovery bundle, which you replace with a fresh export after you play or withdraw;
-- a relayer key with ETH for gas, apart from your account, in `HOOKEDIN_RELAYER_KEY`.
+run, with a relayer key of its own: an account apart from yours, with ETH for gas, in `HOOKEDIN_RELAYER_KEY`. It runs
+from a checkout of this repository:
 
 ```sh
 HOOKEDIN_RELAYER_KEY=0x... npm run watchtower -- --deployment trusted.json --evidence channel.json --journal .private/watchtower.json
 ```
 
-On start it checks the deployed code and owner against the pinned artifact and the deployment manifest. Then, every 4
-seconds, it reads the bundle again, observes the chain through both RPCs, and sends `challengeClose` when the contract
-holds a close older than the bundle's evidence and the deadline has not passed. It prints one JSON line per check, with
-its alerts and the relayer's balance; `--once` runs a single check and exits. Transactions are saved in the journal
-before they are sent, and a lock beside the journal keeps a second watchtower out. It cannot start a close, never
-needs your account's key, and knows only what the bundle holds.
+| Argument            | Meaning                                                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--deployment FILE` | Required. The deployment you trust, such as the `deployment` of [config/production.json](../../config/production.json), with the fields of a [pinned deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment) |
+| `--evidence FILE`   | Required. The channel's recovery bundle, read again on every tick: replace it with a fresh export after you play or withdraw                                                                                                    |
+| `--journal FILE`    | Required. The transaction journal. A lock file beside it, its path with `.lock`, keeps a second watchtower out                                                                                                                  |
+| `--once`            | Run one tick and exit, with status 1 if it failed                                                                                                                                                                               |
 
-Its alerts, and what each means, are in [the CLI reference](../reference/cli.md#alerts).
+On start it checks the deployed code and owner against the release's pinned artifact and the deployment file, and
+stops if either differs; outside Anvil it refuses a `witnessRpcUrl` on the same host as `rpcUrl`. Then every 4 seconds
+it reads the bundle again, checks that it belongs to the deployment, observes the chain through both RPCs, and sends
+`challengeClose`, saved in the journal first, when the contract is closing on an older state than the bundle's and the
+deadline has not passed. Each tick prints one JSON line, `{ time, alerts, pending, relayerBalance }`, where `pending` is
+the hash of the journal's pending transaction or `null`; a failed tick prints `{ severity: "critical", reason }` to
+standard error, and the next runs as usual. `SIGINT` and `SIGTERM` stop it after the current tick. It cannot start a
+close, never needs your account's key, and knows only what the bundle holds.
+
+Each alert is `{ channelId?, severity, reason, remaining?, detail? }`, where `remaining` is the seconds left before the
+challenge deadline:
+
+| `reason`                      | Severity                                      | Meaning                                                                                                                                    |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `stale-close`                 | `warning`; `critical` with under an hour left | The channel is closing on an older state than the evidence. A challenge is sent                                                            |
+| `missed-deadline`             | `critical`                                    | The channel is closing on an older state than the evidence, and the deadline has passed                                                    |
+| `conflicting-sequence`        | `critical`                                    | The closing state has the evidence's sequence and a different hash                                                                         |
+| `finalized-state-differs`     | `critical`                                    | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged                                         |
+| `channel-defense-failed`      | `critical`                                    | Reading or verifying the channel failed, or the chain cannot settle the evidence (it took in a deposit a reorg removed); `detail` says why |
+| `recovery-transaction-failed` | `critical`                                    | The challenge could not be sent; `detail` says why                                                                                         |

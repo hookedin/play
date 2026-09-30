@@ -50,15 +50,9 @@ its **details**, whose hash the operation signs as its `memo`. The contract neve
 check and keep them. A withdrawal names whom it pays in the operation itself, as its `recipient`.
 [Signed messages](../reference/signed-messages.md) has every field.
 
-**Settle.** A channel settles on-chain only when it closes. The contract accepts the latest balance both sides signed,
-or the channel's base, either alone or followed by one operation the account authorized and the casino signed
-([closing and claims](#closing-and-claims)). A withdrawal is an operation, which the contract pays on the same kind of
-evidence ([withdrawing](#withdrawing)).
-
-**Lock in.** The channel's principal is what the contract protects: withdrawals and a close are paid out of it first.
-What the balance holds above it, its winnings, is owed from the shared bankroll. **Lock in my balance** withdraws the
-whole balance to the contract itself, the bankroll paying out the winnings, and the contract puts it into your channel
-as deposits, so that all of it becomes principal.
+**Principal and winnings.** The channel's principal is what the contract protects: withdrawals and a close are paid out
+of it first. What the balance holds above it, its **winnings**, is owed from the shared bankroll until the contract pays
+it, or until you [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
 
 ## Rounds
 
@@ -101,22 +95,20 @@ If the outcome is below 2^63 the balance moves by −0.001 + 0.00196 = +0.00096 
 works out the return of every casino bet from its chance and prize before signing it, and keeps it on the receipt
 ([measured return](../wallet/bets-and-receipts.md#measured-return)).
 
-A game with more outcomes than two plays them with bets like this one. A single-player game, such as Plinko, draws in
-the page, with its own randomness, which bet to place, so that every outcome is reached exactly as often as the game's
-rules say ([collapsing bets](../games/collapsing-bets.md)); the round's outcome settles the bet and picks the result
-within the side it lands on. A game whose players share one draw, such as roulette, has its developer walk to the result
-in binary steps, one casino bet per round ([developer bets](../games/developer-bets.md)).
+A game with more outcomes than two plays them with bets like this one: a single-player game such as Plinko
+[collapses](../games/collapsing-bets.md) each step into one bet drawn in the page, and a game whose players share one
+draw, such as roulette, has its developer back it in
+[binary steps](../games/developer-bets.md#shared-games-binary-steps).
 
 A casino bet settles against the casino's bankroll in the request that places it. The casino may decline it instead:
 it then signs a **rejection**, a checkpoint that leaves the balance unchanged, and the bet costs nothing.
 
 ## Developer bets
 
-A developer bet is a bet against the game's developer instead of the bankroll. It is a debit whose details carry `meta`,
-the game's own JSON saying what the bet is. Its stake leaves your balance at once and goes into the developer's
-**bank** at the casino, and the developer settles the bet later with a `Settlement` its key signs. The wallet checks
-that signature and collects what it pays with a credit. There is no escrow, no deadline and no refund: what a developer
-bet is paid is its developer's word ([trust model](trust-model.md#developer-bets-trust-their-developer)).
+A developer bet is a bet against the game's developer instead of the bankroll: a debit whose details carry `meta`, the
+game's own JSON saying what the bet is. Its stake goes into the developer's **bank** at the casino at once, and the
+developer settles the bet later with a `Settlement` its key signs, which the wallet checks and collects with a credit
+([trust model](trust-model.md#developer-bets-trust-their-developer)).
 
 |              | Casino bet                                              | Developer bet                                |
 | ------------ | ------------------------------------------------------- | -------------------------------------------- |
@@ -137,7 +129,7 @@ The casino's **bankroll** backs every casino bet. The casino admits a bet only w
 commission at all, by the exact Kelly condition for its two outcomes. Its **commission** is then the edge the
 bankroll does not need, split equally between the game's developer and the casino. Commission is the casino's
 accounting, not a second debit from your balance; a bet's receipt reports it. [Economics](../reference/economics.md)
-derives the rule, and [earnings](../games/earnings.md) explains what a developer collects.
+derives the rule, and [earnings](../games/publishing.md#earnings) explains what a developer collects.
 
 Anyone with a balance can move money from it into the bankroll and hold shares of it: the
 [bankroll fund](../wallet/bankroll-fund.md).
@@ -146,29 +138,23 @@ Anyone with a balance can move money from it into the bankroll and hold shares o
 
 A withdrawal takes part or all of the balance out, and the channel stays open. It is an operation that names the address
 to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play goes on
-from the lower balance. The operation and the casino's signature after it, which your receipt keeps, are what the
-contract records and pays it on, with `withdraw`: anyone may send it, and the casino does straight away. Another
-account's address is its deposit address, whose wallet puts what arrives there into its balance: that is how you fund a
-friend's balance.
+from the lower balance. With that evidence, which your receipt keeps, anyone can have the contract record and pay the
+withdrawal with `withdraw`, and the casino does straight away. Another account's address is its deposit address, whose
+wallet puts what arrives there into its balance: that is how you fund a friend's balance.
 
-The contract makes each withdrawal a claim once, in the order they were made, under the hash of its operation, and pays
-it out of the channel's deposits first. What it takes beyond them is winnings, which join the queue that house cash pays
-first in, first out ([closing and claims](#closing-and-claims)): what house cash reaches is paid at once too, and anyone
-can collect the rest later. The casino takes a withdrawal on only when the channel's deposits and the house cash it can
-count on cover all of it, and otherwise declines it, leaving the balance unchanged, so a withdrawal is normally paid in
-full the moment it is sent. What a withdrawal of winnings trusts the casino for is in the
-[trust model](trust-model.md#what-you-trust-the-casino-for).
+The contract pays a withdrawal out of the channel's principal first, and its winnings from house cash, in the order
+the account made them ([withdrawals](../reference/contract.md#withdrawals)). The casino takes a withdrawal on only when
+all of it can be paid now, and otherwise declines it, leaving the balance unchanged
+([what you trust the casino for](trust-model.md#what-you-trust-the-casino-for)).
 
 ## Closing and claims
 
-Only a close ends a channel, and either side can start one alone: it submits its latest evidence, which starts a fixed
-24-hour window, and the account's next deposit opens its next channel at once. Anyone with strictly newer evidence can
-replace the close's state before the deadline, and the deadline never moves. After it, anyone can finalize. The casino
-closes a channel nobody has played on for 7 days whose principal is more than it is owed, finishes the close and
-collects it to the player's address, so what the player lost comes back to the bankroll.
-
-A close is owed the state's balance, plus any deposit it has not taken in and what it withdrew that is not yet a claim,
-less what the channel's claims took that it did not withdraw. Finalizing records that as a **claim**. Up to the
-channel's principal, it is protected: the contract returns `min(owed, principal)`, so losses reduce it. Anything above
-is **winnings**, owed from the shared bankroll and paid first in, first out as cash arrives. Collecting is a separate
-transaction. [Closing and claims](../wallet/closing-and-claims.md) walks through each step.
+Only a close ends a channel, and either side can start one alone with its latest evidence: the latest balance both
+sides signed, or the channel's base, either alone or followed by one operation the account authorized and the casino
+signed. That starts a fixed 24-hour window, and the account's next deposit opens its next channel at once. Anyone with
+strictly newer evidence can replace the close's state before the deadline, and the deadline never moves. After it,
+anyone can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
+**claim**: up to the channel's principal it is protected, `min(owed, principal)`, and the rest is winnings, paid first
+in, first out as cash arrives. Collecting is a separate transaction. The casino closes a channel nobody plays on
+([idle channels](../wallet/closing-and-claims.md#idle-channels)), and
+[closing and claims](../wallet/closing-and-claims.md) walks through each step.
