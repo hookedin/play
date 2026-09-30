@@ -107,21 +107,10 @@ function pendingSummary({ kind, request, details, game, operationId }: any) {
     (failed ? ` Last attempt: ${failed.message}${failed.code ? ` (${failed.code})` : ''}.` : '')
   );
 }
-let settingsWarning = null;
-// Each launcher supplies its defaults; manual settings stay in the browser.
-const networkSetting = `hookedin:${config.network}:selected-network`;
-const network = localStorage.getItem(networkSetting) || config.network;
+// The launcher names the network and the casino in config.js.
+const { network, casino: casinoURL } = config;
 const networkDefaults =
   network === 'local' ? { precision: 4, total: '100000000000000000' } : { precision: 6, total: '100000000000000' };
-function configuredEndpoint(name: string, fallback: string) {
-  try {
-    return endpoint(localStorage.getItem(`hookedin:${network}:${name}-url`) || fallback);
-  } catch {
-    settingsWarning = `The saved ${name} address is invalid. Change it in Settings.`;
-    return fallback;
-  }
-}
-const casinoURL = configuredEndpoint('casino', config.casino);
 let active: ActiveGame | null = null,
   generation = 0,
   uiBusy = false,
@@ -724,7 +713,6 @@ function renderWallet() {
     : '';
   $('faucet-link').classList.toggle('hidden', wallet.expectedChainId !== 11155111n);
   $('wallet-address').textContent = wallet.address;
-  $('chain-id').textContent = state.chainId;
 
   // Deposit: ETH sent to the address goes into the balance by itself, unless something the player should decide on
   // is in the way.
@@ -1170,12 +1158,6 @@ function safeURL(value: string, base: string | undefined = undefined) {
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('Games must use an HTTP or HTTPS URL without credentials.');
   return url;
-}
-
-function endpoint(value: string) {
-  const url = safeURL(value);
-  if (url.search || url.hash) throw new Error('Service addresses cannot include a query or fragment.');
-  return url.href.replace(/\/$/, '');
 }
 
 /** A game's address, checked before the wallet frames it: HTTP(S) without credentials, and never the wallet's own
@@ -2083,19 +2065,6 @@ $<HTMLAnchorElement>('menu-profile').addEventListener('click', event => {
 });
 $<HTMLButtonElement>('refresh-developer-bets').addEventListener('click', () => void refreshActivity());
 $<HTMLButtonElement>('refresh-wallet').addEventListener('click', () => void refreshActivity());
-$<HTMLButtonElement>('connect-casino').addEventListener('click', () =>
-  task(async () => {
-    if (wallet.pending) throw new Error('Finish the operation in flight before switching casinos.');
-    const nextCasino = endpoint($<HTMLInputElement>('casino-url').value.trim());
-    const nextNetwork = $<HTMLSelectElement>('network-mode').value === 'local' ? 'local' : 'sepolia';
-    closeGame();
-    localStorage.setItem(`hookedin:${nextNetwork}:casino-url`, nextCasino);
-    localStorage.setItem(networkSetting, nextNetwork);
-    location.assign('/');
-  }),
-);
-$<HTMLInputElement>('casino-url').value = casinoURL;
-$<HTMLSelectElement>('network-mode').value = network;
 $('network-name').textContent = wallet.networkName;
 $('test-network').textContent = `${wallet.networkName} · Test ETH only · Do not send real ETH`;
 $('deposit-backup').addEventListener('click', () => {
@@ -2109,7 +2078,6 @@ $('deposit-instructions').textContent = `Send test ETH on ${wallet.networkName} 
 $('deposit-note').textContent =
   'Only send test ETH on the named network. Other assets or networks are not supported. Deposits require network confirmations and a second transaction to add ETH to your balance; its fee is deducted.';
 for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-casino-link]')) link.href = casinoURL;
-if (settingsWarning) toast(settingsWarning, true);
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
 const initialRoute = parseRoute(new URL(location.href));
 showPage(typeof initialRoute === 'string' ? initialRoute : 'library');
@@ -2132,9 +2100,7 @@ try {
       'The casino is unavailable or has changed. Your balance stays safe in the contract: export, close, challenge and collect all work from Wallet → Recovery. Playing and depositing need the casino. Reload to reconnect.',
     );
   // Everything with ETH waits for the deployment check, and a failed one shows here.
-  wallet.verified.catch((error: any) =>
-    warn(`${error.shortMessage || error.message} Reload to check again, or check the casino in Settings.`),
-  );
+  wallet.verified.catch((error: any) => warn(`${error.shortMessage || error.message} Reload to check again.`));
   renderWallet();
   renderActivity();
   void refreshActivity();
@@ -2142,7 +2108,7 @@ try {
     toast('An operation is saved and unfinished. Use Retry above to finish it safely.');
   await route();
 } catch (error: any) {
-  warn(`${error.shortMessage || error.message} Reload this page; if it persists, check the casino in Settings.`);
+  warn(`${error.shortMessage || error.message} Reload this page.`);
   for (const id of ['setup-wallet', 'add-to-balance', 'withdraw', 'import-wallet'])
     $<HTMLButtonElement>(id).disabled = true;
 }

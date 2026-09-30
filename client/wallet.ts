@@ -640,7 +640,6 @@ export class CasinoWallet extends GameSessions {
             collectable: entry.collectable,
           })),
       ],
-      chainId: String(this.expectedChainId),
       // Commission this account's games have earned, as the casino reports it to this channel.
       developerEarnings: this.developerEarnings,
     };
