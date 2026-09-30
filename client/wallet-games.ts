@@ -9,7 +9,7 @@ import type {
 import type { Round } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress } from 'ethers';
-import { LIMITS } from '../protocol/protocol.ts';
+import { BOUNDS } from '../protocol/protocol.ts';
 import { gameAmount, gameError, gameOperationKey } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
@@ -79,7 +79,7 @@ export class GameSessions extends ChannelClient {
    * share has them. */
   gameHello(this: CasinoWallet) {
     this.requireGame();
-    return { limits: LIMITS };
+    return { bounds: BOUNDS };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
    * they are shown by if they took one, and what to price bets against. Their address, their channel

@@ -141,7 +141,7 @@ test('unusual RPC gas and fee responses are rejected before signing', async () =
   ]) {
     const { wallet, state } = fixture();
     Object.assign(state, changes, { balance: parseEther('10') });
-    await assert.rejects(wallet.sendTransaction('claim'), /wallet fee limits/);
+    await assert.rejects(wallet.sendTransaction('claim'), /fee caps/);
     assert.equal(state.signed.length, 0);
   }
 });

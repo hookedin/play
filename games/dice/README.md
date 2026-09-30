@@ -18,9 +18,9 @@ The whole game is one decision with two outcomes: [src/rules.ts](src/rules.ts) b
 
 **Return.** The nominal return is 99%: `chance/10000 × 9900/chance = 0.99`. The payout is rounded down to a whole number of wei, so the exact figure can be below 99% by less than one wei per roll; [test/dice.test.ts](test/dice.test.ts) checks this at every chance on the slider. A roll has two outcomes, so the return the wallet measures of its bet is the roll's.
 
-**Limits.** `RoundClient` prices the bet with the casino's own admission rule against half the reported bankroll. A stake the casino could not back, which happens sooner at low win chances, is refused with a message before anything is signed.
+**Stakes.** `RoundClient` prices the bet with the casino's own admission rule against half the reported bankroll. A stake the casino could not back, which happens sooner at low win chances, is refused with a message before anything is signed.
 
-To change the rules: the `9900n` in `winPayout` in [src/rules.ts](src/rules.ts) is the return in basis points, and `CHANCE_MIN` and `CHANCE_MAX` are the chance limits, which the slider keeps to; keep the multiplier in `odds()` in [src/game.ts](src/game.ts) and the test in step. A higher return leaves the casino less edge, so it admits smaller stakes. The die is pure CSS.
+To change the rules: the `9900n` in `winPayout` in [src/rules.ts](src/rules.ts) is the return in basis points, and `CHANCE_MIN` and `CHANCE_MAX` are the chance bounds, which the slider keeps to; keep the multiplier in `odds()` in [src/game.ts](src/game.ts) and the test in step. A higher return leaves the casino less edge, so it admits smaller stakes. The die is pure CSS.
 
 ## Run it, test it, make it yours
 

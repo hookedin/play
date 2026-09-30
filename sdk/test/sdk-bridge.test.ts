@@ -16,7 +16,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '3', pending: false });
     assert.deepEqual(early, [{ allowance: '3', pending: false }]);
     stopEarly();
-    const hello = { limits: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
+    const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
     // Amounts are ETH, counted in wei.
@@ -123,7 +123,7 @@ test('allowance() refuses outside a frame as call does, a greeting that failed i
       posted.map(message => message.method),
       ['wallet.hello', 'wallet.hello'],
     );
-    const hello = { limits: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
+    const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver({ hookedin: true, id: posted.at(-1).id, result: hello });
     assert.deepEqual(await greeting, hello);
     // Greeted, with nothing pushed: allowance() waits as long as a request would, then gives up.

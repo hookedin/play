@@ -290,7 +290,7 @@ export const MAX_DEVELOPER_BETS = 256;
 export const MAX_PAYOUTS = 256;
 /** Every bound a bet is held to, as the wallet reports it to a game and the casino to a developer. They are part
  * of the protocol revision, so a wallet or a developer that holds other ones stops before it signs anything. */
-export const LIMITS = {
+export const BOUNDS = {
   /** The size of the space a round's outcome and a bet's chance are counted in, as a decimal string. */
   outcomeSpace: String(OUTCOME_SPACE),
   /** The most a bet's meta takes as canonical JSON, and the longest group label. */
@@ -552,14 +552,14 @@ export const PROTOCOL = id(
       kinds: KIND,
       outcome: OUTCOME_TAG,
       counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID },
-      limits: LIMITS,
+      bounds: BOUNDS,
     }),
 );
 /** What a developer's server shares with the casino, and nothing more: the three structures it signs, the outcome
- * and the limits. A change to what only a wallet signs leaves it alone, so it does not stop every developer. */
+ * and the bounds. A change to what only a wallet signs leaves it alone, so it does not stop every developer. */
 export const DEVELOPER_PROTOCOL = id(
   encoded([DEVELOPER_ACCESS_TYPES, SETTLEMENT_TYPES, BANK_CASINO_BET_TYPES]) +
-    canonicalJSON({ outcome: OUTCOME_TAG, limits: LIMITS }),
+    canonicalJSON({ outcome: OUTCOME_TAG, bounds: BOUNDS }),
 );
 /** A wallet checks `protocol` in the casino's `GET /api/config`, and a developer's server `developerProtocol`. */
 export function assertProtocol(config: { protocol?: unknown; developerProtocol?: unknown }, developer = false) {

@@ -42,7 +42,7 @@ test("the allowance strip shows every push in ETH and follows its round beside t
     const deliver = (data: any) => listeners.forEach(listener => listener({ source: parent, data }));
     const push = (allowance: string) => deliver({ hookedin: true, event: 'game.allowance', allowance, pending: false });
     // The wallet answers the greeting the page sends as it loads.
-    deliver({ hookedin: true, id: posted[0].id, result: { limits: {} } });
+    deliver({ hookedin: true, id: posted[0].id, result: { bounds: {} } });
     const round = new RoundClient(
       {
         call: async () => ({ uname: 'player', chainId: '1', bankroll: String(10n ** 21n) }),

@@ -52,7 +52,7 @@ release and holds nothing secret.
 On start the wallet:
 
 1. reads [`GET /api/config`](../casino-api/public.md#get-apiconfig) and requires the chain it was built for, its own
-   `protocol` ([the protocol revision](signed-messages.md#limits-and-the-protocol-revision)) and the pinned contract and
+   `protocol` ([the protocol revision](signed-messages.md#bounds-and-the-protocol-revision)) and the pinned contract and
    operator; otherwise it starts in [recovery mode](../wallet/backups-and-recovery.md#recovery-mode);
 2. loads its saved account, so the game library works from here on: it needs nothing from the chain;
 3. meanwhile, checks the deployment: it reads the code at the pinned address, at a confirmed block both of its RPCs

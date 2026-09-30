@@ -378,7 +378,7 @@ developer's casino bets move the balance without a statement.
 `BankWithdraw(developer, amount, sequence)` takes money out of the bank. `developer` signs it and sends it through its
 open channel, and `sequence` is the number of the statement it will produce, so it works once.
 
-## Limits and the protocol revision
+## Bounds and the protocol revision
 
 | Bound                                                         | Value                                          |
 | ------------------------------------------------------------- | ---------------------------------------------- |
@@ -390,7 +390,7 @@ open channel, and `sequence` is the number of the statement it will produce, so 
 | Settlements in one request, developer bets in one public page | 256                                            |
 | Payouts listed in one reply                                   | 256                                            |
 
-The first three are `LIMITS`, which `GET /api/config` reports as `limits`:
+The first three are `BOUNDS`, which `GET /api/config` reports as `bounds`:
 `{"outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64}`.
 
 `PROTOCOL` fixes everything a wallet and the casino must agree on. It is the keccak-256 of the UTF-8 bytes of the
@@ -399,14 +399,14 @@ canonical JSON of the rules they apply alike. An `encodeType` string is a struct
 `Access(bytes32 channelId,uint256 expiresAt)`. The rules:
 
 ```text
-{"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"none":0,"withdrawal":5},"limits":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
+{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"none":0,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
 `DEVELOPER_PROTOCOL` fixes only what a developer's server shares with the casino: the `encodeType` strings of
 `DeveloperAccess`, `Settlement` and `BankCasinoBet`, followed by:
 
 ```text
-{"limits":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
+{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
 `GET /api/config` reports both, as `protocol` and `developerProtocol`. A wallet compares `protocol`, and a developer's
@@ -422,7 +422,7 @@ the hashing and pricing rules in numbers.
 | Key                             | Contents                                                                                                                                                                                                                                          |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, the developer `0x4444…44` and the recipient `0x5555…55`                                                                                           |
-| `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#limits-and-the-protocol-revision)                                                                                                                                                                          |
+| `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#bounds-and-the-protocol-revision)                                                                                                                                                                          |
 | `opening`                       | The opening of the player's first channel, whose `index` is `0`                                                                                                                                                                                   |
 | `base`, `baseHash`              | The channel's base, and its hash                                                                                                                                                                                                                  |
 | `operations`                    | Six operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |

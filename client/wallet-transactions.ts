@@ -8,7 +8,7 @@ import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { depositRemaining, recordPlay } from './play-controls.ts';
 /** Everything that signs or recovers an on-chain transaction: deposits, withdrawals, closes, claims,
- * challenges, fee limits, nonce recovery and confirmed-receipt bookkeeping. The wallet
+ * challenges, fee caps, nonce recovery and confirmed-receipt bookkeeping. The wallet
  * class is a chain: `CasinoWallet` extends `GameSessions` extends `ChannelClient`
  * extends this, so each method declares `this: CasinoWallet`. */
 export class WalletTransactions {
@@ -129,7 +129,7 @@ export class WalletTransactions {
       gasLimit * feePerGas > 50000000000000000n
     )
       throw new Error(
-        'Transaction exceeds wallet fee limits (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
+        'Transaction exceeds the fee caps (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
       );
   }
   /** What this account's address can put into its balance within its deposit limit: everything but the deposit's own

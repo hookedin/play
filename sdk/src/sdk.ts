@@ -6,7 +6,7 @@ export type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt 
 
 /** Every bound a bet is held to, as the wallet reports them. They are part of the protocol revision the wallet
  * and its casino share, so read them rather than carrying copies of your own. */
-export interface WalletLimits {
+export interface WalletBounds {
   /** The size of the outcome space, as a decimal string: a bet's chance counts outcomes out of this. */
   outcomeSpace: string;
   /** The most a developer bet's meta takes, as canonical JSON, and the longest group label. */
@@ -91,8 +91,8 @@ const call = (method: string, params: Record<string, unknown> = {}) =>
 
 /** The page's first message, which starts it at the wallet: every bound the wallet holds a bet to. A greeting that
  * failed is forgotten, so the next call asks again. */
-let greeting: Promise<{ limits: WalletLimits }> | null = null;
-const hello = (): Promise<{ limits: WalletLimits }> =>
+let greeting: Promise<{ bounds: WalletBounds }> | null = null;
+const hello = (): Promise<{ bounds: WalletBounds }> =>
   (greeting ??= call('wallet.hello').catch(error => {
     greeting = null;
     throw error;

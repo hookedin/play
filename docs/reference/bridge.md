@@ -1,6 +1,6 @@
 ---
 title: Game bridge
-description: The postMessage protocol between a game page and the HookedIn wallet, with its envelopes, methods, events, receipts, limits and error codes.
+description: The postMessage protocol between a game page and the HookedIn wallet, with its envelopes, methods, events, receipts, bounds and error codes.
 sidebar:
   order: 1
 ---
@@ -69,7 +69,7 @@ stands, and the page that follows finds it with [`game.receipt`](#gamereceipt).
 ## Size
 
 The wallet refuses with `invalid-request` a request whose estimated JSON size is above 70,000 characters, or that nests
-deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [limits](#limits).
+deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [bounds](#bounds).
 
 ## Queueing
 
@@ -91,8 +91,8 @@ public record show a group as one.
 
 ### `wallet.hello`
 
-The page's first request. Answered at once, it takes no parameters and answers `{ limits }`, the bounds the wallet holds
-a bet to ([limits](#limits)).
+The page's first request. Answered at once, it takes no parameters and answers `{ bounds }`, the bounds the wallet holds
+a bet to ([bounds](#bounds)).
 
 ### `wallet.info`
 
@@ -331,9 +331,9 @@ and its ID keeps returning the rejection:
 }
 ```
 
-## Limits
+## Bounds
 
-`wallet.hello` reports `limits`, every bound the wallet holds a bet to:
+`wallet.hello` reports `bounds`, every bound the wallet holds a bet to:
 
 | Field          | Value                    | Meaning                                                                     |
 | -------------- | ------------------------ | --------------------------------------------------------------------------- |
@@ -341,8 +341,8 @@ and its ID keeps returning the rejection:
 | `meta`         | `4096`                   | The most bytes a developer bet's meta takes as canonical JSON               |
 | `group`        | `64`                     | The longest group label, in characters                                      |
 
-They are [part of the protocol revision](signed-messages.md#limits-and-the-protocol-revision): the casino reports the
-same numbers as `limits` in [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the developer kit's
+They are [part of the protocol revision](signed-messages.md#bounds-and-the-protocol-revision): the casino reports the
+same numbers as `bounds` in [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the developer kit's
 [`DEVELOPER_PROTOCOL`](../sdk/developer.md#developer_protocol) hashes them. A game reads them rather than carrying
 copies.
 

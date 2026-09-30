@@ -1,5 +1,5 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
-import { LIMITS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
+import { BOUNDS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
 /** Every method a game may call. */
 export const METHODS = [
@@ -53,7 +53,7 @@ const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(val
 /** The stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance. */
 function validateOdds(chance: unknown, prize: unknown) {
   if (gameAmount(prize) >= MAX_BALANCE) throw new Error('A prize is below 2^128.');
-  if (gameAmount(chance) >= BigInt(LIMITS.outcomeSpace))
+  if (gameAmount(chance) >= BigInt(BOUNDS.outcomeSpace))
     throw new Error('A chance counts winning outcomes out of 2^64, from 1 to 2^64 − 1.');
 }
 /** A bounded estimate of the serialized size that stops early, so an oversized message is never stringified. */

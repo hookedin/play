@@ -40,7 +40,7 @@ test('game allowances and complete stake amounts are readable on phones and tabl
         if (event.source !== iframe.contentWindow || !request.hookedin || !request.method) return;
         const result =
           request.method === 'wallet.hello'
-            ? { limits: {} }
+            ? { bounds: {} }
             : request.method === 'wallet.info'
               ? {
                   uname: 'layout',

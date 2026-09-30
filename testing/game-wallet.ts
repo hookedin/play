@@ -24,7 +24,7 @@ import {
   checkpointEvidence,
   rejectionCheckpoint,
   KIND,
-  LIMITS,
+  BOUNDS,
   MAX_DEVELOPER_BETS,
   MAX_META_BYTES,
   MAX_PAYOUTS,
@@ -412,7 +412,7 @@ export async function gameWallet({
     if (!round) throw refused(404, 'not-found', 'Unknown round');
     if (!validMeta(meta))
       throw refused(400, 'invalid', `A casino bet's meta is a JSON object of up to ${MAX_META_BYTES} bytes`);
-    if (typeof group !== 'string' || !group.length || group.length > LIMITS.group)
+    if (typeof group !== 'string' || !group.length || group.length > BOUNDS.group)
       throw refused(400, 'invalid', 'A casino bet names a group of 1 to 64 characters');
     const seed = await seedOf(round.id),
       message = {

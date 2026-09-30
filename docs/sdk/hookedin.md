@@ -49,7 +49,7 @@ carried it out, which `receipt` tells; and with a plain `Error` for a reply with
 
 #### `hello`
 
-[`wallet.hello`](../reference/bridge.md#wallethello), `{ limits }`: the page's first message, which the module sends as
+[`wallet.hello`](../reference/bridge.md#wallethello), `{ bounds }`: the page's first message, which the module sends as
 it loads inside a frame. Every call returns that one promise while it is pending or once it has resolved; a greeting
 that failed is forgotten, so the next call asks again.
 
@@ -170,10 +170,10 @@ async function place(bet: CasinoBetRequest) {
 game may still risk in this tab, winnings included, in wei, and whether a signed operation awaits recovery in the
 wallet.
 
-### `WalletLimits`
+### `WalletBounds`
 
 Every bound the wallet holds a bet to, `{ outcomeSpace, meta, group }`, as `hello` reports them
-([limits](../reference/bridge.md#limits)).
+([bounds](../reference/bridge.md#bounds)).
 
 ### `WalletInfo`
 

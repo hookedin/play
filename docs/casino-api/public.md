@@ -13,7 +13,7 @@ a player's address or channel.
 
 ### `GET /api/config`
 
-The deployment the casino runs, the protocol revision it speaks and the limits it holds bets to. A wallet checks
+The deployment the casino runs, the protocol revision it speaks and the bounds it holds bets to. A wallet checks
 `protocol`, and a developer's server `developerProtocol`, against its own before it signs anything; the wallet takes
 nothing else here on trust ([how it pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
@@ -23,13 +23,13 @@ nothing else here on trust ([how it pins its deployment](../reference/deployment
 | `rpcUrl`             | string         | The casino's primary RPC                                                                                                                |
 | `witnessRpcUrl`      | string         | Its witness RPC, on another host; absent when it has none                                                                               |
 | `contractAddress`    | address        | The HookedInCasino contract                                                                                                             |
-| `protocol`           | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#limits-and-the-protocol-revision), the hash of everything a wallet and the casino agree on |
+| `protocol`           | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#bounds-and-the-protocol-revision), the hash of everything a wallet and the casino agree on |
 | `developerProtocol`  | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                     |
 | `operator`           | address        | The contract's owner: the casino's signing address                                                                                      |
 | `networkName`        | string         | `"Sepolia"` or `"Anvil test chain"`                                                                                                     |
 | `isLocalDevelopment` | boolean        | `true` only on a local stack that offers [the faucet](#post-apifaucet)                                                                  |
 | `explorerUrl`        | string or null | `"https://sepolia.etherscan.io"` on Sepolia, `null` otherwise                                                                           |
-| `limits`             | object         | `{outcomeSpace, meta, group}`: [the limits](../reference/signed-messages.md#limits-and-the-protocol-revision) a bet is held to          |
+| `bounds`             | object         | `{outcomeSpace, meta, group}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to          |
 
 ### `GET /api/status`
 

@@ -59,7 +59,7 @@ test("the ball lands in the bucket its bet reached, on one of that bucket's path
     }
 });
 
-test('each drop is one casino bet, recovers a lost reply under the same ID, and explains limits', async () => {
+test('each drop is one casino bet, recovers a lost reply under the same ID, and explains a stake the casino cannot back', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('plinko'));

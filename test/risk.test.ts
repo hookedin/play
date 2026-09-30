@@ -110,7 +110,7 @@ test('there is no percentage cap apart from Kelly and bankroll backing', () => {
   assert.equal(q.fee, 0n);
 });
 
-test('large intermediate products stay exact near uint256 limits', () => {
+test('large intermediate products stay exact near the uint256 maximum', () => {
   const q = assessBinary({
     bankroll: UINT256_MAX - UINT256_MAX / 4n,
     stake: UINT256_MAX / 4n,

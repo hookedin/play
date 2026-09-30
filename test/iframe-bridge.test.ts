@@ -274,7 +274,7 @@ test('validation rejects developer and wallet-field injection before dispatch', 
     'signature',
     'autoApprove',
     'approved',
-    'limits',
+    'bounds',
     'grant',
   ]) {
     const message = bet({ [field]: 'attacker-controlled' });
