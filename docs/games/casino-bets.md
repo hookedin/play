@@ -12,7 +12,7 @@ a hand of blackjack is [one casino bet per step](multi-step-games.md).
 ## The bet
 
 Every casino bet is on a round, whose outcome is a uniform integer in `[0, 2^64)` that the wallet checks before the game
-sees it ([rounds](../overview/how-it-works.md#rounds)). The bet pays `prize` when the outcome is below `chance`.
+sees it ([how it works](../overview/how-it-works.md)). The bet pays `prize` when the outcome is below `chance`.
 
 - `chance` counts winning outcomes out of 2^64, from 1 to 2^64 − 1: a sure win or a sure loss is not a bet.
 - `prize` is gross, what a winning bet pays: twice the stake is an even-money win, and a prize below the stake is a
