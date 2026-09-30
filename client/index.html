@@ -340,9 +340,9 @@
             <label for="limit-minutes">Session length (minutes)</label
             ><input id="limit-minutes" type="number" min="1" max="1440" step="1" placeholder="No limit" />
             <p class="help">
-              A bet must fit within the remaining loss allowance. Wins do not undo losses; developer bets and payments
-              count their full stake. Sessions end with a 15-minute break. Lower limits apply now; increases or removal
-              wait 24 hours.
+              A bet must fit within what is left of the daily loss limit. Wins do not undo losses; developer bets and
+              payments count their full stake. Sessions end with a 15-minute break. Lower limits apply now; increases or
+              removal wait 24 hours.
             </p>
             <button class="button small" type="submit">Save limits</button>
           </form>
@@ -582,7 +582,7 @@
         <div id="withdraw-source-field">
           <label for="withdraw-source">Withdraw from</label
           ><select id="withdraw-source">
-            <option value="balance">Game balance</option>
+            <option value="balance">Balance</option>
             <option value="address">Deposit address · less network fee</option>
           </select>
         </div>
@@ -607,31 +607,41 @@
       </section>
     </dialog>
 
-    <dialog id="fund-dialog" class="sheet" aria-labelledby="fund-title">
-      <form id="fund-form">
+    <dialog id="allowance-dialog" class="sheet" aria-labelledby="allowance-title">
+      <form id="allowance-form">
         <div class="sheet-head">
-          <h2 id="fund-title">Play with ETH</h2>
-          <button class="close" type="button" data-fund-cancel aria-label="Close">×</button>
+          <h2 id="allowance-title">Play with ETH</h2>
+          <button class="close" type="button" data-allowance-cancel aria-label="Close">×</button>
         </div>
-        <p id="fund-who" class="muted"></p>
+        <p id="allowance-who" class="muted"></p>
         <div class="label-row">
-          <label for="fund-amount">It may play with up to</label
-          ><button id="fund-take-all" class="text-button" type="button">Take it all back</button>
+          <label for="allowance-amount">It may play with up to</label
+          ><button id="allowance-take-all" class="text-button" type="button">Take it all back</button>
         </div>
         <div class="amount-input">
-          <input id="fund-amount" inputmode="decimal" autocomplete="off" aria-describedby="fund-help" /><span>ETH</span>
+          <input id="allowance-amount" inputmode="decimal" autocomplete="off" aria-describedby="allowance-help" /><span
+            >ETH</span
+          >
         </div>
-        <input id="fund-slider" class="slider" type="range" min="0" max="100" step="1" aria-label="Game limit" />
-        <div class="scale"><span>0</span><span id="fund-total"></span></div>
-        <p id="fund-help" class="help"></p>
+        <input
+          id="allowance-slider"
+          class="slider"
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          aria-label="Game allowance"
+        />
+        <div class="scale"><span>0</span><span id="allowance-total"></span></div>
+        <p id="allowance-help" class="help"></p>
         <div class="actions end">
-          <button class="button" type="button" data-fund-cancel>Not now</button
-          ><button id="fund-confirm" class="button primary" type="submit">Allow</button>
+          <button class="button" type="button" data-allowance-cancel>Not now</button
+          ><button id="allowance-confirm" class="button primary" type="submit">Allow</button>
         </div>
         <details class="terms">
-          <summary>How a game limit works</summary>
+          <summary>How an allowance works</summary>
           <ul>
-            <li>The money stays in your balance. The limit is the most this game may put at risk.</li>
+            <li>The money stays in your balance. The allowance is the most this game may put at risk.</li>
             <li>It can lose all of it, winnings included, on its bets and payments, and not a wei more.</li>
             <li>Leaving the game or closing the tab takes back what is left. Change it any time.</li>
             <li>
@@ -641,7 +651,7 @@
           </ul>
         </details>
         <div class="sheet-foot">
-          <button id="fund-deposit" class="text-button" type="button">Deposit more</button>
+          <button id="allowance-deposit" class="text-button" type="button">Deposit more</button>
         </div>
       </form>
     </dialog>

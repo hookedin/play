@@ -54,7 +54,7 @@ async function setUp(bankroll?: bigint) {
   const f = await gameWallet({ bankroll }),
     w = f.wallet;
   w.openGame(f.identity('mines'));
-  await w.setGameLimit('200000');
+  await w.setGameAllowance('200000');
   const store = memoryStore(),
     client = () => new RoundClient(f.bridge, minesGraph, undefined, { store, name: 'mines' }),
     covered = async (stake: bigint, mines: number) =>

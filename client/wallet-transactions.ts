@@ -142,10 +142,10 @@ export class WalletTransactions {
     ]);
     const rest = balance - fees.maxCost;
     this.depositFee = fees.maxCost;
-    const allowance = depositRemaining(this.controls),
+    const remaining = depositRemaining(this.controls),
       amount = rest > 0n ? rest : 0n;
     return {
-      amount: allowance !== null && allowance < amount ? allowance : amount,
+      amount: remaining !== null && remaining < amount ? remaining : amount,
       fee: fees.maxCost,
       overrides: fees.overrides,
     };
@@ -485,7 +485,7 @@ export class WalletTransactions {
       value = amount === undefined ? balance : BigInt(amount);
     if (value <= 0n || value > balance) throw new Error('Not that much is in your balance.');
     // The open game may risk no more than stays in the balance.
-    if (this.game && BigInt(this.game.balance) > balance - value) this.game.balance = String(balance - value);
+    if (this.game && BigInt(this.game.allowance) > balance - value) this.game.allowance = String(balance - value);
     const receipt = await this.perform('withdrawal', { amount: value, recipient }, crypto.randomUUID());
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this withdrawal.');
     return receipt;
@@ -498,7 +498,7 @@ export class WalletTransactions {
       balance = BigInt(c?.state.balance || 0);
     if (!c || Number(c.onchain?.status) !== 1 || c.closing || !balance) throw new Error('No balance to lock in.');
     // All of it goes out and back in: the open game risks nothing meanwhile.
-    if (this.game) this.game.balance = '0';
+    if (this.game) this.game.allowance = '0';
     const receipt = await this.perform(
       'lock-in',
       { amount: balance, recipient: this.config.contractAddress },

@@ -1,8 +1,8 @@
 import type {
   DeveloperBetRequest,
   CasinoBetRequest,
+  GameAllowance,
   GameIdentity,
-  GameLimit,
   GameReceipt,
   GameSession,
 } from '../protocol/game-types.ts';
@@ -49,9 +49,9 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
 };
 
 /**
- * The open game's spending limit. It lives only in this tab's memory: the wallet persists no game
- * state, and leaving the game or closing the tab releases the limit back to the balance it came from.
- * The signed channel balance is the money; the limit only caps what the game may risk.
+ * The open game's allowance. It lives only in this tab's memory: the wallet persists no game
+ * state, and leaving the game or closing the tab releases the allowance back to the balance it came from.
+ * The signed channel balance is the money; the allowance only caps what the game may risk.
  */
 export class GameSessions extends ChannelClient {
   game: GameSession | null = null;
@@ -59,7 +59,7 @@ export class GameSessions extends ChannelClient {
     this.game = {
       key: identity.key,
       identity: { ...identity, developer: getAddress(identity.developer) },
-      balance: '0',
+      allowance: '0',
     };
     this.render();
   }
@@ -71,9 +71,9 @@ export class GameSessions extends ChannelClient {
     if (!this.game) throw gameError('game-closed', 'No game is open');
     return this.game;
   }
-  gameLimit(this: CasinoWallet): GameLimit {
+  gameAllowance(this: CasinoWallet): GameAllowance {
     const game = this.requireGame();
-    return { balance: game.balance, pending: this.pending?.game?.key === game.key };
+    return { allowance: game.allowance, pending: this.pending?.game?.key === game.key };
   }
   /** What a game page learns when it loads: every bound a bet is held to, as the protocol this wallet and its casino
    * share has them. */
@@ -125,10 +125,10 @@ export class GameSessions extends ChannelClient {
     const game = this.requireGame();
     return { key: game.key, id, name: game.identity.name, developer: game.identity.developer };
   }
-  /** The only grant of spending authority: how much of the playing balance the open game may risk.
-   * The limit lives in this tab's memory and signs nothing, so it can be set while an operation is
-   * pending; what that operation has already committed is simply not the player's to allocate. */
-  async setGameLimit(this: CasinoWallet, amount: string) {
+  /** The only grant of spending authority: the open game's allowance, how much of the balance it may risk.
+   * The allowance lives in this tab's memory and signs nothing, so it can be set while an operation is
+   * pending; what that operation has already committed is simply not the player's to allow. */
+  async setGameAllowance(this: CasinoWallet, amount: string) {
     const n = gameAmount(amount, false);
     this.requireGame();
     // It waits for the wallet's own background work rather than failing as busy.
@@ -136,8 +136,8 @@ export class GameSessions extends ChannelClient {
       async () => {
         this.ready();
         const game = this.requireGame();
-        if (n > this.playableBalance()) throw new Error('The limit exceeds your balance');
-        game.balance = String(n);
+        if (n > this.playableBalance()) throw new Error('The allowance exceeds your balance');
+        game.allowance = String(n);
         this.render();
       },
       { wait: true },

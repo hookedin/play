@@ -13,12 +13,12 @@ what the wallet checks and answers.
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
-const shown = document.querySelector('#balance')!;
-HookedIn.onBalance(({ balance }) => (shown.textContent = `${HookedIn.formatAmount(balance)} ETH`));
+const shown = document.querySelector('#allowance')!;
+HookedIn.onAllowance(({ allowance }) => (shown.textContent = `${HookedIn.formatAmount(allowance)} ETH`));
 
 const stake = HookedIn.parseAmount('0.000001'); // '1000000000000' wei
-const funding = await HookedIn.requestFunds({ amount: stake });
-if (funding.funded) {
+const answer = await HookedIn.requestAllowance({ amount: stake });
+if (answer.allowed) {
   const id = crypto.randomUUID(); // save it before sending: a lost reply is recovered by this id
   const receipt = await HookedIn.casinoBet({
     id,
@@ -64,22 +64,22 @@ A developer's round as the casino shows it to anyone, read through the player's 
 [`Round`](developer.md#round), open or revealed. The wallet passes the casino's answer on as it is: check it as
 [checking a round](outcome.md#checking-a-round) shows.
 
-#### `balance`
+#### `allowance`
 
-The game's balance as the wallet last pushed it, a [`GameLimit`](#gamelimit). It greets the wallet first and rejects as
-[`hello`](#hello) does, with `no-wallet` outside a frame; when nothing has been pushed yet, it waits for the first push,
-and rejects with `timeout` if none arrives within 180,000 ms.
+The game's allowance as the wallet last pushed it, a [`GameAllowance`](#gameallowance). It greets the wallet first and
+rejects as [`hello`](#hello) does, with `no-wallet` outside a frame; when nothing has been pushed yet, it waits for the
+first push, and rejects with `timeout` if none arrives within 180,000 ms.
 
-#### `onBalance`
+#### `onAllowance`
 
-Calls a listener with every [`game.balance`](../reference/bridge.md#gamebalance) push, and returns a function that
-stops it. A listener added later hears only later pushes; `balance()` reads the current one.
+Calls a listener with every [`game.allowance`](../reference/bridge.md#gameallowance) push, and returns a function that
+stops it. A listener added later hears only later pushes; `allowance()` reads the current one.
 
-#### `requestFunds`
+#### `requestAllowance`
 
-[`game.requestFunds`](../reference/bridge.md#gamerequestfunds): asks the player for `amount` more than the game holds,
-a suggestion the wallet's own dialog shows, and resolves once they have decided with `funded`, the limit they chose as
-`amount` (or `null`), and the game's `balance` and `pending` after it.
+[`game.requestAllowance`](../reference/bridge.md#gamerequestallowance): asks the player for `amount` more than the game
+holds, a suggestion the wallet's own dialog shows, and resolves once they have decided with `allowed`, and the game's
+`allowance` and `pending` after it.
 
 #### `receipt`
 
@@ -134,8 +134,8 @@ Every digit of an amount, `formatAmount` to 18 places: what belongs in a field t
 
 #### `initializeGame`
 
-A page's start: it waits for `wallet.info` and the first balance, and fills `stakeInput` with the recommended stake
-unless the player edited it meanwhile. It resolves with the player's `wallet.info` as `wallet`, the balance as `state`,
+A page's start: it waits for `wallet.info` and the first allowance, and fills `stakeInput` with the recommended stake
+unless the player edited it meanwhile. It resolves with the player's `wallet.info` as `wallet`, the game's `allowance`,
 and `scope`, the page's [`storageScope`](#storagescope). It signs nothing and asks the player nothing.
 
 ## Error class
@@ -154,9 +154,9 @@ async function place(bet: CasinoBetRequest) {
   try {
     return await HookedIn.casinoBet(bet);
   } catch (error) {
-    if (!(error instanceof HookedInError) || error.code !== 'insufficient-funds') throw error;
-    const funding = await HookedIn.requestFunds({ amount: bet.stake });
-    if (funding.funded) return HookedIn.casinoBet(bet); // the same id: the same bet
+    if (!(error instanceof HookedInError) || error.code !== 'insufficient-allowance') throw error;
+    const answer = await HookedIn.requestAllowance({ amount: bet.stake });
+    if (answer.allowed) return HookedIn.casinoBet(bet); // the same id: the same bet
     throw error;
   }
 }
@@ -164,10 +164,11 @@ async function place(bet: CasinoBetRequest) {
 
 ## Types
 
-### `GameLimit`
+### `GameAllowance`
 
-`{ balance, pending }`, what the wallet pushes as [`game.balance`](../reference/bridge.md#gamebalance): what the game
-may still risk in this tab, winnings included, in wei, and whether a signed operation awaits recovery in the wallet.
+`{ allowance, pending }`, what the wallet pushes as [`game.allowance`](../reference/bridge.md#gameallowance): what the
+game may still risk in this tab, winnings included, in wei, and whether a signed operation awaits recovery in the
+wallet.
 
 ### `WalletLimits`
 

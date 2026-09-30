@@ -10,7 +10,7 @@ export const METHODS = [
   'game.casinoBet',
   'game.developerBet',
   'game.payment',
-  'game.requestFunds',
+  'game.requestAllowance',
 ];
 const methods = new Set(METHODS);
 /** Questions the wallet answers at once. Everything else signs or asks the player, and waits its turn. */
@@ -93,7 +93,7 @@ function validate(data: any) {
   } else if (data.method === 'wallet.round') {
     if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.id))
       throw new Error('A round is named by its 32-byte hash, as 0x and 64 hex digits.');
-  } else if (data.method === 'game.requestFunds') {
+  } else if (data.method === 'game.requestAllowance') {
     // The wallet's modal decides, and every word in it is the wallet's: a game suggests an amount.
     if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);

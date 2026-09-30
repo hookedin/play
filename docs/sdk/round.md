@@ -39,8 +39,8 @@ if (state.actions.includes('cash-out')) state = await round.action('cash-out');
 | `store`   | Where the round is saved, a [`RoundStore`](#roundstore). `localStorage` by default                            |
 | `name`    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
 
-Each step is at most one operation, whose group is the round's `id`. The round asks the player for money when the
-game's balance is short of what the step needs, draws the step's branch with the page's own randomness
+Each step is at most one operation, whose group is the round's `id`. The round asks the player for more when the
+game's allowance is short of what the step needs, draws the step's branch with the page's own randomness
 ([`prepareAction`](engine.md#prepareaction)) and saves it with a fresh operation ID before it sends anything, and then
 sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing. A bet wins when the receipt's outcome is
 below its chance, which fixes the class of states it reaches, and the outcome draws the state within it; the verified
@@ -74,10 +74,10 @@ with the bridge's errors.
 
 Starts a round at the graph's root with `setup.stake`, a decimal string of wei, as its cash; the setup goes to `graph`
 and is saved with the round. It throws `Recover the pending action first` while a step is pending, which `restore`
-resolves. It makes sure the game's balance covers the stake, prices the graph, and saves the round under a fresh `id`,
-replacing a saved unfinished round, whose cash is in the game's balance already. It places no bet; the first `action`
-does. It throws the pricing error above, `Add enough money to this game to continue` when the player does not give the
-game enough, and the bridge's errors.
+resolves. It makes sure the game's allowance covers the stake, prices the graph, and saves the round under a fresh
+`id`, replacing a saved unfinished round, whose cash is in the game's allowance already. It places no bet; the first
+`action` does. It throws the pricing error above, `Increase your game allowance to continue.` when the player does not
+allow the game enough, and the bridge's errors.
 
 #### `action`
 
@@ -93,7 +93,7 @@ with its state unchanged.
 | `Illegal game action`                                                                          | The node does not offer the action                                            | –                                                                             |
 | `Retry the pending action first`                                                               | Another step is pending                                                       | Pending                                                                       |
 | A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The live bankroll is below the planning floor or does not admit the bet drawn | –                                                                             |
-| `Add enough money to this game to continue`                                                    | The player did not give the game enough                                       | –                                                                             |
+| `Increase your game allowance to continue.`                                                    | The player did not allow the game enough                                      | –                                                                             |
 | The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                  | Pending, under a fresh operation ID                                           |
 | The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                        | Pending, under the same operation ID, so sending it again is the same request |
 
@@ -113,13 +113,13 @@ removed.
 
 #### `inHand`
 
-The cash inside an unfinished round, or `0n`: part of the game's balance, and the player's to keep if they stop.
+The cash inside an unfinished round, or `0n`: part of the game's allowance, and the player's to keep if they stop.
 
-#### `ensureFunds`
+#### `ensureAllowance`
 
-Makes sure the game's balance, as the last `restore`, `start` or `action` read it, covers `required`. When it does not,
-it asks the player for the shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
-`Add enough money to this game to continue` if the balance is still short.
+Makes sure the game's allowance, as the last `restore`, `start` or `action` read it, covers `required`. When it does
+not, it asks the player for the shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
+`Increase your game allowance to continue.` if the allowance is still short.
 
 #### `busy`
 
@@ -128,8 +128,8 @@ it asks the player for the shortfall plus four times `stake`, so one authorizati
 #### `onChange`
 
 Calls a listener after every `restore`, `start` and `action`, whether it resolved or threw: whenever the round's cash or
-`busy` may have changed. Returns a function that stops it. [`mountBank`](bank-and-synth.md#mountbank) redraws the strip
-with it.
+`busy` may have changed. Returns a function that stops it. [`mountAllowance`](allowance-and-synth.md#mountallowance)
+redraws the strip with it.
 
 ## Types
 
@@ -164,8 +164,8 @@ One step taken: its `action`, and the `label` of the outcome it led to when the 
 
 ### `RoundBridge`
 
-What the helper needs of the SDK: `call`, a bridge request, and `balance`, the game's balance as the wallet last pushed
-it. `HookedIn` and a [test bridge](../games/testing.md#testbridge) are both round bridges.
+What the helper needs of the SDK: `call`, a bridge request, and `allowance`, the game's allowance as the wallet last
+pushed it. `HookedIn` and a [test bridge](../games/testing.md#testbridge) are both round bridges.
 
 ### `RoundStore`
 

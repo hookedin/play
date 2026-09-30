@@ -86,14 +86,14 @@ requested casino bet is completed.
   their fees from the deposit address, where the wallet keeps nothing back
   ([fees and gas](../wallet/closing-and-claims.md#fees-and-gas)). Anyone can send a challenge, a finalization or a
   collection for you.
-- **Set each game's limit.** You choose how much each game may play with, and the wallet holds it to that.
+- **Set each game's allowance.** You choose how much each game may play with, and the wallet holds it to that.
 
 ## What a game can and cannot do
 
 A game can:
 
-- ask for casino bets, developer bets and payments, up to the limit you give it;
-- lose its whole limit, winnings included, on bets that pay back little;
+- ask for casino bets, developer bets and payments, up to the allowance you give it;
+- lose its whole allowance, winnings included, on bets that pay back little;
 - show you whatever it likes.
 
 A game cannot:
@@ -101,12 +101,12 @@ A game cannot:
 - see your keys, your address, your channels or your balances;
 - see the secret of your round, or the seed your wallet picked, before the result;
 - ask the wallet for any signature but its own bets and payments;
-- spend a wei beyond its limit, or change who earns its commission.
+- spend a wei beyond its allowance, or change who earns its commission.
 
 The wallet verifies each casino bet completely (its odds, its outcome and what it pays) and records its return, but it
 does not refuse a bet for paying back little. It does not check a game's advertised rules, how a game's steps combine,
 which bet a collapsed step draws, or the files a game serves. Playing a game trusts its developer for its tables
-([games and their limits](../wallet/getting-started.md#games-and-their-limits)).
+([games and their allowances](../wallet/getting-started.md#games-and-their-allowances)).
 
 ## Developer bets trust their developer
 

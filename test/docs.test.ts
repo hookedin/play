@@ -77,7 +77,7 @@ test('every name each SDK entry point exports has its entry, and nothing else', 
     'sdk/steps.md': ['sdk/src/steps.ts'],
     'sdk/admits.md': ['sdk/src/admits.ts'],
     'sdk/outcome.md': ['sdk/src/outcome.ts'],
-    'sdk/bank-and-synth.md': ['sdk/src/bank.ts', 'sdk/src/synth.ts'],
+    'sdk/allowance-and-synth.md': ['sdk/src/allowance.ts', 'sdk/src/synth.ts'],
     'games/testing.md': ['testing/game-wallet.ts'],
   };
   for (const [page, sources] of Object.entries(pages))

@@ -37,7 +37,7 @@ test('a session spans reloads and requires a 15-minute break before further play
   assert.throws(() => allowPlay(reduced, 1n, now + 20 * 60000), /Take a break/);
 });
 
-test('loss allowance checks the full stake and wins or rejected bets cannot increase it', () => {
+test('the daily loss limit checks the full stake and wins or rejected bets cannot raise what is left of it', () => {
   let state = changeLimits(playControls(undefined, now), limits, now);
   state = recordPlay(state, { kind: 'casino-bet', status: 'signed', stake: '80', payout: '30' }, now);
   assert.equal(state.lost, '50');
@@ -51,7 +51,7 @@ test('loss allowance checks the full stake and wins or rejected bets cannot incr
   assert.equal(playControls(state, now + DAY).lost, '0');
 });
 
-test('deposit allowance counts confirmed own deposits and pauses block all new commitments', () => {
+test('the daily deposit limit counts confirmed own deposits and pauses block all new commitments', () => {
   let state = changeLimits(playControls(undefined, now), limits, now);
   state = recordPlay(state, { kind: 'deposit', status: 'confirmed', amount: '600' }, now);
   state = recordPlay(state, { kind: 'deposit', status: 'reverted', amount: '400' }, now);

@@ -21,7 +21,7 @@ import { fraction } from '../sdk/src/engine/index.ts';
 type Terms = { stake: string; chance: string; prize: string };
 /** A casino to run the suite against, with a wallet playing a published game. */
 export interface Casino {
-  /** The wallet, with its channel funded, the game open and its spending limit set. */
+  /** The wallet, with its channel funded, the game open and its allowance set. */
   wallet: CasinoWallet;
   bridge: TestBridge;
   /** The game's developer, as its server creates it on starting. */
@@ -83,7 +83,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     const before = await w.balance(),
       bet = { id: 'lost', ...x.within };
     await assert.rejects(x.bridge.call('game.casinoBet', bet), /lost reply/);
-    assert.equal((await x.bridge.balance()).pending, true, 'the wallet holds the signed bet');
+    assert.equal((await x.bridge.allowance()).pending, true, 'the wallet holds the signed bet');
     const receipt = await x.bridge.call('game.casinoBet', bet);
     assert.equal(receipt.status, 'settled');
     assert.deepEqual(await x.bridge.call('game.receipt', { id: 'lost' }), receipt);
@@ -111,7 +111,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     assert.equal(await y.bridge.call('game.receipt', { id: 'once' }), null, 'this wallet has no record of it');
     await assert.rejects(y.bridge.call('game.casinoBet', bet), (error: any) => error.code === 'id-used');
     assert.equal(await y.wallet.balance(), before, 'no second bet');
-    assert.equal((await y.bridge.balance()).pending, false, 'nothing is left pending');
+    assert.equal((await y.bridge.allowance()).pending, false, 'nothing is left pending');
     assert.equal((await y.bridge.call('game.casinoBet', { ...bet, id: 'fresh' })).status, 'settled');
   });
 

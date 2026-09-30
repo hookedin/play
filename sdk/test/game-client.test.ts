@@ -20,39 +20,39 @@ const bridgeFor = (w: any, extra: (method: string, params: any) => Promise<unkno
   };
 };
 
-test('the spending limit lives in memory: leaving the game releases it, and nothing about games is saved', async () => {
+test('the allowance lives in memory: leaving the game releases it, and nothing about games is saved', async () => {
   const f = await gameWallet(),
     w = f.wallet;
-  await assert.rejects(w.setGameLimit('100'), /No game is open/);
+  await assert.rejects(w.setGameAllowance('100'), /No game is open/);
   w.openGame(f.identity('a'));
-  await assert.rejects(w.gameCasinoBet(terms()), /exceeds the game balance/);
-  await w.setGameLimit('100');
+  await assert.rejects(w.gameCasinoBet(terms()), /exceeds the game's allowance/);
+  await w.setGameAllowance('100');
   assert.equal(w.availableBalance(), 999900n);
-  await assert.rejects(w.setGameLimit('1000001'), /exceeds your balance/);
-  await assert.rejects(w.gameCasinoBet({ ...terms(), stake: '101' }), /game balance/);
-  await assert.rejects(w.payBankroll(999901n), /unallocated/);
+  await assert.rejects(w.setGameAllowance('1000001'), /exceeds your balance/);
+  await assert.rejects(w.gameCasinoBet({ ...terms(), stake: '101' }), /game's allowance/);
+  await assert.rejects(w.payBankroll(999901n), /less the game's allowance/);
   w.closeGame();
   assert.equal(w.availableBalance(), 1000000n);
-  assert.throws(() => w.gameLimit(), /No game is open/);
+  assert.throws(() => w.gameAllowance(), /No game is open/);
   const record = await f.storage.get(w.storageKey);
-  assert.doesNotMatch(JSON.stringify(record), /games|allocation|"balance":"100"/);
+  assert.doesNotMatch(JSON.stringify(record), /games|allowance/);
   const reloaded = await f.reload();
   assert.equal(reloaded.game, null);
   assert.equal(reloaded.availableBalance(), 1000000n);
 });
 
-test('verified gains and losses move the limit; exact retries by ID never charge twice', async () => {
+test('verified gains and losses move the allowance; exact retries by ID never charge twice', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('1000');
-  let balance = 1000n;
+  await w.setGameAllowance('1000');
+  let allowance = 1000n;
   for (let i = 0; i < 20; i++) {
     const request = terms(`round-${i}`),
       receipt = await w.gameCasinoBet(request);
     assert.equal(receipt.status, 'settled');
-    balance += BigInt(receipt.payout!) - 10n;
-    assert.equal(w.gameLimit().balance, String(balance));
+    allowance += BigInt(receipt.payout!) - 10n;
+    assert.equal(w.gameAllowance().allowance, String(allowance));
     assert.equal(w.availableBalance(), 999000n);
     assert.deepEqual(receipt, {
       id: request.id,
@@ -71,7 +71,7 @@ test('verified gains and losses move the limit; exact retries by ID never charge
   assert.equal(await w.gameReceipt('never-played'), null);
   // Another game cannot reuse this game's operation IDs.
   w.openGame(f.identity('other'));
-  await w.setGameLimit('100');
+  await w.setGameAllowance('100');
   await w.gameCasinoBet(terms('round-0'));
   assert.equal(f.settlements(), 21);
 });
@@ -80,14 +80,14 @@ test("a developer bet keeps its game's meta, is paid only what its developer sig
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
   const request = { id: 'ride', stake: '10', meta: { cashout: '2.5' }, group: 'round-7' };
   const placed = await w.gameDeveloperBet(request);
   assert.match(placed.bet!, /^0x[0-9a-f]{64}$/);
   assert.deepEqual(placed, { ...request, kind: 'developer-bet', status: 'open', bet: placed.bet });
-  assert.equal(w.gameLimit().balance, '990');
+  assert.equal(w.gameAllowance().allowance, '990');
   assert.equal(f.bank(), 10n ** 12n + 10n, "the stake went into the developer's bank");
   assert.deepEqual(await w.gameDeveloperBet(request), placed, 'asking again while it is open');
   await assert.rejects(w.gameDeveloperBet({ ...request, stake: '20' }), /different intent/);
@@ -113,10 +113,10 @@ test("a developer bet keeps its game's meta, is paid only what its developer sig
     "a developer bet rests on its developer's word",
   );
   assert.deepEqual(pushed, [receipt]);
-  assert.equal(w.gameLimit().balance, '1015');
+  assert.equal(w.gameAllowance().allowance, '1015');
   // A game published nowhere has no developer to take a developer bet.
   w.openGame(f.identity('plain', { slug: undefined }));
-  await w.setGameLimit('100');
+  await w.setGameAllowance('100');
   await assert.rejects(w.gameDeveloperBet({ ...request, id: 'nobody' }), /published nowhere/);
 });
 
@@ -124,7 +124,7 @@ test("settlements the developer's bank cannot pay are refused whole, and the bet
   const f = await gameWallet({ bank: 5n }),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   const won = await w.gameDeveloperBet({ id: 'won', stake: '10', meta: {} }),
     lost = await w.gameDeveloperBet({ id: 'lost', stake: '10', meta: {} });
   assert.equal(f.bank(), 25n, "both stakes went into the developer's bank");
@@ -143,7 +143,7 @@ test('settled developer bets are found through the account feed, zero payouts ar
     w = f.wallet,
     game = f.identity();
   w.openGame(game);
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   const place = async (id: string) => (await w.gameDeveloperBet({ id, stake: '10', meta: {} })).bet!;
   const waiting = await place('waiting'),
     returned = await place('return'),
@@ -189,7 +189,7 @@ test('encrypted backups retain every open developer bet beyond recent history', 
     w = f.wallet,
     game = f.identity();
   w.openGame(game);
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   await w.gameDeveloperBet({ id: 'a', stake: '10', meta: {} });
   await w.gameDeveloperBet({ id: 'b', stake: '20', meta: {} });
   for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
@@ -220,13 +220,13 @@ test('a game learns how its operations ended and never whose they were', async (
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   const replies: any[] = [],
     reply = async (value: unknown) => void replies.push(await value);
   f.bridge.onReceipt(receipt => replies.push(receipt));
   await reply(w.gameHello());
   await reply(w.gameInfo());
-  await reply(w.gameLimit());
+  await reply(w.gameAllowance());
   await reply(w.gameCasinoBet(terms('own')));
   await reply(w.gameDeveloperBet({ id: 'seat', stake: '10', meta: { seat: 1 } }));
   await f.developer.settle([{ bet: replies.at(-1).bet, player: 10n, casino: 0n }]);
@@ -271,7 +271,7 @@ test('a lost reply is recovered by its ID after a reload', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('100');
+  await w.setGameAllowance('100');
   const api = w.api.bind(w);
   w.api = async (...args) => {
     const result = await api(...args);
@@ -279,15 +279,15 @@ test('a lost reply is recovered by its ID after a reload', async () => {
     return result;
   };
   await assert.rejects(w.gameCasinoBet(terms('lost')), /lost reply/);
-  assert.equal(w.gameLimit().pending, true);
+  assert.equal(w.gameAllowance().pending, true);
   const request = structuredClone(w.pending.request);
   const restored = await f.reload();
-  assert.equal(restored.game, null, 'the limit did not survive the reload');
+  assert.equal(restored.game, null, 'the allowance did not survive the reload');
   assert.deepEqual(restored.pending.request, request);
   await restored.exclusive(() => restored.resume());
   assert.equal(restored.availableBalance(), await restored.balance(), 'the result landed in the channel balance');
   restored.openGame(f.identity());
-  assert.equal(restored.gameLimit().pending, false);
+  assert.equal(restored.gameAllowance().pending, false);
   assert.equal((await restored.gameReceipt('lost'))!.status, 'settled', 'the game can still learn the outcome by ID');
   assert.equal(f.settlements(), 1);
   await restored.gameCasinoBet(terms('lost'));
@@ -298,7 +298,7 @@ test('a result recovered in the same tab updates the open game; a closed game ch
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('100');
+  await w.setGameAllowance('100');
   const api = w.api.bind(w);
   let lose = true;
   w.api = async (...args) => {
@@ -311,10 +311,10 @@ test('a result recovered in the same tab updates the open game; a closed game ch
   };
   await assert.rejects(w.gameCasinoBet(terms('a')), /lost reply/);
   const receipt: any = await w.exclusive(() => w.resume());
-  assert.equal(w.gameLimit().balance, String(100n - 10n + BigInt(receipt.payout)));
+  assert.equal(w.gameAllowance().allowance, String(100n - 10n + BigInt(receipt.payout)));
   w.closeGame();
   w.openGame(f.identity('b'));
-  await w.setGameLimit('50');
+  await w.setGameAllowance('50');
   lose = true;
   await assert.rejects(w.gameCasinoBet(terms('b')), /lost reply/);
   w.closeGame();
@@ -368,30 +368,30 @@ for (const boundary of ['request', 'settlement'])
     const f = await gameWallet(),
       w = f.wallet;
     w.openGame(f.identity());
-    await w.setGameLimit('100');
+    await w.setGameAllowance('100');
     let commits = 0;
     // The signed request is saved once, and the settlement is the save after it.
     f.storage.beforeCommit = () => {
       if (++commits === (boundary === 'request' ? 1 : 2)) throw new Error('disk failed');
     };
     await assert.rejects(w.gameCasinoBet(terms()), /disk failed/);
-    await assert.rejects(w.setGameLimit('10'), /storage needs recovery/);
+    await assert.rejects(w.setGameAllowance('10'), /storage needs recovery/);
     f.storage.beforeCommit = null;
     const restored = await f.reload();
     if (restored.pending) await restored.exclusive(() => restored.resume());
     restored.openGame(f.identity());
-    await restored.setGameLimit('100');
+    await restored.setGameAllowance('100');
     await restored.gameCasinoBet(terms());
     assert.equal(f.settlements(), 1);
   });
 
 test('mines runs its own rules through the wallet bridge and its own storage, including reload', async () => {
   const name = 'mines',
-    allocation = '100000';
+    allowance = '100000';
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity(name));
-  await w.setGameLimit(allocation);
+  await w.setGameAllowance(allowance);
   const bridge = bridgeFor(w),
     store = memoryStore();
   const graph = () => createMines({ tiles: 5, mines: 1, cashouts: [1200n, 1560n, 2280n] });
@@ -399,9 +399,9 @@ test('mines runs its own rules through the wallet bridge and its own storage, in
   let round = new RoundClient(bridge, graph, undefined, { store, name }),
     state = await round.start({ stake });
   const before = await w.balance();
-  // What a bank shows: the limit without the cash inside the unfinished round.
-  const shown = () => BigInt(w.gameLimit().balance) - round.inHand();
-  assert.equal(shown(), BigInt(allocation) - BigInt(stake));
+  // What the allowance strip shows: the allowance without the cash inside the unfinished round.
+  const shown = () => BigInt(w.gameAllowance().allowance) - round.inHand();
+  assert.equal(shown(), BigInt(allowance) - BigInt(stake));
   for (let i = 0; !state.terminal && i < 64; i++) {
     state = await round.action(state.actions.find(a => ['stand', 'cash-out'].includes(a)) ?? state.actions[0]);
     if (i === 2) round = new RoundClient(bridge, graph, undefined, { store, name });
@@ -409,14 +409,14 @@ test('mines runs its own rules through the wallet bridge and its own storage, in
     if (!state.terminal)
       assert.equal(
         shown(),
-        BigInt(allocation) - BigInt(state.contributed),
-        'the bank shows the limit without the cash inside the unfinished round',
+        BigInt(allowance) - BigInt(state.contributed),
+        'the strip shows the allowance without the cash inside the unfinished round',
       );
   }
   assert.equal(state.terminal, true);
   assert.equal(round.inHand(), 0n);
   assert.equal(await w.balance(), before - BigInt(state.contributed) + BigInt(state.cash));
-  assert.equal(w.gameLimit().balance, String(BigInt(allocation) - BigInt(state.contributed) + BigInt(state.cash)));
+  assert.equal(w.gameAllowance().allowance, String(BigInt(allowance) - BigInt(state.contributed) + BigInt(state.cash)));
   assert.equal(store.map.size, 1, 'the round lives under one key per player');
   assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
 });
@@ -425,7 +425,7 @@ test('an encrypted backup restores the channel and its recent receipts', async (
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('a'));
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   await w.gameCasinoBet(terms('kept'));
   for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
   const password = 'game backup test passphrase',
@@ -443,7 +443,7 @@ test('an encrypted backup restores the channel and its recent receipts', async (
   await assert.rejects(restored.gameReceipt('kept'), /No game is open/);
   restored.openGame(f.identity('a'));
   assert.equal(await restored.gameReceipt('kept'), null, 'receipts beyond the retained history are not restored');
-  await restored.setGameLimit('100');
+  await restored.setGameAllowance('100');
   await restored.gameCasinoBet(terms('after-restore'));
   assert.equal(f.settlements(), 103);
 });
@@ -452,7 +452,7 @@ test('importing newer evidence brings the channel up to date', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('100');
+  await w.setGameAllowance('100');
   const before = await f.storage.get(w.storageKey);
   await w.gameCasinoBet(terms());
   const bundle = await w.exportEvidence();
@@ -469,15 +469,15 @@ test('importing newer evidence brings the channel up to date', async () => {
   assert.equal(restored.availableBalance(), await w.balance());
 });
 
-test('additional game wagers debit the limit once and recover their cards and costs after a lost reply', async () => {
+test('additional game wagers debit the allowance once and recover their cards and costs after a lost reply', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('extra-cash'));
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   let loseReply = true,
     settlements = 0;
   const bridge = bridgeFor(w, async (method, params) => {
-    if (method === 'game.requestFunds') return { funded: false, amount: null, ...w.gameLimit() };
+    if (method === 'game.requestAllowance') return { allowed: false, ...w.gameAllowance() };
     if (method !== 'game.casinoBet' && method !== 'game.payment') return undefined;
     const receipt = method === 'game.casinoBet' ? await w.gameCasinoBet(params) : await w.gamePayment(params);
     settlements++;
@@ -497,10 +497,14 @@ test('additional game wagers debit the limit once and recover their cards and co
   let round = new RoundClient(bridge, graph, undefined, { store });
   await round.start({ stake: '1000' });
   const before = await w.balance();
-  await assert.rejects(round.action('double'), /enough money/);
+  await assert.rejects(round.action('double'), /Increase your game allowance/);
   assert.equal(settlements, 0);
-  assert.equal(JSON.parse(store.get(round['storageKey'])!).pending, null, 'no ticket is drawn before funding');
-  await w.setGameLimit('2000');
+  assert.equal(
+    JSON.parse(store.get(round['storageKey'])!).pending,
+    null,
+    'no ticket is drawn while the allowance is short',
+  );
+  await w.setGameAllowance('2000');
   await assert.rejects(round.action('double'), /reply lost/);
   round = new RoundClient(bridge, graph, undefined, { store });
   const recovered = (await round.restore())!;
@@ -522,18 +526,18 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
   // The player authorizes only the stated minimum, not the suggested session amount.
   const minimum = (params: any) => String(BigInt(params.amount) - 4000n);
   const bridge = bridgeFor(w, async (method, params) => {
-    if (method !== 'game.requestFunds') return undefined;
+    if (method !== 'game.requestAllowance') return undefined;
     requests.push(params);
-    if (approve) await w.setGameLimit(String(BigInt(w.gameLimit().balance) + BigInt(minimum(params))));
-    return { funded: approve, amount: approve ? params.amount : null, ...w.gameLimit() };
+    if (approve) await w.setGameAllowance(String(BigInt(w.gameAllowance().allowance) + BigInt(minimum(params))));
+    return { allowed: approve, ...w.gameAllowance() };
   });
   const graph = coin({ action: 'double', additionalCash: 1000n, payout: () => 3000n });
   const round = new RoundClient(bridge, graph, undefined, { store: memoryStore() });
   await round.start({ stake: '1000' });
   assert.deepEqual(requests, [{ amount: '5000' }], 'shortfall plus four stakes');
-  assert.equal(w.gameLimit().balance, '1000');
+  assert.equal(w.gameAllowance().allowance, '1000');
   approve = false;
-  await assert.rejects(round.action('double'), /Add enough money/);
+  await assert.rejects(round.action('double'), /Increase your game allowance/);
   assert.deepEqual(requests.at(-1), { amount: '5000' });
   approve = true;
   const state = await round.action('double');
@@ -545,7 +549,7 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
 test('a stake the casino cannot back fails with a plain capacity message, not a pricing error', async () => {
   const bridge = {
     call: async () => ({ bankroll: '5000000000000000', chainId: '1' }),
-    balance: async () => ({ balance: '100000000000000000', pending: false }),
+    allowance: async () => ({ allowance: '100000000000000000', pending: false }),
   };
   const round = new RoundClient(bridge, coin({ payout: stake => (stake * 19n) / 10n }), undefined, {
     store: memoryStore(),
@@ -560,7 +564,7 @@ test('a supported plan is reused across rounds and recomputed when the bankroll 
     builds = 0;
   const bridge = {
     call: async () => ({ bankroll: String(bankroll), chainId: '1' }),
-    balance: async () => ({ balance: '10000', pending: false }),
+    allowance: async () => ({ allowance: '10000', pending: false }),
   };
   const round = new RoundClient(
     bridge,
@@ -597,7 +601,7 @@ test('a rejected game action survives a lost reply and reload without resampling
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('rejection'));
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   const api = w.api.bind(w),
     attempts: any[] = [];
   w.api = async (url, body: any) => {
@@ -637,7 +641,7 @@ test('a rejected game action survives a lost reply and reload without resampling
   const ticket = structuredClone(round['data'].pending.ticket);
   assert.equal(w.pending, null);
   assert.equal(await w.balance(), before);
-  assert.equal(w.gameLimit().balance, '1000');
+  assert.equal(w.gameAllowance().allowance, '1000');
   round = new RoundClient(bridge, graph, undefined, { store });
   const resumed = await round.restore();
   assert.equal(resumed!.events.length, 0);
@@ -657,7 +661,7 @@ test('the state carries the setup its round was started with, across a reload', 
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('setup'));
-  await w.setGameLimit('10000');
+  await w.setGameAllowance('10000');
   const store = memoryStore(),
     graph = (setup: any) => createMines({ tiles: setup.tiles, mines: 1, cashouts: [1200n, 1560n, 2280n] }),
     setup = { stake: '1000', tiles: 5 };
@@ -670,7 +674,7 @@ test('a round saved with a setup the rules refuse is let go once, and the next r
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('setup'));
-  await w.setGameLimit('10000');
+  await w.setGameAllowance('10000');
   const store = memoryStore(),
     graph = (setup: any) => createMines({ tiles: setup.tiles, mines: 1, cashouts: [1200n, 1560n, 2280n] });
   await new RoundClient(bridgeFor(w), graph, undefined, { store }).start({ stake: '1000', tiles: 5 });
@@ -693,7 +697,7 @@ test('an action sent again after its reply was lost is that step, not another fr
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('retry'));
-  await w.setGameLimit('10000');
+  await w.setGameAllowance('10000');
   let lose = true;
   const bridge = bridgeFor(w, async (method, params) => {
     if (method !== 'game.casinoBet') return undefined;
@@ -752,7 +756,7 @@ test('a button pressed twice plays one step, and the second press bets nothing',
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('twice'));
-  await w.setGameLimit('10000');
+  await w.setGameAllowance('10000');
   const graph = coin({ payout: () => 1900n });
   // The wallet's bridge answers a game's requests one at a time, in the order asked.
   const bridge = bridgeTo(w);
@@ -773,7 +777,7 @@ test("the stub developer pages a game's bets 100 at a time, as the casino does",
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameLimit('1000');
+  await w.setGameAllowance('1000');
   for (let i = 0; i < 101; i++) await w.gameDeveloperBet({ id: `bet-${i}`, stake: '1', meta: {} });
   const first = await f.developer.bets();
   assert.deepEqual([first.bets.length, first.more], [100, true]);

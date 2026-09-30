@@ -31,22 +31,22 @@ import {
   validMeta,
 } from '../protocol/protocol.ts';
 import { assessBet, betReturn, RETURN_SCALE } from '../protocol/risk.ts';
-import type { GameIdentity, GameLimit, GameReceipt } from '../protocol/game-types.ts';
+import type { GameAllowance, GameIdentity, GameReceipt } from '../protocol/game-types.ts';
 import type { DeveloperCasinoBet, PublicDeveloperBet, Round } from '../protocol/types.ts';
 import type { BankCasinoBet, Developer, Settlement } from '../sdk/src/developer.ts';
 import type { GamePlan } from '../sdk/src/engine/index.ts';
 
 /** A game's side of the bridge, as `RoundClient` and a game's own client take it: every request goes through the
- * checks the wallet's bridge makes, and the player agrees to every request for funds. */
+ * checks the wallet's bridge makes, and the player agrees to every request for a larger allowance. */
 export interface TestBridge {
   call(method: string, params?: any): Promise<any>;
-  balance(): Promise<GameLimit>;
+  allowance(): Promise<GameAllowance>;
   /** Called with every receipt the wallet pushes: a developer bet its developer settled, once collected. */
   onReceipt(listener: (receipt: GameReceipt) => void): () => void;
 }
 
 /** A game's side of the bridge to any wallet: requests go through the checks the wallet's bridge makes, the player
- * agrees to every request for funds, and every receipt the wallet pushes reaches the listeners. */
+ * agrees to every request for a larger allowance, and every receipt the wallet pushes reaches the listeners. */
 const pushes = new WeakMap<CasinoWallet, Set<(receipt: GameReceipt) => void>>();
 export function bridgeTo(wallet: CasinoWallet): TestBridge {
   let listeners = pushes.get(wallet),
@@ -59,20 +59,20 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
     };
   }
   return {
-    balance: async () => wallet.gameLimit(),
+    allowance: async () => wallet.gameAllowance(),
     async call(method, params = {}) {
       const checked = validateRequest({ hookedin: true, id: ++sent, method, params }).params;
       if (method === 'wallet.hello') return wallet.gameHello();
       if (method === 'wallet.info') return wallet.gameInfo();
       if (method === 'wallet.round') return wallet.gameRound(checked.id);
       if (method === 'game.receipt') return wallet.gameReceipt(checked.id);
-      if (method === 'game.requestFunds') {
+      if (method === 'game.requestAllowance') {
         // The player agrees: the game may risk what it asked for more, as far as the balance goes.
         const more = checked.amount === undefined ? wallet.playableBalance() : BigInt(checked.amount),
-          limit = BigInt(wallet.gameLimit().balance) + more,
-          amount = limit < wallet.playableBalance() ? limit : wallet.playableBalance();
-        await wallet.setGameLimit(String(amount));
-        return { funded: true, amount: String(amount), ...wallet.gameLimit() };
+          allowance = BigInt(wallet.gameAllowance().allowance) + more,
+          amount = allowance < wallet.playableBalance() ? allowance : wallet.playableBalance();
+        await wallet.setGameAllowance(String(amount));
+        return { allowed: true, ...wallet.gameAllowance() };
       }
       if (method === 'game.casinoBet') return wallet.gameCasinoBet(checked);
       if (method === 'game.developerBet') return wallet.gameDeveloperBet(checked);

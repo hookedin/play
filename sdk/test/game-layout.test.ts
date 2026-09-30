@@ -52,7 +52,7 @@ test('game allowances and complete stake amounts are readable on phones and tabl
               : null;
         iframe.contentWindow!.postMessage({ hookedin: true, id: request.id, result }, '*');
         iframe.contentWindow!.postMessage(
-          { hookedin: true, event: 'game.balance', balance: '1234567890123456789', pending: false },
+          { hookedin: true, event: 'game.allowance', allowance: '1234567890123456789', pending: false },
           '*',
         );
       });

@@ -1,6 +1,6 @@
 ---
 title: How a game works
-description: What a game owns and what the wallet owns, the sandbox, the spending limit, the bridge, and how a game keeps every operation to exactly once across lost replies, reloads and tabs.
+description: What a game owns and what the wallet owns, the sandbox, the allowance, the bridge, and how a game keeps every operation to exactly once across lost replies, reloads and tabs.
 sidebar:
   order: 2
 ---
@@ -15,7 +15,7 @@ its origin and names every operation, so that each happens exactly once whatever
 | The game                                              | The wallet                                                                                                          |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Its rules, its bets and presentation                  | The player's key and signed channel balance                                                                         |
-| Its own saved state, at its own origin                | Checking each bet against the game's spending limit, and signing it whole                                           |
+| Its own saved state, at its own origin                | Checking each bet against the game's allowance, and signing it whole                                                |
 | An ID for each operation, saved before it asks        | Sending the bet to the casino and verifying the result: signatures, the round's secret and seed, the balance change |
 | What the player sees, drawn from the verified outcome | Keeping the evidence, and settling on-chain                                                                         |
 
@@ -38,27 +38,27 @@ The build's [`_headers`](publishing.md#the-_headers-file) keep the page to its o
 `<style>`, no scripts from a CDN and no third-party requests. Bundle what you need, and run a server on the page's own
 origin ([one Worker](developer-bets.md#one-cloudflare-worker)).
 
-## The spending limit
+## The allowance
 
-A game never learns the player's balance. It gets a spending limit for the open tab: what the player lets it risk, plus
-its verified winnings.
+A game never learns the player's balance. It gets an allowance for the open tab: what the player lets it risk, plus its
+verified winnings.
 
-- A game starts with a limit of zero, and the wallet's own dialog is the only grant. It asks with
-  `HookedIn.requestFunds({ amount })`, where `amount` is how much more it suggests; every word in the dialog is the
-  wallet's. The reply says whether the player set a limit (`funded`), the limit they chose (`amount`), and the resulting
-  `balance` and `pending`. When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and
-  the reply says `funded: false`.
-- The wallet pushes `game.balance` with `{ balance, pending }` when the page loads and whenever either changes.
-  `HookedIn.onBalance` hears it, and `HookedIn.balance()` resolves to the latest.
-- Every bet and payment must fit the limit. Verified winnings raise it; stakes and payments lower it.
-- In the dialog the player can also lower the limit, or take it all back.
-- Leaving the game, reloading or closing the tab releases the limit. The money never left the player's balance.
-- One game per wallet holds a limit at a time, across tabs.
+- A game starts with an allowance of zero, and the wallet's own dialog is the only grant. It asks with
+  `HookedIn.requestAllowance({ amount })`, where `amount` is how much more it suggests; every word in the dialog is the
+  wallet's. The reply says whether the player set an allowance (`allowed`), and the resulting `allowance` and `pending`.
+  When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and the reply says
+  `allowed: false`.
+- The wallet pushes `game.allowance` with `{ allowance, pending }` when the page loads and whenever either changes.
+  `HookedIn.onAllowance` hears it, and `HookedIn.allowance()` resolves to the latest.
+- Every bet and payment must fit the allowance. Verified winnings raise it; stakes and payments lower it.
+- In the dialog the player can also lower the allowance, or take it all back.
+- Leaving the game, reloading or closing the tab releases the allowance. The money never left the player's balance.
+- One game per wallet holds an allowance at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](#lost-replies)).
 
-[`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the balance strip the house games show: the limit, labelled
-**Game allowance**, with an **Adjust allowance** button.
+[`mountAllowance`](../sdk/allowance-and-synth.md#mountallowance) draws the strip the house games show: the allowance,
+labelled **Game allowance**, with an **Adjust allowance** button.
 
 ## The bridge
 
@@ -72,7 +72,7 @@ field, reply and [error](../reference/bridge.md#errors).
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
-HookedIn.onBalance(({ balance, pending }) => render(balance, pending)); // your page's own render
+HookedIn.onAllowance(({ allowance, pending }) => render(allowance, pending)); // your page's own render
 const info = await HookedIn.info(); // the player's names, the bankroll, a recommended stake
 ```
 
@@ -161,12 +161,12 @@ no uname until their first deposit, and the wallet then loads the page again. `R
 
 ## Reloads and tabs
 
-- A reload releases the spending limit. The state at your origin survives, and every settled step's money is in the
-  channel balance: a resumed round asks for money again.
+- A reload releases the allowance. The state at your origin survives, and every settled step's money is in the channel
+  balance: a resumed round asks for an allowance again.
 - Saved state stays in this browser. It is not in wallet backups and does not follow the player to another browser; a
   round left unfinished leaves the player the cash it held.
 - Two tabs of one game share its origin storage. Read saved state again before every action; `RoundClient` does, and
-  its `watch(listener)` reloads the round when another tab writes it. The wallet lets one game per wallet hold a limit
-  at a time and keeps one pending operation per channel, so the money stays consistent whatever the tabs do.
+  its `watch(listener)` reloads the round when another tab writes it. The wallet lets one game per wallet hold an
+  allowance at a time and keeps one pending operation per channel, so the money stays consistent whatever the tabs do.
 - A game with state beyond one round, such as a slot's bonus counter, applies each finished round once, by the round's
   `id`.

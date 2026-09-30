@@ -89,7 +89,7 @@ export class ChannelClient extends WalletTransactions {
   async balance(this: CasinoWallet) {
     return BigInt(this.channel?.state.balance || 0);
   }
-  /** What the player may still allocate to the open game: the signed balance less what a pending operation has already
+  /** The most the player may allow the open game: the signed balance less what a pending operation has already
    * committed. A credit collects what is owed and commits nothing. */
   playableBalance(this: CasinoWallet) {
     const pending = this.pending,
@@ -99,8 +99,8 @@ export class ChannelClient extends WalletTransactions {
   }
   /** The signed balance minus what this tab's open game may still risk of it; never below zero. */
   availableBalance(this: CasinoWallet) {
-    const limit = this.game ? BigInt(this.game.balance) : 0n,
-      available = BigInt(this.channel?.state.balance || 0) - limit;
+    const allowance = this.game ? BigInt(this.game.allowance) : 0n,
+      available = BigInt(this.channel?.state.balance || 0) - allowance;
     return available < 0n ? 0n : available;
   }
   updateBankroll(this: CasinoWallet, value: unknown) {
@@ -162,8 +162,10 @@ export class ChannelClient extends WalletTransactions {
     const allowed = (debit: bigint) => {
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
-        if (debit > BigInt(this.game.balance)) throw gameError('insufficient-funds', 'Bet exceeds the game balance');
-      } else if (debit > this.availableBalance()) throw new Error('Debit exceeds unallocated wallet balance');
+        if (debit > BigInt(this.game.allowance))
+          throw gameError('insufficient-allowance', "Bet exceeds the game's allowance");
+      } else if (debit > this.availableBalance())
+        throw new Error("Debit exceeds your balance less the game's allowance");
       if (kind === 'casino-bet')
         try {
           describeBet(betTerms(intent.amount, intent.chance, intent.prize));
@@ -293,11 +295,11 @@ export class ChannelClient extends WalletTransactions {
     if (!same(hashState(this.domain, next), hashState(this.domain, response.state)))
       throw new Error('Result state differs from evidence');
     const game = c.pending?.game as GameIntent | undefined;
-    // The open game's limit follows its verified result. A result recovered after a reload, or for a game since closed,
-    // changes only the channel balance: the limit was already released.
+    // The open game's allowance follows its verified result. A result recovered after a reload, or for a game since
+    // closed, changes only the channel balance: the allowance was already released.
     if (game && this.game?.key === game.key) {
-      const limit = BigInt(this.game.balance) + BigInt(next.balance) - BigInt(c.state.balance);
-      this.game.balance = String(limit < 0n ? 0n : limit);
+      const allowance = BigInt(this.game.allowance) + BigInt(next.balance) - BigInt(c.state.balance);
+      this.game.allowance = String(allowance < 0n ? 0n : allowance);
     }
     // A reply to a casino bet on this channel's own round names its next one. It needs no signature: this
     // wallet picks its seed only after it has the round.
@@ -422,7 +424,7 @@ export class ChannelClient extends WalletTransactions {
     return { payout: BigInt(settlement.player), settlement: plain(settlement) };
   }
   /** Collect what a developer bet this wallet placed was paid, once its developer settled it. The wallet checks the
-   * settlement, then signs a credit for what it pays, which raises the open game's limit if it is the game that
+   * settlement, then signs a credit for what it pays, which raises the open game's allowance if it is the game that
    * placed the bet. The bet's receipt then says what it was paid, and goes to the game that placed it. */
   async collectDeveloperBet(this: CasinoWallet, hash: string) {
     const tracked = this.developerBets[hash],

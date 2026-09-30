@@ -38,7 +38,7 @@ interface ActiveGame {
   path: string;
   frame: HTMLIFrameElement;
   dispose: () => void;
-  /** The last balance pushed into the iframe, so unchanged renders stay quiet; empty until the entry has loaded. */
+  /** The last allowance pushed into the iframe, so unchanged renders stay quiet; empty until the entry has loaded. */
   pushed: string | null;
 }
 /** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
@@ -369,30 +369,30 @@ function download(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-/** One funded game per wallet across tabs, so no two tabs show limits against the same balance. */
-let limitLock: (() => void) | null = null;
-async function holdGameLimit() {
-  if (limitLock) return;
+/** One game with an allowance per wallet across tabs, so no two tabs show allowances against the same balance. */
+let allowanceLock: (() => void) | null = null;
+async function holdGameAllowance() {
+  if (allowanceLock) return;
   const acquired = Promise.withResolvers<boolean>(),
     released = Promise.withResolvers<void>();
-  void withLock(`hookedin:game-limit:${wallet.storageKey}`, false, async held => {
+  void withLock(`hookedin:game-allowance:${wallet.storageKey}`, false, async held => {
     acquired.resolve(held);
     if (held) await released.promise;
   });
   if (!(await acquired.promise))
     throw new Error('Another tab already has a game playing with this balance. Finish or leave it there first.');
-  limitLock = () => released.resolve();
+  allowanceLock = () => released.resolve();
 }
-/** Leaving a game releases its limit: the money was always in the balance. */
+/** Leaving a game releases its allowance: the money was always in the balance. */
 function closeGame() {
   if (!active) return;
   active.dispose();
   active.frame.remove();
   active = null;
   wallet.closeGame();
-  limitLock?.();
-  limitLock = null;
-  if ($<HTMLDialogElement>('fund-dialog').open) $<HTMLDialogElement>('fund-dialog').close('');
+  allowanceLock?.();
+  allowanceLock = null;
+  if ($<HTMLDialogElement>('allowance-dialog').open) $<HTMLDialogElement>('allowance-dialog').close('');
 }
 /** The game went away without navigation (a balance or account change): the lobby replaces its URL. */
 function abandonGame() {
@@ -555,88 +555,88 @@ function renderGameAccount() {
     active.pushed = null;
     active.frame.src = active.frame.src;
   }
-  if ($<HTMLDialogElement>('fund-dialog').open) renderFundDialog();
-  // The game's own balance view follows the wallet: top-ups and recoveries push without polling.
-  const balance = wallet.gameLimit();
-  const pushed = JSON.stringify(balance);
+  if ($<HTMLDialogElement>('allowance-dialog').open) renderAllowanceDialog();
+  // The game's own allowance view follows the wallet: top-ups and recoveries push without polling.
+  const allowance = wallet.gameAllowance();
+  const pushed = JSON.stringify(allowance);
   if (active.pushed !== null && pushed !== active.pushed && active.frame.contentWindow) {
     active.pushed = pushed;
-    const message = { hookedin: true, event: 'game.balance', ...balance };
+    const message = { hookedin: true, event: 'game.allowance', ...allowance };
     active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
   }
 }
 /** The slider runs linearly from nothing to the whole playable balance, a hundredth of it a step. */
 const SLIDER_STEPS = 100n;
 const sliderAmount = (total: bigint, value: string) => (total * BigInt(value)) / SLIDER_STEPS;
-// The last limit the player chose for a game is only the next suggestion; authority comes from the dialog alone.
-const limitSetting = () => `hookedin:${network}:game-limit:${active?.identity.key}`;
+// The last allowance the player chose for a game is only the next suggestion; authority comes from the dialog alone.
+const allowanceSetting = () => `hookedin:${network}:game-allowance:${active?.identity.key}`;
 /** The wallet's own dialog: the sole grant of spending authority over ETH. It says what the game may play with now,
  * what it would, and out of how much, because those are the whole of what is being authorized. */
-function renderFundDialog() {
+function renderAllowanceDialog() {
   if (!active) return;
   const name = active.identity.name;
-  const limit = BigInt(wallet.game?.balance || '0');
-  $('fund-title').textContent = limit > 0n ? `Change ${name}'s limit` : `Play ${name} with ETH`;
+  const allowance = BigInt(wallet.game?.allowance || '0');
+  $('allowance-title').textContent = allowance > 0n ? `Change ${name}'s allowance` : `Play ${name} with ETH`;
   const total = wallet.playableBalance(),
-    slider = $<HTMLInputElement>('fund-slider');
+    slider = $<HTMLInputElement>('allowance-slider');
   let amount = -1n;
   try {
-    amount = parseEther($<HTMLInputElement>('fund-amount').value.trim() || '0');
+    amount = parseEther($<HTMLInputElement>('allowance-amount').value.trim() || '0');
   } catch {}
   const valid = amount >= 0n && amount <= total;
-  $('fund-total').textContent = `${formatEther(total)} ETH, your balance`;
-  $<HTMLButtonElement>('fund-take-all').classList.toggle('hidden', limit === 0n);
+  $('allowance-total').textContent = `${formatEther(total)} ETH, your balance`;
+  $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
-  $('fund-help').textContent = !valid
+  $('allowance-help').textContent = !valid
     ? amount > total
       ? `That is more than your balance of ${formatEther(total)} ETH.`
       : 'Enter an amount in ETH.'
     : total === 0n
       ? 'Your balance is empty. Deposit to play with ETH.'
-      : amount === limit
-        ? `This is ${name}'s limit now.`
-        : amount > limit
-          ? `${name} may play with ${formatEther(amount - limit)} ETH more.`
-          : `${formatEther(limit - amount)} ETH comes back to your balance.`;
-  $('fund-help').classList.toggle('check-failed', !valid);
-  $<HTMLButtonElement>('fund-confirm').disabled = !valid || amount === limit || uiBusy || wallet.busy;
-  $('fund-confirm').textContent = !valid
+      : amount === allowance
+        ? `This is ${name}'s allowance now.`
+        : amount > allowance
+          ? `${name} may play with ${formatEther(amount - allowance)} ETH more.`
+          : `${formatEther(allowance - amount)} ETH comes back to your balance.`;
+  $('allowance-help').classList.toggle('check-failed', !valid);
+  $<HTMLButtonElement>('allowance-confirm').disabled = !valid || amount === allowance || uiBusy || wallet.busy;
+  $('allowance-confirm').textContent = !valid
     ? 'Allow'
-    : amount < limit
-      ? `Take back ${formatEther(limit - amount)} ETH`
+    : amount < allowance
+      ? `Take back ${formatEther(allowance - amount)} ETH`
       : `Allow ${formatEther(amount)} ETH`;
 }
-let fundRequest: { resolve: (amount: bigint | null) => void } | null = null;
-/** Opened by the game's request for money, which may suggest how much more. With nothing in the balance to allow, the
- * wallet opens on Deposit instead, and the game hears that it has no more. */
-function openFundDialog(amount?: bigint) {
+let allowanceRequest: { resolve: (amount: bigint | null) => void } | null = null;
+/** Opened by the game's request for a larger allowance, which may suggest how much more. With nothing in the balance
+ * to allow, the wallet opens on Deposit instead, and the game hears that it has no more. */
+function openAllowanceDialog(amount?: bigint) {
   if (!active) return Promise.resolve<bigint | null>(null);
-  fundRequest?.resolve(null);
-  if (wallet.playableBalance() === 0n && BigInt(wallet.game?.balance || '0') === 0n) {
+  allowanceRequest?.resolve(null);
+  if (wallet.playableBalance() === 0n && BigInt(wallet.game?.allowance || '0') === 0n) {
     openWallet('deposit');
     return Promise.resolve<bigint | null>(null);
   }
-  const dialog = $<HTMLDialogElement>('fund-dialog');
+  const dialog = $<HTMLDialogElement>('allowance-dialog');
   // The game page shows nothing but the game, so the dialog that grants it money says who it is.
   const host = new URL(active.frame.src).host;
-  $('fund-who').textContent = active.publisher
+  $('allowance-who').textContent = active.publisher
     ? `Published by ${active.publisher}, served from ${host}. Its developer earns half of each casino bet's commission, and takes and settles its developer bets.`
     : `Served from ${host}. Nobody publishes it, so nobody earns from it.`;
   const total = wallet.playableBalance(),
-    limit = BigInt(wallet.game?.balance || '0'),
-    // What the game asked for, never more; or the limit as it is, or what the player last chose.
+    allowance = BigInt(wallet.game?.allowance || '0'),
+    // What the game asked for, never more; or the allowance as it is, or what the player last chose.
     suggested =
       amount && amount > 0n
-        ? limit + amount
-        : limit > 0n
-          ? limit
-          : BigInt(localStorage.getItem(limitSetting()) || networkDefaults.total);
-  $<HTMLInputElement>('fund-amount').value = formatEther(suggested > total ? total : suggested);
-  renderFundDialog();
+        ? allowance + amount
+        : allowance > 0n
+          ? allowance
+          : BigInt(localStorage.getItem(allowanceSetting()) || networkDefaults.total);
+  $<HTMLInputElement>('allowance-amount').value = formatEther(suggested > total ? total : suggested);
+  renderAllowanceDialog();
   if (!dialog.open) dialog.showModal();
-  $<HTMLInputElement>('fund-amount').select();
+  $<HTMLInputElement>('allowance-amount').select();
   return new Promise<bigint | null>(resolve => {
-    fundRequest = { resolve };
+    allowanceRequest = { resolve };
   });
 }
 
@@ -757,7 +757,7 @@ function renderWallet() {
             : request.error ||
               (c
                 ? `The address receives ${formatEther(amount!)} ETH, with no fee taken out: another HookedIn account's address puts it into that balance. Check the full address before confirming.`
-                : 'All ETH at your deposit address is sent, less the network fee. This does not withdraw your game balance. Keep enough gas at this address if you need recovery transactions.');
+                : 'All ETH at your deposit address is sent, less the network fee. This does not withdraw your balance. Keep enough gas at this address if you need recovery transactions.');
   $('withdraw-help').classList.toggle('check-failed', Boolean(request.error));
 
   $('pending-banner').classList.toggle(
@@ -1201,10 +1201,10 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       // follows.
       if (uiBusy) throw gameError('busy', 'The wallet is processing another operation.');
       await wallet.actionDone;
-      if (method === 'game.requestFunds') {
-        const amount = await openFundDialog(params.amount === undefined ? undefined : BigInt(params.amount));
+      if (method === 'game.requestAllowance') {
+        const amount = await openAllowanceDialog(params.amount === undefined ? undefined : BigInt(params.amount));
         if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
-        return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
+        return { allowed: amount !== null, ...wallet.gameAllowance() };
       }
       if (method === 'game.casinoBet') return wallet.gameCasinoBet(params);
       if (method === 'game.developerBet') return wallet.gameDeveloperBet(params);
@@ -1688,31 +1688,31 @@ act('setup-wallet', async () => {
   await wallet.setupDemo();
   funded('Demo ETH added: games play with ETH.');
 });
-$<HTMLFormElement>('fund-form').addEventListener('submit', event => {
+$<HTMLFormElement>('allowance-form').addEventListener('submit', event => {
   event.preventDefault();
   void task(async () => {
     if (!active) return;
-    const amount = parseEther($<HTMLInputElement>('fund-amount').value.trim() || '0');
-    // A limit on the balance is held against other tabs.
-    await holdGameLimit();
-    await wallet.setGameLimit(String(amount));
-    localStorage.setItem(limitSetting(), String(amount));
+    const amount = parseEther($<HTMLInputElement>('allowance-amount').value.trim() || '0');
+    // An allowance is held against other tabs.
+    await holdGameAllowance();
+    await wallet.setGameAllowance(String(amount));
+    localStorage.setItem(allowanceSetting(), String(amount));
     toast(`${active.identity.name} may play with up to ${formatEther(amount)} ETH.`);
-    $<HTMLDialogElement>('fund-dialog').close(String(amount));
+    $<HTMLDialogElement>('allowance-dialog').close(String(amount));
   });
 });
-$<HTMLDialogElement>('fund-dialog').addEventListener('close', () => {
-  const value = $<HTMLDialogElement>('fund-dialog').returnValue;
-  const request = fundRequest;
-  fundRequest = null;
+$<HTMLDialogElement>('allowance-dialog').addEventListener('close', () => {
+  const value = $<HTMLDialogElement>('allowance-dialog').returnValue;
+  const request = allowanceRequest;
+  allowanceRequest = null;
   request?.resolve(value ? BigInt(value) : null);
-  $<HTMLDialogElement>('fund-dialog').returnValue = '';
+  $<HTMLDialogElement>('allowance-dialog').returnValue = '';
 });
 $<HTMLButtonElement>('bet-detail-close').addEventListener('click', () => $<HTMLDialogElement>('bet-dialog').close());
-for (const button of document.querySelectorAll<HTMLButtonElement>('[data-fund-cancel]'))
-  button.addEventListener('click', () => $<HTMLDialogElement>('fund-dialog').close(''));
-$<HTMLButtonElement>('fund-deposit').addEventListener('click', () => {
-  $<HTMLDialogElement>('fund-dialog').close('');
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-allowance-cancel]'))
+  button.addEventListener('click', () => $<HTMLDialogElement>('allowance-dialog').close(''));
+$<HTMLButtonElement>('allowance-deposit').addEventListener('click', () => {
+  $<HTMLDialogElement>('allowance-dialog').close('');
   openWallet('deposit');
 });
 for (const id of ['wallet-button', 'hero-deposit']) $(id).addEventListener('click', () => openWallet('deposit'));
@@ -1723,16 +1723,16 @@ for (const button of document.querySelectorAll<HTMLElement>('#wallet-dialog [dat
 $('wallet-dialog')
   .querySelector('[data-close]')!
   .addEventListener('click', () => $<HTMLDialogElement>('wallet-dialog').close());
-$<HTMLInputElement>('fund-slider').addEventListener('input', () => {
-  $<HTMLInputElement>('fund-amount').value = formatEther(
-    sliderAmount(wallet.playableBalance(), $<HTMLInputElement>('fund-slider').value),
+$<HTMLInputElement>('allowance-slider').addEventListener('input', () => {
+  $<HTMLInputElement>('allowance-amount').value = formatEther(
+    sliderAmount(wallet.playableBalance(), $<HTMLInputElement>('allowance-slider').value),
   );
-  renderFundDialog();
+  renderAllowanceDialog();
 });
-$<HTMLInputElement>('fund-amount').addEventListener('input', renderFundDialog);
-$<HTMLButtonElement>('fund-take-all').addEventListener('click', () => {
-  $<HTMLInputElement>('fund-amount').value = '0';
-  renderFundDialog();
+$<HTMLInputElement>('allowance-amount').addEventListener('input', renderAllowanceDialog);
+$<HTMLButtonElement>('allowance-take-all').addEventListener('click', () => {
+  $<HTMLInputElement>('allowance-amount').value = '0';
+  renderAllowanceDialog();
 });
 function downloadEvidence(report: any) {
   download(`hookedin-channel-${report.opening.channelId}.json`, json(report));
@@ -1779,7 +1779,7 @@ act('withdraw', async () => {
   const { to, amount, error } = withdrawalRequest();
   if (error || !to) throw new Error(error || 'Enter a destination address.');
   const open = withdrawalFromChannel();
-  // A partial withdrawal leaves the open game its limit; a whole one takes back what the game holds.
+  // A partial withdrawal leaves the open game its allowance; a whole one takes back what the game holds.
   if (open && amount !== null && amount >= BigInt(wallet.channel?.state.balance || 0)) abandonGame();
   const receipt = await wallet.withdraw(to, amount ?? undefined, { fromAddress: !open });
   $<HTMLInputElement>('withdraw-to').value = '';

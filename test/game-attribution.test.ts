@@ -13,11 +13,11 @@ test('a receipt keeps the name of the game it was placed in, after that game is 
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('Dice'));
-  await w.setGameLimit('200000');
+  await w.setGameAllowance('200000');
   await w.gameCasinoBet(terms('bet-1'));
   w.closeGame();
   w.openGame(f.identity('Roulette'));
-  await w.setGameLimit('200000');
+  await w.setGameAllowance('200000');
   await w.gameCasinoBet(terms('bet-2'));
   w.closeGame();
 
@@ -29,7 +29,7 @@ test('activity stays newest first when an earlier receipt is written again', asy
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('Dice'));
-  await w.setGameLimit('200000');
+  await w.setGameAllowance('200000');
   await w.gameCasinoBet(terms('bet-a'));
   await w.gameCasinoBet(terms('bet-b'));
   // A receipt rewritten later keeps its own place in time.

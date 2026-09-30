@@ -102,9 +102,9 @@ and the casino: a [settled trade-off](../overview/architecture.md#settled-trade-
 - It depends on the bet's edge and on the casino's bankroll. A bet with no more edge than the bankroll needs earns
   nothing, and a bet with no edge is declined.
 - It is never an extra debit to the player: the stake, chance and prize are exactly what the player signed.
-- No fee protects a player from a game. A game can spend its whole spending limit on bets that pay back little, and the
-  wallet records each bet's [measured return](casino-bets.md#measured-return) without refusing it: the limit the player
-  sets is their protection.
+- No fee protects a player from a game. A game can spend its whole allowance on bets that pay back little, and the
+  wallet records each bet's [measured return](casino-bets.md#measured-return) without refusing it: the allowance the
+  player sets is their protection.
 - Every settled casino bet earns it, won or lost, your own casino bets on your rounds included, for whoever publishes
   the game when the bet settles. A rejected bet earns nothing, nor does a reveal, and a game nobody publishes earns its
   developer nothing. A developer bet earns no commission, since the bankroll does not back it

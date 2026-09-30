@@ -33,7 +33,11 @@ The wallet answers each request once, with the same `id` and either `result` or 
 ```
 
 ```json title="Refusal"
-{ "hookedin": true, "id": 8, "error": { "code": "insufficient-funds", "message": "Bet exceeds the game balance" } }
+{
+  "hookedin": true,
+  "id": 8,
+  "error": { "code": "insufficient-allowance", "message": "Bet exceeds the game's allowance" }
+}
 ```
 
 `code` is stable, and a game acts on it; `message` is for people. The codes are under [errors](#errors). An
@@ -71,9 +75,9 @@ deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [l
 
 `wallet.hello`, `wallet.round` and `game.receipt` are answered at once, also while a bet or the player's dialog is open,
 and so is `wallet.info`, except that it waits until the wallet has first heard from the casino. `game.casinoBet`,
-`game.developerBet`, `game.payment` and `game.requestFunds` sign something or ask the player, so they take their turn
-one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`. A request whose turn
-comes while the player is doing something in the wallet is refused with `busy` too; one whose turn comes while the
+`game.developerBet`, `game.payment` and `game.requestAllowance` sign something or ask the player, so they take their
+turn one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`. A request whose
+turn comes while the player is doing something in the wallet is refused with `busy` too; one whose turn comes while the
 wallet does work of its own, such as its regular look at the chain, waits for it.
 
 ## Amounts
@@ -135,14 +139,14 @@ settled receipt as a [`game.receipt`](#gamereceipt-1) event.
 ### `game.casinoBet`
 
 A casino bet: settled against the casino's bankroll in the one request, on the player's own
-[round](../overview/how-it-works.md#rounds). The game's balance drops by the stake, and rises by the prize when the
+[round](../overview/how-it-works.md#rounds). The game's allowance drops by the stake, and rises by the prize when the
 round's 64-bit outcome is below the chance; the casino's commission is not charged to the player. The casino may
 decline the bet instead, with a signed checkpoint that leaves the balance unchanged.
 
 | Param    | Type           | Meaning                                          |
 | -------- | -------------- | ------------------------------------------------ |
 | `id`     | `string`       | The game's ID for the operation                  |
-| `stake`  | decimal string | Paid to enter; at most the game's balance        |
+| `stake`  | decimal string | Paid to enter; at most the game's allowance      |
 | `chance` | decimal string | How many of the 2^64 outcomes win: 1 to 2^64 − 1 |
 | `prize`  | decimal string | What the bet pays when it wins; below 2^128      |
 | `group`  | `string`       | Optional: the group the bet belongs to           |
@@ -172,14 +176,14 @@ partial loss. The result is the bet's [receipt](#receipt), `settled` or `rejecte
 
 ### `game.developerBet`
 
-A developer bet: a bet against the game's developer. Its stake leaves the game's balance and goes into the developer's
-bank at once, and the bet is final. The developer settles it when it chooses, on its word, and the player trusts it to
-pay.
+A developer bet: a bet against the game's developer. Its stake comes out of the game's allowance and goes into the
+developer's bank at once, and the bet is final. The developer settles it when it chooses, on its word, and the player
+trusts it to pay.
 
 | Param   | Type           | Meaning                                                                                                                                |
 | ------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`    | `string`       | The game's ID for the operation                                                                                                        |
-| `stake` | decimal string | Paid into the developer's bank; at most the game's balance                                                                             |
+| `stake` | decimal string | Paid into the developer's bank; at most the game's allowance                                                                           |
 | `meta`  | object         | The game's own JSON, saying what the bet is. The casino keeps it with the bet and never reads it; the developer's server settles by it |
 | `group` | `string`       | Optional: the group the bet belongs to, such as a match or a spin                                                                      |
 
@@ -189,7 +193,7 @@ UTF-8. Its numbers are whole, so odds of 2.1 go as the string `"2.1"`.
 The result is the bet's receipt at once: `open`, with `bet`, the hash that names it at the casino and to the developer,
 or `rejected` when the casino did not take it. The same request again returns the receipt as it stands. Once the
 developer has settled the bet, the wallet checks the developer's signed settlement, collects what it pays into the
-channel, raises the game's balance by it while the game is open, and pushes the settled receipt as a
+channel, raises the game's allowance by it while the game is open, and pushes the settled receipt as a
 [`game.receipt`](#gamereceipt-1) event. A game opened by its URL alone is published by nobody and takes no developer
 bets: `invalid-request`. The developer's side is the [developer kit](../sdk/developer.md).
 
@@ -230,53 +234,48 @@ A payment to the bankroll: the balance drops by `amount`, with no chance involve
 | Param    | Type           | Meaning                                    |
 | -------- | -------------- | ------------------------------------------ |
 | `id`     | `string`       | The game's ID for the operation            |
-| `amount` | decimal string | What is paid; at most the game's balance   |
+| `amount` | decimal string | What is paid; at most the game's allowance |
 | `group`  | `string`       | Optional: the group the payment belongs to |
 
 The result is the payment's receipt, `settled` or `rejected`. It carries no amount.
 
-### `game.requestFunds`
+### `game.requestAllowance`
 
-Asks for money. The wallet opens its own dialog, in its own words, where the player sets how much of their balance the
-game may risk, or declines. The game passes it an amount and nothing else, and only the player's confirmation there
-grants a game money. The reply comes once the player has decided. When the player's balance has nothing to allow, the
-wallet opens its Deposit tab instead, and the reply says `funded: false` at once.
+Asks for a larger allowance. The wallet opens its own dialog, in its own words, where the player sets how much of their
+balance the game may risk, or declines. The game passes it an amount and nothing else, and only the player's
+confirmation there grants a game money. The reply comes once the player has decided. When the player's balance has
+nothing to allow, the wallet opens its Deposit tab instead, and the reply says `allowed: false` at once.
 
-| Param    | Type           | Meaning                                                                                                                   |
-| -------- | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `amount` | decimal string | Optional: how much more than the game holds. The dialog suggests the game's balance plus this, up to the player's balance |
+| Param    | Type           | Meaning                                                                                                                     |
+| -------- | -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `amount` | decimal string | Optional: how much more than the game holds. The dialog suggests the game's allowance plus this, up to the player's balance |
 
-| Result field | Type                     | Meaning                                                                   |
-| ------------ | ------------------------ | ------------------------------------------------------------------------- |
-| `funded`     | `boolean`                | Whether a limit was set                                                   |
-| `amount`     | decimal string or `null` | The limit set, which may be lower than the game had; `null` when none was |
-| `balance`    | decimal string           | The game's balance after it                                               |
-| `pending`    | `boolean`                | Whether an operation of this game awaits recovery                         |
+| Result field | Type           | Meaning                                                             |
+| ------------ | -------------- | ------------------------------------------------------------------- |
+| `allowed`    | `boolean`      | Whether the player set an allowance                                 |
+| `allowance`  | decimal string | The game's allowance after it, which may be lower than the game had |
+| `pending`    | `boolean`      | Whether an operation of this game awaits recovery                   |
 
 ```json title="Reply"
-{
-  "hookedin": true,
-  "id": 3,
-  "result": { "funded": true, "amount": "5000000000000", "balance": "5000000000000", "pending": false }
-}
+{ "hookedin": true, "id": 3, "result": { "allowed": true, "allowance": "5000000000000", "pending": false } }
 ```
 
 ## Events
 
 The wallet sends these unasked, with `event` in place of an envelope ID, to the game's origin.
 
-### `game.balance`
+### `game.allowance`
 
-The game's balance: what it may still risk in this tab, including its winnings. The wallet sends it when the frame has
-loaded and whenever the balance or `pending` changes, so there is nothing to poll.
+The game's allowance: what it may still risk in this tab, including its winnings. The wallet sends it when the frame has
+loaded and whenever the allowance or `pending` changes, so there is nothing to poll.
 
-| Field     | Type           | Meaning                                                                                                         |
-| --------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
-| `balance` | decimal string | What the game may still risk                                                                                    |
-| `pending` | `boolean`      | A signed operation of this game awaits recovery in the wallet. While it does, no other bet or payment is signed |
+| Field       | Type           | Meaning                                                                                                         |
+| ----------- | -------------- | --------------------------------------------------------------------------------------------------------------- |
+| `allowance` | decimal string | What the game may still risk                                                                                    |
+| `pending`   | `boolean`      | A signed operation of this game awaits recovery in the wallet. While it does, no other bet or payment is signed |
 
 ```json
-{ "hookedin": true, "event": "game.balance", "balance": "5980000000000", "pending": false }
+{ "hookedin": true, "event": "game.allowance", "allowance": "5980000000000", "pending": false }
 ```
 
 ### `game.receipt`
@@ -351,17 +350,17 @@ copies.
 
 A refusal is `{ code, message }`. The wallet's codes:
 
-| `code`               | Meaning                                                                                                                                                 | What a game does                                                                                                                                                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid-request`    | The envelope or its parameters break a rule on this page, the envelope ID did not rise, or the request asks a developer bet of a game published nowhere | Fixes the request: sent again unchanged, it fails again                                                                                                                                                                                            |
-| `unknown-method`     | The wallet offers no such method                                                                                                                        | Keeps to the methods on this page                                                                                                                                                                                                                  |
-| `busy`               | The player is doing something in the wallet, or 32 requests already wait                                                                                | Sends the same request again shortly                                                                                                                                                                                                               |
-| `insufficient-funds` | The stake or amount exceeds the game's balance                                                                                                          | Calls `game.requestFunds`, then sends the same request again                                                                                                                                                                                       |
-| `pending-operation`  | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the wallet finishes a deposit it is taking in by itself, and the player recovers anything else from the wallet's banner. When the pushed `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |
-| `id-conflict`        | The ID is bound to other terms or another game, or a pending request under it differs                                                                   | Sends the terms saved with the ID, or a fresh ID for a fresh operation                                                                                                                                                                             |
-| `id-used`            | The operation was carried out on another channel, and this wallet has no receipt of it                                                                  | Does not place it again under another ID without asking the player                                                                                                                                                                                 |
-| `game-closed`        | The game is not the open one: the player left it, or closed it while its request waited                                                                 | Stops: the page is leaving                                                                                                                                                                                                                         |
-| `failed`             | Anything else, such as a casino that did not answer or chain observations that are out of date                                                          | Sends the same request again under the same ID: nothing proves it was not signed, and the wallet resumes it if it was                                                                                                                              |
+| `code`                   | Meaning                                                                                                                                                 | What a game does                                                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid-request`        | The envelope or its parameters break a rule on this page, the envelope ID did not rise, or the request asks a developer bet of a game published nowhere | Fixes the request: sent again unchanged, it fails again                                                                                                                                                                                            |
+| `unknown-method`         | The wallet offers no such method                                                                                                                        | Keeps to the methods on this page                                                                                                                                                                                                                  |
+| `busy`                   | The player is doing something in the wallet, or 32 requests already wait                                                                                | Sends the same request again shortly                                                                                                                                                                                                               |
+| `insufficient-allowance` | The stake or amount exceeds the game's allowance                                                                                                        | Calls `game.requestAllowance`, then sends the same request again                                                                                                                                                                                   |
+| `pending-operation`      | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the wallet finishes a deposit it is taking in by itself, and the player recovers anything else from the wallet's banner. When the pushed `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |
+| `id-conflict`            | The ID is bound to other terms or another game, or a pending request under it differs                                                                   | Sends the terms saved with the ID, or a fresh ID for a fresh operation                                                                                                                                                                             |
+| `id-used`                | The operation was carried out on another channel, and this wallet has no receipt of it                                                                  | Does not place it again under another ID without asking the player                                                                                                                                                                                 |
+| `game-closed`            | The game is not the open one: the player left it, or closed it while its request waited                                                                 | Stops: the page is leaving                                                                                                                                                                                                                         |
+| `failed`                 | Anything else, such as a casino that did not answer or chain observations that are out of date                                                          | Sends the same request again under the same ID: nothing proves it was not signed, and the wallet resumes it if it was                                                                                                                              |
 
 A casino bet the casino declines is no error: it is a `rejected` receipt.
 

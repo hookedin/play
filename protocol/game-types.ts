@@ -1,5 +1,5 @@
-/** What the wallet knows about a game: where it is served, its key, its developer, and, for this tab only, a
- * spending limit. */
+/** What the wallet knows about a game: where it is served, its key, its developer, and, for this tab only, an
+ * allowance. */
 export interface GameIdentity {
   /** The page the wallet frames: a game is its URL. */
   url: string;
@@ -15,12 +15,12 @@ export interface GameIdentity {
   /** What the wallet calls it. */
   name: string;
 }
-/** The open game in this tab. Never persisted: closing the tab or leaving the game releases the limit. */
+/** The open game in this tab. Never persisted: closing the tab or leaving the game releases the allowance. */
 export interface GameSession {
   key: string;
   identity: GameIdentity;
   /** Decimal wei the game may still risk, including its winnings. */
-  balance: string;
+  allowance: string;
 }
 /** A casino bet: settled against the casino's bankroll in the request that places it, on the player's own round.
  * The stake is paid to enter, and the bet pays `prize` when the round's 64-bit outcome is below `chance`. */
@@ -68,8 +68,8 @@ export interface GameReceipt {
   payout?: string;
   reason?: string;
 }
-/** What the wallet pushes to the game: its spending limit and whether an operation awaits recovery. */
-export interface GameLimit {
-  balance: string;
+/** What the wallet pushes to the game: its allowance and whether an operation awaits recovery. */
+export interface GameAllowance {
+  allowance: string;
   pending: boolean;
 }

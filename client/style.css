@@ -1134,7 +1134,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
   margin-top: 10px;
   font-size: 12px;
 }
-#fund-who {
+#allowance-who {
   margin-top: 8px;
   font-size: 12px;
   overflow-wrap: anywhere;

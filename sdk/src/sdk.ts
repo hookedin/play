@@ -1,8 +1,8 @@
 /** HookedIn game bridge. This script runs inside a sandboxed iframe that keeps the game host's origin. */
-import type { CasinoBetRequest, DeveloperBetRequest, GameLimit, GameReceipt } from '../../protocol/game-types.ts';
+import type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
 import type { Round } from '../../protocol/types.ts';
 import { exactAmount, formatAmount, parseAmount, playerScope } from './wire.ts';
-export type { CasinoBetRequest, DeveloperBetRequest, GameLimit, GameReceipt } from '../../protocol/game-types.ts';
+export type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
 
 /** Every bound a bet is held to, as the wallet reports them. They are part of the protocol revision the wallet
  * and its casino share, so read them rather than carrying copies of your own. */
@@ -26,7 +26,7 @@ export interface WalletInfo {
   recommendedStake: string;
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
- * `invalid-request`, `unknown-method`, `busy`, `insufficient-funds`, `pending-operation`, `id-conflict`, `id-used`,
+ * `invalid-request`, `unknown-method`, `busy`, `insufficient-allowance`, `pending-operation`, `id-conflict`, `id-used`,
  * `game-closed` and `failed`; a refusal by the casino carries the casino's code. */
 export class HookedInError extends Error {
   code: string;
@@ -42,17 +42,17 @@ const pending = new Map<
   number,
   { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
 >();
-const balanceListeners = new Set<(balance: GameLimit) => void>();
+const allowanceListeners = new Set<(allowance: GameAllowance) => void>();
 const receiptListeners = new Set<(receipt: GameReceipt) => void>();
-// The wallet pushes the balance right after the iframe loads and on every change; there is nothing to poll.
-let latest: GameLimit | null = null;
+// The wallet pushes the allowance right after the iframe loads and on every change; there is nothing to poll.
+let latest: GameAllowance | null = null;
 window.addEventListener('message', event => {
   if (event.source !== window.parent) return;
   const message = event.data;
   if (!message || message.hookedin !== true) return;
-  if (message.event === 'game.balance') {
-    latest = { balance: String(message.balance), pending: message.pending === true };
-    for (const listener of balanceListeners) listener(latest);
+  if (message.event === 'game.allowance') {
+    latest = { allowance: String(message.allowance), pending: message.pending === true };
+    for (const listener of allowanceListeners) listener(latest);
     return;
   }
   // A developer bet's developer has settled it, and the wallet has checked and collected what it was paid.
@@ -71,7 +71,7 @@ window.addEventListener('message', event => {
   else request.reject(new Error('The wallet returned an invalid response.'));
 });
 
-/** How long the page waits for the wallet: for a reply, or for the first balance it pushes. */
+/** How long the page waits for the wallet: for a reply, or for the first allowance it pushes. */
 const timeout = 180000;
 const timedOut = () => new HookedInError('timeout', 'The wallet did not respond. Check the client, then reconnect.');
 const call = (method: string, params: Record<string, unknown> = {}) =>
@@ -99,20 +99,20 @@ const hello = (): Promise<{ limits: WalletLimits }> =>
   }));
 if (window.parent !== window) hello().catch(() => {});
 
-/** The wallet pushes the game's spendable balance whenever it changes, including stops and top-ups. */
-const onBalance = (listener: (balance: GameLimit) => void) => {
-  balanceListeners.add(listener);
+/** The wallet pushes the game's allowance whenever it changes, including stops and top-ups. */
+const onAllowance = (listener: (allowance: GameAllowance) => void) => {
+  allowanceListeners.add(listener);
   return () => {
-    balanceListeners.delete(listener);
+    allowanceListeners.delete(listener);
   };
 };
-/** The last pushed balance; the first push if none has come yet. */
-const balance = async (): Promise<GameLimit> => {
+/** The last pushed allowance; the first push if none has come yet. */
+const allowance = async (): Promise<GameAllowance> => {
   await hello();
   return (
     latest ??
     new Promise((resolve, reject) => {
-      const stop = onBalance(value => {
+      const stop = onAllowance(value => {
         clearTimeout(timer);
         stop();
         resolve(value);
@@ -139,15 +139,13 @@ export const HookedIn = Object.freeze({
    * its seed, its secret, its outcome and the developer's casino bet on it. A game whose players share a draw checks
    * its rounds here. */
   round: (id: string): Promise<Round> => call('wallet.round', { id }),
-  balance,
-  onBalance,
-  /** Ask the player for more money: `amount` more than the game has now. The wallet shows its own dialog, in its own
-   * words, where the player sets the game's spending limit; the reply says whether they did, the limit they chose,
-   * and the new state. */
-  requestFunds: (
-    options: { amount?: bigint | string } = {},
-  ): Promise<GameLimit & { funded: boolean; amount: string | null }> =>
-    call('game.requestFunds', options.amount === undefined ? {} : { amount: String(options.amount) }),
+  allowance,
+  onAllowance,
+  /** Ask the player for a larger allowance: `amount` more than the game has now. The wallet shows its own dialog, in
+   * its own words, where the player sets the game's allowance; the reply says whether they did, and the allowance
+   * after it. */
+  requestAllowance: (options: { amount?: bigint | string } = {}): Promise<GameAllowance & { allowed: boolean }> =>
+    call('game.requestAllowance', options.amount === undefined ? {} : { amount: String(options.amount) }),
   /** The receipt of an earlier operation by your own `id`, or `null` if this wallet has none. For an open developer
    * bet the wallet also asks the casino: once its developer has settled it, the wallet collects it and `onReceipt`
    * hears. */
@@ -173,7 +171,7 @@ export const HookedIn = Object.freeze({
   parseAmount,
   formatAmount,
   exactAmount,
-  /** Read-only startup: who is playing and what the game may spend, and the recommended stake in the stake field
+  /** Read-only startup: who is playing and the game's allowance, and the recommended stake in the stake field
    * unless the player has edited it meanwhile. */
   async initializeGame({ stakeInput }: { stakeInput: HTMLInputElement }) {
     const initialStake = stakeInput.value;
@@ -184,10 +182,10 @@ export const HookedIn = Object.freeze({
     stakeInput.addEventListener('input', onEdit);
     try {
       const wallet: WalletInfo = await call('wallet.info');
-      const state = await balance();
+      const started = { wallet, allowance: await allowance(), scope: storageScope(wallet) };
       if (!edited && stakeInput.value === initialStake && /^[1-9]\d{0,77}$/.test(String(wallet.recommendedStake)))
         stakeInput.value = exactAmount(wallet.recommendedStake);
-      return { wallet, state, scope: storageScope(wallet) };
+      return started;
     } finally {
       stakeInput.removeEventListener('input', onEdit);
     }

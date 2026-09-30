@@ -14,7 +14,7 @@ The ball bounces left or right at each peg with equal chance and lands in a buck
 
 ## How it works
 
-A drop is a round of one decision, played through `RoundClient` from the [game SDK](../../sdk). [src/drop.ts](src/drop.ts) wraps it as `DropClient`, which lands each finished drop once, and the balance strip leaves a ball's winnings out until it lands.
+A drop is a round of one decision, played through `RoundClient` from the [game SDK](../../sdk). [src/drop.ts](src/drop.ts) wraps it as `DropClient`, which lands each finished drop once, and the allowance strip leaves a ball's winnings out until it lands.
 
 ### The board is a graph
 

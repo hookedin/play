@@ -148,7 +148,7 @@ test('spins settle through the wallet bridge in both modes and survive a reload'
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('samson'));
-  await w.setGameLimit('100000');
+  await w.setGameAllowance('100000');
   const store = memoryStore();
   let round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
   const ids = new Set<string>();

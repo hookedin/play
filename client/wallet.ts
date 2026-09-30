@@ -96,7 +96,7 @@ const networks: Record<string, { id: bigint; name: string; stake: string }> = {
 /**
  * The independent wallet. Its concerns are layered as a class chain kept in their own files:
  * on-chain transactions (`wallet-transactions.ts`), the off-chain channel protocol
- * (`wallet-channel.ts`) and the open game's spending limit (`wallet-games.ts`). This file owns
+ * (`wallet-channel.ts`) and the open game's allowance (`wallet-games.ts`). This file owns
  * configuration, durable state, locking, observation and the casino API transport.
  */
 export class CasinoWallet extends GameSessions {

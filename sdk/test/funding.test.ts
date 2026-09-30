@@ -57,7 +57,7 @@ test('rounds use the table when supported and preserve the ordinary fallback and
   ]) {
     const call = {
       call: async () => ({ bankroll: String(bankroll), chainId: '31337', address: '0xab', channelId: '0x01' }),
-      balance: async () => ({ balance: '100', pending: false }),
+      allowance: async () => ({ allowance: '100', pending: false }),
     };
     // This deterministic graph keeps fallback coverage fast.
     const make = (setup: any) => ({

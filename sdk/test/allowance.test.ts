@@ -4,7 +4,7 @@ import { memoryStore } from '../../testing/game-wallet.ts';
 import { createSynth } from '../src/synth.ts';
 import { coin } from './coin.ts';
 
-/** An element that keeps its class, text, attributes and children: all of the DOM the bank strip touches. */
+/** An element that keeps its class, text, attributes and children: all of the DOM the allowance strip touches. */
 class Element {
   className = '';
   textContent = '';
@@ -29,7 +29,7 @@ class Element {
   addEventListener() {}
 }
 
-test("the bank strip shows every push in ETH and follows its round beside the round's other listeners", async () => {
+test("the allowance strip shows every push in ETH and follows its round beside the round's other listeners", async () => {
   const posted: any[] = [],
     listeners: ((event: any) => void)[] = [];
   const parent = { postMessage: (message: any) => posted.push(message) };
@@ -37,16 +37,16 @@ test("the bank strip shows every push in ETH and follows its round beside the ro
   (globalThis as any).document = { createElement: () => new Element() };
   try {
     const { HookedIn } = await import('../src/sdk.ts');
-    const { mountBank } = await import('../src/bank.ts');
+    const { mountAllowance } = await import('../src/allowance.ts');
     const { RoundClient } = await import('../src/round.ts');
     const deliver = (data: any) => listeners.forEach(listener => listener({ source: parent, data }));
-    const push = (balance: string) => deliver({ hookedin: true, event: 'game.balance', balance, pending: false });
+    const push = (allowance: string) => deliver({ hookedin: true, event: 'game.allowance', allowance, pending: false });
     // The wallet answers the greeting the page sends as it loads.
     deliver({ hookedin: true, id: posted[0].id, result: { limits: {} } });
     const round = new RoundClient(
       {
         call: async () => ({ uname: 'player', chainId: '1', bankroll: String(10n ** 21n) }),
-        balance: HookedIn.balance,
+        allowance: HookedIn.allowance,
       },
       coin({ payout: stake => (stake * 19n) / 10n }),
       undefined,
@@ -55,9 +55,9 @@ test("the bank strip shows every push in ETH and follows its round beside the ro
     const heard: string[] = [];
     const deaf = round.onChange(() => heard.push('round'));
     const root = new Element();
-    mountBank(root as any, { round });
+    mountAllowance(root as any, { round });
     const [, amount, symbol] = root.children[0]!.children;
-    // Nothing to show until the wallet pushes a balance, and then at once.
+    // Nothing to show until the wallet pushes an allowance, and then at once.
     assert.deepEqual([amount!.textContent, symbol!.textContent], ['—', 'ETH']);
     push('5000000000000000');
     assert.equal(amount!.textContent, '0.005');

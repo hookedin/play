@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('the game SDK greets the wallet, accepts only parent-window replies, delivers balance pushes and numbers its requests upwards', async () => {
+test('the game SDK greets the wallet, accepts only parent-window replies, delivers allowance pushes and numbers its requests upwards', async () => {
   const posted: any[] = [],
     listeners: ((event: any) => void)[] = [];
   const parent = { postMessage: (message: any) => posted.push(message) };
@@ -9,12 +9,12 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
   try {
     const { HookedIn, HookedInError } = await import('../src/sdk.ts');
     const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
-    // The page greets the wallet as it loads, and a balance the wallet pushes reaches the game at once.
+    // The page greets the wallet as it loads, and an allowance the wallet pushes reaches the game at once.
     assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
     const early: any[] = [];
-    const stopEarly = HookedIn.onBalance(balance => early.push(balance));
-    deliver(parent, { hookedin: true, event: 'game.balance', balance: '3', pending: false });
-    assert.deepEqual(early, [{ balance: '3', pending: false }]);
+    const stopEarly = HookedIn.onAllowance(allowance => early.push(allowance));
+    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '3', pending: false });
+    assert.deepEqual(early, [{ allowance: '3', pending: false }]);
     stopEarly();
     const hello = { limits: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver(parent, { hookedin: true, id: 1, result: hello });
@@ -29,12 +29,12 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     deliver(parent, {
       hookedin: true,
       id: posted.at(-1).id,
-      error: { code: 'insufficient-funds', message: 'Bet exceeds the game balance' },
+      error: { code: 'insufficient-allowance', message: "Bet exceeds the game's allowance" },
     });
     await assert.rejects(
       refused,
       (error: any) =>
-        error instanceof HookedInError && error.code === 'insufficient-funds' && /exceeds/.test(error.message),
+        error instanceof HookedInError && error.code === 'insufficient-allowance' && /exceeds/.test(error.message),
     );
     const reply = HookedIn.info();
     const { id, method } = posted.at(-1);
@@ -45,28 +45,28 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     ] as const)
       listeners.forEach(listener => listener({ source, data: { hookedin: true, id, result } }));
     assert.equal(await reply, 'real');
-    const balances: any[] = [];
-    const stop = HookedIn.onBalance(balance => balances.push(balance));
-    deliver({}, { hookedin: true, event: 'game.balance', balance: '7', enabled: true, pending: false });
-    deliver(parent, { hookedin: true, event: 'game.balance', balance: '7', pending: false, stray: true });
-    deliver(parent, { hookedin: true, event: 'game.balance', balance: '0', pending: 'yes' });
-    assert.deepEqual(balances, [
-      { balance: '7', pending: false },
-      { balance: '0', pending: false },
+    const allowances: any[] = [];
+    const stop = HookedIn.onAllowance(allowance => allowances.push(allowance));
+    deliver({}, { hookedin: true, event: 'game.allowance', allowance: '7', enabled: true, pending: false });
+    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '7', pending: false, stray: true });
+    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '0', pending: 'yes' });
+    assert.deepEqual(allowances, [
+      { allowance: '7', pending: false },
+      { allowance: '0', pending: false },
     ]);
     stop();
-    deliver(parent, { hookedin: true, event: 'game.balance', balance: '9', enabled: true, pending: false });
-    assert.equal(balances.length, 2);
-    const funding = HookedIn.requestFunds({ amount: 12n });
+    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '9', enabled: true, pending: false });
+    assert.equal(allowances.length, 2);
+    const asked = HookedIn.requestAllowance({ amount: 12n });
     const sent = posted.at(-1);
-    assert.equal(sent.method, 'game.requestFunds');
+    assert.equal(sent.method, 'game.requestAllowance');
     assert.deepEqual(sent.params, { amount: '12' });
     deliver(parent, {
       hookedin: true,
       id: sent.id,
-      result: { funded: false, amount: null, balance: '7', enabled: true },
+      result: { allowed: false, allowance: '7', pending: false },
     });
-    assert.equal((await funding).funded, false);
+    assert.equal((await asked).allowed, false);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
     const bet = { id: 'coin', stake: '5', chance: '9', prize: '10', group: 'hand-1' };
     const calls = [HookedIn.casinoBet(bet), HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } })];
@@ -96,7 +96,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
   }
 });
 
-test('balance() refuses outside a frame as call does, a greeting that failed is asked again, and a silent wallet times out', async t => {
+test('allowance() refuses outside a frame as call does, a greeting that failed is asked again, and a silent wallet times out', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const posted: any[] = [],
     listeners: ((event: any) => void)[] = [];
@@ -110,7 +110,7 @@ test('balance() refuses outside a frame as call does, a greeting that failed is 
     const fresh = '../src/sdk.ts?again';
     const { HookedIn, HookedInError }: typeof import('../src/sdk.ts') = await import(fresh);
     const refused = (code: string) => (error: any) => error instanceof HookedInError && error.code === code;
-    await assert.rejects(HookedIn.balance(), refused('no-wallet'));
+    await assert.rejects(HookedIn.allowance(), refused('no-wallet'));
     assert.equal(posted.length, 0);
     // In a wallet's frame, a greeting the wallet refused is forgotten, and the next call asks again.
     page.parent = parent;
@@ -126,15 +126,15 @@ test('balance() refuses outside a frame as call does, a greeting that failed is 
     const hello = { limits: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver({ hookedin: true, id: posted.at(-1).id, result: hello });
     assert.deepEqual(await greeting, hello);
-    // Greeted, with nothing pushed: balance() waits as long as a request would, then gives up.
-    const silent = HookedIn.balance();
+    // Greeted, with nothing pushed: allowance() waits as long as a request would, then gives up.
+    const silent = HookedIn.allowance();
     await new Promise(resolve => setImmediate(resolve));
     t.mock.timers.tick(180000);
     await assert.rejects(silent, refused('timeout'));
     // A push ends the wait.
-    const pushed = HookedIn.balance();
-    deliver({ hookedin: true, event: 'game.balance', balance: '5', pending: false });
-    assert.deepEqual(await pushed, { balance: '5', pending: false });
+    const pushed = HookedIn.allowance();
+    deliver({ hookedin: true, event: 'game.allowance', allowance: '5', pending: false });
+    assert.deepEqual(await pushed, { allowance: '5', pending: false });
   } finally {
     delete (globalThis as any).window;
   }

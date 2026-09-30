@@ -4,10 +4,10 @@ import { behaviour } from '../testing/conformance.ts';
 /** The stub a game is tested with passes what the casino itself passes. */
 behaviour('the test casino', async () => {
   const f = await gameWallet(),
-    limit = '100000',
+    allowance = '100000',
     playing = async (wallet = f.wallet) => {
       wallet.openGame(f.identity());
-      await wallet.setGameLimit(limit);
+      await wallet.setGameAllowance(allowance);
       return wallet;
     };
   await playing();
@@ -17,7 +17,7 @@ behaviour('the test casino', async () => {
     developer: async () => f.developer,
     async replaceChannel() {
       await f.replaceChannel();
-      await f.wallet.setGameLimit(limit);
+      await f.wallet.setGameAllowance(allowance);
     },
     async forget() {
       const wallet = await playing(await f.forget());

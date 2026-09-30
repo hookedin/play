@@ -63,13 +63,13 @@ test('each drop is one casino bet, recovers a lost reply under the same ID, and 
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('plinko'));
-  await w.setGameLimit('200000');
+  await w.setGameAllowance('200000');
   const store = memoryStore();
   let loseReply = false,
     bets = 0,
     bankroll = '1000000000000';
   const bridge = {
-    balance: async () => w.gameLimit(),
+    allowance: async () => w.gameAllowance(),
     call: async (method: string, params: any = {}) => {
       if (method === 'wallet.info') return { ...w.gameInfo(), bankroll };
       if (method === 'game.receipt') return w.gameReceipt(params.id);

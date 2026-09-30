@@ -308,8 +308,8 @@ h1 {
 .hidden {
   display: none !important;
 }
-/* The game's view of its wallet allocation: one slim line, the figure and the way to add to it. */
-.bank {
+/* The game's allowance: one slim line, the figure and the way to adjust it. */
+.allowance {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -320,7 +320,7 @@ h1 {
   border-radius: 12px;
   background: var(--panel);
 }
-.bank-figure {
+.allowance-figure {
   flex: 1;
   display: flex;
   flex-wrap: wrap;
@@ -328,7 +328,7 @@ h1 {
   gap: 6px;
   min-width: 0;
 }
-.bank-label {
+.allowance-label {
   color: var(--muted);
   font-size: 10px;
   text-transform: uppercase;
@@ -336,19 +336,19 @@ h1 {
   font-weight: 600;
   margin-right: 6px;
 }
-.bank-amount {
+.allowance-amount {
   overflow-wrap: anywhere;
   font-size: 18px;
   letter-spacing: -0.4px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.bank-asset {
+.allowance-asset {
   color: var(--muted);
   font-size: 10px;
   font-weight: 600;
 }
-.bank-status {
+.allowance-status {
   order: 3;
   flex-basis: 100%;
   padding-bottom: 4px;
@@ -356,7 +356,7 @@ h1 {
   font-size: 11px;
   line-height: 1.5;
 }
-.bank-add {
+.allowance-adjust {
   height: 36px;
   padding: 0 14px;
   border-radius: 8px;
@@ -367,11 +367,11 @@ h1 {
   font-weight: 700;
   white-space: nowrap;
 }
-.bank[data-state='empty'] .bank-add {
+.allowance[data-state='empty'] .allowance-adjust {
   background: var(--accent);
   color: #14201b;
 }
-.bank-add:hover:not(:disabled) {
+.allowance-adjust:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 @media (max-width: 600px) {
@@ -389,14 +389,14 @@ h1 {
   .game-title {
     margin-top: 0;
   }
-  .bank {
+  .allowance {
     margin-top: 12px;
   }
   .controls {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 10px;
   }
-  .bank-label {
+  .allowance-label {
     flex-basis: 100%;
   }
   .controls > .primary:last-child {

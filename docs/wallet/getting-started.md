@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Open the wallet, deposit ETH, give a game a limit, withdraw, and the names you are known by.
+description: Open the wallet, deposit ETH, give a game an allowance, withdraw, and the names you are known by.
 sidebar:
   order: 1
 ---
@@ -44,7 +44,7 @@ address to my balance** is off in Settings, while the casino is unavailable, and
 next balance opens ([closing and claims](closing-and-claims.md)). **Add to balance**, on the Deposit tab, adds it when
 you choose.
 
-## Games and their limits
+## Games and their allowances
 
 The library at `/` lists the games `@hookedin` publishes and the games your own account publishes, each by its
 [icon](../games/publishing.md#the-icon); **Open a game by its URL** opens any other.
@@ -59,24 +59,24 @@ A published game's developer is the account that published it: it earns half of 
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
 all of its commission, and it takes no developer bets.
 
-A game plays only with the limit you give it in the wallet's own dialog, which opens when the game asks; every word in
-it is the wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab instead. The limit caps
-what the game may risk, and moves no money:
+A game plays only with the allowance you give it in the wallet's own dialog, which opens when the game asks; every
+word in it is the wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab instead. The
+allowance caps what the game may risk, and moves no money:
 
-- The money stays in your balance. The limit is the most the game may put at risk, out of what your balance has taken
-  in: a deposit still arriving cannot raise it.
+- The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
+  taken in: a deposit still arriving cannot raise it.
 - It lives only in this tab's memory. Leaving the game, reloading or closing the tab releases it, and the game asks
-  again next time; the wallet remembers the last limit you chose only as the next suggestion.
+  again next time; the wallet remembers the last allowance you chose only as the next suggestion.
 - Every verified result of the game's own operations moves it: a win raises it and a loss lowers it. A game can lose
   everything it holds, its winnings included, and not a wei more.
 - A withdrawal lowers it to what stays in your balance, if it was more; taking out everything, or locking in, closes
   the game.
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
   has already committed.
-- One game per account holds a limit at a time, across every tab of the browser: a game in another tab is refused at
-  the dialog until you leave the first.
+- One game per account holds an allowance at a time, across every tab of the browser: a game in another tab is refused
+  at the dialog until you leave the first.
 
-The wallet does not refuse a bet for paying back little: a game can spend its whole limit on poor bets, and your
+The wallet does not refuse a bet for paying back little: a game can spend its whole allowance on poor bets, and your
 [bets](bets-and-receipts.md) show what each game really paid back.
 
 **Play limits and breaks**, in Settings, set a daily deposit limit, a daily loss limit and a session length, or start a

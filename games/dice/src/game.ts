@@ -1,7 +1,7 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import type { RoundState } from '@hookedin/play/sdk/round';
-import { mountBank } from '@hookedin/play/sdk/bank';
+import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import { CHANCE_MAX, CHANCE_MIN, diceGraph, winPayout } from './rules.ts';
 
 /** What Auto cycles through: the rolls one press plays, where 0 is a single roll. */
@@ -10,7 +10,7 @@ const AUTO = [0, 10, 50, 100];
 const HISTORY = 10;
 const round = new RoundClient(HookedIn, diceGraph);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const bank = mountBank($('bank'), { round });
+const allowance = mountAllowance($('allowance'), { round });
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const stakeInput = $<HTMLInputElement>('stake'),
   slider = $<HTMLInputElement>('chance'),
@@ -70,7 +70,7 @@ function render() {
   autoButton.textContent = auto ? `Auto · ${auto}` : 'Auto';
   autoButton.setAttribute('aria-pressed', String(auto > 0));
   for (const id of ['stake', 'chance', 'chance-text', 'half', 'double']) $<HTMLInputElement>(id).disabled = locked;
-  bank.setBusy(!ready || running);
+  allowance.setBusy(!ready || running);
   $('die').classList.toggle('rolling', running);
 }
 /** A finished roll: the verified outcome read on a 0–100 scale, where under the win chance wins. */
@@ -136,7 +136,7 @@ async function press() {
 }
 async function recover() {
   try {
-    bank.update((await HookedIn.initializeGame({ stakeInput })).state);
+    allowance.update((await HookedIn.initializeGame({ stakeInput })).allowance);
     // Ready before the round is restored: a round this page cannot finish is let go with a word, and
     // the player plays on.
     ready = true;

@@ -40,7 +40,7 @@ test('a roll settles through the real wallet and pays what the rules promise', a
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('dice'));
-  await w.setGameLimit('200000');
+  await w.setGameAllowance('200000');
   const round = new RoundClient(f.bridge, diceGraph, undefined, { store: memoryStore(), name: 'dice' });
   // Forty rolls at 49.50% all land on one side about once in 10^12 runs, so both outcomes are always seen.
   let wins = 0,

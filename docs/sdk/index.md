@@ -45,8 +45,8 @@ Node-safe module imports anywhere.
 | `@hookedin/play/sdk/steps`              | [Binary steps](steps.md), a shared draw backed with binary casino bets                | Node-safe                             |
 | `@hookedin/play/sdk/admits`             | [The casino's admission rule](admits.md), and a bet's measured return                 | Node-safe                             |
 | `@hookedin/play/sdk/outcome`            | [The rule a round's outcome follows](outcome.md), and what a casino bet pays on it    | Node-safe                             |
-| `@hookedin/play/sdk/bank`               | [`mountBank`](bank-and-synth.md#mountbank), the balance strip                         | Browser only                          |
-| `@hookedin/play/sdk/synth`              | [`createSynth`](bank-and-synth.md#createsynth), synthesized sound                     | Node-safe; sound plays in a browser   |
+| `@hookedin/play/sdk/allowance`          | [`mountAllowance`](allowance-and-synth.md#mountallowance), the allowance strip        | Browser only                          |
+| `@hookedin/play/sdk/synth`              | [`createSynth`](allowance-and-synth.md#createsynth), synthesized sound                | Node-safe; sound plays in a browser   |
 | `@hookedin/play/testing/game-wallet.ts` | [`gameWallet`](../games/testing.md#gamewallet), the real wallet against a stub casino | Node                                  |
 
-The stylesheet [`shared.css`](bank-and-synth.md#sharedcss) reaches a game through the build.
+The stylesheet [`shared.css`](allowance-and-synth.md#sharedcss) reaches a game through the build.

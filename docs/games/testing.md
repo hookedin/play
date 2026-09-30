@@ -30,14 +30,14 @@ import assert from 'node:assert/strict';
 import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
 import { HEADS, flipBet, wire } from '../src/flip.ts';
 
-test('a flip settles through the real wallet and moves the balance by its own terms', async () => {
+test('a flip settles through the real wallet and moves the allowance by its own terms', async () => {
   const f = await gameWallet();
   f.wallet.openGame(f.identity('flip'));
-  await f.wallet.setGameLimit('200000');
+  await f.wallet.setGameAllowance('200000');
   const receipt = await f.bridge.call('game.casinoBet', { id: 'first', ...wire(flipBet(1000n)) });
   assert.equal(receipt.status, 'settled');
   assert.equal(receipt.payout, BigInt(receipt.outcome) < HEADS ? '2000' : '0');
-  assert.equal(f.wallet.gameLimit().balance, String(200000n - 1000n + BigInt(receipt.payout)));
+  assert.equal(f.wallet.gameAllowance().allowance, String(200000n - 1000n + BigInt(receipt.payout)));
 });
 ```
 
@@ -56,7 +56,7 @@ pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance
 
 | Member                       | What it is                                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wallet`                     | The player's wallet. Open a game with `openGame(identity)` and give it a spending limit with `setGameLimit(amount)` before it bets                |
+| `wallet`                     | The player's wallet. Open a game with `openGame(identity)` and give it an allowance with `setGameAllowance(amount)` before it bets                |
 | `bridge`                     | The game's side of the bridge to `wallet`, a [`TestBridge`](#testbridge), to hand to `RoundClient` or your own client                             |
 | `identity(name?, declared?)` | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about it. Every name given here is published |
 | `developer`                  | A stub [`Developer`](../sdk/developer.md#developer) with the fixture's key, serving the game named `test`, to hand to your server's code          |
@@ -67,8 +67,8 @@ pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance
 | `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                          |
 | `forget()`                   | A wallet that has lost every receipt, as one restored from an older backup has                                                                    |
 
-The wallet methods a test calls are `openGame(identity)`, `setGameLimit(amount)` (a decimal string of wei, as the
-player sets it in the wallet's dialog), `gameLimit()` (the open game's `{ balance, pending }`), `closeGame()`,
+The wallet methods a test calls are `openGame(identity)`, `setGameAllowance(amount)` (a decimal string of wei, as the
+player sets it in the wallet's dialog), `gameAllowance()` (the open game's `{ allowance, pending }`), `closeGame()`,
 `balance()` (the channel's signed balance, a bigint) and `playableBalance()` (that balance less what a pending operation
 commits), from [client/wallet-games.ts](../../client/wallet-games.ts) and
 [client/wallet-channel.ts](../../client/wallet-channel.ts).
@@ -90,16 +90,16 @@ What the stub holds a game to:
 
 `bridgeTo(wallet)` is a game's side of the bridge to any wallet, such as one `reload()` returns. Every request goes
 through the checks the wallet's bridge makes, with an envelope ID above the last, and on to the wallet's own methods.
-The player agrees to every `game.requestFunds`: the limit rises by the amount asked, or by the whole playable balance
-when none is, up to the playable balance. Every receipt the wallet pushes reaches the `onReceipt` listeners of every
-bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
+The player agrees to every `game.requestAllowance`: the allowance rises by the amount asked, or by the whole playable
+balance when none is, up to the playable balance. Every receipt the wallet pushes reaches the `onReceipt` listeners of
+every bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
 refusal.
 
 ### `TestBridge`
 
 What `bridgeTo` returns, and what [`RoundClient`](../sdk/round.md#roundbridge) and a game's own client take: `call`
-sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, `balance` is the open game's
-`{ balance, pending }`, and `onReceipt` hears pushed receipts and returns a function that stops the listener.
+sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, `allowance` is the open game's
+`{ allowance, pending }`, and `onReceipt` hears pushed receipts and returns a function that stops the listener.
 
 ## Testing a multi-step game
 

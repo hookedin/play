@@ -62,11 +62,11 @@ Each flip returns 95% of what it risks, which leaves the casino the edge it need
 ```ts title="src/game.ts"
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
-import { mountBank } from '@hookedin/play/sdk/bank';
+import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import { doubleUp } from './rules.ts';
 
 const round = new RoundClient(HookedIn, doubleUp);
-mountBank(document.getElementById('bank')!, { round });
+mountAllowance(document.getElementById('allowance')!, { round });
 
 // On startup: the saved round, with any step the wallet settled while the page was away.
 let state = await round.restore().catch(error => {
@@ -87,14 +87,14 @@ round.watch(() => render(round.state())); // another tab moved the round
 
 - `restore()` loads the player's saved round and resolves a step whose reply was lost. Call it on startup.
 - `start(setup)` starts a round. `setup.stake` is the stake in wei, and any other field is yours for the graph
-  function, such as Dice's `chanceBps`. It asks the wallet for money if the limit is short, prices the graph and saves
-  the round; no money moves until the first action.
+  function, such as Dice's `chanceBps`. It asks the wallet for more if the allowance is short, prices the graph and
+  saves the round; no money moves until the first action.
 - `action(id)` plays one step: at most one casino bet or payment, drawn and saved with a fresh operation ID before
   anything is signed, and checked against the wallet's verified payout.
 - The state says where the round stands ([`RoundState`](../sdk/round.md#roundstate)): `cash` is what the round holds,
   which the player keeps if they stop, and `events` are each step's action and label, to redraw the round after a
-  reload. `mountBank(element, { round })` leaves that cash out of the game's allowance and stands still while a step
-  settles, so the figure moves once a round.
+  reload. `mountAllowance(element, { round })` leaves that cash out of the game's allowance and stands still while a
+  step settles, so the figure moves once a round.
 
 ## One step is one bet
 
@@ -124,7 +124,7 @@ covers their conservative starting requirement.
 
 An action can commit more of the player's money, such as a double, a split or insurance: give it `additionalCash`.
 `state.actionCosts` says what each action adds, and `state.contributed` what the player has put in so far. When the
-limit is short, `RoundClient` asks the wallet for the shortfall plus four stakes, so one authorization lasts a few
+allowance is short, `RoundClient` asks the wallet for the shortfall plus four stakes, so one authorization lasts a few
 rounds.
 
 ## Precomputed prices

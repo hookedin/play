@@ -12,7 +12,7 @@ main {
   display: flex;
   gap: 6px;
 }
-.bank {
+.allowance {
   margin: 0 0 10px;
   padding: 9px 14px;
 }

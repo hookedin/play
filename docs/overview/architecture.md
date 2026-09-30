@@ -22,8 +22,8 @@ equally between the game's developer and the casino. The calculation is more inv
 the point: a fee taken first would shrink every bet the bankroll can take, while this admits the largest ones and
 charges only the surplus. A game sets its own tables, and its developer earns half of the edge they carry. Nothing here
 pretends to protect a player from a game: any game can waste the money it is given on bets that pay back little,
-whatever the fee, and a cap would only hide that. The player's protection is the spending limit they set, and the
-measured return of every casino bet, which the wallet records and does not enforce.
+whatever the fee, and a cap would only hide that. The player's protection is the allowance they set, and the measured
+return of every casino bet, which the wallet records and does not enforce.
 
 **A multi-step game is a sequence of casino bets.** Every step is one casino bet, settled on its own, so the bankroll
 moves atomically with each step and no step waits on another. A player can walk away after any settled step with the

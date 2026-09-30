@@ -1,7 +1,7 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import type { RoundState } from '@hookedin/play/sdk/round';
-import { mountBank } from '@hookedin/play/sdk/bank';
+import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import type { Rational } from '@hookedin/play/sdk/engine';
 import { TILES, coveredPicks, minesGraph, multiplier, payout } from './rules.ts';
 
@@ -11,7 +11,7 @@ const stake = $<HTMLInputElement>('stake'),
   mines = $<HTMLSelectElement>('mines'),
   play = $<HTMLButtonElement>('play'),
   random = $<HTMLButtonElement>('random'),
-  bank = mountBank($('bank'), { round });
+  allowance = mountAllowance($('allowance'), { round });
 for (let count = 1; count < TILES; count++)
   mines.add(new Option(String(count), String(count), count === 3, count === 3));
 const tiles = Array.from({ length: TILES }, (_, index) => {
@@ -74,7 +74,7 @@ function render() {
     { mines: m, stake: wei } = state ? setupOf(state) : { mines: Number(mines.value), stake: '0' },
     more = open && actions.includes('reveal'),
     picking = ready && !busy && more;
-  bank.setBusy(Boolean(busy) || !ready);
+  allowance.setBusy(Boolean(busy) || !ready);
   for (const id of ['stake', 'mines', 'half', 'double']) $<HTMLInputElement>(id).disabled = Boolean(busy) || open;
   tiles.forEach((tile, i) => {
     const kind = gems.includes(i) ? 'gem' : mine === i ? 'mine' : '';
@@ -197,7 +197,7 @@ document.addEventListener('keydown', event => {
 
 async function connect() {
   try {
-    bank.update((await HookedIn.initializeGame({ stakeInput: stake })).state);
+    allowance.update((await HookedIn.initializeGame({ stakeInput: stake })).allowance);
     // Ready before the round is restored: a round this page cannot finish is let go with a word, and the player
     // plays on.
     ready = true;

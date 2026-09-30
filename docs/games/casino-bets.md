@@ -49,11 +49,11 @@ const key = `${HookedIn.storageScope(await HookedIn.info())}:flip`;
 
 /** One flip for `stake`, in wei. */
 async function flip(stake: bigint) {
-  // The game may risk only its spending limit, which the player sets in the wallet's own dialog.
-  const { balance } = await HookedIn.balance();
-  if (BigInt(balance) < stake) {
-    const funding = await HookedIn.requestFunds({ amount: 10n * stake - BigInt(balance) });
-    if (BigInt(funding.balance) < stake) throw new Error('Increase your game allowance to play.');
+  // The game may risk only its allowance, which the player sets in the wallet's own dialog.
+  const { allowance } = await HookedIn.allowance();
+  if (BigInt(allowance) < stake) {
+    const answer = await HookedIn.requestAllowance({ amount: 10n * stake - BigInt(allowance) });
+    if (BigInt(answer.allowance) < stake) throw new Error('Increase your game allowance to play.');
   }
   // Name the operation and save it before the wallet signs anything.
   const id = crypto.randomUUID();
