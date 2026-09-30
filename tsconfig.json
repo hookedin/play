@@ -11,7 +11,8 @@
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "noEmit": true,
-    "moduleDetection": "force"
+    "moduleDetection": "force",
+    "allowJs": true
   },
   "include": [
     "protocol/**/*.ts",

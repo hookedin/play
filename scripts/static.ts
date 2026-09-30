@@ -1,82 +1,10 @@
-import http from 'node:http';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createStaticServer } from '../sdk/bin/hookedin-game.js';
 
-const types: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-};
+export { createStaticServer };
 
-/** The headers every file is served with: the `/*` block of a Cloudflare Pages `_headers` file. */
-async function readHeaders(dir: string) {
-  const headers: Record<string, string> = { 'Cache-Control': 'no-store' };
-  const text = await fs.readFile(path.join(dir, '_headers'), 'utf8').catch(() => '');
-  for (const line of text.split('\n')) {
-    const match = /^\s+([A-Za-z-]+):\s*(.+)$/.exec(line);
-    if (match) headers[match[1]] = match[2];
-  }
-  return headers;
-}
-
-/**
- * Serve a built directory the way the static host does: its files, its `_headers`, and the page for any
- * extensionless route. `config`, when given, replaces config.js so a launcher can point the wallet at its casino.
- * `build`, when given, builds the directory again before every page load, so a change shows on reload.
- */
-export function createStaticServer(dir: string, config?: unknown, build?: () => Promise<unknown>) {
-  let serving: Promise<void> = Promise.resolve();
-  return http.createServer(async (req, res) => {
-    const respond = async () => {
-      let headers = await readHeaders(dir);
-      if (req.method === 'OPTIONS') return void res.writeHead(204, headers).end();
-      if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, headers).end();
-      try {
-        const pathname = decodeURIComponent(new URL(req.url!, 'http://localhost').pathname);
-        if (
-          pathname.includes('\0') ||
-          pathname.split('/').some(p => p === '..' || p.startsWith('.') || p.startsWith('_'))
-        )
-          throw new Error('Invalid path');
-        if (build) {
-          if (!path.extname(pathname) || pathname.endsWith('.html')) {
-            try {
-              await build();
-            } catch (error: any) {
-              return void res.writeHead(500, { 'Content-Type': 'text/plain' }).end(error.message);
-            }
-          }
-          headers = await readHeaders(dir);
-        }
-        let data: Buffer | string, type: string;
-        if (pathname === '/config.js' && config) {
-          data = `export default ${JSON.stringify(config)};`;
-          type = types['.js'];
-        } else {
-          // Wallet routes such as /wallet and /@hookedin/dice are client-side.
-          const file = path.join(dir, !path.extname(pathname) ? 'index.html' : pathname);
-          if (!(path.extname(file) in types)) throw new Error('Invalid file');
-          data = await fs.readFile(file);
-          type = types[path.extname(file)];
-        }
-        res.writeHead(200, { ...headers, 'Content-Type': type });
-        res.end(req.method === 'HEAD' ? undefined : data);
-      } catch {
-        res.writeHead(404, { ...headers, 'Content-Type': 'text/plain' }).end('Not found');
-      }
-    };
-    // Reading the built files belongs to the same queue as rebuilding them. A second tab must
-    // not clear the output directory while the first tab is reading its page or scripts.
-    if (build) await (serving = serving.catch(() => {}).then(respond));
-    else await respond();
-  });
-}
-
+// `npm run dev`: the built wallet, served as its host serves it.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dir = path.resolve(process.argv[2] ?? fileURLToPath(new URL('../dist', import.meta.url)));
   const port = Number(process.env.PORT ?? 4184);
