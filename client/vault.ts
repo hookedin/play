@@ -3,8 +3,7 @@ import type { Store } from './storage.ts';
 
 const metadataKey = 'wallet-vault',
   proof = 'HOOKEDIN/WALLET-VAULT',
-  text = new TextEncoder(),
-  conflict = new Error('Encrypted wallet record changed');
+  text = new TextEncoder();
 type Sealed = { iv: string; data: string };
 type Metadata = Sealed & { salt: string };
 const protectedKey = (key: string) => key.startsWith('funding-accounts:');
@@ -138,45 +137,27 @@ export class VaultStore implements Store {
     await this.commit([[name, value]]);
   }
 
+  /** Keys are written only through `update`, which encrypts them. */
   async commit(entries: Iterable<readonly [string, unknown]>) {
     const values = Array.from(entries);
-    if (!values.some(([name]) => protectedKey(name))) return this.storage.commit(values);
-    const key = this.#requireKey();
-    await withLock('hookedin:vault', true, async () => {
-      const encrypted = await Promise.all(
-        values.map(async ([name, value]) => [name, protectedKey(name) ? await seal(key, name, value) : value] as const),
-      );
-      this.#stillUnlocked(key);
-      await this.storage.commit(encrypted);
-    });
+    if (values.some(([name]) => protectedKey(name))) throw new Error('Wallet keys are saved only by update');
+    await this.storage.commit(values);
   }
 
+  /** A key's read, change and encrypted write, one tab at a time. */
   async update<T = any>(name: string, change: (value: T | undefined) => T): Promise<T> {
     if (!protectedKey(name)) return this.storage.update(name, change);
     const key = this.#requireKey();
     return withLock('hookedin:vault', true, async () => {
-      for (;;) {
-        const saved = await this.storage.get<Sealed>(name),
-          value = saved === undefined ? undefined : await unseal<T>(key, name, saved);
-        this.#stillUnlocked(key);
-        const next = change(value);
-        if ((next as { then?: unknown } | null | undefined)?.then)
-          throw new Error('Storage updates must be synchronous');
-        const encrypted = await seal(key, name, next);
-        this.#stillUnlocked(key);
-        try {
-          // Crypto completes before the transaction starts. Compare within the atomic update
-          // so callers without Web Locks also preserve concurrent imports and selections.
-          await this.storage.update<Sealed>(name, current => {
-            if (JSON.stringify(current) !== JSON.stringify(saved)) throw conflict;
-            return encrypted;
-          });
-          this.#stillUnlocked(key);
-          return structuredClone(next);
-        } catch (error) {
-          if (error !== conflict) throw error;
-        }
-      }
+      const saved = await this.storage.get<Sealed>(name),
+        value = saved === undefined ? undefined : await unseal<T>(key, name, saved);
+      this.#stillUnlocked(key);
+      const next = change(value);
+      if ((next as { then?: unknown } | null | undefined)?.then) throw new Error('Storage updates must be synchronous');
+      const encrypted = await seal(key, name, next);
+      this.#stillUnlocked(key);
+      await this.storage.put(name, encrypted);
+      return structuredClone(next);
     });
   }
 }
