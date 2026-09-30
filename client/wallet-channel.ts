@@ -672,9 +672,10 @@ export class ChannelClient extends WalletTransactions {
   }
   /** The fund as the casino states it, signed, with what this account's shares come to at that price. The casino's
    * statement of the holding is taken first when it is later than the wallet's own, as it stands unless it states fewer
-   * shares than the wallet can prove: a wallet restored from an older backup has missed it, and a sale must follow it. */
+   * shares than the wallet can prove: a wallet restored from an older backup has missed it, and a sale must follow it.
+   * A wallet that refused a statement keeps that refusal. */
   async fundStatus(this: CasinoWallet) {
-    if (this.channel?.registered && !this.fund.redeeming) {
+    if (this.channel?.registered && !this.fund.redeeming && !this.fund.alert) {
       const { statement } = await this.api(`/api/channels/${this.channelId}/fund`);
       if (statement && Number(statement.message.sequence) > this.fund.sequence) {
         assertSignature(this.domain, SHARE_TYPES, statement.message, statement.signature, this.operator);
