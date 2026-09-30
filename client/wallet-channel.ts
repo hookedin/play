@@ -678,10 +678,8 @@ export class ChannelClient extends WalletTransactions {
       const { statement } = await this.api(`/api/channels/${this.channelId}/fund`);
       if (statement && Number(statement.message.sequence) > this.fund.sequence) {
         assertSignature(this.domain, SHARE_TYPES, statement.message, statement.signature, this.operator);
-        if (
-          !same(statement.message.holder, this.address) ||
-          BigInt(statement.message.shares) < BigInt(this.fund.shares)
-        )
+        if (!same(statement.message.holder, this.address)) throw new Error('The share statement is for another holder');
+        if (BigInt(statement.message.shares) < BigInt(this.fund.shares))
           throw new Error('The casino states fewer shares than its earlier signed statement');
         await this.exclusive(
           () => {

@@ -62,7 +62,6 @@ export class GameSessions extends ChannelClient {
       balance: '0',
     };
     this.render();
-    return identity.key;
   }
   closeGame(this: CasinoWallet) {
     this.game = null;
