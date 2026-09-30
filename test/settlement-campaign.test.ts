@@ -1,11 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { ContractFactory, id, Wallet } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, assessBinary, claimOf } from '../testing/contract.ts';
 import { baseState, checkpointEvidence, channelId, hashOperation, STATE_TYPES } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
-import release from '../client/contract-artifact.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 
@@ -296,10 +294,5 @@ test('gas profile covers full-width evidence, a long winnings queue, forced ETH 
   assert.equal((await claimOf(f, message.channelId)).paid, 100n);
   for (const name of ['claimBehind71', 'challengeWide', 'finalizeGasBurner'])
     assert.ok((BigInt((gas as any)[name]) * 12n) / 10n < 2000000n, name + ' exceeds operational gas budget');
-  fs.mkdirSync('build', { recursive: true });
-  fs.writeFileSync(
-    'build/settlement-gas.json',
-    JSON.stringify({ measuredAt: new Date().toISOString(), compiler: release.compiler, gas }, null, 2) + '\n',
-  );
   t.diagnostic('Measured gas: ' + JSON.stringify(gas));
 });
