@@ -1,3 +1,30 @@
+import { formatEther, parseEther, ZeroAddress } from 'ethers';
+import qrcode from 'qrcode-generator';
+import { CasinoWallet } from './wallet.ts';
+import { VaultStore } from './vault.ts';
+import { validateWithdrawal } from './withdrawal.ts';
+import { backupFingerprint, verifyBackupFile } from './backup.ts';
+import { playControls, depositRemaining } from './play-controls.ts';
+import { gameReceipt } from './wallet-games.ts';
+import { OPERATIONS } from './wallet-channel.ts';
+import { withLock } from './storage.ts';
+import { json, same, verifyEvidence, gameKey } from '../protocol/protocol.ts';
+import { attachGameBridge, gameError } from './bridge.ts';
+import {
+  activityJSON,
+  createActivityEntry,
+  developerBetSummary,
+  h,
+  percent,
+  receiptSummary,
+  signedEth,
+} from './activity.ts';
+import { betDetail, betRowElement, betTotals, groupRowElement, groupRows, measuredReturn, totalCards } from './bets.ts';
+import type { BetRow } from './bets.ts';
+import type { GameIdentity } from '../protocol/game-types.ts';
+import type { PlayerDeveloperBet } from '../protocol/types.ts';
+import config from './config.ts';
+
 interface ActiveGame {
   /** The channel this game is bound to; null until a channel is open. */
   channelId: string | null;
@@ -10,9 +37,7 @@ interface ActiveGame {
   /** The wallet path that reopens this game. */
   path: string;
   frame: HTMLIFrameElement;
-  generation: number;
   dispose: () => void;
-  key: string;
   /** The last balance pushed into the iframe, so unchanged renders stay quiet; empty until the entry has loaded. */
   pushed: string | null;
 }
@@ -21,34 +46,6 @@ interface ActiveGame {
 type GameRoute = { owner: string; name: string } | { url: string };
 /** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
 type Published = { key: string; developer: string };
-import { formatEther, parseEther, ZeroAddress } from 'ethers';
-import { CasinoWallet } from './wallet.ts';
-import { VaultStore } from './vault.ts';
-import { validateWithdrawal } from './withdrawal.ts';
-import { backupFingerprint, verifyBackupFile } from './backup.ts';
-import { playControls, depositRemaining } from './play-controls.ts';
-import qrcode from 'qrcode-generator';
-import { gameReceipt } from './wallet-games.ts';
-import { OPERATIONS } from './wallet-channel.ts';
-import { withLock } from './storage.ts';
-import { json, same, verifyEvidence, gameKey } from '../protocol/protocol.ts';
-import { attachGameBridge, gameError } from './bridge.ts';
-import { activityJSON, createActivityEntry, filterActivity, receiptSummary, developerBetSummary } from './activity.ts';
-import type { BetRow } from './bets.ts';
-import {
-  betDetail,
-  betRowElement,
-  filterBets,
-  groupRowElement,
-  groupRows,
-  percent,
-  measuredReturn,
-  totalCards,
-  betTotals,
-} from './bets.ts';
-import type { GameIdentity } from '../protocol/game-types.ts';
-import type { PlayerDeveloperBet } from '../protocol/types.ts';
-import config from './config.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const eth = (value: string | number | bigint | undefined, precision = networkDefaults.precision) => {
@@ -99,7 +96,6 @@ const { network, casino: casinoURL } = config;
 const networkDefaults =
   network === 'local' ? { precision: 4, total: '100000000000000000' } : { precision: 6, total: '100000000000000' };
 let active: ActiveGame | null = null,
-  generation = 0,
   uiBusy = false,
   toastTimer: ReturnType<typeof setTimeout> | undefined,
   statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -125,7 +121,7 @@ const wallet = new CasinoWallet({
   },
   // A developer bet's receipt reaches the game that placed it as soon as the wallet has collected what it was paid.
   onGameReceipt: (game, receipt) => {
-    if (!active || active.key !== game.key || !active.frame.contentWindow || active.pushed === null) return;
+    if (!active || active.identity.key !== game.key || !active.frame.contentWindow || active.pushed === null) return;
     const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.id, receipt) };
     active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
   },
@@ -197,6 +193,14 @@ async function unlockWallet() {
     });
   });
 }
+/** Ask for the wallet's passphrase again, before money leaves or a key shows. The field is cleared either way. */
+async function reauthenticate(field: HTMLInputElement) {
+  try {
+    await vault.verify(field.value);
+  } finally {
+    field.value = '';
+  }
+}
 function withdrawalFromChannel() {
   return (
     Number(wallet.publicState.channelStatus) === 1 &&
@@ -215,10 +219,11 @@ function withdrawalRequest() {
     channel,
   });
 }
-let safetyReading = false,
-  safetyAccount = '',
-  depositURI = '';
+let safetyAccount = '',
+  depositURI = '',
+  backupShown = '';
 const backupSetting = () => `hookedin:checked-backup:${wallet.storageKey}`;
+/** The play limits and breaks, the deposit address, and whether the checked backup still holds the saved evidence. */
 function renderSafety() {
   const controls = playControls(wallet.controls),
     limits = controls.limits;
@@ -274,28 +279,27 @@ function renderSafety() {
       : fee > 0n
         ? `Address balance ${formatEther(held)} ETH. Estimated maximum network fee ${formatEther(fee)} ETH. Up to ${formatEther(net)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}. The final fee is recorded in Activity.`
         : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
-  if (safetyReading) return;
-  safetyReading = true;
-  const account = wallet.storageKey;
-  void wallet.storage
-    .get(account)
-    .then(record => {
-      if (account !== wallet.storageKey) return;
-      const fingerprint = record ? backupFingerprint(record) : '',
-        saved = localStorage.getItem(backupSetting());
-      const message = !saved
-        ? 'No checked backup. Download a backup and reopen it with Check saved backup before depositing.'
-        : saved === fingerprint
-          ? 'Your checked backup matches the current saved evidence.'
-          : 'Your backup needs updating. Download and check a fresh copy after playing or moving ETH; older evidence may not recover your latest balance.';
-      $('backup-status').textContent = message;
-      $('backup-reminder').textContent = message;
-    })
+  // The saved record is read and hashed again only once it, the account or the checked backup has changed.
+  const shown = json([wallet.storageKey, wallet.revision, checked]);
+  if (shown === backupShown) return;
+  backupShown = shown;
+  const say = (message: string) => {
+    if (backupShown === shown) for (const id of ['backup-status', 'backup-reminder']) $(id).textContent = message;
+  };
+  wallet.storage
+    .get(wallet.storageKey)
+    .then(record =>
+      say(
+        !checked
+          ? 'No checked backup. Download a backup and reopen it with Check saved backup before depositing.'
+          : checked === (record ? backupFingerprint(record) : '')
+            ? 'Your checked backup matches the current saved evidence.'
+            : 'Your backup needs updating. Download and check a fresh copy after playing or moving ETH; older evidence may not recover your latest balance.',
+      ),
+    )
     .catch(() => {
-      $('backup-status').textContent = 'Could not check saved backup status. Refresh before depositing.';
-    })
-    .finally(() => {
-      safetyReading = false;
+      say('Could not check saved backup status. Refresh before depositing.');
+      backupShown = '';
     });
 }
 $('play-limits-form').addEventListener('submit', event => {
@@ -317,14 +321,13 @@ $('play-limits-form').addEventListener('submit', event => {
     toast('Limits saved. Reductions apply now; increases or removal wait 24 hours.');
   });
 });
-$('pause-play').addEventListener(
-  'click',
-  () =>
-    void task(async () => {
-      await wallet.pausePlay(Number($<HTMLSelectElement>('play-pause').value));
-      closeGame();
-      toast('Your break has started. You can still withdraw or recover your balance.');
-    }),
+act(
+  'pause-play',
+  async () => {
+    await wallet.pausePlay(Number($<HTMLSelectElement>('play-pause').value));
+    closeGame();
+  },
+  'Your break has started. You can still withdraw or recover your balance.',
 );
 
 function toast(message: string, error = false) {
@@ -350,6 +353,21 @@ async function task(callback: () => unknown | Promise<unknown>) {
     renderWallet();
   }
 }
+/** A button that runs one wallet action, then says what it did. */
+function act(id: string, run: () => unknown, done?: string | (() => string)) {
+  $(id).addEventListener('click', () =>
+    task(async () => {
+      await run();
+      if (done) toast(typeof done === 'string' ? done : done());
+    }),
+  );
+}
+/** Save `text` as a file the player downloads. */
+function download(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  h('a', { href: url, download: name }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
 
 /** One funded game per wallet across tabs, so no two tabs show limits against the same balance. */
 let limitLock: (() => void) | null = null;
@@ -371,7 +389,6 @@ function closeGame() {
   active.dispose();
   active.frame.remove();
   active = null;
-  generation += 1;
   wallet.closeGame();
   limitLock?.();
   limitLock = null;
@@ -386,34 +403,21 @@ function abandonGame() {
   }
 }
 
-const pagePaths: Record<string, string> = {
-  library: '/',
-  wallet: '/wallet',
-  games: '/games',
-  bets: '/bets',
-  bankroll: '/bankroll',
-  settings: '/settings',
-  activity: '/activity',
+/** The pages with a path of their own, and what they are called. */
+const PAGES: Record<string, { path: string; title: string }> = {
+  library: { path: '/', title: 'Games' },
+  wallet: { path: '/wallet', title: 'Wallet' },
+  games: { path: '/games', title: 'My games' },
+  bets: { path: '/bets', title: 'Bets' },
+  bankroll: { path: '/bankroll', title: 'Bankroll' },
+  settings: { path: '/settings', title: 'Settings' },
+  activity: { path: '/activity', title: 'Activity' },
 };
 const gamePath = (route: GameRoute) =>
   'url' in route ? `/games/custom?url=${encodeURIComponent(route.url)}` : `/${route.owner}/${route.name}`;
 /** How a player is written: an alias wears `@`, a uname wears `~`. */
 const showName = (names: { uname?: string | null; alias?: string | null } | null) =>
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
-/** A player's page: everything the casino says about them, as anyone sees it. */
-const profilePath = (name: string) => `/${name}`;
-/** A game's public record: every bet anyone has placed in it, under its key. */
-const gameBetsPath = (key: string) => `/games/${key.toLowerCase()}`;
-const PAGE_TITLES: Record<string, string> = {
-  library: 'Games',
-  wallet: 'Wallet',
-  games: 'My games',
-  bets: 'Bets',
-  bankroll: 'Bankroll',
-  settings: 'Settings',
-  activity: 'Activity',
-  gamebets: 'Game record',
-};
 /** Show a section; the URL is the caller's responsibility. */
 function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -421,13 +425,9 @@ function showPage(page: string) {
   for (const link of document.querySelectorAll<HTMLElement>('.nav-link'))
     link.classList.toggle('active', link.dataset.page === page || (page === 'play' && link.dataset.page === 'library'));
   document.title =
-    page === 'play' && active
-      ? `${active.identity.name} · HookedIn`
-      : page === 'profile'
-        ? `${$('profile-name').textContent} · HookedIn`
-        : page === 'library'
-          ? 'HookedIn'
-          : `${PAGE_TITLES[page] ?? page} · HookedIn`;
+    page === 'library'
+      ? 'HookedIn'
+      : `${page === 'play' && active ? active.identity.name : page === 'profile' ? $('profile-name').textContent : (PAGES[page]?.title ?? page)} · HookedIn`;
   if (page === 'activity') {
     renderActivity();
     void refreshActivity();
@@ -483,8 +483,8 @@ function renderFund() {
   $<HTMLButtonElement>('invest').disabled = uiBusy || !open || !f;
   for (const id of ['divest', 'divest-all']) $<HTMLButtonElement>(id).disabled = uiBusy || !open || !f || !shares;
 }
-function navigate(page: string, push = true, path = pagePaths[page]) {
-  if (wallet.busy && active && wallet.pending?.game?.key === active.key) {
+function navigate(page: string, push = true, path = PAGES[page]!.path) {
+  if (wallet.busy && active && wallet.pending?.game?.key === active.identity.key) {
     if (!push) history.pushState(null, '', active.path);
     return toast('Wait for the current operation to finish before leaving the game.', true);
   }
@@ -507,9 +507,7 @@ function parseRoute(url: URL): string | GameRoute | { profile: string } | { reco
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
   const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
   if (record) return { record: record[1]!.toLowerCase() };
-  const page = Object.entries(pagePaths).find(([, path]) => path === pathname)?.[0];
-  if (page) return page;
-  return pathname === '/' ? 'library' : { unknown: pathname };
+  return Object.entries(PAGES).find(([, page]) => page.path === pathname)?.[0] ?? { unknown: pathname };
 }
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
@@ -541,11 +539,7 @@ async function route(push = false) {
 function renderMoney() {
   const funded = wallet.funded,
     balance = BigInt(wallet.publicState?.balance || 0);
-  $('wallet-button-amount').innerHTML = '';
-  $('wallet-button-amount').append(
-    plainEth(balance),
-    Object.assign(document.createElement('small'), { textContent: 'ETH' }),
-  );
+  $('wallet-button-amount').replaceChildren(plainEth(balance), h('small', null, 'ETH'));
   $('wallet-button-amount').classList.toggle('hidden', !funded);
   $('wallet-button-label').textContent = funded && balance > 0n ? 'Wallet' : 'Deposit';
   $('hero-deposit').classList.toggle('hidden', funded || !wallet.address);
@@ -575,7 +569,7 @@ function renderGameAccount() {
 const SLIDER_STEPS = 100n;
 const sliderAmount = (total: bigint, value: string) => (total * BigInt(value)) / SLIDER_STEPS;
 // The last limit the player chose for a game is only the next suggestion; authority comes from the dialog alone.
-const limitSetting = () => `hookedin:${network}:game-limit:${active?.key}`;
+const limitSetting = () => `hookedin:${network}:game-limit:${active?.identity.key}`;
 /** The wallet's own dialog: the sole grant of spending authority over ETH. It says what the game may play with now,
  * what it would, and out of how much, because those are the whole of what is being authorized. */
 function renderFundDialog() {
@@ -613,9 +607,9 @@ function renderFundDialog() {
       : `Allow ${formatEther(amount)} ETH`;
 }
 let fundRequest: { resolve: (amount: bigint | null) => void } | null = null;
-/** Opened by the game's request for money. With nothing in the balance to allow, the wallet opens on Deposit
- * instead, and the game hears that it has no more. */
-function openFundDialog({ amount, asked = false }: { amount?: bigint; asked?: boolean }) {
+/** Opened by the game's request for money, which may suggest how much more. With nothing in the balance to allow, the
+ * wallet opens on Deposit instead, and the game hears that it has no more. */
+function openFundDialog(amount?: bigint) {
   if (!active) return Promise.resolve<bigint | null>(null);
   fundRequest?.resolve(null);
   if (wallet.playableBalance() === 0n && BigInt(wallet.game?.balance || '0') === 0n) {
@@ -630,11 +624,13 @@ function openFundDialog({ amount, asked = false }: { amount?: bigint; asked?: bo
     : `Served from ${host}. Nobody publishes it, so nobody earns from it.`;
   const total = wallet.playableBalance(),
     limit = BigInt(wallet.game?.balance || '0'),
-    requested = amount && amount > 0n ? limit + amount : 0n,
-    remembered = BigInt(localStorage.getItem(limitSetting()) || networkDefaults.total),
-    // The player's own visit shows the limit as it is, or what they last chose; a game's request
-    // suggests exactly what it asked for, never more.
-    suggested = asked && requested ? requested : limit > 0n ? limit : remembered;
+    // What the game asked for, never more; or the limit as it is, or what the player last chose.
+    suggested =
+      amount && amount > 0n
+        ? limit + amount
+        : limit > 0n
+          ? limit
+          : BigInt(localStorage.getItem(limitSetting()) || networkDefaults.total);
   $<HTMLInputElement>('fund-amount').value = formatEther(suggested > total ? total : suggested);
   renderFundDialog();
   if (!dialog.open) dialog.showModal();
@@ -672,7 +668,6 @@ function renderWallet() {
   if (!wallet.address) return;
   const state = wallet.publicState;
   if (active?.channelId && active.channelId !== wallet.channelId) abandonGame();
-  renderMoney();
   const busy = uiBusy || wallet.busy;
   const ready = state.address === wallet.address;
   const observed = Boolean(state.observedAt);
@@ -794,9 +789,7 @@ function renderWallet() {
   const account = wallet.address;
   if (JSON.stringify([...accounts.options].map(o => o.value)) !== JSON.stringify(addresses))
     accounts.replaceChildren(...addresses.map(address => new Option(address, address)));
-  // The list follows the account in use, but an account the player has picked and not yet
-  // selected is theirs: a background observation re-renders every few seconds, and setting the
-  // value every time took their choice back before they could act on it.
+  // The list follows the account in use, and leaves alone one the player has picked and not yet switched to.
   if (shownAccount !== account || !addresses.includes(accounts.value)) accounts.value = account;
   shownAccount = account;
   accounts.disabled = busy;
@@ -816,34 +809,63 @@ function renderWallet() {
   renderGameAccount();
 }
 
+/** What each row of a list was built from, so that a row that has not changed is not built again. */
+const signatures = new WeakMap<Element, string>();
+/** Keep a list's rows in step with `items`, by key. A row whose signature is unchanged stays mounted, keeping its open
+ * details, selection and focus while the wallet renders on every poll. */
+function syncRows<T>(
+  list: HTMLElement,
+  items: T[],
+  key: (item: T) => string,
+  signature: (item: T) => string,
+  build: (item: T) => HTMLElement,
+) {
+  const existing = new Map([...list.children].map(row => [(row as HTMLElement).dataset.key, row as HTMLElement]));
+  items.forEach((item, index) => {
+    const id = key(item),
+      sign = signature(item);
+    let row = existing.get(id);
+    existing.delete(id);
+    if (!row || signatures.get(row) !== sign) {
+      const built = build(item);
+      built.dataset.key = id;
+      signatures.set(built, sign);
+      if (row instanceof HTMLDetailsElement && built instanceof HTMLDetailsElement) built.open = row.open;
+      row?.replaceWith(built);
+      row = built;
+    }
+    if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null);
+  });
+  for (const row of existing.values()) row.remove();
+}
+
 function renderDeveloperBets() {
-  const list = $('wallet-developer-bets'),
-    developerBets = Object.entries(wallet.developerBets),
-    receiptsById = new Map(wallet.history.map(receipt => [receipt.operationId, receipt]));
-  $('developer-bets').classList.toggle('hidden', !developerBets.length && !wallet.developerBetError);
-  $('developer-bets-status').textContent = wallet.developerBetError
-    ? `This may be out of date. ${wallet.developerBetError}`
-    : 'Bets waiting for their developers, and what they were paid on its way to your balance.';
-  $('developer-bets-status').classList.toggle('check-failed', Boolean(wallet.developerBetError));
-  $<HTMLButtonElement>('refresh-developer-bets').disabled = historyBusy || wallet.busy || !wallet.channel;
-  const existing = new Map(
-    [...list.children].map(row => [(row as HTMLElement).dataset.bet, row as HTMLDetailsElement]),
-  );
-  list.replaceChildren(
-    ...developerBets.map(([hash, tracked]) => {
-      const receipt = tracked.operationId ? receiptsById.get(tracked.operationId) : undefined;
-      const state: PlayerDeveloperBet = tracked.state ?? {
+  const receiptsById = new Map(wallet.history.map(receipt => [receipt.operationId, receipt]));
+  const bets = Object.entries(wallet.developerBets).map(([hash, tracked]) => {
+    const receipt = tracked.operationId ? receiptsById.get(tracked.operationId) : undefined,
+      state: PlayerDeveloperBet = tracked.state ?? {
         bet: hash,
         game: tracked.game,
         status: 'open',
         stake: String(receipt?.stake ?? 0),
         collected: false,
       };
+    return { hash, tracked, receipt, state, payload: activityJSON({ ...state, error: tracked.error }) };
+  });
+  $('developer-bets').classList.toggle('hidden', !bets.length && !wallet.developerBetError);
+  $('developer-bets-status').textContent = wallet.developerBetError
+    ? `This may be out of date. ${wallet.developerBetError}`
+    : 'Bets waiting for their developers, and what they were paid on its way to your balance.';
+  $('developer-bets-status').classList.toggle('check-failed', Boolean(wallet.developerBetError));
+  $<HTMLButtonElement>('refresh-developer-bets').disabled = historyBusy || wallet.busy || !wallet.channel;
+  syncRows(
+    $('wallet-developer-bets'),
+    bets,
+    bet => bet.hash,
+    bet => bet.payload,
+    ({ hash, tracked, receipt, state, payload }) => {
       const presentation = developerBetSummary(state, receipt?.game?.name);
-      const payload = activityJSON({ ...state, error: tracked.error }),
-        previous = existing.get(hash);
-      if (previous?.querySelector('.activity-payload')?.textContent === payload) return previous;
-      const item = createActivityEntry({
+      return createActivityEntry({
         ...presentation,
         timestamp: state.settledAt ? new Date(state.settledAt).toISOString() : (receipt?.createdAt ?? ''),
         description: [
@@ -855,10 +877,7 @@ function renderDeveloperBets() {
         payload,
         facts: [['Bet', hash], ...(state.group ? [['Group', state.group] as [string, string]] : [])],
       });
-      item.dataset.bet = hash;
-      (item as HTMLDetailsElement).open = previous?.open ?? false;
-      return item;
-    }),
+    },
   );
 }
 
@@ -875,71 +894,59 @@ function renderActivity() {
             ? ` Checked ${new Date(wallet.detailsObservedAt).toLocaleTimeString([], { hour12: false })}.`
             : '');
   $('history-status').classList.toggle('check-failed', Boolean(historyError || wallet.detailsError));
-  const list = $('activity-list');
-  const existing = new Map(
-    [...list.children].map(row => [(row as HTMLElement).dataset.operationId, row as HTMLDetailsElement]),
-  );
   // A deposit taken into the balance is the deposit's own bookkeeping: the deposit is what the player sees.
-  const receipts = wallet.history.filter(receipt => receipt.kind !== 'taken-in');
-  for (const [index, receipt] of receipts.entries()) {
-    const payload = activityJSON(receipt),
-      previous = existing.get(receipt.operationId);
-    let item: HTMLElement | undefined = previous;
-    // Keep unchanged rows mounted so polling preserves open details, selection and focus.
-    if (!previous || previous.querySelector('.activity-payload')?.textContent !== payload) {
-      const operation = receipt.proof?.step?.operation;
-      const channelId = operation?.channelId || receipt.proof?.base?.channelId;
-      const gameName = receipt.game?.name;
-      const presentation = receiptSummary(receipt, wallet.config.contractAddress);
-      const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
-      if (channelId) facts.push(['Channel', channelId]);
-      if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
-      if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
-      if (receipt.to)
-        facts.push([
-          'To',
-          same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to,
-        ]);
-      if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
-      // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away: the
-      // oldest of its channel first, since the contract records them in order.
-      if (receipt.withdrawal && !receipt.recorded && !receipt.returned && wallet.nextToRecord(receipt))
-        facts.push(['Payment', sendNow(receipt.operationId)]);
-      if (receipt.fee !== undefined) facts.push(['Network fee', `${formatEther(receipt.fee)} ETH`]);
-      if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash, receipt.txHash)]);
-      if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn, receipt.recordedIn)]);
-      if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
-      item = createActivityEntry({
-        ...presentation,
-        timestamp: receipt.createdAt,
-        payload,
-        facts,
-        description: gameName || (receipt.to ? `To ${short(receipt.to)}` : undefined),
-        notice: [presentation.description, presentation.notice].filter(Boolean).join(' '),
-      });
-      item.dataset.operationId = receipt.operationId;
-      (item as HTMLDetailsElement).open = previous?.open || false;
-      previous?.replaceWith(item);
-    }
-    if (list.children[index] !== item) list.insertBefore(item!, list.children[index] || null);
-    existing.delete(receipt.operationId);
-  }
-  for (const row of existing.values()) row.remove();
-  filterActivity(list, $<HTMLInputElement>('activity-search').value, $('activity-empty'), $('activity-visible-count'));
-}
-/** A button that has the contract make a withdrawal a claim and pay it now, sent from this account. */
-function sendNow(operationId: string) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'button small';
-  button.textContent = 'Send it now';
-  button.addEventListener('click', () =>
-    task(async () => {
-      await wallet.sendWithdrawal(operationId);
-      toast('Sent: the contract has it.');
-    }),
+  syncRows(
+    $('activity-list'),
+    wallet.history.filter(receipt => receipt.kind !== 'taken-in'),
+    receipt => receipt.operationId,
+    activityJSON,
+    activityEntry,
   );
-  return button;
+  filterList('activity');
+}
+/** One receipt as Activity lists it, with the facts behind it. */
+function activityEntry(receipt: any) {
+  const operation = receipt.proof?.step?.operation;
+  const channelId = operation?.channelId || receipt.proof?.base?.channelId;
+  const presentation = receiptSummary(receipt, wallet.config.contractAddress);
+  const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
+  if (channelId) facts.push(['Channel', channelId]);
+  if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
+  if (receipt.commission !== undefined) facts.push(['Commission', `${formatEther(receipt.commission)} ETH`]);
+  if (receipt.to)
+    facts.push(['To', same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to]);
+  if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
+  // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away: the
+  // oldest of its channel first, since the contract records them in order.
+  if (receipt.withdrawal && !receipt.recorded && !receipt.returned && wallet.nextToRecord(receipt))
+    facts.push([
+      'Payment',
+      h(
+        'button',
+        {
+          type: 'button',
+          className: 'button small',
+          onclick: () =>
+            task(async () => {
+              await wallet.sendWithdrawal(receipt.operationId);
+              toast('Sent: the contract has it.');
+            }),
+        },
+        'Send it now',
+      ),
+    ]);
+  if (receipt.fee !== undefined) facts.push(['Network fee', `${formatEther(receipt.fee)} ETH`]);
+  if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash)]);
+  if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn)]);
+  if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
+  return createActivityEntry({
+    ...presentation,
+    timestamp: receipt.createdAt,
+    payload: activityJSON(receipt),
+    facts,
+    description: receipt.game?.name || (receipt.to ? `To ${short(receipt.to)}` : undefined),
+    notice: [presentation.description, presentation.notice].filter(Boolean).join(' '),
+  });
 }
 /** The balance's channel and any whose close is under way, for recovery: their state on the chain, and the lock in,
  * close, challenge and collect a player can do without the casino. */
@@ -986,7 +993,6 @@ function renderRecovery() {
   $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
   $<HTMLButtonElement>('channel-finalize').disabled = !closing || Date.now() / 1000 < deadline || busy;
 }
-let claimLimit = 20;
 let claimsShown = '';
 const claimRecipients = new Map<string, string>();
 /** What closed balances are still owed: shown only while something is. */
@@ -995,9 +1001,6 @@ function renderClaims() {
     (claim: any) => BigInt(claim.amount) > BigInt(claim.paid),
   );
   $('claims').classList.toggle('hidden', !claims.length);
-  const list = $('claim-list');
-  // The wallet re-renders on every observation. Rebuild the rows only when they differ, so a recipient
-  // address being typed keeps its text and focus.
   const describe = (claim: any) => {
     const unpaid = BigInt(claim.amount) - BigInt(claim.paid),
       ready = BigInt(claim.collectable || '0');
@@ -1008,102 +1011,79 @@ function renderClaims() {
         : `Its ${plainEth(claim.winningsRemaining)} ETH of winnings wait for the bankroll to have the cash.`)
     );
   };
-  const visible = claims.slice(0, claimLimit);
-  const shown = JSON.stringify([visible.map(describe), claims.length, wallet.busy || uiBusy]);
+  // The wallet re-renders on every observation. Rebuild the rows only when they differ, so a recipient
+  // address being typed keeps its text and focus.
+  const disabled = wallet.busy || uiBusy,
+    shown = JSON.stringify([claims.map(describe), disabled]);
   if (shown === claimsShown) return;
   claimsShown = shown;
-  list.replaceChildren();
-  for (const claim of visible) {
-    const row = document.createElement('div'),
-      text = document.createElement('p');
-    text.textContent = describe(claim);
-    const collect = document.createElement('button');
-    collect.className = 'button small';
-    collect.type = 'button';
-    collect.textContent = 'Collect';
-    collect.disabled = wallet.busy || uiBusy;
-    collect.addEventListener('click', () =>
-      task(async () => {
-        const before = BigInt(claim.paid);
-        await wallet.claim(claim.id);
-        // A withdrawal paid in full leaves the list.
-        const after = wallet.publicState.claims.find((c: any) => c.id === claim.id);
-        const collected = BigInt(after?.paid ?? claim.amount) - before;
-        toast(
-          collected > 0n
-            ? `Collected ${plainEth(collected)} ETH.`
-            : 'Nothing could be paid yet: the bankroll has no cash for these winnings.',
-        );
-      }),
-    );
-    const destination = document.createElement('input');
-    destination.placeholder = 'Or another address, 0x…';
-    destination.setAttribute('aria-label', 'Collect to another address');
-    destination.value = claimRecipients.get(claim.id) ?? '';
-    destination.addEventListener('input', () => claimRecipients.set(claim.id, destination.value));
-    const authorization = document.createElement('input');
-    authorization.type = 'password';
-    authorization.autocomplete = 'current-password';
-    authorization.placeholder = 'Wallet passphrase for another address';
-    authorization.setAttribute('aria-label', 'Wallet passphrase for claim');
-    const redirect = document.createElement('button');
-    redirect.className = 'text-button';
-    redirect.type = 'button';
-    redirect.textContent = 'Collect there';
-    redirect.disabled = collect.disabled;
-    redirect.addEventListener('click', () =>
-      task(async () => {
-        const recipient = destination.value.trim();
-        try {
-          await vault.verify(authorization.value);
-        } finally {
-          authorization.value = '';
-        }
-        await wallet.claim(claim.id, recipient);
-        toast(`Collected what could be paid to ${short(recipient)}.`);
-      }),
-    );
-    row.className = 'claim-row';
-    row.append(text, collect, destination, authorization, redirect);
-    // A closed balance's claim rests on its channel's evidence; a withdrawal's is on-chain already.
-    if (claim.channelId) {
-      const evidence = document.createElement('button');
-      evidence.className = 'text-button';
-      evidence.type = 'button';
-      evidence.textContent = 'Export evidence';
-      evidence.addEventListener('click', () =>
-        task(async () => downloadEvidence(await wallet.exportEvidence(claim.channelId))),
+  $('claim-list').replaceChildren(
+    ...claims.map((claim: any) => {
+      const destination = h('input', {
+          placeholder: 'Or another address, 0x…',
+          ariaLabel: 'Collect to another address',
+          value: claimRecipients.get(claim.id) ?? '',
+        }),
+        authorization = h('input', {
+          type: 'password',
+          placeholder: 'Wallet passphrase for another address',
+          ariaLabel: 'Wallet passphrase for claim',
+        });
+      authorization.autocomplete = 'current-password';
+      destination.oninput = () => claimRecipients.set(claim.id, destination.value);
+      const collect = () =>
+        task(async () => {
+          const before = BigInt(claim.paid);
+          await wallet.claim(claim.id);
+          // A withdrawal paid in full leaves the list.
+          const after = wallet.publicState.claims.find((c: any) => c.id === claim.id);
+          const collected = BigInt(after?.paid ?? claim.amount) - before;
+          toast(
+            collected > 0n
+              ? `Collected ${plainEth(collected)} ETH.`
+              : 'Nothing could be paid yet: the bankroll has no cash for these winnings.',
+          );
+        });
+      const redirect = () =>
+        task(async () => {
+          const recipient = destination.value.trim();
+          await reauthenticate(authorization);
+          await wallet.claim(claim.id, recipient);
+          toast(`Collected what could be paid to ${short(recipient)}.`);
+        });
+      const row = h(
+        'div',
+        { className: 'claim-row' },
+        h('p', null, describe(claim)),
+        h('button', { type: 'button', className: 'button small', disabled, onclick: collect }, 'Collect'),
+        destination,
+        authorization,
+        h('button', { type: 'button', className: 'text-button', disabled, onclick: redirect }, 'Collect there'),
       );
-      row.append(evidence);
-    }
-    list.append(row);
-  }
-  if (claims.length > claimLimit) {
-    const more = document.createElement('button');
-    more.className = 'text-button';
-    more.type = 'button';
-    more.textContent = `Show more (${claims.length - claimLimit} more)`;
-    more.addEventListener('click', () => {
-      claimLimit += 20;
-      renderClaims();
-    });
-    list.append(more);
-  }
+      // A closed balance's claim rests on its channel's evidence; a withdrawal's is on-chain already.
+      const exportEvidence = () => task(async () => downloadEvidence(await wallet.exportEvidence(claim.channelId)));
+      if (claim.channelId)
+        row.append(
+          h('button', { type: 'button', className: 'text-button', onclick: exportEvidence }, 'Export evidence'),
+        );
+      return row;
+    }),
+  );
 }
 
-function transactionLink(hash: string, label?: string) {
-  const link = document.createElement(
-    wallet.expectedChainId === 11155111n && /^0x[0-9a-f]{64}$/i.test(hash) ? 'a' : 'span',
+function transactionLink(hash: string) {
+  if (wallet.expectedChainId !== 11155111n || !/^0x[0-9a-f]{64}$/i.test(hash)) return h('span', null, hash);
+  return h(
+    'a',
+    {
+      href: `https://sepolia.etherscan.io/tx/${hash}`,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: 'View this transaction on Sepolia Etherscan',
+      onclick: event => event.stopPropagation(),
+    },
+    hash,
   );
-  link.textContent = label || 'Transaction ID unavailable';
-  if (link instanceof HTMLAnchorElement) {
-    link.href = `https://sepolia.etherscan.io/tx/${hash}`;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.title = 'View this transaction on Sepolia Etherscan';
-    link.addEventListener('click', event => event.stopPropagation());
-  }
-  return link;
 }
 
 /** The user-initiated refresh; the wallet's own loop observes, polls and audits otherwise. */
@@ -1120,57 +1100,42 @@ async function refreshActivity() {
     historyError = error;
   } finally {
     historyBusy = false;
-    renderDeveloperBets();
-    renderActivity();
-    if (!$('page-bets').classList.contains('hidden')) renderBets();
-    if (!$('page-games').classList.contains('hidden')) renderMyGames();
+    renderWallet();
   }
 }
 
 /** Files a player picks are read here, so a damaged one says so instead of showing a parser's error. */
 async function readJSONFile(file: File, what: string) {
+  if (file.size > 24 * 1024 * 1024) throw new Error(`A ${what} is at most 24 MiB.`);
   try {
     return JSON.parse(await file.text());
   } catch {
     throw new Error(`That file is not a ${what}. Pick the JSON file this wallet wrote.`);
   }
 }
-function safeURL(value: string, base: string | undefined = undefined) {
+/** A game's address, checked before the wallet frames it: HTTP(S) without credentials, and never the wallet's own
+ * origin, where a frame could lift its own sandbox and read the wallet's storage. */
+function gameURL(value: string) {
   let url;
   try {
-    url = new URL(value, base);
+    url = new URL(value);
   } catch {
     throw new Error('Enter the full URL of the game, starting with https://.');
   }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('Games must use an HTTP or HTTPS URL without credentials.');
-  return url;
-}
-
-/** A game's address, checked before the wallet frames it: HTTP(S) without credentials, and never the wallet's own
- * origin, where a frame could lift its own sandbox and read the wallet's storage. */
-function gameURL(value: string) {
-  const url = safeURL(value);
   if (url.origin === location.origin) throw new Error('Games cannot be served from the wallet’s own origin.');
   return url;
 }
-/** The icon a game is shown by: icon.svg beside its page. */
-const iconURL = (url: string) => new URL('icon.svg', url).href;
 /** How a game is named in the wallet: the name it is published under, in words. */
 const gameTitle = (name: string) => name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ');
 
 /** A game's icon: icon.svg beside its page, over the game's initial, which shows when it has none. */
 function gameIcon(url: string, name: string) {
-  const tile = document.createElement('span'),
-    image = document.createElement('img');
-  tile.className = 'game-icon';
+  const image = h('img', { src: new URL('icon.svg', url).href, alt: '', loading: 'lazy', decoding: 'async' });
+  image.onerror = () => image.remove();
+  const tile = h('span', { className: 'game-icon' }, image);
   tile.dataset.initial = name.charAt(0).toUpperCase();
-  image.src = iconURL(url);
-  image.alt = '';
-  image.loading = 'lazy';
-  image.decoding = 'async';
-  image.addEventListener('error', () => image.remove(), { once: true });
-  tile.append(image);
   return tile;
 }
 
@@ -1180,14 +1145,12 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   const entry = gameURL(url);
   const slug = 'url' in gameRoute ? undefined : gameRoute.name;
   closeGame();
-  const frame = document.createElement('iframe');
+  const frame = h('iframe', { referrerPolicy: 'no-referrer' });
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-  frame.setAttribute('referrerpolicy', 'no-referrer');
   frame.setAttribute(
     'allow',
     "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; payment 'none'; fullscreen 'none'",
   );
-  const currentGeneration = ++generation;
   const identity: GameIdentity = {
     url: entry.href,
     key: published?.key ?? gameKey({ developer: ZeroAddress, name: entry.href }),
@@ -1198,21 +1161,17 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   frame.title = `${identity.name}, a sandboxed game`;
   // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
   const isCurrent = () =>
-    active?.generation === currentGeneration &&
-    active.frame === frame &&
-    (active.channelId === null || active.channelId === wallet.channelId);
+    active?.frame === frame && (active.channelId === null || active.channelId === wallet.channelId);
   const path = gamePath(gameRoute);
   await walletStarted;
-  const key = wallet.openGame(identity);
+  wallet.openGame(identity);
   active = {
     channelId: wallet.channelId,
     identity,
     publisher: 'owner' in gameRoute ? gameRoute.owner : null,
     path,
     frame,
-    generation: currentGeneration,
     dispose: () => {},
-    key,
     pushed: null,
   };
   frame.addEventListener('load', () => {
@@ -1243,8 +1202,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       if (uiBusy) throw gameError('busy', 'The wallet is processing another operation.');
       await wallet.actionDone;
       if (method === 'game.requestFunds') {
-        const requested = params.amount === undefined ? undefined : BigInt(params.amount);
-        const amount = await openFundDialog({ amount: requested, asked: true });
+        const amount = await openFundDialog(params.amount === undefined ? undefined : BigInt(params.amount));
         if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
         return { funded: amount !== null, amount: amount === null ? null : String(amount), ...wallet.gameLimit() };
       }
@@ -1256,11 +1214,12 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
   });
   frame.src = entry.href;
   // The game's icon stands in for it until its page has loaded.
-  const loading = document.createElement('div'),
-    label = document.createElement('p');
-  loading.className = 'game-loading';
-  label.textContent = `Loading ${identity.name}…`;
-  loading.append(gameIcon(entry.href, identity.name), label);
+  const loading = h(
+    'div',
+    { className: 'game-loading' },
+    gameIcon(entry.href, identity.name),
+    h('p', null, `Loading ${identity.name}…`),
+  );
   frame.addEventListener('load', () => loading.remove(), { once: true });
   $('frame-slot').replaceChildren(loading, frame);
   showPage('play');
@@ -1276,34 +1235,38 @@ for (const link of document.querySelectorAll<HTMLElement>('[data-page]'))
   });
 /** One card for a published game: its icon and the name it is published under. */
 function gameCard(route: { owner: string; name: string }, game: Published & { name: string; url: string }) {
-  const card = document.createElement('a'),
-    title = document.createElement('h3'),
-    link = document.createElement('span');
-  card.className = 'game-card';
-  card.href = gamePath(route);
-  title.textContent = gameTitle(game.name);
-  link.className = 'catalog-link';
-  link.textContent = `${route.owner}/${route.name}`;
-  card.append(gameIcon(game.url, title.textContent), title, link);
+  const name = gameTitle(game.name),
+    key = game.key.toLowerCase();
   // A bet's receipt names its game only by this key, so remembering the card is what lets a line of
   // history be opened again, and its public record found.
-  const key = game.key;
-  knownGames.set(key.toLowerCase(), { route, ...game, name: title.textContent });
-  const record = document.createElement('span');
-  record.className = 'catalog-record';
-  record.textContent = 'Every bet ↗';
-  record.title = `Every bet anyone has placed in ${title.textContent}`;
-  record.addEventListener('click', event => {
-    event.preventDefault();
-    event.stopPropagation();
-    void openGameRecord(key.toLowerCase());
-  });
-  card.append(record);
-  card.addEventListener('click', event => {
-    event.preventDefault();
-    task(() => loadGame(game.url, route, true, game));
-  });
-  return card;
+  knownGames.set(key, { route, ...game, name });
+  return h(
+    'a',
+    {
+      className: 'game-card',
+      href: gamePath(route),
+      onclick: event => {
+        event.preventDefault();
+        task(() => loadGame(game.url, route, true, game));
+      },
+    },
+    gameIcon(game.url, name),
+    h('h3', null, name),
+    h('span', { className: 'catalog-link' }, `${route.owner}/${route.name}`),
+    h(
+      'span',
+      {
+        className: 'catalog-record',
+        title: `Every bet anyone has placed in ${name}`,
+        onclick: event => {
+          event.preventDefault();
+          event.stopPropagation();
+          void openGameRecord(key);
+        },
+      },
+      'Every bet ↗',
+    ),
+  );
 }
 /** Every game a profile publishes, as cards. */
 const profileCards = (owner: string, games: (Published & { name: string; url: string })[]) =>
@@ -1313,12 +1276,7 @@ const profileCards = (owner: string, games: (Published & { name: string; url: st
 async function loadLibrary() {
   const list = $('game-library');
   try {
-    const response = await fetch(`${casinoURL}/api/players/@${HOUSE}`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (!response.ok) throw new Error();
-    const house = await response.json();
+    const house = await wallet.api(`/api/players/@${HOUSE}`);
     const mine = wallet.alias === HOUSE ? [] : (wallet.profile?.games ?? []);
     list.replaceChildren(...profileCards('@' + HOUSE, house.games), ...profileCards(showName(wallet.profile), mine));
   } catch {
@@ -1335,7 +1293,7 @@ async function openProfile(name: string, push = true) {
   const games = $('profile-games');
   games.textContent = 'Loading…';
   $('profile-games-heading').classList.remove('hidden');
-  navigate('profile', push, profilePath(name));
+  navigate('profile', push, `/${name}`);
   try {
     const profile = await wallet.api(`/api/players/${name}`);
     $('profile-name').textContent = showName(profile);
@@ -1343,18 +1301,19 @@ async function openProfile(name: string, push = true) {
     $('profile-uname').textContent = profile.alias ? '~' + profile.uname : '';
     document.title = `${showName(profile)} · HookedIn`;
     $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
-    const card = document.createElement('div'),
-      label = document.createElement('span'),
-      amount = document.createElement('strong'),
-      note = document.createElement('span');
-    card.className = 'money-card';
-    label.className = 'label';
-    label.textContent = 'Bets';
-    amount.textContent = String(profile.stats.plays);
-    note.className = 'muted';
-    note.textContent = `Staked ${eth(profile.stats.staked, 4)} ETH · won ${eth(profile.stats.won, 4)} ETH`;
-    card.append(label, amount, note);
-    $('profile-stats').replaceChildren(card);
+    $('profile-stats').replaceChildren(
+      h(
+        'div',
+        { className: 'money-card' },
+        h('span', { className: 'label' }, 'Bets'),
+        h('strong', null, String(profile.stats.plays)),
+        h(
+          'span',
+          { className: 'muted' },
+          `Staked ${eth(profile.stats.staked, 4)} ETH · won ${eth(profile.stats.won, 4)} ETH`,
+        ),
+      ),
+    );
     const cards = profileCards(showName(profile), profile.games);
     if (cards.length) games.replaceChildren(...cards);
     else games.textContent = `${showName(profile)} publishes no games.`;
@@ -1379,10 +1338,10 @@ function renderProfile() {
   const uname = wallet.alias && wallet.uname ? '~' + wallet.uname : '';
   $('menu-uname').textContent = uname;
   $('wallet-uname').textContent = uname;
-  $<HTMLAnchorElement>('menu-profile').href = name ? profilePath(name) : '/';
+  $<HTMLAnchorElement>('menu-profile').href = name ? `/${name}` : '/';
   $('menu-profile').classList.toggle('hidden', !name);
   $('wallet-name').textContent = name ?? 'No name yet: your first deposit gives you one.';
-  $<HTMLAnchorElement>('wallet-name-link').href = name ? profilePath(name) : '/';
+  $<HTMLAnchorElement>('wallet-name-link').href = name ? `/${name}` : '/';
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.funded || Boolean(wallet.pending);
@@ -1397,27 +1356,29 @@ function renderProfile() {
   if (libraryKey && libraryKey !== key) void loadLibrary();
   libraryKey = key;
   $('my-games').replaceChildren(
-    ...games.map(game => {
-      const row = document.createElement('div'),
-        label = document.createElement('span'),
-        remove = document.createElement('button');
-      row.className = 'game-row';
-      label.textContent = `${name}/${game.name} · ${game.url}`;
-      remove.className = 'text-button';
-      remove.type = 'button';
-      remove.textContent = 'Take down';
-      remove.title = `Take ${name}/${game.name} out of the lobby`;
-      remove.disabled = uiBusy;
-      remove.addEventListener('click', () =>
-        task(async () => {
-          await wallet.publishGame(game.name, null);
-          await loadLibrary();
-          toast(`${name}/${game.name} is taken down.`);
-        }),
-      );
-      row.append(label, remove);
-      return row;
-    }),
+    ...games.map(game =>
+      h(
+        'div',
+        { className: 'game-row' },
+        h('span', null, `${name}/${game.name} · ${game.url}`),
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'text-button',
+            title: `Take ${name}/${game.name} out of the lobby`,
+            disabled: uiBusy,
+            onclick: () =>
+              task(async () => {
+                await wallet.publishGame(game.name, null);
+                await loadLibrary();
+                toast(`${name}/${game.name} is taken down.`);
+              }),
+          },
+          'Take down',
+        ),
+      ),
+    ),
   );
 }
 /** This account's bank as a developer, as the casino has it now. */
@@ -1473,10 +1434,6 @@ function ownBets(): BetRow[] {
       receipt,
     }));
 }
-/** Open a game's public record. From a bet, the key is all that is needed. */
-const showGameRecord = (row: { key?: string | null }) => {
-  if (row.key) void openGameRecord(row.key);
-};
 /** One bet in full: the odds it rode, where its round landed, and the preimages that fixed
  * it. Everything shown comes out of the receipt this wallet kept. */
 function showBet(row: BetRow) {
@@ -1485,7 +1442,7 @@ function showBet(row: BetRow) {
   $('bet-detail').replaceChildren(
     betDetail(row, opened => {
       $<HTMLDialogElement>('bet-dialog').close();
-      showGameRecord(opened);
+      if (opened.key) void openGameRecord(opened.key);
     }),
   );
   $('bet-dialog').scrollTop = 0;
@@ -1498,7 +1455,7 @@ const betSignature = (rows: readonly BetRow[], extra = '') =>
   extra + rows.map(row => `${row.operation}:${row.payout}`).join(',');
 let shownBets = '\u0000',
   shownPlayed = '\u0000';
-const NO_BETS = 'No bets yet. Play a game with ETH and every bet you place is here.';
+const NO_BETS = 'No bets yet. Play a game with ETH, and your bets show here.';
 function renderBets() {
   const rows = ownBets();
   $<HTMLButtonElement>('refresh-bets').disabled = historyBusy || !wallet.address;
@@ -1506,7 +1463,7 @@ function renderBets() {
   if (signature === shownBets) return;
   shownBets = signature;
   $('bet-list').replaceChildren(...betElements(rows, showBet));
-  filterBets($('bet-list'), $<HTMLInputElement>('bet-search').value, $('bet-empty'), $('bet-visible-count'), NO_BETS);
+  filterList('bet');
 }
 /** A list of bets, the ones a game grouped standing together as one row. */
 function betElements(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
@@ -1519,12 +1476,38 @@ function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
   const last = rows.at(-1)!;
   $('bet-detail-eyebrow').textContent = `One group, ${rows.length} bets`;
   $('bet-detail-title').textContent = `${last.game} · ${last.group}`;
-  const list = document.createElement('div');
-  list.className = 'bet-table';
-  list.append(...rows.map(row => betRowElement(row, onOpen)));
-  $('bet-detail').replaceChildren(list);
+  $('bet-detail').replaceChildren(h('div', { className: 'bet-table' }, ...rows.map(row => betRowElement(row, onOpen))));
   $('bet-dialog').scrollTop = 0;
   if (!$<HTMLDialogElement>('bet-dialog').open) $<HTMLDialogElement>('bet-dialog').showModal();
+}
+/** Show the rows of a list, of bets or events, that hold every word typed in its search, and count them. */
+function filterList(name: 'activity' | 'bet' | 'gamebets') {
+  const terms = $<HTMLInputElement>(`${name}-search`).value.trim().toLowerCase().split(/\s+/).filter(Boolean),
+    events = name === 'activity';
+  let visible = 0,
+    total = 0;
+  for (const row of $(`${name}-list`).children as HTMLCollectionOf<HTMLElement>) {
+    const text = `${row.textContent} ${row.dataset.search ?? ''}`.toLowerCase(),
+      matches = terms.every(term => text.includes(term)),
+      // A group's row stands for every bet in it.
+      count = Number(row.dataset.bets ?? 1);
+    row.classList.toggle('hidden', !matches);
+    total += count;
+    if (matches) visible += count;
+  }
+  $(`${name}-visible-count`).textContent =
+    `${terms.length ? `${visible} / ` : ''}${total} ${events ? 'event' : 'bet'}${total === 1 ? '' : 's'}`;
+  const empty = $(`${name}-empty`);
+  empty.classList.toggle('hidden', visible !== 0);
+  empty.textContent = terms.length
+    ? events
+      ? 'No matching events. Try a method, amount, operation ID or transaction hash.'
+      : 'No bet matches that. Try a game, an amount, a bet number or an operation ID.'
+    : events
+      ? 'No activity yet. Events will appear here as you use the wallet and games.'
+      : name === 'bet'
+        ? NO_BETS
+        : 'Nobody has placed a bet in this game yet.';
 }
 /** One line per game: what this wallet staked in it, what came back, and what its bets were worth. */
 function renderMyGames() {
@@ -1551,71 +1534,78 @@ function renderMyGames() {
   $('played-count').textContent = String(list.length);
   $('games-totals').replaceChildren(...totalCards(betTotals(all)));
   $('played-games').replaceChildren(
-    ...list.map(entry => {
-      const card = document.createElement('div');
-      card.className = 'played-game';
-      const heading = document.createElement('div');
-      heading.className = 'played-heading';
-      const star = document.createElement('button');
-      star.type = 'button';
-      star.className = 'played-star';
-      star.disabled = !entry.key;
-      star.textContent = entry.key && starred.has(entry.key) ? '★' : '☆';
-      star.title = !entry.key
-        ? 'This game has no key on its bets, so it cannot be starred.'
-        : starred.has(entry.key)
-          ? `Take ${entry.name} out of your favourites`
-          : `Keep ${entry.name} at the top`;
-      star.setAttribute('aria-pressed', String(Boolean(entry.key && starred.has(entry.key))));
-      if (entry.key) star.addEventListener('click', () => toggleFavourite(entry.key!));
-      const title = document.createElement('h3');
-      title.textContent = entry.name;
-      const when = document.createElement('span');
-      when.className = 'played-when';
-      when.textContent = `Last played ${new Date(entry.last).toLocaleDateString()}`;
-      heading.append(star, title, when);
-      card.append(heading);
-      const totals = betTotals(entry.rows),
+    ...list.map(({ key, name, last, rows }) => {
+      const favourite = key !== null && starred.has(key),
+        totals = betTotals(rows),
         expected = measuredReturn(totals.priced, totals.expected),
-        figures = document.createElement('dl');
-      figures.className = 'played-figures';
-      for (const [label, value] of [
+        known = key ? knownGames.get(key) : undefined;
+      const figures: [string, string, string?][] = [
         ['Bets', String(totals.bets)],
         ['Staked', `${formatEther(totals.staked)} ETH`],
         ['Paid back', `${formatEther(totals.paid)} ETH`],
-        ['Your result', `${totals.net < 0n ? '−' : '+'}${formatEther(totals.net < 0n ? -totals.net : totals.net)} ETH`],
+        ['Your result', signedEth(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
         ['Return of your bets', expected === null ? '—' : percent(expected)],
-      ] as [string, string][]) {
-        const term = document.createElement('dt'),
-          detail = document.createElement('dd');
-        term.textContent = label;
-        detail.textContent = value;
-        if (label === 'Your result')
-          detail.className = totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : '';
-        figures.append(term, detail);
-      }
-      card.append(figures);
-      const actions = document.createElement('div');
-      actions.className = 'played-actions';
-      const known = entry.key ? knownGames.get(entry.key) : undefined;
-      if (known) {
-        const play = document.createElement('button');
-        play.type = 'button';
-        play.className = 'button small primary';
-        play.textContent = 'Play';
-        play.addEventListener('click', () => task(() => loadGame(known.url, known.route, true, known)));
-        actions.append(play);
-      }
-      if (entry.key) {
-        const record = document.createElement('button');
-        record.type = 'button';
-        record.className = 'button small';
-        record.textContent = 'Every bet in it ↗';
-        record.addEventListener('click', () => void openGameRecord(entry.key!));
-        actions.append(record);
-      }
-      card.append(actions);
-      return card;
+      ];
+      return h(
+        'div',
+        { className: 'played-game' },
+        h(
+          'div',
+          { className: 'played-heading' },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'played-star',
+              disabled: !key,
+              ariaPressed: String(favourite),
+              title: !key
+                ? 'This game has no key on its bets, so it cannot be starred.'
+                : favourite
+                  ? `Take ${name} out of your favourites`
+                  : `Keep ${name} at the top`,
+              onclick: () => key && toggleFavourite(key),
+            },
+            favourite ? '★' : '☆',
+          ),
+          h('h3', null, name),
+          h('span', { className: 'played-when' }, `Last played ${new Date(last).toLocaleDateString()}`),
+        ),
+        h(
+          'dl',
+          { className: 'played-figures' },
+          ...figures.flatMap(([label, value, className]) => [
+            h('dt', null, label),
+            h('dd', { className: className ?? '' }, value),
+          ]),
+        ),
+        h(
+          'div',
+          { className: 'played-actions' },
+          ...(known
+            ? [
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'button small primary',
+                    onclick: () => task(() => loadGame(known.url, known.route, true, known)),
+                  },
+                  'Play',
+                ),
+              ]
+            : []),
+          ...(key
+            ? [
+                h(
+                  'button',
+                  { type: 'button', className: 'button small', onclick: () => void openGameRecord(key) },
+                  'Every bet in it ↗',
+                ),
+              ]
+            : []),
+        ),
+      );
     }),
   );
   $('played-empty').classList.toggle('hidden', list.length !== 0);
@@ -1623,7 +1613,8 @@ function renderMyGames() {
 /** A game's public record: every bet anyone has placed in it, straight from the casino. */
 async function openGameRecord(key: string, push = true) {
   const known = knownGames.get(key),
-    mine = ownBets().find(row => row.key === key);
+    mine = ownBets().find(row => row.key === key),
+    path = `/games/${key.toLowerCase()}`;
   const name = known?.name || mine?.game || 'This game';
   $('gamebets-name').textContent = name;
   $('gamebets-key').textContent = key;
@@ -1632,14 +1623,14 @@ async function openGameRecord(key: string, push = true) {
   $('gamebets-developer-bets').classList.add('hidden');
   $('gamebets-empty').classList.add('hidden');
   $<HTMLInputElement>('gamebets-search').value = '';
-  navigate('gamebets', push, gameBetsPath(key));
+  navigate('gamebets', push, path);
   document.title = `${name} · HookedIn`;
   const play = $<HTMLButtonElement>('gamebets-play');
   play.classList.toggle('hidden', !known);
   play.onclick = known ? () => task(() => loadGame(known.url, known.route, true, known)) : null;
   try {
     const record = await wallet.api(`/api/games/${key}?limit=200`);
-    if (location.pathname !== gameBetsPath(key)) return;
+    if (location.pathname !== path) return;
     const rows: BetRow[] = record.bets.map((bet: any) => {
       const who = bet.alias ? '@' + bet.alias : bet.uname ? '~' + bet.uname : 'a player';
       return {
@@ -1674,13 +1665,7 @@ async function openGameRecord(key: string, push = true) {
       $('gamebets-developer-bets').classList.remove('hidden');
     }
     $('gamebets-list').replaceChildren(...betElements(rows));
-    filterBets(
-      $('gamebets-list'),
-      '',
-      $('gamebets-empty'),
-      $('gamebets-visible-count'),
-      'Nobody has placed a bet in this game yet.',
-    );
+    filterList('gamebets');
   } catch (error: any) {
     $('gamebets-empty').classList.remove('hidden');
     $('gamebets-empty').textContent =
@@ -1690,38 +1675,19 @@ async function openGameRecord(key: string, push = true) {
   }
 }
 window.addEventListener('popstate', () => void route(false));
-$<HTMLInputElement>('bet-search').addEventListener('input', () =>
-  filterBets($('bet-list'), $<HTMLInputElement>('bet-search').value, $('bet-empty'), $('bet-visible-count'), NO_BETS),
-);
-$<HTMLInputElement>('gamebets-search').addEventListener('input', () =>
-  filterBets(
-    $('gamebets-list'),
-    $<HTMLInputElement>('gamebets-search').value,
-    $('gamebets-empty'),
-    $('gamebets-visible-count'),
-    'Nobody has placed a bet in this game yet.',
-  ),
-);
-$<HTMLButtonElement>('refresh-bets').addEventListener('click', () => void refreshActivity());
-$<HTMLInputElement>('activity-search').addEventListener('input', () => {
-  filterActivity(
-    $('activity-list'),
-    $<HTMLInputElement>('activity-search').value,
-    $('activity-empty'),
-    $('activity-visible-count'),
-  );
-});
+for (const name of ['activity', 'bet', 'gamebets'] as const)
+  $(`${name}-search`).addEventListener('input', () => filterList(name));
+for (const id of ['refresh-bets', 'refresh-developer-bets', 'refresh-wallet'])
+  $(id).addEventListener('click', () => void refreshActivity());
 $<HTMLFormElement>('custom-form').addEventListener('submit', event => {
   event.preventDefault();
   const url = $<HTMLInputElement>('custom-url').value.trim();
   task(() => loadGame(url, { url }));
 });
-$<HTMLButtonElement>('setup-wallet').addEventListener('click', () =>
-  task(async () => {
-    await wallet.setupDemo();
-    funded('Demo ETH added: games play with ETH.');
-  }),
-);
+act('setup-wallet', async () => {
+  await wallet.setupDemo();
+  funded('Demo ETH added: games play with ETH.');
+});
 $<HTMLFormElement>('fund-form').addEventListener('submit', event => {
   event.preventDefault();
   void task(async () => {
@@ -1769,37 +1735,22 @@ $<HTMLButtonElement>('fund-take-all').addEventListener('click', () => {
   renderFundDialog();
 });
 function downloadEvidence(report: any) {
-  const url = URL.createObjectURL(new Blob([json(report)], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `hookedin-channel-${report.opening.channelId}.json`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  download(`hookedin-channel-${report.opening.channelId}.json`, json(report));
   const { state } = verifyEvidence(report);
   toast(`Exported the recovery bundle of channel ${short(state.channelId)}, sequence ${state.sequence}.`);
 }
-$<HTMLButtonElement>('export-evidence').addEventListener('click', () =>
-  task(async () => {
-    downloadEvidence(await wallet.exportEvidence());
-  }),
-);
-$<HTMLButtonElement>('start-close').addEventListener('click', () =>
-  task(async () => {
-    await wallet.startClose();
-    toast('Close started. It can be challenged for 24 hours; keep watching until it is done.');
-  }),
-);
-$<HTMLButtonElement>('recover-wallet').addEventListener('click', () =>
-  task(async () => {
-    await wallet.recover();
-    toast('The saved operation is finished. Reopen its game to carry on.');
-  }),
-);
-$<HTMLButtonElement>('speed-up-transaction').addEventListener('click', () =>
-  task(async () => {
-    await wallet.speedUpTransaction();
-    toast('Sent again with a higher fee. Retry to check for confirmation.');
-  }),
+act('export-evidence', async () => downloadEvidence(await wallet.exportEvidence()));
+for (const id of ['start-close', 'channel-start-close'])
+  act(
+    id,
+    () => wallet.startClose(),
+    'Close started. It can be challenged for 24 hours; keep watching until it is done.',
+  );
+act('recover-wallet', () => wallet.recover(), 'The saved operation is finished. Reopen its game to carry on.');
+act(
+  'speed-up-transaction',
+  () => wallet.speedUpTransaction(),
+  'Sent again with a higher fee. Retry to check for confirmation.',
 );
 $<HTMLInputElement>('auto-deposit').addEventListener('change', () => {
   // Read before the task renders the page again from the wallet, which still has the old setting.
@@ -1811,122 +1762,79 @@ $<HTMLInputElement>('auto-deposit').addEventListener('change', () => {
     );
   });
 });
-$('estimate-deposit-fee').addEventListener(
-  'click',
-  () =>
-    void task(async () => {
-      await wallet.depositable();
-    }),
-);
-$<HTMLButtonElement>('add-to-balance').addEventListener('click', () =>
-  task(async () => {
-    const before = BigInt(wallet.publicState.balance || 0);
-    await wallet.deposit();
-    funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
-  }),
-);
+act('estimate-deposit-fee', () => wallet.depositable());
+act('add-to-balance', async () => {
+  const before = BigInt(wallet.publicState.balance || 0);
+  await wallet.deposit();
+  funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
+});
 for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-password', 'withdraw-source'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
   $<HTMLInputElement>('withdraw-amount').value = formatEther(wallet.channel?.state.balance || 0);
   renderWallet();
 });
-$<HTMLButtonElement>('withdraw').addEventListener('click', () =>
-  task(async () => {
-    const password = $<HTMLInputElement>('withdraw-password');
-    try {
-      await vault.verify(password.value);
-    } finally {
-      password.value = '';
-    }
-    const { to, amount, error } = withdrawalRequest();
-    if (error || !to) throw new Error(error || 'Enter a destination address.');
-    const open = withdrawalFromChannel();
-    // A partial withdrawal leaves the open game its limit; a whole one takes back what the game holds.
-    if (open && amount !== null && amount >= BigInt(wallet.channel?.state.balance || 0)) {
-      closeGame();
-      if (!$('page-play').classList.contains('hidden')) {
-        showPage('library');
-        history.replaceState(null, '', '/');
-      }
-    }
-    const receipt = await wallet.withdraw(to, amount ?? undefined, { fromAddress: !open });
-    $<HTMLInputElement>('withdraw-to').value = '';
-    $<HTMLInputElement>('withdraw-amount').value = '';
-    $<HTMLDialogElement>('wallet-dialog').close();
-    toast(
-      receipt.withdrawal
-        ? `Withdrew ${formatEther(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
-        : `Withdrew ${formatEther(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
-    );
-  }),
-);
-$<HTMLButtonElement>('invest').addEventListener('click', () =>
-  task(async () => {
-    const amount = parseEther($<HTMLInputElement>('invest-amount').value.trim());
-    if (wallet.pending) throw new Error('Finish the operation in flight before buying shares.');
-    const receipt = await wallet.invest(amount);
-    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this investment.');
-    toast(`Bought ${formatEther(receipt.shares)} shares for ${formatEther(amount)} ETH.`);
-    await refreshFund();
-  }),
-);
+act('withdraw', async () => {
+  await reauthenticate($<HTMLInputElement>('withdraw-password'));
+  const { to, amount, error } = withdrawalRequest();
+  if (error || !to) throw new Error(error || 'Enter a destination address.');
+  const open = withdrawalFromChannel();
+  // A partial withdrawal leaves the open game its limit; a whole one takes back what the game holds.
+  if (open && amount !== null && amount >= BigInt(wallet.channel?.state.balance || 0)) abandonGame();
+  const receipt = await wallet.withdraw(to, amount ?? undefined, { fromAddress: !open });
+  $<HTMLInputElement>('withdraw-to').value = '';
+  $<HTMLInputElement>('withdraw-amount').value = '';
+  $<HTMLDialogElement>('wallet-dialog').close();
+  toast(
+    receipt.withdrawal
+      ? `Withdrew ${formatEther(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
+      : `Withdrew ${formatEther(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
+  );
+});
+act('invest', async () => {
+  const amount = parseEther($<HTMLInputElement>('invest-amount').value.trim());
+  if (wallet.pending) throw new Error('Finish the operation in flight before buying shares.');
+  const receipt = await wallet.invest(amount);
+  if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this investment.');
+  toast(`Bought ${formatEther(receipt.shares)} shares for ${formatEther(amount)} ETH.`);
+  await refreshFund();
+});
 $<HTMLButtonElement>('divest-all').addEventListener('click', () => {
   if (fundStatus) $<HTMLInputElement>('divest-amount').value = formatEther(fundStatus.value);
 });
-$<HTMLButtonElement>('divest').addEventListener('click', () =>
-  task(async () => {
-    const status = await wallet.fundStatus(),
-      held = BigInt(wallet.fund.shares),
-      wanted = parseEther($<HTMLInputElement>('divest-amount').value.trim());
-    if (wanted <= 0n || BigInt(status.equity) <= 0n) throw new Error('Enter what the shares you sell should be worth.');
-    // Shares worth the amount asked for at the stated price; everything, when that is all of them.
-    const shares =
-      wanted >= BigInt(status.value) ? held : (wanted * BigInt(status.totalShares)) / BigInt(status.equity);
-    if (!shares) throw new Error('That is less than one share.');
-    const receipt = await wallet.redeem(shares);
-    toast(
-      `Sold ${formatEther(shares)} shares for ${formatEther(receipt.amount)} ETH. It is on its way to your balance.`,
-    );
-    await wallet.collectPayouts();
-    await refreshFund();
-  }),
-);
+act('divest', async () => {
+  const status = await wallet.fundStatus(),
+    held = BigInt(wallet.fund.shares),
+    wanted = parseEther($<HTMLInputElement>('divest-amount').value.trim());
+  if (wanted <= 0n || BigInt(status.equity) <= 0n) throw new Error('Enter what the shares you sell should be worth.');
+  // Shares worth the amount asked for at the stated price; everything, when that is all of them.
+  const shares = wanted >= BigInt(status.value) ? held : (wanted * BigInt(status.totalShares)) / BigInt(status.equity);
+  if (!shares) throw new Error('That is less than one share.');
+  const receipt = await wallet.redeem(shares);
+  toast(`Sold ${formatEther(shares)} shares for ${formatEther(receipt.amount)} ETH. It is on its way to your balance.`);
+  await wallet.collectPayouts();
+  await refreshFund();
+});
 // The open balance's bundle, and the bundle of any channel still closing beside it.
-$<HTMLButtonElement>('channel-export').addEventListener('click', () =>
-  task(async () => {
-    for (const channelId of new Set([wallet.channelId, wallet.closingChannel?.state.channelId]))
-      if (channelId) downloadEvidence(await wallet.exportEvidence(channelId));
-  }),
-);
-$<HTMLButtonElement>('channel-lock').addEventListener('click', () =>
-  task(async () => {
+act('channel-export', async () => {
+  for (const channelId of new Set([wallet.channelId, wallet.closingChannel?.state.channelId]))
+    if (channelId) downloadEvidence(await wallet.exportEvidence(channelId));
+});
+act(
+  'channel-lock',
+  async () => {
     // All of the balance goes out and back in: the open game gives back what it holds.
     closeGame();
     await wallet.lockIn();
-    toast(
-      'Locking in: all of your balance goes into deposits the contract holds, in one transaction the casino sends.',
-    );
-  }),
-);
-$<HTMLButtonElement>('channel-start-close').addEventListener('click', () =>
-  task(async () => {
-    await wallet.startClose();
-    toast('Close started. It can be challenged for 24 hours; keep watching until it is done.');
-  }),
+  },
+  'Locking in: all of your balance goes into deposits the contract holds, in one transaction the casino sends.',
 );
 for (const id of ['channel-challenge', 'challenge-now'])
-  $<HTMLButtonElement>(id).addEventListener('click', () =>
-    task(async () => {
-      await wallet.challengeClose();
-      toast('Your latest saved balance is submitted.');
-    }),
-  );
-$<HTMLButtonElement>('channel-finalize').addEventListener('click', () =>
-  task(async () => {
-    await wallet.finalizeClose();
-    toast('The close is done. Collect what it is owed under Waiting to be paid.');
-  }),
+  act(id, () => wallet.challengeClose(), 'Your latest saved balance is submitted.');
+act(
+  'channel-finalize',
+  () => wallet.finalizeClose(),
+  'The close is done. Collect what it is owed under Waiting to be paid.',
 );
 $<HTMLInputElement>('channel-import').addEventListener('change', event => {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -1951,107 +1859,83 @@ $<HTMLButtonElement>('copy-address').addEventListener('click', async () => {
     toast('Your address is selected. Copy it with your browser’s copy command.');
   }
 });
-$<HTMLButtonElement>('export-key').addEventListener('click', () =>
-  task(async () => {
-    const field = $<HTMLTextAreaElement>('exported-key');
-    const hiding = !field.classList.contains('hidden');
-    if (
-      !hiding &&
-      !confirm('Show this wallet’s private key? Anyone who sees it can take everything this wallet holds.')
-    )
-      return;
-    if (!hiding) {
-      const password = $<HTMLInputElement>('key-password');
-      try {
-        await vault.verify(password.value);
-      } finally {
-        password.value = '';
-      }
-    }
-    field.classList.toggle('hidden', hiding);
-    field.value = hiding ? '' : wallet.exportKey();
-    $<HTMLButtonElement>('export-key').textContent = hiding
-      ? "Show this wallet's private key"
-      : "Hide this wallet's private key";
-  }),
-);
-$<HTMLButtonElement>('import-wallet').addEventListener('click', () =>
-  task(async () => {
+act('export-key', async () => {
+  const field = $<HTMLTextAreaElement>('exported-key');
+  const hiding = !field.classList.contains('hidden');
+  if (!hiding) {
+    if (!confirm('Show this wallet’s private key? Anyone who sees it can take everything this wallet holds.')) return;
+    await reauthenticate($<HTMLInputElement>('key-password'));
+  }
+  field.classList.toggle('hidden', hiding);
+  field.value = hiding ? '' : wallet.exportKey();
+  $<HTMLButtonElement>('export-key').textContent = hiding
+    ? "Show this wallet's private key"
+    : "Hide this wallet's private key";
+});
+act(
+  'import-wallet',
+  async () => {
     closeGame();
     await wallet.importKey($<HTMLInputElement>('import-key').value);
     $<HTMLInputElement>('import-key').value = '';
-    $<HTMLTextAreaElement>('exported-key').value = '';
-    $<HTMLTextAreaElement>('exported-key').classList.add('hidden');
-    toast('Account imported.');
-  }),
+  },
+  'Account imported.',
 );
-$<HTMLButtonElement>('select-saved-wallet').addEventListener('click', () =>
-  task(async () => {
+act(
+  'select-saved-wallet',
+  async () => {
     closeGame();
     await wallet.selectSavedAccount($<HTMLSelectElement>('saved-wallets').value);
-    $<HTMLTextAreaElement>('exported-key').value = '';
-    $<HTMLTextAreaElement>('exported-key').classList.add('hidden');
-    toast('Switched account.');
-  }),
+  },
+  'Switched account.',
 );
-$<HTMLButtonElement>('pick-alias').addEventListener('click', () =>
-  task(async () => {
+act(
+  'pick-alias',
+  async () => {
     const input = $<HTMLInputElement>('alias-input');
     await wallet.pickAlias(input.value);
     input.value = '';
-    toast(`You are @${wallet.alias}.`);
-  }),
+  },
+  () => `You are @${wallet.alias}.`,
 );
-$<HTMLButtonElement>('publish-game').addEventListener('click', () =>
-  task(async () => {
-    const name = $<HTMLInputElement>('game-name-input'),
-      url = $<HTMLInputElement>('game-url-input');
-    const published = name.value.trim();
-    if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-    await wallet.publishGame(published, gameURL(url.value.trim()).href);
-    name.value = url.value = '';
-    await loadLibrary();
-    toast(`Published at ${showName(wallet)}/${published}.`);
-  }),
-);
-$<HTMLButtonElement>('bank-deposit').addEventListener('click', () =>
-  task(async () => {
-    const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
-    if (amount <= 0n) throw new Error('Enter how much to put in your bank.');
-    const receipt = await wallet.depositBank(amount);
-    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
-    $<HTMLInputElement>('bank-amount').value = '';
-    toast(`Put ${formatEther(amount)} ETH in your bank.`);
-    await refreshBank();
-  }),
-);
-$<HTMLButtonElement>('bank-withdraw').addEventListener('click', () =>
-  task(async () => {
-    const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
-    await wallet.withdrawBank(amount);
-    $<HTMLInputElement>('bank-amount').value = '';
-    toast(`Took ${formatEther(amount)} ETH out of your bank. It is on its way to your balance.`);
-    await wallet.collectPayouts();
-    await refreshBank();
-  }),
-);
-$<HTMLButtonElement>('clear-alias').addEventListener('click', () =>
-  task(async () => {
-    await wallet.pickAlias(null);
-    toast(`You are ~${wallet.uname}.`);
-  }),
-);
-$<HTMLAnchorElement>('wallet-name-link').addEventListener('click', event => {
-  event.preventDefault();
-  if (wallet.uname) void openProfile(showName(wallet));
+act('publish-game', async () => {
+  const name = $<HTMLInputElement>('game-name-input'),
+    url = $<HTMLInputElement>('game-url-input');
+  const published = name.value.trim();
+  if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
+  await wallet.publishGame(published, gameURL(url.value.trim()).href);
+  name.value = url.value = '';
+  await loadLibrary();
+  toast(`Published at ${showName(wallet)}/${published}.`);
 });
-$<HTMLAnchorElement>('menu-profile').addEventListener('click', event => {
-  event.preventDefault();
-  $('account-menu').hidePopover?.();
-  if (wallet.uname) void openProfile(showName(wallet));
+act('bank-deposit', async () => {
+  const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
+  if (amount <= 0n) throw new Error('Enter how much to put in your bank.');
+  const receipt = await wallet.depositBank(amount);
+  if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
+  $<HTMLInputElement>('bank-amount').value = '';
+  toast(`Put ${formatEther(amount)} ETH in your bank.`);
+  await refreshBank();
 });
-$<HTMLButtonElement>('refresh-developer-bets').addEventListener('click', () => void refreshActivity());
-$<HTMLButtonElement>('refresh-wallet').addEventListener('click', () => void refreshActivity());
+act('bank-withdraw', async () => {
+  const amount = parseEther($<HTMLInputElement>('bank-amount').value.trim());
+  await wallet.withdrawBank(amount);
+  $<HTMLInputElement>('bank-amount').value = '';
+  toast(`Took ${formatEther(amount)} ETH out of your bank. It is on its way to your balance.`);
+  await wallet.collectPayouts();
+  await refreshBank();
+});
+act(
+  'clear-alias',
+  () => wallet.pickAlias(null),
+  () => `You are ~${wallet.uname}.`,
+);
+for (const id of ['wallet-name-link', 'menu-profile'])
+  $(id).addEventListener('click', event => {
+    event.preventDefault();
+    $('account-menu').hidePopover?.();
+    if (wallet.uname) void openProfile(showName(wallet));
+  });
 $('network-name').textContent = wallet.networkName;
 $('test-network').textContent = `${wallet.networkName} · Test ETH only · Do not send real ETH`;
 $('deposit-backup').addEventListener('click', () => {
@@ -2062,8 +1946,6 @@ $('deposit-backup').addEventListener('click', () => {
   $<HTMLInputElement>('backup-password').focus();
 });
 $('deposit-instructions').textContent = `Send test ETH on ${wallet.networkName} to your deposit address`;
-$('deposit-note').textContent =
-  'Only send test ETH on the named network. Other assets or networks are not supported. Deposits require network confirmations and a second transaction to add ETH to your balance; its fee is deducted.';
 $<HTMLAnchorElement>('casino-status').href = casinoURL + '/api/status';
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
 const initialRoute = parseRoute(new URL(location.href));
@@ -2100,29 +1982,19 @@ try {
     $<HTMLButtonElement>(id).disabled = true;
 }
 
-$<HTMLButtonElement>('backup-wallet').addEventListener('click', () =>
-  task(async () => {
-    const password = $<HTMLInputElement>('key-password');
-    try {
-      await vault.verify(password.value);
-    } finally {
-      password.value = '';
-    }
+act(
+  'backup-wallet',
+  async () => {
+    await reauthenticate($<HTMLInputElement>('key-password'));
     const backup = await wallet.encryptedBackup($<HTMLInputElement>('backup-password').value);
-    const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'hookedin-encrypted-wallet.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    toast('Backup downloaded. Use Check saved backup to reopen and verify the file.');
-  }),
+    download('hookedin-encrypted-wallet.json', JSON.stringify(backup));
+  },
+  'Backup downloaded. Use Check saved backup to reopen and verify the file.',
 );
 $<HTMLInputElement>('restore-backup').addEventListener('change', () =>
   task(async () => {
     const file = $<HTMLInputElement>('restore-backup').files?.[0];
     if (!file) return;
-    if (file.size > 24 * 1024 * 1024) throw new Error('A backup is at most 24 MiB.');
     closeGame();
     await wallet.restoreBackup(await readJSONFile(file, 'wallet backup'), $<HTMLInputElement>('backup-password').value);
     $<HTMLInputElement>('backup-password').value = '';
@@ -2130,7 +2002,6 @@ $<HTMLInputElement>('restore-backup').addEventListener('change', () =>
     toast('Backup restored. Check your balance, and retry any saved operation.');
   }),
 );
-
 $<HTMLInputElement>('verify-backup').addEventListener(
   'change',
   () =>
@@ -2139,7 +2010,6 @@ $<HTMLInputElement>('verify-backup').addEventListener(
         file = input.files?.[0];
       if (!file) return;
       try {
-        if (file.size > 24 * 1024 * 1024) throw new Error('A backup is at most 24 MiB.');
         const backup = await readJSONFile(file, 'wallet backup');
         const fingerprint = await wallet.withSavedRecord(record =>
           verifyBackupFile(

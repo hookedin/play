@@ -1,7 +1,7 @@
 import { formatEther } from 'ethers';
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { betPayout, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
-import { activityJSON } from './activity.ts';
+import { activityJSON, h, jsonBlock, percent, signedEth, timeOf } from './activity.ts';
 
 /**
  * One settled bet, however it was read: from this wallet's own receipt, or from a game's public
@@ -35,10 +35,6 @@ export interface BetRow {
   receipt?: any;
 }
 
-/** Every bet this wallet or the casino lists is in ETH. */
-const unit = 'ETH';
-/** A return in millionths, written as a percentage with four decimals. */
-export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
 /** What a set of bets was expected to pay back, in millionths of everything staked. */
 export const measuredReturn = (staked: bigint, expected: bigint) =>
   staked > 0n ? returnParts(staked, expected) : null;
@@ -56,100 +52,87 @@ export interface BetTotals {
   priced: bigint;
   net: bigint;
 }
-export const emptyTotals = (): BetTotals => ({ bets: 0, staked: 0n, paid: 0n, expected: 0n, priced: 0n, net: 0n });
-export function addBet(totals: BetTotals, row: { stake: bigint; payout: bigint; expected: bigint | null }) {
-  totals.bets++;
-  totals.staked += row.stake;
-  totals.paid += row.payout;
-  if (row.expected !== null) {
+/** Bets, added up. */
+export function betTotals(rows: readonly BetRow[]) {
+  const totals: BetTotals = { bets: rows.length, staked: 0n, paid: 0n, expected: 0n, priced: 0n, net: 0n };
+  for (const row of rows) {
+    totals.staked += row.stake;
+    totals.paid += row.payout;
+    totals.net += row.payout - row.stake;
+    if (row.expected === null) continue;
     totals.expected += row.expected;
     totals.priced += row.stake;
   }
-  totals.net += row.payout - row.stake;
-  return totals;
-}
-/** Bets, added up. */
-export function betTotals(rows: readonly BetRow[]) {
-  const totals = emptyTotals();
-  for (const row of rows) addBet(totals, row);
   return totals;
 }
 
-const element = (tag: string, className: string, text?: string) => {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-};
-const signed = (value: bigint, unit: string) =>
-  `${value < 0n ? '−' : '+'}${formatEther(value < 0n ? -value : value)} ${unit}`;
+const tone = (net: bigint) => (net < 0n ? 'negative' : net > 0n ? 'positive' : '');
 /** One figure under its label, as a bet's row and a bet in full both show it. */
-const figure = (label: string, value: string, className = '') => {
-  const cell = element('div', `bet-figure ${className}`.trim());
-  cell.append(element('span', 'bet-figure-value', value), element('span', 'bet-figure-label', label));
-  return cell;
-};
+const figure = (label: string, value: string, className = '') =>
+  h(
+    'div',
+    { className: `bet-figure ${className}`.trim() },
+    h('span', { className: 'bet-figure-value' }, value),
+    h('span', { className: 'bet-figure-label' }, label),
+  );
 
 /** How much went in, how much came back, and both returns side by side: one card, or none for no bets. */
 export function totalCards(totals: BetTotals) {
   if (!totals.bets) return [];
-  const card = element('div', 'wallet-balance-card'),
-    expected = measuredReturn(totals.priced, totals.expected),
+  const expected = measuredReturn(totals.priced, totals.expected),
     realised = realisedReturn(totals.staked, totals.paid);
-  card.append(
-    element('div', 'eyebrow', `${totals.bets.toLocaleString('en-US')} ${totals.bets === 1 ? 'BET' : 'BETS'}`),
-  );
-  const amount = element('div', 'large-amount');
-  amount.append(element('span', '', expected === null ? '—' : percent(expected)), element('small', '', 'EXPECTED'));
-  card.append(amount);
-  card.append(
-    element(
-      'p',
-      '',
-      `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
-        `They paid back ${realised === null ? '—' : percent(realised)}: ` +
-        `${formatEther(totals.paid)} ${unit} for ${formatEther(totals.staked)} ${unit} staked.`,
+  return [
+    h(
+      'div',
+      { className: 'money-card' },
+      h(
+        'div',
+        { className: 'eyebrow' },
+        `${totals.bets.toLocaleString('en-US')} ${totals.bets === 1 ? 'BET' : 'BETS'}`,
+      ),
+      h(
+        'div',
+        { className: 'large-amount' },
+        h('span', null, expected === null ? '—' : percent(expected)),
+        h('small', null, 'EXPECTED'),
+      ),
+      h(
+        'p',
+        null,
+        `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
+          `They paid back ${realised === null ? '—' : percent(realised)}: ` +
+          `${formatEther(totals.paid)} ETH for ${formatEther(totals.staked)} ETH staked.`,
+      ),
+      h('p', { className: `bet-net ${totals.net < 0n ? 'negative' : 'positive'}` }, signedEth(totals.net)),
     ),
-  );
-  card.append(element('p', totals.net < 0n ? 'bet-net negative' : 'bet-net positive', signed(totals.net, unit)));
-  return [card];
+  ];
 }
 
-/** One row per bet. `who` is shown on a public list and left out of a player's own. A row that can
- * be opened is a button: only this wallet's own receipt holds the odds and preimages to show. */
+/** A row of a bet list, with the game, player and time of its latest bet. `who` is shown on a public list and left
+ * out of a player's own. A row that can be opened is a button: only this wallet's own receipt holds the odds and
+ * preimages to show. */
+function rowElement(last: BetRow, net: bigint, onOpen?: () => void) {
+  const item = onOpen ? h('button', { type: 'button', onclick: onOpen }) : h('div');
+  item.className = `bet-row tone-${tone(net) || 'neutral'}`;
+  const name = h('div', { className: 'bet-game' }, h('span', { className: 'bet-game-name' }, last.game));
+  if (last.who) name.append(h('span', { className: 'bet-who' }, last.who));
+  name.append(timeOf(last.at, 'bet-time', true));
+  item.append(name);
+  return item;
+}
+/** One row per bet. */
 export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const net = row.payout - row.stake,
-    tone = `bet-row tone-${net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral'}`,
-    item = element(onOpen ? 'button' : 'div', tone);
-  if (onOpen) {
-    (item as HTMLButtonElement).type = 'button';
-    item.addEventListener('click', () => onOpen(row));
-  }
-  const name = element('div', 'bet-game');
-  name.append(element('span', 'bet-game-name', row.game));
-  if (row.who) name.append(element('span', 'bet-who', row.who));
-  const date = new Date(row.at),
-    time = document.createElement('time');
-  time.className = 'bet-time';
-  if (!Number.isNaN(date.getTime())) {
-    time.dateTime = date.toISOString();
-    time.title = time.dateTime;
-    time.textContent = `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} · ${date.toLocaleTimeString(
-      [],
-      { hour12: false, hour: '2-digit', minute: '2-digit' },
-    )}`;
-  } else time.textContent = '—';
-  name.append(time);
-  item.append(name);
+    item = rowElement(row, net, onOpen && (() => onOpen(row)));
   item.append(
-    figure('Staked', `${formatEther(row.stake)} ${unit}`),
+    figure('Staked', `${formatEther(row.stake)} ETH`),
     figure(
       row.maxPayout === undefined || row.maxPayout === null
         ? 'Paid'
-        : `Paid of up to ${formatEther(row.maxPayout)} ${unit}`,
-      `${formatEther(row.payout)} ${unit}`,
+        : `Paid of up to ${formatEther(row.maxPayout)} ETH`,
+      `${formatEther(row.payout)} ETH`,
     ),
-    figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
+    figure('Result', signedEth(net), tone(net)),
     figure(
       'Return of this bet',
       row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
@@ -189,32 +172,11 @@ export function groupRows(rows: readonly BetRow[]): BetRow[][] {
 export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonly BetRow[]) => void) {
   const last = rows.at(-1)!,
     net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n),
-    item = element(
-      onOpen ? 'button' : 'div',
-      `bet-row tone-${net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral'}`,
-    );
-  if (onOpen) {
-    (item as HTMLButtonElement).type = 'button';
-    item.addEventListener('click', () => onOpen(rows));
-  }
-  const name = element('div', 'bet-game');
-  name.append(element('span', 'bet-game-name', last.game));
-  if (last.who) name.append(element('span', 'bet-who', last.who));
-  const date = new Date(last.at);
-  name.append(
-    element(
-      'span',
-      'bet-time',
-      Number.isNaN(date.getTime())
-        ? '—'
-        : `${date.toLocaleDateString([], { day: 'numeric', month: 'short' })} · ${date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit' })}`,
-    ),
-  );
+    item = rowElement(last, net, onOpen && (() => onOpen(rows)));
   item.append(
-    name,
     figure('Group', last.group!, 'bet-group'),
     figure('Bets', String(rows.length)),
-    figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
+    figure('Result', signedEth(net), tone(net)),
   );
   item.dataset.search =
     `group ${last.group} ${rows.map(row => row.operation ?? `bet #${row.index}`).join(' ')}`.toLowerCase();
@@ -230,32 +192,28 @@ const across = (value: bigint) => Number((value * 1_000_000n) / OUTCOME_SPACE) /
 /** The share of the space a stretch of outcomes covers, as a percentage with four decimals. */
 const chance = (width: bigint) => percent((width * 1_000_000n) / OUTCOME_SPACE);
 
-const detailSection = (title: string, note?: string) => {
-  const box = element('section', 'bet-detail-section');
-  box.append(element('h3', '', title));
-  if (note) box.append(element('p', 'bet-detail-note', note));
-  return box;
-};
-const hex = (value: unknown) => element('code', 'bet-detail-hex', value === undefined ? '—' : String(value));
+const detailSection = (title: string, note?: string) =>
+  h(
+    'section',
+    { className: 'bet-detail-section' },
+    h('h3', null, title),
+    ...(note ? [h('p', { className: 'bet-detail-note' }, note)] : []),
+  );
+const hex = (value: unknown) => h('code', { className: 'bet-detail-hex' }, value === undefined ? '—' : String(value));
 /** A value beside a tick: the wallet has just worked it out again from the preimages it kept. */
-const rederived = (value: unknown, matches: boolean, why: string) => {
-  const line = element('div', 'bet-detail-derived');
-  line.title = why;
-  line.append(hex(value), element('span', `bet-detail-check ${matches ? 'ok' : 'bad'}`, matches ? '✓' : '✗'));
-  return line;
-};
-const factList = (rows: readonly (readonly [string, string | Node] | null | false | undefined)[]) => {
-  const list = element('dl', 'bet-detail-facts');
-  for (const entry of rows) {
-    if (!entry) continue;
-    const term = document.createElement('dt'),
-      detail = document.createElement('dd');
-    term.textContent = entry[0];
-    detail.append(entry[1]);
-    list.append(term, detail);
-  }
-  return list;
-};
+const rederived = (value: unknown, matches: boolean, why: string) =>
+  h(
+    'div',
+    { className: 'bet-detail-derived', title: why },
+    hex(value),
+    h('span', { className: `bet-detail-check ${matches ? 'ok' : 'bad'}` }, matches ? '✓' : '✗'),
+  );
+const factList = (rows: readonly (readonly [string, string | Node] | null | false | undefined)[]) =>
+  h(
+    'dl',
+    { className: 'bet-detail-facts' },
+    ...rows.flatMap(entry => (entry ? [h('dt', null, entry[0]), h('dd', null, entry[1])] : [])),
+  );
 
 /**
  * One of this wallet's own bets, whole: for a casino bet, its chance drawn across the outcome space, where its round
@@ -290,25 +248,25 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
 
   const when = new Date(row.at);
   body.append(
-    element(
+    h(
       'p',
-      'bet-detail-when',
-      `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Broke even'} ${signed(net, unit)}` +
+      { className: 'bet-detail-when' },
+      `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Broke even'} ${signedEth(net)}` +
         (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`),
     ),
-  );
-  const figures = element('div', 'bet-detail-figures');
-  figures.append(
-    figure('Staked', `${formatEther(row.stake)} ${unit}`),
-    figure('Paid', `${formatEther(row.payout)} ${unit}`),
-    figure('Result', signed(net, unit), net < 0n ? 'negative' : net > 0n ? 'positive' : ''),
-    figure(
-      'Return of this bet',
-      row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
-      'bet-return',
+    h(
+      'div',
+      { className: 'bet-detail-figures' },
+      figure('Staked', `${formatEther(row.stake)} ETH`),
+      figure('Paid', `${formatEther(row.payout)} ETH`),
+      figure('Result', signedEth(net), tone(net)),
+      figure(
+        'Return of this bet',
+        row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
+        'bet-return',
+      ),
     ),
   );
-  body.append(figures);
 
   if (developerBet && receipt.settlement) {
     // A developer bet is settled by its developer, from their bank, on their word.
@@ -319,9 +277,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     settled.append(
       factList([
         ['Developer', hex(receipt.game?.developer)],
-        ['The bet you signed', element('code', 'bet-detail-hex', JSON.stringify(receipt.details?.meta))],
-        ['Paid to you', `${formatEther(receipt.settlement.player)} ${unit}`],
-        ['Given to the casino', `${formatEther(receipt.settlement.casino)} ${unit}`],
+        ['The bet you signed', hex(JSON.stringify(receipt.details?.meta))],
+        ['Paid to you', `${formatEther(receipt.settlement.player)} ETH`],
+        ['Given to the casino', `${formatEther(receipt.settlement.casino)} ETH`],
         ['The developer’s signature', hex(receipt.settlement.signature)],
       ]),
     );
@@ -331,9 +289,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     // A developer bet has no odds and no round.
   } else if (!revealed || landed === null) {
     body.append(
-      element(
+      h(
         'p',
-        'bet-detail-note',
+        { className: 'bet-detail-note' },
         'This receipt keeps no revealed round, so there is nothing to draw: only the amounts above are known.',
       ),
     );
@@ -341,25 +299,23 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     const won = landed < revealed.chance;
     // The whole outcome space, the stretch below the bet's chance and where the round landed in it.
     const where = detailSection('Where the round landed');
-    const space = element('div', `bet-space${won ? ' hit' : ''}`),
-      band = element('div', 'bet-space-band'),
-      mark = element('div', 'bet-space-mark');
+    const band = h('div', {
+        className: 'bet-space-band',
+        title: `Pays ${formatEther(revealed.prize)} ETH on ${chance(revealed.chance)} of outcomes`,
+      }),
+      mark = h('div', { className: 'bet-space-mark', title: `The outcome, ${landed}` });
     band.style.width = `${across(revealed.chance)}%`;
-    band.title = `Pays ${formatEther(revealed.prize)} ${unit} on ${chance(revealed.chance)} of outcomes`;
     mark.style.left = `${across(landed)}%`;
-    mark.title = `The outcome, ${landed}`;
-    space.append(band, mark);
-    const scale = element('div', 'bet-space-scale');
-    scale.append(element('span', '', '0'), element('span', '', '2⁶⁴'));
-    where.append(space, scale);
     where.append(
-      element(
+      h('div', { className: `bet-space${won ? ' hit' : ''}` }, band, mark),
+      h('div', { className: 'bet-space-scale' }, h('span', null, '0'), h('span', null, '2⁶⁴')),
+      h(
         'p',
-        'bet-detail-note',
+        { className: 'bet-detail-note' },
         `The round drew ${landed}, ${across(landed).toFixed(3)}% of the way across the space. ` +
           (won
-            ? `That is below the bet’s chance, so it pays its prize, ${formatEther(revealed.prize)} ${unit}.`
-            : `That is not below the bet’s chance, so it pays nothing of the ${formatEther(revealed.prize)} ${unit} it could have.`),
+            ? `That is below the bet’s chance, so it pays its prize, ${formatEther(revealed.prize)} ETH.`
+            : `That is not below the bet’s chance, so it pays nothing of the ${formatEther(revealed.prize)} ETH it could have.`),
       ),
     );
     body.append(where);
@@ -370,7 +326,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     );
     terms.append(
       factList([
-        ['Prize', `${formatEther(revealed.prize)} ${unit}`],
+        ['Prize', `${formatEther(revealed.prize)} ETH`],
         ['Chance', `${chance(revealed.chance)} · ${revealed.chance} of 2⁶⁴ outcomes`],
         ['Worth', `${percent(returnParts(row.stake, row.expected ?? 0n))} of the stake`],
       ]),
@@ -439,72 +395,33 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Game key', hex(receipt.details?.game)],
         ['Memo, the hash of the details above', hex(op.memo)],
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
-        ['Balance after it settled', `${formatEther(receipt.balance ?? 0)} ${unit}`],
+        ['Balance after it settled', `${formatEther(receipt.balance ?? 0)} ETH`],
         receipt.commission && BigInt(receipt.commission) > 0n
-          ? ['The game’s commission', `${formatEther(receipt.commission)} ${unit}`]
+          ? ['The game’s commission', `${formatEther(receipt.commission)} ETH`]
           : null,
         ['The state it moved from', hex(op.previousStateHash)],
         ['Your signature on it', hex(step.authorization)],
         ['The casino’s signature on it', hex(step.casinoSignature)],
       ]),
     );
-    const raw = document.createElement('details');
-    raw.className = 'bet-detail-raw';
-    const label = document.createElement('summary');
-    label.textContent = 'The whole receipt, as JSON';
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'text-button';
-    copy.textContent = 'Copy JSON';
-    const text = activityJSON(receipt);
-    const said = element('span', 'activity-copy-status');
-    said.setAttribute('role', 'status');
-    copy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(text);
-        said.textContent = 'Copied';
-      } catch {
-        said.textContent = 'Copy unavailable. Select the text below.';
-      }
-    });
-    const bar = element('div', 'activity-payload-heading');
-    bar.append(said, copy);
-    const payload = element('pre', 'activity-payload', text);
-    payload.tabIndex = 0;
-    raw.append(label, bar, payload);
-    record.append(raw);
+    record.append(
+      h(
+        'details',
+        { className: 'bet-detail-raw' },
+        h('summary', null, 'The whole receipt, as JSON'),
+        ...jsonBlock(activityJSON(receipt), 'the whole receipt'),
+      ),
+    );
     body.append(record);
   }
 
-  if (onGame && row.key) {
-    const link = document.createElement('button');
-    link.type = 'button';
-    link.className = 'button secondary small bet-detail-more';
-    link.textContent = 'Every bet in this game ↗';
-    link.addEventListener('click', () => onGame(row));
-    body.append(link);
-  }
+  if (onGame && row.key)
+    body.append(
+      h(
+        'button',
+        { type: 'button', className: 'button small bet-detail-more', onclick: () => onGame(row) },
+        'Every bet in this game ↗',
+      ),
+    );
   return body;
-}
-
-/** Search across the rendered rows, as the activity list does: the text is what the player reads,
- * plus the operation ID or number each row carries. */
-export function filterBets(list: HTMLElement, query: string, empty: HTMLElement, count: HTMLElement, none: string) {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  let visible = 0,
-    total = 0;
-  for (const row of list.children as HTMLCollectionOf<HTMLElement>) {
-    const text = (row.textContent! + ' ' + (row.dataset.search ?? '')).toLowerCase();
-    const matches = terms.every(term => text.includes(term));
-    // A group's row stands for every bet in it.
-    const bets = Number(row.dataset.bets ?? 1);
-    row.classList.toggle('hidden', !matches);
-    total += bets;
-    if (matches) visible += bets;
-  }
-  count.textContent = `${terms.length ? `${visible} / ` : ''}${total} ${total === 1 ? 'bet' : 'bets'}`;
-  empty.classList.toggle('hidden', visible !== 0);
-  empty.textContent = terms.length
-    ? 'No bet matches that. Try a game, an amount, a bet number or an operation ID.'
-    : none;
 }

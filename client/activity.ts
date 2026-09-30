@@ -12,7 +12,7 @@ interface ActivityEntry {
   description?: string;
   amount?: string;
   amountLabel?: string;
-  payload?: string;
+  payload: string;
   facts?: [string, string | Node][];
   notice?: string;
 }
@@ -25,114 +25,98 @@ export function activityJSON(data: unknown): string {
   }
 }
 
-const element = (tag: string, className: string, text?: string) => {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
+/** An element with its properties, `onclick` among them, and its children. */
+export function h<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  props: Partial<HTMLElementTagNameMap[K]> | null = null,
+  ...children: (Node | string)[]
+): HTMLElementTagNameMap[K] {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
   return node;
-};
-
-/** Shared presentation only: receipts and live events keep their existing owners. */
-export function createActivityEntry(entry: ActivityEntry) {
-  const expandable = entry.payload !== undefined;
-  const row = document.createElement(expandable ? 'details' : 'div');
-  row.className = `activity-entry tone-${entry.tone || 'neutral'}`;
-  const summary = element(expandable ? 'summary' : 'div', 'activity-summary');
-  const content = element('div', 'activity-content');
-  const heading = element('div', 'activity-title-line');
-  heading.append(element('span', 'activity-title', entry.title));
-  if (entry.status) heading.append(element('span', 'activity-badge', entry.status));
-  content.append(heading);
-  if (entry.description) content.append(element('p', 'activity-description', entry.description));
-  const date = new Date(entry.timestamp),
-    time = document.createElement('time');
-  time.className = 'activity-time';
-  if (!Number.isNaN(date.getTime())) {
-    time.dateTime = date.toISOString();
-    time.title = time.dateTime;
-    const clock = date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    time.textContent = `${date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} · ${clock}`;
-  } else time.textContent = 'Time unavailable';
-  content.append(time);
-  summary.append(content);
-  if (entry.amount !== undefined) {
-    const amount = element('div', 'activity-amount');
-    amount.append(
-      element('span', 'activity-value', entry.amount),
-      element('span', 'activity-amount-label', entry.amountLabel),
-    );
-    summary.append(amount);
-  }
-  row.append(summary);
-  if (expandable) {
-    const body = element('div', 'activity-body');
-    if (entry.notice) body.append(element('p', 'activity-notice', entry.notice));
-    if (entry.facts?.length) {
-      const facts = document.createElement('dl');
-      facts.className = 'activity-facts';
-      for (const [label, value] of entry.facts) {
-        const term = document.createElement('dt'),
-          detail = document.createElement('dd');
-        term.textContent = label;
-        detail.append(value);
-        facts.append(term, detail);
-      }
-      body.append(facts);
-    }
-    const toolbar = element('div', 'activity-payload-heading');
-    toolbar.append(element('span', '', 'Raw JSON'));
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'text-button';
-    copy.textContent = 'Copy JSON';
-    copy.setAttribute('aria-label', `Copy JSON: ${entry.title}`);
-    const feedback = element('span', 'activity-copy-status');
-    feedback.setAttribute('role', 'status');
-    copy.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(entry.payload!);
-        feedback.textContent = 'Copied';
-      } catch {
-        feedback.textContent = 'Copy unavailable. Select the text below.';
-      }
+}
+/** A moment, to the second, or with `short` to the minute and without its year. */
+export function timeOf(at: string | number, className: string, short = false) {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return h('time', { className }, '—');
+  const iso = date.toISOString(),
+    day = date.toLocaleDateString([], { day: 'numeric', month: 'short', ...(short ? {} : { year: 'numeric' }) }),
+    clock = date.toLocaleTimeString([], {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      ...(short ? {} : { second: '2-digit' }),
     });
-    toolbar.append(feedback, copy);
-    const payload = element('pre', 'activity-payload', entry.payload);
-    payload.tabIndex = 0;
-    payload.setAttribute('aria-label', `JSON details: ${entry.title}`);
-    body.append(toolbar, payload);
-    row.append(body);
-  }
-  return row;
+  return h('time', { className, dateTime: iso, title: iso }, `${day} · ${clock}`);
+}
+/** A share in millionths, as a percentage with four decimals. */
+export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
+/** A gain or a loss in ETH, with its sign. */
+export const signedEth = (value: bigint) => `${value < 0n ? '−' : '+'}${formatEther(value < 0n ? -value : value)} ETH`;
+/** JSON as the wallet shows it: a Copy JSON button with its status, above the text. */
+export function jsonBlock(text: string, title: string) {
+  const status = h('span', { className: 'activity-copy-status', role: 'status' });
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      status.textContent = 'Copied';
+    } catch {
+      status.textContent = 'Copy unavailable. Select the text below.';
+    }
+  };
+  return [
+    h(
+      'div',
+      { className: 'activity-payload-heading' },
+      status,
+      h(
+        'button',
+        { type: 'button', className: 'text-button', ariaLabel: `Copy JSON: ${title}`, onclick: copy },
+        'Copy JSON',
+      ),
+    ),
+    h('pre', { className: 'activity-payload', tabIndex: 0, ariaLabel: `JSON: ${title}` }, text),
+  ];
 }
 
-export function filterActivity(list: HTMLElement, query: string, empty: HTMLElement, count: HTMLElement) {
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  let visible = 0;
-  for (const row of list.children) {
-    const text = terms.length ? row.textContent!.toLowerCase() : '';
-    const matches = terms.every(term => text.includes(term));
-    row.classList.toggle('hidden', !matches);
-    if (matches) visible++;
-  }
-  const total = terms.length ? list.childElementCount : visible;
-  count.textContent = `${terms.length ? `${visible} / ` : ''}${total} ${total === 1 ? 'event' : 'events'}`;
-  empty.classList.toggle('hidden', visible !== 0);
-  empty.textContent = terms.length
-    ? 'No matching events. Try a method, amount, operation ID or transaction hash.'
-    : 'No activity yet. Events will appear here as you use the wallet and games.';
+/** One line of Activity: its summary, and opened, its facts and the JSON behind it. */
+export function createActivityEntry(entry: ActivityEntry) {
+  const heading = h(
+    'div',
+    { className: 'activity-title-line' },
+    h('span', { className: 'activity-title' }, entry.title),
+  );
+  if (entry.status) heading.append(h('span', { className: 'activity-badge' }, entry.status));
+  const content = h('div', { className: 'activity-content' }, heading);
+  if (entry.description) content.append(h('p', { className: 'activity-description' }, entry.description));
+  content.append(timeOf(entry.timestamp, 'activity-time'));
+  const summary = h('summary', { className: 'activity-summary' }, content);
+  if (entry.amount !== undefined)
+    summary.append(
+      h(
+        'div',
+        { className: 'activity-amount' },
+        h('span', { className: 'activity-value' }, entry.amount),
+        h('span', { className: 'activity-amount-label' }, entry.amountLabel ?? ''),
+      ),
+    );
+  const body = h('div', { className: 'activity-body' });
+  if (entry.notice) body.append(h('p', { className: 'activity-notice' }, entry.notice));
+  if (entry.facts?.length)
+    body.append(
+      h(
+        'dl',
+        { className: 'activity-facts' },
+        ...entry.facts.flatMap(([label, value]) => [h('dt', null, label), h('dd', null, value)]),
+      ),
+    );
+  body.append(...jsonBlock(entry.payload, entry.title));
+  return h('details', { className: `activity-entry tone-${entry.tone || 'neutral'}` }, summary, body);
 }
 
-/** The exact return of a signed bet, from its expected payout out of 2^64 stakes, to a hundredth of a basis point. */
-export function returnToPlayer(stake: unknown, expectedPayout: unknown) {
-  const parts = returnParts(BigInt(stake as string), BigInt(expectedPayout as string));
-  return `RTP ${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
-}
 /** What a developer bet asks of the player, said as plainly as the docs say it. */
 const DEVELOPER_BET =
   'Its stake went to the game’s developer when you placed it, and the developer settles it: what it pays is their word, and you trust them to pay it. Your wallet collects what they pay.';
-/** Every receipt this wallet keeps is in ETH. */
-const unit = 'ETH';
 /** A developer bet can have settled while what it was paid still waits to enter the channel balance. Its game goes by
  * the name its receipt kept, when this wallet has the receipt. */
 export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer bet') {
@@ -147,7 +131,7 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
         : bet.collected
           ? 'Payout collected'
           : 'Payout ready',
-    amount: `${formatEther(amount)} ${unit}`,
+    amount: `${formatEther(amount)} ETH`,
     amountLabel: !settled
       ? 'Stake with the developer'
       : bet.payout === '0'
@@ -180,7 +164,7 @@ export function receiptSummary(
       )[receipt.kind],
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: receipt.lost ? 'warning' : 'neutral',
-      amount: `0 ${unit}`,
+      amount: `0 ETH`,
       amountLabel: 'Balance change',
       description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'lock-in'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
@@ -188,7 +172,7 @@ export function receiptSummary(
           ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this casino bet would have paid cannot be checked.'
           : receipt.wouldHavePaid === undefined
             ? 'Your balance is unchanged. You can place another bet.'
-            : `Your balance is unchanged. The casino revealed the round: this casino bet would have paid ${formatEther(receipt.wouldHavePaid)} ${unit} for its ${formatEther(receipt.request?.amount ?? 0)} ${unit} stake.`,
+            : `Your balance is unchanged. The casino revealed the round: this casino bet would have paid ${formatEther(receipt.wouldHavePaid)} ETH for its ${formatEther(receipt.request?.amount ?? 0)} ETH stake.`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -242,7 +226,7 @@ export function receiptSummary(
                   transaction: 'Transaction',
                 } as Record<string, string>
               )[receipt.kind] || receipt.kind;
-  let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ${unit}`;
+  let amount = `${formatEther(settled ? receipt.amount || '0' : '0')} ETH`;
   let amountLabel = !settled
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
@@ -261,18 +245,18 @@ export function receiptSummary(
                   ? 'Claim recorded'
                   : ['withdrawal-sent', 'close-started', 'dispute'].includes(receipt.kind)
                     ? 'No payment'
-                    : `${unit} received`;
+                    : `ETH received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (played) {
-    amount = settled ? `${net < 0n ? '−' : '+'}${formatEther(net < 0n ? -net : net)} ${unit}` : '—';
+    amount = settled ? signedEth(net) : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
     if (settled) tone = net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral';
-    description = `Stake ${formatEther(receipt.stake)} ${unit} · Paid ${formatEther(receipt.payout ?? 0)} ${unit}${
+    description = `Stake ${formatEther(receipt.stake)} ETH · Paid ${formatEther(receipt.payout ?? 0)} ETH${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${formatEther(receipt.maxPayout)} ${unit} · ${returnToPlayer(receipt.stake, receipt.expectedPayout)}`
-    }${receipt.kind === 'casino-bet' ? ` · Balance ${formatEther(receipt.balance)} ${unit}` : ''}`;
+        : ` of up to ${formatEther(receipt.maxPayout)} ETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
+    }${receipt.kind === 'casino-bet' ? ` · Balance ${formatEther(receipt.balance)} ETH` : ''}`;
   } else if (
     settled &&
     ['withdrawal', 'divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind) &&
@@ -280,27 +264,27 @@ export function receiptSummary(
   )
     tone = 'positive';
   if (receipt.kind === 'invest')
-    description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Bought ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'redeem')
     description = `Sold ${formatEther(receipt.shares)} shares; you hold ${formatEther(receipt.holding)}. Your wallet collects the money into your balance.`;
   if (receipt.kind === 'divest')
-    description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Paid for redeemed bankroll shares. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'payment')
-    description = `A payment this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `A payment this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'developer-bet') {
     const open = receipt.payout === undefined;
     status = open ? 'Waiting for the developer' : BigInt(receipt.payout) ? 'Payout collected' : 'Settled · no payout';
     if (open)
-      description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${formatEther(receipt.balance)} ${unit}`;
+      description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${formatEther(receipt.balance)} ETH`;
   }
   if (receipt.kind === 'developer-bet-payout')
-    description = `What a developer bet’s developer paid, checked by your wallet and collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `What a developer bet’s developer paid, checked by your wallet and collected into your balance. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'bank')
-    description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'withdrawn')
-    description = `Taken from your bank and collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Taken from your bank and collected into your balance. Balance ${formatEther(receipt.balance)} ETH`;
   if (receipt.kind === 'earnings')
-    description = `Commission your games earned, collected into your balance. Balance ${formatEther(receipt.balance)} ${unit}`;
+    description = `Commission your games earned, collected into your balance. Balance ${formatEther(receipt.balance)} ETH`;
   // The contract makes a withdrawal or a lock-in a claim under its ID once the casino, or anyone, sends it, and pays
   // what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into the
   // account's own channel.
@@ -328,9 +312,9 @@ export function receiptSummary(
         : receipt.returned
           ? 'It never became a claim, so the close returned it: it is part of what your closed balance is owed, under Waiting to be paid.'
           : receipt.recorded
-            ? `The contract still owes ${formatEther(receipt.owed)} ${unit} of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
+            ? `The contract still owes ${formatEther(receipt.owed)} ETH of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
             : "The contract makes it a claim under the withdrawal's ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.",
-      `Balance ${formatEther(receipt.balance)} ${unit}`,
+      `Balance ${formatEther(receipt.balance)} ETH`,
     ].join(' ');
   }
   const notice =
