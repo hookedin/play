@@ -28,7 +28,6 @@ import {
   FUND_ID,
   DEVELOPER_ID,
   FUND_TYPES,
-  SHARE_TYPES,
   REDEEM_TYPES,
   SETTLEMENT_TYPES,
   BANK_TYPES,
@@ -670,29 +669,8 @@ export class ChannelClient extends WalletTransactions {
       return { minted: '0', fund: { ...this.fund, alert: `Investment ${op.memo}: ${error.message}` } };
     }
   }
-  /** The fund as the casino states it, signed, with what this account's shares come to at that price. The casino's
-   * statement of the holding is taken first when it is later than the wallet's own, as it stands unless it states fewer
-   * shares than the wallet can prove: a wallet restored from an older backup has missed it, and a sale must follow it.
-   * A wallet that refused a statement keeps that refusal. */
+  /** The fund as the casino states it, signed, with what this account's shares come to at that price. */
   async fundStatus(this: CasinoWallet) {
-    if (this.channel?.registered && !this.fund.redeeming && !this.fund.alert) {
-      const { statement } = await this.api(`/api/channels/${this.channelId}/fund`);
-      if (statement && Number(statement.message.sequence) > this.fund.sequence) {
-        assertSignature(this.domain, SHARE_TYPES, statement.message, statement.signature, this.operator);
-        if (!same(statement.message.holder, this.address)) throw new Error('The share statement is for another holder');
-        if (BigInt(statement.message.shares) < BigInt(this.fund.shares))
-          throw new Error('The casino states fewer shares than its earlier signed statement');
-        await this.exclusive(
-          () => {
-            const { alert, ...fund } = this.fund,
-              sequence = Number(statement.message.sequence);
-            if (sequence <= fund.sequence) return;
-            return this.save(undefined, { fund: { ...fund, sequence, shares: statement.message.shares, statement } });
-          },
-          { wait: true },
-        );
-      }
-    }
     const { message, signature } = await this.api('/api/fund');
     assertSignature(this.domain, FUND_TYPES, message, signature, this.operator);
     return {

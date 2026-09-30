@@ -254,18 +254,6 @@ collecting and stays `false`.
 [operation](#post-apichannelsidoperations); the messages are [the fund's](../reference/signed-messages.md#bankroll-fund-messages).
 A holding belongs to the channel's account, so it outlives any one channel.
 
-### `GET /api/channels/:id/fund`
-
-The account's shares in the bankroll fund, with the casino's latest statement of them.
-
-| Response field | Type           | Meaning                                                      |
-| -------------- | -------------- | ------------------------------------------------------------ |
-| `holder`       | address        | The channel's account                                        |
-| `shares`       | string         | The shares held                                              |
-| `sequence`     | number         | The number of the latest statement; 0 before any             |
-| `statement`    | object or null | The latest `ShareStatement`, `{message, signature}`          |
-| `value`        | string         | What the shares are worth at the current price, rounded down |
-
 ### `POST /api/channels/:id/fund/redeem`
 
 Burns shares at the current price; what they are worth leaves the bankroll and is owed to the account at once, listed
