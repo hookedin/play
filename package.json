@@ -26,7 +26,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && npm run typecheck && node scripts/vectors.ts --check && node --test --test-timeout=180000 test/*.test.ts sdk/test/*.test.ts games/*/test/*.test.ts",
     "vectors": "node scripts/vectors.ts",
-    "recover": "node scripts/verify-evidence.ts",
     "watchtower": "node scripts/watchtower.ts",
     "audit:package": "node scripts/audit-package.ts",
     "format": "prettier --write .",
