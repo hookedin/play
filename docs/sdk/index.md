@@ -1,11 +1,11 @@
 ---
 title: Packages and imports
-description: How a game installs @hookedin/play, the import paths the SDK offers, and which of them run in Node.
+description: How a game installs @hookedin/play, and the import paths the SDK offers.
 ---
 
 The SDK is part of the `@hookedin/play` package, the repository that also holds the wallet, the contract and the
-house's games. It is the wallet bridge, a helper for multi-step rounds, an exact pricing engine, a balance strip, sound,
-the kit a game's server settles developer bets with, binary steps for a draw its players share, and a test wallet.
+house's games. It ships as TypeScript source, so your editor shows every signature and doc comment; these pages say
+what each export is for.
 
 ## Install
 
@@ -20,50 +20,33 @@ A game depends on play's `main` branch:
 ```
 
 `package-lock.json` records the exact commit, so an install is reproducible, and `npm update @hookedin/play` moves the
-game to the latest one. There are no versions and no tags: a push to play's `main` is the release.
+game to the latest one; commit the lockfile, and the push deploys it. There are no versions and no tags: a push to
+play's `main` is the release.
 
 - Node 24.4 or later.
-- The package ships raw `.ts` files, with no compiled JavaScript and no declaration files. A game page is bundled with
-  esbuild, which `hookedin-game build` runs ([CLI](../reference/cli.md)). The package's only dependencies are esbuild
-  and ethers.
+- The package ships raw `.ts` files, with no compiled JavaScript and no declaration files.
+  [`hookedin-game build`](../games/publishing.md#build) bundles a page with esbuild.
 - TypeScript checks the SDK as source. The template's `tsconfig.json` (`module` and `moduleResolution` `NodeNext`,
   `allowImportingTsExtensions`, `noEmit`, `strict`, the `DOM` library) is a configuration that does.
-- Node does not strip types from files inside `node_modules`, so a game's Node tests load the SDK through tsx:
-  `node --import tsx --test test/*.test.ts`.
+- Node does not strip types from files inside `node_modules`, so a game's Node tests load the SDK through tsx
+  ([testing](../games/testing.md#running-tests)).
 
 ## Entry points
 
-The table links each import path to its reference. A browser-only module touches `window` as it loads, so importing
-it in Node throws; a Node-safe module imports anywhere.
+Import each path on its own. A browser-only module touches `window` as it loads, so importing it in Node throws; a
+Node-safe module imports anywhere.
 
-| Import                                  | What it is                                                                         | Runs                                  |
-| --------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------- |
-| `@hookedin/play/sdk/sdk`                | [`HookedIn`](hookedin.md), the wallet bridge, and its types                        | Browser only                          |
-| `@hookedin/play/sdk/round`              | [`RoundClient`](round.md), a multi-step round as a sequence of casino bets         | Node-safe                             |
-| `@hookedin/play/sdk/engine`             | [The pricing engine](engine.md), with the mines rules                              | Node-safe                             |
-| `@hookedin/play/sdk/developer`          | [`createDeveloper`](developer.md), for a game's own server                         | Node-safe; runs wherever `fetch` does |
-| `@hookedin/play/sdk/steps`              | [Binary steps](steps.md), a shared draw backed with binary casino bets             | Node-safe                             |
-| `@hookedin/play/sdk/admits`             | [The casino's admission rule](admits.md), and a bet's measured return              | Node-safe                             |
-| `@hookedin/play/sdk/outcome`            | [The rule a round's outcome follows](outcome.md), and what a casino bet pays on it | Node-safe                             |
-| `@hookedin/play/sdk/wire`               | [How a player is named](wire.md), shared by page and server                        | Node-safe                             |
-| `@hookedin/play/sdk/bank`               | [`mountBank`](bank-and-synth.md#mountbank), the balance strip                      | Browser only                          |
-| `@hookedin/play/sdk/synth`              | [`createSynth`](bank-and-synth.md#createsynth), synthesized sound                  | Node-safe; sound plays in a browser   |
-| `@hookedin/play/sdk`                    | Everything a game page needs, in one import: see below                             | Browser only                          |
-| `@hookedin/play/testing/game-wallet.ts` | [`gameWallet`](game-wallet.md), the real wallet against a stub casino, for tests   | Node                                  |
+| Import                                  | What it is                                                                            | Runs                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------- |
+| `@hookedin/play/sdk/sdk`                | [`HookedIn`](hookedin.md), the wallet bridge, and its types                           | Browser only                          |
+| `@hookedin/play/sdk/round`              | [`RoundClient`](round.md), a multi-step round as a sequence of casino bets            | Node-safe                             |
+| `@hookedin/play/sdk/engine`             | [The pricing engine](engine.md), with the mines rules                                 | Node-safe                             |
+| `@hookedin/play/sdk/developer`          | [`createDeveloper`](developer.md), for a game's own server                            | Node-safe; runs wherever `fetch` does |
+| `@hookedin/play/sdk/steps`              | [Binary steps](steps.md), a shared draw backed with binary casino bets                | Node-safe                             |
+| `@hookedin/play/sdk/admits`             | [The casino's admission rule](admits.md), and a bet's measured return                 | Node-safe                             |
+| `@hookedin/play/sdk/outcome`            | [The rule a round's outcome follows](outcome.md), and what a casino bet pays on it    | Node-safe                             |
+| `@hookedin/play/sdk/bank`               | [`mountBank`](bank-and-synth.md#mountbank), the balance strip                         | Browser only                          |
+| `@hookedin/play/sdk/synth`              | [`createSynth`](bank-and-synth.md#createsynth), synthesized sound                     | Node-safe; sound plays in a browser   |
+| `@hookedin/play/testing/game-wallet.ts` | [`gameWallet`](../games/testing.md#gamewallet), the real wallet against a stub casino | Node                                  |
 
-The package maps `@hookedin/play/sdk/<path>` to `sdk/src/<path>.ts`, so a single engine file, such as
-`@hookedin/play/sdk/engine/rational`, imports on its own too. Nothing else in the package can be imported; the
-stylesheet [`shared.css`](bank-and-synth.md#sharedcss) reaches a game through the build.
-
-## The barrel
-
-`@hookedin/play/sdk` re-exports [sdk](hookedin.md), [round](round.md), [bank](bank-and-synth.md#mountbank),
-[synth](bank-and-synth.md#createsynth), [admits](admits.md), [outcome](outcome.md) and [engine](engine.md). It leaves
-out [developer](developer.md), [steps](steps.md) and [wire](wire.md). It is browser-only, because the bridge is.
-
-```ts
-import { HookedIn, RoundClient, mountBank, createMines } from '@hookedin/play/sdk';
-```
-
-Code that runs in Node, such as a test or a game's server, imports the Node-safe paths on their own: the barrel loads
-the bridge. The house's games and the template import every path on its own.
+The stylesheet [`shared.css`](bank-and-synth.md#sharedcss) reaches a game through the build.

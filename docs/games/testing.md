@@ -1,14 +1,14 @@
 ---
 title: Testing
-description: Test a game against the real wallet and an in-memory casino that holds every bet to the casino's own rules.
+description: Test a game against the real wallet and an in-memory casino that holds every bet to the casino's own rules, and the reference for @hookedin/play/testing/game-wallet.ts.
 sidebar:
-  order: 9
+  order: 7
 ---
 
-Game tests do not mock the wallet. [`gameWallet()`](../sdk/game-wallet.md#gamewallet) from
-`@hookedin/play/testing/game-wallet.ts` builds the real wallet, in memory, with an open channel, wired to a casino stub
-that derives and signs every state exactly as the protocol says. A bet your test places is a real signed bet, sent
-through the same checks the wallet's bridge makes.
+Game tests do not mock the wallet. `import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';` builds the
+real wallet, in memory, with an open channel, wired to a casino stub that derives and signs every state exactly as the
+protocol says. A bet your test places is a real signed bet, sent through the same checks the wallet's bridge makes. The
+module is Node-safe and made for Node tests.
 
 ## Running tests
 
@@ -20,8 +20,7 @@ npm test
 
 This type-checks, then runs `node --import tsx --test test/*.test.ts`. `tsx` is there because `@hookedin/play` ships
 TypeScript and Node does not strip types from files inside `node_modules`. In play itself Node runs the sources
-directly, so one game's tests run with `node --test games/<id>/test/*.test.ts` from play's root, and `npm test` runs
-every suite.
+directly: `node --test games/<id>/test/*.test.ts` from play's root runs one game's tests, and `npm test` every suite.
 
 ## A first test
 
@@ -48,58 +47,73 @@ start: a bet that settles, the same bet sent twice and placed once, and a bet wi
 
 ## The fixture
 
-`const f = await gameWallet({ bankroll?, bank? })` gives you:
+### `gameWallet`
 
-- `f.wallet`, the real wallet, with a channel of 1,000,000 wei open. Open a game with
-  `f.wallet.openGame(f.identity(name))` and set its spending limit with `f.wallet.setGameLimit(amount)`;
-  `f.wallet.gameLimit()` reads the limit, and `await f.wallet.balance()` the channel's balance.
-- `f.bridge`, the game's side of the bridge, to hand to `RoundClient` or your own client. The player agrees to every
-  request for funds, as far as the balance goes, and `f.bridge.onReceipt` hears the receipts the wallet pushes.
-- `f.identity(name)`, a game as its developer published it. Every name you give is published.
-- `f.developer`, a stub shaped like the `Developer` that `createDeveloper` returns, serving the game `f.identity()`
-  names, `test`.
-- `bankroll`, what the stub covers casino bets with, and `bank`, what the developer's bank holds: 10^12 each by
-  default. `f.bankroll()` and `f.bank()` read them as play goes on.
+`gameWallet({ bankroll?, bank? })` resolves with a real `CasinoWallet` from play's client, with an in-memory store, a
+random player and one open channel of 1,000,000 wei on the local chain, 31337, wired to a stub casino in place of the
+network. `bankroll` is what the stub covers casino bets with, and `bank` what the developer's bank holds before any
+developer bet pays its stake in: 10^12 each by default.
 
-Every member is in [`gameWallet`](../sdk/game-wallet.md#gamewallet).
+| Member                       | What it is                                                                                                                                        |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wallet`                     | The player's wallet. Open a game with `openGame(identity)` and give it a spending limit with `setGameLimit(amount)` before it bets                |
+| `bridge`                     | The game's side of the bridge to `wallet`, a [`TestBridge`](#testbridge), to hand to `RoundClient` or your own client                             |
+| `identity(name?, declared?)` | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about it. Every name given here is published |
+| `developer`                  | A stub [`Developer`](../sdk/developer.md#developer) with the fixture's key, serving the game named `test`, to hand to your server's code          |
+| `storage`, `owner`, `player` | What the wallet saves, the stub casino's signing key, and the player's key                                                                        |
+| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the developer's bank holds                                                 |
+| `secretOf(round)`            | A round's secret, which only the casino knows until it reveals the round                                                                          |
+| `reload()`                   | A wallet started afresh from what this one saved, as a reload of the page starts one                                                              |
+| `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                          |
+| `forget()`                   | A wallet that has lost every receipt, as one restored from an older backup has                                                                    |
 
-## What the stub holds you to
+The wallet methods a test calls are `openGame(identity)`, `setGameLimit(amount)` (a decimal string of wei, as the
+player sets it in the wallet's dialog), `gameLimit()` (the open game's `{ balance, pending }`), `closeGame()`,
+`balance()` (the channel's signed balance, a bigint) and `playableBalance()` (that balance less what a pending operation
+commits), from [client/wallet-games.ts](../../client/wallet-games.ts) and
+[client/wallet-channel.ts](../../client/wallet-channel.ts).
+
+What the stub holds a game to:
 
 - Every casino bet passes the casino's own admission rule against `bankroll`, and the stub charges its commission. A
-  bet it declines, a zero-edge one for instance, the casino declines too. A declined bet comes back `rejected` with its
-  round revealed and the balance unchanged.
+  bet it declines, a zero-edge one for instance, the casino declines too: it comes back `rejected` with its round
+  revealed and the balance unchanged.
 - Operation IDs behave as the casino's do: the same `id` returns the same receipt, on the player's next channel too,
   and a wallet that has lost the receipt is refused with `id-used`.
 - Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`.
 - The developer's casino bet names a group, is admitted like any other and reveals its round, once: the same bet again
   gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
-- `developer.bets()` pages as the casino does, 100 bets by default: page with `after` and `more`, and the size never
+- `developer.bets()` pages as the casino does, 100 bets at a time: page with `after` and `more`, and the size never
   matters.
+
+### `bridgeTo`
+
+`bridgeTo(wallet)` is a game's side of the bridge to any wallet, such as one `reload()` returns. Every request goes
+through the checks the wallet's bridge makes, with an envelope ID above the last, and on to the wallet's own methods.
+The player agrees to every `game.requestFunds`: the limit rises by the amount asked, or by the whole playable balance
+when none is, up to the playable balance. Every receipt the wallet pushes reaches the `onReceipt` listeners of every
+bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
+refusal.
+
+### `TestBridge`
+
+What `bridgeTo` returns, and what [`RoundClient`](../sdk/round.md#roundbridge) and a game's own client take: `call`
+sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, `balance` is the open game's
+`{ balance, pending }`, and `onReceipt` hears pushed receipts and returns a function that stops the listener.
 
 ## Testing a multi-step game
 
 ```ts title="test/double-up.test.ts"
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
+import { gameWallet, memoryStore } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
-import type { RoundStore } from '@hookedin/play/sdk/round';
 import { doubleUp } from '../src/rules.ts';
-
-/** The game's origin storage, in memory. */
-const memory = (): RoundStore => {
-  const map = new Map<string, string>();
-  return {
-    get: key => map.get(key) ?? null,
-    set: (key, value) => void map.set(key, value),
-    remove: key => void map.delete(key),
-  };
-};
 
 test('a round of Double up settles one step at a time', async () => {
   const f = await gameWallet();
   f.wallet.openGame(f.identity('double-up'));
-  const round = new RoundClient(f.bridge, doubleUp, undefined, { store: memory(), name: 'double-up' });
+  const round = new RoundClient(f.bridge, doubleUp, undefined, { store: memoryStore(), name: 'double-up' });
   await round.start({ stake: '1000' });
   const state = await round.action('flip');
   assert.equal(state.cash, state.nodeId === 'won' ? '1900' : '0');
@@ -107,8 +121,12 @@ test('a round of Double up settles one step at a time', async () => {
 ```
 
 `src/rules.ts` is [Double up](multi-step-games.md#describe-the-game-as-a-graph). Give `RoundClient` a `store` and a
-`name`: a test has no page origin and no page path. Two clients over one store are one game in two tabs, or before and
-after a reload.
+`name`: a test has no page origin and no page path.
+
+### `memoryStore`
+
+`memoryStore()` is a game's origin storage in memory, as `RoundClient` takes it: what `localStorage` is to a page. Two
+clients over one store are one game in two tabs, or before and after a reload. `map` holds what it saved.
 
 ## Testing recovery
 
@@ -116,17 +134,16 @@ after a reload.
   the page would: `game.receipt` finds the receipt, and sending the same request again places nothing.
   [Plinko's test](../../games/plinko/test/plinko.test.ts) does this through its own client.
 - **A reload.** `await f.reload()` starts another wallet from what this one saved. Open the game in it again, and give
-  your client `f.bridgeFor(wallet)`.
+  your client `bridgeTo(wallet)`.
 - **Another channel.** `await f.replaceChannel()` closes the player's channel and opens another. Operation IDs carry
   over: the same request finds the operation instead of placing another.
-- **Lost receipts.** `await f.forget()` returns a wallet without the receipts this one kept, as one restored from an
-  older backup. After `f.replaceChannel()`, an operation it sends again fails with `id-used`.
+- **Lost receipts.** `await f.forget()` returns a wallet without the receipts this one kept. After
+  `f.replaceChannel()`, an operation it sends again fails with `id-used`.
 
 ## Testing a server
 
 Hand `f.developer` to your server's code in place of the one `createDeveloper` makes: it opens rounds, derives seed
-hashes, places the developer's casino bets and reveals, and settles bets, against the stub's bankroll and bank.
-`f.secretOf(round)` is a round's secret, which the stub reveals only with the round's casino bet or reveal. The
+hashes, places the developer's casino bets and reveals, and settles bets, against the stub's bankroll and bank. The
 template's [test/developer-bet.test.ts](https://github.com/hookedin/game-template/blob/main/test/developer-bet.test.ts)
 backs a developer bet with a casino bet on a round and settles it by the outcome. Roulette's wheel takes everything
 outside it as arguments, so its tests run it against a casino and a clock of their own
@@ -134,8 +151,21 @@ outside it as arguments, so its tests run it against a casino and a clock of the
 
 ## Proving a game's floor
 
-A test is where a game proves the least any bet it can place pays back: every branch of every step, at every stake it
-takes. The house games' tests pin it as `FLOOR`; see [measured return](casino-bets.md#measured-return).
+A game states no floor to its players: a promise nobody can verify is worth nothing, because no game bounds how often
+it wagers what it holds. It holds its own table to one in a test instead, and every player sees the
+[measured return](casino-bets.md#measured-return) of each bet they signed. The house games pin theirs as `FLOOR`, over
+every step of every graph they build, at stakes from 1,000 wei to 10^18.
+
+### `worstReturn`
+
+`worstReturn(plan)` is the least any bet a priced game can place pays back, in millionths of its stake: every branch
+of every step of a [`GamePlan`](../sdk/engine.md#gameplan).
+
+```ts
+import { worstReturn } from '@hookedin/play/testing/game-wallet.ts';
+
+assert.ok(worstReturn(compileGame(graph, { admits, bankrollFloor, cashQuantum, initialCash: stake })) >= FLOOR);
+```
 
 ## The conformance suite
 

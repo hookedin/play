@@ -85,57 +85,40 @@ round.watch(() => render(round.state())); // another tab moved the round
 
 `render` and `message` are your page's own.
 
-- `new RoundClient(bridge, graph, funding?, { store?, name? })` takes the bridge (`HookedIn` in a page), the function
-  that builds the graph for a setup, an optional [precomputed price table](#precomputed-prices), and where the round
-  is saved: `localStorage` and the page's path unless you say otherwise.
-- `restore()` loads the player's saved round and resolves a step whose reply was lost
-  ([state and recovery](state-and-recovery.md)). Call it on startup.
-- `start(setup)` starts a round. `setup.stake` is the stake as a decimal string, and any other field is yours for the
-  graph function, such as Dice's `chanceBps`. It asks the wallet for money if the limit is short, prices the graph and
-  saves the round; no money moves until the first action.
-- `action(id)` plays one step. It asks for money if the step needs more than the limit holds, draws which bet the step
-  places with the page's own randomness and saves it with a fresh operation ID before anything is signed, places it as
-  one `game.casinoBet` (or a `game.payment`, or nothing), checks the wallet's verified payout against the bet, and
-  advances to the state the outcome reaches.
-- The state says where the round stands: `nodeId`, `cash` (what the round holds, which the player keeps if they stop),
-  `terminal`, `actions` (what is legal from here), `events` (each step's action and label, to redraw the round after a
-  reload) and `settlement` (the last step's result: whether its bet won and at what chance, its payout and outcome, and
-  `draw`, the value to show it with). Every field is in [`RoundState`](../sdk/round.md#roundstate).
+- `restore()` loads the player's saved round and resolves a step whose reply was lost. Call it on startup.
+- `start(setup)` starts a round. `setup.stake` is the stake in wei, and any other field is yours for the graph
+  function, such as Dice's `chanceBps`. It asks the wallet for money if the limit is short, prices the graph and saves
+  the round; no money moves until the first action.
+- `action(id)` plays one step: at most one casino bet or payment, drawn and saved with a fresh operation ID before
+  anything is signed, and checked against the wallet's verified payout.
+- The state says where the round stands ([`RoundState`](../sdk/round.md#roundstate)): `cash` is what the round holds,
+  which the player keeps if they stop, and `events` are each step's action and label, to redraw the round after a
+  reload. `mountBank(element, { round })` leaves that cash out of the game's allowance and stands still while a step
+  settles, so the figure moves once a round.
 
 ## One step is one bet
 
-When the player acts, the engine groups the step's successors by the cash they need into **cash classes**. A step with
-one class places no bet, and any cash above that class's is paid to the bankroll as a `game.payment`. Any other step
-places at most one casino bet, between a lower class and a higher one:
-
-```text
-stake  = current cash − the lower class's cash
-prize  = the higher class's cash − the lower class's cash
-```
-
-Whatever the outcome, the player's cash after the bet is exactly the reached class's. A step of two classes, one on
-each side of the current cash, is always that one bet. A step of more is collapsed: the page draws, with its own
-randomness and before anything is signed, which pair of classes to bet between, in proportions that reach every class
-exactly as often as the rules say, and a class at exactly the current cash is reached with no bet
-([collapsing bets](collapsing-bets.md)). Which state of a class, when several need its cash, is drawn from the round's
-outcome, so the verified outcome names the card as well as the money.
+When the player acts, the engine groups the step's successors by the cash they need into cash classes. A step with one
+class places no bet, and any cash above that class's is paid to the bankroll as a payment. Any other step places at
+most one casino bet, between a lower class and a higher one: it stakes the current cash less the lower class's, and its
+prize is the difference between the two, so whatever the outcome, the player's cash after it is exactly the reached
+class's. A step of more than two classes is collapsed: the page draws which pair to bet between, in proportions that
+reach every class exactly as often as the rules say ([pricing and collapsing](collapsing-bets.md)).
 
 In Double up, `flip` from `start` stakes the stake for a prize of 1.9 stakes that wins on half the outcomes, and `take`
-moves no money: the 1.9 stakes are already in the player's balance. [Sequential games](sequential-games.md) derives all
-of it.
+moves no money: the 1.9 stakes are already in the player's balance.
 
 ## Pricing
 
-The engine works backward from the terminal payouts and gives every state its **cash**: the least that finances each
-of its actions with bets the casino's rule admits. That is more than the state's expected value, by a
-[risk premium](sequential-games.md#why-the-price-exceeds-the-expected-value) that shrinks as the bankroll grows.
+The engine works backward from the terminal payouts and gives every state its cash: the least that finances each of its
+actions with bets the casino's rule admits. That is more than the state's expected value, by a
+[risk premium](collapsing-bets.md#why-the-price-exceeds-the-expected-value) that shrinks as the bankroll grows, and
+every step needs an edge of its own at its state's cash.
 
 `RoundClient` prices against half the bankroll `wallet.info` reports, on a grid of a billionth of the stake, and starts
 the round with the stake as its cash. A stake the casino cannot back is refused before anything is signed, with an
 error naming about how much it can back. The next round with the same setup reuses the prices while the bankroll still
-covers their conservative starting requirement. Every step needs an edge of its own at its state's cash: a step with
-none is never admitted. Mines pays 99% of fair odds at any depth, so each pick after the first is fair at the
-cash-outs; each state holds a little more than its cash-out, what its next pick needs, and cashing out pays that back.
+covers their conservative starting requirement.
 
 ## Extra wagers
 
@@ -147,45 +130,20 @@ rounds.
 ## Precomputed prices
 
 Pricing a large graph in the page takes time. The constructor's third argument is a
-[`FundingTable`](../sdk/engine.md#fundingtable): each action's required cash at one stake. `RoundClient` uses it,
+[`FundingTable`](../sdk/engine.md#fundingtable): each action's required cash at one stake, which `RoundClient` uses,
 scaled by an exact integer, when the stake is a multiple of the table's `initialCash` and the bankroll covers its
-`conservativeBankroll` times that multiple; otherwise it prices in the page with `compileGameAsync`.
-[Blackjack](https://github.com/hookedin/game-blackjack) passes the table it commits:
+`conservativeBankroll` times that multiple. [Blackjack](https://github.com/hookedin/game-blackjack) commits its table and
+passes it:
 
 ```ts
-import { HookedIn } from '@hookedin/play/sdk/sdk';
-import { RoundClient } from '@hookedin/play/sdk/round';
-import { createBlackjack } from './rules.ts';
-import { blackjackFunding } from './funding.ts';
-
 const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: BigInt(setup.stake) }), blackjackFunding);
 ```
 
-A table is right only for the rules it was generated from. Blackjack's
-[scripts/funding.ts](https://github.com/hookedin/game-blackjack/blob/main/scripts/funding.ts) compiles its rules with
-`compileGame` and writes every action's `requiredCash` into `src/funding.ts`: `npm run generate` runs it, and `npm test`
-fails when the table does not match the rules.
+A table is right only for the rules it was generated from: blackjack's `npm run generate` compiles its rules with
+`compileGame` and writes every action's `requiredCash`, and its `npm test` fails when the table does not match.
 
 ## Changing the rules
 
 A saved round carries a hash of its rules: the graph the page builds for its setup. Once you change the graph, a round
 saved under the old one cannot be finished here: `restore()` throws once, with a message telling the player that what
 the round held is in their balance, and returns `null` after. Every step it took had already settled in the wallet.
-
-## The balance strip
-
-`mountBank(element, { round })` shows the game's limit less the cash inside an unfinished round, and stands still while
-a step settles, so the figure moves once a round: down by what the player put in, up by what the round finally pays.
-The cash it leaves out is the player's all the same ([`mountBank`](../sdk/bank-and-synth.md#mountbank)).
-
-## Examples
-
-- [Mines](../../games/mines/): `createMines({ tiles, mines, cashouts })`, reveal or cash out. The simplest graph where
-  the player decides when to stop.
-- [Blackjack](https://github.com/hookedin/game-blackjack): `createBlackjack({ stake })` with the precomputed table;
-  doubles, splits and insurance through `additionalCash`, and the cards redrawn from `state.events`.
-- [Dice](../../games/dice/): one decision with two outcomes, [src/rules.ts](../../games/dice/src/rules.ts).
-- [Plinko](../../games/plinko/): one decision whose outcomes are the buckets,
-  [src/tables.ts](../../games/plinko/src/tables.ts), with the ball's path drawn from `state.settlement.draw`.
-- [Samson's Gold](../../games/samson/): one decision with dozens of outcomes, reel stops drawn from
-  `state.settlement.draw`, and a bonus counter that applies each finished round once, by `state.id`.

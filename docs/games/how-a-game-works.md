@@ -1,13 +1,14 @@
 ---
 title: How a game works
-description: What a game owns and what the wallet owns, its URL, the sandbox, the spending limit and the bridge.
+description: What a game owns and what the wallet owns, the sandbox, the spending limit, the bridge, and how a game keeps every operation to exactly once across lost replies, reloads and tabs.
 sidebar:
   order: 2
 ---
 
-A game is a static web page on its own host. The wallet frames it in a sandbox, and the two talk through `postMessage`.
-The game asks for bets; the wallet signs each one, sends it to the casino and checks the result before the game hears
-of it.
+A game is a static web page on its own host, known by [its URL](publishing.md#the-games-url). The wallet frames it in a
+sandbox, and the two talk through `postMessage`. The game asks for bets; the wallet signs each one, sends it to the
+casino and checks the result before the game hears of it. The wallet keeps no state for a game: a game saves its own at
+its origin and names every operation, so that each happens exactly once whatever is lost on the way.
 
 ## Who does what
 
@@ -22,17 +23,6 @@ The casino admits each casino bet against its bankroll and signs each result; it
 ([how it works](../overview/how-it-works.md)). A game never sees a key and signs nothing. It cannot ask for arbitrary
 signatures, supply a bet's seed, see a round's secret before the reveal, or choose who earns its commission.
 
-## The game's URL
-
-A game is its URL: the page the wallet frames, such as `https://dice-game.hookedin.com/`. Beside it, the game may serve
-`icon.svg`, a square SVG the wallet shows as the game's tile in the library and while it loads.
-
-The account that [publishes](publishing.md) the game is its developer. It earns the game's
-[commission](earnings.md), its bank takes the stakes of the game's [developer bets](developer-bets.md), and its key
-settles them. A game opened by its URL alone is published by nobody: nobody earns its commission, and it takes no
-developer bets. Nothing states what a game pays back: a player's return is [measured](casino-bets.md#measured-return)
-from the bets themselves. Every rule is in the [game URL reference](../reference/game-url.md).
-
 ## The sandbox
 
 The wallet frames the page with `sandbox="allow-scripts allow-same-origin"`, `referrerpolicy="no-referrer"` and a
@@ -44,12 +34,9 @@ reach the wallet's page, storage or keys, or a browser wallet extension; navigat
 forms, show `alert` or `confirm` dialogs, or start downloads. The wallet refuses a game on its own origin, and its host
 forbids framing its pages.
 
-The build writes a Content-Security-Policy into the game's [`_headers`](../reference/cli.md#the-_headers-file) that
-keeps the page to its own origin: scripts, styles, fonts, workers and requests from there only, and images from there
-or as `data:` URLs. So there are no inline `<script>` or `<style>` elements, no scripts from a CDN and no third-party
-requests: bundle what you need, and run a server on the page's own origin
-([one Worker](developer-bets.md#one-cloudflare-worker)). The policy is the game's own. The wallet needs no header from
-the game's host: it frames the page and shows `icon.svg` as an image.
+The build's [`_headers`](publishing.md#the-_headers-file) keep the page to its own origin: no inline `<script>` or
+`<style>`, no scripts from a CDN and no third-party requests. Bundle what you need, and run a server on the page's own
+origin ([one Worker](developer-bets.md#one-cloudflare-worker)).
 
 ## The spending limit
 
@@ -68,7 +55,7 @@ its verified winnings.
 - Leaving the game, reloading or closing the tab releases the limit. The money never left the player's balance.
 - One game per wallet holds a limit at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
-  until it does ([lost replies](state-and-recovery.md#lost-replies)).
+  until it does ([lost replies](#lost-replies)).
 
 [`mountBank`](../sdk/bank-and-synth.md#mountbank) draws the balance strip the house games show: the limit, labelled
 **Game allowance**, with an **Adjust allowance** button.
@@ -76,45 +63,110 @@ its verified winnings.
 ## The bridge
 
 The page posts `{ hookedin: true, id, method, params }` to its parent window; the wallet answers the page's origin,
-and only it, with `{ hookedin: true, id, result }` or `{ hookedin: true, id, error: { code, message } }`.
-`wallet.hello`, `wallet.info`, `wallet.round` and `game.receipt` are answered at once. Anything that signs or asks the
-player waits its turn, in the order asked, up to 32 at a time. The [`HookedIn`](../sdk/hookedin.md#hookedin) object
-wraps all of it: a typed method per call, and a `HookedInError` with a stable `code` for every refusal. The eight
-methods are [`wallet.hello`](../reference/bridge.md#wallethello), [`wallet.info`](../reference/bridge.md#walletinfo),
-[`wallet.round`](../reference/bridge.md#walletround), [`game.receipt`](../reference/bridge.md#gamereceipt),
-[`game.casinoBet`](../reference/bridge.md#gamecasinobet),
-[`game.developerBet`](../reference/bridge.md#gamedeveloperbet), [`game.payment`](../reference/bridge.md#gamepayment)
-and [`game.requestFunds`](../reference/bridge.md#gamerequestfunds); the [bridge reference](../reference/bridge.md) has
-every field, reply and error.
+and only it, with `{ hookedin: true, id, result }` or `{ hookedin: true, id, error: { code, message } }`. Questions are
+answered at once; anything that signs or asks the player waits its turn, in the order asked, up to 32 at a time.
+[`HookedIn`](../sdk/hookedin.md#hookedin) wraps all of it, with a typed method per request and a `HookedInError` for
+every refusal: act on its `code`, show its `message`. The [bridge reference](../reference/bridge.md) has every method,
+field, reply and [error](../reference/bridge.md#errors).
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
 HookedIn.onBalance(({ balance, pending }) => render(balance, pending)); // your page's own render
-const hello = await HookedIn.hello(); // the methods, the money and the limits a bet is held to
 const info = await HookedIn.info(); // the player's names, the bankroll, a recommended stake
 ```
 
-`HookedIn.initializeGame({ stakeInput, assetLabels })` is the read-only startup the house games share: the greeting, the
-player, the first balance, the money's name on the page and the recommended stake in the stake field.
+Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('0.001')` is `'1000000000000000'`, and
+`formatAmount` reads one back. [`wallet.info`](../reference/bridge.md#walletinfo) is all a game learns of the player:
+their uname, theirs for good, the alias they go by today, the casino's bankroll as last reported and a recommended
+stake. The player's address, channel and balances never cross the bridge.
 
-## ETH
+## Operation IDs
 
-A game plays with the network's ETH: `asset.symbol` is what to show, and `asset.decimals` is 18. Amounts on the bridge
-are decimal strings of whole wei. `HookedIn.parseAmount('0.001')` is `'1000000000000000'`; `formatAmount`,
-`exactAmount` and `stepStake` convert the other way.
+Every casino bet, developer bet and payment carries an `id` the game chooses, such as `crypto.randomUUID()`: the game's
+durable name for the operation, kept for the player and the game on every channel of the player's. The same `id` with
+the same terms returns the operation's receipt, so an operation is placed once however often it is sent; the same `id`
+with other terms fails with `id-conflict`.
 
-## What a game learns about the player
+## Save before you send
 
-`wallet.info` answers `{ uname, alias, chainId, bankroll, recommendedStake }`. The uname, written `~uname`, is the
-player's for good; the alias, written `@alias`, is what they are called today, and `null` unless they took one.
-`HookedIn.showName(info)` writes either the way the wallet does. Key anything you save by the uname
-([storage](state-and-recovery.md#storage)): a player has none until their first deposit, and the wallet then loads the
-game again. The player's address, channel and balances never cross the bridge. `bankroll` is the casino's bankroll as
-last reported: what to price bets against, not a promise to admit them.
+Choose the action and its `id`, and save both at your origin, before you ask the wallet; a page that draws which bet to
+place saves the bet it drew with them. The wallet saves the signed request before it leaves, so the game's record and
+the wallet's meet by `id` after any crash. [A coin flip](casino-bets.md#a-coin-flip) saves `{ id, stake }` under its
+storage key and clears it once the receipt arrives.
 
-## Three operations
+## Lost replies
 
-- A [casino bet](casino-bets.md) settles against the bankroll in the request that places it.
-- A [developer bet](developer-bets.md) is a bet against you, which your server settles later.
-- A [payment](casino-bets.md#payments) is a debit to the bankroll with no outcome.
+A reply can be lost to a reload, a crash, or the SDK's `timeout` after three minutes. A timeout or any other error
+proves nothing about the operation. On startup, read what you saved and ask the wallet:
+
+```ts
+import { HookedIn } from '@hookedin/play/sdk/sdk';
+import { flipBet, wire } from './flip.ts';
+
+const key = `${HookedIn.storageScope(await HookedIn.info())}:flip`;
+const saved: { id: string; stake: string } | null = JSON.parse(localStorage.getItem(key) ?? 'null');
+if (saved) {
+  const receipt = await HookedIn.receipt(saved.id);
+  if (receipt) {
+    localStorage.removeItem(key); // the reply that was lost: apply it once
+    show(receipt);
+  } else
+    offer('Finish your flip', async () => {
+      // No receipt in this wallet: the same request, under the same id.
+      show(await HookedIn.casinoBet({ id: saved.id, ...wire(flipBet(BigInt(saved.stake))) }));
+      localStorage.removeItem(key);
+    });
+}
+```
+
+`show` and `offer` are your page's own.
+
+- **A receipt** is the reply you lost. Apply it exactly once, and clear your record.
+- **`null`** means this wallet holds no receipt for the `id`. Send the same request under the same `id`. If the wallet
+  still holds it signed, which the pushed `pending: true` shows, it sends that signed request again; if not, it signs
+  it. The player can also retry a signed request from the wallet's banner.
+- While an operation is pending, the wallet takes no other bet or payment: another `id` fails with
+  `pending-operation`.
+
+[`RoundClient`](../sdk/round.md#roundclient) does all of this for a multi-step game.
+
+## Rejections
+
+A receipt with `status: 'rejected'` is a checkpoint the casino signed one step above the operation, which the wallet
+checked: the operation is cancelled, with no outcome, no balance change and no commission, and `reason` says why. The
+`id` keeps returning that rejection. To try again, send the same terms under a fresh `id`; `RoundClient` keeps the
+pending step and the bet it drew, and does so: drawing again would change the game's odds. A declined casino bet's
+round is revealed with its rejection ([rejected bets](../wallet/bets-and-receipts.md#rejected-bets)).
+
+## When a wallet has lost receipts
+
+A wallet restored from an older backup may not hold the receipt of an operation its player carried out on another
+channel. `game.receipt` returns `null` for it, and sending the request again fails with `id-used`: the operation was
+carried out, and its result is not in this wallet. Clear your record and tell the player. Do not send it again under
+another `id` without asking them.
+
+## Storage
+
+Keep state at your own origin, in `localStorage` or IndexedDB. Key it by page, chain and player, so that games sharing a
+host and accounts sharing a browser never read each other's state. `HookedIn.storageScope(info)` builds such a key:
+
+```text
+hookedin:<page path>:<chainId>:<uname>
+```
+
+It keys on the uname, which is the player's for good; never key by the alias, which the player can change. A player has
+no uname until their first deposit, and the wallet then loads the page again. `RoundClient` saves its round under
+`hookedin:round:<name>:<chainId>:<uname>`, where `name` is the page's path unless you pass one.
+
+## Reloads and tabs
+
+- A reload releases the spending limit. The state at your origin survives, and every settled step's money is in the
+  channel balance: a resumed round asks for money again.
+- Saved state stays in this browser. It is not in wallet backups and does not follow the player to another browser; a
+  round left unfinished leaves the player the cash it held.
+- Two tabs of one game share its origin storage. Read saved state again before every action; `RoundClient` does, and
+  its `watch(listener)` reloads the round when another tab writes it. The wallet lets one game per wallet hold a limit
+  at a time and keeps one pending operation per channel, so the money stays consistent whatever the tabs do.
+- A game with state beyond one round, such as a slot's bonus counter, applies each finished round once, by the round's
+  `id`.

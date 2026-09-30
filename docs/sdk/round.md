@@ -6,14 +6,10 @@ sidebar:
 ---
 
 `import { RoundClient } from '@hookedin/play/sdk/round';` plays a game of several steps, such as a hand of blackjack, as
-a sequence of casino bets, priced by the [engine](engine.md): each step is one casino bet, a payment or nothing. The
+a sequence of casino bets priced by the [engine](engine.md): each step is one casino bet, a payment or nothing. The
 module is Node-safe: it reaches `localStorage` only through its default store and `window` only in `watch`, so a test
-runs it in Node with a store of its own.
-[Multi-step games](../games/multi-step-games.md) is the guide, and [sequential games](../games/sequential-games.md)
-derives the pricing.
-
-Every step settles in the wallet on its own, so the cash inside an unfinished round is part of the game's balance, and a
-player who stops keeps it: a [settled trade-off](../overview/architecture.md#settled-trade-offs).
+runs it in Node with a store of its own. [Multi-step games](../games/multi-step-games.md) is the guide, and
+[pricing and collapsing](../games/collapsing-bets.md) the method.
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
@@ -33,106 +29,62 @@ if (state.actions.includes('cash-out')) state = await round.action('cash-out');
 
 ### `RoundClient`
 
-```ts
-export class RoundClient {
-  constructor(
-    bridge: RoundBridge,
-    graph: (setup: any) => GameGraph,
-    funding?: FundingTable,
-    {
-      store,
-      name,
-    }?: {
-      store?: RoundStore;
-      name?: string;
-    },
-  );
-}
-```
+`new RoundClient(bridge, graph, funding?, { store?, name? })`:
 
-| Parameter | Type                        | Meaning                                                                                                               |
-| --------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `bridge`  | `RoundBridge`               | How it reaches the wallet: `HookedIn` in a page, a [test bridge](game-wallet.md#testbridge) in a test                 |
-| `graph`   | `(setup: any) => GameGraph` | Builds the game's graph for a setup, the object `start` is given. Called once per distinct setup in a page            |
-| `funding` | `FundingTable`              | Precomputed action prices, such as [blackjack's](https://github.com/hookedin/game-blackjack/blob/main/src/funding.ts) |
-| `store`   | `RoundStore`                | Where the round is saved. `localStorage` by default                                                                   |
-| `name`    | `string`                    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location`         |
+| Parameter | Meaning                                                                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------- |
+| `bridge`  | How it reaches the wallet, a [`RoundBridge`](#roundbridge): `HookedIn` in a page, a test bridge in a test     |
+| `graph`   | Builds the game's graph for a setup, the object `start` is given. Called once per distinct setup in a page    |
+| `funding` | Precomputed action prices, a [`FundingTable`](engine.md#fundingtable), such as blackjack's                    |
+| `store`   | Where the round is saved, a [`RoundStore`](#roundstore). `localStorage` by default                            |
+| `name`    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
 
-Each action of a round is at most one operation, whose [group](../reference/bridge.md#gamecasinobet) is the round's
-`id`:
+Each step is at most one operation, whose group is the round's `id`. The round asks the player for money when the
+game's balance is short of what the step needs, draws the step's branch with the page's own randomness
+([`prepareAction`](engine.md#prepareaction)) and saves it with a fresh operation ID before it sends anything, and then
+sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing. A bet wins when the receipt's outcome is
+below its chance, which fixes the class of states it reaches, and the outcome draws the state within it; the verified
+payout must be the prize when the bet won and `0` otherwise, or the step throws. A declined step stays saved under a
+fresh operation ID, the same bet, never drawn again. A step whose reply was lost stays saved under its own, and the
+wallet answers it with the same receipt.
 
-1. If the game's balance is short of the step's cash, the round asks the player for the shortfall plus four stakes.
-2. It draws the step's branch with the page's own randomness ([`prepareAction`](engine.md#prepareaction)) and saves it
-   with a fresh operation ID in its store before it sends anything.
-3. It sends a bet as one `game.casinoBet` (its stake, chance and prize), a payment as `game.payment`, and nothing for a
-   step without either.
-4. A bet wins when the receipt's outcome is below its chance, which fixes the class of states it reaches, and
-   [`landing`](engine.md#landing) the state within it. The verified payout must be the prize when the bet won and `0`
-   otherwise, or the step throws.
-
-A declined step stays saved under a fresh operation ID, for the player to retry or leave: the same bet, never drawn
-again, since a redraw would change the game's odds. A step whose reply was lost stays saved under its own: `restore`
-finds its receipt through `game.receipt`, and `action` sends it again, which the wallet answers with the same
-receipt.
-
-**Saving.** The store key is `hookedin:round:<name>:<chainId>:<uname>`, from [`playerScope`](wire.md#playerscope). A
-saved round records its format, `HOOKEDIN/ROUND/5`, and its rules: the SHA-256 hash of the graph its setup builds, as
-JSON. A page cannot finish a round saved in another format or under other rules, a setup its rules refuse included. The
-next `restore`, `start` or `action` removes it and throws
+**Saving.** The store key is `hookedin:round:<name>:<chainId>:<uname>`. A saved round records its format,
+`HOOKEDIN/ROUND/5`, and its rules: the SHA-256 hash of the graph its setup builds, as JSON. A page cannot finish a round
+saved in another format or under other rules, a setup its rules refuse included: the next `restore`, `start` or
+`action` removes it and throws
 `This round was started under rules this game does not play. What it held is in your balance.`
 
 **Pricing.** `start` prices the graph against the bankroll `wallet.info` reports. It reuses the saved round's plan when
 the setup is the same and the bankroll still covers the plan's `conservativeBankroll`. With `funding`, when the stake is
 a whole multiple `k` of `funding.initialCash` and the bankroll covers `k` times `funding.conservativeBankroll`, it loads
-the table at scale `k` ([`loadFundedGame`](engine.md#loadfundedgame)). Otherwise it compiles the graph in the page
-([`compileGameAsync`](engine.md#compilegameasync)) with a planning floor of half the bankroll and a cash grid of the stake
-divided by 10^9, at least 1. When pricing fails, or the bankroll is below the plan's `conservativeBankroll`, `start`
-throws `The casino can only back about <amount> of payouts right now. Lower your stake and try again.`
+the table at scale `k` ([`loadFundedGame`](engine.md#loadfundedgame)). Otherwise it compiles the graph in the page with
+a planning floor of half the bankroll and a cash grid of the stake divided by 10^9, at least 1. When pricing fails, or
+the bankroll is below the plan's `conservativeBankroll`, `start` throws
+`The casino can only back about <amount> ETH of payouts right now. Lower your stake and try again.`
 
 #### `restore`
-
-```ts
-restore(): Promise<RoundState | null>;
-```
 
 Reads the saved round for this game and player, and applies any result the wallet settled meanwhile: for a pending step
 it asks `game.receipt` by the step's operation ID and applies the receipt it finds. It is the only method that looks a
 result up; `start` and `action` take the saved round as it stands. It resolves with the round's state, or `null` when
-none is saved. It asks the wallet for `wallet.info`, `wallet.hello` (until the wallet has answered it once) and the
-game's balance. It throws for a round saved under other rules (see saving above), when a receipt does not match the
-saved step, and with the bridge's errors. Its `onChange` listeners are called when it ends, whether or not it threw.
+none is saved, and throws for a round saved under other rules, for a receipt that does not match the saved step, and
+with the bridge's errors.
 
 #### `start`
 
-```ts
-start(setup: {
-  stake: string;
-  [key: string]: unknown;
-}): Promise<RoundState>;
-```
-
-Starts a round at the graph's root, with `setup.stake`, a decimal string of smallest units, as its cash. The setup goes
-to `graph` and is saved, as JSON, with the round. `start` reads the saved round first and throws
-`Recover the pending action first` while a step is pending, which `restore` resolves. It makes sure the game's balance
-covers the stake, prices the graph, and saves the round under a fresh `id`. It places no bet; the first `action` does.
-A saved unfinished round is replaced, and its cash is in the game's balance already.
-
-It throws the pricing error above, `Add enough money to this game to continue` when the player does not give the game
-enough, and the bridge's errors. Its `onChange` listeners are called when it ends.
+Starts a round at the graph's root with `setup.stake`, a decimal string of wei, as its cash; the setup goes to `graph`
+and is saved with the round. It throws `Recover the pending action first` while a step is pending, which `restore`
+resolves. It makes sure the game's balance covers the stake, prices the graph, and saves the round under a fresh `id`,
+replacing a saved unfinished round, whose cash is in the game's balance already. It places no bet; the first `action`
+does. It throws the pricing error above, `Add enough money to this game to continue` when the player does not give the
+game enough, and the bridge's errors.
 
 #### `action`
 
-```ts
-action(action: string): Promise<RoundState>;
-```
-
-Plays one step, `action` being one of `state().actions`, and resolves with the state it leads to. It reads the saved
-round first, as it stands. With no step pending, it makes sure the balance covers the round's cash plus the action's
-`additionalCash`, draws the step's branch at the bankroll `wallet.info` reports, saves it and sends it. With a step
-pending, only that step's action is accepted, and the step is sent again under its saved operation ID. The wallet
-answers an operation it has carried out with its receipt, so a step whose reply was lost is played once, and `action`
-resolves with the state it led to. A finished round resolves with its state unchanged. `busy` is `true` while it runs,
-and the `onChange` listeners are called when it ends.
+Plays one step, `action` being one of `state().actions`, and resolves with the state it leads to. With a step pending,
+only that step's action is accepted, and the step is sent again under its saved operation ID: the wallet answers an
+operation it has carried out with its receipt, so a step whose reply was lost is played once. A finished round resolves
+with its state unchanged.
 
 | Throws                                                                                         | When                                                                          | The step afterwards                                                           |
 | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -150,108 +102,46 @@ After an error, `restore()` gives the state to show: a pending step shows `pendi
 
 #### `state`
 
-```ts
-state(): RoundState | null;
-```
-
 The round as last read, without asking the wallet: `null` before the first `restore` or `start`, and when no round is
 saved.
 
 #### `watch`
 
-```ts
-watch(listener: () => void): void;
-```
-
-Follows other tabs of the game. When another tab writes this round's key in `localStorage`, it restores the round and
-calls `listener`; a failed restore is ignored. The key is known once `restore` or `start` has run. It does nothing
-where there is no `window`. Each call adds a listener, and none can be removed.
+Follows other tabs of the game: when another tab writes this round's key in `localStorage`, it restores the round and
+calls the listener, ignoring a failed restore. It does nothing where there is no `window`, and a listener cannot be
+removed.
 
 #### `inHand`
 
-```ts
-inHand(): bigint;
-```
-
-The cash inside an unfinished round, or `0n`. It is part of the game's balance and the player's to keep if they stop;
-[`mountBank`](bank-and-synth.md#mountbank) leaves it out of the figure it shows.
+The cash inside an unfinished round, or `0n`: part of the game's balance, and the player's to keep if they stop.
 
 #### `ensureFunds`
 
-```ts
-ensureFunds(required: bigint, stake: bigint): Promise<void>;
-```
-
-Makes sure the game's balance covers `required`. When it does not, it asks the player through `game.requestFunds` for
-the shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
-`Add enough money to this game to continue` if the balance is still short. `start` and `action` call it. It works from
-the balance the last `restore`, `start` or `action` read, so one of them runs before it.
+Makes sure the game's balance, as the last `restore`, `start` or `action` read it, covers `required`. When it does not,
+it asks the player for the shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
+`Add enough money to this game to continue` if the balance is still short.
 
 #### `busy`
 
-```ts
-busy: boolean;
-```
-
-`true` while `action` runs: the wallet's balance holds the step's result before the round does, and another `action`
-throws.
+`true` while `action` runs: the wallet's balance holds the step's result before the round does.
 
 #### `onChange`
 
-```ts
-onChange(listener: () => void): () => void;
-```
-
-Calls `listener` after every `restore`, `start` and `action`, whether it resolved or threw: whenever the round's cash
-or `busy` may have changed. Returns a function that stops it. [`mountBank(root, { round })`](bank-and-synth.md#mountbank)
-redraws the strip with it.
-
-#### `name`
-
-```ts
-readonly name: string;
-```
-
-The name the constructor was given, or its default: part of the storage key.
-
-#### `units`
-
-```ts
-units: string;
-```
-
-The symbol of the wallet's asset, from `wallet.hello`, used in the sentences the helper writes to the player. It is `''`
-until a `restore`, `start` or `action` has had the wallet's answer.
+Calls a listener after every `restore`, `start` and `action`, whether it resolved or threw: whenever the round's cash or
+`busy` may have changed. Returns a function that stops it. [`mountBank`](bank-and-synth.md#mountbank) redraws the strip
+with it.
 
 ## Types
 
 ### `RoundState`
-
-```ts
-export interface RoundState {
-  id: string;
-  setup: { stake: string; [key: string]: unknown };
-  nodeId: string;
-  cash: string;
-  contributed: string;
-  balance: string;
-  terminal: boolean;
-  actions: string[];
-  actionCosts: Record<string, string>;
-  events: RoundEvent[];
-  pending: boolean;
-  settlement: any;
-}
-```
 
 | Field         | Meaning                                                                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`          | The round's own ID, a UUID fixed at `start`. It is the group of each step, and lets a game apply a finished round to its own state exactly once |
 | `setup`       | The setup `start` was given, as JSON: its `stake`, and whatever else the game's graph is built from, such as Samson's `mode`                    |
 | `nodeId`      | The graph node the round is at                                                                                                                  |
-| `cash`        | The round's cash at this node, a decimal string of smallest units. At a terminal node, what the round paid                                      |
+| `cash`        | The round's cash at this node, a decimal string of wei. At a terminal node, what the round paid                                                 |
 | `contributed` | The stake plus the `additionalCash` of every step taken                                                                                         |
-| `balance`     | The game's balance as last read from the wallet                                                                                                 |
 | `terminal`    | The round is finished                                                                                                                           |
 | `actions`     | The actions the node offers: only the pending step's while one is pending, none at a terminal node                                              |
 | `actionCosts` | The `additionalCash` of each of the node's actions, as decimal strings                                                                          |
@@ -261,65 +151,23 @@ export interface RoundState {
 
 A settled step's `settlement` is `{ kind, won?, chance?, payout, outcome, draw }`. `kind` is `casino-bet`, `payment` or
 `noop`. A casino bet's `won` says whether its outcome was below its `chance`, and its `payout` and `outcome` are the
-receipt's decimal strings; a payment's or a no-op's `payout` and `outcome` are `null`. `draw` is what the page shows the
-result with, such as which reel stops or which path a ball takes, drawn apart from which state the step reached: for a
-bet, from the round's outcome by [`landing`](engine.md#landing), and for a step without one by the page when it
-prepared the step, a 64-bit value as a decimal string either way.
+receipt's decimal strings; a payment's or a no-op's `payout` and `outcome` are `null`. `draw` is a 64-bit value, as a
+decimal string, to show the result with, such as which reel stops or which path a ball takes: drawn from the round's
+outcome for a bet, apart from which state the step reached, and by the page for a step without one.
 [`seededRandom(BigInt(draw))`](engine.md#seededrandom) reads it. A declined step's `settlement` is
 `{ kind: 'rejected', reason }`.
 
 ### `RoundEvent`
 
-```ts
-export interface RoundEvent {
-  action: string;
-  label?: string;
-}
-```
-
-One step taken: its action, and the label of the outcome it led to when the graph gives one, such as blackjack's
+One step taken: its `action`, and the `label` of the outcome it led to when the graph gives one, such as blackjack's
 `player:0:12:3`.
-
-### `Bridge`
-
-```ts
-export type Bridge = (method: string, params?: any) => Promise<any>;
-```
-
-One bridge request, as [`HookedIn.call`](hookedin.md#call) sends it.
 
 ### `RoundBridge`
 
-```ts
-export interface RoundBridge {
-  call: Bridge;
-  balance: () => Promise<GameLimit>;
-}
-```
-
-What the helper needs of the SDK: requests, and the game's balance as the wallet last pushed it, a `GameLimit`
-`{ balance: string; pending: boolean }` of the same shape as [`GameBalance`](hookedin.md#gamebalance). `HookedIn` and
-[`TestBridge`](game-wallet.md#testbridge) are both round bridges.
+What the helper needs of the SDK: `call`, a bridge request, and `balance`, the game's balance as the wallet last pushed
+it. `HookedIn` and a [test bridge](../games/testing.md#testbridge) are both round bridges.
 
 ### `RoundStore`
 
-```ts
-export interface RoundStore {
-  get(key: string): string | null;
-  set(key: string, value: string): void;
-  remove(key: string): void;
-}
-```
-
-Where rounds live between reloads: the game's own origin storage. `localStorage` fits it, and a test passes a map:
-
-```ts
-import type { RoundStore } from '@hookedin/play/sdk/round';
-
-const saved = new Map<string, string>();
-const store: RoundStore = {
-  get: key => saved.get(key) ?? null,
-  set: (key, value) => void saved.set(key, value),
-  remove: key => void saved.delete(key),
-};
-```
+Where rounds live between reloads: `get`, `set` and `remove` over the game's own origin storage. `localStorage` fits
+it, and a test passes a [`memoryStore()`](../games/testing.md#memorystore).

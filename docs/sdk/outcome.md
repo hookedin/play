@@ -8,25 +8,14 @@ sidebar:
 `import { betPayout, outcome, roundId, seedHash } from '@hookedin/play/sdk/outcome';` is the rule every round's outcome
 follows, and what a casino bet pays on it, for a page, a server or anybody else that checks a round. The module is
 Node-safe. A round is named by the hash of a secret the casino keeps, a seed by its own hash, and the outcome is theirs
-together. The casino names the round before the seed is picked, so neither side knows the outcome before both are out.
-[Signed messages](../reference/signed-messages.md) gives the derivation's place in the protocol.
+together ([signed messages](../reference/signed-messages.md)).
 
 ## The rule
 
 ### `outcome`
 
-```ts
-export function outcome(
-  seed: string,
-  secret: string,
-): {
-  randomHash: string;
-  value: bigint;
-};
-```
-
-The outcome of a round's `secret` with a bet's `seed`, both 32-byte hex strings. Every bet on one round and seed sees
-the same outcome.
+`outcome(seed, secret)`: the outcome of a round's `secret` with a bet's `seed`, both 32-byte hex strings. Every bet on
+one round and seed sees the same outcome.
 
 | Result       | Meaning                                                                                      |
 | ------------ | -------------------------------------------------------------------------------------------- |
@@ -35,37 +24,23 @@ the same outcome.
 
 ### `betPayout`
 
-```ts
-export const betPayout: (bet: { chance: Integer; prize: Integer }, value: bigint) => bigint;
-```
-
-What a casino bet pays on the outcome `value`: its `prize` when `value` is below its `chance`, and `0n` otherwise. The
-stake was paid to enter. `chance` and `prize` may be decimal strings, numbers or bigints, so a receipt's or a round's
-casino bet goes in as it is.
+`betPayout(bet, value)`: what a casino bet pays on the outcome `value`, its `prize` when `value` is below its `chance`,
+and `0n` otherwise. `chance` and `prize` may be decimal strings, numbers or bigints, so a receipt's or a round's casino
+bet goes in as it is.
 
 ### `roundId`
-
-```ts
-export const roundId: (secret: string) => string;
-```
 
 A round's ID, the hash of its secret: `keccak256(secret)`, in lower-case hex.
 
 ### `seedHash`
 
-```ts
-export const seedHash: (seed: string) => string;
-```
-
-The hash a bet names its seed by: `keccak256(seed)`, in lower-case hex. Whoever knows the round's secret cannot know
-the outcome before the seed is out.
+The hash a bet names its seed by: `keccak256(seed)`, in lower-case hex.
 
 ## Checking a round
 
-The wallet checks a casino bet on the player's own round before the game hears of it: the receipt's `outcome` is one
-the wallet derived itself, and its `payout` the `betPayout` of it. A developer's round is public once the developer's
-casino bet reveals it ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), which a game page reads
-with [`HookedIn.round`](hookedin.md#round)), and anyone can check it by hand:
+The wallet checks a casino bet on the player's own round before the game hears of it. A developer's round is public
+once the developer's casino bet reveals it ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), which
+a game page reads with [`HookedIn.round`](hookedin.md#round)), and anyone can check it by hand:
 
 1. `roundId(round.secret)` is the round's ID: the casino revealed the secret it committed to.
 2. `seedHash(round.seed)` is the seed hash the game published before anybody bet: the developer brought the seed it

@@ -1,6 +1,6 @@
 ---
 title: Quick start
-description: Run the game template on your machine, open it in the wallet by its URL and place a first bet.
+description: Run the game template on your machine, open it in the wallet by its URL, place a first bet, and find the house game closest to yours.
 sidebar:
   order: 1
 ---
@@ -25,19 +25,10 @@ cd my-game
 npm install
 ```
 
-The template depends on `@hookedin/play` at its `main` branch ([packages and imports](../sdk/index.md)). It holds:
-
-| File                                   | What it holds                                                                                                     |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `src/index.html`                       | The page. It loads `./shared.css`, `./style.css` and `./game.js`                                                  |
-| `src/game.ts`                          | The entry point, bundled to `dist/game.js`. Here, the probe                                                       |
-| `src/style.css`                        | The page's styles, on top of the SDK's `shared.css`                                                               |
-| `src/icon.svg`                         | The icon the wallet shows the game by: a square SVG of one symbol ([the icon](../reference/game-url.md#the-icon)) |
-| `test/`                                | Casino and developer bets through the real wallet ([testing](testing.md))                                         |
-| `wrangler.jsonc`, `.github/workflows/` | Deployment to Cloudflare ([publishing](publishing.md))                                                            |
-
-There is nothing to configure: a game is its [URL](../reference/game-url.md), and the account that publishes it is its
-developer, which earns its [commission](earnings.md) and settles its [developer bets](developer-bets.md).
+The template depends on `@hookedin/play` at its `main` branch ([packages and imports](../sdk/index.md)). `src/` is the
+game: `index.html`, `style.css`, [`icon.svg`](publishing.md#the-icon) and `game.ts`, here the probe. `test/` places
+casino and developer bets through the real wallet ([testing](testing.md)), and the workflow deploys the game
+([publishing](publishing.md)). There is nothing to configure: the account that publishes the game is its developer.
 
 ## Run it
 
@@ -45,7 +36,7 @@ developer, which earns its [commission](earnings.md) and settles its [developer 
 npm run dev
 ```
 
-This runs [`hookedin-game serve`](../reference/cli.md#serve): it builds `src/` into `dist/`, serves it at
+This runs [`hookedin-game serve`](publishing.md#build): it builds `src/` into `dist/`, serves it at
 `http://127.0.0.1:4185/` and builds again on every page load, so a change shows on reload. `PORT` moves it.
 
 ## Open it in the wallet
@@ -53,13 +44,10 @@ This runs [`hookedin-game serve`](../reference/cli.md#serve): it builds `src/` i
 1. Open [play.hookedin.com](https://play.hookedin.com) and go to **Games**.
 2. Choose **Open a game by its URL**, enter `http://127.0.0.1:4185/` and choose **Open**.
 
-The wallet frames the page from your machine in a sandbox and connects the bridge. The probe prints the replies to
+The wallet frames the page from your machine in a sandbox and connects the bridge, and the probe prints the replies to
 `wallet.hello` and `wallet.info` as it starts. A game served from your machine plays against the public wallet and
-casino, because your browser loads both. A game opened by its URL alone is published by nobody, so it takes no
-developer bets: those need the game [published](publishing.md) and opened at its name.
-
-Open the wallet as `https://play.hookedin.com/?log` to see every bridge message below the game
-([the developer log](../wallet/games-and-limits.md#the-developer-log)).
+casino, because your browser loads both. Developer bets need the game [published](publishing.md#publish-it) and opened
+at its name.
 
 ## Place a first bet
 
@@ -88,15 +76,25 @@ wallet checked against the round it signed; it is below the chance, so the prize
 the wallet returns the same receipt: an operation ID names one operation. Send other terms under the same ID and it
 refuses them with `id-conflict`.
 
-## Next
-
 Replace the probe with your game in `src/`, and keep the probe in a branch: it is the quickest way to reproduce a wallet
 reply you did not expect.
 
-- [How a game works](how-a-game-works.md): what the game owns, what the wallet owns, the sandbox and the spending
-  limit.
-- [Casino bets](casino-bets.md): a one-shot game, the casino's edge and measured return.
-- [Multi-step games](multi-step-games.md): decisions, at most one casino bet per step, with `RoundClient`.
-- [State and recovery](state-and-recovery.md): operation IDs, lost replies and reloads.
-- [Developer bets](developer-bets.md): a server of your own, and bets against you.
-- [Testing](testing.md), [publishing](publishing.md) and [the house games](examples.md).
+## The house games
+
+The house's games are what `@hookedin` publishes, each with its README, its tests and its deployment. Start from the
+one closest to your game.
+
+| Game                                                    | What it shows                                                                   | Copy                                                                                             |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Dice](../../games/dice/)                               | The smallest `RoundClient` game: one decision, two outcomes                     | [src/rules.ts](../../games/dice/src/rules.ts), [src/game.ts](../../games/dice/src/game.ts)       |
+| [Plinko](../../games/plinko/)                           | One decision of many outcomes, collapsed into one bet per drop                  | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts) |
+| [Samson's Gold](../../games/samson/)                    | A 243-ways slot whose odds are counted exactly from its reels                   | [src/math.ts](../../games/samson/src/math.ts)                                                    |
+| [Mines](../../games/mines/)                             | Reveal or cash out: the simplest multi-step graph                               | [src/rules.ts](../../games/mines/src/rules.ts)                                                   |
+| [Blackjack](https://github.com/hookedin/game-blackjack) | Doubles, splits and insurance, with precomputed prices                          | The whole repository                                                                             |
+| [Roulette](https://github.com/hookedin/game-roulette)   | Many players' developer bets on one spin, backed by the wheel's casino bets     | The whole repository                                                                             |
+| [Crash](https://github.com/hookedin/game-crash)         | Many players on one flight, each a developer bet paid from the developer's bank | The whole repository                                                                             |
+
+The four static games live in play's [games/](../../games/) folder. From play's root, after `npm ci`,
+`node sdk/bin/hookedin-game.js serve games/<id>` serves one at `http://127.0.0.1:4185/`. To make one your own, start a
+repository from the template and copy the game's `src/` and `test/` over it. Blackjack, roulette and crash are
+repositories of their own, each with its README.

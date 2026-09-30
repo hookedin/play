@@ -7,17 +7,16 @@ sidebar:
 
 `import { HookedIn, HookedInError } from '@hookedin/play/sdk/sdk';` gives a game page its wallet. The module is
 browser-only: as it loads it listens for messages on `window`, and inside a wallet's frame it greets the wallet with
-`wallet.hello` at once. Each method below is one request of the [game bridge](../reference/bridge.md), which says what
-the wallet checks and answers.
+`wallet.hello` at once. Each request member below is one request of the [game bridge](../reference/bridge.md), which says
+what the wallet checks and answers.
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
 const shown = document.querySelector('#balance')!;
-HookedIn.onBalance(({ balance }) => (shown.textContent = HookedIn.formatAmount(balance)));
-const { asset } = await HookedIn.hello(); // asset.symbol names the network's ETH
+HookedIn.onBalance(({ balance }) => (shown.textContent = `${HookedIn.formatAmount(balance)} ETH`));
 
-const stake = HookedIn.parseAmount('0.000001'); // '1000000000000' in the asset's smallest units
+const stake = HookedIn.parseAmount('0.000001'); // '1000000000000' wei
 const funding = await HookedIn.requestFunds({ amount: stake });
 if (funding.funded) {
   const id = crypto.randomUUID(); // save it before sending: a lost reply is recovered by this id
@@ -36,255 +35,93 @@ if (funding.funded) {
 
 ### `HookedIn`
 
-```ts
-export const HookedIn: Readonly<{
-  call: (method: string, params?: Record<string, unknown>) => Promise<any>;
-  hello: () => Promise<WalletHello>;
-  limits: () => Promise<WalletLimits>;
-  info: () => Promise<WalletInfo>;
-  round: (id: string) => Promise<Round>;
-  balance: () => Promise<GameBalance>;
-  onBalance: (listener: (balance: GameBalance) => void) => () => void;
-  requestFunds: (options?: { amount?: bigint | string }) => Promise<
-    GameBalance & {
-      funded: boolean;
-      amount: string | null;
-    }
-  >;
-  receipt: (id: string) => Promise<GameReceipt | null>;
-  casinoBet: (request: CasinoBetRequest) => Promise<GameReceipt>;
-  developerBet: (request: DeveloperBetRequest) => Promise<GameReceipt>;
-  onReceipt: (listener: (receipt: GameReceipt) => void) => () => void;
-  payment: (id: string, amount: string, group?: string) => Promise<GameReceipt>;
-  storageScope: (wallet: WalletInfo | null | undefined) => string;
-  showName: (names: PlayerNames | null | undefined) => string;
-  parseAmount: (value: string) => string;
-  formatAmount: (value: string | number | bigint, places?: number) => string;
-  exactAmount: (value: string | number | bigint) => string;
-  stepStake: (input: HTMLInputElement, up: boolean) => void;
-  initializeGame: ({
-    stakeInput,
-    assetLabels,
-  }: {
-    stakeInput: HTMLInputElement;
-    assetLabels?: Iterable<Element>;
-  }) => Promise<{
-    wallet: WalletInfo;
-    state: GameBalance;
-    asset: string;
-    scope: string;
-  }>;
-}>;
-```
-
-One frozen object per page. A member that talks to the wallet sends one request envelope to `window.parent` and resolves
-with the reply to it; envelope IDs count up from 1 for the life of the page. Replies from any window other than
-`window.parent` are ignored.
+One frozen object per page. A member that talks to the wallet sends one request envelope to `window.parent` and
+resolves with the reply to it; envelope IDs count up from 1 for the life of the page, and replies from any other window
+are ignored.
 
 #### `call`
 
-```ts
-call: (method: string, params?: Record<string, unknown>) => Promise<any>;
-```
-
-Sends any bridge request and resolves with the reply's `result`. `params` defaults to `{}`. It rejects with:
-
-- a `HookedInError` carrying the wallet's `code` and `message` when the wallet refuses (`failed` if the reply names no
-  code);
-- `HookedInError('no-wallet')` at once when the page is not inside a frame;
-- `HookedInError('timeout')` when no reply arrives within 180,000 ms. The request is forgotten and a late reply ignored;
-  the wallet may still have carried it out, which `receipt` tells;
-- a plain `Error` for a reply with neither `result` nor `error`.
-
-```ts
-const receipt = await HookedIn.call('game.receipt', { id: 'coin-17' });
-```
+Sends any bridge request, with `params` `{}` by default, and resolves with the reply's `result`. It rejects with a
+`HookedInError` carrying the wallet's `code` and `message` when the wallet refuses (`failed` if the reply names no
+code); with `HookedInError('no-wallet')` at once when the page is not inside a frame; with `HookedInError('timeout')`
+when no reply arrives within 180,000 ms, after which the request is forgotten, although the wallet may still have
+carried it out, which `receipt` tells; and with a plain `Error` for a reply with neither `result` nor `error`.
 
 #### `hello`
 
-```ts
-hello: () => Promise<WalletHello>;
-```
-
-The wallet's greeting, [`wallet.hello`](../reference/bridge.md#wallethello): the methods it offers, the asset it counts
-in, its chain and its limits. The module sends it as it loads inside a frame, and every call returns that one promise
-while it is pending or once it has resolved. A greeting that failed is forgotten, so the next call asks the wallet
-again. It rejects as [`call`](#call) does.
-
-#### `limits`
-
-```ts
-limits: () => Promise<WalletLimits>;
-```
-
-The bounds the wallet holds a bet to: `(await hello()).limits`.
+[`wallet.hello`](../reference/bridge.md#wallethello), `{ limits }`: the page's first message, which the module sends as
+it loads inside a frame. Every call returns that one promise while it is pending or once it has resolved; a greeting
+that failed is forgotten, so the next call asks again.
 
 #### `info`
 
-```ts
-info: () => Promise<WalletInfo>;
-```
-
-[`wallet.info`](../reference/bridge.md#walletinfo), asked afresh on every call: the player's names, the casino's
-bankroll and a recommended stake.
+[`wallet.info`](../reference/bridge.md#walletinfo), asked afresh on every call.
 
 #### `round`
 
-```ts
-round: (id: string) => Promise<Round>;
-```
-
-A developer's round as the casino shows it to anyone, a [`Round`](developer.md#round), read through the player's wallet
-with [`wallet.round`](../reference/bridge.md#walletround), since a game page talks to nobody but its own origin. `id` is
-the round's 32-byte hash. The round is `open`, or revealed with its seed, its secret, its outcome and the developer's
-casino bet on it. The wallet passes the casino's answer on as it is: a game checks it as
-[checking a round](outcome.md#checking-a-round) shows, and walks a shared draw's rounds with
-[`stepOutcome`](steps.md#stepoutcome). It rejects as [`call`](#call) does.
+A developer's round as the casino shows it to anyone, read through the player's wallet with
+[`wallet.round`](../reference/bridge.md#walletround), since a game page talks to nobody but its own origin: a
+[`Round`](developer.md#round), open or revealed. The wallet passes the casino's answer on as it is: check it as
+[checking a round](outcome.md#checking-a-round) shows.
 
 #### `balance`
 
-```ts
-balance: () => Promise<GameBalance>;
-```
-
-The game's balance as the wallet last pushed it. It greets the wallet first, with [`hello`](#hello), and rejects as
-that does: with `HookedInError('no-wallet')` outside a frame, for one. When nothing has been pushed yet, it waits for the
-first push, and rejects with `HookedInError('timeout')` if none arrives within 180,000 ms.
+The game's balance as the wallet last pushed it, a [`GameLimit`](#gamelimit). It greets the wallet first and rejects as
+[`hello`](#hello) does, with `no-wallet` outside a frame; when nothing has been pushed yet, it waits for the first push,
+and rejects with `timeout` if none arrives within 180,000 ms.
 
 #### `onBalance`
 
-```ts
-onBalance: (listener: (balance: GameBalance) => void) => () => void;
-```
-
-Calls `listener` with every [`game.balance`](../reference/bridge.md#gamebalance) push and returns a function that stops
-it. Pushes wait for the greeting: one that arrives before it is delivered when the greeting does, so a listener can
-always format the amount in the wallet's asset. A listener added later hears only later pushes; `balance()` reads the
-current one.
+Calls a listener with every [`game.balance`](../reference/bridge.md#gamebalance) push, and returns a function that
+stops it. A listener added later hears only later pushes; `balance()` reads the current one.
 
 #### `requestFunds`
 
-```ts
-requestFunds: (options?: { amount?: bigint | string }) =>
-  Promise<
-    GameBalance & {
-      funded: boolean;
-      amount: string | null;
-    }
-  >;
-```
-
-Asks for money with [`game.requestFunds`](../reference/bridge.md#gamerequestfunds). `amount` is how much more than the
-game holds, in smallest units. It is a suggestion the wallet's own dialog shows, and the call resolves once the player
-has decided: `funded` says whether they set a limit, `amount` is the limit they chose (`null` if they did not), and
-`balance` and `pending` are the game's state after it. When the player's balance has nothing to allow, the wallet opens
-its Deposit tab instead, and the call resolves at once with `funded: false`.
+[`game.requestFunds`](../reference/bridge.md#gamerequestfunds): asks the player for `amount` more than the game holds,
+a suggestion the wallet's own dialog shows, and resolves once they have decided with `funded`, the limit they chose as
+`amount` (or `null`), and the game's `balance` and `pending` after it.
 
 #### `receipt`
 
-```ts
-receipt: (id: string) => Promise<GameReceipt | null>;
-```
-
-The [receipt](../reference/bridge.md#receipt) of an earlier operation by the game's own `id`, or `null` if this wallet
-has none. For an open developer bet the wallet also asks the casino about it; once its developer has settled it, the
-wallet collects what it pays and `onReceipt` hears the settled receipt.
+[`game.receipt`](../reference/bridge.md#gamereceipt): an earlier operation's receipt by the game's own `id`, or `null`
+if this wallet has none. For an open developer bet the wallet also asks the casino, and once its developer has settled
+it, collects it, and `onReceipt` hears.
 
 #### `casinoBet`
 
-```ts
-casinoBet: (request: CasinoBetRequest) => Promise<GameReceipt>;
-```
-
-Places a casino bet with [`game.casinoBet`](../reference/bridge.md#gamecasinobet): settled against the casino's bankroll
-in the one request, on the player's own round. Resolves with its receipt, `settled` or `rejected`. The same request again
-returns the saved receipt.
+[`game.casinoBet`](../reference/bridge.md#gamecasinobet): resolves with the bet's receipt, `settled` or `rejected`.
 
 #### `developerBet`
 
-```ts
-developerBet: (request: DeveloperBetRequest) => Promise<GameReceipt>;
-```
-
-Places a developer bet with [`game.developerBet`](../reference/bridge.md#gamedeveloperbet): its stake goes into the bank
-of the game's developer at once, and the developer settles it. Resolves with its receipt, `open` or `rejected`. Once the
-developer has settled it and the wallet has collected what it pays, `onReceipt` hears the settled receipt.
-
-```ts
-const placed = await HookedIn.developerBet({
-  id: 'match-812-home',
-  stake: '1000000000000',
-  meta: { pick: 'home', odds: '2.1' }, // the game's own JSON; its numbers are whole, so odds go as strings
-  group: 'match-812',
-});
-```
+[`game.developerBet`](../reference/bridge.md#gamedeveloperbet): resolves with the bet's receipt, `open` or `rejected`;
+once the developer has settled it and the wallet has collected what it pays, `onReceipt` hears.
 
 #### `onReceipt`
 
-```ts
-onReceipt: (listener: (receipt: GameReceipt) => void) => () => void;
-```
-
-Calls `listener` with every [`game.receipt`](../reference/bridge.md#gamereceipt-1) push: a developer bet this game
-placed, settled by its developer and collected by the wallet. Returns a function that stops it. Receipts are not held for
-the greeting.
-
-#### `payment`
-
-```ts
-payment: (id: string, amount: string, group?: string) => Promise<GameReceipt>;
-```
-
-Pays `amount` to the bankroll with [`game.payment`](../reference/bridge.md#gamepayment). Its arguments are positional.
-Resolves with the receipt, `settled` or `rejected`; a payment's receipt carries no amount.
+Calls a listener with every [`game.receipt`](../reference/bridge.md#gamereceipt-1) push, a developer bet of this game
+settled by its developer and collected by the wallet, and returns a function that stops it.
 
 #### `storageScope`
 
-```ts
-storageScope: (wallet: WalletInfo | null | undefined) => string;
-```
-
-A storage key for this page, chain and player: `hookedin:<pathname>:<chainId>:<uname>`, from `location.pathname` and a
-`wallet.info` result. A missing chain reads `chain` and a missing uname `anonymous`. It keys on the uname, so taking or
-dropping an alias keeps what the player had. [`playerScope`](wire.md#playerscope) builds the part after the path.
+A storage key for this page, chain and player, from a `wallet.info` result: `hookedin:<pathname>:<chainId>:<uname>`,
+with `chain` for a missing chain and `anonymous` for a missing uname, in lower case. It keys on the uname, so taking or
+dropping an alias keeps what the player had ([storage](../games/how-a-game-works.md#storage)).
 
 ```ts
 HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:3byt9ocwnnzaxanmiz3stocj'
 ```
 
-#### `showName`
-
-```ts
-showName: (names: PlayerNames | null | undefined) => string;
-```
-
-How a player is written: `@alias`, or `~uname` without an alias, or `—` for neither. The same function as
-[`showName`](wire.md#showname).
-
 #### `parseAmount`
 
-```ts
-parseAmount: (value: string) => string;
-```
-
-What the player typed, as whole smallest units of the wallet's asset in a decimal string. It trims spaces and accepts
-digits with at most `decimals` places after the point, using the greeted asset's decimals (18 before the greeting). It
-throws an `Error` with a message for the player: `Enter a positive stake with up to 18 decimal places.` for anything
-else, and `Your stake must be greater than zero.` for zero.
-
-```ts
-HookedIn.parseAmount('0.000001'); // '1000000000000'
-```
+What the player typed, in ETH, as whole wei in a decimal string: digits with at most 18 places after the point, spaces
+trimmed. It throws an `Error` whose message is for the player, `Enter a positive stake with up to 18 decimal places.`
+or, for zero, `Your stake must be greater than zero.`
 
 #### `formatAmount`
 
-```ts
-formatAmount: (value: string | number | bigint, places?: number) => string;
-```
-
-Smallest units as the player reads them, truncated (never rounded) to `places` decimal places, 6 by default, with
-trailing zeros dropped. A positive amount that truncates to nothing reads `<0.000001`, a negative one keeps its sign, and
-a value `BigInt` cannot read returns `—`.
+Wei in ETH as the player reads them, truncated (never rounded) to `places` decimal places, 6 by default, with trailing
+zeros dropped. A positive amount that truncates to nothing reads `<0.000001`, a negative one keeps its sign, and a
+value `BigInt` cannot read returns `—`.
 
 ```ts
 HookedIn.formatAmount('1500000000000000000'); // '1.5'
@@ -293,57 +130,17 @@ HookedIn.formatAmount('1', 2); // '<0.01'
 
 #### `exactAmount`
 
-```ts
-exactAmount: (value: string | number | bigint) => string;
-```
-
-Every digit of an amount: `formatAmount` to the asset's full `decimals`. It is what belongs in a field the player edits.
-
-#### `stepStake`
-
-```ts
-stepStake: (input: HTMLInputElement, up: boolean) => void;
-```
-
-Moves a stake field to the next value up or down the ladder 1, 2, 5, 10, 20, 50 and on, in smallest units. It writes the
-result back with `exactAmount` and leaves an unreadable value alone. From `0.000001`, up is `0.000002` and down
-`0.0000005`.
+Every digit of an amount, `formatAmount` to 18 places: what belongs in a field the player edits.
 
 #### `initializeGame`
 
-```ts
-initializeGame: ({ stakeInput, assetLabels }: { stakeInput: HTMLInputElement; assetLabels?: Iterable<Element> }) =>
-  Promise<{
-    wallet: WalletInfo;
-    state: GameBalance;
-    asset: string;
-    scope: string;
-  }>;
-```
-
-A page's start: it waits for the greeting, `wallet.info` and the first balance, then writes the money's symbol into
-every element of `assetLabels`, labels `stakeInput` `Stake in <symbol>`, and fills `stakeInput` with the recommended
-stake unless the player edited it meanwhile. It resolves with the player's `wallet.info`, the balance as `state`, the
-symbol as `asset`, and `scope`, the page's [`storageScope`](#storagescope). It signs nothing and asks the player
-nothing.
-
-```ts
-const startup = await HookedIn.initializeGame({
-  stakeInput: document.querySelector<HTMLInputElement>('#stake')!,
-  assetLabels: document.querySelectorAll('[data-asset]'),
-});
-```
+A page's start: it waits for `wallet.info` and the first balance, and fills `stakeInput` with the recommended stake
+unless the player edited it meanwhile. It resolves with the player's `wallet.info` as `wallet`, the balance as `state`,
+and `scope`, the page's [`storageScope`](#storagescope). It signs nothing and asks the player nothing.
 
 ## Error class
 
 ### `HookedInError`
-
-```ts
-export class HookedInError extends Error {
-  code: string;
-  constructor(code: string, message: string);
-}
-```
 
 A refusal a game can act on. `code` is stable and the message is for people; `name` is `'HookedInError'`. The codes are
 the wallet's, the casino's passed through, and the SDK's own `no-wallet` and `timeout`: the
@@ -367,124 +164,29 @@ async function place(bet: CasinoBetRequest) {
 
 ## Types
 
-### `GameBalance`
+### `GameLimit`
 
-```ts
-export interface GameBalance {
-  balance: string;
-  pending: boolean;
-}
-```
-
-What the wallet pushes as [`game.balance`](../reference/bridge.md#gamebalance). `balance` is what the game may still
-risk in this tab, including its winnings, in wei; the wallet releases a limit when the player leaves the game. `pending`
-is `true` while a signed operation of this game awaits recovery in the wallet, and no bet or payment is possible.
-
-### `Asset`
-
-```ts
-export interface Asset {
-  symbol: string;
-  decimals: number;
-}
-```
-
-What the wallet counts in, as a player reads it: the network's ETH (symbol `ETH`). It counts in units of 10^-18:
-`decimals` is 18.
+`{ balance, pending }`, what the wallet pushes as [`game.balance`](../reference/bridge.md#gamebalance): what the game
+may still risk in this tab, winnings included, in wei, and whether a signed operation awaits recovery in the wallet.
 
 ### `WalletLimits`
 
-```ts
-export interface WalletLimits {
-  outcomeSpace: string;
-  meta: number;
-  group: number;
-}
-```
-
-Every bound the wallet holds a bet to: the size of the outcome space a bet's chance counts outcomes out of, the most a
-developer bet's meta takes as canonical JSON, and the longest group label. They are part of the protocol revision the
-wallet and its casino share; the [bridge's limits](../reference/bridge.md#limits) give their values.
-
-### `WalletHello`
-
-```ts
-export interface WalletHello {
-  methods: string[];
-  asset: Asset;
-  chainId: string;
-  limits: WalletLimits;
-}
-```
-
-The result of [`wallet.hello`](../reference/bridge.md#wallethello).
+Every bound the wallet holds a bet to, `{ outcomeSpace, meta, group }`, as `hello` reports them
+([limits](../reference/bridge.md#limits)).
 
 ### `WalletInfo`
 
-```ts
-export interface WalletInfo {
-  uname: string | null;
-  alias: string | null;
-  chainId: string;
-  bankroll: string;
-  recommendedStake: string;
-}
-```
-
-The result of [`wallet.info`](../reference/bridge.md#walletinfo): everything a game learns about the player. `uname` is
-theirs for good and `null` until the casino knows the player, from their first deposit; a game keys anything of its own
-by it. `alias` is the name they are shown by, `null` unless they took one. `bankroll` is the casino's bankroll as last
-reported: what to price bets against rather than a promise to admit them.
+The result of [`wallet.info`](../reference/bridge.md#walletinfo): `{ uname, alias, chainId, bankroll, recommendedStake }`.
 
 ### `CasinoBetRequest`
 
-```ts
-export interface CasinoBetRequest {
-  id: string;
-  stake: string;
-  chance: string;
-  prize: string;
-  group?: string;
-}
-```
-
-The parameters of [`game.casinoBet`](../reference/bridge.md#gamecasinobet). `id` is the game's own name for the
-operation. The bet pays `prize` when the round's 64-bit outcome is below `chance`, which counts winning outcomes out of
-2^64, from 1 to 2^64 − 1. `stake` and `prize` are positive and below 2^128, and all three are decimal strings. `group`
-labels bets that belong together.
+The parameters of [`game.casinoBet`](../reference/bridge.md#gamecasinobet): `{ id, stake, chance, prize, group? }`.
 
 ### `DeveloperBetRequest`
 
-```ts
-export interface DeveloperBetRequest {
-  id: string;
-  stake: string;
-  meta: Record<string, unknown>;
-  group?: string;
-}
-```
-
-The parameters of [`game.developerBet`](../reference/bridge.md#gamedeveloperbet). `meta` is the game's own JSON, saying
-what the bet is: the casino keeps it and never reads it, and the developer's server settles the bet by it.
+The parameters of [`game.developerBet`](../reference/bridge.md#gamedeveloperbet): `{ id, stake, meta, group? }`.
 
 ### `GameReceipt`
 
-```ts
-export interface GameReceipt {
-  id: string;
-  kind: 'casino-bet' | 'developer-bet' | 'payment';
-  status: 'settled' | 'rejected' | 'open';
-  stake?: string;
-  chance?: string;
-  prize?: string;
-  meta?: Record<string, unknown>;
-  group?: string;
-  bet?: string;
-  outcome?: string;
-  payout?: string;
-  reason?: string;
-}
-```
-
-What a game learns about an operation, under its own `id`: how it ended, never the signed evidence. The
-[receipt reference](../reference/bridge.md#receipt) says when each field is present.
+What a game learns about an operation, under its own `id`: how it ended, never the signed evidence
+([receipt](../reference/bridge.md#receipt)).
