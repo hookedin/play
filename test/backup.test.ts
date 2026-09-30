@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { backupFingerprint, verifyBackupFile } from '../client/backup-status.ts';
-import { encryptBackup } from '../client/backup.ts';
+import { Wallet } from 'ethers';
+import { backupFingerprint, encryptBackup, verifyBackupFile } from '../client/backup.ts';
 
 const password = 'the downloaded backup passphrase';
+const key = new Wallet('0x' + 'ab'.repeat(32));
 const account = {
-  fundingKey: '0x' + 'ab'.repeat(32),
-  address: '0x1111111111111111111111111111111111111111',
+  fundingKey: key.privateKey,
+  address: key.address,
   chainId: '31337',
   casino: '0x2222222222222222222222222222222222222222',
 };

@@ -35,7 +35,7 @@ import { mapBounded } from '../protocol/concurrency.ts';
 import { BrowserStore, withLock } from './storage.ts';
 import { fundingAccounts, readFundingAccounts } from './funding-accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
-import { encryptBackup, decryptBackup } from './backup.ts';
+import { encryptBackup, openBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { GameSessions } from './wallet-games.ts';
 import { changeLimits, depositRemaining, playControls, restoreControls } from './play-controls.ts';
@@ -938,15 +938,10 @@ export class CasinoWallet extends GameSessions {
   async restoreBackup(backup: any, password: string) {
     if (this.busy || this.pending || this.transactionIntent)
       throw new Error('Recover the current operation before restoring a wallet');
-    const value = await decryptBackup(backup, password);
-    if (
-      value.schema !== 'HOOKEDIN/WALLET/1' ||
-      value.scope !== 'selected-account' ||
-      value.chainId !== String(this.expectedChainId) ||
-      !same(value.casino, this.config.contractAddress)
-    )
-      throw new Error('Backup belongs to another deployment');
-    if (value.record?.schema !== 'HOOKEDIN/WALLET-STATE/1') throw new Error('Unsupported backup contents');
+    const value = await openBackup(backup, password, {
+      chainId: this.expectedChainId,
+      casino: this.config.contractAddress,
+    });
     // Verify signed settlement evidence before writes.
     for (const c of Object.values(value.record.channels || {}) as WalletChannel[]) {
       if (!same(c.opening.player, value.address)) throw new Error('Backup channel identity differs');
@@ -958,8 +953,6 @@ export class CasinoWallet extends GameSessions {
         evidence: this.evidence(c),
       });
     }
-    if (typeof value.fundingKey !== 'string' || !same(new Wallet(value.fundingKey).address, value.address))
-      throw new Error("The backup's key is not its account's");
     if (!same(value.address, this.address)) await this.importKey(value.fundingKey);
     await this.exclusive(async () => {
       if (!same(value.address, this.address))

@@ -7,17 +7,19 @@ const metadataKey = 'wallet-vault',
 type Sealed = { iv: string; data: string };
 type Metadata = Sealed & { salt: string };
 const protectedKey = (key: string) => key.startsWith('funding-accounts:');
-const encode = (bytes: Uint8Array) => {
+/** Bytes as base64, a chunk at a time, so no call takes more arguments than an engine allows. */
+export const base64 = (data: Uint8Array) => {
   let result = '';
-  for (let i = 0; i < bytes.length; i += 24576) result += btoa(String.fromCharCode(...bytes.slice(i, i + 24576)));
+  for (let i = 0; i < data.length; i += 24576) result += btoa(String.fromCharCode(...data.slice(i, i + 24576)));
   return result;
 };
-const decode = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+export const bytes = (value: string) => Uint8Array.from(atob(value), c => c.charCodeAt(0));
 
-async function derive(password: string, salt: Uint8Array<ArrayBuffer>) {
+/** The key a passphrase stands for with a salt: what the vault and every backup encrypt with. */
+export async function passphraseKey(password: string, salt: Uint8Array<ArrayBuffer>) {
   if (typeof password !== 'string' || password.length < 12 || password.length > 1024)
-    throw new Error('Use a wallet passphrase of 12–1024 characters');
-  if (salt.length !== 16) throw new Error('Invalid wallet encryption parameters');
+    throw new Error('Use a passphrase of 12–1024 characters');
+  if (salt.length !== 16) throw new Error('Invalid encryption parameters');
   const material = await crypto.subtle.importKey('raw', text.encode(password), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', hash: 'SHA-256', iterations: 600000, salt },
@@ -37,18 +39,18 @@ async function seal(key: CryptoKey, name: string, value: unknown): Promise<Seale
     key,
     text.encode(serialized),
   );
-  return { iv: encode(iv), data: encode(new Uint8Array(data)) };
+  return { iv: base64(iv), data: base64(new Uint8Array(data)) };
 }
 
 async function unseal<T>(key: CryptoKey, name: string, value: Sealed): Promise<T> {
   if (!value || typeof value.iv !== 'string' || typeof value.data !== 'string')
     throw new Error('Invalid encrypted wallet record');
-  const iv = decode(value.iv);
-  if (iv.length !== 12) throw new Error('Invalid wallet encryption parameters');
+  const iv = bytes(value.iv);
+  if (iv.length !== 12) throw new Error('Invalid encryption parameters');
   const plaintext = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv, additionalData: text.encode(`${proof}:${name}`) },
     key,
-    decode(value.data),
+    bytes(value.data),
   );
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
@@ -75,8 +77,8 @@ export class VaultStore implements Store {
   async setup(password: string) {
     const epoch = this.#epoch,
       salt = crypto.getRandomValues(new Uint8Array(16)),
-      key = await derive(password, salt),
-      metadata: Metadata = { salt: encode(salt), ...(await seal(key, metadataKey, proof)) };
+      key = await passphraseKey(password, salt),
+      metadata: Metadata = { salt: base64(salt), ...(await seal(key, metadataKey, proof)) };
     if (epoch !== this.#epoch) throw new Error('Wallet is locked');
     await this.storage.update(metadataKey, saved => {
       if (saved !== undefined) throw new Error('Wallet already has a passphrase. Unlock it instead.');
@@ -89,7 +91,7 @@ export class VaultStore implements Store {
   async #check(password: string) {
     const metadata = await this.storage.get<Metadata>(metadataKey);
     if (!metadata) throw new Error('Set a wallet passphrase first');
-    const key = await derive(password, decode(metadata.salt));
+    const key = await passphraseKey(password, bytes(metadata.salt));
     try {
       if ((await unseal(key, metadataKey, metadata)) !== proof) throw new Error('Invalid wallet proof');
     } catch {

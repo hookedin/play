@@ -25,7 +25,7 @@ import { formatEther, parseEther, ZeroAddress } from 'ethers';
 import { CasinoWallet } from './wallet.ts';
 import { VaultStore } from './vault.ts';
 import { validateWithdrawal } from './withdrawal.ts';
-import { backupFingerprint, verifyBackupFile } from './backup-status.ts';
+import { backupFingerprint, verifyBackupFile } from './backup.ts';
 import { playControls, depositRemaining } from './play-controls.ts';
 import qrcode from 'qrcode-generator';
 import { gameReceipt } from './wallet-games.ts';
