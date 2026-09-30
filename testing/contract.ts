@@ -97,7 +97,6 @@ export function assessBinary({ bankroll, stake, netWin, chance }: Record<string,
     chance,
     prize,
     developerFee: risk.fee / 2n,
-    casinoFee: risk.fee / 2n,
   };
 }
 /** Deposit into an account's channel, from the account or anyone else: the account's first deposit opens it. The
@@ -125,7 +124,6 @@ export async function countersigned(f: any, ch: any, { state, evidence }: any) {
       : evidence.casinoSignature,
   );
 }
-/** A close without the other side: started with `evidence`, then finalized once the challenge period is over. */
 /** A finalized channel's claim: what its close was owed and what of it is paid, with what the contract still holds for it. */
 export async function claimOf(f: any, channelId: string) {
   const [c, claim] = await Promise.all([f.contract.channels(channelId), f.contract.claims(channelId)]);
@@ -141,6 +139,7 @@ export async function claimOf(f: any, channelId: string) {
     winningsRemaining,
   };
 }
+/** A close without the other side: started with `evidence`, then finalized once the challenge period is over. */
 export async function forceClose(f: any, env: any, ch: any, evidence = ch.evidence, by = ch.player) {
   await (await f.contract.connect(by).startClose(evidence)).wait();
   await env.provider.send('evm_increaseTime', [86401]);

@@ -1,4 +1,4 @@
-// Where `wrangler deploy` publishes dist/: a Cloudflare Worker that only serves static assets (the successor to Pages).
+// Where `wrangler deploy` publishes dist/: a Cloudflare Worker that only serves static assets.
 // For a copy of this game, change `name`, and replace or remove `routes` (without it the game is served at
 // <name>.<you>.workers.dev). Run wrangler from this folder.
 {
