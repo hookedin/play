@@ -40,7 +40,7 @@ export async function buildWallet(dist = path.join(root, 'dist')) {
   fs.copyFileSync(ethers, path.join(dist, 'vendor/ethers.js'));
   for (const file of ['index.html', 'style.css', '_headers', '_redirects'])
     fs.copyFileSync(path.join(root, 'client', file), path.join(dist, file));
-  fs.cpSync(path.join(root, 'brand'), path.join(dist, 'brand'), { recursive: true, filter: f => !f.endsWith('.md') });
+  fs.cpSync(path.join(root, 'brand'), path.join(dist, 'brand'), { recursive: true });
 
   // HOOKEDIN_CLIENT_CONFIG names a JSON file with this deployment's settings; without it the defaults ship.
   const configFile = process.env.HOOKEDIN_CLIENT_CONFIG;
