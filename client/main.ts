@@ -46,10 +46,8 @@ import {
   totalCards,
   betTotals,
 } from './bets.ts';
-import { createGameLog, describeReceipt } from './game-log.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
-import type { LogKind } from './game-log.ts';
 import config from './config.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -136,15 +134,6 @@ const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const HOUSE = 'hookedin';
 /** How many games one profile holds. */
 const MAX_GAMES = 100;
-// A developer's diagnostic: the game page shows it below the game only when the wallet was opened with ?log.
-$('game-activity').classList.toggle('hidden', !new URLSearchParams(location.search).has('log'));
-const gameLog = createGameLog({
-  list: $('game-activity-list'),
-  search: $<HTMLInputElement>('game-activity-search'),
-  empty: $('game-activity-empty'),
-  count: $('game-activity-count'),
-  filters: document.querySelectorAll<HTMLInputElement>('input[name="game-log-filter"]'),
-});
 const vault = new VaultStore();
 const wallet = new CasinoWallet({
   storage: vault,
@@ -163,14 +152,6 @@ const wallet = new CasinoWallet({
     if (!active || active.key !== game.key || !active.frame.contentWindow || active.pushed === null) return;
     const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.id, receipt) };
     active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
-    gameLog.log('event', 'game.receipt', { description: describeReceipt(message.receipt), payload: message });
-  },
-  // What the wallet collects on its own answers no request of the game's, so the developer log shows its failures.
-  onBackgroundError: (title, error) => {
-    if (active)
-      gameLog.log('error', title, {
-        description: error?.code ? `${error.code}: ${error.message}` : String(error?.message ?? error),
-      });
   },
 });
 
@@ -378,10 +359,6 @@ function toast(message: string, error = false) {
   toastTimer = setTimeout(() => $('toast').classList.add('hidden'), error ? 7500 : 4500);
 }
 
-function logGameActivity(title: string, payload?: unknown, kind: LogKind = 'client') {
-  if (active) gameLog.log(kind, title, { payload });
-}
-
 /** One user action at a time. A background poll holding the wallet finishes first. */
 async function task(callback: () => unknown | Promise<unknown>) {
   if (uiBusy) return toast('Wait for the current wallet operation to finish.', true);
@@ -391,9 +368,7 @@ async function task(callback: () => unknown | Promise<unknown>) {
     await wallet.actionDone;
     return await callback();
   } catch (error: any) {
-    const message = error.shortMessage || error.message || String(error);
-    logGameActivity(message, undefined, 'error');
-    toast(message, true);
+    toast(error.shortMessage || error.message || String(error), true);
   } finally {
     uiBusy = false;
     renderWallet();
@@ -607,7 +582,6 @@ function renderGameAccount() {
   if (active.channelId === null && wallet.channelId) active.channelId = wallet.channelId;
   if (active.uname !== undefined && wallet.uname !== active.uname) {
     active.uname = undefined;
-    logGameActivity('Player named', { uname: wallet.uname });
     active.pushed = null;
     active.frame.src = active.frame.src;
   }
@@ -619,10 +593,6 @@ function renderGameAccount() {
     active.pushed = pushed;
     const message = { hookedin: true, event: 'game.balance', ...balance };
     active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
-    gameLog.log('event', 'game.balance', {
-      description: `balance ${formatEther(balance.balance)} ETH${balance.pending ? ' · pending operation' : ''}`,
-      payload: message,
-    });
   }
 }
 /** The slider runs linearly from nothing to the whole playable balance, a hundredth of it a step. */
@@ -1276,20 +1246,8 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     key,
     pushed: null,
   };
-  gameLog.clear();
-  $<HTMLInputElement>('game-activity-search').value = '';
-  logGameActivity('Game opened', {
-    url: entry.href,
-    origin: entry.origin,
-    sandbox: frame.getAttribute('sandbox'),
-    developer: identity.developer,
-    channelId: active.channelId,
-    gameKey: key,
-    path,
-  });
   frame.addEventListener('load', () => {
     if (!isCurrent()) return;
-    logGameActivity('Game iframe loaded', { url: entry.href });
     active!.pushed = '';
     renderGameAccount();
     // The game's own keys, such as Space to play, work without a click into it first.
@@ -1299,7 +1257,6 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     iframe: frame,
     origin: entry.origin,
     isCurrent,
-    onActivity: (type, data) => gameLog.bridge(type, data),
     onRequest: async (method, params) => {
       if (method === 'wallet.hello') return wallet.gameHello();
       // The player is named once the wallet has heard from the casino, and a game finds its saved rounds by that name:
@@ -1764,15 +1721,6 @@ async function openGameRecord(key: string, push = true) {
   }
 }
 window.addEventListener('popstate', () => void route(false));
-$<HTMLButtonElement>('clear-game-activity').addEventListener('click', () => gameLog.clear());
-$<HTMLButtonElement>('export-game-activity').addEventListener('click', () => {
-  const url = URL.createObjectURL(new Blob([gameLog.export()], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `hookedin-game-log-${active?.identity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'session'}.json`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
 $<HTMLInputElement>('bet-search').addEventListener('input', () =>
   filterBets($('bet-list'), $<HTMLInputElement>('bet-search').value, $('bet-empty'), $('bet-visible-count'), NO_BETS),
 );
@@ -1810,12 +1758,10 @@ $<HTMLFormElement>('fund-form').addEventListener('submit', event => {
   void task(async () => {
     if (!active) return;
     const amount = parseEther($<HTMLInputElement>('fund-amount').value.trim() || '0');
-    logGameActivity('Spending limit requested', { amount: String(amount) });
     // A limit on the balance is held against other tabs.
     await holdGameLimit();
     await wallet.setGameLimit(String(amount));
     localStorage.setItem(limitSetting(), String(amount));
-    logGameActivity('Spending limit set; the game may risk it until you leave', wallet.game);
     toast(`${active.identity.name} may play with up to ${formatEther(amount)} ETH.`);
     $<HTMLDialogElement>('fund-dialog').close(String(amount));
   });
@@ -1824,7 +1770,6 @@ $<HTMLDialogElement>('fund-dialog').addEventListener('close', () => {
   const value = $<HTMLDialogElement>('fund-dialog').returnValue;
   const request = fundRequest;
   fundRequest = null;
-  if (!value && active) logGameActivity('Spending limit unchanged');
   request?.resolve(value ? BigInt(value) : null);
   $<HTMLDialogElement>('fund-dialog').returnValue = '';
 });

@@ -10,8 +10,6 @@ export interface WalletOptions {
   onProgress?: (message: string) => void;
   /** A game's bet that settled later was collected: the receipt it now has, for the game that placed it. */
   onGameReceipt?: (game: GameIntent, receipt: any) => void;
-  /** Collecting what is owed, which the wallet does on its own, failed: what it was collecting, and why. */
-  onBackgroundError?: (title: string, error: any) => void;
   storage?: Store;
   trustedDeployment?: Deployment | null;
 }
@@ -99,7 +97,6 @@ export class CasinoWallet extends GameSessions {
   declare onChange: (wallet: CasinoWallet) => void;
   declare onProgress: (message: string) => void;
   declare onGameReceipt: (game: GameIntent, receipt: any) => void;
-  declare onBackgroundError: (title: string, error: any) => void;
   declare storage: Store;
   declare trustedDeployment: Deployment | null;
   declare publicState: Record<string, any>;
@@ -203,7 +200,6 @@ export class CasinoWallet extends GameSessions {
     onChange = () => {},
     onProgress = () => {},
     onGameReceipt = () => {},
-    onBackgroundError = () => {},
     storage = new BrowserStore(),
     trustedDeployment = null,
   }: WalletOptions = {}) {
@@ -219,7 +215,6 @@ export class CasinoWallet extends GameSessions {
       onChange,
       onProgress,
       onGameReceipt,
-      onBackgroundError,
       storage,
       trustedDeployment,
       publicState: {},
@@ -341,8 +336,8 @@ export class CasinoWallet extends GameSessions {
     this.timer = setInterval(() => {
       if (!this.busy && !globalThis.document?.hidden)
         void this.refresh()
-          .then(() => this.sweep().catch(error => this.onBackgroundError('Adding ETH to your balance failed', error)))
-          .then(() => this.collectPayouts().catch(error => this.onBackgroundError('Collecting payouts failed', error)))
+          .then(() => this.sweep().catch(error => console.error('Adding ETH to your balance failed', error)))
+          .then(() => this.collectPayouts().catch(error => console.error('Collecting payouts failed', error)))
           .catch(() => {});
     }, 4000);
     this.timer.unref?.();
@@ -762,7 +757,7 @@ export class CasinoWallet extends GameSessions {
     const c = this.channel;
     await this.saveChanges(before);
     if (c && !c.registered && Number(c.onchain.status) === 1 && !this.recoveryOnly)
-      await this.activate().catch(error => this.onBackgroundError('Registering your balance failed', error));
+      await this.activate().catch(error => console.error('Registering your balance failed', error));
     return this.publicState;
   }
   /** The record contents that warrant a new durable revision; observation times are display only. */

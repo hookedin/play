@@ -112,7 +112,7 @@ export class GameSessions extends ChannelClient {
     const answer = gameReceipt(id, receipt);
     if (answer.status === 'open')
       void this.collectDeveloperBet(receipt.bet).catch(error =>
-        this.onBackgroundError(`Collecting developer bet ${receipt.bet} failed`, error),
+        console.error(`Collecting developer bet ${receipt.bet} failed`, error),
       );
     return answer;
   }

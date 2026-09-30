@@ -16,21 +16,14 @@ interface ActivityEntry {
   payload?: string;
   facts?: [string, string | Node][];
   notice?: string;
-  compact?: boolean;
-  /** Timing shown beside the clock, such as latency or the gap since the previous event. */
-  meta?: string;
 }
 
-export function activityJSON(data: unknown, limit = Infinity): string {
-  let text: string;
+export function activityJSON(data: unknown): string {
   try {
-    text = JSON.stringify(plain(data), null, 2);
+    return JSON.stringify(plain(data), null, 2);
   } catch {
     return '[Payload could not be displayed as JSON.]';
   }
-  return text.length > limit
-    ? `${text.slice(0, limit)}\n[Payload truncated at ${limit.toLocaleString('en-US')} characters.]`
-    : text;
 }
 
 const element = (tag: string, className: string, text?: string) => {
@@ -44,7 +37,7 @@ const element = (tag: string, className: string, text?: string) => {
 export function createActivityEntry(entry: ActivityEntry) {
   const expandable = entry.payload !== undefined;
   const row = document.createElement(expandable ? 'details' : 'div');
-  row.className = `activity-entry tone-${entry.tone || 'neutral'}${entry.compact ? ' compact-entry' : ''}`;
+  row.className = `activity-entry tone-${entry.tone || 'neutral'}`;
   const summary = element(expandable ? 'summary' : 'div', 'activity-summary');
   const content = element('div', 'activity-content');
   const heading = element('div', 'activity-title-line');
@@ -59,12 +52,9 @@ export function createActivityEntry(entry: ActivityEntry) {
     time.dateTime = date.toISOString();
     time.title = time.dateTime;
     const clock = date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    time.textContent = entry.compact
-      ? `${clock}.${String(date.getMilliseconds()).padStart(3, '0')}`
-      : `${date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} · ${clock}`;
+    time.textContent = `${date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })} · ${clock}`;
   } else time.textContent = 'Time unavailable';
   content.append(time);
-  if (entry.meta) time.after(element('span', 'activity-meta', entry.meta));
   summary.append(content);
   if (entry.amount !== undefined) {
     const amount = element('div', 'activity-amount');
@@ -91,14 +81,12 @@ export function createActivityEntry(entry: ActivityEntry) {
       body.append(facts);
     }
     const toolbar = element('div', 'activity-payload-heading');
-    const truncated = entry.payload!.endsWith('characters.]');
-    toolbar.append(element('span', '', truncated ? 'Payload preview · truncated' : 'Raw JSON'));
+    toolbar.append(element('span', '', 'Raw JSON'));
     const copy = document.createElement('button');
     copy.type = 'button';
     copy.className = 'text-button';
-    const copyLabel = truncated ? 'Copy shown text' : 'Copy JSON';
-    copy.textContent = copyLabel;
-    copy.setAttribute('aria-label', `${copyLabel}: ${entry.title}`);
+    copy.textContent = 'Copy JSON';
+    copy.setAttribute('aria-label', `Copy JSON: ${entry.title}`);
     const feedback = element('span', 'activity-copy-status');
     feedback.setAttribute('role', 'status');
     copy.addEventListener('click', async () => {
@@ -124,8 +112,7 @@ export function filterActivity(list: HTMLElement, query: string, empty: HTMLElem
   let visible = 0;
   for (const row of list.children) {
     const text = terms.length ? row.textContent!.toLowerCase() : '';
-    // A caller's own category filter marks rows `filtered`; the search never un-hides them.
-    const matches = !row.classList.contains('filtered') && terms.every(term => text.includes(term));
+    const matches = terms.every(term => text.includes(term));
     row.classList.toggle('hidden', !matches);
     if (matches) visible++;
   }

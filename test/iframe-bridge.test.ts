@@ -25,15 +25,11 @@ class FakeEventTarget {
 const deferred = <T = void>() => Promise.withResolvers<T>();
 const ORIGIN = 'https://game.example';
 
-function harness(
-  onRequest: (...args: any[]) => any = async () => ({ cash: '100' }),
-  onActivity: () => void = () => {},
-) {
+function harness(onRequest: (...args: any[]) => any = async () => ({ cash: '100' })) {
   const target = new FakeEventTarget();
   const replies: any[] = [];
   const calls: any[] = [];
   const errors: any[] = [];
-  const activity: any[] = [];
   const child = { postMessage: (message: any, destination: any) => replies.push({ message, destination }) };
   let current = true;
   const detach = attachGameBridge({
@@ -46,17 +42,12 @@ function harness(
       return onRequest(method, params);
     },
     onError: message => errors.push(message),
-    onActivity: (type, data) => {
-      activity.push({ type, data });
-      onActivity();
-    },
   });
   return {
     target,
     replies,
     calls,
     errors,
-    activity,
     child,
     detach,
     setCurrent: (value: any) => {
@@ -75,7 +66,6 @@ test('bridge accepts requests only from the bound iframe window at the game orig
   });
   assert.equal(bridge.calls.length, 0);
   assert.equal(bridge.replies.length, 0);
-  assert.equal(bridge.activity.length, 0, 'Other windows cannot write to the game log');
 
   // The frame navigated away from the game: whatever page it shows now is not the game the player opened.
   await bridge.send(request(1), bridge.child, 'https://elsewhere.example');
@@ -96,7 +86,6 @@ test('bridge rejects stale game requests and suppresses results completed after 
   bridge.setCurrent(false);
   await bridge.send(request(1));
   assert.equal(bridge.calls.length, 0);
-  assert.equal(bridge.activity.length, 0);
 
   bridge.setCurrent(true);
   const operation = bridge.send(request(2));
@@ -105,58 +94,6 @@ test('bridge rejects stale game requests and suppresses results completed after 
   (pending.resolve! as any)({ cash: '50' });
   await operation;
   assert.equal(bridge.replies.length, 0, 'The new game must not receive the previous game result');
-  assert.deepEqual(
-    bridge.activity,
-    [{ type: 'request', data: request(2) }],
-    'Late results must not enter a replacement game log',
-  );
-  bridge.detach();
-});
-
-test('activity includes requests, successful results and every rejection path', async () => {
-  const bridge = harness(() => ({ cash: '75' }));
-  await bridge.send(request(1));
-  await bridge.send(request(1));
-  await bridge.send(request(3, 'wallet.sign'));
-  await bridge.send(null);
-  assert.deepEqual(
-    bridge.activity.map(entry => entry.type),
-    ['request', 'response', 'request', 'error', 'request', 'error', 'request', 'error'],
-  );
-  assert.deepEqual(bridge.activity[0].data, request(1));
-  assert.deepEqual(bridge.activity[1].data, { hookedin: true, id: 1, result: { cash: '75' } });
-  assert.deepEqual(bridge.activity[3].data.error, {
-    code: 'invalid-request',
-    message: 'A request ID must be larger than the last.',
-  });
-  assert.equal(bridge.activity[5].data.error.code, 'unknown-method');
-  assert.match(bridge.activity[7].data.error, /Invalid HookedIn request/);
-  bridge.detach();
-});
-
-test('diagnostic failures cannot interrupt request execution, error replies or later requests', async () => {
-  let failing = true;
-  const bridge = harness(
-    () => {
-      if (failing) {
-        failing = false;
-        throw new Error('Settlement failed');
-      }
-      return { cash: '100' };
-    },
-    () => {
-      throw new Error('Log unavailable');
-    },
-  );
-  await bridge.send(request(1));
-  await bridge.send(request(2));
-  assert.deepEqual(bridge.replies[0].message.error, { code: 'failed', message: 'Settlement failed' });
-  assert.deepEqual(bridge.replies[1].message.result, { cash: '100' });
-  assert.equal(bridge.calls.length, 2);
-  assert.deepEqual(
-    bridge.activity.map(entry => entry.type),
-    ['request', 'error', 'request', 'response'],
-  );
   bridge.detach();
 });
 
@@ -385,7 +322,6 @@ test('a message relayed by a frame nested inside the game iframe is ignored', as
   await bridge.send(request(1), nested);
   assert.equal(bridge.calls.length, 0);
   assert.equal(bridge.replies.length, 0);
-  assert.equal(bridge.activity.length, 0);
   bridge.detach();
 });
 

@@ -112,36 +112,6 @@
 
       <section id="page-play" class="page hidden">
         <div id="frame-slot" class="game-viewport"></div>
-        <section id="game-activity" class="game-activity hidden" aria-labelledby="game-activity-title">
-          <div class="section-head">
-            <h2 id="game-activity-title">Developer log <span id="game-activity-count" class="count">0</span></h2>
-            <div class="actions">
-              <button id="export-game-activity" class="button small" type="button">Export JSON</button
-              ><button id="clear-game-activity" class="button small" type="button">Clear</button>
-            </div>
-          </div>
-          <p class="muted">
-            Every bridge request and reply with its round-trip time, wallet actions and balance pushes: the latest 500
-            of this session, newest first.
-          </p>
-          <div class="toolbar">
-            <input
-              id="game-activity-search"
-              type="search"
-              placeholder="Search methods, amounts, operation IDs or payloads…"
-              aria-label="Search the developer log"
-              autocomplete="off"
-            />
-            <div class="segmented" role="radiogroup" aria-label="Show">
-              <label><input type="radio" name="game-log-filter" value="all" checked /><span>All</span></label
-              ><label><input type="radio" name="game-log-filter" value="bridge" /><span>Bridge</span></label
-              ><label><input type="radio" name="game-log-filter" value="wallet" /><span>Wallet</span></label
-              ><label><input type="radio" name="game-log-filter" value="errors" /><span>Errors</span></label>
-            </div>
-          </div>
-          <div id="game-activity-list" class="list" role="region" aria-label="Developer log events" tabindex="0"></div>
-          <p id="game-activity-empty" class="empty hidden"></p>
-        </section>
       </section>
 
       <section id="page-wallet" class="page hidden">

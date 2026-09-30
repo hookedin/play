@@ -109,7 +109,6 @@ export function attachGameBridge({
   isCurrent,
   onRequest,
   onError = () => {},
-  onActivity = () => {},
   target = window,
 }: {
   iframe: Pick<HTMLIFrameElement, 'contentWindow'>;
@@ -118,7 +117,6 @@ export function attachGameBridge({
   isCurrent: () => boolean;
   onRequest: (method: string, params: any) => Promise<unknown>;
   onError?: (message: string) => void;
-  onActivity?: (type: 'request' | 'response' | 'error', data: any) => void;
   target?: Pick<Window, 'addEventListener' | 'removeEventListener'>;
 }) {
   // Request IDs only ever rise within a page, so none is answered twice and nothing has to be remembered. A page
@@ -129,18 +127,9 @@ export function attachGameBridge({
     waiting = 0,
     turn: Promise<unknown> = Promise.resolve(),
     page = 0;
-  const activity = (type: 'request' | 'response' | 'error', data: unknown) => {
-    // Diagnostics must never interrupt validation or settlement.
-    try {
-      onActivity(type, data);
-    } catch {}
-  };
   const reply = (id: number, payload: Record<string, unknown>) => {
-    if (isCurrent() && iframe.contentWindow) {
-      const message = { hookedin: true, id, ...payload };
-      iframe.contentWindow.postMessage(message, origin);
-      activity('error' in payload ? 'error' : 'response', message);
-    }
+    if (isCurrent() && iframe.contentWindow)
+      iframe.contentWindow.postMessage({ hookedin: true, id, ...payload }, origin);
   };
   const fail = (id: number, error: any) =>
     reply(id, {
@@ -160,13 +149,11 @@ export function attachGameBridge({
   };
   const listener = (event: MessageEvent) => {
     if (!isCurrent() || event.source !== iframe.contentWindow || event.origin !== origin) return;
-    activity('request', event.data);
     let request: { id: number; method: string; params: any };
     try {
       request = validateRequest(event.data);
     } catch (error: any) {
       if (Number.isSafeInteger(event.data?.id)) fail(event.data.id, error);
-      else activity('error', { error: error.message });
       return;
     }
     if (request.id <= last) {

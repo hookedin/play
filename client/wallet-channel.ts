@@ -823,7 +823,7 @@ export class ChannelClient extends WalletTransactions {
         const paid = await this.collectDeveloperBet(hash);
         if (paid) collected.push(paid);
       } catch (error: any) {
-        this.onBackgroundError(`Collecting developer bet ${hash} failed`, error);
+        console.error(`Collecting developer bet ${hash} failed`, error);
         await this.exclusive(
           async () => {
             if (this.channelId === channelId && this.developerBets[hash])

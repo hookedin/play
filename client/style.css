@@ -985,59 +985,6 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .game-loading .game-icon {
   width: 112px;
 }
-.game-activity {
-  margin: 20px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-}
-.game-activity > .muted {
-  margin-top: 6px;
-  font-size: 12px;
-}
-.game-activity .actions {
-  margin: 0;
-}
-.segmented {
-  display: flex;
-  flex: none;
-  padding: 3px;
-  border: 1px solid var(--line-strong);
-  border-radius: 9px;
-}
-.segmented label {
-  margin: 0;
-}
-.segmented input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-  width: auto;
-}
-.segmented span {
-  display: block;
-  padding: 5px 11px;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-.segmented input:checked + span {
-  background: var(--raised);
-  color: var(--text);
-}
-.segmented input:focus-visible + span {
-  outline: 2px solid var(--accent);
-}
-.game-activity-list {
-  max-height: 520px;
-  overflow: auto;
-  overflow-anchor: none;
-}
-.game-activity-list .filtered {
-  display: none;
-}
 
 /* Dialogs. */
 .sheet {
@@ -1273,14 +1220,6 @@ main:has(> #page-play:not(.hidden)) > .banner {
     monospace;
   font-variant-numeric: tabular-nums;
 }
-.activity-meta {
-  display: inline-block;
-  margin: 5px 0 0 12px;
-  color: #6f7c94;
-  font:
-    11px/1.6 var(--mono),
-    monospace;
-}
 .activity-amount {
   display: flex;
   flex-direction: column;
@@ -1363,26 +1302,6 @@ main:has(> #page-play:not(.hidden)) > .banner {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 2;
-}
-.compact-entry .activity-summary {
-  grid-template-columns: 12px minmax(0, 1fr);
-  padding: 11px 16px;
-}
-.compact-entry .activity-title,
-.compact-entry .activity-description {
-  font:
-    12px/1.6 var(--mono),
-    monospace;
-}
-.compact-entry .activity-description {
-  margin-top: 3px;
-  color: #a6b3c9;
-}
-.compact-entry.tone-positive .activity-title {
-  color: #cfe8d6;
-}
-.compact-entry.tone-negative .activity-title {
-  color: #efc4cc;
 }
 
 /* Bets: one line each, in a player's own list and a game's public record. */

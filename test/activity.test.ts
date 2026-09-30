@@ -95,14 +95,11 @@ test('closures and actual collections remain distinct from off-chain payments', 
   );
 });
 
-test('diagnostic JSON handles bigint, malformed payloads and explicit preview truncation', () => {
+test('receipt JSON handles bigint and malformed payloads', () => {
   assert.deepEqual(JSON.parse(activityJSON({ value: 123n })), { value: '123' });
   const circular: any = {};
   circular.self = circular;
   assert.match(activityJSON(circular), /could not be displayed/);
-  const long = { data: 'x'.repeat(100) };
-  assert.match(activityJSON(long, 30), /truncated at 30 characters/);
-  assert.deepEqual(JSON.parse(activityJSON(long)), long, 'Saved receipt JSON is never truncated by default');
 });
 
 test('a withdrawal reads as paid once paid, and one paying the contract as going into the channel as deposits', () => {
