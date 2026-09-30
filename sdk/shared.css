@@ -278,26 +278,7 @@ h1 {
 .rules p {
   margin: 8px 0;
 }
-.stage-meta {
-  position: absolute;
-  left: 22px;
-  top: 19px;
-  font-size: 9px;
-  letter-spacing: 1.2px;
-  color: var(--muted);
-  text-transform: uppercase;
-}
-.stage-badge {
-  position: absolute;
-  right: 22px;
-  top: 17px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 5px 10px;
-  color: var(--muted);
-  font-size: 9px;
-}
-/* Small controls the richer games share: toggles, and a bet field with steppers. */
+/* Toggles the richer games share. */
 .tool {
   height: 34px;
   padding: 0 13px;
@@ -324,47 +305,8 @@ h1 {
   background: var(--panel);
   border-color: var(--line);
 }
-.step {
-  height: 44px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: #fff;
-  font-size: 20px;
-  line-height: 1;
-}
-.step:hover:not(:disabled) {
-  border-color: var(--accent);
-}
 .hidden {
   display: none !important;
-}
-.reconnect {
-  padding: 0;
-  color: var(--accent);
-  background: none;
-  font-size: 11px;
-  text-decoration: underline;
-  margin-left: 10px;
-}
-.busy-label {
-  display: inline-flex;
-  gap: 9px;
-  align-items: center;
-}
-.busy-label:before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 /* The game's view of its wallet allocation: one slim line, the figure and the way to add to it. */
 .bank {
@@ -477,12 +419,6 @@ h1 {
   }
   .rules summary {
     text-align: left;
-  }
-  .stage-meta {
-    left: 15px;
-  }
-  .stage-badge {
-    right: 15px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

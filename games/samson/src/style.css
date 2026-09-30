@@ -33,6 +33,18 @@ main {
 #mute[aria-pressed='false'] .cross {
   display: none;
 }
+.step {
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+}
+.step:hover:not(:disabled) {
+  border-color: var(--accent);
+}
 
 /* The cabinet */
 .cabinet {
