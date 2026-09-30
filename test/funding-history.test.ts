@@ -40,7 +40,7 @@ test('confirmed transaction receipts report actual claim payment and preserve ol
   assert.equal(wallet.history.length, 1);
   assert.equal((await storage.get('wallet:test')).channels.old.claim.paid, '10');
 });
-test('durable wallet state survives reload and refuses signing after persistence failure', async () => {
+test('durable wallet state survives reload, and a failed write latches a waiting action, a save, a refresh and a send', async () => {
   const storage = new MemoryStore(),
     wallet = new CasinoWallet({ network: 'local', storage });
   wallet.storageKey = 'wallet:test';
@@ -53,16 +53,28 @@ test('durable wallet state survives reload and refuses signing after persistence
   const next = new CasinoWallet({ network: 'local', storage });
   next.hydrate(await storage.get(wallet.storageKey));
   assert.deepEqual(next.pending, wallet.pending);
-  storage.beforeCommit = () => {
-    throw new Error('storage full');
-  };
-  await assert.rejects(wallet.save(), /storage full/);
-  await assert.rejects(
-    wallet.exclusive(() => {
-      throw new Error('must not execute');
-    }),
-    /storage needs recovery/,
-  );
+  // A background write fails while an action waits for it.
+  const write = Promise.withResolvers<void>(),
+    commit = storage.commit;
+  storage.commit = () => write.promise;
+  wallet.refreshing = wallet.save();
+  let ran = false;
+  const action = wallet.exclusive(async () => {
+    ran = true;
+  });
+  write.reject(new Error('disk unavailable'));
+  await assert.rejects(action, /reload from durable state/);
+  assert.deepEqual([ran, wallet.storageFailed], [false, true]);
+  storage.commit = () => assert.fail('a latched wallet must not write');
+  for (const attempt of [
+    () => wallet.save(),
+    () => wallet.refresh(),
+    () => wallet.sendTransaction('claim'),
+    () => wallet.recoverTransaction(),
+    () => wallet.useKey(''),
+  ])
+    await assert.rejects(attempt(), /reload from durable state/);
+  storage.commit = commit;
   assert.equal((await storage.get(wallet.storageKey)).channels.channel.pending.signature, 'signed');
 });
 test('a replaced transaction cannot be reported as a channel deposit', async () => {
@@ -87,11 +99,33 @@ test('a replaced transaction cannot be reported as a channel deposit', async () 
     waitForTransaction: async () => ({ status: 1, hash: '0xtransaction' }),
     getTransaction: async () => ({ to: '0xself', data: '0x', value: 0n }),
   } as any;
+  wallet.observer = {
+    receipt: (hash: string) => wallet.provider.getTransactionReceipt(hash),
+    corroborate: (_: string, read: any) => read(wallet.provider),
+  } as any;
   await assert.rejects(wallet.recoverTransaction(), /replaced/);
   assert.equal(wallet.transactionIntent, null);
   assert.equal(wallet.history.length, 1);
   assert.equal(wallet.history[0].status, 'replaced');
   assert.equal(wallet.history[0].amount, '0');
+});
+test('a confirmation the witness disputes keeps the saved transaction and records nothing', async () => {
+  const storage = new MemoryStore(),
+    wallet = new CasinoWallet({ network: 'local', storage });
+  Object.assign(wallet, { config: { confirmations: 2 }, storageKey: 'confirmation', render: () => {} });
+  wallet.transactionIntent = { method: 'challengeClose', value: '0', raw: 'signed transaction', hash: '0xclaimed' };
+  await wallet.save();
+  wallet.observer = {
+    receipt: async () => {
+      throw new Error('Independent RPC transaction receipts disagree');
+    },
+  } as any;
+  await assert.rejects(
+    wallet.waitTransaction({ wait: async () => ({ hash: '0xclaimed', status: 1, logs: [] }) } as any),
+    /disagree/,
+  );
+  assert.equal((await storage.get(wallet.storageKey)).transactionIntent.raw, 'signed transaction');
+  assert.deepEqual([wallet.history, wallet.lastChainCheck], [[], 0]);
 });
 test('past the newest 100 receipts, a withdrawal or a lock-in stays until it is paid or returned', async () => {
   const wallet = new CasinoWallet({ network: 'local', storage: new MemoryStore() });

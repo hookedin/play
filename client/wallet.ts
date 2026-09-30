@@ -134,8 +134,6 @@ export class CasinoWallet extends GameSessions {
   declare channels: Record<string, WalletChannel>;
   declare busy: boolean;
   declare revision: number;
-  declare verifiedChainId: bigint | null;
-  declare sending: boolean | undefined;
   declare transactionIntent: any;
   declare config: any;
   declare recoveryOnly: boolean;
@@ -144,7 +142,7 @@ export class CasinoWallet extends GameSessions {
   declare observer: ChainObserver;
   declare timer: ReturnType<typeof setInterval> | undefined;
   /** The deployment check: the contract's code and operator, read from two independent RPCs. */
-  declare verified: Promise<void>;
+  declare verified: Promise<unknown>;
   /** The deployment check, then the current account's first chain observation and casino reconciliation. */
   declare synced: Promise<void>;
   declare savedFundingAddresses: string[];
@@ -232,75 +230,49 @@ export class CasinoWallet extends GameSessions {
       revision: 0,
     });
   }
+  /** A local Anvil casino, whose faucet funds a wallet: the casino says so, and it is refused anywhere else. */
   get isLocalDevelopment() {
-    return (
-      this.expectedChainId === 31337n &&
-      this.verifiedChainId === 31337n &&
-      String(this.config?.chainId) === '31337' &&
-      this.config?.isLocalDevelopment === true
-    );
+    return this.network === 'local' && this.config?.isLocalDevelopment === true;
   }
   /** The casino's signing key: the contract's owner, as the deployment check read it. */
   get operator(): string {
     return this.config.operator;
   }
   validateConfiguredNetwork() {
-    if (String(this.config?.chainId) !== String(this.expectedChainId)) {
-      const actual = this.config?.chainId ?? 'unknown';
-      const hint =
-        this.network === 'sepolia' && String(actual) === '31337'
-          ? ' Stop the Anvil services and run npm run sepolia to start Sepolia.'
-          : '';
+    if (String(this.config?.chainId) !== String(this.expectedChainId))
       throw new Error(
-        `This client requires ${this.networkName} (chain ${this.expectedChainId}). The casino reports chain ${actual}.${hint}`,
+        `This client requires ${this.networkName} (chain ${this.expectedChainId}). The casino reports chain ${this.config?.chainId ?? 'unknown'}.`,
       );
-    }
   }
   async assertNetwork() {
-    this.verifiedChainId = null;
     this.validateConfiguredNetwork();
     // Read the current chain directly, then pin this same chain ID on the transaction.
-    const actualChain = BigInt(await this.provider.send('eth_chainId', []));
-    if (actualChain !== this.expectedChainId)
+    if (BigInt(await this.provider.send('eth_chainId', [])) !== this.expectedChainId)
       throw new Error(
         `Casino RPC must be on ${this.networkName} (chain ${this.expectedChainId}). No transaction was signed.`,
       );
-    this.verifiedChainId = actualChain;
   }
+  /** Start on the deployment this wallet was built to trust. A casino that differs from it, or does not answer, leaves
+   * the wallet in recovery mode. */
   async start() {
-    const pinKey = `deployment:${this.expectedChainId}:${this.casinoURL}`;
-    const trusted = this.trustedDeployment || (await this.storage.get(pinKey));
+    const trusted = this.trustedDeployment;
+    if (!trusted) throw new Error('This wallet names no deployment to trust');
     let advertised, serviceError;
     try {
       advertised = await this.api('/api/config');
       assertProtocol(advertised);
       if (
-        !advertised ||
         String(advertised.chainId) !== String(this.expectedChainId) ||
-        (trusted &&
-          (!same(advertised.contractAddress, trusted.contractAddress) || !same(advertised.operator, trusted.operator)))
+        !same(advertised.contractAddress, trusted.contractAddress) ||
+        !same(advertised.operator, trusted.operator)
       )
         throw new Error('Casino configuration differs from the trusted network, deployment or protocol');
     } catch (error: any) {
       serviceError = error.message;
     }
-    if (trusted) {
-      if (!trusted.rpcUrl && this.network !== 'local')
-        throw new Error('Install a deployment manifest with independently chosen RPC URLs');
-      this.config = {
-        ...(!serviceError ? advertised : {}),
-        ...trusted,
-        rpcUrl: trusted.rpcUrl || advertised?.rpcUrl,
-        isLocalDevelopment: !serviceError && advertised?.isLocalDevelopment === true,
-      };
-    } else {
-      if (serviceError)
-        throw new Error('Casino unavailable or incompatible and no trusted deployment: ' + serviceError);
-      this.config = advertised;
-    }
+    this.config = { ...(serviceError ? {} : advertised), ...trusted, confirmations: this.network === 'local' ? 1 : 2 };
     this.recoveryOnly = Boolean(serviceError);
     this.validateConfiguredNetwork();
-    this.config.confirmations = this.expectedChainId === 11155111n ? 2 : 1;
     this.provider = createRpcProvider(this.config.rpcUrl, this.expectedChainId);
     if (this.network !== 'local') {
       requireIndependentRpc(this.config.rpcUrl, this.config.witnessRpcUrl);
@@ -311,7 +283,7 @@ export class CasinoWallet extends GameSessions {
       provider: this.provider,
       witnessProvider: this.witnessProvider,
       chainId: this.expectedChainId,
-      finality: this.config.confirmations || 1,
+      finality: this.config.confirmations,
     });
     // The wallet is ready as soon as its account is loaded; everything that touches ETH waits for this check, through
     // synced.
@@ -321,13 +293,6 @@ export class CasinoWallet extends GameSessions {
       address: this.config.contractAddress,
       chainId: this.expectedChainId,
       expected: trusted,
-    }).then(async deployment => {
-      this.config.operator = deployment.operator;
-      await this.storage.put(pinKey, {
-        ...deployment,
-        rpcUrl: this.config.rpcUrl,
-        witnessRpcUrl: this.config.witnessRpcUrl,
-      });
     });
     this.verified.catch(() => {});
     const saved = await fundingAccounts(this.storage, this.expectedChainId, { create: true });

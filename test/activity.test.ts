@@ -73,6 +73,11 @@ test('reorged, reverted, replaced and unknown receipts never advertise a confirm
     assert.notEqual(summary.tone, 'positive');
     if (status === 'orphaned') assert.match(summary.notice!, /no longer confirmed/);
   }
+  const rejected = receiptSummary(
+    { status: 'rejected', kind: 'casino-bet', amount: '100', reason: 'Capacity too low' },
+    contract,
+  );
+  assert.deepEqual([rejected.status, rejected.amount, rejected.notice], ['Nothing paid', '0 ETH', 'Capacity too low']);
 });
 
 test('closures and actual collections remain distinct from off-chain payments', () => {

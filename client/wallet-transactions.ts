@@ -6,7 +6,6 @@ import { ZeroAddress, formatEther, getAddress, keccak256, Transaction } from 'et
 import { plain, same, hashState, withdrawalRecorded } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
-import { withLock } from './storage.ts';
 import { depositRemaining, recordPlay } from './play-controls.ts';
 export const TRANSACTION_LIMITS = Object.freeze({
   gas: 2000000n,
@@ -33,108 +32,82 @@ export const channelRecord = (value: Record<string, any>) =>
  * class is a chain: `CasinoWallet` extends `GameSessions` extends `ChannelClient`
  * extends this, so each method declares `this: CasinoWallet`. */
 export class WalletTransactions {
+  /** Sign, save and broadcast one transaction from this account's address, under the wallet's lock. */
   async sendTransaction(this: CasinoWallet, method: string, args: any[] = [], overrides: TransactionRequest = {}) {
     this.requireDurableState();
-    if (this.sending) throw new Error('The wallet is already sending a transaction.');
-    this.sending = true;
-    const send = async () => {
-      this.requireDurableState();
-      await this.assertNetwork();
-      const { address, signer, provider, contract } = this;
-      const value = BigInt(overrides.value ?? 0);
-      if (value < 0n) throw new Error('Transaction value cannot be negative.');
-      const remaining = method === 'deposit' ? depositRemaining(this.controls) : null;
-      if (remaining !== null && value > remaining)
-        throw new Error('Your play controls limit deposits. ETH stays at your address for withdrawal or recovery.');
-      // A deposit of everything the address holds is priced before its value is known, and keeps that price.
-      const fees = overrides.gasLimit
-        ? {
-            maxCost: BigInt(overrides.gasLimit) * BigInt(overrides.maxFeePerGas!),
-            overrides: {
-              gasLimit: BigInt(overrides.gasLimit),
-              maxFeePerGas: BigInt(overrides.maxFeePerGas!),
-              maxPriorityFeePerGas: BigInt(overrides.maxPriorityFeePerGas!),
-              type: 2,
-            },
-          }
-        : await this.transactionFees(method, args, value);
-      const [balance, latestNonce, pendingNonce] = await Promise.all([
-        provider.getBalance(address, 'pending'),
-        provider.send('eth_getTransactionCount', [address, 'latest']),
-        provider.send('eth_getTransactionCount', [address, 'pending']),
-      ]);
-      // Public RPCs may omit pending debits from balance queries. Do not build a
-      // second transaction against that balance until the first one is mined.
-      if (BigInt(latestNonce) !== BigInt(pendingNonce))
-        throw new Error('A wallet transaction is pending. Wait for confirmation before sending another.');
-      const nonce = Number(BigInt(pendingNonce));
-      if (overrides.nonce != null && BigInt(overrides.nonce) !== BigInt(pendingNonce))
-        throw new Error('The wallet nonce changed. Recover the pending operation before sending again.');
-      if (balance < value + fees.maxCost) {
-        throw new Error(
-          `Your address holds too little for this transaction: its fee can be up to ${formatEther(fees.maxCost)} ETH. Send that much ETH to ${address} first, with "Add ETH that arrives at my deposit address to my balance" off in Settings.`,
-        );
-      }
-      await this.assertNetwork();
-      if (
-        address !== this.address ||
-        signer !== this.signer ||
-        provider !== this.provider ||
-        contract !== this.contract
-      )
-        throw new Error('The account changed. Check the amount and try again.');
-      // Pin the same gas limit and fee caps used by the reserve check. Neither
-      // the caller nor a later provider estimate can raise this cost silently.
-      const pinnedOverrides = {
-        value,
-        nonce,
-        chainId: this.expectedChainId,
-        ...fees.overrides,
-      };
-      this.requireDurableState();
-      // `send` pays ETH straight to the address it names, calling no contract.
-      const recipient = method === 'send' ? getAddress(args[0]) : null;
-      if (!this.storageKey)
-        return recipient
-          ? signer.sendTransaction({ to: recipient, ...pinnedOverrides })
-          : contract[method](...args, pinnedOverrides);
-      if (this.transactionIntent) throw new Error('Recover the saved transaction before sending another');
-      // Signed, then saved, then broadcast: a lost reply leaves exactly this transaction to look for or send again.
-      const raw = await signer.signTransaction(
-        recipient
-          ? { to: recipient, data: '0x', ...pinnedOverrides }
-          : await contract[method].populateTransaction(...args, pinnedOverrides),
+    await this.assertNetwork();
+    const { address, signer, provider, contract } = this;
+    const value = BigInt(overrides.value ?? 0);
+    if (value < 0n) throw new Error('Transaction value cannot be negative.');
+    const remaining = method === 'deposit' ? depositRemaining(this.controls) : null;
+    if (remaining !== null && value > remaining)
+      throw new Error('Your play controls limit deposits. ETH stays at your address for withdrawal or recovery.');
+    // A deposit of everything the address holds is priced before its value is known, and keeps that price.
+    const fees = overrides.gasLimit
+      ? {
+          maxCost: BigInt(overrides.gasLimit) * BigInt(overrides.maxFeePerGas!),
+          overrides: {
+            gasLimit: BigInt(overrides.gasLimit),
+            maxFeePerGas: BigInt(overrides.maxFeePerGas!),
+            maxPriorityFeePerGas: BigInt(overrides.maxPriorityFeePerGas!),
+            type: 2,
+          },
+        }
+      : await this.transactionFees(method, args, value);
+    const [balance, latestNonce, pendingNonce] = await Promise.all([
+      provider.getBalance(address, 'pending'),
+      provider.send('eth_getTransactionCount', [address, 'latest']),
+      provider.send('eth_getTransactionCount', [address, 'pending']),
+    ]);
+    // Public RPCs may omit pending debits from balance queries. Do not build a
+    // second transaction against that balance until the first one is mined.
+    if (BigInt(latestNonce) !== BigInt(pendingNonce))
+      throw new Error('A wallet transaction is pending. Wait for confirmation before sending another.');
+    const nonce = Number(BigInt(pendingNonce));
+    if (overrides.nonce != null && BigInt(overrides.nonce) !== BigInt(pendingNonce))
+      throw new Error('The wallet nonce changed. Recover the pending operation before sending again.');
+    if (balance < value + fees.maxCost) {
+      throw new Error(
+        `Your address holds too little for this transaction: its fee can be up to ${formatEther(fees.maxCost)} ETH. Send that much ETH to ${address} first, with "Add ETH that arrives at my deposit address to my balance" off in Settings.`,
       );
-      this.transactionIntent = {
-        method,
-        args: plain(args),
-        value: String(value),
-        nonce,
-        to: recipient ?? (await contract.getAddress()),
-        data: recipient ? '0x' : contract.interface.encodeFunctionData(method, args),
-        fees: plain(fees.overrides),
-        raw,
-        hash: keccak256(raw),
-      };
-      // The signed close and its fence are one durable write. An estimate or signing failure leaves the channel
-      // usable; once signed, its evidence must stay frozen even if the transaction is replaced or reorganized out.
-      if (method === 'startClose') this.channels[args[0].base.channelId].closing = true;
-      await this.save();
-      return provider.broadcastTransaction(raw);
-    };
-    try {
-      return await withLock(
-        `hookedin:wallet-send:${this.expectedChainId}:${this.address?.toLowerCase()}`,
-        false,
-        held => {
-          if (!held)
-            throw new Error('This wallet is sending a transaction in another tab. Try again after confirmation.');
-          return send();
-        },
-      );
-    } finally {
-      this.sending = false;
     }
+    await this.assertNetwork();
+    if (address !== this.address || signer !== this.signer || provider !== this.provider || contract !== this.contract)
+      throw new Error('The account changed. Check the amount and try again.');
+    // Pin the same gas limit and fee caps used by the reserve check. Neither
+    // the caller nor a later provider estimate can raise this cost silently.
+    const pinnedOverrides = {
+      value,
+      nonce,
+      chainId: this.expectedChainId,
+      ...fees.overrides,
+    };
+    this.requireDurableState();
+    if (this.transactionIntent) throw new Error('Recover the saved transaction before sending another');
+    // `send` pays ETH straight to the address it names, calling no contract.
+    const recipient = method === 'send' ? getAddress(args[0]) : null;
+    // Signed, then saved, then broadcast: a lost reply leaves exactly this transaction to look for or send again.
+    const raw = await signer.signTransaction(
+      recipient
+        ? { to: recipient, data: '0x', ...pinnedOverrides }
+        : await contract[method].populateTransaction(...args, pinnedOverrides),
+    );
+    this.transactionIntent = {
+      method,
+      args: plain(args),
+      value: String(value),
+      nonce,
+      to: recipient ?? (await contract.getAddress()),
+      data: recipient ? '0x' : contract.interface.encodeFunctionData(method, args),
+      fees: plain(fees.overrides),
+      raw,
+      hash: keccak256(raw),
+    };
+    // The signed close and its fence are one durable write. An estimate or signing failure leaves the channel
+    // usable; once signed, its evidence must stay frozen even if the transaction is replaced or reorganized out.
+    if (method === 'startClose') this.channels[args[0].base.channelId].closing = true;
+    await this.save();
+    return provider.broadcastTransaction(raw);
   }
   async transactionFees(this: CasinoWallet, method: string, args: any[] = [], value = 0n) {
     const [estimate, fees] = await Promise.all([
@@ -331,7 +304,7 @@ export class WalletTransactions {
     this.lastChainCheck = 0;
     let receipt;
     try {
-      receipt = await tx.wait(this.config.confirmations || 1, 90000);
+      receipt = await tx.wait(this.config.confirmations, 90000);
     } catch (error: any) {
       if (!['TRANSACTION_REPLACED', 'CALL_EXCEPTION'].includes(error.code) || !error.receipt) throw error;
       receipt = error.receipt;
@@ -389,16 +362,14 @@ export class WalletTransactions {
     await this.save(record, { transactionIntent: null, controls: recordPlay(this.controls, record) });
   }
   transactionRecovery(this: CasinoWallet) {
-    return { provider: this.provider, observer: this.observer, confirmations: this.config.confirmations || 1 };
+    return { provider: this.provider, observer: this.observer, confirmations: this.config.confirmations };
   }
   async transactionStatus(this: CasinoWallet, receipt: TransactionReceipt, intent: any) {
     const read = async (provider: any) => {
       const tx = await provider.getTransaction(receipt.hash);
       return tx && { from: tx.from, to: tx.to, nonce: tx.nonce, data: tx.data, value: tx.value };
     };
-    const transaction = this.observer
-      ? await this.observer.corroborate('transaction intent', read)
-      : await read(this.provider);
+    const transaction = await this.observer.corroborate('transaction intent', read);
     if (!transaction) throw new Error('Confirmed transaction data is unavailable; recover again shortly');
     return !sameTransactionIntent(transaction, intent, this.address)
       ? 'replaced'
