@@ -397,7 +397,7 @@ export class CasinoWallet extends GameSessions {
     await this.verified;
     await this.withChannelLock(true, async () => {
       await this.refreshLocked();
-      if (this.channel?.registered) await this.reconcile().catch(() => {});
+      if (this.channel?.registered) await this.activate().catch(() => {});
     });
     this.render();
   }
@@ -1034,13 +1034,8 @@ export class CasinoWallet extends GameSessions {
   async recover() {
     const result = await this.exclusive(async () => {
       if (this.transactionIntent) await this.recoverTransaction();
-      if (this.channel && !this.channel.registered) return this.activate();
-      if (this.pending?.request) return this.resume();
-      if (this.channel)
-        this.noteNames(
-          await this.api(`/api/channels/${this.channelId}/activate`, { opening: this.channel.opening }, this.channel),
-        );
-      await this.reconcile();
+      if (this.pending?.request && this.channel?.registered) return this.resume();
+      if (this.channel) await this.activate();
     });
     // A verified stored result is recoverable even while new play is paused.
     if (result?.verified)

@@ -2077,7 +2077,7 @@ $('deposit-backup').addEventListener('click', () => {
 $('deposit-instructions').textContent = `Send test ETH on ${wallet.networkName} to your deposit address`;
 $('deposit-note').textContent =
   'Only send test ETH on the named network. Other assets or networks are not supported. Deposits require network confirmations and a second transaction to add ETH to your balance; its fee is deducted.';
-for (const link of document.querySelectorAll<HTMLAnchorElement>('a[data-casino-link]')) link.href = casinoURL;
+$<HTMLAnchorElement>('casino-status').href = casinoURL + '/api/status';
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
 const initialRoute = parseRoute(new URL(location.href));
 showPage(typeof initialRoute === 'string' ? initialRoute : 'library');

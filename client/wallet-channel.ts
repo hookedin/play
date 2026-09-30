@@ -386,10 +386,6 @@ export class ChannelClient extends WalletTransactions {
         : {}),
     });
     this.updateBankroll(response.bankroll);
-    void this.api(`/api/channels/${c.state.channelId}/ack`, {
-      stateHash: hashState(this.domain, next),
-      signature: c.playerSignature,
-    }).catch(() => {});
     return receipt;
   }
   // --- Developer bets --------------------------------------------------------------------------------
@@ -848,18 +844,5 @@ export class ChannelClient extends WalletTransactions {
       c.round = id;
     }
     return c.round!;
-  }
-  async reconcile(this: CasinoWallet) {
-    const c = this.channel;
-    if (!c?.registered) return;
-    const reply = await this.api(`/api/channels/${c.state.channelId}`);
-    this.noteNames(reply);
-    if (same(hashState(this.domain, c.state), hashState(this.domain, reply.state))) {
-      this.updateBankroll(reply.bankroll);
-      return;
-    }
-    if (!reply.lastResponse) throw new Error('Casino checkpoint differs; import recovery evidence');
-    if (!this.pending) throw new Error('Unknown pending operation; use saved recovery evidence');
-    await this.accept(reply.lastResponse, this.pending.operationId, this.pending.kind);
   }
 }

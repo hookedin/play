@@ -297,22 +297,28 @@ export class WalletTransactions {
     const receipt = await this.waitTransaction(tx);
     return this.history.find(entry => entry.txHash === receipt.hash);
   }
-  /** Register this account's channel with the casino, which answers with the state it holds. A channel still at its
-   * base is taken up there; one the casino has seen played on needs this wallet's own evidence. */
+  /** Register this account's channel with the casino, or look it up there: either way the casino answers with the state
+   * it holds. A channel still at its base is taken up there; one the casino has seen played on needs this wallet's own
+   * evidence. A later state of a registered channel is the reply to this wallet's saved operation, which it lost. */
   async activate(this: CasinoWallet) {
     const c = this.channel!;
     if (this.recoveryOnly) return;
     const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening: c.opening }, c);
     this.noteNames(reply);
-    this.updateBankroll(reply.bankroll);
-    if (c.registered) return;
-    if (!same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
+    if (same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
+      this.updateBankroll(reply.bankroll);
+      if (c.registered) return;
+      this.missingChannel = null;
+      c.registered = true;
+      return this.save();
+    }
+    if (!c.registered) {
       this.missingChannel = c.state.channelId;
       throw new Error("This balance was played in another browser: restore that wallet's backup to use it here.");
     }
-    this.missingChannel = null;
-    c.registered = true;
-    await this.save();
+    if (!reply.lastResponse) throw new Error('Casino checkpoint differs; import recovery evidence');
+    if (!this.pending) throw new Error('Unknown pending operation; use saved recovery evidence');
+    await this.accept(reply.lastResponse, this.pending.operationId, this.pending.kind);
   }
   /** The local chain's faucet fills this account's address, and the sweep puts it into the balance. */
   async setupDemo(this: CasinoWallet) {
