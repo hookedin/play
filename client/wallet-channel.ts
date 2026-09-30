@@ -45,8 +45,26 @@ import { gameAmount, gameError, gameRef, META } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 import { allowPlay, recordPlay } from './play-controls.ts';
 const random = () => hexlify(randomBytes(32));
-/** Operations that add to the balance: a payout collected, or a deposit taken in. They commit none of it. */
-const CREDITS = ['divest', 'earnings', 'developer-bet-payout', 'withdrawn', 'taken-in'];
+/** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
+ * developer bet, a payment, an investment and a bank deposit are debits, a withdrawal names its recipient (a lock-in is
+ * one to the contract), a payout collected is a credit, and money deposited into the channel is taken in with a
+ * deposit. */
+export const OPERATIONS: Record<string, { kind: number; name: string; game?: boolean }> = {
+  'casino-bet': { kind: KIND.casinoBet, name: 'casino bet', game: true },
+  payment: { kind: KIND.debit, name: 'game payment', game: true },
+  'developer-bet': { kind: KIND.debit, name: 'developer bet', game: true },
+  invest: { kind: KIND.debit, name: 'bankroll investment' },
+  bank: { kind: KIND.debit, name: 'bank deposit' },
+  withdrawal: { kind: KIND.withdrawal, name: 'withdrawal' },
+  'lock-in': { kind: KIND.withdrawal, name: 'lock-in' },
+  divest: { kind: KIND.credit, name: 'bankroll payout' },
+  earnings: { kind: KIND.credit, name: 'earnings payout' },
+  'developer-bet-payout': { kind: KIND.credit, name: 'developer bet payout' },
+  withdrawn: { kind: KIND.credit, name: 'bank withdrawal' },
+  'taken-in': { kind: KIND.deposit, name: 'deposit' },
+};
+/** A payout collected or a deposit taken in adds to the balance, and commits none of it. */
+const credit = (kind: string) => OPERATIONS[kind]!.kind === KIND.credit || OPERATIONS[kind]!.kind === KIND.deposit;
 const bytes32 = (value: unknown): value is string =>
   typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value) && !same(value, ZeroHash);
 /** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
@@ -75,7 +93,7 @@ export class ChannelClient extends WalletTransactions {
    * committed. A credit collects what is owed and commits nothing. */
   playableBalance(this: CasinoWallet) {
     const pending = this.pending,
-      committed = pending?.request && !CREDITS.includes(pending.kind) ? BigInt(pending.request.amount) : 0n,
+      committed = pending?.request && !credit(pending.kind) ? BigInt(pending.request.amount) : 0n,
       free = BigInt(this.channel?.state.balance || 0) - committed;
     return free < 0n ? 0n : free;
   }
@@ -112,40 +130,21 @@ export class ChannelClient extends WalletTransactions {
     this.requireDurableState();
     // A deposit on its way into the balance goes first: nothing else is signed before the casino has signed it.
     if (kind !== 'taken-in' && this.pending?.kind === 'taken-in') await this.takeDeposits();
+    const known = OPERATIONS[kind];
+    if (!known) throw new Error('Unknown wallet operation');
     const intent = {
-      // A developer bet, a payment and an investment are debits, a payout collected is a credit, money deposited into
-      // the channel is taken in with a deposit, and a withdrawal names its recipient: a lock-in is one to the contract.
-      kind:
-        (
-          {
-            'casino-bet': KIND.casinoBet,
-            payment: KIND.debit,
-            'developer-bet': KIND.debit,
-            invest: KIND.debit,
-            bank: KIND.debit,
-            withdrawal: KIND.withdrawal,
-            'lock-in': KIND.withdrawal,
-            divest: KIND.credit,
-            earnings: KIND.credit,
-            'developer-bet-payout': KIND.credit,
-            withdrawn: KIND.credit,
-            'taken-in': KIND.deposit,
-          } as Record<string, number>
-        )[kind] || 0,
+      kind: known.kind,
       amount: BigInt(kind === 'casino-bet' ? input.stake : input.amount),
       recipient: input.recipient ? getAddress(input.recipient) : ZeroAddress,
       chance: kind === 'casino-bet' ? BigInt(input.chance) : 0n,
       prize: kind === 'casino-bet' ? BigInt(input.prize) : 0n,
     };
-    if (!intent.kind) throw new Error('Unknown wallet operation');
     // What the operation means, signed as its memo. A casino bet, a developer bet and a payment are always the open
     // game's, so which game that is has one source of truth: the session this wallet has open; the game may give
     // them a group. An investment, a bank deposit and a payout name what they pay into or collect from.
     const details: Details = plain({
       id: id(operationId),
-      ...(['casino-bet', 'payment', 'developer-bet'].includes(kind)
-        ? { game: gameRef(this.requireGame().identity) }
-        : {}),
+      ...(known.game ? { game: gameRef(this.requireGame().identity) } : {}),
       ...(input.group ? { group: input.group } : {}),
       ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
       ...(kind === 'developer-bet' ? { meta: input.meta } : {}),
@@ -179,14 +178,12 @@ export class ChannelClient extends WalletTransactions {
     };
     const sign = async () => {
       // A credit collects what is owed: it spends nothing.
-      allowed(CREDITS.includes(kind) ? 0n : intent.amount);
+      allowed(credit(kind) ? 0n : intent.amount);
       // The round is fixed before this wallet picks its seed, so only one secret can settle the casino bet:
       // the wallet picks the seed and sends it with the bet.
       const seed = kind === 'casino-bet' ? random() : null,
         round = seed ? await this.ownRound() : ZeroHash;
-      const controls = ['casino-bet', 'developer-bet', 'payment'].includes(kind)
-        ? allowPlay(this.controls, intent.amount)
-        : this.controls;
+      const controls = known.game ? allowPlay(this.controls, intent.amount) : this.controls;
       const request = operation(this.domain, this.channel!.state, {
         kind: intent.kind,
         amount: intent.amount,

@@ -29,6 +29,7 @@ import { backupFingerprint, verifyBackupFile } from './backup-status.ts';
 import { playControls, depositRemaining } from './play-controls.ts';
 import qrcode from 'qrcode-generator';
 import { gameReceipt } from './wallet-games.ts';
+import { OPERATIONS } from './wallet-channel.ts';
 import { withLock } from './storage.ts';
 import { json, same, verifyEvidence, gameKey } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
@@ -82,23 +83,10 @@ const ethAmount = (text: string) => {
     return null;
   }
 };
-/** What each operation the wallet signs is, as the banner of a saved one names it. */
-const OPERATIONS: Record<string, string> = {
-  'casino-bet': 'casino bet',
-  'developer-bet': 'developer bet',
-  payment: 'game payment',
-  invest: 'bankroll investment',
-  bank: 'bank deposit',
-  'developer-bet-payout': 'developer bet payout',
-  divest: 'bankroll payout',
-  withdrawn: 'bank withdrawal',
-  earnings: 'earnings payout',
-  withdrawal: 'withdrawal',
-};
 /** A saved operation in words: what it is, the ID the casino knows it by and the sequence it was signed at, and what the
  * last attempt to send it ran into. */
 function pendingSummary({ kind, request, details, game, operationId }: any) {
-  const what = `${formatEther(request.amount)} ETH ${OPERATIONS[kind] ?? kind}${game ? ` in ${game.name}` : ''}`,
+  const what = `${formatEther(request.amount)} ETH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
     failed = wallet.pendingError?.operationId === operationId ? wallet.pendingError : null;
   return (
     `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${request.sequence}). ` +
