@@ -1,7 +1,7 @@
 import type { JsonRpcProvider } from 'ethers';
 import type { ChainObserver } from './chain-observer.ts';
 import type { Deployment, Integer } from './types.ts';
-import { Contract, getAddress, keccak256 } from 'ethers';
+import { Contract, getAddress } from 'ethers';
 import artifact from '../client/contract-artifact.ts';
 import { same } from './protocol.ts';
 
@@ -55,13 +55,6 @@ export async function verifyDeployment({
       runtime = runtime.slice(0, start * 2) + value + runtime.slice((start + length) * 2);
     }
   if (!same(code, '0x' + runtime)) throw new Error('Unrecognized casino bytecode; funding disabled');
-  if (expected?.runtimeHash && !same(expected.runtimeHash, keccak256(code)))
-    throw new Error('Deployment runtime hash differs');
   await observer.accept(observation);
-  return {
-    chainId: String(chainId),
-    contractAddress: address,
-    operator: values.owner,
-    runtimeHash: keccak256(code),
-  };
+  return { chainId: String(chainId), contractAddress: address, operator: values.owner };
 }

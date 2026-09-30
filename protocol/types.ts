@@ -143,7 +143,6 @@ export interface Deployment {
   chainId: Integer;
   contractAddress: string;
   operator: string;
-  runtimeHash?: string;
   rpcUrl?: string;
   witnessRpcUrl?: string;
 }
