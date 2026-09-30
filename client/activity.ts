@@ -2,7 +2,6 @@ import { formatEther } from 'ethers';
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
 import { plain, same } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
-import { developerBetStatus } from './game-account.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
 interface ActivityEntry {
@@ -289,7 +288,7 @@ export function receiptSummary(
   if (receipt.kind === 'payment')
     description = `A payment this game charged, paid into the casino's bankroll. Balance ${formatEther(receipt.balance)} ${unit}`;
   if (receipt.kind === 'developer-bet') {
-    const open = developerBetStatus(receipt) === 'open';
+    const open = receipt.payout === undefined;
     status = open ? 'Waiting for the developer' : BigInt(receipt.payout) ? 'Payout collected' : 'Settled · no payout';
     if (open)
       description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${formatEther(receipt.balance)} ${unit}`;
@@ -336,7 +335,7 @@ export function receiptSummary(
   }
   const notice =
     receipt.status === 'orphaned'
-      ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or use the saved transaction details to retry from your funding wallet.'
+      ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or retry it from your deposit address with the saved transaction details.'
       : receipt.kind === 'close-started'
         ? 'A close without the casino can be challenged for 24 hours. Then finish it under Wallet → Recovery.'
         : receipt.kind === 'closure'

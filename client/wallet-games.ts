@@ -10,8 +10,7 @@ import type { Round } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress } from 'ethers';
 import { LIMITS } from '../protocol/protocol.ts';
-import { developerBetStatus, gameAmount, gameOperationKey } from './game-account.ts';
-import { gameError } from './bridge.ts';
+import { gameAmount, gameError, gameOperationKey } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
 /** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
@@ -24,10 +23,15 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
       'id-used',
       'This operation was carried out on another channel, and its result is not in this wallet',
     );
+  // A developer bet is open until the wallet has collected what its developer paid.
   const op = receipt.request ?? receipt.proof.step.operation,
     kind: GameReceipt['kind'] = receipt.kind,
     status: GameReceipt['status'] =
-      receipt.status === 'rejected' ? 'rejected' : kind === 'developer-bet' ? developerBetStatus(receipt) : 'settled';
+      receipt.status === 'rejected'
+        ? 'rejected'
+        : receipt.payout === undefined && kind === 'developer-bet'
+          ? 'open'
+          : 'settled';
   return {
     id,
     kind,

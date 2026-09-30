@@ -1,4 +1,4 @@
-import { gameAmount, gameOperationKey } from './game-account.ts';
+import type { GameIdentity } from '../protocol/game-types.ts';
 import { LIMITS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
 /** Every method a game may call; `wallet.hello` reports this list, so a game can tell what a wallet offers. */
@@ -17,6 +17,25 @@ const methods = new Set(METHODS);
 const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'wallet.round', 'game.receipt']);
 /** Requests a game may have waiting for their turn. */
 const MAX_QUEUE = 32;
+/** The game an operation is for, as a bet or a payment signs it: its key, which stays the same wherever the game
+ * is served. */
+export function gameRef(identity: GameIdentity): string {
+  if (!['http:', 'https:'].includes(new URL(identity.url).protocol)) throw new Error('Game URLs must use HTTP(S)');
+  if (!/^0x[0-9a-f]{64}$/.test(identity.key)) throw new Error('A game key is a lowercase 32-byte hash');
+  return identity.key;
+}
+/** An amount a game names, in wei: a decimal string below 2^256, above zero unless `positive` is false. */
+export function gameAmount(value: unknown, positive = true) {
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,77})$/.test(value)) throw new Error('Use decimal wei amounts');
+  const n = BigInt(value);
+  if (n >= 1n << 256n || (positive && n === 0n)) throw new Error('Amount is outside the supported range');
+  return n;
+}
+/** A game names its own operations; the wallet scopes them by player and game. */
+export function gameOperationKey(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._:-]{1,64}$/.test(value))
+    throw new Error('A game operation ID is 1–64 characters of letters, digits, ".", "_", ":" or "-"');
+}
 /** An error a game can act on: `code` is stable, the message is for people. */
 export const gameError = (code: string, message: string) => Object.assign(new Error(message), { code });
 const invalid = (message: string) => gameError('invalid-request', message);

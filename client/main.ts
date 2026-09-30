@@ -29,7 +29,6 @@ import { backupFingerprint, verifyBackupFile } from './backup-status.ts';
 import { playControls, depositRemaining } from './play-controls.ts';
 import qrcode from 'qrcode-generator';
 import { gameReceipt } from './wallet-games.ts';
-import { developerBetStatus } from './game-account.ts';
 import { withLock } from './storage.ts';
 import { json, same, verifyEvidence, gameKey } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
@@ -1471,7 +1470,7 @@ function ownBets(): BetRow[] {
         receipt.status === 'signed' &&
         ((receipt.kind === 'casino-bet' && receipt.expectedPayout !== undefined) ||
           // A developer bet is one once what it was paid is collected.
-          (receipt.kind === 'developer-bet' && developerBetStatus(receipt) === 'settled')),
+          (receipt.kind === 'developer-bet' && receipt.payout !== undefined)),
     )
     .map((receipt: any) => ({
       at: Date.parse(receipt.createdAt),

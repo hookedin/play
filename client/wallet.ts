@@ -3,6 +3,43 @@ import type { Store } from './storage.ts';
 import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerDeveloperBet } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
+import { Contract, Wallet, getAddress } from 'ethers';
+import {
+  domain,
+  canonicalJSON,
+  json,
+  plain,
+  same,
+  MAX_JSON_BYTES,
+  STATE_TYPES,
+  ACCESS_TYPES,
+  authorization,
+  baseState,
+  channelId,
+  hashState,
+  checkpointEvidence,
+  verifyEvidence,
+  verifyStep,
+  hashOperation,
+  KIND,
+  assertProtocol,
+  owed,
+} from '../protocol/protocol.ts';
+import {
+  ChainObserver,
+  createRpcProvider,
+  requireIndependentRpc,
+  requireCanonicalBlock,
+} from '../protocol/chain-observer.ts';
+import { mapBounded } from '../protocol/concurrency.ts';
+import { BrowserStore, withLock } from './storage.ts';
+import { fundingAccounts, readFundingAccounts } from './funding-accounts.ts';
+import { verifyDeployment } from '../protocol/deployment.ts';
+import { encryptBackup, decryptBackup } from './backup.ts';
+import trustedArtifact from './contract-artifact.ts';
+import { GameSessions } from './wallet-games.ts';
+import { changeLimits, depositRemaining, playControls, restoreControls } from './play-controls.ts';
+import type { PlayControls, PlayLimits } from './play-controls.ts';
 export interface WalletOptions {
   casinoURL?: string;
   network?: string;
@@ -39,45 +76,19 @@ export interface GameIntent {
   /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
   developer: string;
 }
-import { Contract, Wallet, getAddress } from 'ethers';
-import {
-  domain,
-  canonicalJSON,
-  json,
-  plain,
-  same,
-  MAX_JSON_BYTES,
-  STATE_TYPES,
-  ACCESS_TYPES,
-  authorization,
-  baseState,
-  channelId,
-  hashState,
-  checkpointEvidence,
-  verifyEvidence,
-  verifyStep,
-  hashOperation,
-  KIND,
-  assertProtocol,
-  owed,
-} from '../protocol/protocol.ts';
-import {
-  ChainObserver,
-  createRpcProvider,
-  requireIndependentRpc,
-  requireCanonicalBlock,
-} from '../protocol/chain-observer.ts';
-import { mapBounded } from '../protocol/concurrency.ts';
-import { BrowserStore, withLock } from './storage.ts';
-import { fundingAccounts, readFundingAccounts } from './funding-accounts.ts';
-import { verifyDeployment } from '../protocol/deployment.ts';
-import { encryptBackup, decryptBackup } from './backup.ts';
-import trustedArtifact from './contract-artifact.ts';
-import { channelRecord } from './wallet-transactions.ts';
-import { GameSessions } from './wallet-games.ts';
-import { changeLimits, depositRemaining, playControls, restoreControls } from './play-controls.ts';
-import type { PlayControls, PlayLimits } from './play-controls.ts';
 export const HISTORICAL_CHANNEL_BATCH = 16;
+/** What the wallet keeps of an on-chain channel record. */
+const CHANNEL_FIELDS = [
+  'player',
+  'deposited',
+  'principal',
+  'claimed',
+  'status',
+  'deadline',
+  'closingSequence',
+  'closingHash',
+  'closingBalance',
+];
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
   sepolia: { id: 11155111n, name: 'Sepolia', stake: '1000000000000' },
   local: { id: 31337n, name: 'Anvil test chain', stake: '1000000000000000' },
@@ -118,7 +129,7 @@ export class CasinoWallet extends GameSessions {
   >;
   /** Where the feed of this account's settled developer bets was read up to. */
   declare developerBetCursor: string;
-  developerBetError: string | null = null;
+  declare developerBetError: string | null;
   /** What the last attempt to send the pending operation it names ran into: a casino that refuses an operation
    * refuses it the same way on every retry. */
   pendingError: { operationId: string; message: string; code?: string } | null = null;
@@ -181,8 +192,8 @@ export class CasinoWallet extends GameSessions {
   reportedBankroll = '0';
   /** Whether ETH at this account's address goes into its balance up to its deposit limit. Off, it stays available
    * for withdrawal and transaction fees. */
-  autoDeposit = true;
-  controls: PlayControls = playControls();
+  declare autoDeposit: boolean;
+  declare controls: PlayControls;
   /** What a deposit under way is adding to the balance, from this account's address; nothing between deposits. */
   depositing = 0n;
   /** The fee the last deposit was priced at: the sweep leaves alone an address holding less than twice it, since a
@@ -219,16 +230,10 @@ export class CasinoWallet extends GameSessions {
       uname: null,
       alias: null,
       profile: null,
-      fund: { sequence: 0, shares: '0', statement: null },
-      developerBets: {},
-      developerBetCursor: '0',
-      bank: {},
       developerEarnings: null,
-      history: [],
-      channels: {},
       busy: false,
-      revision: 0,
     });
+    this.hydrate(undefined);
   }
   /** A local Anvil casino, whose faucet funds a wallet: the casino says so, and it is refused anywhere else. */
   get isLocalDevelopment() {
@@ -631,8 +636,7 @@ export class CasinoWallet extends GameSessions {
       await this.refreshing;
       return this.publicState;
     }
-    const pending = this.withChannelLock(false, async held => {
-      if (!held) return;
+    await this.refreshUnder(async () => {
       try {
         await this.refreshLocked({ channelId });
       } catch (error) {
@@ -640,22 +644,27 @@ export class CasinoWallet extends GameSessions {
         throw error;
       }
     });
+    void this.refreshDetails();
+    return this.publicState;
+  }
+  /** Run `fn` holding the channel lock, unless another tab has it, as this wallet's one refresh: an action waits for it. */
+  async refreshUnder(fn: () => Promise<void>) {
+    const pending = this.withChannelLock(false, async held => {
+      if (held) await fn();
+    });
     this.refreshing = pending;
     try {
       await pending;
     } finally {
       if (this.refreshing === pending) this.refreshing = null;
     }
-    void this.refreshDetails();
-    return this.publicState;
   }
   async observeChannels(keys: string[], block: ChainBlock): Promise<[string, any, any][]> {
     return mapBounded(keys, async key => {
       const value = await this.observer.contractRead(this.reader, 'channels', [key], block);
-      const onchain = channelRecord(value);
+      const onchain = plain(Object.fromEntries(CHANNEL_FIELDS.map(field => [field, value[field]])));
       let claim = null;
       if (Number(value.status) === 3) {
-        // Two reads of one block, asked together.
         const [terms, collectable] = await Promise.all([
           this.observer.contractRead(this.reader, 'claims', [key], block),
           this.observer.contractRead(this.reader, 'collectable', [key], block),
@@ -751,18 +760,12 @@ export class CasinoWallet extends GameSessions {
     const commit = async (apply: () => void) => {
       while (this.refreshing) await this.refreshing.catch(() => {});
       if (!current() || this.busy || this.storageFailed) return;
-      const pending = this.withChannelLock(false, async held => {
-        if (!held || !current() || this.busy || this.storageFailed) return;
+      await this.refreshUnder(async () => {
+        if (!current() || this.busy || this.storageFailed) return;
         const before = this.durable();
         apply();
         await this.saveChanges(before);
       });
-      this.refreshing = pending;
-      try {
-        await pending;
-      } finally {
-        if (this.refreshing === pending) this.refreshing = null;
-      }
     };
     // Channels this account closed before, and the transactions its activity lists: read a few at a time.
     this.detailsRefreshing = (async () => {
@@ -908,7 +911,7 @@ export class CasinoWallet extends GameSessions {
   async selectSavedAccount(address: string) {
     const saved = await readFundingAccounts(this.storage, this.expectedChainId);
     const key = saved.accounts[getAddress(address)];
-    if (!key) throw new Error('No saved funding key for this address');
+    if (!key) throw new Error('This browser holds no key for that address');
     await this.importKey(key);
   }
   requireService() {
@@ -956,7 +959,7 @@ export class CasinoWallet extends GameSessions {
       });
     }
     if (typeof value.fundingKey !== 'string' || !same(new Wallet(value.fundingKey).address, value.address))
-      throw new Error('Backup funding key differs');
+      throw new Error("The backup's key is not its account's");
     if (!same(value.address, this.address)) await this.importKey(value.fundingKey);
     await this.exclusive(async () => {
       if (!same(value.address, this.address))
@@ -966,12 +969,7 @@ export class CasinoWallet extends GameSessions {
       // exclusive reloads the persisted revision while holding the shared lock.
       for (const [id, old] of Object.entries(this.channels)) {
         const next = value.record.channels[id];
-        if (
-          !next ||
-          BigInt(old.state.sequence) > BigInt(next.state.sequence) ||
-          (BigInt(old.state.sequence) === BigInt(next.state.sequence) &&
-            !same(hashState(this.domain, old.state), hashState(this.domain, next.state)))
-        )
+        if (!next || this.behind(old.state, next.state))
           throw new Error('Backup would discard newer or conflicting saved evidence');
         if (old.pending && canonicalJSON(old.pending) !== canonicalJSON(next.pending ?? null))
           throw new Error('Backup would discard or change a saved pending operation');
@@ -1009,6 +1007,11 @@ export class CasinoWallet extends GameSessions {
       });
     else await this.refresh();
     return result;
+  }
+  /** Whether `state` is older than the saved one, or another state at its sequence. */
+  behind(saved: Checkpoint, state: Checkpoint) {
+    const difference = BigInt(saved.sequence) - BigInt(state.sequence);
+    return difference > 0n || (!difference && !same(hashState(this.domain, saved), hashState(this.domain, state)));
   }
   evidence(channel = this.channel!) {
     if (channel.playerSignature && channel.playerSignature !== '0x')
@@ -1065,14 +1068,8 @@ export class CasinoWallet extends GameSessions {
         throw new Error('Evidence belongs to a different wallet or deployment');
       const channelId = checked.state.channelId,
         old = this.channels[channelId!];
-      if (old && BigInt(old.state.sequence) > BigInt(checked.state.sequence))
-        throw new Error('Backup is older than the saved checkpoint');
-      if (
-        old &&
-        BigInt(old.state.sequence) === BigInt(checked.state.sequence) &&
-        !same(hashState(this.domain, old.state), hashState(this.domain, checked.state))
-      )
-        throw new Error('Conflicting checkpoint at the saved sequence');
+      if (old && this.behind(old.state, checked.state))
+        throw new Error('The evidence is older than the saved checkpoint, or conflicts with it');
       const registered = await this.reader.channels(channelId);
       if (!Number(registered.status) || !same(registered.player, this.address))
         throw new Error('Recovery evidence is not for a channel of this account on this contract');
@@ -1134,7 +1131,6 @@ export class CasinoWallet extends GameSessions {
     await this.refresh();
   }
   destroy() {
-    this.revision++; // Discard any optional reads still in flight.
     clearInterval(this.timer);
     this.provider?.destroy();
     this.witnessProvider?.destroy();

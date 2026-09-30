@@ -7,26 +7,6 @@ import { plain, same, hashState, withdrawalRecorded } from '../protocol/protocol
 import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { depositRemaining, recordPlay } from './play-controls.ts';
-export const TRANSACTION_LIMITS = Object.freeze({
-  gas: 2000000n,
-  feePerGas: 200000000000n,
-  totalFee: 50000000000000000n,
-});
-const picked = (value: Record<string, any>, keys: string[]) => plain(Object.fromEntries(keys.map(k => [k, value[k]])));
-/** The durable projection of an on-chain channel record. */
-export const channelRecord = (value: Record<string, any>) =>
-  picked(value, [
-    'player',
-    'deposited',
-    'principal',
-    'claimed',
-    'status',
-    'deadline',
-    'closingSequence',
-    'closingHash',
-    'closingBalance',
-  ]);
-
 /** Everything that signs or recovers an on-chain transaction: deposits, withdrawals, closes, claims,
  * challenges, fee limits, nonce recovery and confirmed-receipt bookkeeping. The wallet
  * class is a chain: `CasinoWallet` extends `GameSessions` extends `ChannelClient`
@@ -144,9 +124,9 @@ export class WalletTransactions {
     if (
       gasLimit <= 0n ||
       feePerGas <= 0n ||
-      gasLimit > TRANSACTION_LIMITS.gas ||
-      feePerGas > TRANSACTION_LIMITS.feePerGas ||
-      gasLimit * feePerGas > TRANSACTION_LIMITS.totalFee
+      gasLimit > 2000000n ||
+      feePerGas > 200000000000n ||
+      gasLimit * feePerGas > 50000000000000000n
     )
       throw new Error(
         'Transaction exceeds wallet fee limits (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
@@ -449,10 +429,8 @@ export class WalletTransactions {
       ].reduce((a, b) => (a > b ? a : b));
       const maxPriorityFeePerGas = bump(original.maxPriorityFeePerGas ?? 0n);
       this.checkTransactionBudget(original.gasLimit, maxFeePerGas);
-      if (maxFeePerGas > 200000000000n || maxPriorityFeePerGas > maxFeePerGas)
-        throw new Error('Speed-up exceeds the wallet fee cap; use the funding wallet');
       if ((await this.provider.getBalance(this.address)) < original.value + original.gasLimit * maxFeePerGas)
-        throw new Error('Add ETH to the funding wallet before speeding up');
+        throw new Error('Add ETH to your deposit address before speeding up');
       const request = {
         to: original.to,
         data: original.data,
@@ -550,7 +528,6 @@ export class WalletTransactions {
       throw new Error('That withdrawal is not waiting to be sent.');
     if (!this.nextToRecord(entry)) throw new Error('Send the withdrawal you made before it first.');
     const hash = await this.exclusive(async () => {
-      await this.assertNetwork();
       const tx = await this.sendTransaction('withdraw', [entry.proof]);
       await this.waitTransaction(tx);
       return tx.hash;
@@ -607,7 +584,6 @@ export class WalletTransactions {
   async startClose(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
       if (!this.channel) throw new Error('No active channel');
-      await this.assertNetwork();
       // Keep ETH added for the close's fees at the address, including after a failed estimate or gas check.
       if (this.autoDeposit) await this.save(undefined, { autoDeposit: false });
       const tx = await this.sendTransaction('startClose', [this.evidence()]);

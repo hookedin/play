@@ -53,7 +53,7 @@ async function unseal<T>(key: CryptoKey, name: string, value: Sealed): Promise<T
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
 
-/** Encrypt funding keys at rest; signed settlement evidence stays readable while locked.
+/** Encrypt account keys at rest; signed settlement evidence stays readable while locked.
  * Locking drops this tab's encryption key. The UI must also discard its live wallet signer. */
 export class VaultStore implements Store {
   #key: CryptoKey | null = null;

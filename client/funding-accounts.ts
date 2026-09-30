@@ -1,11 +1,11 @@
 import type { Store } from './storage.ts';
 import type { Integer } from '../protocol/types.ts';
+import { Wallet } from 'ethers';
+import { withLock } from './storage.ts';
 export interface FundingAccounts {
   selected: string | null;
   accounts: Record<string, string>;
 }
-import { Wallet } from 'ethers';
-import { withLock } from './storage.ts';
 
 const keyFor = (chainId: Integer) => `funding-accounts:1:${chainId}`;
 

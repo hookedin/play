@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { getAddress, id, ZeroAddress } from 'ethers';
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
-import { gameRef } from '../client/game-account.ts';
+import { gameRef } from '../client/bridge.ts';
 import { channelId, gameKey } from '../protocol/protocol.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 

@@ -41,8 +41,7 @@ import {
   validMeta,
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
-import { gameAmount, gameRef } from './game-account.ts';
-import { gameError, META } from './bridge.ts';
+import { gameAmount, gameError, gameRef, META } from './bridge.ts';
 import { WalletTransactions } from './wallet-transactions.ts';
 import { allowPlay, recordPlay } from './play-controls.ts';
 const random = () => hexlify(randomBytes(32));
@@ -321,7 +320,7 @@ export class ChannelClient extends WalletTransactions {
     c.playerSignature = await this.signer.signTypedData(this.domain, STATE_TYPES, next);
     c.lastResponse = rejected
       ? { ...response, evidence: checkpointEvidence(next, c.playerSignature, c.casinoSignature) }
-      : { ...response, evidence: { ...response.evidence, step } };
+      : response;
     const drawn = !rejected && casinoBet ? outcome(step.seed, step.secret) : null,
       settled = drawn ? { ...drawn, payout: betPayout(op, drawn.value) } : null,
       // What the player signed, exactly: the most the bet could pay and its return out of 2^64 stakes.
