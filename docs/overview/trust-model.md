@@ -76,10 +76,11 @@ requested casino bet is completed.
 - **Watch your channel.** Either side can start a unilateral close, and the casino could close with an older signed
   state. A challenge with your newer evidence must be mined within 24 hours of the close starting, or the older, lower
   balance becomes final. Opening the wallet does not send a challenge: you press **Challenge the close**, or run a
-  [watchtower](../wallet/backups-and-recovery.md#the-watchtower).
-- **Keep your evidence.** Your latest signed state is your proof. Export recovery bundles, and keep an encrypted backup
-  of every account you fund: a key alone cannot rebuild an off-chain balance
-  ([backups and recovery](../wallet/backups-and-recovery.md)).
+  [watchtower](../wallet/keys-and-recovery.md#the-watchtower).
+- **Keep your key, and your evidence.** Your key is your account: save it with a passkey or a key file. Your latest
+  signed state is your proof. The wallet keeps it, and on another device takes up the casino's copy, which is the
+  casino's word; export recovery bundles to settle without trusting it
+  ([keys and recovery](../wallet/keys-and-recovery.md)).
 - **Take out or lock in what you win.** What your balance holds above your deposits is a claim on the shared bankroll
   until the contract pays it: withdraw it, or [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
 - **Keep ETH for the exit.** Closing, challenging, finalizing and collecting are transactions, and your account pays
@@ -144,5 +145,6 @@ The wallet checks:
 - game URLs and every bridge request.
 
 It takes on the casino's word: commission, the bankroll figure, the fund's equity and total shares, the developer
-earnings tally and a developer bank's balance. It takes on the developer's word what a developer bet pays and which bet
+earnings tally, a developer bank's balance, and, on a device without your evidence, that the state it holds of your
+balance is the latest. It takes on the developer's word what a developer bet pays and which bet
 a collapsed step draws, and on the game's word everything a game shows.

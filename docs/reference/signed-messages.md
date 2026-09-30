@@ -158,7 +158,7 @@ secret. Kind 0 appears nowhere else. The casino's replies carry evidence in this
 `{base, playerSignature, casinoSignature, step}`.
 
 A wallet exports evidence as a bundle (`EvidenceBundle` in [types.ts](../../protocol/types.ts)), which a wallet imports
-and the [watchtower](../wallet/backups-and-recovery.md#the-watchtower) reads:
+and the [watchtower](../wallet/keys-and-recovery.md#the-watchtower) reads:
 
 | Field         | Type       | Meaning                                                                                                                                                                 |
 | ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

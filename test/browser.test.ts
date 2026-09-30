@@ -1,4 +1,4 @@
-/** The wallet's storage in a real browser: IndexedDB, Web Locks and WebCrypto, which Node does not have. */
+/** The wallet in a real browser: IndexedDB, Web Locks and passkeys, which Node does not have. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -30,6 +30,12 @@ const server = http.createServer((req, res) => {
   } else if (req.url === '/__test-funding.js') {
     res.writeHead(200, { 'content-type': 'text/javascript' });
     res.end(testScript('browser-funding'));
+  } else if (req.url === '/__test-passkey') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(page('HookedIn passkey validation', '/__test-passkey.js'));
+  } else if (req.url === '/__test-passkey.js') {
+    res.writeHead(200, { 'content-type': 'text/javascript' });
+    res.end(testScript('browser-passkey'));
   } else if (req.url === '/__test') {
     res.writeHead(200, {
       'content-type': 'text/html; charset=utf-8',
@@ -58,16 +64,18 @@ async function result(tab: Page) {
   return JSON.parse((await tab.textContent('#result'))!);
 }
 
-test('storage and locks hold in a real browser, and two tabs choose one funding key', async t => {
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const base = `http://127.0.0.1:${(server.address() as any).port}`;
-  // The Chrome installed on the machine: GitHub's runners have it, and playwright-core downloads nothing.
-  const browser = await chromium.launch({ channel: 'chrome' });
-  t.after(async () => {
-    await browser.close();
-    server.close();
-  });
+server.listen(0, '127.0.0.1');
+await once(server, 'listening');
+const port = (server.address() as any).port;
+// The Chrome installed on the machine: GitHub's runners have it, and playwright-core downloads nothing.
+const browser = await chromium.launch({ channel: 'chrome' });
+test.after(async () => {
+  await browser.close();
+  server.close();
+});
+
+test('storage and locks hold in a real browser, and two tabs choose one key', async () => {
+  const base = `http://127.0.0.1:${port}`;
   const context = await browser.newContext();
 
   const smoke = await context.newPage();
@@ -83,11 +91,41 @@ test('storage and locks hold in a real browser, and two tabs choose one funding 
     const funding = await result(tab);
     assert.equal(funding.passed, true, funding.error);
     assert.equal(funding.role, 'ab'[i]);
-    assert.equal(funding.simultaneousFundingSelection, true);
+    assert.equal(funding.simultaneousSelection, true);
     assert.equal(funding.durableAccounts, 1);
     assert.equal(funding.atomicUpdates, 40);
-    assert.equal(funding.encryptedUpdates, 40);
-    assert.equal(funding.encryptedImports, 2);
-    assert.equal(funding.lockedKeys, true);
+    assert.equal(funding.imports, 2);
   }
+});
+
+/** The harness beside a virtual authenticator that answers PRF requests, as a passkey's device does. WebAuthn takes a
+ * domain, never an IP address, so the page is at localhost. */
+async function passkeyPage() {
+  const context = await browser.newContext(),
+    tab = await context.newPage(),
+    cdp = await context.newCDPSession(tab);
+  await cdp.send('WebAuthn.enable');
+  await cdp.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      ctap2Version: 'ctap2_1',
+      transport: 'internal',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      hasPrf: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+  await tab.goto(`http://localhost:${port}/__test-passkey`);
+  await tab.waitForFunction(() => 'passkeyKey' in window);
+  return (create: boolean) => tab.evaluate(create => (window as any).passkeyKey(create), create);
+}
+
+test('a passkey holds one account key, and another passkey another', async () => {
+  const key = await passkeyPage();
+  const made = await key(true);
+  assert.match(made, /^0x[0-9a-f]{64}$/);
+  assert.equal(await key(false), made, 'signing in gives the key the passkey was made with');
+  assert.notEqual(await key(true), made);
 });

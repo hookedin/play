@@ -6,7 +6,6 @@ import type { GameSession } from '../protocol/game-types.ts';
 import { Contract, Wallet, getAddress } from 'ethers';
 import {
   domain,
-  canonicalJSON,
   json,
   plain,
   same,
@@ -33,12 +32,11 @@ import {
 } from '../protocol/chain-observer.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import { BrowserStore, withLock } from './storage.ts';
-import { fundingAccounts, readFundingAccounts } from './funding-accounts.ts';
+import { saveAccounts, readAccounts } from './accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
-import { encryptBackup, openBackup } from './backup.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { GameSessions } from './wallet-games.ts';
-import { changeLimits, depositRemaining, playControls, restoreControls } from './play-controls.ts';
+import { changeLimits, depositRemaining, playControls } from './play-controls.ts';
 import type { PlayControls, PlayLimits } from './play-controls.ts';
 export interface WalletOptions {
   casinoURL?: string;
@@ -156,7 +154,8 @@ export class CasinoWallet extends GameSessions {
   declare verified: Promise<unknown>;
   /** The deployment check, then the current account's first chain observation and casino reconciliation. */
   declare synced: Promise<void>;
-  declare savedFundingAddresses: string[];
+  /** Every account this browser holds a key for. */
+  declare savedAddresses: string[];
   /** This account's key: it signs everything on the account's channel, its address receives deposits, and a close
    * pays it. */
   declare signer: Wallet;
@@ -300,7 +299,7 @@ export class CasinoWallet extends GameSessions {
       expected: trusted,
     });
     this.verified.catch(() => {});
-    const saved = await fundingAccounts(this.storage, this.expectedChainId, { create: true });
+    const saved = await saveAccounts(this.storage, this.expectedChainId, { create: true });
     await this.useKey(saved.accounts[saved.selected!], { select: false });
     // The single observation loop; the page only re-renders from wallet state. A hidden tab does not poll.
     this.timer = setInterval(() => {
@@ -337,11 +336,11 @@ export class CasinoWallet extends GameSessions {
         ':' +
         address.toLowerCase();
       const run = async () => {
-        const saved = await fundingAccounts(this.storage, this.expectedChainId, {
+        const saved = await saveAccounts(this.storage, this.expectedChainId, {
           privateKeys: [signer.privateKey],
           select,
         });
-        this.savedFundingAddresses = Object.keys(saved.accounts);
+        this.savedAddresses = Object.keys(saved.accounts);
         Object.assign(this, {
           signer,
           address,
@@ -905,7 +904,7 @@ export class CasinoWallet extends GameSessions {
     await this.useKey(privateKey.trim());
   }
   async selectSavedAccount(address: string) {
-    const saved = await readFundingAccounts(this.storage, this.expectedChainId);
+    const saved = await readAccounts(this.storage, this.expectedChainId);
     const key = saved.accounts[getAddress(address)];
     if (!key) throw new Error('This browser holds no key for that address');
     await this.importKey(key);
@@ -919,75 +918,12 @@ export class CasinoWallet extends GameSessions {
   exportKey() {
     return this.signer.privateKey;
   }
-  async encryptedBackup(password: string) {
-    const value = await this.withSavedRecord(async record => ({
-      schema: 'HOOKEDIN/WALLET/1',
-      chainId: String(this.expectedChainId),
-      casino: this.config.contractAddress,
-      address: this.address,
-      fundingKey: this.signer.privateKey,
-      scope: 'selected-account',
-      record,
-    }));
-    return encryptBackup(value, password);
-  }
-  async restoreBackup(backup: any, password: string) {
-    if (this.busy || this.pending || this.transactionIntent)
-      throw new Error('Recover the current operation before restoring a wallet');
-    const value = await openBackup(backup, password, {
-      chainId: this.expectedChainId,
-      casino: this.config.contractAddress,
-    });
-    // Verify signed settlement evidence before writes.
-    for (const c of Object.values(value.record.channels || {}) as WalletChannel[]) {
-      if (!same(c.opening.player, value.address)) throw new Error('Backup channel identity differs');
-      verifyEvidence({
-        chainId: value.chainId,
-        casino: value.casino,
-        operator: this.operator,
-        opening: c.opening,
-        evidence: this.evidence(c),
-      });
-    }
-    if (!same(value.address, this.address)) await this.importKey(value.fundingKey);
-    await this.exclusive(async () => {
-      if (!same(value.address, this.address))
-        throw new Error('Wallet changed while restoring; retry with the backup wallet');
-      if (this.pending || this.transactionIntent)
-        throw new Error('Recover the current operation before restoring a wallet');
-      // exclusive reloads the persisted revision while holding the shared lock.
-      for (const [id, old] of Object.entries(this.channels)) {
-        const next = value.record.channels[id];
-        if (!next || this.behind(old.state, next.state))
-          throw new Error('Backup would discard newer or conflicting saved evidence');
-        if (old.pending && canonicalJSON(old.pending) !== canonicalJSON(next.pending ?? null))
-          throw new Error('Backup would discard or change a saved pending operation');
-        if (old.closing) next.closing = true;
-      }
-      const record = {
-        ...value.record,
-        controls: restoreControls(this.controls, value.record.controls),
-        revision: this.revision + 1,
-      };
-      try {
-        await this.storage.commit([
-          [this.storageKey, record],
-          ...record.history.map((r: any) => [this.storageKey + ':receipt:' + r.operationId, r] as const),
-        ]);
-      } catch (error) {
-        this.storageFailed = true;
-        throw error;
-      }
-      this.hydrate(record);
-    });
-    await this.refresh();
-    return this.publicState;
-  }
   async recover() {
     const result = await this.exclusive(async () => {
       if (this.transactionIntent) await this.recoverTransaction();
-      if (this.pending?.request && this.channel?.registered) return this.resume();
-      if (this.channel) await this.activate();
+      // The casino says first where the channel is: it may hold the reply this wallet lost, or play from another device.
+      const answer = this.channel ? await this.activate() : undefined;
+      return this.pending?.request && this.channel?.registered ? this.resume() : answer;
     });
     // A verified stored result is recoverable even while new play is paused.
     if (result?.verified)
@@ -1014,7 +950,7 @@ export class CasinoWallet extends GameSessions {
       await this.refreshing?.catch(() => {});
       return await withLock('hookedin:channel:' + this.storageKey, true, async () => {
         const record = await this.storage.get(this.storageKey);
-        if (!record) throw new Error('No wallet record to back up');
+        if (!record) throw new Error('No wallet record saved');
         return read(record);
       });
     } finally {

@@ -1,68 +1,47 @@
 ---
-title: Backups and recovery
-description: Encrypted backups, recovery bundles, lost replies, recovery mode and the watchtower.
+title: Keys and recovery
+description: Your key and its passkey, another device, recovery bundles, lost replies, recovery mode and the watchtower.
 sidebar:
   order: 4
 ---
 
-Your signed evidence is what lets you settle without the casino. Keep two things: an encrypted backup of every account
-you fund, and a current recovery bundle of each channel.
+Your key is your account: it signs everything you do with your money, and only it can close your balance without the
+casino. The casino holds the latest state of your balance, which your key signed, and gives it to any wallet with your
+key. Your own copy of that state, your evidence, is what lets you settle when the casino does not.
 
-## What to keep
+## Your key
 
-|              | Encrypted backup                                                      | Recovery bundle                                                                                         |
-| ------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Holds        | An account's key, channels, evidence, pending operations and receipts | One channel's opening and its latest evidence                                                           |
-| Keys         | The account's key                                                     | None                                                                                                    |
-| Protected by | Your passphrase                                                       | Nothing: it holds no key                                                                                |
-| Restores     | The whole account, in a wallet                                        | Settlement: closing, challenging, finalizing, collecting; play, when it holds the casino's latest state |
-| Made with    | **Download encrypted backup** on Settings                             | **Export recovery bundle** under Recovery on the Wallet page                                            |
+The wallet keeps your key in this browser. Before your first deposit, save it, under **Save your wallet** on the Deposit
+tab or **Your key** in Settings:
 
-## Passphrases
+- **Save with a passkey** makes a passkey for play.hookedin.com, which your device or password manager keeps and syncs
+  to your other devices as it does any passkey. The account's key is the passkey's secret for the wallet, its
+  [PRF](https://w3c.github.io/webauthn/#prf-extension) output, which never leaves the browser: **Sign in with a
+  passkey** gives the same key wherever the passkey is. Each passkey you make is an account of its own. A passkey works
+  only at play.hookedin.com, and only on devices whose passkeys support PRF; the wallet says when they do not.
+- **Save a key file** downloads `hookedin-<address>.txt`, which holds the key itself. **Import a private key**, under
+  Accounts in Settings, opens it in any copy of the wallet, including one you [build yourself](#recovery-mode). Anyone
+  who has the file can take everything the account holds.
 
-The wallet passphrase encrypts this browser's keys; signed evidence stays readable in browser storage. Withdrawals,
-redirected claims, showing a private key and downloading an encrypted backup ask for it again. The backup passphrase
-protects one downloaded file; the two are separate, and support can reset neither. If you forget the wallet passphrase
-but have a checked backup and its backup passphrase, open the wallet in a fresh browser profile, choose a new wallet
-passphrase there, and restore the backup. Keep the original browser data until every account and its latest evidence
-are safely recovered.
+**Show this wallet's private key** shows the key of the account in use. Nobody can recover a lost key for you. Once you
+save your key, the wallet asks the browser to keep its storage rather than clear it to make room.
 
-## Encrypted backups
+## On another device
 
-On **Settings**, under **Keys and backups**, enter a passphrase of 12 to 1,024 characters as the **Backup passphrase**
-and your wallet passphrase to authorize **Download encrypted backup**. The wallet downloads
-`hookedin-encrypted-wallet.json`. A backup holds only the account in use:
+Sign in with your passkey, or import your key, and the wallet takes up your balance from the casino: the latest state
+it holds of your channel, with the reply that signed it. The wallet checks that its evidence carries your own
+signatures and the casino's, and signs the state itself; a declined operation's state moves no money.
+[Bankroll shares](bankroll-fund.md#the-statements-your-wallet-checks) follow the same way.
 
-- its key;
-- every channel's opening, latest evidence and pending operation;
-- its bankroll fund statements, developer bets and bank statements;
-- its latest 100 receipts, and every receipt still to be settled: a developer bet still open, and a withdrawal not yet
-  paid or returned;
-- its play limits, breaks and recorded usage.
+What stays in the browser it happened in: receipts and activity, [play limits](getting-started.md#games-and-their-allowances),
+each game's saved state, the payout of a developer bet placed there, whose receipt is its proof, and a withdrawal the
+contract still owes, which that channel's [recovery bundle](#recovery-bundles) carries.
 
-It holds no game state. Back up every account you fund, each on its own: a key alone cannot rebuild a signed balance.
+One account can play on several devices. A device that missed play elsewhere takes up the casino's later state when it
+opens, or on **Retry** once an operation of its own is refused for following an older state; that operation is void.
 
-After downloading, keep the backup passphrase in the field and select that saved file with **Check saved backup**. The
-wallet decrypts it and checks its account, deployment and recovery contents against the saved wallet; a matching file
-unlocks the Deposit tab's receiving controls. Save and check a fresh copy after playing or moving ETH: Settings and the
-Wallet page say when your evidence has changed since. A checked copy is a snapshot, not an automatic backup.
-
-| Property       | Value                                                                           |
-| -------------- | ------------------------------------------------------------------------------- |
-| Format         | A `HOOKEDIN/WALLET-BACKUP/1` envelope around a `HOOKEDIN/WALLET/1` record       |
-| Key derivation | PBKDF2-SHA256, 600,000 iterations, a random 16-byte salt                        |
-| Cipher         | AES-256-GCM, a random 12-byte IV, `HOOKEDIN/WALLET-BACKUP/1` as additional data |
-| Size           | At most 16 MiB before encryption                                                |
-
-To restore, enter the passphrase and choose the file with **Restore a backup**, with no operation or transaction
-pending. Before it writes anything, the wallet checks that:
-
-- the backup is for this chain and this contract;
-- every channel belongs to the backup's account, and all the evidence verifies;
-- it replaces no saved evidence with an older or conflicting checkpoint and changes no pending operation.
-
-A backup of another account switches the wallet to that account. Restoring keeps the stricter play controls and the
-higher daily usage of the saved wallet and the backup; it does not shorten a break.
+On another device the casino's copy is taken on its word: had it given an older state, a wallet without the newer one
+could not tell. A current recovery bundle settles your balance without trusting it.
 
 ## Recovery bundles
 
@@ -86,8 +65,9 @@ pending, play on that channel waits, and a banner names it: what it is, its amou
 by, the sequence it was signed at, and what the last attempt to send it ran into, with the casino's code when the casino
 refused it. The banner offers:
 
-- **Retry**, which sends the exact saved request again. The casino answers a retry with the result it recorded,
-  accepted or rejected, so an operation is never carried out twice.
+- **Retry**, which asks the casino for the state it holds, then sends the exact saved request again if that state does
+  not already answer it. The casino answers a retry with the result it recorded, accepted or rejected, so an operation
+  is never carried out twice.
 - **Export recovery bundle** and **Close without the casino**, for a casino that does not answer. A close settles at the
   latest completed state, and an operation the casino never completed costs nothing.
 
@@ -107,8 +87,9 @@ in **recovery mode**. Evidence export and import, closing without the casino, ch
 and **Send it now** work, against the pinned contract through the pinned RPCs; play, deposits, withdrawals from the
 balance and locking in do not. Reload once the casino is back.
 
-Recovery needs play.hookedin.com no more than the casino: the same wallet builds from a checkout of this repository,
-with Node 24.4 or later, and serves at http://127.0.0.1:4184, where you restore your encrypted backup.
+With your key file, recovery needs play.hookedin.com no more than the casino: the same wallet builds from a checkout of
+this repository, with Node 24.4 or later, and serves at http://127.0.0.1:4184, where you import it. A passkey works only
+at play.hookedin.com.
 
 ```sh
 git clone https://github.com/hookedin/play

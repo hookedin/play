@@ -228,17 +228,6 @@ input[type='file']::file-selector-button {
   font: inherit;
   cursor: pointer;
 }
-.file-button {
-  position: relative;
-  margin: 0;
-  overflow: hidden;
-}
-.file-button input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
 .check {
   display: flex;
   align-items: center;

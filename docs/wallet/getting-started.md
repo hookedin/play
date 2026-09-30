@@ -9,12 +9,9 @@ The wallet at https://play.hookedin.com holds your keys and your money, and ever
 
 ## Open the wallet
 
-On your first visit, choose and confirm a wallet passphrase of 12 to 1,024 characters. The wallet makes your
-**account**, an Ethereum key encrypted with that passphrase in this browser, which signs everything you do with your
-money. Its address is your **deposit address**. Unlock the wallet with the passphrase whenever the page loads; **Lock
-wallet** in the account menu locks every open wallet tab, and the wallet locks itself after five minutes without
-activity. Support cannot recover a lost key or reset your passphrase: keep a
-[checked encrypted backup](backups-and-recovery.md#encrypted-backups).
+On your first visit the wallet makes your **account**: an Ethereum key in this browser, which signs everything you do
+with your money. Its address is your **deposit address**. Nothing needs setting up to open games; before your first
+deposit you [save your key](keys-and-recovery.md#your-key).
 
 This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
 offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet
@@ -22,12 +19,14 @@ has checked the casino's contract on-chain, and a banner says so if that check f
 ([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
 **Accounts**, in Settings, keeps every key this browser made or imported, and **Import a private key** makes one your
-account. Switching accounts closes the open game. Back up every account you fund.
+account. Switching accounts closes the open game.
 
 ## Deposit
 
-Before the Deposit tab shows your deposit address, download an encrypted backup in Settings and select that file again
-with **Check saved backup**, which checks that it decrypts and holds the current account and its evidence.
+Before the Deposit tab shows your deposit address, it asks you to save your wallet: **Save with a passkey**, **I have
+a passkey** to open the account of one you made before, or **Save a key file instead**
+([your key](keys-and-recovery.md#your-key)). A passkey's account takes over from the one this browser made, and a game
+you have open opens again under it.
 
 Then send Sepolia ETH to the address: free test ETH from the faucet the tab links to, or a withdrawal from another
 player's balance. The wallet checks the address every 4 seconds while the page is visible and adds what arrives to your
@@ -91,8 +90,7 @@ pause, while withdrawals, recovery and settling an operation already signed go o
 
 ## Withdraw
 
-On the Wallet dialog's **Withdraw** tab, enter an amount or choose **Max**, the address to pay and your wallet
-passphrase. The address must be a valid one other than the zero address, your own deposit address and the casino's
+On the Wallet dialog's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be a valid one other than the zero address, your own deposit address and the casino's
 contract, into which [lock in](closing-and-claims.md#lock-in-your-balance) moves a balance. Your account signs a
 withdrawal of that amount to that address and the casino signs your balance after it at once: your balance pays it now,
 and you play on with the rest. The contract then pays the address, out of your deposits first and the bankroll for the
@@ -101,7 +99,7 @@ their wallet puts it into their balance.
 
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
 much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight
-([when a reply is lost](backups-and-recovery.md#when-a-reply-is-lost)); without the casino,
+([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)); without the casino,
 [close without the casino](closing-and-claims.md#close-without-the-casino).
 
 **Deposit address**, under **Withdraw from**, sends everything held at your deposit address, less the network fee, and
@@ -130,4 +128,4 @@ game's developer.
 ## Help
 
 **Contact support** in the account menu opens an email to support@hookedin.com. Include the transaction hash or
-operation ID and the error you see. Never send a private key, passphrase or backup file.
+operation ID and the error you see. Never send a private key or key file.

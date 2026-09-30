@@ -524,7 +524,7 @@ export async function gameWallet({
       await wallet.save();
     },
     reload,
-    /** A wallet that has lost the receipts this one kept, as one restored from an older backup would have. */
+    /** A wallet that has lost the receipts this one kept, as the same account on another device has. */
     async forget() {
       for (const key of [...storage.records.keys()]) if (key.includes(':receipt:')) storage.records.delete(key);
       const record = await storage.get('game-wallet');

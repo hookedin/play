@@ -1,9 +1,8 @@
 import { formatEther, parseEther, ZeroAddress } from 'ethers';
 import qrcode from 'qrcode-generator';
 import { CasinoWallet } from './wallet.ts';
-import { VaultStore } from './vault.ts';
 import { validateWithdrawal } from './withdrawal.ts';
-import { backupFingerprint, verifyBackupFile } from './backup.ts';
+import { passkeyKey } from './passkey.ts';
 import { playControls, depositRemaining } from './play-controls.ts';
 import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
@@ -106,9 +105,7 @@ const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const HOUSE = 'hookedin';
 /** How many games one profile holds. */
 const MAX_GAMES = 100;
-const vault = new VaultStore();
 const wallet = new CasinoWallet({
-  storage: vault,
   casinoURL,
   network,
   trustedDeployment: config.deployment,
@@ -127,80 +124,6 @@ const wallet = new CasinoWallet({
   },
 });
 
-const lockMessages = new BroadcastChannel('hookedin:wallet-lock');
-let lastInteraction = Date.now();
-function lockWallet(broadcast = true) {
-  if (vault.locked) return;
-  if (broadcast) lockMessages.postMessage('lock');
-  vault.lock();
-  // Reload discards every live signer, game and displayed secret in this tab.
-  location.reload();
-}
-lockMessages.onmessage = event => {
-  if (event.data === 'lock') lockWallet(false);
-};
-$('lock-wallet').addEventListener('click', () => lockWallet());
-for (const name of ['pointerdown', 'keydown', 'touchstart'])
-  window.addEventListener(
-    name,
-    () => {
-      lastInteraction = Date.now();
-    },
-    { passive: true },
-  );
-// Trusted activation propagates from game frames; their messages cannot keep the key unlocked.
-setInterval(() => {
-  if (navigator.userActivation?.isActive) lastInteraction = Date.now();
-  if (!vault.locked && Date.now() - lastInteraction >= 5 * 60000) lockWallet(false);
-}, 1000);
-async function unlockWallet() {
-  const dialog = $<HTMLDialogElement>('unlock-dialog');
-  let existing = await vault.hasPassphrase();
-  const render = () => {
-    $('unlock-title').textContent = existing ? 'Unlock your wallet' : 'Protect your wallet';
-    $('unlock-help').textContent = existing
-      ? 'Enter this browser’s wallet passphrase. If it is lost, restore your encrypted backup in a fresh browser profile after creating a new wallet passphrase there. Keep this browser’s data until recovery is complete.'
-      : 'Choose at least 12 characters to encrypt your wallet keys in this browser.';
-    $('unlock-confirm-field').hidden = existing;
-    $<HTMLInputElement>('unlock-confirm').required = !existing;
-    $<HTMLInputElement>('unlock-password').autocomplete = existing ? 'current-password' : 'new-password';
-  };
-  render();
-  dialog.addEventListener('cancel', event => event.preventDefault());
-  dialog.showModal();
-  await new Promise<void>(resolve => {
-    $('unlock-form').addEventListener('submit', async event => {
-      event.preventDefault();
-      const password = $<HTMLInputElement>('unlock-password'),
-        confirmation = $<HTMLInputElement>('unlock-confirm'),
-        button = $<HTMLButtonElement>('unlock-submit');
-      button.disabled = true;
-      try {
-        if (!existing && password.value !== confirmation.value) throw new Error('Passphrases do not match.');
-        if (existing) await vault.unlock(password.value);
-        else await vault.setup(password.value);
-        password.value = confirmation.value = '';
-        lastInteraction = Date.now();
-        dialog.close();
-        resolve();
-      } catch (error: any) {
-        $('unlock-error').textContent = error.message;
-        existing = await vault.hasPassphrase();
-        render();
-      } finally {
-        button.disabled = false;
-      }
-    });
-  });
-}
-/** Ask for the wallet's passphrase again, before money leaves or a key shows. The field is cleared either way. */
-async function reauthenticate(field: HTMLInputElement) {
-  try {
-    await vault.verify(field.value);
-  } finally {
-    field.value = '';
-  }
-}
 function withdrawalFromChannel() {
   return (
     Number(wallet.publicState.channelStatus) === 1 &&
@@ -220,10 +143,16 @@ function withdrawalRequest() {
   });
 }
 let safetyAccount = '',
-  depositURI = '',
-  backupShown = '';
-const backupSetting = () => `hookedin:checked-backup:${wallet.storageKey}`;
-/** The play limits and breaks, the deposit address, and whether the checked backup still holds the saved evidence. */
+  depositURI = '';
+/** Whether the player has this account's key outside this browser: a passkey, a key file or their own import. */
+const savedSetting = () => `hookedin:saved:${wallet.address.toLowerCase()}`;
+/** The player has this account's key. Persistent storage keeps this browser's copy from being cleared to make room. */
+function markSaved() {
+  localStorage.setItem(savedSetting(), '1');
+  void navigator.storage?.persist?.();
+  renderWallet();
+}
+/** The play limits and breaks, the deposit address, and whether this account's key is saved outside this browser. */
 function renderSafety() {
   const controls = playControls(wallet.controls),
     limits = controls.limits;
@@ -249,16 +178,19 @@ function renderSafety() {
     $<HTMLTextAreaElement>('exported-key').value = '';
     $('exported-key').classList.add('hidden');
     $('export-key').textContent = "Show this wallet's private key";
-    for (const id of ['key-password', 'withdraw-password', 'withdraw-to', 'withdraw-amount'])
-      $<HTMLInputElement>(id).value = '';
+    for (const id of ['withdraw-to', 'withdraw-amount']) $<HTMLInputElement>(id).value = '';
     $<HTMLSelectElement>('withdraw-source').value = 'balance';
     $<HTMLInputElement>('limit-deposit').value = limits.deposit === null ? '' : formatEther(limits.deposit);
     $<HTMLInputElement>('limit-loss').value = limits.loss === null ? '' : formatEther(limits.loss);
     $<HTMLInputElement>('limit-minutes').value = String(limits.minutes ?? '');
   }
-  const checked = localStorage.getItem(backupSetting());
-  $('deposit-safety').hidden = Boolean(checked);
-  $('deposit-ready').hidden = !checked;
+  const saved = localStorage.getItem(savedSetting()) !== null;
+  $('deposit-save').hidden = saved;
+  $('deposit-ready').hidden = !saved;
+  $('key-status').textContent = saved
+    ? 'Saved. Sign in with your passkey, or import your key under Accounts, to open this account on another device.'
+    : "This account's key is only in this browser. Save it with a passkey or a key file before you deposit.";
+  for (const button of document.querySelectorAll<HTMLElement>('[data-key="create"]')) button.hidden = saved;
   const uri = `ethereum:${wallet.address}@${wallet.expectedChainId}`;
   if (uri !== depositURI) {
     depositURI = uri;
@@ -279,28 +211,6 @@ function renderSafety() {
       : fee > 0n
         ? `Address balance ${formatEther(held)} ETH. Estimated maximum network fee ${formatEther(fee)} ETH. Up to ${formatEther(net)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}. The final fee is recorded in Activity.`
         : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
-  // The saved record is read and hashed again only once it, the account or the checked backup has changed.
-  const shown = json([wallet.storageKey, wallet.revision, checked]);
-  if (shown === backupShown) return;
-  backupShown = shown;
-  const say = (message: string) => {
-    if (backupShown === shown) for (const id of ['backup-status', 'backup-reminder']) $(id).textContent = message;
-  };
-  wallet.storage
-    .get(wallet.storageKey)
-    .then(record =>
-      say(
-        !checked
-          ? 'No checked backup. Download a backup and reopen it with Check saved backup before depositing.'
-          : checked === (record ? backupFingerprint(record) : '')
-            ? 'Your checked backup matches the current saved evidence.'
-            : 'Your backup needs updating. Download and check a fresh copy after playing or moving ETH; older evidence may not recover your latest balance.',
-      ),
-    )
-    .catch(() => {
-      say('Could not check saved backup status. Refresh before depositing.');
-      backupShown = '';
-    });
 }
 $('play-limits-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -363,8 +273,8 @@ function act(id: string, run: () => unknown, done?: string | (() => string)) {
   );
 }
 /** Save `text` as a file the player downloads. */
-function download(name: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+function download(name: string, text: string, type = 'application/json') {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   h('a', { href: url, download: name }).click();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
@@ -740,8 +650,7 @@ function renderWallet() {
     Boolean(request.error) ||
     Boolean(wallet.transactionIntent) ||
     Boolean(c && wallet.pending) ||
-    Boolean(c && wallet.recoveryOnly) ||
-    !$<HTMLInputElement>('withdraw-password').value;
+    Boolean(c && wallet.recoveryOnly);
   $('withdraw').textContent =
     amount !== null ? `Withdraw ${formatEther(amount)} ETH` : c ? 'Withdraw' : 'Withdraw address funds';
   $('withdraw-help').textContent = !ready
@@ -785,7 +694,7 @@ function renderWallet() {
   $<HTMLButtonElement>('start-close').disabled = busy || !wallet.channel || Number(state.channelStatus) !== 1;
   for (const id of ['import-wallet', 'recover-wallet']) $<HTMLButtonElement>(id).disabled = busy;
   const accounts = $<HTMLSelectElement>('saved-wallets');
-  const addresses = wallet.savedFundingAddresses || [];
+  const addresses = wallet.savedAddresses || [];
   const account = wallet.address;
   if (JSON.stringify([...accounts.options].map(o => o.value)) !== JSON.stringify(addresses))
     accounts.replaceChildren(...addresses.map(address => new Option(address, address)));
@@ -957,7 +866,7 @@ function renderRecovery() {
     closing = state.closingChannelId,
     deadline = Number(state.deadline);
   $('channel-status').textContent = wallet.missingChannel
-    ? "This balance was played in another browser: restore that wallet's backup, or import its recovery bundle."
+    ? 'The casino holds another state of this balance than this browser: import its recovery bundle.'
     : [
         state.channelId
           ? `Channel ${short(state.channelId)} · ${Number(state.channelStatus) === 1 ? (wallet.channel?.closing ? 'close signed; retry submission' : 'open') : 'closing'}`
@@ -1020,16 +929,10 @@ function renderClaims() {
   $('claim-list').replaceChildren(
     ...claims.map((claim: any) => {
       const destination = h('input', {
-          placeholder: 'Or another address, 0x…',
-          ariaLabel: 'Collect to another address',
-          value: claimRecipients.get(claim.id) ?? '',
-        }),
-        authorization = h('input', {
-          type: 'password',
-          placeholder: 'Wallet passphrase for another address',
-          ariaLabel: 'Wallet passphrase for claim',
-        });
-      authorization.autocomplete = 'current-password';
+        placeholder: 'Or another address, 0x…',
+        ariaLabel: 'Collect to another address',
+        value: claimRecipients.get(claim.id) ?? '',
+      });
       destination.oninput = () => claimRecipients.set(claim.id, destination.value);
       const collect = () =>
         task(async () => {
@@ -1047,7 +950,6 @@ function renderClaims() {
       const redirect = () =>
         task(async () => {
           const recipient = destination.value.trim();
-          await reauthenticate(authorization);
           await wallet.claim(claim.id, recipient);
           toast(`Collected what could be paid to ${short(recipient)}.`);
         });
@@ -1057,7 +959,6 @@ function renderClaims() {
         h('p', null, describe(claim)),
         h('button', { type: 'button', className: 'button small', disabled, onclick: collect }, 'Collect'),
         destination,
-        authorization,
         h('button', { type: 'button', className: 'text-button', disabled, onclick: redirect }, 'Collect there'),
       );
       // A closed balance's claim rests on its channel's evidence; a withdrawal's is on-chain already.
@@ -1768,14 +1669,13 @@ act('add-to-balance', async () => {
   await wallet.deposit();
   funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
 });
-for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-password', 'withdraw-source'])
+for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
   $<HTMLInputElement>('withdraw-amount').value = formatEther(wallet.channel?.state.balance || 0);
   renderWallet();
 });
 act('withdraw', async () => {
-  await reauthenticate($<HTMLInputElement>('withdraw-password'));
   const { to, amount, error } = withdrawalRequest();
   if (error || !to) throw new Error(error || 'Enter a destination address.');
   const open = withdrawalFromChannel();
@@ -1864,7 +1764,6 @@ act('export-key', async () => {
   const hiding = !field.classList.contains('hidden');
   if (!hiding) {
     if (!confirm('Show this wallet’s private key? Anyone who sees it can take everything this wallet holds.')) return;
-    await reauthenticate($<HTMLInputElement>('key-password'));
   }
   field.classList.toggle('hidden', hiding);
   field.value = hiding ? '' : wallet.exportKey();
@@ -1878,6 +1777,7 @@ act(
     closeGame();
     await wallet.importKey($<HTMLInputElement>('import-key').value);
     $<HTMLInputElement>('import-key').value = '';
+    markSaved();
   },
   'Account imported.',
 );
@@ -1938,13 +1838,26 @@ for (const id of ['wallet-name-link', 'menu-profile'])
   });
 $('network-name').textContent = wallet.networkName;
 $('test-network').textContent = `${wallet.networkName} · Test ETH only · Do not send real ETH`;
-$('deposit-backup').addEventListener('click', () => {
-  $<HTMLDialogElement>('wallet-dialog').close();
-  showPage('settings');
-  history.pushState(null, '', '/settings');
-  $('keys-title').scrollIntoView({ block: 'start' });
-  $<HTMLInputElement>('backup-password').focus();
-});
+// The account is saved with a passkey, whose secret is its key, or as the key itself in a file.
+for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
+  button.addEventListener('click', async () => {
+    const how = button.dataset.key,
+      playing = Boolean(active) && how !== 'file';
+    await task(async () => {
+      if (how === 'file') {
+        download(`hookedin-${wallet.address}.txt`, wallet.exportKey() + '\n', 'text/plain');
+        markSaved();
+        return toast('Key file saved. Anyone who has it can take everything this account holds: keep it private.');
+      }
+      const key = await passkeyKey(how === 'create');
+      closeGame();
+      await wallet.importKey(key);
+      markSaved();
+      toast(how === 'create' ? 'Your wallet is saved with your passkey.' : 'Signed in with your passkey.');
+    });
+    // A game open under the account it replaced opens again under this one.
+    if (playing && !active) void route();
+  });
 $('deposit-instructions').textContent = `Send test ETH on ${wallet.networkName} to your deposit address`;
 $<HTMLAnchorElement>('casino-status').href = casinoURL + '/api/status';
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
@@ -1961,7 +1874,6 @@ function warn(message: string) {
 }
 
 void loadLibrary();
-await unlockWallet();
 try {
   await wallet.start().finally(startup.resolve);
   if (wallet.recoveryOnly)
@@ -1981,54 +1893,3 @@ try {
   for (const id of ['setup-wallet', 'add-to-balance', 'withdraw', 'import-wallet'])
     $<HTMLButtonElement>(id).disabled = true;
 }
-
-act(
-  'backup-wallet',
-  async () => {
-    await reauthenticate($<HTMLInputElement>('key-password'));
-    const backup = await wallet.encryptedBackup($<HTMLInputElement>('backup-password').value);
-    download('hookedin-encrypted-wallet.json', JSON.stringify(backup));
-  },
-  'Backup downloaded. Use Check saved backup to reopen and verify the file.',
-);
-$<HTMLInputElement>('restore-backup').addEventListener('change', () =>
-  task(async () => {
-    const file = $<HTMLInputElement>('restore-backup').files?.[0];
-    if (!file) return;
-    closeGame();
-    await wallet.restoreBackup(await readJSONFile(file, 'wallet backup'), $<HTMLInputElement>('backup-password').value);
-    $<HTMLInputElement>('backup-password').value = '';
-    $<HTMLInputElement>('restore-backup').value = '';
-    toast('Backup restored. Check your balance, and retry any saved operation.');
-  }),
-);
-$<HTMLInputElement>('verify-backup').addEventListener(
-  'change',
-  () =>
-    void task(async () => {
-      const input = $<HTMLInputElement>('verify-backup'),
-        file = input.files?.[0];
-      if (!file) return;
-      try {
-        const backup = await readJSONFile(file, 'wallet backup');
-        const fingerprint = await wallet.withSavedRecord(record =>
-          verifyBackupFile(
-            backup,
-            $<HTMLInputElement>('backup-password').value,
-            {
-              fundingKey: wallet.exportKey(),
-              address: wallet.address,
-              chainId: wallet.expectedChainId,
-              casino: wallet.config.contractAddress,
-            },
-            record,
-          ),
-        );
-        localStorage.setItem(backupSetting(), fingerprint);
-        $<HTMLInputElement>('backup-password').value = '';
-        toast('Saved backup checked. Keep the file and its passphrase safe.');
-      } finally {
-        input.value = '';
-      }
-    }),
-);

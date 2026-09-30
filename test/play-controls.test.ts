@@ -1,14 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  DAY,
-  allowPlay,
-  changeLimits,
-  depositRemaining,
-  playControls,
-  recordPlay,
-  restoreControls,
-} from '../client/play-controls.ts';
+import { DAY, allowPlay, changeLimits, depositRemaining, playControls, recordPlay } from '../client/play-controls.ts';
 
 const now = Date.UTC(2026, 8, 29, 12);
 const limits = { deposit: '1000', loss: '100', minutes: 30 };
@@ -61,30 +53,6 @@ test('the daily deposit limit counts confirmed own deposits and pauses block all
   assert.equal(depositRemaining(state, now), 0n);
   assert.throws(() => allowPlay(state, 1n, now), /Play is paused/);
   assert.equal(depositRemaining(state, now + DAY), 1000n);
-});
-
-test('restoring evidence preserves stricter limits, usage, exclusions and session state', () => {
-  const current = allowPlay(changeLimits(playControls(undefined, now), limits, now), 1n, now);
-  Object.assign(current, { deposited: '700', lost: '60', pausedUntil: now + DAY });
-  const backup = changeLimits(playControls(undefined, now), { deposit: '2000', loss: '50', minutes: 60 }, now);
-  backup.pending = { limits: { deposit: null, loss: null, minutes: null }, at: now + DAY };
-  const restored = restoreControls(current, backup, now);
-  assert.deepEqual(restored.limits, { deposit: '1000', loss: '50', minutes: 30 });
-  assert.equal(restored.deposited, '700');
-  assert.equal(restored.lost, '60');
-  assert.equal(restored.pausedUntil, now + DAY);
-  assert.equal(restored.sessionStarted, now);
-  assert.equal(restored.pending, undefined);
-});
-
-test('an expired backup session cannot erase an active break, and shorter restored sessions require a break', () => {
-  const current = allowPlay(changeLimits(playControls(undefined, now), { ...limits, minutes: 1 }, now), 1n, now);
-  const backup = { ...current, sessionStarted: now - DAY };
-  const restored = restoreControls(current, backup, now + 60000);
-  assert.throws(() => allowPlay(restored, 1n, now + 60000), /Take a break/);
-  const longSession = { ...current, limits: { ...limits, minutes: 30 } };
-  const shorter = restoreControls(longSession, backup, now + 20 * 60000);
-  assert.throws(() => allowPlay(shorter, 1n, now + 20 * 60000), /Take a break/);
 });
 
 test('invalid limits and counters are rejected rather than disabling limits', () => {

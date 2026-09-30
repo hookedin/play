@@ -1,9 +1,20 @@
 import type { TransactionReceipt, TransactionResponse, TransactionRequest } from 'ethers';
-import type { Integer } from '../protocol/types.ts';
+import type { Checkpoint, Integer } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { ZeroAddress, formatEther, getAddress, keccak256, Transaction } from 'ethers';
-import { plain, same, hashState, withdrawalRecorded } from '../protocol/protocol.ts';
+import {
+  plain,
+  same,
+  hashState,
+  hashOperation,
+  withdrawalRecorded,
+  verifyEvidence,
+  rejectionCheckpoint,
+  assertSignature,
+  checkpointEvidence,
+  STATE_TYPES,
+} from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
 import { depositRemaining, recordPlay } from './play-controls.ts';
@@ -191,7 +202,7 @@ export class WalletTransactions {
       throw new Error('Deposit must be a positive uint256 amount');
     if (this.missingChannel)
       throw new Error(
-        'This account has a balance open that this browser holds no evidence for: restore its backup first.',
+        'The casino holds another state of your balance than this browser: import your recovery bundle first.',
       );
     // An operation waits for its channel; one a reorganisation took back to unopened opens again with a deposit.
     if (this.pending && this.pending.kind !== 'taken-in' && Number(this.channel?.onchain?.status) === 1)
@@ -251,8 +262,8 @@ export class WalletTransactions {
     return this.history.find(entry => entry.txHash === receipt.hash);
   }
   /** Register this account's channel with the casino, or look it up there: either way the casino answers with the state
-   * it holds. A channel still at its base is taken up there; one the casino has seen played on needs this wallet's own
-   * evidence. A later state of a registered channel is the reply to this wallet's saved operation, which it lost. */
+   * it holds. A channel still at its base is taken up there. A later state is the reply to this wallet's saved
+   * operation, which it lost, or play on this account from another device or before this browser's data was lost. */
   async activate(this: CasinoWallet) {
     const c = this.channel!;
     if (this.recoveryOnly) return;
@@ -265,13 +276,51 @@ export class WalletTransactions {
       c.registered = true;
       return this.save();
     }
-    if (!c.registered) {
-      this.missingChannel = c.state.channelId;
-      throw new Error("This balance was played in another browser: restore that wallet's backup to use it here.");
-    }
-    if (!reply.lastResponse) throw new Error('Casino checkpoint differs; import recovery evidence');
-    if (!this.pending) throw new Error('Unknown pending operation; use saved recovery evidence');
-    await this.accept(reply.lastResponse, this.pending.operationId, this.pending.kind);
+    // Until this wallet holds the state the casino does, it plays nothing on the channel and puts nothing into it.
+    if (!c.registered) this.missingChannel = c.state.channelId;
+    const last = reply.lastResponse,
+      pending = this.pending,
+      answered = last && (last.status === 'rejected' ? last.request : last.evidence.step.operation);
+    if (
+      pending?.request &&
+      answered &&
+      same(hashOperation(this.domain, answered), hashOperation(this.domain, pending.request))
+    )
+      return this.accept(last, pending.operationId, pending.kind);
+    if (last && BigInt(reply.state.sequence) > BigInt(c.state.sequence)) return this.takeUp(reply.state, last);
+    throw new Error('The casino holds another state of your balance than this browser: import your recovery bundle.');
+  }
+  /** Take up the casino's later state of this account's channel, with the reply that signed it. The casino cannot make
+   * one up: its evidence carries this account's own signatures, and a declined operation's state moves no money. A saved
+   * operation below it is void, since it names an earlier state. */
+  async takeUp(this: CasinoWallet, state: Checkpoint, last: any) {
+    const c = this.channel!,
+      rejected = last.status === 'rejected';
+    const proven = verifyEvidence({
+      chainId: this.expectedChainId,
+      casino: this.config.contractAddress,
+      operator: this.operator,
+      opening: c.opening,
+      evidence: last.evidence,
+    }).state;
+    const next = rejected ? rejectionCheckpoint(this.domain, proven, last.request) : proven,
+      casinoSignature = rejected ? last.casinoSignature : last.evidence.step.casinoSignature;
+    if (rejected) assertSignature(this.domain, STATE_TYPES, next, casinoSignature, this.operator);
+    if (!same(hashState(this.domain, next), hashState(this.domain, state)))
+      throw new Error("The casino's state of your balance differs from its evidence.");
+    const playerSignature = await this.signer.signTypedData(this.domain, STATE_TYPES, next);
+    this.channels[c.state.channelId] = {
+      ...c,
+      state: next,
+      playerSignature,
+      casinoSignature,
+      lastResponse: rejected ? { ...last, evidence: checkpointEvidence(next, playerSignature, casinoSignature) } : last,
+      pending: null,
+      registered: true,
+      round: undefined,
+    };
+    this.missingChannel = null;
+    await this.save();
   }
   /** The local chain's faucet fills this account's address, and the sweep puts it into the balance. */
   async setupDemo(this: CasinoWallet) {

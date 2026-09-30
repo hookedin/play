@@ -38,19 +38,7 @@ try {
   };
   writer.channelId = id;
   await writer.save();
-  const password = 'browser regression backup password',
-    backup = await writer.encryptedBackup(password),
-    lock = (fn: () => Promise<unknown>) => navigator.locks.request('hookedin:channel:' + writer.storageKey, fn);
-  // While another tab holds the channel's lock, a restore waits for it and then refuses.
-  await lock(async () => {
-    try {
-      await writer.restoreBackup(backup, password);
-    } catch (error: any) {
-      if (/Another tab/.test(error.message)) return;
-      throw error;
-    }
-    throw new Error('A restore went ahead under another tab’s lock');
-  });
+  const lock = (fn: () => Promise<unknown>) => navigator.locks.request('hookedin:channel:' + writer.storageKey, fn);
   // An export waits for the lock, and reads what was committed while it waited.
   const reader = tab();
   reader.hydrate({ schema: 'HOOKEDIN/WALLET-STATE/1', channels: {}, revision: 0 });

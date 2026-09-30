@@ -431,7 +431,7 @@ export class ChannelClient extends WalletTransactions {
       channelId = this.channelId;
     if (!tracked) return null;
     const receipt = tracked.operationId ? await this.getReceipt(tracked.operationId) : null;
-    if (!receipt) throw new Error('The proof of this bet is missing. Restore the wallet backup that holds it.');
+    if (!receipt) throw new Error('The proof of this bet is in the browser that placed it: collect it there.');
     const bet: PublicDeveloperBet = await this.api(`/api/developer-bets/${hash}`);
     if (bet.status === 'open') return null;
     const paid = this.developerBetPaid(receipt, bet);
@@ -636,7 +636,7 @@ export class ChannelClient extends WalletTransactions {
    * checked: the casino's signature, this exact debit, and the shares its stated price implies.
    * The checkpoint it came with is already signed and stands either way, so a statement that fails
    * is kept out and shown as an alert instead. One that does not follow the wallet's last statement,
-   * as in a wallet restored from an older backup, is checked on its own and left for `syncFund`. */
+   * as when the account plays on another device too, is checked on its own and left for `syncFund`. */
   adoptStatement(this: CasinoWallet, statement: any, op: Operation) {
     const holder = this.channel!.opening.player,
       cause = hashOperation(this.domain, op);
@@ -675,8 +675,8 @@ export class ChannelClient extends WalletTransactions {
       return { minted: '0', fund: { ...this.fund, alert: `Investment ${op.memo}: ${error.message}` } };
     }
   }
-  /** Take up the casino's latest statement of this account's holding when it is later than the wallet's: a wallet
-   * restored from an older backup, or sharing its account with another, has missed statements. The casino sends every
+  /** Take up the casino's latest statement of this account's holding when it is later than the wallet's: a wallet whose
+   * account plays on another device too, or that lost its browser's data, has missed statements. The casino sends every
    * `Redeem` this account signed with the statement it produced, and the later statement is taken only if every share
    * it takes away is one of those redemptions this wallet has not seen, each checked: this account's signature, the
    * casino's, and the price. What each of them sold for is owed to this account. Nothing is taken while an operation

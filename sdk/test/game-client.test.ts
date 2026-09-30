@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bridgeTo, gameWallet, memoryStore } from '@hookedin/play/testing/game-wallet.ts';
 import { MemoryStore } from '../../client/storage.ts';
-import { decryptBackup } from '../../client/backup.ts';
 import { rejectionCheckpoint, STATE_TYPES, checkpointEvidence } from '../../protocol/protocol.ts';
 import { RoundClient } from '../src/round.ts';
 import type { GameReceipt } from '../../protocol/game-types.ts';
@@ -184,38 +183,6 @@ test('settled developer bets are found through the account feed, zero payouts ar
   restored.openGame(game);
   assert.equal((await restored.gameReceipt('return'))!.payout, '10');
 });
-test('encrypted backups retain every open developer bet beyond recent history', async () => {
-  const f = await gameWallet(),
-    w = f.wallet,
-    game = f.identity();
-  w.openGame(game);
-  await w.setGameAllowance('1000');
-  await w.gameDeveloperBet({ id: 'a', stake: '10', meta: {} });
-  await w.gameDeveloperBet({ id: 'b', stake: '20', meta: {} });
-  for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
-  const password = 'long bet backup passphrase',
-    backup = await w.encryptedBackup(password);
-  const contents = await decryptBackup(backup, password);
-  assert.equal(contents.record.history.length, 102);
-  assert.equal(contents.record.history.filter((receipt: any) => receipt.kind === 'developer-bet').length, 2);
-  const restored = await f.reload();
-  restored.storage = new MemoryStore();
-  restored.channels = {};
-  restored.channelId = null;
-  restored.revision = 0;
-  restored.refresh = async () => ({});
-  await restored.restoreBackup(backup, password);
-  // Their developer pays both stakes back while the wallet is away.
-  const open = await f.developer.bets({ status: 'open' });
-  await f.developer.settle(open.bets.map(bet => ({ bet: bet.bet, player: BigInt(bet.stake), casino: 0n })));
-  await restored.collectPayouts();
-  assert.equal(await restored.balance(), 999899n);
-  assert.deepEqual(restored.developerBets, {});
-  restored.openGame(game);
-  assert.equal((await restored.gameReceipt('a'))!.payout, '10');
-  assert.equal((await restored.gameReceipt('b'))!.payout, '20');
-});
-
 test('a game learns how its operations ended and never whose they were', async () => {
   const f = await gameWallet(),
     w = f.wallet;
@@ -419,33 +386,6 @@ test('mines runs its own rules through the wallet bridge and its own storage, in
   assert.equal(w.gameAllowance().allowance, String(BigInt(allowance) - BigInt(state.contributed) + BigInt(state.cash)));
   assert.equal(store.map.size, 1, 'the round lives under one key per player');
   assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
-});
-
-test('an encrypted backup restores the channel and its recent receipts', async () => {
-  const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity('a'));
-  await w.setGameAllowance('1000');
-  await w.gameCasinoBet(terms('kept'));
-  for (let i = 0; i < 101; i++) await w.gamePayment({ id: `pay-${i}`, amount: '1' });
-  const password = 'game backup test passphrase',
-    backup = await w.encryptedBackup(password);
-  const contents = await decryptBackup(backup, password);
-  assert.equal(contents.record.history.length, 100);
-  const restored = await f.reload();
-  restored.storage = new MemoryStore();
-  restored.channels = {};
-  restored.channelId = null;
-  restored.revision = 0;
-  restored.refresh = async () => ({});
-  await restored.restoreBackup(backup, password);
-  assert.equal(restored.game, null);
-  await assert.rejects(restored.gameReceipt('kept'), /No game is open/);
-  restored.openGame(f.identity('a'));
-  assert.equal(await restored.gameReceipt('kept'), null, 'receipts beyond the retained history are not restored');
-  await restored.setGameAllowance('100');
-  await restored.gameCasinoBet(terms('after-restore'));
-  assert.equal(f.settlements(), 103);
 });
 
 test('importing newer evidence brings the channel up to date', async () => {

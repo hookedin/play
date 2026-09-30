@@ -19,7 +19,7 @@ HookedIn runs on Sepolia (chain 11155111).
 | Casino     | Names rounds, admits bets against its bankroll, signs results, has the contract pay withdrawals and keeps the books. The service is private; its API is public | [Casino API](casino-api/index.md)                               |
 | Games      | Sites of their own, each known by its URL and run in a sandboxed frame inside the wallet. Four of the house's games are in this repository                     | [games/](../games/)                                             |
 | SDK        | The wallet bridge, a round helper, exact step pricing, a developer kit and the build tool                                                                      | [Packages and imports](sdk/index.md)                            |
-| Watchtower | Challenges a stale close of your channel from its exported evidence, from a machine you run                                                                    | [The watchtower](wallet/backups-and-recovery.md#the-watchtower) |
+| Watchtower | Challenges a stale close of your channel from its exported evidence, from a machine you run                                                                    | [The watchtower](wallet/keys-and-recovery.md#the-watchtower)    |
 
 Everything a player has to trust is in this repository. The casino service is private, and a player does not have to
 trust its code: the wallet checks every signature, revealed secret and balance change against the public protocol, and

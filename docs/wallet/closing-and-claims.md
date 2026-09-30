@@ -17,8 +17,7 @@ still owes you under **Waiting to be paid**, your [developer bets](bets-and-rece
 under way: the deposits the contract holds for it and the sequence of your latest evidence; for a closing one, the
 sequence the close proposes beside yours, how much less it holds, any challenge on its way and the deadline; and when
 the wallet last read the chain. Its actions are the rest of this page and
-[recovery bundles](backups-and-recovery.md#recovery-bundles). Locking in needs the casino; the rest do not. A balance
-played in another browser needs that browser's backup, or its recovery bundle.
+[recovery bundles](keys-and-recovery.md#recovery-bundles). Locking in needs the casino; the rest do not.
 
 ## Lock in your balance
 
@@ -93,7 +92,7 @@ contract holds a close at a lower sequence than the evidence the wallet saved, t
 
 - A challenge must carry a strictly higher sequence than the proposed state.
 - It must be mined before the deadline, and it does not move the deadline.
-- Anyone holding the evidence can send it: you, your [watchtower](backups-and-recovery.md#the-watchtower), or the
+- Anyone holding the evidence can send it: you, your [watchtower](keys-and-recovery.md#the-watchtower), or the
   casino's own watcher.
 
 The wallet sends a challenge only when you press the button. Once the deadline has passed, the proposed state is final
@@ -116,7 +115,7 @@ what can be collected now:
 - **Collect** sends `claim(id)`, which anyone may send. It pays the claim's protected principal and whatever of its
   winnings house cash reaches to the claim's recipient: your account for a closed balance and the withdrawal's address
   for a withdrawal, unless you have redirected it.
-- **Collect there**, with an address and your wallet passphrase, sends `claimTo(id, recipient)`, which only your
+- **Collect there**, with an address, sends `claimTo(id, recipient)`, which only your
   account may send. It makes `recipient` the claim's recipient, for this collection and every later one, and pays. The
   contract's own address puts what it pays into your balance's channel as deposits.
 - **Export evidence**, beside a closed balance's claim, saves the recovery bundle of its channel.
@@ -141,4 +140,4 @@ before signing leaves the balance open, and the close can be tried again; a sign
 retry. Recovery shows the ETH the address holds for fees. You can also turn it off under **Deposits** in Settings and
 send ETH to the address, or have somebody relay the transaction: anyone can send `withdraw`, `challengeClose`,
 `finalizeClose` and `claim`, and only your account or the casino can send `startClose`. A pending transaction shows
-**Retry** and **Speed up** ([when a reply is lost](backups-and-recovery.md#when-a-reply-is-lost)).
+**Retry** and **Speed up** ([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)).

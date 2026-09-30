@@ -56,7 +56,6 @@
       </details>
       <a href="/settings" data-page="settings">Settings</a>
       <a href="mailto:support@hookedin.com">Contact support</a>
-      <button id="lock-wallet" class="text-button" type="button">Lock wallet</button>
       <a id="menu-profile" href="/" class="hidden">Public profile</a>
     </div>
 
@@ -127,7 +126,6 @@
           ><a class="text-button" href="/activity" data-page="activity">All activity →</a>
         </div>
         <p id="balance-protection" class="help"></p>
-        <p id="backup-reminder" class="help" role="status"></p>
         <p id="developer-earnings" class="muted hidden"></p>
         <section id="claims" class="card hidden" aria-labelledby="claims-title">
           <h2 id="claims-title">Waiting to be paid</h2>
@@ -396,39 +394,21 @@
           </p>
         </section>
         <section class="card" aria-labelledby="keys-title">
-          <h2 id="keys-title">Keys and backups</h2>
+          <h2 id="keys-title">Your key</h2>
+          <p id="key-status" class="muted"></p>
+          <div class="actions">
+            <button class="button small" type="button" data-key="create">Save with a passkey</button
+            ><button class="button small" type="button" data-key="sign-in">Sign in with a passkey</button
+            ><button class="button small" type="button" data-key="file">Save a key file</button>
+          </div>
           <p class="muted">
-            This browser encrypts your key with your wallet passphrase. Keep an encrypted backup: support cannot recover
-            your passphrase or key. The wallet locks after five minutes without activity.
+            A passkey opens this account only on this site. A key file opens it in any copy of this wallet, even one you
+            run yourself.
           </p>
-          <label for="key-password">Wallet passphrase to export a key or backup</label>
-          <input id="key-password" type="password" autocomplete="current-password" />
           <button id="export-key" class="text-button" type="button">Show this wallet's private key</button>
           <textarea id="exported-key" class="key-field hidden" readonly aria-label="Private key"></textarea>
           <p class="muted">
             Anyone who sees this key can take everything this wallet holds. Never paste it into a site or a message.
-          </p>
-          <label for="backup-password">Backup passphrase</label>
-          <input
-            id="backup-password"
-            type="password"
-            minlength="12"
-            autocomplete="new-password"
-            placeholder="At least 12 characters"
-          />
-          <div class="actions">
-            <button id="backup-wallet" class="button small" type="button">Download encrypted backup</button
-            ><label class="button small file-button"
-              >Restore a backup<input id="restore-backup" type="file" accept="application/json"
-            /></label>
-          </div>
-          <label class="button small file-button"
-            >Check saved backup<input id="verify-backup" type="file" accept="application/json"
-          /></label>
-          <p id="backup-status" class="help" role="status"></p>
-          <p class="muted">
-            A backup holds this account's key, its signed evidence and any operation in flight. Keep it and its
-            passphrase apart.
           </p>
         </section>
         <section class="card" aria-labelledby="accounts-title">
@@ -497,31 +477,6 @@
     </div>
     <div id="toast" class="toast hidden" role="alert"></div>
 
-    <dialog id="unlock-dialog" class="sheet" aria-labelledby="unlock-title">
-      <form id="unlock-form">
-        <h2 id="unlock-title">Protect your wallet</h2>
-        <p id="unlock-help" class="help"></p>
-        <label for="unlock-password">Wallet passphrase</label>
-        <input
-          id="unlock-password"
-          type="password"
-          minlength="12"
-          maxlength="1024"
-          required
-          autocomplete="current-password"
-        />
-        <div id="unlock-confirm-field">
-          <label for="unlock-confirm">Confirm passphrase</label
-          ><input id="unlock-confirm" type="password" autocomplete="new-password" />
-        </div>
-        <p id="unlock-error" class="help check-failed" role="alert"></p>
-        <button id="unlock-submit" class="button primary full" type="submit">Continue</button>
-        <p class="help">
-          Your key stays in this browser. Support cannot reset this passphrase. Keep your encrypted backup and its
-          passphrase safe.
-        </p>
-      </form>
-    </dialog>
     <dialog id="wallet-dialog" class="sheet" aria-labelledby="wallet-title">
       <div class="sheet-head">
         <h2 id="wallet-title">Wallet</h2>
@@ -535,17 +490,17 @@
         ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
-        <div id="deposit-safety" class="safety-note">
-          <strong>Back up before depositing</strong>
+        <div id="deposit-save" class="safety-note">
+          <strong>Save your wallet</strong>
           <p>
-            You control this wallet's key. Download an encrypted backup in Settings, then reopen the saved file to check
-            it. Save a fresh backup after playing.
+            Your wallet is a key in this browser. Save it with a passkey to open it on any of your devices, even if this
+            browser forgets it.
           </p>
-          <p>
-            Recovery can require a 24-hour challenge window, your latest evidence and ETH for network fees. Watch your
-            balance during that window. Winnings depend on available bankroll cash until you lock them in.
-          </p>
-          <button id="deposit-backup" class="button small" type="button">Back up wallet</button>
+          <button class="button primary full" type="button" data-key="create">Save with a passkey</button>
+          <div class="actions">
+            <button class="text-button" type="button" data-key="sign-in">I have a passkey</button
+            ><button class="text-button" type="button" data-key="file">Save a key file instead</button>
+          </div>
         </div>
         <div id="deposit-ready" hidden>
           <label id="deposit-instructions" for="wallet-address"></label>
@@ -575,7 +530,7 @@
         </p>
         <p class="help">
           Need help with a deposit or withdrawal? <a href="mailto:support@hookedin.com">Contact support</a>. Never send
-          your key, passphrase or backup.
+          your key or key file.
         </p>
       </section>
       <section class="tab-panel" data-panel="withdraw" hidden>
@@ -600,8 +555,6 @@
         <button id="withdraw-max" class="text-button" type="button">Max</button>
         <label for="withdraw-to">To</label>
         <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
-        <label for="withdraw-password">Wallet passphrase</label>
-        <input id="withdraw-password" type="password" autocomplete="current-password" />
         <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
       </section>

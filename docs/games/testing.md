@@ -65,7 +65,7 @@ pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance
 | `secretOf(round)`            | A round's secret, which only the casino knows until it reveals the round                                                                          |
 | `reload()`                   | A wallet started afresh from what this one saved, as a reload of the page starts one                                                              |
 | `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                          |
-| `forget()`                   | A wallet that has lost every receipt, as one restored from an older backup has                                                                    |
+| `forget()`                   | A wallet that has lost every receipt, as the same account on another device has                                                                   |
 
 The wallet methods a test calls are `openGame(identity)`, `setGameAllowance(amount)` (a decimal string of wei, as the
 player sets it in the wallet's dialog), `gameAllowance()` (the open game's `{ allowance, pending }`), `closeGame()`,

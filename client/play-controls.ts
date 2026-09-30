@@ -109,24 +109,3 @@ export function recordPlay(saved: PlayControls, receipt: any, now = Date.now()) 
   }
   return state;
 }
-/** Restoring cannot relax controls or erase today's usage. Increases can be scheduled again after restoration. */
-export function restoreControls(current: PlayControls, restored?: PlayControls, now = Date.now()) {
-  let a = playControls(current, now),
-    b = playControls(restored, now);
-  const limits = { ...a.limits };
-  for (const field of ['deposit', 'loss', 'minutes'] as const) {
-    const left = a.limits[field],
-      right = b.limits[field];
-    if (left === null || (right !== null && BigInt(right) < BigInt(left))) Object.assign(limits, { [field]: right });
-  }
-  a = changeLimits(a, limits, now);
-  b = changeLimits(b, limits, now);
-  a.pausedUntil = Math.max(a.pausedUntil, b.pausedUntil);
-  for (const field of ['deposited', 'lost'] as const)
-    a[field] = String(BigInt(a[field]) > BigInt(b[field]) ? a[field] : b[field]);
-  const duration = (limits.minutes ?? 0) * 60000;
-  const active = [a.sessionStarted, b.sessionStarted].filter(start => start && now < start + duration + BREAK),
-    breaking = active.filter(start => now >= start + duration);
-  a.sessionStarted = !duration ? 0 : breaking.length ? Math.max(...breaking) : active.length ? Math.min(...active) : 0;
-  return a;
-}

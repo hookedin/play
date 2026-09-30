@@ -35,8 +35,8 @@ or out, the fund's `equity` and `totalShares` immediately before, which fixed th
 the investment or the `Redeem` you signed. The wallet keeps the latest statement and checks its signature, that it
 follows your last one, that its cause is what you signed, and that its shares and amount match that at its own price. It
 cannot check `equity` and `totalShares` themselves: players' balances are private, so the price is the casino's word. A
-statement that fails a check is not adopted, and the Bankroll page says why. A wallet restored from an older backup, or
-sharing its account with another, has missed statements: when the Bankroll page opens and before every sale, it asks the
+statement that fails a check is not adopted, and the Bankroll page says why. A wallet whose account plays on another
+device too, or that lost its browser's data, has missed statements: when the Bankroll page opens and before every sale, it asks the
 casino for its latest one and every `Redeem` your account signed, and takes the later statement up only if every share
 it takes away is one of those redemptions, each checked for your signature, the casino's and its price. What they sold
 for is owed to you. It waits while an operation or a sale is pending, whose own reply brings its statement.

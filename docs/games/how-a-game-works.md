@@ -141,8 +141,8 @@ round is revealed with its rejection ([rejected bets](../wallet/bets-and-receipt
 
 ## When a wallet has lost receipts
 
-A wallet restored from an older backup may not hold the receipt of an operation its player carried out on another
-channel. `game.receipt` returns `null` for it, and sending the request again fails with `id-used`: the operation was
+A wallet on another device, or one that lost its browser's data, may not hold the receipt of an operation its player
+carried out on another channel. `game.receipt` returns `null` for it, and sending the request again fails with `id-used`: the operation was
 carried out, and its result is not in this wallet. Clear your record and tell the player. Do not send it again under
 another `id` without asking them.
 
@@ -163,8 +163,8 @@ no uname until their first deposit, and the wallet then loads the page again. `R
 
 - A reload releases the allowance. The state at your origin survives, and every settled step's money is in the channel
   balance: a resumed round asks for an allowance again.
-- Saved state stays in this browser. It is not in wallet backups and does not follow the player to another browser; a
-  round left unfinished leaves the player the cash it held.
+- Saved state stays in this browser and does not follow the player to another device; a round left unfinished leaves
+  the player the cash it held.
 - Two tabs of one game share its origin storage. Read saved state again before every action; `RoundClient` does, and
   its `watch(listener)` reloads the round when another tab writes it. The wallet lets one game per wallet hold an
   allowance at a time and keeps one pending operation per channel, so the money stays consistent whatever the tabs do.
