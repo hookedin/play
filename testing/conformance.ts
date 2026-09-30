@@ -12,6 +12,7 @@ import type { CasinoWallet } from '../client/wallet.ts';
 import type { GameReceipt } from '../protocol/game-types.ts';
 import { betPayout, outcome, seedHash } from '../protocol/protocol.ts';
 import type { Developer } from '../sdk/src/developer.ts';
+import { memoryStore } from './game-wallet.ts';
 import type { TestBridge } from './game-wallet.ts';
 import { RoundClient } from '../sdk/src/round.ts';
 import { fraction } from '../sdk/src/engine/index.ts';
@@ -55,14 +56,6 @@ const flip = (hundredths: bigint) => (setup: any) => ({
     { id: 'tails', kind: 'terminal' as const, payout: 0n },
   ],
 });
-const memory = () => {
-  const map = new Map<string, string>();
-  return {
-    get: (key: string) => map.get(key) ?? null,
-    set: (key: string, value: string) => void map.set(key, value),
-    remove: (key: string) => void map.delete(key),
-  };
-};
 /** The next receipt the wallet pushes for operation `id`. */
 const pushed = (bridge: TestBridge, id: string) =>
   new Promise<GameReceipt>(resolve => {
@@ -232,7 +225,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
 
   test(`${name}: a round saved under rules the game does not play is let go once, and the next one plays`, async t => {
     const x = await open(t),
-      store = memory(),
+      store = memoryStore(),
       stake = x.within.stake;
     const old = new RoundClient(x.bridge, flip(190n), undefined, { store, name: 'rules' });
     await old.start({ stake });

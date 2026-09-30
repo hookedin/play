@@ -12,7 +12,7 @@ interface Ball {
   pegsHit: number;
   done: () => void;
 }
-export interface BoardOptions {
+interface BoardOptions {
   reducedMotion: boolean;
   onPeg?: (row: number, rows: number) => void;
 }

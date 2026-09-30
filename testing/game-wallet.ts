@@ -30,10 +30,11 @@ import {
   MAX_PAYOUTS,
   validMeta,
 } from '../protocol/protocol.ts';
-import { assessBet } from '../protocol/risk.ts';
+import { assessBet, betReturn, RETURN_SCALE } from '../protocol/risk.ts';
 import type { GameIdentity, GameLimit, GameReceipt } from '../protocol/game-types.ts';
 import type { DeveloperCasinoBet, PublicDeveloperBet, Round } from '../protocol/types.ts';
 import type { BankCasinoBet, Developer, Settlement } from '../sdk/src/developer.ts';
+import type { GamePlan } from '../sdk/src/engine/index.ts';
 
 /** A game's side of the bridge, as `RoundClient` and a game's own client take it: every request goes through the
  * checks the wallet's bridge makes, and the player agrees to every request for funds. */
@@ -82,6 +83,30 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
       return () => void listeners!.delete(listener);
     },
   };
+}
+
+/** A game's origin storage in memory, as `RoundClient` takes it in a test: what `localStorage` is to a page. Two
+ * clients over one store are one game in two tabs, or before and after a reload. `map` holds what it saved. */
+export function memoryStore() {
+  const map = new Map<string, string>();
+  return {
+    map,
+    get: (key: string) => map.get(key) ?? null,
+    set: (key: string, value: string) => void map.set(key, value),
+    remove: (key: string) => void map.delete(key),
+  };
+}
+
+/** The least any bet a priced game can place pays back, in millionths of its stake: every branch of every step. */
+export function worstReturn(plan: GamePlan) {
+  let worst = RETURN_SCALE;
+  for (const node of plan.nodes)
+    if (node.kind === 'decision')
+      for (const { transition } of node.actions)
+        if (transition.kind === 'casino-bet')
+          for (const branch of transition.branches)
+            if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
+  return worst;
 }
 
 /**
@@ -436,9 +461,6 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
   };
   /** The developer a game's server would create with its developer's key, against this stub casino. */
   const stubDeveloper: Developer = {
-    address: developerKey.address,
-    game: game.key,
-    limits: LIMITS,
     bankroll: async () => bankroll,
     async openRound() {
       const id = createRound();
@@ -456,18 +478,15 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
         settled.push(...(await settleBatch(settlements.slice(i, i + MAX_DEVELOPER_BETS))));
       return settled;
     },
-    bets: async ({ status = 'open', group, after = '', limit = 100 } = {}) => {
+    bets: async ({ status = 'open', after = '' } = {}) => {
       const { bets, cursor, more } = page(
-        [...developerBets.values()].filter(
-          bet => bet.game === game.key && (group === undefined || bet.group === group),
-        ),
+        [...developerBets.values()].filter(bet => bet.game === game.key),
         status === 'settled',
         after,
-        limit,
+        100,
       );
       return { bets: bets.map(bet => publicDeveloperBet(bet.bet)), cursor, more };
     },
-    bet: async hash => (developerBets.has(hash.toLowerCase()) ? publicDeveloperBet(hash.toLowerCase()) : null),
   };
   const wallet = make();
   await wallet.save();
@@ -485,23 +504,21 @@ export async function gameWallet({ bankroll: capital = 10n ** 12n, bank: funds =
     /** The developer the game's server would create: it opens rounds, places its casino bets and settles developer
      * bets, with the developer's key. */
     developer: stubDeveloper,
-    /** The game's side of the bridge to this fixture's wallet, and to any other. */
+    /** The game's side of the bridge to this fixture's wallet. */
     bridge: bridgeTo(wallet),
-    bridgeFor: bridgeTo,
     settlements: () => settlements,
-    /** What the stub casino has to cover casino bets with, and what the developer's bank holds. */
-    bankroll: () => bankroll,
+    /** What the developer's bank holds. */
     bank: () => bank,
     /** A round's secret, which only the casino knows until it reveals the round. */
     secretOf: (round: string) => secrets.get(round.toLowerCase())!,
     /** The player closes their channel and opens another. A game's operation IDs are theirs across both. */
-    async replaceChannel(of = wallet) {
-      const old = of.channels[of.channelId!]!,
+    async replaceChannel() {
+      const old = wallet.channels[wallet.channelId!]!,
         next = await openChannel(1000000n, Number(old.opening.index) + 1);
-      of.channels[old.opening.channelId] = { ...old, onchain: { ...old.onchain, status: '3' } };
-      of.channels[next.opening.channelId] = structuredClone(next);
-      of.channelId = next.opening.channelId;
-      await of.save();
+      wallet.channels[old.opening.channelId] = { ...old, onchain: { ...old.onchain, status: '3' } };
+      wallet.channels[next.opening.channelId] = structuredClone(next);
+      wallet.channelId = next.opening.channelId;
+      await wallet.save();
     },
     reload,
     /** A wallet that has lost the receipts this one kept, as one restored from an older backup would have. */

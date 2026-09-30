@@ -1,20 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
+import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
 import { DropClient } from '../src/drop.ts';
 import { RISKS, ROWS, bucketOf, dropGraph, multipliers, path, paths } from '../src/tables.ts';
-import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
+import { admits } from '@hookedin/play/sdk/admits';
 import { compileGame, fraction, getNode, seededRandom } from '@hookedin/play/sdk/engine';
-
-const memoryStore = () => {
-  const map = new Map<string, string>();
-  return {
-    map,
-    get: (key: string) => map.get(key) ?? null,
-    set: (key: string, value: string) => void map.set(key, value),
-    remove: (key: string) => void map.delete(key),
-  };
-};
 const plan = (rows: any, risk: any, stake: bigint, bankroll = 20000n * stake) =>
   compileGame(dropGraph({ stake: String(stake), rows, risk }), {
     admits,
@@ -81,7 +71,6 @@ test('each drop is one casino bet, recovers a lost reply under the same ID, and 
   const bridge = {
     balance: async () => w.gameLimit(),
     call: async (method: string, params: any = {}) => {
-      if (method === 'wallet.hello') return w.gameHello();
       if (method === 'wallet.info') return { ...w.gameInfo(), bankroll };
       if (method === 'game.receipt') return w.gameReceipt(params.id);
       if (method !== 'game.casinoBet') throw new Error(`unexpected ${method}`);
@@ -131,21 +120,14 @@ test('each drop is one casino bet, recovers a lost reply under the same ID, and 
   assert.equal(client.pending, null, 'nothing is pending for a table the casino cannot back');
 });
 
-/** The least any one bet of this game pays back, in millionths of its stake, when the casino's bankroll is far above
- * the stake. A drop bets only what its ball can lose, and the bets for the outer buckets carry more of the board's edge
- * than the rest, so a bet pays back less of its stake than the board does of the ball. The game publishes no such
- * figure — a promise nobody can verify is worth nothing, because no game bounds how often it wagers what it holds —
- * but its own table is held to it here, and every player sees the measured return of each bet they actually signed. */
+/** The least any bet of this game pays back, in millionths of its stake, when the casino's bankroll is far above the
+ * stake. A drop bets only what its ball can lose, and the bets for the outer buckets carry more of the board's edge
+ * than the rest, so a bet pays back less of its stake than the board does of the ball. */
 const FLOOR = 927000n;
 
-test('every bet this game can place pays back at least the floor it is built to', t => {
-  let worst = RETURN_SCALE;
+test('every bet this game can place pays back at least the floor it is built to', () => {
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
     for (const rows of ROWS)
-      for (const risk of RISKS) {
-        const drop = plan(rows, risk, stake, 10n ** 9n * stake);
-        for (const branch of (getNode(drop, drop.root) as any).actions[0].transition.branches)
-          if (betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
-      }
-  assert.ok(worst >= FLOOR, `a bet pays back ${worst} millionths, below this game's floor`);
+      for (const risk of RISKS)
+        assert.ok(worstReturn(plan(rows, risk, stake, 10n ** 9n * stake)) >= FLOOR, `${rows} ${risk} below the floor`);
 });

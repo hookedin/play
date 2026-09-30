@@ -1,31 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compileGame, fraction, loadFundedGame, UINT256_MAX } from '../src/engine/index.ts';
+import { compileGame, fraction, loadFundedGame } from '../src/engine/index.ts';
+import { UINT256_MAX } from '../../protocol/risk.ts';
 import { admits } from '../src/admits.ts';
 import { RoundClient } from '../src/round.ts';
+import { memoryStore } from '../../testing/game-wallet.ts';
+import { coin } from './coin.ts';
 
 // A table as a game commits it: the required cash of every action, at one scale.
-const graph = (scale: bigint) => ({
-  root: 'start',
-  nodes: [
-    {
-      id: 'start',
-      kind: 'decision' as const,
-      actions: [
-        {
-          id: 'double',
-          additionalCash: 2n * scale,
-          outcomes: [
-            { next: 'win', probability: fraction(1n, 2n), label: 'card' },
-            { next: 'loss', probability: fraction(1n, 2n), label: 'other card' },
-          ],
-        },
-      ],
-    },
-    { id: 'win', kind: 'terminal' as const, payout: 6n * scale },
-    { id: 'loss', kind: 'terminal' as const, payout: 0n },
-  ],
-});
+const graph = (scale: bigint) =>
+  coin({ action: 'double', additionalCash: 2n * scale, payout: () => 6n * scale, labels: ['card', 'other card'] })({
+    stake: '0',
+  });
 const base = compileGame(graph(1n), { admits, bankrollFloor: 1000n, cashQuantum: 1n, initialCash: 2n });
 const table = {
   bankrollFloor: base.bankrollFloor,
@@ -69,7 +55,6 @@ test('rounds use the table when supported and preserve the ordinary fallback and
     [3n, 10000n, 5000n],
     [2n, 1001n, 500n],
   ]) {
-    const store = new Map<string, string>();
     const call = {
       call: async () => ({ bankroll: String(bankroll), chainId: '31337', address: '0xab', channelId: '0x01' }),
       balance: async () => ({ balance: '100', pending: false }),
@@ -93,11 +78,7 @@ test('rounds use the table when supported and preserve the ordinary fallback and
       conservativeBankroll: 1002n,
       actions: { start: [2n] },
     };
-    const memory = {
-      get: (k: string) => store.get(k) ?? null,
-      set: (k: string, v: string) => void store.set(k, v),
-      remove: (k: string) => void store.delete(k),
-    };
+    const memory = memoryStore();
     const round = new RoundClient(call, make, funding, { store: memory }),
       started = await round.start({ stake: String(stake) });
     assert.equal(round['plan']!.bankrollFloor, floor);

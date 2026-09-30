@@ -15,7 +15,7 @@ interface Reel {
   started: number;
   landing: { from: number; to: number; start: number; duration: number; done: () => void } | null;
 }
-export interface StopOptions {
+interface StopOptions {
   turbo: boolean;
   /** Reels to hold back for suspense, with the extra seconds each spins. */
   suspense?: Readonly<Record<number, number>>;

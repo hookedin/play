@@ -1,7 +1,8 @@
 import { add, compare, divide, fraction, multiply } from './rational.ts';
 import type { Rational } from './rational.ts';
 import type { GameGraph, GameNode } from './model.ts';
-import { cashClasses, compileTransition, priceTransition, UINT256_MAX, OUTCOME_SPACE } from './transition.ts';
+import { cashClasses, compileTransition, priceTransition } from './transition.ts';
+import { OUTCOME_SPACE, uint256 } from '../../../protocol/risk.ts';
 import type { Admits, Bet, CashClass, CashOutcome, TransitionPlan } from './transition.ts';
 
 /** A uniform integer in [0, limit): the page's own randomness, which draws each step's branch. */
@@ -11,7 +12,7 @@ const ZERO = fraction(0n);
 const ONE = fraction(1n);
 const indexes = new WeakMap<GamePlan, ReadonlyMap<string, PricedNode>>();
 
-export interface PricedAction {
+interface PricedAction {
   readonly id: string;
   readonly additionalCash: bigint;
   readonly requiredCash: bigint;
@@ -39,7 +40,7 @@ export interface GamePlan {
   readonly conservativeBankroll: bigint;
   readonly nodes: readonly PricedNode[];
 }
-export interface CompileOptions {
+interface CompileOptions {
   /** The casino's admission rule. Every bet a step can place is checked against it at the planning bankroll. */
   readonly admits: Admits;
   readonly bankrollFloor: bigint;
@@ -55,12 +56,6 @@ export interface FundingTable {
   readonly actions: Readonly<Record<string, readonly bigint[]>>;
 }
 
-function money(value: bigint, name: string, positive = false): void {
-  if (typeof value !== 'bigint' || value < (positive ? 1n : 0n) || value > UINT256_MAX) {
-    throw new RangeError(`${name} must be ${positive ? 'a positive' : 'a nonnegative'} uint256`);
-  }
-}
-
 /** Price every legal action before any randomness is consumed. No network or wallet access. */
 export function compileGame(graph: GameGraph, options: CompileOptions): GamePlan {
   const work = compileSteps(graph, options);
@@ -72,7 +67,7 @@ export function compileGame(graph: GameGraph, options: CompileOptions): GamePlan
 
 /** Load exact integer-scaled funding; construct only transitions actually used. */
 export function loadFundedGame(graph: GameGraph, table: FundingTable, scale: bigint, admits: Admits): GamePlan {
-  money(scale, 'funding scale', true);
+  uint256(scale, 'funding scale', true);
   const work = compileSteps(
     graph,
     {
@@ -110,9 +105,9 @@ function* compileSteps(
   table?: FundingTable,
   scale = 1n,
 ): Generator<void, GamePlan> {
-  money(options.bankrollFloor, 'bankrollFloor', true);
-  money(options.cashQuantum, 'cashQuantum', true);
-  if (options.initialCash !== undefined) money(options.initialCash, 'initialCash');
+  uint256(options.bankrollFloor, 'bankrollFloor', true);
+  uint256(options.cashQuantum, 'cashQuantum', true);
+  if (options.initialCash !== undefined) uint256(options.initialCash, 'initialCash');
   const input = new Map<string, GameNode>();
   for (const node of graph.nodes) {
     if (!node.id || input.has(node.id)) throw new Error('game node ids must be nonempty and unique');
@@ -139,7 +134,7 @@ function* compileSteps(
     visiting.add(id);
     let node: PricedNode;
     if (source.kind === 'terminal') {
-      money(source.payout, 'terminal payout');
+      uint256(source.payout, 'terminal payout');
       if (id === graph.root && options.initialCash !== undefined && options.initialCash !== source.payout) {
         throw new Error('a terminal root must already have its exact payout');
       }
@@ -164,7 +159,7 @@ function* compileSteps(
         if (!action.id || actionIds.has(action.id)) throw new Error(`duplicate or empty action at ${id}`);
         actionIds.add(action.id);
         const additionalCash = action.additionalCash ?? 0n;
-        money(additionalCash, 'additional action cash');
+        uint256(additionalCash, 'additional action cash');
         if (action.outcomes.length === 0) throw new Error(`empty action at ${id}`);
         const outcomes: CashOutcome[] = [];
         for (const outcome of action.outcomes) {
@@ -185,7 +180,7 @@ function* compileSteps(
           required: bigint;
         if (savedPrices) {
           required = savedPrices[actions.length]! * scale;
-          money(required, 'precomputed action cash');
+          uint256(required, 'precomputed action cash');
         } else {
           key = cashKey(outcomes);
           let needed = prices.get(key);
@@ -236,7 +231,7 @@ function* compileSteps(
   let maximumCash = 0n;
   for (const node of priced.values()) maximumCash = maximumCash > node.cash ? maximumCash : node.cash;
   const conservativeBankroll = options.bankrollFloor + BigInt(root.depth) * maximumCash;
-  money(conservativeBankroll, 'conservativeBankroll', true);
+  uint256(conservativeBankroll, 'conservativeBankroll', true);
   const plan: GamePlan = Object.freeze({
     admits: options.admits,
     root: root.id,
@@ -262,7 +257,7 @@ export function getNode(plan: GamePlan, id: string): PricedNode {
 }
 
 export type Policy = (node: Extract<PricedNode, { kind: 'decision' }>) => string;
-export interface PolicyEvaluation {
+interface PolicyEvaluation {
   readonly distribution: readonly { readonly payout: bigint; readonly probability: Rational }[];
   readonly expectedPayout: Rational;
   readonly expectedAdditionalCash: Rational;
@@ -370,7 +365,7 @@ function draw(random: RandomBelow, limit: bigint): bigint {
   return value;
 }
 /** Exact sequential categorical draw; avoids a global LCM of weight denominators. */
-export function selectWeighted<T>(items: readonly T[], weight: (item: T) => Rational, random: RandomBelow): T {
+function selectWeighted<T>(items: readonly T[], weight: (item: T) => Rational, random: RandomBelow): T {
   if (typeof random !== 'function') throw new TypeError('an injected RNG is required');
   const positive = items.filter(item => weight(item).n > 0n);
   let remaining = positive.reduce((total, item) => add(total, weight(item)), ZERO);
@@ -386,7 +381,7 @@ export function selectWeighted<T>(items: readonly T[], weight: (item: T) => Rati
   throw new Error('empty weighted distribution');
 }
 
-export interface RuntimeState {
+interface RuntimeState {
   readonly nodeId: string;
   readonly cash: bigint;
   readonly bankroll: bigint;
@@ -396,7 +391,7 @@ interface PreparedBase {
   readonly actionId: string;
   readonly additionalCash: bigint;
 }
-export type PreparedTransition =
+type PreparedTransition =
   | (PreparedBase & {
       readonly kind: 'casino-bet';
       /** Exactly what the wallet signs: the stake, its chance and its prize. */
@@ -426,7 +421,7 @@ export function prepareAction(
   const node = getNode(plan, state.nodeId);
   if (node.kind !== 'decision') throw new Error('terminal state has no action');
   if (state.cash !== node.cash) throw new Error('state does not have its funded continuation balance');
-  money(state.bankroll, 'live bankroll', true);
+  uint256(state.bankroll, 'live bankroll', true);
   if (state.bankroll < plan.bankrollFloor)
     throw new RangeError('available bankroll fell below the planning floor; stop before betting');
   const action = node.actions.find(value => value.id === actionId);
@@ -464,7 +459,7 @@ export function prepareAction(
       });
     }
   } else {
-    money(state.bankroll + step.amount, 'bankroll after payment', true);
+    uint256(state.bankroll + step.amount, 'bankroll after payment', true);
     if (step.outcomes.length > 1 && typeof random !== 'function')
       throw new TypeError('this step chooses among equal-cash states: an injected RNG is required');
     const next =
@@ -484,7 +479,7 @@ export function prepareAction(
   return prepared;
 }
 
-export interface Resolution {
+interface Resolution {
   readonly state: RuntimeState;
   readonly label?: string | undefined;
   /** What the bet paid: its prize, or zero. */
@@ -530,13 +525,6 @@ export function resolveTransition(prepared: PreparedTransition, outcome?: bigint
     payout: 0n,
     payment: prepared.amount,
   });
-}
-
-/** Demonstration only: production gets this outcome from the verified round. */
-export function simulateServerResult(prepared: PreparedTransition, random: RandomBelow): bigint {
-  if (prepared.kind !== 'casino-bet') throw new Error('not a bet');
-  if (typeof random !== 'function') throw new TypeError('an independent server RNG is required');
-  return draw(random, OUTCOME_SPACE);
 }
 
 /** A RandomBelow drawn from a 64-bit seed, such as a round's verified outcome: the SplitMix64 stream from the seed,

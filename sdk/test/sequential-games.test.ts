@@ -5,7 +5,6 @@ import {
   fraction,
   OUTCOME_SPACE,
   compileGame,
-  compileGameAsync,
   createMines,
   evaluatePolicy,
   getNode,
@@ -13,37 +12,19 @@ import {
   prepareAction,
   resolveTransition,
   seededRandom,
-  simulateServerResult,
 } from '../src/engine/index.ts';
-import type { CashClass } from '../src/engine/index.ts';
+import { compileGameAsync } from '../src/engine/engine.ts';
+import type { CashClass } from '../src/engine/transition.ts';
 import { admits } from '../src/admits.ts';
+import { coin } from './coin.ts';
 
 const UNIT = 10n ** 18n;
 const ZERO = fraction(0n);
 const ONE = fraction(1n);
 const options = { admits, bankrollFloor: 1_000_000n * UNIT, cashQuantum: 10n ** 9n, initialCash: UNIT };
 /** A coin toss that pays 1.9 times: one step, one casino bet. */
-const coin = {
-  root: 'flip',
-  nodes: [
-    {
-      id: 'flip',
-      kind: 'decision' as const,
-      actions: [
-        {
-          id: 'toss',
-          outcomes: [
-            { next: 'heads', probability: fraction(1n, 2n) },
-            { next: 'tails', probability: fraction(1n, 2n) },
-          ],
-        },
-      ],
-    },
-    { id: 'heads', kind: 'terminal' as const, payout: 19n * UNIT },
-    { id: 'tails', kind: 'terminal' as const, payout: 0n },
-  ],
-};
-const plan = compileGame(coin, { ...options, initialCash: 10n * UNIT });
+const toss = coin({ action: 'toss', payout: () => 19n * UNIT })({ stake: '0' });
+const plan = compileGame(toss, { ...options, initialCash: 10n * UNIT });
 
 test('state labels with equal funding retain distinct subsequent choices', () => {
   const game = {
@@ -100,15 +81,14 @@ test("a step's branch is drawn by the page's randomness before anything is built
   assert.throws(() => resolveTransition(step), /64-bit outcome/);
   assert.throws(() => resolveTransition(step, OUTCOME_SPACE), /64-bit outcome/);
   assert.throws(() => resolveTransition({ ...step }, 0n), /returned by prepareAction/);
-  assert.throws(() => simulateServerResult(step, () => -1n), /RNG result/);
   // A live bankroll the casino's rule would refuse stops the step before anything is signed.
   const live = 7n * options.bankrollFloor,
-    refusing = compileGame(coin, {
+    refusing = compileGame(toss, {
       ...options,
       initialCash: 10n * UNIT,
       admits: (b, bet) => b !== live && admits(b, bet),
     });
-  const ready = { nodeId: 'flip', cash: refusing.initialCash, bankroll: refusing.conservativeBankroll };
+  const ready = { nodeId: refusing.root, cash: refusing.initialCash, bankroll: refusing.conservativeBankroll };
   assert.equal(prepareAction(refusing, ready, 'toss', seededRandom(1n)).kind, 'casino-bet');
   assert.throws(
     () => prepareAction(refusing, { ...ready, bankroll: live }, 'toss', seededRandom(1n)),
@@ -191,7 +171,7 @@ test('malformed, cyclic, and underfunded game graphs fail before any execution',
     /below required/,
   );
   assert.throws(() => getNode({ ...plan }, plan.root), /returned by compileGame/);
-  assert.throws(() => compileGame(coin, { ...options, admits: undefined as any }), /admission rule is required/);
+  assert.throws(() => compileGame(toss, { ...options, admits: undefined as any }), /admission rule is required/);
   assert(Object.isFrozen(plan) && Object.isFrozen(plan.nodes));
 });
 

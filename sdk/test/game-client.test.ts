@@ -1,34 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
+import { bridgeTo, gameWallet, memoryStore } from '@hookedin/play/testing/game-wallet.ts';
 import { MemoryStore } from '../../client/storage.ts';
 import { decryptBackup } from '../../client/backup.ts';
 import { rejectionCheckpoint, STATE_TYPES, checkpointEvidence } from '../../protocol/protocol.ts';
-import { validateRequest } from '../../client/bridge.ts';
 import { RoundClient } from '../src/round.ts';
-import type { RoundStore } from '../src/round.ts';
 import type { GameReceipt } from '../../protocol/game-types.ts';
-import { createMines } from '../src/engine/index.ts';
+import { createMines, fraction } from '../src/engine/index.ts';
+import { coin } from './coin.ts';
 
 const odds = { chance: '9000000000000000000', prize: '20' };
 const terms = (id = 'op-0') => ({ id, stake: '10', ...odds });
-/** A game's own origin storage, shared by every RoundClient of one test like localStorage would be. */
-const memoryStore = (): RoundStore & { map: Map<string, string> } => {
-  const map = new Map<string, string>();
-  return {
-    map,
-    get: key => map.get(key) ?? null,
-    set: (key, value) => void map.set(key, value),
-    remove: key => void map.delete(key),
-  };
-};
-/** What the SDK gives a round: the fixture's bridge to wallet `w`, with `extra` answering some requests first. */
-const bridgeFor = (
-  f: Awaited<ReturnType<typeof gameWallet>>,
-  w: any,
-  extra: (method: string, params: any) => Promise<unknown> | undefined = () => undefined,
-) => {
-  const bridge = f.bridgeFor(w);
+/** What the SDK gives a round: the bridge to wallet `w`, with `extra` answering some requests first. */
+const bridgeFor = (w: any, extra: (method: string, params: any) => Promise<unknown> | undefined = () => undefined) => {
+  const bridge = bridgeTo(w);
   return {
     ...bridge,
     call: async (method: string, params: any = {}) => (await extra(method, params)) ?? bridge.call(method, params),
@@ -91,115 +76,7 @@ test('verified gains and losses move the limit; exact retries by ID never charge
   assert.equal(f.settlements(), 21);
 });
 
-test("a developer bet carries its game's meta, and reaches the game settled once its developer paid and the wallet collected", async () => {
-  const f = await gameWallet(),
-    w = f.wallet;
-  w.openGame(f.identity());
-  await w.setGameLimit('1000');
-  const pushed: GameReceipt[] = [];
-  f.bridge.onReceipt(receipt => pushed.push(receipt));
-  const round = await f.developer.openRound(),
-    request = {
-      id: 'spin-1',
-      stake: '10',
-      group: round.id.slice(2),
-      meta: { seedHash: await f.developer.seedHash(round.id), pick: 'red' },
-    };
-  const placed = await w.gameDeveloperBet(request);
-  assert.match(placed.bet!, /^0x[0-9a-f]{64}$/);
-  assert.deepEqual(placed, {
-    id: 'spin-1',
-    kind: 'developer-bet',
-    status: 'open',
-    stake: '10',
-    meta: request.meta,
-    group: request.group,
-    bet: placed.bet,
-  });
-  assert.equal(w.gameLimit().balance, '990', 'the stake went to the developer');
-  assert.equal(f.bank(), 10n ** 12n + 10n, "into the developer's bank");
-  assert.deepEqual(await w.gameDeveloperBet(request), placed, 'asking again while it is open');
-  await assert.rejects(w.gameDeveloperBet({ ...request, stake: '20' }), /different intent/);
-  await assert.rejects(w.gameDeveloperBet({ ...request, meta: { pick: 'black' } }), /different intent/);
-  const other = await w.gameDeveloperBet({ ...request, id: 'spin-2' });
-  // The developer backs both with one casino bet of them together, whose meta names them, and which reveals the round.
-  const revealed = await f.developer.casinoBet({
-    round: round.id,
-    stake: '20',
-    chance: odds.chance,
-    prize: '40',
-    group: 'spin',
-    meta: { covered: [placed.bet!, other.bet!] },
-  });
-  assert.deepEqual(
-    [revealed.status, revealed.casinoBet?.accepted, revealed.casinoBet?.meta],
-    ['revealed', true, { covered: [placed.bet, other.bet] }],
-  );
-  const won = BigInt(revealed.outcome!) < 9000000000000000000n ? 20n : 0n;
-  await f.developer.settle([
-    { bet: placed.bet!, player: won, casino: 0n },
-    { bet: other.bet!, player: won, casino: 0n },
-  ]);
-  await w.collectPayouts();
-  const receipt = (await w.gameReceipt('spin-1'))!;
-  assert.deepEqual(
-    [receipt.status, receipt.payout, receipt.outcome],
-    ['settled', String(won), undefined],
-    "a developer bet rests on its developer's word",
-  );
-  assert.deepEqual(
-    pushed.map(r => `${r.id} ${r.status}`).sort(),
-    ['spin-1 settled', 'spin-2 settled'],
-    'the wallet sends the game every bet it collected',
-  );
-  assert.equal(w.gameLimit().balance, String(980n + 2n * won), "what they were paid is the game's");
-  // The wallet's own casino bets are unaffected.
-  assert.equal((await w.gameCasinoBet(terms('own'))).status, 'settled');
-});
-
-test("the developer's casino bet is taken against the bankroll whole, and one it cannot back moves no money", async () => {
-  const f = await gameWallet({ bankroll: 200000n }),
-    w = f.wallet;
-  w.openGame(f.identity());
-  await w.setGameLimit('1000');
-  const round = await f.developer.openRound(),
-    // Pocket 3 of 37 pays 36 times: a net 3,500 wei a win, which this bankroll can back once and not twice.
-    pocket = { chance: String((1n << 64n) / 37n), prize: '3600' };
-  const first = await w.gameDeveloperBet({ id: 'first', stake: '100', meta: { pocket: 3 } }),
-    second = await w.gameDeveloperBet({ id: 'second', stake: '100', meta: { pocket: 3 } });
-  assert.deepEqual(
-    [first.status, second.status],
-    ['open', 'open'],
-    'the developer takes developer bets: the bankroll takes only its casino bets',
-  );
-  const bank = f.bank();
-  const both = await f.developer.casinoBet({
-    round: round.id,
-    stake: '200',
-    chance: pocket.chance,
-    prize: '7200',
-    group: 'spin',
-    meta: {},
-  });
-  assert.deepEqual(
-    [both.status, both.casinoBet!.accepted],
-    ['revealed', false],
-    'the same pocket twice is more than this bankroll backs: declined, and revealed all the same',
-  );
-  assert.equal(f.bank(), bank, 'and it moved no money');
-  await f.developer.settle([
-    { bet: first.bet!, player: 100n, casino: 0n },
-    { bet: second.bet!, player: 100n, casino: 0n },
-  ]);
-  await w.collectPayouts();
-  assert.equal(w.gameLimit().balance, '1000');
-  // One of them alone, on a round of its own, is a bet the bankroll backs.
-  const next = await f.developer.openRound();
-  const taken = await f.developer.casinoBet({ round: next.id, stake: '100', ...pocket, group: 'spin', meta: {} });
-  assert.equal(taken.casinoBet!.accepted, true);
-});
-
-test('a developer bet is paid what its developer signs, and a game published nowhere takes none', async () => {
+test("a developer bet keeps its game's meta, is paid only what its developer signed, and a game published nowhere takes none", async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
@@ -208,11 +85,13 @@ test('a developer bet is paid what its developer signs, and a game published now
   f.bridge.onReceipt(receipt => pushed.push(receipt));
   const request = { id: 'ride', stake: '10', meta: { cashout: '2.5' }, group: 'round-7' };
   const placed = await w.gameDeveloperBet(request);
-  assert.deepEqual(
-    [placed.status, placed.group, placed.meta, placed.payout],
-    ['open', 'round-7', { cashout: '2.5' }, undefined],
-  );
+  assert.match(placed.bet!, /^0x[0-9a-f]{64}$/);
+  assert.deepEqual(placed, { ...request, kind: 'developer-bet', status: 'open', bet: placed.bet });
   assert.equal(w.gameLimit().balance, '990');
+  assert.equal(f.bank(), 10n ** 12n + 10n, "the stake went into the developer's bank");
+  assert.deepEqual(await w.gameDeveloperBet(request), placed, 'asking again while it is open');
+  await assert.rejects(w.gameDeveloperBet({ ...request, stake: '20' }), /different intent/);
+  await assert.rejects(w.gameDeveloperBet({ ...request, meta: { cashout: '3' } }), /different intent/);
   await f.developer.settle([{ bet: placed.bet!, player: 25n, casino: 1n }]);
   // A settlement its developer did not sign is refused before the wallet signs anything for it.
   const api = w.api.bind(w);
@@ -388,7 +267,7 @@ test('a game learns how its operations ended and never whose they were', async (
     'pay payment settled ',
   ]);
 });
-test('a lost reply is recovered after reload without any game state in the wallet', async () => {
+test('a lost reply is recovered by its ID after a reload', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
@@ -451,7 +330,7 @@ test('saved round state belongs to one player', async () => {
   w.openGame(f.identity('a'));
   const store = memoryStore();
   const keyFor = async (wallet: any) => {
-    const round = new RoundClient(bridgeFor(f, wallet), createMines, undefined, { store, name: 'mines' });
+    const round = new RoundClient(bridgeFor(wallet), createMines, undefined, { store, name: 'mines' });
     await round.restore();
     return round['storageKey'];
   };
@@ -462,9 +341,9 @@ test('saved round state belongs to one player', async () => {
   assert.ok(w.uname && mine.includes(w.uname.toLowerCase()), mine);
   // Another account is somewhere else entirely.
   const other = {
-    ...bridgeFor(f, w),
+    ...bridgeFor(w),
     call: async (method: string, params: any = {}) => {
-      const value = await bridgeFor(f, w).call(method, params);
+      const value = await bridgeFor(w).call(method, params);
       return method === 'wallet.info' ? { ...value, uname: 'somebodyelse', alias: null } : value;
     },
   };
@@ -473,9 +352,9 @@ test('saved round state belongs to one player', async () => {
   assert.notEqual(theirs['storageKey'], mine);
   // An alias is what they are called today; it never moves what they saved.
   const renamed = {
-    ...bridgeFor(f, w),
+    ...bridgeFor(w),
     call: async (method: string, params: any = {}) => {
-      const value = await bridgeFor(f, w).call(method, params);
+      const value = await bridgeFor(w).call(method, params);
       return method === 'wallet.info' ? { ...value, alias: 'Renamed' } : value;
     },
   };
@@ -484,48 +363,6 @@ test('saved round state belongs to one player', async () => {
   assert.equal(after['storageKey'], mine);
 });
 
-test('the bridge validates game requests without revisions or checkpoints', () => {
-  const round = '0x' + '1'.repeat(64),
-    valid = (method: string, params: any) => validateRequest({ hookedin: true, id: 1, method, params }).method;
-  for (const params of [
-    { ...terms(), developer: '0x1' },
-    { ...terms(), seed: '0x00' },
-    { ...terms(), revision: 0 },
-    { ...terms(), data: {} },
-    { ...terms(), chance: String(1n << 64n) },
-    { ...terms(), odds: '5' },
-    { ...terms(), payouts: [] },
-    { ...terms(), group: '' },
-    { ...terms(), group: 'x'.repeat(65) },
-    { ...terms(), round },
-    { ...terms(), deadline: 1 },
-    { id: 'r', stake: '10', meta: { pick: 'home' } },
-  ])
-    assert.throws(() => valid('game.casinoBet', params));
-  for (const params of [
-    terms(),
-    { ...terms(), deadline: 1 },
-    { ...terms(), round: '0x1' },
-    { ...terms(), round, deadline: 1 },
-    { ...terms(), meta: {} },
-    { id: 'r', stake: '10' },
-    { id: 'r', stake: '10', terms: {} },
-    { id: 'r', stake: '10', meta: {}, deadline: 1 },
-    { id: 'r', stake: '10', meta: [] },
-    { id: 'r', stake: '10', meta: {}, round },
-  ])
-    assert.throws(() => valid('game.developerBet', params));
-  assert.equal(valid('game.casinoBet', terms()), 'game.casinoBet');
-  assert.equal(valid('game.casinoBet', { ...terms(), group: 'hand-1' }), 'game.casinoBet');
-  assert.equal(
-    valid('game.developerBet', { id: 'r', stake: '10', meta: { pick: 'home' }, group: 'match-9' }),
-    'game.developerBet',
-  );
-  for (const id of ['1', -1, 1.5])
-    assert.throws(() => validateRequest({ hookedin: true, id, method: 'wallet.info' }), /request ID/);
-  assert.throws(() => validateRequest({ hookedin: true, id: 1, method: 'game.save', params: {} }), /not available/);
-  assert.throws(() => validateRequest({ hookedin: true, id: 1, method: 'wallet.sign', params: {} }));
-});
 for (const boundary of ['request', 'settlement'])
   test('failed ' + boundary + ' persistence stops spending and restores without duplicate settlement', async () => {
     const f = await gameWallet(),
@@ -555,7 +392,7 @@ test('mines runs its own rules through the wallet bridge and its own storage, in
     w = f.wallet;
   w.openGame(f.identity(name));
   await w.setGameLimit(allocation);
-  const bridge = bridgeFor(f, w),
+  const bridge = bridgeFor(w),
     store = memoryStore();
   const graph = () => createMines({ tiles: 5, mines: 1, cashouts: [1200n, 1560n, 2280n] });
   const stake = '1000';
@@ -584,7 +421,7 @@ test('mines runs its own rules through the wallet bridge and its own storage, in
   assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
 });
 
-test('encrypted backups carry no game state and restore the channel evidence alone', async () => {
+test('an encrypted backup restores the channel and its recent receipts', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('a'));
@@ -595,8 +432,6 @@ test('encrypted backups carry no game state and restore the channel evidence alo
     backup = await w.encryptedBackup(password);
   const contents = await decryptBackup(backup, password);
   assert.equal(contents.record.history.length, 100);
-  assert.equal('gameReceipts' in contents, false);
-  assert.doesNotMatch(JSON.stringify(contents.record.channels), /games/);
   const restored = await f.reload();
   restored.storage = new MemoryStore();
   restored.channels = {};
@@ -613,7 +448,7 @@ test('encrypted backups carry no game state and restore the channel evidence alo
   assert.equal(f.settlements(), 103);
 });
 
-test('importing newer financial evidence needs no game bookkeeping', async () => {
+test('importing newer evidence brings the channel up to date', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
@@ -635,14 +470,13 @@ test('importing newer financial evidence needs no game bookkeeping', async () =>
 });
 
 test('additional game wagers debit the limit once and recover their cards and costs after a lost reply', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('extra-cash'));
   await w.setGameLimit('1000');
   let loseReply = true,
     settlements = 0;
-  const bridge = bridgeFor(f, w, async (method, params) => {
+  const bridge = bridgeFor(w, async (method, params) => {
     if (method === 'game.requestFunds') return { funded: false, amount: null, ...w.gameLimit() };
     if (method !== 'game.casinoBet' && method !== 'game.payment') return undefined;
     const receipt = method === 'game.casinoBet' ? await w.gameCasinoBet(params) : await w.gamePayment(params);
@@ -653,26 +487,11 @@ test('additional game wagers debit the limit once and recover their cards and co
     }
     return receipt;
   });
-  const graph = () => ({
-    root: 'start',
-    nodes: [
-      {
-        id: 'start',
-        kind: 'decision' as const,
-        actions: [
-          {
-            id: 'double',
-            additionalCash: 1000n,
-            outcomes: [
-              { next: 'win', probability: fraction(1n, 2n), label: 'player:0:10:0' },
-              { next: 'loss', probability: fraction(1n, 2n), label: 'player:0:5:3' },
-            ],
-          },
-        ],
-      },
-      { id: 'win', kind: 'terminal' as const, payout: 3000n },
-      { id: 'loss', kind: 'terminal' as const, payout: 0n },
-    ],
+  const graph = coin({
+    action: 'double',
+    additionalCash: 1000n,
+    payout: () => 3000n,
+    labels: ['player:0:10:0', 'player:0:5:3'],
   });
   const store = memoryStore();
   let round = new RoundClient(bridge, graph, undefined, { store });
@@ -695,7 +514,6 @@ test('additional game wagers debit the limit once and recover their cards and co
 });
 
 test('the round helper asks the wallet for exactly the shortfall and stops when the player declines', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('shortfall'));
@@ -703,33 +521,13 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
   let approve = true;
   // The player authorizes only the stated minimum, not the suggested session amount.
   const minimum = (params: any) => String(BigInt(params.amount) - 4000n);
-  const bridge = bridgeFor(f, w, async (method, params) => {
+  const bridge = bridgeFor(w, async (method, params) => {
     if (method !== 'game.requestFunds') return undefined;
     requests.push(params);
     if (approve) await w.setGameLimit(String(BigInt(w.gameLimit().balance) + BigInt(minimum(params))));
     return { funded: approve, amount: approve ? params.amount : null, ...w.gameLimit() };
   });
-  const graph = () => ({
-    root: 'start',
-    nodes: [
-      {
-        id: 'start',
-        kind: 'decision' as const,
-        actions: [
-          {
-            id: 'double',
-            additionalCash: 1000n,
-            outcomes: [
-              { next: 'win', probability: fraction(1n, 2n) },
-              { next: 'loss', probability: fraction(1n, 2n) },
-            ],
-          },
-        ],
-      },
-      { id: 'win', kind: 'terminal' as const, payout: 3000n },
-      { id: 'loss', kind: 'terminal' as const, payout: 0n },
-    ],
-  });
+  const graph = coin({ action: 'double', additionalCash: 1000n, payout: () => 3000n });
   const round = new RoundClient(bridge, graph, undefined, { store: memoryStore() });
   await round.start({ stake: '1000' });
   assert.deepEqual(requests, [{ amount: '5000' }], 'shortfall plus four stakes');
@@ -744,104 +542,24 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
   assert.equal(requests.length, 3);
 });
 
-test('every sentence the round helper writes names what the wallet plays with, asked again after a greeting that failed', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
-  const requests: any[] = [];
-  let limit = '0',
-    greetings = 0;
-  const bridge = {
-    call: async (method: string, params: any = {}) => {
-      if (method === 'game.requestFunds') {
-        requests.push(params);
-        return { funded: false, amount: null, balance: limit, pending: false };
-      }
-      if (method === 'wallet.hello' && ++greetings === 1) throw new Error('The wallet did not respond.');
-      return { bankroll: '5000000000000000', chainId: '1', asset: { symbol: 'ETH', decimals: 18 } };
-    },
-    balance: async () => ({ balance: limit, pending: false }),
-  };
-  const round = new RoundClient(
-    bridge,
-    (setup: any) => ({
-      root: 'start',
-      nodes: [
-        {
-          id: 'start',
-          kind: 'decision' as const,
-          actions: [
-            {
-              id: 'roll',
-              outcomes: [
-                { next: 'win', probability: fraction(1n, 2n) },
-                { next: 'loss', probability: fraction(1n, 2n) },
-              ],
-            },
-          ],
-        },
-        { id: 'win', kind: 'terminal' as const, payout: (BigInt(setup.stake) * 19n) / 10n },
-        { id: 'loss', kind: 'terminal' as const, payout: 0n },
-      ],
-    }),
-    undefined,
-    { store: memoryStore() },
-  );
-  await assert.rejects(round.restore(), /did not respond/);
-  await assert.rejects(round.start({ stake: '1000' }), /Add enough money/);
-  assert.deepEqual(requests.at(-1), { amount: '5000' }, 'the shortfall plus four stakes, and no words of its own');
-  limit = '100000000000000000';
-  await assert.rejects(round.start({ stake: '5000000000000000' }), /back about 0\.0025 ETH of payouts/);
-});
-
 test('a stake the casino cannot back fails with a plain capacity message, not a pricing error', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   const bridge = {
-    call: async () => ({
-      bankroll: '5000000000000000',
-      chainId: '1',
-      asset: { symbol: 'ETH', decimals: 18 },
-    }),
+    call: async () => ({ bankroll: '5000000000000000', chainId: '1' }),
     balance: async () => ({ balance: '100000000000000000', pending: false }),
   };
-  const round = new RoundClient(
-    bridge,
-    (setup: any) => ({
-      root: 'start',
-      nodes: [
-        {
-          id: 'start',
-          kind: 'decision',
-          actions: [
-            {
-              id: 'roll',
-              outcomes: [
-                { next: 'win', probability: fraction(1n, 2n) },
-                { next: 'loss', probability: fraction(1n, 2n) },
-              ],
-            },
-          ],
-        },
-        { id: 'win', kind: 'terminal', payout: (BigInt(setup.stake) * 19n) / 10n },
-        { id: 'loss', kind: 'terminal', payout: 0n },
-      ],
-    }),
-    undefined,
-    { store: memoryStore() },
-  );
+  const round = new RoundClient(bridge, coin({ payout: stake => (stake * 19n) / 10n }), undefined, {
+    store: memoryStore(),
+  });
   await assert.rejects(round.start({ stake: '5000000000000000' }), /back about 0\.0025 ETH of payouts/);
   await assert.rejects(round.start({ stake: '5000000000000000' }), error => !/initialCash/.test(String(error)));
   assert.equal((await round.start({ stake: '1000000000000' })).terminal, false);
 });
 
 test('a supported plan is reused across rounds and recomputed when the bankroll falls below its bound', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   let bankroll = 1000000000n,
     builds = 0;
   const bridge = {
-    call: async () => ({
-      bankroll: String(bankroll),
-      chainId: '1',
-      asset: { symbol: 'ETH', decimals: 18 },
-    }),
+    call: async () => ({ bankroll: String(bankroll), chainId: '1' }),
     balance: async () => ({ balance: '10000', pending: false }),
   };
   const round = new RoundClient(
@@ -876,7 +594,6 @@ test('a supported plan is reused across rounds and recomputed when the bankroll 
 });
 
 test('a rejected game action survives a lost reply and reload without resampling or charging', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('rejection'));
@@ -905,32 +622,13 @@ test('a rejected game action survives a lost reply and reload without resampling
     }
     return api(url, body);
   };
-  const bridge = bridgeFor(f, w, async (method, params) => {
+  const bridge = bridgeFor(w, async (method, params) => {
     if (method !== 'game.casinoBet') return undefined;
     const receipt = await w.gameCasinoBet(params);
     if (receipt.status === 'rejected') throw new Error('reply lost');
     return receipt;
   });
-  const graph = () => ({
-    root: 'start',
-    nodes: [
-      {
-        id: 'start',
-        kind: 'decision' as const,
-        actions: [
-          {
-            id: 'roll',
-            outcomes: [
-              { next: 'win', probability: fraction(1n, 2n), label: 'win' },
-              { next: 'loss', probability: fraction(1n, 2n), label: 'loss' },
-            ],
-          },
-        ],
-      },
-      { id: 'win', kind: 'terminal' as const, payout: 1900n },
-      { id: 'loss', kind: 'terminal' as const, payout: 0n },
-    ],
-  });
+  const graph = coin({ payout: () => 1900n, labels: ['win', 'loss'] });
   const store = memoryStore();
   let round = new RoundClient(bridge, graph, undefined, { store });
   await round.start({ stake: '1000' });
@@ -963,8 +661,8 @@ test('the state carries the setup its round was started with, across a reload', 
   const store = memoryStore(),
     graph = (setup: any) => createMines({ tiles: setup.tiles, mines: 1, cashouts: [1200n, 1560n, 2280n] }),
     setup = { stake: '1000', tiles: 5 };
-  assert.deepEqual((await new RoundClient(bridgeFor(f, w), graph, undefined, { store }).start(setup)).setup, setup);
-  const reloaded = new RoundClient(bridgeFor(f, w), graph, undefined, { store });
+  assert.deepEqual((await new RoundClient(bridgeFor(w), graph, undefined, { store }).start(setup)).setup, setup);
+  const reloaded = new RoundClient(bridgeFor(w), graph, undefined, { store });
   assert.deepEqual((await reloaded.restore())!.setup, setup);
 });
 
@@ -975,13 +673,13 @@ test('a round saved with a setup the rules refuse is let go once, and the next r
   await w.setGameLimit('10000');
   const store = memoryStore(),
     graph = (setup: any) => createMines({ tiles: setup.tiles, mines: 1, cashouts: [1200n, 1560n, 2280n] });
-  await new RoundClient(bridgeFor(f, w), graph, undefined, { store }).start({ stake: '1000', tiles: 5 });
+  await new RoundClient(bridgeFor(w), graph, undefined, { store }).start({ stake: '1000', tiles: 5 });
   // The game's rules change so that the saved setup no longer builds a graph.
   const stricter = (setup: any) => {
     if (setup.mines === undefined) throw new RangeError('mines requires integer 0 < mines < tiles');
     return graph(setup);
   };
-  const reloaded = new RoundClient(bridgeFor(f, w), stricter, undefined, { store });
+  const reloaded = new RoundClient(bridgeFor(w), stricter, undefined, { store });
   await assert.rejects(reloaded.restore(), /rules this game does not play/);
   assert.equal(await reloaded.restore(), null);
   assert.deepEqual((await reloaded.start({ stake: '1000', tiles: 5, mines: 1 })).setup, {
@@ -992,13 +690,12 @@ test('a round saved with a setup the rules refuse is let go once, and the next r
 });
 
 test('an action sent again after its reply was lost is that step, not another from where it led', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('retry'));
   await w.setGameLimit('10000');
   let lose = true;
-  const bridge = bridgeFor(f, w, async (method, params) => {
+  const bridge = bridgeFor(w, async (method, params) => {
     if (method !== 'game.casinoBet') return undefined;
     const receipt = await w.gameCasinoBet(params);
     if (lose) {
@@ -1052,34 +749,13 @@ test('an action sent again after its reply was lost is that step, not another fr
 });
 
 test('a button pressed twice plays one step, and the second press bets nothing', async () => {
-  const { fraction } = await import('../src/engine/index.ts');
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('twice'));
   await w.setGameLimit('10000');
-  const half = fraction(1n, 2n);
-  const graph = () => ({
-    root: 'start',
-    nodes: [
-      {
-        id: 'start',
-        kind: 'decision' as const,
-        actions: [
-          {
-            id: 'roll',
-            outcomes: [
-              { next: 'won', probability: half },
-              { next: 'lost', probability: half },
-            ],
-          },
-        ],
-      },
-      { id: 'won', kind: 'terminal' as const, payout: 1900n },
-      { id: 'lost', kind: 'terminal' as const, payout: 0n },
-    ],
-  });
+  const graph = coin({ payout: () => 1900n });
   // The wallet's bridge answers a game's requests one at a time, in the order asked.
-  const bridge = f.bridgeFor(w);
+  const bridge = bridgeTo(w);
   let turn: Promise<unknown> = Promise.resolve();
   const inTurn = {
     ...bridge,

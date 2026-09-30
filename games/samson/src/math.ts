@@ -14,8 +14,8 @@ import type { GameGraph, RandomBelow } from '@hookedin/play/sdk/engine';
 
 /** L lion, P pillars, S shears, T torch, A K Q J; W/2/3 jawbone wilds (×1 ×2 ×3); H honeycomb scatter. */
 export const PAYING = 'LPSTAKQJ';
-export const WILDS: Readonly<Record<string, number>> = { W: 1, '2': 2, '3': 3 };
-export const SCATTER = 'H';
+const WILDS: Readonly<Record<string, number>> = { W: 1, '2': 2, '3': 3 };
+const SCATTER = 'H';
 export const ROWS = 3;
 /** Pay per way for three, four and five adjacent reels from the left, in whole stakes. */
 export const PAYS: Readonly<Record<string, readonly [number, number, number]>> = {
@@ -229,7 +229,7 @@ export function sampleStops(machine: Machine, key: number, random: RandomBelow):
 }
 
 const PREFIX = 'samson:';
-export const outcomeNode = (machine: Machine, key: number) => `${PREFIX}${machine.name}:${key}`;
+const outcomeNode = (machine: Machine, key: number) => `${PREFIX}${machine.name}:${key}`;
 /** The machine and outcome key of a terminal node, or null for any other node. */
 export function nodeOutcome(nodeId: string): { machine: Machine; key: number } | null {
   const [, name, key] = nodeId.startsWith(PREFIX) ? nodeId.split(':') : [];

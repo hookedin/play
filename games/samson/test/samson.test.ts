@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { add, compileGame, fraction, multiply } from '@hookedin/play/sdk/engine';
 import type { Rational } from '@hookedin/play/sdk/engine';
-import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
-import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
+import { admits } from '@hookedin/play/sdk/admits';
+import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import {
   BONUS_SPINS,
@@ -149,33 +149,14 @@ test('spins settle through the wallet bridge in both modes and survive a reload'
     w = f.wallet;
   w.openGame(f.identity('samson'));
   await w.setGameLimit('100000');
-  const map = new Map<string, string>();
-  const store = {
-    get: (k: string) => map.get(k) ?? null,
-    set: (k: string, v: string) => void map.set(k, v),
-    remove: (k: string) => void map.delete(k),
-  };
-  const bridge = {
-    balance: async () => w.gameLimit(),
-    // Exactly what the wallet answers with, so a game's view of the player is the real one.
-    call: async (method: string, params: any = {}) =>
-      method === 'wallet.hello'
-        ? w.gameHello()
-        : method === 'wallet.info'
-          ? { ...w.gameInfo(), bankroll: '1000000000000' }
-          : method === 'game.receipt'
-            ? w.gameReceipt(params.id)
-            : method === 'game.casinoBet'
-              ? w.gameCasinoBet(params)
-              : w.gamePayment(params),
-  };
-  let round = new RoundClient(bridge, slotGraph, undefined, { store, name: 'samson' });
+  const store = memoryStore();
+  let round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
   const ids = new Set<string>();
   let expected = await w.balance();
   for (let spin = 0; spin < 12; spin++) {
     const mode = spin % 3 === 2 ? 'bonus' : 'base';
     let state = await round.start({ stake: '1000', mode });
-    if (spin === 5) round = new RoundClient(bridge, slotGraph, undefined, { store, name: 'samson' });
+    if (spin === 5) round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
     state = await round.action('spin');
     assert.equal(state.terminal, true);
     const outcome = nodeOutcome(state.nodeId)!;
@@ -191,38 +172,20 @@ test('spins settle through the wallet bridge in both modes and survive a reload'
   assert.equal(nodeOutcome('dice:win'), null);
 });
 
-const GRAPHS = (stake: bigint) => ['base', 'bonus'].map(mode => slotGraph({ stake: String(stake), mode }));
-
-/** Every step this game can ever place, at every stake it takes: the floor holds for each one, so it
- * is checked against all of them and not against a sample. */
-/** The least any one bet of this game pays back, in millionths of its stake, when the casino's bankroll is far above
- * the stake. The bets for the largest pays carry more of the machine's edge than the rest, so the jackpot's pays back
- * less than the machine does. The game publishes no such figure — a promise nobody can verify is worth nothing,
- * because no game bounds how often it wagers what it holds — but its own table is held to it here, and every player
- * sees the measured return of each bet they actually signed. */
+/** The least any bet of this game pays back, in millionths of its stake, when the casino's bankroll is far above the
+ * stake. The bets for the largest pays carry more of the machine's edge than the rest, so the jackpot's pays back less
+ * than the machine does. */
 const FLOOR = 951000n;
 
-test('every bet this game can place pays back at least the floor it is built to', t => {
-  let worst = RETURN_SCALE;
+test('every bet this game can place pays back at least the floor it is built to', () => {
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
-    for (const graph of GRAPHS(stake)) {
-      const plan = compileGame(graph, {
+    for (const mode of ['base', 'bonus']) {
+      const plan = compileGame(slotGraph({ stake: String(stake), mode }), {
         admits,
         bankrollFloor: 10n ** 9n * stake,
         cashQuantum: stake / 10n ** 9n || 1n,
         initialCash: stake,
       });
-      for (const node of plan.nodes) {
-        if (node.kind !== 'decision') continue;
-        for (const action of node.actions) {
-          const step = action.transition;
-          // Every step is a bet that pays something back: this game never charges for nothing.
-          assert.ok(step.kind === 'casino-bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
-          if (step.kind !== 'casino-bet') continue;
-          for (const branch of step.branches)
-            if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
-        }
-      }
+      assert.ok(worstReturn(plan) >= FLOOR, `a ${mode} bet pays back less than this game's floor`);
     }
-  assert.ok(worst >= FLOOR, `a bet pays back ${worst} millionths, below this game's floor`);
 });

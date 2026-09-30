@@ -10,7 +10,6 @@
     "node": ">=24.4"
   },
   "exports": {
-    "./sdk": "./sdk/src/index.ts",
     "./sdk/engine": "./sdk/src/engine/index.ts",
     "./sdk/*": "./sdk/src/*.ts",
     "./testing/game-wallet.ts": "./testing/game-wallet.ts"

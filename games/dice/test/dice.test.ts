@@ -1,19 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
+import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import { CHANCE_MAX, CHANCE_MIN, diceGraph } from '../src/rules.ts';
 import { compileGame } from '@hookedin/play/sdk/engine';
-import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
-
-const memoryStore = () => {
-  const map = new Map<string, string>();
-  return {
-    get: (key: string) => map.get(key) ?? null,
-    set: (key: string, value: string) => void map.set(key, value),
-    remove: (key: string) => void map.delete(key),
-  };
-};
+import { admits } from '@hookedin/play/sdk/admits';
 
 test('every roll on the slider returns 99% of the stake, to the last wei', () => {
   const stake = 10n ** 15n;
@@ -50,17 +41,7 @@ test('a roll settles through the real wallet and pays what the rules promise', a
     w = f.wallet;
   w.openGame(f.identity('dice'));
   await w.setGameLimit('200000');
-  const bridge = {
-    balance: async () => w.gameLimit(),
-    call: async (method: string, params: any = {}) => {
-      if (method === 'wallet.hello') return w.gameHello();
-      if (method === 'wallet.info') return { ...w.gameInfo(), bankroll: '1000000000000' };
-      if (method === 'game.receipt') return w.gameReceipt(params.id);
-      if (method === 'game.casinoBet') return w.gameCasinoBet(params);
-      throw new Error(`unexpected ${method}`);
-    },
-  };
-  const round = new RoundClient(bridge, diceGraph, undefined, { store: memoryStore(), name: 'dice' });
+  const round = new RoundClient(f.bridge, diceGraph, undefined, { store: memoryStore(), name: 'dice' });
   // Forty rolls at 49.50% all land on one side about once in 10^12 runs, so both outcomes are always seen.
   let wins = 0,
     losses = 0;
@@ -81,40 +62,18 @@ test('a roll settles through the real wallet and pays what the rules promise', a
   assert.ok(wins > 0 && losses > 0, `saw both outcomes (${wins}/${losses})`);
 });
 
-const GRAPHS = (stake: bigint) =>
-  [CHANCE_MIN, 1234, 3333, 5000, 6667, 9000 - 1, CHANCE_MAX].map(chanceBps =>
-    diceGraph({ stake: String(stake), chanceBps }),
-  );
-
-/** Every step this game can ever place, at every stake it takes: the floor holds for each one, so it
- * is checked against all of them and not against a sample. */
-/** The least any one bet of this game pays back, in millionths of its stake. The game publishes no
- * such figure — a promise nobody can verify is worth nothing, because no game bounds how often it
- * wagers what it holds — but its own table is held to it here, and every player sees the measured
- * return of each bet they actually signed. */
+/** The least any bet of this game pays back, in millionths of its stake. */
 const FLOOR = 989000n;
 
-test('every bet this game can place pays back at least the floor it is built to', t => {
-  let worst = RETURN_SCALE;
+test('every bet this game can place pays back at least the floor it is built to', () => {
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
-    for (const graph of GRAPHS(stake)) {
-      const plan = compileGame(graph, {
+    for (const chanceBps of [CHANCE_MIN, 1234, 3333, 5000, 6667, 9000 - 1, CHANCE_MAX]) {
+      const plan = compileGame(diceGraph({ stake: String(stake), chanceBps }), {
         admits,
         bankrollFloor: 10n ** 9n * stake,
         cashQuantum: stake / 10n ** 9n || 1n,
         initialCash: stake,
       });
-      for (const node of plan.nodes) {
-        if (node.kind !== 'decision') continue;
-        for (const action of node.actions) {
-          const step = action.transition;
-          // Every step is a bet that pays something back: this game never charges for nothing.
-          assert.ok(step.kind === 'casino-bet' || step.amount === 0n, `${node.id}/${action.id} charges for nothing`);
-          if (step.kind !== 'casino-bet') continue;
-          for (const branch of step.branches)
-            if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
-        }
-      }
+      assert.ok(worstReturn(plan) >= FLOOR, `a bet at ${chanceBps} pays back less than this game's floor`);
     }
-  assert.ok(worst >= FLOOR, `a bet pays back ${worst} millionths, below this game's floor`);
 });

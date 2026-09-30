@@ -31,10 +31,9 @@ let session: RoundState | null = null,
   busy = '',
   revealing = -1,
   ready = false,
-  connecting = true,
-  asset = 'ETH';
+  connecting = true;
 
-const amount = (wei: bigint | string) => `${HookedIn.formatAmount(wei, 8)} ${asset}`;
+const amount = (wei: bigint | string) => `${HookedIn.formatAmount(wei, 8)} ETH`;
 /** A multiplier to the hundredth, rounded down; whole from a thousand up. */
 function times({ n, d }: Rational) {
   const hundredths = (n * 100n) / d,
@@ -198,12 +197,7 @@ document.addEventListener('keydown', event => {
 
 async function connect() {
   try {
-    const startup = await HookedIn.initializeGame({
-      stakeInput: stake,
-      assetLabels: document.querySelectorAll('[data-asset]'),
-    });
-    bank.update(startup.state);
-    asset = startup.asset;
+    bank.update((await HookedIn.initializeGame({ stakeInput: stake })).state);
     // Ready before the round is restored: a round this page cannot finish is let go with a word, and the player
     // plays on.
     ready = true;

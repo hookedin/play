@@ -40,7 +40,7 @@ test('game allowances and complete stake amounts are readable on phones and tabl
         if (event.source !== iframe.contentWindow || !request.hookedin || !request.method) return;
         const result =
           request.method === 'wallet.hello'
-            ? { asset: { symbol: 'ETH', decimals: 18 }, methods: [], chainId: '31337', limits: {} }
+            ? { limits: {} }
             : request.method === 'wallet.info'
               ? {
                   uname: 'layout',

@@ -1,4 +1,4 @@
-/** Synthesized sound for the sample games: no audio files to host. The context starts on the player's first gesture. */
+/** Synthesized sound for a game's page: no audio files to host. The context starts on the player's first gesture. */
 export function createSynth(storageKey = 'hookedin:muted') {
   let context: AudioContext | null = null,
     master: GainNode | null = null,

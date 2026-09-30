@@ -1,16 +1,11 @@
-/** Optional sample-game library. This runs entirely inside the game's iframe. */
-import {
-  compileGameAsync,
-  fraction,
-  getNode,
-  landing,
-  loadFundedGame,
-  prepareAction,
-  rngFromBytes,
-} from './engine/index.ts';
-import type { CashClass, FundingTable, GameGraph, GamePlan } from './engine/index.ts';
+/** Plays a multi-step game as a sequence of casino bets through the wallet. It reaches `localStorage` only through its
+ * default store and `window` only in `watch`, so it runs in Node too. */
+import { fraction, getNode, loadFundedGame, prepareAction } from './engine/index.ts';
+import type { FundingTable, GameGraph, GamePlan } from './engine/index.ts';
+import { compileGameAsync, landing, rngFromBytes } from './engine/engine.ts';
+import type { CashClass } from './engine/transition.ts';
 import { admits } from './admits.ts';
-import { playerScope } from './wire.ts';
+import { formatAmount, playerScope } from './wire.ts';
 import type { GameLimit } from '../../protocol/game-types.ts';
 export interface RoundEvent {
   action: string;
@@ -24,7 +19,6 @@ export interface RoundState {
   nodeId: string;
   cash: string;
   contributed: string;
-  balance: string;
   terminal: boolean;
   actions: string[];
   actionCosts: Record<string, string>;
@@ -32,10 +26,9 @@ export interface RoundState {
   pending: boolean;
   settlement: any;
 }
-export type Bridge = (method: string, params?: any) => Promise<any>;
 /** What the helper needs from the SDK: requests, and the wallet's latest pushed limit. */
 export interface RoundBridge {
-  call: Bridge;
+  call: (method: string, params?: any) => Promise<any>;
   balance: () => Promise<GameLimit>;
 }
 /** Where a round lives between reloads: the game's own origin storage, keyed per game and per player. */
@@ -75,17 +68,13 @@ export class RoundClient {
   busy = false;
   /** Whoever follows the round's cash and busy state, such as the bank strip. */
   private listeners = new Set<() => void>();
-  private readonly call: Bridge;
+  private readonly call: RoundBridge['call'];
   private readonly balance: () => Promise<GameLimit>;
   private readonly graph: (setup: any) => GameGraph;
   private readonly funding?: FundingTable;
   private readonly store: RoundStore;
   /** Distinguishes games that share a host origin; the page path is unique per game on one host. */
-  readonly name: string;
-  /** What the wallet plays with, for the sentences this helper writes to the player. */
-  units = '';
-  /** What `wallet.hello` answered, once the wallet has answered it. */
-  private hello: any;
+  private readonly name: string;
   /** The graph built for each setup, and the hash of the rules it is played under, once each per page. */
   private graphs = new Map<string, { graph: GameGraph; rules: Promise<string> }>();
   constructor(
@@ -117,19 +106,6 @@ export class RoundClient {
   }
   private changed() {
     for (const listener of this.listeners) listener();
-  }
-  /** What the wallet plays with, asked for until the wallet has answered, so every sentence below names the right
-   * money. */
-  private async greet() {
-    this.hello ??= await this.call('wallet.hello');
-    this.units = this.hello?.asset?.symbol ?? '';
-    return this.hello;
-  }
-  /** An amount in what the wallet counts in: ETH, in units of 10^-18. */
-  private amount(units: bigint) {
-    const whole = units / 10n ** 18n,
-      fraction = (units % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '');
-    return `${whole}${fraction ? '.' + fraction : ''}${this.units ? ' ' + this.units : ''}`;
   }
   /** The graph this page builds for a setup, and the rules it is played under: the graph's hash. A round saved
    * under other rules is not one this page can finish. */
@@ -184,7 +160,7 @@ export class RoundClient {
   }
   /** Read the round as this origin's storage holds it. */
   private async load() {
-    const [info] = await Promise.all([this.call('wallet.info'), this.greet()]);
+    const info = await this.call('wallet.info');
     this.storageKey = `hookedin:round:${this.name}:${playerScope(info)}`;
     this.account = await this.balance();
     const saved = this.store.get(this.storageKey);
@@ -221,7 +197,6 @@ export class RoundClient {
       cash: this.data.cash,
       terminal: node.kind === 'terminal',
       contributed: this.data.contributed,
-      balance: this.account.balance,
       events: this.data.events,
       actionCosts: Object.fromEntries(
         node.kind === 'terminal' ? [] : node.actions.map(a => [a.id, String(a.additionalCash)]),
@@ -288,7 +263,7 @@ export class RoundClient {
     // Pricing fails when the casino cannot cover the round's payouts; say so in the player's terms.
     const capacity = () =>
       new Error(
-        `The casino can only back about ${this.amount(bankrollFloor)} of payouts right now. Lower your stake and try again.`,
+        `The casino can only back about ${formatAmount(bankrollFloor)} ETH of payouts right now. Lower your stake and try again.`,
       );
     if (!reusable)
       try {

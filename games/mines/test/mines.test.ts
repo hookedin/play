@@ -1,19 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';
+import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import { TILES, coveredPicks, minesGraph, multiplier, payout } from '../src/rules.ts';
 import { compileGame } from '@hookedin/play/sdk/engine';
-import { admits, betReturn, RETURN_SCALE } from '@hookedin/play/sdk/admits';
-
-const memoryStore = () => {
-  const map = new Map<string, string>();
-  return {
-    get: (key: string) => map.get(key) ?? null,
-    set: (key: string, value: string) => void map.set(key, value),
-    remove: (key: string) => void map.delete(key),
-  };
-};
+import { admits } from '@hookedin/play/sdk/admits';
 /** The ways to choose k of n, counted apart from the rules' own count. */
 const factorial = (n: number): bigint => (n < 2 ? 1n : BigInt(n) * factorial(n - 1));
 const choose = (n: number, k: number) => factorial(n) / (factorial(k) * factorial(n - k));
@@ -124,14 +115,11 @@ test('a round goes only as far as the casino covers at its stake', async () => {
   }
 });
 
-/** The least any one bet of this game pays back, in millionths of its stake: 99%, less at most a thousandth, what
- * rounding a cash-out down to the wei takes from a stake of 1000 wei. The game publishes no such figure — a promise
- * nobody can verify is worth nothing, because no game bounds how often it wagers what it holds — but its own table is
- * held to it here, and every player sees the measured return of each bet they actually signed. */
+/** The least any bet of this game pays back, in millionths of its stake: 99%, less at most a thousandth, what
+ * rounding a cash-out down to the wei takes from a stake of 1000 wei. */
 const FLOOR = 989000n;
 
 test('every bet this game can place pays back at least its floor, and a cash-out keeps the rest', () => {
-  let worst = RETURN_SCALE;
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
     for (const bankroll of [5000n * stake, 10n ** 6n * stake, 2n * 10n ** 9n * stake])
       for (let mines = 1; mines < TILES; mines++) {
@@ -144,15 +132,11 @@ test('every bet this game can place pays back at least its floor, and a cash-out
           cashQuantum: stake / 10n ** 9n || 1n,
           initialCash: stake,
         });
+        assert.ok(worstReturn(plan) >= FLOOR, `a bet among ${mines} mines pays back less than this game's floor`);
         for (const node of plan.nodes) {
           if (node.kind !== 'decision') continue;
-          for (const action of node.actions) {
-            const step = action.transition;
-            if (step.kind === 'casino-bet') {
-              for (const branch of step.branches)
-                if (branch.kind === 'bet' && betReturn(branch.bet) < worst) worst = betReturn(branch.bet);
-              continue;
-            }
+          for (const { transition: step } of node.actions) {
+            if (step.kind === 'casino-bet') continue;
             // A state holds a little more than its cash-out: what the next pick needs beyond fair odds for the
             // casino to take it. Cashing out gives that back, never a 99th of what the cash-out pays.
             const cashout = payout(stake, mines, Number(node.id.split(':')[2]));
@@ -160,5 +144,4 @@ test('every bet this game can place pays back at least its floor, and a cash-out
           }
         }
       }
-  assert.ok(worst >= FLOOR, `a bet pays back ${worst} millionths, below this game's floor`);
 });

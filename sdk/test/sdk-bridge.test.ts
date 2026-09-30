@@ -9,29 +9,21 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
   try {
     const { HookedIn, HookedInError } = await import('../src/sdk.ts');
     const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
-    // The page greets the wallet as it loads. No balance reaches the game until the wallet answers,
-    // but an amount can be read and written meanwhile: ETH counts in units of 10^-18.
+    // The page greets the wallet as it loads, and a balance the wallet pushes reaches the game at once.
     assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
-    assert.equal(HookedIn.formatAmount('1500000000000000000'), '1.5');
-    assert.equal(HookedIn.parseAmount('1.5'), '1500000000000000000');
     const early: any[] = [];
     const stopEarly = HookedIn.onBalance(balance => early.push(balance));
     deliver(parent, { hookedin: true, event: 'game.balance', balance: '3', pending: false });
-    assert.deepEqual(early, []);
-    const hello = {
-      methods: ['wallet.hello'],
-      asset: { symbol: 'USDX', decimals: 6 },
-      chainId: '31337',
-    };
+    assert.deepEqual(early, [{ balance: '3', pending: false }]);
+    stopEarly();
+    const hello = { limits: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
-    assert.deepEqual(early, [{ balance: '3', pending: false }], 'the held balance follows the greeting');
-    stopEarly();
-    // Once the wallet has said what it plays with, amounts follow its own decimals.
-    assert.equal(HookedIn.parseAmount('1.5'), '1500000');
-    assert.equal(HookedIn.formatAmount('1500000'), '1.5');
+    // Amounts are ETH, counted in wei.
+    assert.equal(HookedIn.parseAmount('1.5'), '1500000000000000000');
+    assert.equal(HookedIn.formatAmount('1500000000000000000'), '1.5');
     assert.equal(HookedIn.formatAmount('1', 2), '<0.01');
-    assert.throws(() => HookedIn.parseAmount('0.0000001'), /6 decimal places/);
+    assert.throws(() => HookedIn.parseAmount('0.0000000000000000001'), /18 decimal places/);
     // A refusal carries a code the game can act on.
     const refused = HookedIn.call('game.casinoBet');
     deliver(parent, {
@@ -76,14 +68,12 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     });
     assert.equal((await funding).funded, false);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
-    const calls = [
-      HookedIn.payment('pay', '5', 'hand-1'),
-      HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } }),
-    ];
+    const bet = { id: 'coin', stake: '5', chance: '9', prize: '10', group: 'hand-1' };
+    const calls = [HookedIn.casinoBet(bet), HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } })];
     assert.deepEqual(
       posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
-        { method: 'game.payment', params: { id: 'pay', amount: '5', group: 'hand-1' } },
+        { method: 'game.casinoBet', params: bet },
         { method: 'game.developerBet', params: { id: 'seat', stake: '5', meta: { seat: 2 } } },
       ],
     );
@@ -133,7 +123,7 @@ test('balance() refuses outside a frame as call does, a greeting that failed is 
       posted.map(message => message.method),
       ['wallet.hello', 'wallet.hello'],
     );
-    const hello = { methods: ['wallet.hello'], asset: { symbol: 'ETH', decimals: 18 }, chainId: '31337' };
+    const hello = { limits: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver({ hookedin: true, id: posted.at(-1).id, result: hello });
     assert.deepEqual(await greeting, hello);
     // Greeted, with nothing pushed: balance() waits as long as a request would, then gives up.

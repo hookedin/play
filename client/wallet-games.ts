@@ -11,7 +11,7 @@ import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress } from 'ethers';
 import { LIMITS } from '../protocol/protocol.ts';
 import { developerBetStatus, gameAmount, gameOperationKey } from './game-account.ts';
-import { METHODS, gameError } from './bridge.ts';
+import { gameError } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
 /** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
@@ -72,17 +72,11 @@ export class GameSessions extends ChannelClient {
     const game = this.requireGame();
     return { balance: game.balance, pending: this.pending?.game?.key === game.key };
   }
-  /** What a game page learns when it loads: what this wallet offers, and what it counts in, the network's ETH. Amounts
-   * on the bridge are whole numbers of the smallest unit. */
+  /** What a game page learns when it loads: every bound a bet is held to, as the protocol this wallet and its casino
+   * share has them. */
   gameHello(this: CasinoWallet) {
     this.requireGame();
-    return {
-      methods: METHODS,
-      asset: this.asset,
-      chainId: String(this.expectedChainId),
-      // Every bound a bet is held to, as the protocol this wallet and its casino share has them.
-      limits: LIMITS,
-    };
+    return { limits: LIMITS };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
    * they are shown by if they took one, and what to price bets against. Their address, their channel

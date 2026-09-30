@@ -37,8 +37,6 @@ import {
 import type { PublicDeveloperBet, Round } from '../../protocol/types.ts';
 
 export type { PublicDeveloperBet, Round };
-/** A game's key, as its developer and the name they published it under make it. */
-export { gameKey };
 /** What a casino's `GET /api/config` names for this kit to use it, as `developerProtocol` and `limits`: a stub casino
  * in a server's test answers with them. */
 export { DEVELOPER_PROTOCOL, LIMITS };
@@ -62,23 +60,7 @@ export interface BankCasinoBet {
   group: string;
   meta: Record<string, unknown>;
 }
-/** A page of a game's developer bets, and the cursor for the next. */
-export interface DeveloperBetPage {
-  bets: PublicDeveloperBet[];
-  cursor: string;
-  more: boolean;
-}
 export interface Developer {
-  address: string;
-  /** The key of the game this kit serves. */
-  game: string;
-  /** Every bound a bet is held to: the size of the space a round's outcome and a bet's chance are counted in, the most
-   * a bet's meta takes, the longest group. */
-  limits: {
-    outcomeSpace: string;
-    meta: number;
-    group: number;
-  };
   /** The casino's bankroll, as it last reported it: what to price casino bets against, not a promise to admit them. */
   bankroll(): Promise<bigint>;
   /** A new round for this developer's casino bet: named by the casino by the hash of a secret it keeps. */
@@ -100,16 +82,12 @@ export interface Developer {
    * `MAX_DEVELOPER_BETS` at a time, and it takes each batch whole or, if the bank cannot pay it, not at all. A bet
    * settled before answers with what settled it. */
   settle(settlements: Settlement[]): Promise<PublicDeveloperBet[]>;
-  /** This game's developer bets, open or settled, of one group if you name one, a page at a time: open ones as they
+  /** This game's developer bets, open or settled, a page at a time, with the cursor for the next: open ones as they
    * stand, read from the start; settled ones in the order they settled, so a saved cursor never misses one. */
   bets(query?: {
     status?: 'open' | 'settled';
-    group?: string;
     after?: string;
-    limit?: number;
-  }): Promise<DeveloperBetPage>;
-  /** A developer bet as anyone may read it; null for one the casino does not know. */
-  bet(hash: string): Promise<PublicDeveloperBet | null>;
+  }): Promise<{ bets: PublicDeveloperBet[]; cursor: string; more: boolean }>;
 }
 
 export async function createDeveloper({
@@ -189,9 +167,6 @@ export async function createDeveloper({
     return revealed;
   };
   return {
-    address: signer.address,
-    game,
-    limits: config.limits,
     bankroll: async () => BigInt((await api('/api/status')).bankroll),
     openRound: () => asDeveloper('/api/rounds', {}),
     seedHash: async round => hashOfSeed(await seedOf(round.toLowerCase())),
@@ -211,17 +186,10 @@ export async function createDeveloper({
       }
       return settled;
     },
-    bets: ({ status = 'open', group, after, limit } = {}) =>
+    bets: ({ status = 'open', after } = {}) =>
       api(
         `/api/developer-bets?game=${game}&status=${status}` +
-          (group === undefined ? '' : `&group=${encodeURIComponent(group)}`) +
-          (after === undefined ? '' : `&after=${encodeURIComponent(after)}`) +
-          (limit === undefined ? '' : `&limit=${limit}`),
+          (after === undefined ? '' : `&after=${encodeURIComponent(after)}`),
       ),
-    bet: hash =>
-      api(`/api/developer-bets/${hash}`).catch(error => {
-        if (error.status === 404) return null;
-        throw error;
-      }),
   };
 }

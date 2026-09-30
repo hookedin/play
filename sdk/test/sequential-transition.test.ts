@@ -1,22 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  add,
-  cashClasses,
-  compare,
-  compileTransition,
-  fraction,
-  landing,
-  multiply,
-  priceTransition,
-  seededRandom,
-  tableAdmits,
-  UINT256_MAX,
-  OUTCOME_SPACE,
-} from '../src/engine/index.ts';
+import { add, compare, fraction, multiply, seededRandom } from '../src/engine/index.ts';
 import type { Rational } from '../src/engine/index.ts';
+import { cashClasses, compileTransition, priceTransition, tableAdmits } from '../src/engine/transition.ts';
+import { landing } from '../src/engine/engine.ts';
 import { admits } from '../src/admits.ts';
-import { assessBet } from '../../protocol/risk.ts';
+import { assessBet, OUTCOME_SPACE, UINT256_MAX } from '../../protocol/risk.ts';
 
 const ZERO = fraction(0n);
 const ONE = fraction(1n);

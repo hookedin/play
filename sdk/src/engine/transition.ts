@@ -1,9 +1,6 @@
 import { add, compare, divide, fraction, multiply } from './rational.ts';
 import type { Rational } from './rational.ts';
-
-export const UINT256_MAX = (1n << 256n) - 1n;
-/** A round's outcome is a uniform integer below this. */
-export const OUTCOME_SPACE = 1n << 64n;
+import { OUTCOME_SPACE, uint256 } from '../../../protocol/risk.ts';
 
 /** A casino bet: a stake paid to enter, and a prize it pays when the round's outcome is below its chance, counted
  * in outcomes out of 2^64. */
@@ -16,7 +13,7 @@ export interface Bet {
  * This library checks every bet it builds against it and never assumes what it is. */
 export type Admits = (bankroll: bigint, bet: Bet) => boolean;
 
-/** A labeled successor and the credits required to continue from that state. */
+/** A labeled successor and the cash needed to continue from that state. */
 export interface CashOutcome {
   readonly next: string;
   readonly label?: string;
@@ -35,10 +32,10 @@ export interface CashClass {
  * cash of class `win` when the round's outcome is below its chance. A branch without a bet lands on its class and
  * moves no money.
  */
-export type Branch =
+type Branch =
   | { readonly kind: 'bet'; readonly weight: Rational; readonly bet: Bet; readonly win: number; readonly lose: number }
   | { readonly kind: 'none'; readonly weight: Rational; readonly class: number };
-export interface TransitionInput {
+interface TransitionInput {
   readonly admits: Admits;
   readonly bankroll: bigint;
   readonly cash: bigint;
@@ -67,7 +64,7 @@ export type TransitionPlan =
       readonly amount: bigint;
       readonly outcomes: readonly CashOutcome[];
     };
-export interface TransitionPriceInput {
+interface TransitionPriceInput {
   readonly bankroll: bigint;
   readonly outcomes: readonly CashOutcome[];
   /** Search grid, in the same integer currency units as all cash values. */
@@ -80,17 +77,12 @@ const ONE = fraction(1n);
  * outcomes when its prize is under about 4·10^9 times its stake. */
 const MARGIN = fraction((1n << 32n) + 1n, 1n << 32n);
 
-function money(value: bigint, name: string, positive = false): void {
-  if (typeof value !== 'bigint' || value < (positive ? 1n : 0n) || value > UINT256_MAX)
-    throw new RangeError(`${name} must be ${positive ? 'a positive' : 'a nonnegative'} uint256`);
-}
-
 function validate(outcomes: readonly CashOutcome[]): CashOutcome[] {
   if (!Array.isArray(outcomes) || outcomes.length === 0) throw new RangeError('a transition needs an outcome');
   let total = ZERO;
   for (const outcome of outcomes) {
     if (!outcome.next) throw new Error('a successor needs a state');
-    money(outcome.cash, 'successor cash');
+    uint256(outcome.cash, 'successor cash');
     if (compare(outcome.probability, ZERO) < 0) throw new RangeError('negative transition probability');
     total = add(total, outcome.probability);
   }
@@ -169,7 +161,7 @@ function rounded(
  * `tableAdmits` guarantees. A class at c is reached with no bet. A step with no class above c pairs every other class
  * with the highest one, a bet the bankroll cannot lose.
  */
-export function collapse(bankroll: bigint, cash: bigint, classes: readonly CashClass[]): Branch[] {
+function collapse(bankroll: bigint, cash: bigint, classes: readonly CashClass[]): Branch[] {
   const branches: Branch[] = [],
     lows = classes.flatMap((c, i) => (c.cash < cash ? [i] : [])),
     highs = classes.flatMap((c, i) => (c.cash > cash ? [i] : [])),
@@ -228,8 +220,8 @@ export function collapse(bankroll: bigint, cash: bigint, classes: readonly CashC
 /** The branches for one step taken with `cash`, each bet checked with the casino's rule at the planning bankroll, or
  * the payment when nothing is left to chance. */
 export function compileTransition({ admits, bankroll, cash, outcomes }: TransitionInput): TransitionPlan {
-  money(bankroll, 'bankroll', true);
-  money(cash, 'cash');
+  uint256(bankroll, 'bankroll', true);
+  uint256(cash, 'cash');
   const classes = cashClasses(outcomes),
     live = Object.freeze(classes.flatMap(c => c.outcomes));
   if (classes.length === 1) {
@@ -263,8 +255,8 @@ export function compileTransition({ admits, bankroll, cash, outcomes }: Transiti
  * leaves every bet room to round. More cash is never less safe for the bankroll, so the search is a bisection, and
  * the largest successor's cash always suffices: the bankroll loses on no class. */
 export function priceTransition({ bankroll, outcomes, quantum }: TransitionPriceInput): bigint {
-  money(bankroll, 'bankroll', true);
-  money(quantum, 'quantum', true);
+  uint256(bankroll, 'bankroll', true);
+  uint256(quantum, 'quantum', true);
   const classes = cashClasses(outcomes);
   // A step that moves no money costs exactly its successor's cash, without rounding.
   if (classes.length === 1) return classes[0]!.cash;
