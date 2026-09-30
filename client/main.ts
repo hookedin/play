@@ -111,7 +111,7 @@ const wallet = new CasinoWallet({
   storage: vault,
   casinoURL,
   network,
-  trustedDeployment: config.deployment || null,
+  trustedDeployment: config.deployment,
   onChange: () => renderWallet(),
   onProgress: message => {
     $('operation-text').textContent = message;
