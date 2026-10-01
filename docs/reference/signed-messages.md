@@ -40,6 +40,7 @@ The contract exposes the two it uses as `hashState` and `hashOperation`.
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ------------------------ |
 | `Checkpoint`      | `bytes32 channelId`, `uint256 sequence`, `bytes32 previousStateHash`, `bytes32 transitionHash`, `uint256 balance`, `uint256 deposited`, `uint256 withdrawn`                                                        | The casino, and the account when it countersigns | Contract, wallet, casino |
 | `Operation`       | `bytes32 channelId`, `bytes32 previousStateHash`, `uint256 sequence`, `uint256 kind`, `uint256 amount`, `address recipient`, `uint64 chance`, `uint256 prize`, `bytes32 round`, `bytes32 seedHash`, `bytes32 memo` | The account                                      | Contract, casino, wallet |
+| `Quote`           | `bytes32 channelId`, `bytes32 previousStateHash`, `bytes32 round`, `uint256 virtualBankroll`, `uint256 expiresAt`                                                                                                  | The casino                                       | Wallet, casino, contract |
 | `Access`          | `bytes32 channelId`, `uint256 expiresAt`                                                                                                                                                                           | The account                                      | Casino                   |
 | `DeveloperAccess` | `address developer`, `uint256 expiresAt`                                                                                                                                                                           | The developer                                    | Casino                   |
 | `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                                                  | The developer                                    | Casino, wallet           |
@@ -107,12 +108,12 @@ hash and `sequence` the base's plus one. Applied, it produces the next checkpoin
 
 Every transition holds to these rules, which the contract, the wallet and the casino apply alike:
 
-- `amount` is 1 to 2^128 − 1, and a casino bet's (its stake), a debit's or a withdrawal's is at most the base balance.
-- A casino bet's `chance` is 1 to 2^64 − 1, the winning outcomes out of 2^64, and its `prize` is 1 to 2^128 − 1: a sure
+- `amount` is 1 to 2^96 − 1, and a casino bet's (its stake), a debit's or a withdrawal's is at most the base balance.
+- A casino bet's `chance` is 1 to 2^64 − 1, the winning outcomes out of 2^64, and its `prize` is 1 to 2^96 − 1: a sure
   loss or a sure win is no bet.
 - A withdrawal's `recipient` is any address but zero, the contract itself to lock a balance in; every other kind's is
   the zero address.
-- The next `balance`, `deposited` and `withdrawn` are below 2^128.
+- The next `balance`, `deposited` and `withdrawn` are below 2^96.
 - Every field a kind does not use is zero, and every kind but a casino bet carries a zero seed and secret: one meaning,
   one encoding.
 
@@ -126,8 +127,8 @@ with its base, is also what the contract records and pays it on ([withdrawals](c
 
 ### Rejection checkpoints
 
-The casino declines a signed casino bet, debit or withdrawal by signing a checkpoint two above its base, with the
-balance unchanged:
+The casino declines a signed casino bet, debit or withdrawal by proposing a checkpoint two above its base, with the
+balance unchanged. The player signs it first, and the casino completes the rejection with its signature:
 
 | Field               | Rejection checkpoint              |
 | ------------------- | --------------------------------- |
@@ -138,15 +139,21 @@ balance unchanged:
 | `deposited`         | The base's                        |
 | `withdrawn`         | The base's                        |
 
-The player countersigns it, and its next operation is at the base's sequence plus three. Once countersigned it
-supersedes the declined operation, whose step would be at the base's sequence plus one: a challenge on-chain accepts a
-strictly higher sequence. Until then the base settles to the same balance. The player signs a rejection only on
-receiving it, so no rejection the casino signs later can supersede a result the player already holds. Credits and
-deposits are not declined this way: the casino refuses a credit it does not owe, or a deposit it has not seen confirmed
-on-chain, with an error.
+The proposal has `casinoSignature: "0x"` and does not advance the channel. The player verifies it, saves its signature,
+and repeats the operation with `rejectionSignature`. The casino signs and records the joint checkpoint, whose evidence
+settles on-chain, and the next operation is at the base's sequence plus three. It supersedes the declined operation,
+whose step would be at the base's sequence plus one. The casino issues no signed rejection without the player's
+signature, so a player cannot choose to complete a rejection after learning a disputed bet's outcome. A recorded
+result takes precedence over a cancellation retry at the casino, but a wallet that has signed the rejection takes no
+result of the operation: the casino would hold a checkpoint the account signed at the sequence of the state after that
+result, which it could complete later to supersede it. The operation then stays pending, and closing without the
+casino settles it. Credits and deposits are not declined this way: the casino refuses a credit it does not owe, or a
+deposit it has not seen confirmed on-chain, with an error.
 
-A declined casino bet carries its round's `secret`, so the player can compute what the bet would have paid. When the
-round is unknown to the casino, or is another channel's unrevealed round, the rejection carries `lost: true` instead.
+A declined casino bet reveals nothing: the casino declines only a bet no [quote](#quotes) covers, which comes without
+its seed, and the round takes the channel's next bet. The player signs no rejection of a bet its quote covers,
+but one declined as a game's operation its account carried out on another channel, which carries `carried`, the
+operation the account signed there: `{operation, authorization, details}`.
 
 ### Evidence
 
@@ -172,6 +179,11 @@ and the [watchtower](../wallet/keys-and-recovery.md#the-watchtower) reads:
 
 `verifyEvidence` in [protocol.ts](../../protocol/protocol.ts) checks a bundle's signatures, none for evidence on the
 channel's base, and returns the checkpoint it proves.
+
+A casino bet a quote covers that the casino has not settled is disputed with a _disputed step_: its operation, the
+account's `authorization` and the `seed`, with a zero `secret` and `casinoSignature` `0x`. Only the contract's
+`dispute` takes it, with the quote ([disputes](contract.md#disputes)); the casino settles it with the step of its
+result, at the same sequence.
 
 ## Operations
 
@@ -287,13 +299,29 @@ The vectors' game, developer `0x4444444444444444444444444444444444444444` and na
 A _round_ is named by the hash of a secret: `round = keccak256(secret)`, where `secret` is 32 random bytes the casino
 picks and keeps until the round is revealed. A casino bet signs its round and the hash of a _seed_,
 `seedHash = keccak256(seed)`: 32 bytes the bettor picks after the round is named and sends with the bet. Both hashes are
-of the 32 raw bytes. Only that secret and that seed settle the bet, so a round needs no signature of its own.
+of the 32 raw bytes. Only that secret and that seed settle the bet.
 
-A round settles one casino bet. A channel's own round is the one its next casino bet names
-([`POST /api/channels/:id/round`](../casino-api/channels.md#post-apichannelsidround)); a developer's round is revealed by
-the developer's own `BankCasinoBet`, which may bet nothing
-([`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet)). Once settled or
-declined, a round is revealed and settles nothing more.
+A round settles one casino bet. A channel's own round is the one its [quote](#quotes) names, revealed only by the casino
+bet that settles on it; a developer's round is revealed by the developer's own `BankCasinoBet`, which may bet nothing
+([`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet)). Once revealed, a
+round settles nothing more.
+
+### Quotes
+
+A _quote_ is the casino's promise to settle the casino bet that follows a checkpoint, signed as `Quote` and sent as
+`{message, signature}`. It names the channel, the checkpoint the bet follows (`previousStateHash`), the channel's round,
+the virtual bankroll the bet is admitted against, half the casino's bankroll when it quoted, and `expiresAt`, in Unix
+seconds, a day (`QUOTE_PERIOD`, 86,400) after the casino signed it. It _covers_ a casino bet whose operation names its
+channel, checkpoint and round, until `expiresAt`, and whose terms its virtual bankroll admits by
+[the Kelly rule](economics.md#a-casino-bet-is-one-wager) with no commission: `covers` in
+[protocol.ts](../../protocol/protocol.ts), which the contract's `dispute` checks too.
+
+The casino settles every casino bet a quote of its own covers, and gives a checkpoint one quote, again and again, until
+half its day is left, then a new one on the same round, so a wallet cannot collect several and keep the best. The
+wallet sends a bet's seed and quote only when the quote covers it with at least half its day left, and never
+countersigns a decline of a bet it sent so. Every reply that follows a channel's latest checkpoint brings the quote for
+the next casino bet; a wallet asks for one with
+[`POST /api/channels/:id/quote`](../casino-api/channels.md#post-apichannelsidquote).
 
 ### The outcome
 
@@ -320,7 +348,7 @@ HookedIn <base64url(utf8(JSON {"message": <message>, "signature": "0x…"}))>
 ```
 
 with base64url as in RFC 4648 §5, without padding. The token of the captured
-[round request](../casino-api/channels.md#post-apichannelsidround) decodes to:
+[quote request](../casino-api/channels.md#post-apichannelsidquote) decodes to:
 
 ```json
 {
@@ -380,21 +408,21 @@ open channel, and `sequence` is the number of the statement it will produce, so 
 
 ## Bounds and the protocol revision
 
-| Bound                                                         | Value                                          |
-| ------------------------------------------------------------- | ---------------------------------------------- |
-| Outcome space, which a chance counts in                       | 2^64, `18446744073709551616` (`OUTCOME_SPACE`) |
-| A bet's meta                                                  | 4,096 bytes of canonical JSON                  |
-| A group label                                                 | 64 UTF-16 code units                           |
-| Amounts, deposits, prizes, balances, `deposited`, `withdrawn` | Below 2^128 (`MAX_BALANCE`)                    |
-| Canonical JSON and API request bodies                         | 1,000,000 bytes                                |
-| Settlements in one request, developer bets in one public page | 256                                            |
-| Payouts listed in one reply                                   | 256                                            |
+| Bound                                                                                     | Value                                          |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Outcome space, which a chance counts in                                                   | 2^64, `18446744073709551616` (`OUTCOME_SPACE`) |
+| A bet's meta                                                                              | 4,096 bytes of canonical JSON                  |
+| A group label                                                                             | 64 UTF-16 code units                           |
+| Amounts, deposits, prizes, balances, `deposited`, `withdrawn`, a quote's virtual bankroll | Below 2^96 (`MAX_BALANCE`)                     |
+| Canonical JSON and API request bodies                                                     | 1,000,000 bytes                                |
+| Settlements in one request, developer bets in one public page                             | 256                                            |
+| Payouts listed in one reply                                                               | 256                                            |
 
 The first three are `BOUNDS`, which `GET /api/config` reports as `bounds`:
 `{"outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64}`.
 
 `PROTOCOL` fixes everything a wallet and the casino must agree on. It is the keccak-256 of the UTF-8 bytes of the
-eleven EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
+twelve EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
 canonical JSON of the rules they apply alike. An `encodeType` string is a structure's name and its fields, as in
 `Access(bytes32 channelId,uint256 expiresAt)`. The rules:
 
@@ -428,6 +456,7 @@ the hashing and pricing rules in numbers.
 | `operations`                    | Six operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |
 | `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                   |
 | `rejection`, `rejectionHash`    | The checkpoint that declines the casino bet instead, and its hash                                                                                                                                                                                 |
+| `quote`                         | The casino's quote for the casino bet: its `message`, the `hash` the casino signs, and whether its virtual bankroll of `5000000000` `admitted` the bet                                                                                            |
 | `cases`                         | Four casino bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                     |
 | `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                |
 
@@ -442,8 +471,9 @@ An implementation built from this page reproduces the file with the domain of `i
 opening's [channel ID](#channel-ids), the [base](#the-base) and `baseHash`; each operation's `canonical` details, their
 hash as its `memo`, and its `hash`; each `next`, the operation applied with its `seed` and `secret` to the checkpoint
 before it, whose `transitionHash` is `keccak256(abi.encode(hash, secret))`, and its `nextHash`; the casino bet's
-`round`, `seedHash` and [outcome](#the-outcome); the [rejection checkpoint](#rejection-checkpoints) and its hash; and
-each case's `risk` from the [admission rule](economics.md#a-casino-bet-is-one-wager).
+`round`, `seedHash` and [outcome](#the-outcome); the [rejection checkpoint](#rejection-checkpoints) and its hash; the
+[quote](#quotes)'s hash and whether it covers the casino bet; and each case's `risk` from the
+[admission rule](economics.md#a-casino-bet-is-one-wager).
 
 `node scripts/vectors.ts --check`, part of `npm test`, fails when the file differs from what the code computes, and
 `npm run vectors` writes it again. [test/derivation.test.ts](../../test/derivation.test.ts) runs the contract's

@@ -60,8 +60,9 @@ export interface BankCasinoBet {
   meta: Record<string, unknown>;
 }
 export interface Developer {
-  /** The casino's bankroll, as it last reported it: what to price casino bets against, not a promise to admit them. */
-  bankroll(): Promise<bigint>;
+  /** The casino's virtual bankroll, half its bankroll, as it last reported it: what it admits casino bets against, and
+   * so what to price them against, not a promise to admit them. */
+  virtualBankroll(): Promise<bigint>;
   /** A new round for this developer's casino bet: named by the casino by the hash of a secret it keeps. */
   openRound(): Promise<Round>;
   /** The hash of the seed this developer's casino bet on a round brings. Published before anybody bets, it fixes the
@@ -166,7 +167,7 @@ export async function createDeveloper({
     return revealed;
   };
   return {
-    bankroll: async () => BigInt((await api('/api/status')).bankroll),
+    virtualBankroll: async () => BigInt((await api('/api/status')).virtualBankroll),
     openRound: () => asDeveloper('/api/rounds', {}),
     seedHash: async round => hashOfSeed(await seedOf(round.toLowerCase())),
     round: id => api(`/api/rounds/${id}`),

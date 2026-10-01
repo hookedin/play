@@ -82,8 +82,8 @@ The token only says who is asking. What a request commits to is signed in its bo
 ## Retries
 
 An operation is known by its `details.id` and bound to the hash of what it signed. Sending the exact same request again
-is always safe: if the casino recorded a reply, it answers with that reply again, with a fresh `bankroll` and, after a
-casino bet, the channel's `nextRound`; if it recorded none, it decides the request. So after a timeout or a dropped
+is always safe: if the casino recorded a reply, it answers with that reply again, with a fresh `quote` when the reply
+is the channel's latest checkpoint; if it recorded none, it decides the request. So after a timeout or a dropped
 connection, send the exact request again. The same ID with another operation is refused with `id-conflict`.
 
 An error reply means nothing was recorded: `429`, `503` and `unconfirmed` are temporary, so send the same request
@@ -160,5 +160,7 @@ that waits its turn, `busy`.
 | `busy`               | 429    | A queue is full, or four channel registrations are in progress                                                                                                                                                                                 |
 | `paused`             | 503    | The casino has stopped signing                                                                                                                                                                                                                 |
 
-A declined operation is not an error. It is a `200` reply with `status: "rejected"`, a signed rejection checkpoint and
-a `reason`; `used: true` marks a game's operation its player already carried out on another channel.
+A declined operation is not an error. It is a `200` reply with `status: "rejected"`, a rejection checkpoint and a
+`reason`; `used: true` marks a game's operation its player already carried out on another channel. The proposal has
+`casinoSignature: "0x"`. The wallet verifies and signs it, then repeats the operation with `rejectionSignature` for the
+casino to complete the joint checkpoint ([operations](channels.md#post-apichannelsidoperations)).

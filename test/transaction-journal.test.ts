@@ -7,6 +7,62 @@ import { Wallet, id, keccak256 } from 'ethers';
 import { TransactionJournal } from '../protocol/transaction-journal.ts';
 import { confirmedNonce, confirmedReceipt, findNonceTransaction } from '../protocol/transaction-recovery.ts';
 
+test('journal keeps calldata private until its evidence is durable and broadcasts only its durable transaction', async () => {
+  const key = Wallet.createRandom(),
+    evidence = Promise.withResolvers<void>(),
+    transaction = Promise.withResolvers<void>(),
+    estimating = Promise.withResolvers<void>(),
+    saved = Promise.withResolvers<void>();
+  let flushes = 0,
+    estimates = 0,
+    broadcasts = 0;
+  const journal = new TransactionJournal({
+    chainId: 31337,
+    provider: {
+      send: async () => '0x7a69',
+      getTransactionCount: async () => 0,
+      broadcastTransaction: async () => {
+        broadcasts++;
+        return {};
+      },
+    },
+    signer: {
+      getAddress: () => key.getAddress(),
+      signTransaction: (tx: any) => key.signTransaction(tx),
+      populateTransaction: async (tx: any) => {
+        estimates++;
+        return { ...tx, type: 2, gasLimit: 50000n, maxFeePerGas: 10n, maxPriorityFeePerGas: 1n };
+      },
+    },
+    persist: (state: any) => {
+      if (state.pending) saved.resolve();
+    },
+    durable: () => {
+      if (++flushes === 1) {
+        estimating.resolve();
+        return evidence.promise;
+      }
+      return transaction.promise;
+    },
+  } as any);
+  const sent = journal.submit('withdrawal', { to: key.address, data: '0x1234' });
+  try {
+    await estimating.promise;
+    assert.equal(estimates, 0, 'gas estimation must not disclose uncommitted signed evidence');
+    assert.equal(broadcasts, 0);
+    evidence.resolve();
+    await saved.promise;
+    assert.equal(estimates, 1);
+    assert.equal(broadcasts, 0, 'the raw transaction waits for its own commit');
+  } finally {
+    evidence.resolve();
+    transaction.resolve();
+  }
+  assert.equal((await sent).status, 'pending');
+  assert.equal(flushes, 2);
+  assert.equal(broadcasts, 1);
+});
+
 test('journal retries reject changed intent before confirmation or broadcast, including after reload', async () => {
   const signer = Wallet.createRandom(),
     destination = Wallet.createRandom().address;

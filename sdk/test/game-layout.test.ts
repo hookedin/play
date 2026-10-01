@@ -46,7 +46,7 @@ test('game allowances and complete stake amounts are readable on phones and tabl
                   uname: 'layout',
                   alias: null,
                   chainId: '31337',
-                  bankroll: '1000000000000000000000',
+                  virtualBankroll: '1000000000000000000000',
                   recommendedStake: '1000000000000',
                 }
               : null;

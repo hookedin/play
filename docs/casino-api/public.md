@@ -66,17 +66,21 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | `escrow`                               | Payouts awarded and not yet collected                                                                                                           |
 | `banks`                                | Everything in developers' banks                                                                                                                 |
 | `withdrawals`                          | Withdrawals the casino has taken on, until the chain records them or their channel's close returns them                                         |
+| `disputedPrizes`                       | The contract's `disputedPrizes`: the prizes of casino bets closes dispute, which it keeps from the owner until each is settled                  |
 | `houseFeesEarned`                      | The casino's own commission, in total                                                                                                           |
-| `reserved`                             | The worst cases of the casino bets being decided                                                                                                |
+| `reserved`                             | The worst cases of casino bets being decided, plus disputed closes' possible payouts above obligations already in the books                     |
 | `equity`                               | The bankroll before reservations: what fund shares are a claim on                                                                               |
 | `unreservedBankroll`                   | `equity − reserved`; it can be negative                                                                                                         |
-| `bankroll`                             | `max(0, unreservedBankroll)`: what admission measures bets against                                                                              |
-| `withdrawableHouse`                    | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                   |
+| `bankroll`                             | `max(0, unreservedBankroll)`: the betting bankroll                                                                                              |
+| `virtualBankroll`                      | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a developer's casino bet is admitted against              |
+| `withdrawableHouse`                    | `max(0, cash − protectedPrincipal − unpaidWinnings − disputedPrizes)`, as the contract's `withdrawableHouse()`                                  |
 
 `alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
 left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older checkpoint than the
-casino holds, and the casino challenges it), `missed-deadline`, `conflicting-sequence`, `finalized-state-differs`,
-`invalid-evidence`, `channel-defense-failed`, `recovery-transaction-failed`, `winnings-exceed-cash` (open channels have
+casino holds, and the casino challenges it), `disputed-bet` (a close disputes a casino bet, and the casino settles it
+with its result), `dispute-unsettled` (the casino could not settle a disputed bet; `detail` says why),
+`missed-deadline`, `conflicting-sequence`, `finalized-state-differs`, `invalid-evidence`, `channel-defense-failed`,
+`recovery-transaction-failed`, `winnings-exceed-cash` (open channels have
 won more than house cash can pay now, [as a withdrawal counts it](channels.md#post-apichannelsidoperations), so not
 every winner can withdraw now), `operator-gas-low` (the key that sends challenges and withdrawals holds less than 0.01
 ETH for their gas) or `withdrawal-unsent` (a withdrawal the casino took on could not be sent yet; `detail` says why). An

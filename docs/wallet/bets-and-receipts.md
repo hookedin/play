@@ -59,17 +59,17 @@ more than once.
 
 ## Rejected bets
 
-A declined request costs nothing. The casino signs a checkpoint that leaves your balance unchanged, and the wallet
-checks it, countersigns it and keeps the receipt in Activity.
+A declined request costs nothing. The casino proposes a checkpoint that leaves your balance unchanged. The wallet
+checks and signs it, then the casino completes it with its signature and the wallet keeps the receipt in Activity.
 
-A casino bet the casino declines comes back with its round's secret. The wallet checks the secret against the round the
-bet signed and, with its own seed, records at once what the bet would have paid: _The casino revealed the round: this
-casino bet would have paid …_. The one exception is a round the casino says it has lost, and that receipt says in words
-that the bet cannot be checked. The wallet countersigns no other decline of a casino bet. A run of declined bets that
-would have paid well is a player's evidence of selective rejection.
+The casino declines only a casino bet its [quote](../overview/how-it-works.md#quotes) does not cover, and the wallet
+sends the seed only with a covered one, so a declined bet reveals nothing: its round stays secret and takes your next
+bet. A covered bet the casino declines is not countersigned: it stays saved, for you to
+[dispute](closing-and-claims.md#dispute-a-casino-bet).
 
-A game's operation that its player already carried out on another channel is declined too, marked `used`. The wallet
-then answers the game with `id-used`, so that it does not place the same bet again under another ID
+A game's operation that its player already carried out on another channel is declined too, marked `used`; a covered
+casino bet only with the operation your account signed there, which the wallet checks. The wallet then answers the game
+with `id-used`, so that it does not place the same bet again under another ID
 ([how a game works](../games/how-a-game-works.md)).
 
 ## A game's public record

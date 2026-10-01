@@ -18,7 +18,7 @@ sees it ([how it works](../overview/how-it-works.md)). The bet pays `prize` when
 - `prize` is gross, what a winning bet pays: twice the stake is an even-money win, and a prize below the stake is a
   partial loss.
 - The bet moves the balance by `−stake`, and by `+prize` when it wins. Commission is never an extra debit.
-- The stake and the prize are above zero and below 2^128 ([`game.casinoBet`](../reference/bridge.md#gamecasinobet)).
+- The stake and the prize are above zero and below 2^96 ([`game.casinoBet`](../reference/bridge.md#gamecasinobet)).
 
 ## A coin flip
 
@@ -80,9 +80,10 @@ A game whose players share one draw walks a tree of its developer's casino bets 
 
 ## Leave the casino an edge
 
-The casino admits a casino bet when its bankroll can take it by the Kelly criterion with no commission at all, so a bet
-with no edge is never admitted, and a bigger prize needs more edge ([pricing and commission](../reference/economics.md)).
-Check a bet before offering it, with the casino's own rule:
+The casino settles a casino bet when the virtual bankroll of its [quote](../overview/how-it-works.md#quotes), half the
+casino's bankroll, can take it by the Kelly criterion with no commission at all, so a bet with no edge is never
+admitted, and a bigger prize needs more edge ([pricing and commission](../reference/economics.md)). Check a bet before
+offering it, with the casino's own rule:
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
@@ -90,14 +91,15 @@ import { admits } from '@hookedin/play/sdk/admits';
 import { flipBet } from './flip.ts';
 
 const stake = BigInt(HookedIn.parseAmount('0.0001'));
-const { bankroll } = await HookedIn.info();
-// Half the reported bankroll, as the house games use, so that ordinary movement does not turn the bet away.
-if (!admits(BigInt(bankroll) / 2n, flipBet(stake))) show('The casino cannot back this stake. Lower it.');
+const { virtualBankroll } = await HookedIn.info();
+// Half the virtual bankroll, as the house games use, so that the quote a later reply brings still covers the bet.
+if (!admits(BigInt(virtualBankroll) / 2n, flipBet(stake))) show('The casino cannot back this stake. Lower it.');
 ```
 
 [`admits`](../sdk/admits.md#admits) is [protocol/risk.ts](../../protocol/risk.ts), the code the casino runs, so a bet it
-admits at a bankroll is one the casino admits at that bankroll. The bankroll `wallet.info` reports reserves nothing: the
-casino checks each bet against its live bankroll, and a declined bet comes back `rejected`.
+admits at a virtual bankroll is one a quote naming that virtual bankroll covers. `wallet.info` reports the virtual
+bankroll of the wallet's latest quote; the bet goes on the quote the wallet holds when it signs, and one that quote does
+not cover comes back `rejected`.
 
 ## Measured return
 

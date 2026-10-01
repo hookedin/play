@@ -10,9 +10,7 @@ import {
   hashOperation,
   withdrawalRecorded,
   verifyEvidence,
-  rejectionCheckpoint,
-  assertSignature,
-  checkpointEvidence,
+  quoteTerms,
   STATE_TYPES,
 } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
@@ -96,7 +94,7 @@ export class WalletTransactions {
     };
     // The signed close and its fence are one durable write. An estimate or signing failure leaves the channel
     // usable; once signed, its evidence must stay frozen even if the transaction is replaced or reorganized out.
-    if (method === 'startClose') this.channels[args[0].base.channelId].closing = true;
+    if (method === 'startClose' || method === 'dispute') this.channels[args[0].base.channelId].closing = true;
     await this.save();
     return provider.broadcastTransaction(raw);
   }
@@ -270,7 +268,6 @@ export class WalletTransactions {
     const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening: c.opening }, c);
     this.noteNames(reply);
     if (same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
-      this.updateBankroll(reply.bankroll);
       if (c.registered) return;
       this.missingChannel = null;
       c.registered = true;
@@ -303,21 +300,22 @@ export class WalletTransactions {
       opening: c.opening,
       evidence: last.evidence,
     }).state;
-    const next = rejected ? rejectionCheckpoint(this.domain, proven, last.request) : proven,
-      casinoSignature = rejected ? last.casinoSignature : last.evidence.step.casinoSignature;
-    if (rejected) assertSignature(this.domain, STATE_TYPES, next, casinoSignature, this.operator);
+    const next = proven,
+      casinoSignature = rejected ? last.evidence.casinoSignature : last.evidence.step.casinoSignature;
     if (!same(hashState(this.domain, next), hashState(this.domain, state)))
       throw new Error("The casino's state of your balance differs from its evidence.");
-    const playerSignature = await this.signer.signTypedData(this.domain, STATE_TYPES, next);
+    const playerSignature = rejected
+      ? last.evidence.playerSignature
+      : await this.signer.signTypedData(this.domain, STATE_TYPES, next);
     this.channels[c.state.channelId] = {
       ...c,
       state: next,
       playerSignature,
       casinoSignature,
-      lastResponse: rejected ? { ...last, evidence: checkpointEvidence(next, playerSignature, casinoSignature) } : last,
+      lastResponse: last,
       pending: null,
       registered: true,
-      round: undefined,
+      quote: undefined,
     };
     this.missingChannel = null;
     await this.save();
@@ -371,9 +369,11 @@ export class WalletTransactions {
                 ? 'withdrawal-sent'
                 : intent?.method === 'startClose'
                   ? 'close-started'
-                  : intent?.method === 'finalizeClose'
-                    ? 'closure'
-                    : 'dispute',
+                  : intent?.method === 'dispute'
+                    ? 'bet-disputed'
+                    : intent?.method === 'finalizeClose'
+                      ? 'closure'
+                      : 'dispute',
       operationId: 'tx:' + receipt.hash,
       amount,
       ...(to && !same(to, this.address) ? { to } : {}),
@@ -630,12 +630,16 @@ export class WalletTransactions {
       ...(left ? {} : { settledAt: here }),
     });
   }
+  /** Close the balance without the casino. A pending casino bet the casino's quote covers is disputed with it: the
+   * casino then has 24 hours to settle it on-chain, or it counts as won. */
   async startClose(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
       if (!this.channel) throw new Error('No active channel');
       // Keep ETH added for the close's fees at the address, including after a failed estimate or gas check.
       if (this.autoDeposit) await this.save(undefined, { autoDeposit: false });
-      const tx = await this.sendTransaction('startClose', [this.evidence()]);
+      const tx = this.disputable()
+        ? await this.sendTransaction('dispute', [this.disputeEvidence(), quoteTerms(this.pending.quote)])
+        : await this.sendTransaction('startClose', [this.evidence()]);
       await this.waitTransaction(tx);
       return tx.hash;
     });
@@ -665,9 +669,14 @@ export class WalletTransactions {
     await this.refresh({ channelId });
     return result;
   }
+  /** Challenge a close with this wallet's newer evidence, or, when the close stops short of a pending casino bet the
+   * casino's quote covers, by disputing the bet. */
   async challengeClose(this: CasinoWallet, channelId = this.closingChannel?.state.channelId) {
     const result = await this.exclusive(async () => {
-      const tx = await this.sendTransaction('challengeClose', [this.evidence(this.channels[channelId!])]);
+      const c = this.channels[channelId!];
+      const tx = this.disputesClose(c)
+        ? await this.sendTransaction('dispute', [this.disputeEvidence(c), quoteTerms(c.pending.quote)])
+        : await this.sendTransaction('challengeClose', [this.evidence(c)]);
       await this.waitTransaction(tx);
       return tx.hash;
     });

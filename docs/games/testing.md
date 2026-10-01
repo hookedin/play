@@ -51,8 +51,8 @@ start: a bet that settles, the same bet sent twice and placed once, and a bet wi
 
 `gameWallet({ bankroll?, bank?, deposit? })` resolves with a real `CasinoWallet` from play's client, with an in-memory
 store, a random player and one open channel on the local chain, 31337, wired to a stub casino in place of the network.
-`bankroll` is what the stub covers casino bets with, and `bank` what the developer's bank holds before any developer bet
-pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
+`bankroll` is what the stub covers casino bets with, whose half its quotes name as the virtual bankroll, and `bank` what
+the developer's bank holds before any developer bet pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
 
 | Member                       | What it is                                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -75,13 +75,13 @@ commits), from [client/wallet-games.ts](../../client/wallet-games.ts) and
 
 What the stub holds a game to:
 
-- Every casino bet passes the casino's own admission rule against `bankroll`, and the stub charges its commission. A
-  bet it declines, a zero-edge one for instance, the casino declines too: it comes back `rejected` with its round
-  revealed and the balance unchanged.
+- Every casino bet the stub's quote covers is settled: the casino's own admission rule against the quote's virtual
+  bankroll, half of `bankroll`, and the stub charges its commission. A bet it does not cover, a zero-edge one for
+  instance, the casino declines too: it comes back `rejected`, revealing nothing, with the balance unchanged.
 - Operation IDs behave as the casino's do: the same `id` returns the same receipt, on the player's next channel too,
   and a wallet that has lost the receipt is refused with `id-used`.
 - Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`.
-- The developer's casino bet names a group, is admitted like any other and reveals its round, once: the same bet again
+- The developer's casino bet names a group, is admitted against the virtual bankroll and reveals its round, once: the same bet again
   gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
 - `developer.bets()` pages as the casino does, 100 bets at a time: page with `after` and `more`, and the size never
   matters.

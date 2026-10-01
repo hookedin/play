@@ -58,7 +58,7 @@ async function setUp(bankroll?: bigint) {
   const store = memoryStore(),
     client = () => new RoundClient(f.bridge, minesGraph, undefined, { store, name: 'mines' }),
     covered = async (stake: bigint, mines: number) =>
-      coveredPicks(stake, mines, BigInt((await f.bridge.call('wallet.info')).bankroll));
+      coveredPicks(stake, mines, BigInt((await f.bridge.call('wallet.info')).virtualBankroll));
   return { client, covered };
 }
 

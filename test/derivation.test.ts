@@ -12,6 +12,7 @@ import {
   STATE_TYPES,
   OP_TYPES,
 } from '../protocol/protocol.ts';
+import { MAX_BALANCE } from '../protocol/risk.ts';
 
 /** The contract and the TypeScript derivation are hand-mirrored; feed both the same
  * evidence for every kind and every invalid branch and require identical verdicts. */
@@ -105,7 +106,7 @@ test('the contract and deriveState agree on every operation kind and invalid enc
   await disagreeNever(await craft(a, round, id('another secret'), seed), /Invalid casino bet/);
   await disagreeNever(await craft(a, round, secret, id('another seed')), /Invalid casino bet/);
   await disagreeNever(await craft(a, round, secret), /Invalid casino bet/);
-  for (const bad of [{ chance: 0n }, { prize: 0n }, { prize: 1n << 128n }])
+  for (const bad of [{ chance: 0n }, { prize: 0n }, { prize: MAX_BALANCE }])
     await disagreeNever(await craft(a, { ...round, ...bad }, secret, seed), /Invalid casino bet/);
   await disagreeNever(await craft(a, { ...round, seedHash: ZeroHash }, secret, ZeroHash), /Invalid casino bet/);
   await disagreeNever(await craft(a, { ...round, amount: 5000n }, secret, seed), /Invalid casino bet/);

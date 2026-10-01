@@ -5,9 +5,10 @@ sidebar:
   order: 2
 ---
 
-The contract enforces how a channel settles and pays its withdrawals. The casino is trusted for its bankroll, its
-accounting and its availability. You keep your evidence, take out or lock in what you win and watch your channel. A
-game, its developer and a bankroll fund share each carry trust of their own, set out below.
+The contract enforces how a channel settles, pays its withdrawals and settles the casino bets the casino's quotes
+cover. The casino is trusted for its bankroll, its accounting and its availability. You keep your evidence, take out or
+lock in what you win and watch your channel. A game, its developer and a bankroll fund share each carry trust of their
+own, set out below.
 
 ## What the contract enforces
 
@@ -23,10 +24,17 @@ game, its developer and a bankroll fund share each carry trust of their own, set
   refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no
   signature, either alone or followed by one operation your account authorized and the casino signed, settled by the
-  secret and seed that hash to what the bet named. [Finalization](../reference/contract.md#finalization) says what such
-  a state is owed. Every signature is bound to the chain and to this contract.
+  secret and seed that hash to what the bet named, or by a casino bet the casino's quote covers, disputed.
+  [Finalization](../reference/contract.md#finalization) says what such a state is owed. Every signature is bound to the
+  chain and to this contract.
+- **A casino bet its quote covers is settled.** Every reply brings the casino's signed quote for your next casino bet:
+  its round, the virtual bankroll it is admitted against and an expiry a day away. The casino must settle a bet the
+  quote's virtual bankroll admits by the casino's Kelly rule. One it leaves unsettled, you dispute by closing with it
+  before the quote expires: it counts as won, and house cash keeps its prize from the owner, until the casino settles it
+  on-chain with the round's secret, which it has 24 hours from the dispute to do.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
-  claim, with no casino server involved. The challenge window is a fixed 24 hours, and a challenge never extends it.
+  claim, with no casino server involved. The challenge window is a fixed 24 hours; only a dispute moves it, to give the
+  casino a full day to settle the disputed bet.
 - **Winnings are recorded, and paid in order.** Finalizing a close, or recording a withdrawal, records its unpaid
   winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
   of an earlier one, and the owner cannot withdraw them.
@@ -42,34 +50,44 @@ game, its developer and a bankroll fund share each carry trust of their own, set
 - **Paying winnings.** What your balance holds above your deposits, your winnings, is an unsecured claim on the shared
   bankroll: a withdrawal's winnings and a close's wait in the queue for house cash. Neither replenishment nor a payout
   deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is covered. This
-  is a deliberate choice of capital efficiency.
+  is a deliberate choice of capital efficiency. A disputed bet's prize is kept from the owner while it is disputed, and
+  once won it waits in the same queue.
+- **The bankroll overcommits.** This is a limitation. The quotes out at once are not divided between them: each admits
+  bets against the whole virtual bankroll as it was when quoted, and holds for a day. The bets on many quotes can
+  together stake more than the Kelly rule lets the bankroll take at once, and win more than it holds; what it cannot
+  pay waits in the winnings queue. The virtual bankroll is half the bankroll, a half-Kelly margin against this, not a
+  bound on it.
 - **Sending withdrawals.** The casino takes on a withdrawal only when your deposits and the house cash it can count on
   cover all of it, and declines it otherwise, so a withdrawal is normally paid in full the moment it is sent. It sends
   each it takes on to the contract once, oldest first and one transaction at a time, and owes it until a confirmed block
   shows it recorded, whoever sent it, or its channel's close final without it. One it cannot send yet waits while the
   next is sent, and its public status says why. Play never waits for a withdrawal.
-- **Admitting bets.** The casino sizes each casino bet against its bankroll with a Kelly rule and sets its commission.
-  That is its own risk management: the contract does not enforce it and the wallet does not check it.
-- **Completing bets.** The casino can decline a casino bet, go offline or never answer, with no protocol penalty. A
-  rejection is a signed checkpoint that leaves the balance unchanged, and an unanswered operation settles at the latest
-  completed state. A declined casino bet's round is revealed with the rejection, so selective rejection shows on your
-  receipts; it is not prevented. What the casino has signed, it cannot change.
+- **Admitting bets.** The casino admits each casino bet against its quote's virtual bankroll with a Kelly rule, and
+  sets its commission against the same figure. It names the virtual bankroll it quotes: half its bankroll, by its own
+  books.
+- **Completing bets.** The casino settles every casino bet its quote covers; the wallet sends a bet's seed only then.
+  It can decline any other operation, go offline or never answer, with no protocol penalty. A rejection is a signed
+  checkpoint that leaves the balance unchanged, and an unanswered operation settles at the latest completed state, but a
+  covered casino bet, which you dispute. A declined casino bet reveals nothing: its round stays secret and takes your
+  next bet. The casino declines a covered bet only as a game's operation you carried out on another channel, with the
+  operation your account signed there as proof. A completed result cannot change.
 - **Keeping its record.** It records every response it signs durably before the response leaves it, so retrying an
   operation ID returns the same accepted or rejected receipt, also after a restart, and a game's operation its player
-  already carried out on another channel is declined, never carried out twice. It signs at most one outcome for a
-  channel position and settles on each round's secret at most once; a round whose secret was lost settles nothing. A
+  already carried out on another channel is declined, never carried out twice. It discloses at most one signed outcome for a
+  channel position and settles on each round's secret at most once; a round whose secret was lost settles nothing, so a
+  covered bet on it, disputed, is paid as won. A
   persistence failure stops all further signing, and play pauses while its view of the chain is stale or while it
   reconciles after a restart or a reorg. It runs the exact protocol revision it pins from this repository.
 - **Watching channels.** It closes a channel nobody has played on for 7 days
-  ([idle channels](../wallet/closing-and-claims.md#idle-channels)), and challenges stale closes of the channels it
-  knows, in its own interest: its watcher does not protect you against the casino.
+  ([idle channels](../wallet/closing-and-claims.md#idle-channels)), challenges stale closes of the channels it knows and
+  settles the casino bets disputed on them, in its own interest: its watcher does not protect you against the casino.
 - **What it reports.** Commission, the bankroll figure it reports, the fund's share price and each developer's earnings
   tally are the casino's word.
 
-These are an operator's promises. The contract enforces none of them, and the wallet is built not to need them: it
-verifies every signature, preimage and balance change itself, keeps the evidence, can send a withdrawal to the contract
-itself and can settle on-chain alone, by closing. What it cannot verify is availability, liquidity and whether every
-requested casino bet is completed.
+These are an operator's promises, but for settling a covered casino bet, which the contract enforces. The wallet is
+built not to need them: it verifies every signature, preimage and balance change itself, keeps the evidence, can send a
+withdrawal to the contract itself and can settle on-chain alone, by closing and by disputing. What it cannot verify is
+availability and liquidity.
 
 ## What you do yourself
 
@@ -77,6 +95,10 @@ requested casino bet is completed.
   state. A challenge with your newer evidence must be mined within 24 hours of the close starting, or the older, lower
   balance becomes final. Opening the wallet does not send a challenge: you press **Challenge the close**, or run a
   [watchtower](../wallet/keys-and-recovery.md#the-watchtower).
+- **Dispute a covered bet the casino leaves unsettled.** A casino bet its quote covers that the casino declines or does
+  not answer stays saved in the wallet, which disputes it when you press **Close without the casino**, or **Challenge
+  the close** when the casino closes short of it. The dispute must be mined before the quote expires, a day after the
+  casino signed it.
 - **Keep your key, and your evidence.** Your key is your account: save it with a passkey or a key file. Your latest
   signed state is your proof. The wallet keeps it, and on another device takes up the casino's copy, which is the
   casino's word; export recovery bundles to settle without trusting it
@@ -138,13 +160,15 @@ The wallet checks:
 - the chain, through two independent RPCs on Sepolia, at blocks both agree on;
 - every result: that the operation is the one it signed, that it follows the saved checkpoint, the revealed secret and
   seed, the outcome and what the bet pays on it, the balance arithmetic, and the casino's signature;
-- every rejection, and the round it reveals;
+- every quote: the casino's signature, the checkpoint and round it names, and whether it covers a casino bet, before the
+  bet's seed goes;
+- every rejection, and that it declines no casino bet a quote covers but one the account signed on another channel;
 - developer settlements, share statements, bank statements and the fund's quote, by their signatures and what
   they refer to;
 - whether the contract has recorded each withdrawal, by its ID, and what it still owes of it;
 - game URLs and every bridge request.
 
-It takes on the casino's word: commission, the bankroll figure, the fund's equity and total shares, the developer
-earnings tally, a developer bank's balance, and, on a device without your evidence, that the state it holds of your
-balance is the latest. It takes on the developer's word what a developer bet pays and which bet
-a collapsed step draws, and on the game's word everything a game shows.
+It takes on the casino's word: commission, the virtual bankroll a quote names, the fund's equity and total shares, the
+developer earnings tally, a developer bank's balance, and, on a device without your evidence, that the state it holds
+of your balance is the latest. It takes on the developer's word what a developer bet pays and which bet a collapsed
+step draws, and on the game's word everything a game shows.

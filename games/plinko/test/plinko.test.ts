@@ -71,7 +71,7 @@ test('each drop is one casino bet, recovers a lost reply under the same ID, and 
   const bridge = {
     allowance: async () => w.gameAllowance(),
     call: async (method: string, params: any = {}) => {
-      if (method === 'wallet.info') return { ...w.gameInfo(), bankroll };
+      if (method === 'wallet.info') return { ...(await w.gameInfo()), virtualBankroll: bankroll };
       if (method === 'game.receipt') return w.gameReceipt(params.id);
       if (method !== 'game.casinoBet') throw new Error(`unexpected ${method}`);
       bets++;

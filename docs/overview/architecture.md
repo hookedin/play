@@ -34,3 +34,12 @@ admitted and charged by itself, not a committed hand, and its prices follow from
 only as far as it can pay. Whether a developer can pay what its developer bets are owed, and proving it, is between the
 developer and its players; the casino does not attempt it. Playing a developer's game trusts that developer: for its
 tables in any game, and with a developer bet for its payment and for whatever its scheme promises.
+
+## Limitations
+
+**The bankroll overcommits.** A casino bet its quote covers is binding, and a quote holds for a day, so the casino
+cannot take one back once its bankroll has moved. The quotes out at once are not divided between them: each admits bets
+against the whole virtual bankroll as it was when quoted. Together the bets on them can stake more than the Kelly rule
+lets the bankroll take at once, and win more than it holds, which then waits in the winnings queue. The virtual
+bankroll is half the bankroll, a half-Kelly margin and the only one. Dividing the bankroll between the quotes out would
+bound it, at the cost of every player's limits shrinking with the number of players holding a quote.

@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { anvil, deployment, open, signedIncrease } from '../testing/contract.ts';
-import { verifyEvidence } from '../protocol/protocol.ts';
+import { anvil, deployment, disputedBet, open, signedIncrease } from '../testing/contract.ts';
+import { hashState, verifyEvidence } from '../protocol/protocol.ts';
+import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 import { DisputeWorker } from '../protocol/dispute-worker.ts';
 
@@ -48,4 +49,44 @@ test("evidence this contract cannot settle blocks no other channel's challenge",
   assert.ok(
     result.alerts.some(alert => alert.channelId === bad.state.channelId && alert.reason === 'channel-defense-failed'),
   );
+});
+
+test('a disputed casino bet is settled by the evidence at its own sequence', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const f = await deployment(env),
+    ch = await open(f, env.wallets[1], 1000n),
+    expiresAt = (await env.provider.getBlock('latest'))!.timestamp + 86400,
+    bet = await disputedBet(f, ch, {
+      virtualBankroll: 5000n,
+      expiresAt,
+      stake: 100n,
+      chance: OUTCOME_SPACE / 2n,
+      prize: 196n,
+    });
+  await (await f.contract.connect(env.wallets[1]).dispute(bet.evidence, bet.terms)).wait();
+  const settled = await bet.settled(),
+    observer = new ChainObserver({ provider: env.provider, chainId: env.chainId }),
+    worker = new DisputeWorker({
+      contract: f.contract,
+      provider: env.provider,
+      observer,
+      signer: env.wallets[9],
+      chainId: env.chainId,
+      file: path.join(directory, 'journal.json'),
+    }),
+    bundle = {
+      opening: ch.opening,
+      evidence: settled.evidence,
+      casino: String(f.contract.target),
+      chainId: env.chainId,
+      operator: f.owner.address,
+    },
+    result = await worker.tick([bundle], await observer.observe());
+  assert.ok(result.alerts.some(alert => alert.reason === 'disputed-bet'));
+  await env.provider.waitForTransaction(result.pending!);
+  const c = await f.contract.channels(ch.state.channelId);
+  assert.deepEqual([c.closingHash, c.disputedPrize], [hashState(f.d, settled.state), 0n]);
 });

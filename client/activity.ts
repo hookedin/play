@@ -165,16 +165,12 @@ export function receiptSummary(
         } as Record<string, string>
       )[receipt.kind],
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
-      tone: receipt.lost ? 'warning' : 'neutral',
+      tone: 'neutral',
       amount: `0 ETH`,
       amountLabel: 'Balance change',
       description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'lock-in'].includes(receipt.kind)
         ? 'Your balance is unchanged.'
-        : receipt.lost
-          ? 'Your balance is unchanged. The casino says it has no record of this round, so it could not reveal it: what this casino bet would have paid cannot be checked.'
-          : receipt.wouldHavePaid === undefined
-            ? 'Your balance is unchanged. You can place another bet.'
-            : `Your balance is unchanged. The casino revealed the round: this casino bet would have paid ${ether(receipt.wouldHavePaid)} ETH for its ${ether(receipt.request?.amount ?? 0)} ETH stake.`,
+        : 'Your balance is unchanged. You can place another bet.',
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -215,6 +211,7 @@ export function receiptSummary(
                   'lock-in': 'Balance locked in',
                   'withdrawal-sent': 'Withdrawal sent',
                   'close-started': 'Close started',
+                  'bet-disputed': 'Bet disputed',
                   closure: 'Balance closed',
                   dispute: 'Close challenged',
                   payment: 'Game payment',
@@ -245,7 +242,7 @@ export function receiptSummary(
                 ? 'Sent'
                 : receipt.kind === 'closure'
                   ? 'Claim recorded'
-                  : ['withdrawal-sent', 'close-started', 'dispute'].includes(receipt.kind)
+                  : ['withdrawal-sent', 'close-started', 'bet-disputed', 'dispute'].includes(receipt.kind)
                     ? 'No payment'
                     : `ETH received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
@@ -323,8 +320,10 @@ export function receiptSummary(
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or retry it from your deposit address with the saved transaction details.'
       : receipt.kind === 'close-started'
         ? 'A close without the casino can be challenged for 24 hours. Then finish it under Wallet → Recovery.'
-        : receipt.kind === 'closure'
-          ? 'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.'
-          : undefined;
+        : receipt.kind === 'bet-disputed'
+          ? 'The casino has 24 hours to settle the disputed bet on-chain; if it does not, the bet counts as won. Then finish the close under Wallet → Recovery.'
+          : receipt.kind === 'closure'
+            ? 'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.'
+            : undefined;
   return { title, status, tone, amount, amountLabel, description, notice };
 }

@@ -29,6 +29,10 @@ import {
   MAX_META_BYTES,
   MAX_PAYOUTS,
   validMeta,
+  assertSignature,
+  covers,
+  QUOTE_TYPES,
+  QUOTE_PERIOD,
 } from '../protocol/protocol.ts';
 import { assessBet, betReturn, RETURN_SCALE } from '../protocol/risk.ts';
 import type { GameAllowance, GameIdentity, GameReceipt } from '../protocol/game-types.ts';
@@ -113,8 +117,8 @@ export function worstReturn(plan: GamePlan) {
  * A real wallet wired to an in-memory casino stub, and a stub developer shaped like the one a game's server creates
  * with its developer's key: what a game is tested against without the private casino. The stub holds every casino
  * bet to the casino's own admission rule and charges its commission, so a bet it takes is one the casino takes.
- * `bankroll` is what it covers casino bets with; `bank` is what the developer's bank holds before any developer bet
- * pays its stake into it.
+ * `bankroll` is what it covers casino bets with, and admits them against half of, as the casino's quotes do; `bank`
+ * is what the developer's bank holds before any developer bet pays its stake into it.
  */
 export async function gameWallet({
   bankroll: capital = 10n ** 12n,
@@ -164,6 +168,18 @@ export async function gameWallet({
       round = roundId(secret);
     secrets.set(round, secret);
     return round;
+  };
+  /** The quote for the casino bet that follows `state` on a channel: its round, and half the bankroll, for a day. */
+  const quoteFor = async (channel: string, state: any) => {
+    if (!own.has(channel)) own.set(channel, createRound());
+    const message = {
+      channelId: channel,
+      previousStateHash: hashState(d, state),
+      round: own.get(channel)!,
+      virtualBankroll: String(bankroll / 2n),
+      expiresAt: String(Math.floor(Date.now() / 1000) + QUOTE_PERIOD),
+    };
+    return { message, signature: await owner.signTypedData(d, QUOTE_TYPES, message) };
   };
   const rounds = new Map<string, { id: string; seed?: string; casinoBet?: DeveloperCasinoBet }>();
   // Developer bets, what each settled bet owes this player until the wallet collects it, and the order bets settled in.
@@ -224,7 +240,6 @@ export async function gameWallet({
       signer: player,
       domain: d,
       config: { contractAddress: casino, operator: owner.address },
-      reportedBankroll: String(bankroll),
       channelId: first.opening.channelId,
       channels: { [first.opening.channelId]: structuredClone(first) },
     });
@@ -233,11 +248,8 @@ export async function gameWallet({
       if (!wallet.channel) throw new Error('No channel');
     };
     wallet.api = async (path, body) => {
-      const channelRound = /^\/api\/channels\/(0x[0-9a-f]{64})\/round$/.exec(path);
-      if (channelRound) {
-        if (!own.has(channelRound[1]!)) own.set(channelRound[1]!, createRound());
-        return { id: own.get(channelRound[1]!) };
-      }
+      const channelQuote = /^\/api\/channels\/(0x[0-9a-f]{64})\/quote$/.exec(path);
+      if (channelQuote) return { quote: await quoteFor(channelQuote[1]!, wallet.channels[channelQuote[1]!]!.state) };
       const round = /^\/api\/rounds\/(0x[0-9a-fA-F]{64})$/.exec(path);
       if (round) return publicRound(round[1]!);
       const developerBet = /^\/api\/developer-bets\/(0x[0-9a-f]{64})$/.exec(path);
@@ -269,12 +281,14 @@ export async function gameWallet({
           .slice(0, MAX_PAYOUTS)
           .map(([source, amount]) => ({ source, index: 0, amount: String(amount) }));
       if (!path.endsWith('/operations')) throw refused(404, 'not-found', `The stub casino has no ${path}`);
-      const { request, details, signature, seed } = body as any,
+      const { request, details, signature, seed, quote, rejectionSignature } = body as any,
         recorded = `${request.channelId}:${details.id}`;
       if (responses.has(recorded)) return responses.get(recorded);
       const kind = Number(request.kind),
         elsewhere = details.game && carried.has(details.id) && carried.get(details.id) !== request.channelId;
-      if (kind === KIND.casinoBet) return casinoBet(request, details, signature, seed, elsewhere);
+      if (rejectionSignature)
+        return decline(request, details, 'Cancelled by player', elsewhere ? { used: true } : {}, rejectionSignature);
+      if (kind === KIND.casinoBet) return casinoBet(request, details, signature, seed, quote, elsewhere);
       if (elsewhere)
         return decline(request, details, 'This operation was carried out on another channel', { used: true });
       if (kind === KIND.debit && details.meta) return placeDeveloperBet(request, details, signature);
@@ -286,10 +300,18 @@ export async function gameWallet({
       if (kind === KIND.debit) bankroll += BigInt(request.amount);
       return settle(request, details, signature, ZeroHash, ZeroHash, 0n);
     };
-    /** The casino declines an operation with a signed checkpoint above it: the balance is unchanged. */
-    const decline = async (request: any, details: any, reason: string, extra: Record<string, unknown> = {}) => {
+    /** The casino proposes a rejection, then completes it once the player signs its unchanged-balance checkpoint. */
+    const decline = async (
+      request: any,
+      details: any,
+      reason: string,
+      extra: Record<string, unknown> = {},
+      rejectionSignature?: string,
+    ) => {
       const base = wallet.channels[request.channelId]!,
         state = rejectionCheckpoint(d, base.state, request);
+      if (rejectionSignature) assertSignature(d, STATE_TYPES, state, rejectionSignature, player.address);
+      const casinoSignature = rejectionSignature ? await owner.signTypedData(d, STATE_TYPES, state) : '0x';
       const response = plain({
         status: 'rejected',
         reason,
@@ -297,13 +319,15 @@ export async function gameWallet({
         details,
         operationId: details.id,
         state,
-        casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
+        casinoSignature,
         commission: '0',
-        evidence: checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
-        bankroll: String(bankroll),
+        evidence: rejectionSignature
+          ? checkpointEvidence(state, rejectionSignature, casinoSignature)
+          : checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
+        ...(rejectionSignature ? { quote: await quoteFor(request.channelId, state) } : {}),
         ...extra,
       });
-      responses.set(`${request.channelId}:${details.id}`, response);
+      if (rejectionSignature) responses.set(`${request.channelId}:${details.id}`, response);
       return response;
     };
     const settle = async (request: any, details: any, signature: string, seed: string, secret: string, fee: bigint) => {
@@ -321,43 +345,54 @@ export async function gameWallet({
           ...checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
           step: { operation: request, authorization: signature, seed, secret, casinoSignature: signed },
         },
-        bankroll: String(bankroll),
+        quote: await quoteFor(request.channelId, next),
       });
       responses.set(`${request.channelId}:${details.id}`, response);
       if (details.game) carried.set(details.id, request.channelId);
       settlements++;
       return response;
     };
-    /** A casino bet on the channel's own round: admitted by the casino's rule against the bankroll, or declined
-     * with the round revealed, so the wallet records what it would have paid. */
-    const casinoBet = async (request: any, details: any, signature: string, seed: string, elsewhere: boolean) => {
+    /** A casino bet on the channel's own round: settled when the stub's quote covers it, and otherwise declined,
+     * revealing nothing. A covered one carried out on another channel is declined with the proof the wallet checks. */
+    const casinoBet = async (
+      request: any,
+      details: any,
+      signature: string,
+      seed: string,
+      quote: any,
+      elsewhere: boolean,
+    ) => {
       const round = String(request.round).toLowerCase(),
-        secret = secrets.get(round)!;
-      if (own.get(request.channelId) !== round) return decline(request, details, 'Round is not open', { lost: true });
-      own.set(request.channelId, createRound());
-      const nextRound = { nextRound: own.get(request.channelId) },
-        terms = betTerms(request.amount, request.chance, request.prize);
-      if (elsewhere)
-        return {
-          ...(await decline(request, details, 'This operation was carried out on another channel', {
-            used: true,
-            secret,
-          })),
-          ...nextRound,
-        };
-      let fee: bigint;
+        used = 'This operation was carried out on another channel';
+      let covered = own.get(request.channelId) === round;
       try {
-        fee = assessBet({ bankroll, bet: terms }).fee;
-      } catch (error) {
-        if (!(error instanceof RangeError)) throw error;
-        return {
-          ...(await decline(request, details, 'The bankroll cannot take this casino bet', { secret })),
-          ...nextRound,
-        };
+        assertSignature(d, QUOTE_TYPES, quote?.message ?? {}, quote?.signature ?? '', owner.address);
+        covered &&= covers(quote, request, Math.floor(Date.now() / 1000));
+      } catch {
+        covered = false;
       }
-      const paid = betPayout(terms, outcome(seed, secret).value);
+      if (!covered)
+        return decline(request, details, elsewhere ? used : 'No quote of the casino covers this casino bet', {
+          ...(elsewhere ? { used: true } : {}),
+        });
+      if (elsewhere) {
+        const other = responses.get(`${carried.get(details.id)}:${details.id}`);
+        return decline(request, details, used, {
+          used: true,
+          carried: {
+            operation: other.evidence.step.operation,
+            authorization: other.evidence.step.authorization,
+            details: other.details,
+          },
+        });
+      }
+      own.set(request.channelId, createRound());
+      const secret = secrets.get(round)!,
+        terms = betTerms(request.amount, request.chance, request.prize),
+        fee = assessBet({ bankroll: BigInt(quote.message.virtualBankroll), bet: terms }).fee,
+        paid = betPayout(terms, outcome(seed, secret).value);
       bankroll += terms.stake - paid - fee / 2n;
-      return { ...(await settle(request, details, signature, seed, secret, fee)), ...nextRound };
+      return settle(request, details, signature, seed, secret, fee);
     };
     /** A developer bet is final and completes at once if its game is published: its stake goes into the developer's
      * bank, and the developer settles it. */
@@ -405,8 +440,8 @@ export async function gameWallet({
   };
   /** The seed of the developer's casino bet on a round, derived from its key as the developer kit derives it. */
   const seedOf = async (round: string) => keccak256(await developerKey.signMessage(getBytes(round)));
-  /** The developer's casino bet on its round, as the casino takes it: admitted against the bankroll before the secret
-   * is read, or, betting nothing, a plain reveal. Either way the round is revealed once. */
+  /** The developer's casino bet on its round, as the casino takes it: admitted against the virtual bankroll, half the
+   * bankroll, before the secret is read, or, betting nothing, a plain reveal. Either way the round is revealed once. */
   const stubCasinoBet = async ({ round: id, stake, chance, prize, group, meta }: BankCasinoBet) => {
     const round = rounds.get(id.toLowerCase());
     if (!round) throw refused(404, 'not-found', 'Unknown round');
@@ -441,7 +476,7 @@ export async function gameWallet({
     let fee: bigint | null = null;
     if (!reveal)
       try {
-        fee = assessBet({ bankroll, bet: terms }).fee;
+        fee = assessBet({ bankroll: bankroll / 2n, bet: terms }).fee;
       } catch (error) {
         if (!(error instanceof RangeError)) throw error;
       }
@@ -464,7 +499,7 @@ export async function gameWallet({
   };
   /** The developer a game's server would create with its developer's key, against this stub casino. */
   const stubDeveloper: Developer = {
-    bankroll: async () => bankroll,
+    virtualBankroll: async () => bankroll / 2n,
     async openRound() {
       const id = createRound();
       rounds.set(id, { id });

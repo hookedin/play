@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachGameBridge, validateRequest } from '../client/bridge.ts';
 import { checkDetails, KIND } from '../protocol/protocol.ts';
+import { MAX_BALANCE } from '../protocol/risk.ts';
 
 const request = (id = 1, method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
 const params = { id: 'op-1', stake: '10', chance: '100', prize: '20' };
@@ -362,7 +363,7 @@ test('validation accepts only plain parameter records and bounded exact terms', 
     assert.throws(() => validateRequest(bet({ chance })));
   assert.throws(() => validateRequest(bet({ chance: String(1n << 64n) })), /chance/);
   for (const prize of [undefined, '0', 20, '-1']) assert.throws(() => validateRequest(bet({ prize })));
-  assert.throws(() => validateRequest(bet({ prize: String(1n << 128n) })), /prize is below 2\^128/);
+  assert.throws(() => validateRequest(bet({ prize: String(MAX_BALANCE) })), /prize is below 2\^96/);
   for (const bad of [{ odds: '5' }, { probability: '0.5' }, { payouts: [] }])
     assert.throws(() => validateRequest(bet(bad)), /Unexpected/, 'one way to state the odds');
   // A casino bet settles now, on the wallet's own round. A developer bet is its developer's to settle, on its word, and

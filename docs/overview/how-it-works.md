@@ -58,9 +58,10 @@ it, or until you [lock it in](../wallet/closing-and-claims.md#lock-in-your-balan
 
 Every casino bet is settled by a **round**, and neither side can choose its outcome:
 
-1. The casino picks a random **secret** and names the round by its hash, `round = keccak256(secret)`.
+1. The casino picks a random **secret** and names the round by its hash, `round = keccak256(secret)`, in its quote.
 2. The wallet signs a bet that names that round and the hash of a random **seed** of its own,
-   `seedHash = keccak256(seed)`, and sends the seed with it. The casino fixed its secret before it could see the seed.
+   `seedHash = keccak256(seed)`, and sends the seed with it when the quote covers the bet. The casino fixed its secret
+   before it could see the seed.
 3. The casino's result reveals the secret. The wallet checks both preimages against the hashes the bet signed, and
    works out the **outcome**:
 
@@ -68,9 +69,26 @@ Every casino bet is settled by a **round**, and neither side can choose its outc
 outcome = low 64 bits of keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))
 ```
 
-A round settles one casino bet; the reply names the channel's next round. A round is revealed even when the casino
-declines its bet, so the wallet records at once what the declined bet would have paid: a casino that declined bets by
-their outcome would show it on its players' receipts.
+A round settles one casino bet, and only the bet that settles on it reveals its secret: a declined bet reveals nothing,
+and the round takes the channel's next bet.
+
+## Quotes
+
+Every reply brings the casino's **quote** for the channel's next casino bet, which follows the state the reply signed:
+the round it settles on, the **virtual bankroll** it is admitted against, and an expiry a day away. The virtual bankroll
+is half the casino's bankroll when it quoted. A quote **covers** a casino bet that names its round and checkpoint while
+it holds, and whose terms its virtual bankroll admits by the casino's
+[Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager).
+
+The casino settles every casino bet a quote covers. The wallet sends the seed with a covered bet only, so the casino
+declines any other without learning what it would have paid. A covered bet the casino declines or leaves unanswered
+stays saved in the wallet, which **disputes** it by closing the channel with it before the quote expires: the contract
+counts it as won, keeps its prize from the owner, and gives the casino 24 hours to settle it with the round's secret
+([closing and claims](../wallet/closing-and-claims.md#dispute-a-casino-bet)). The casino declines a covered bet only as
+a game's operation its player carried out on another channel, with the operation the account signed there as proof.
+
+A quote binds the casino for its day whatever the bankroll does meanwhile, and the quotes out at once are not divided
+between them: the bankroll overcommits ([limitations](architecture.md#limitations)).
 
 A game with a server of its own can also have the casino name rounds for it and place casino bets on them, so that many
 players share one draw; see [developer bets](../games/developer-bets.md).
@@ -100,8 +118,9 @@ A game with more outcomes than two plays them with bets like this one: a single-
 draw, such as roulette, has its developer back it in
 [binary steps](../games/developer-bets.md#shared-games-binary-steps).
 
-A casino bet settles against the casino's bankroll in the request that places it. The casino may decline it instead:
-it then signs a **rejection**, a checkpoint that leaves the balance unchanged, and the bet costs nothing.
+A casino bet settles against the casino's bankroll in the request that places it. One its quote does not cover, the
+casino declines instead: it signs a **rejection**, a checkpoint that leaves the balance unchanged, and the bet costs
+nothing.
 
 ## Developer bets
 
@@ -125,9 +144,10 @@ round and earns no commission. A game uses it for a charge that does not depend 
 
 ## The bankroll and commission
 
-The casino's **bankroll** backs every casino bet. The casino admits a bet only when the bankroll could take it with no
-commission at all, by the exact Kelly condition for its two outcomes. Its **commission** is then the edge the
-bankroll does not need, split equally between the game's developer and the casino. Commission is the casino's
+The casino's **bankroll** backs every casino bet. The casino admits a bet only when its quote's virtual bankroll, half
+the bankroll, could take it with no commission at all, by the exact Kelly condition for its two outcomes. Its
+**commission** is then the edge that virtual bankroll does not need, split equally between the game's developer and the
+casino. Commission is the casino's
 accounting, not a second debit from your balance; a bet's receipt reports it. [Economics](../reference/economics.md)
 derives the rule, and [earnings](../games/publishing.md#earnings) explains what a developer collects.
 
@@ -152,7 +172,9 @@ all of it can be paid now, and otherwise declines it, leaving the balance unchan
 Only a close ends a channel, and either side can start one alone with its latest evidence: the latest balance both
 sides signed, or the channel's base, either alone or followed by one operation the account authorized and the casino
 signed. That starts a fixed 24-hour window, and the account's next deposit opens its next channel at once. Anyone with
-strictly newer evidence can replace the close's state before the deadline, and the deadline never moves. After it,
+strictly newer evidence can replace the close's state before the deadline, and the deadline moves only for a dispute:
+a covered casino bet the account closes with, or challenges with, gives the casino 24 hours from then to replace it with
+its result. After it,
 anyone can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
 **claim**: up to the channel's principal it is protected, `min(owed, principal)`, and the rest is winnings, paid first
 in, first out as cash arrives. Collecting is a separate transaction. The casino closes a channel nobody plays on

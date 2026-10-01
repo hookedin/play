@@ -1,6 +1,14 @@
 import type { JsonRpcProvider } from 'ethers';
 import type { Store } from './storage.ts';
-import type { Domain, Deployment, Checkpoint, Opening, Evidence, PlayerDeveloperBet } from '../protocol/types.ts';
+import type {
+  Domain,
+  Deployment,
+  Checkpoint,
+  Opening,
+  Evidence,
+  PlayerDeveloperBet,
+  Quote,
+} from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
 import { Contract, Wallet, getAddress } from 'ethers';
@@ -23,6 +31,7 @@ import {
   KIND,
   assertProtocol,
   owed,
+  disputedStep,
 } from '../protocol/protocol.ts';
 import {
   ChainObserver,
@@ -57,8 +66,8 @@ export interface WalletChannel {
   claim?: any;
   observedAt?: number;
   lastResponse?: { evidence: Evidence } | null;
-  /** This channel's next own round, named by the casino's reply to the last bet or asked for. */
-  round?: string;
+  /** The casino's quote for this channel's next casino bet, from its reply to the last operation or asked for. */
+  quote?: Quote;
   pending?: any;
   /** Registered with the casino, which has the same state: play and deposits taken in need it. */
   registered?: boolean;
@@ -86,6 +95,7 @@ const CHANNEL_FIELDS = [
   'closingSequence',
   'closingHash',
   'closingBalance',
+  'disputedPrize',
 ];
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
   sepolia: { id: 11155111n, name: 'Sepolia', stake: '1000000000000' },
@@ -188,7 +198,6 @@ export class CasinoWallet extends GameSessions {
     stats: any;
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
-  reportedBankroll = '0';
   /** Whether ETH at this account's address goes into its balance up to its deposit limit. Off, it stays available
    * for withdrawal and transaction fees. */
   declare autoDeposit: boolean;
@@ -579,10 +588,17 @@ export class CasinoWallet extends GameSessions {
       deadline: closing?.onchain.deadline || '0',
       closingSequence: closing?.onchain.closingSequence || '0',
       closingSaved: closing?.state.sequence || '0',
-      challengePending: this.transactionIntent?.method === 'challengeClose',
+      challengePending: ['challengeClose', 'dispute'].includes(this.transactionIntent?.method),
       // What the latest saved state is owed beyond what the close proposes.
       balanceAtRisk: closing ? String(this.atRisk(closing)) : '0',
-      needsChallenge: Boolean(closing && BigInt(closing.state.sequence) > BigInt(closing.onchain.closingSequence)),
+      // A close that stops short of a casino bet its quote covers is challenged by disputing the bet.
+      challengeDisputes: Boolean(closing && this.disputesClose(closing)),
+      needsChallenge: Boolean(
+        closing &&
+        (BigInt(closing.state.sequence) > BigInt(closing.onchain.closingSequence) || this.disputesClose(closing)),
+      ),
+      // The prize of the casino bet the close disputes, until the casino settles it: 0 with none.
+      disputedPrize: closing?.onchain.disputedPrize || '0',
       // What the contract still owes: closed balances, under their channels, and withdrawals it has not paid in full.
       claims: [
         ...Object.values(this.channels)
@@ -942,6 +958,17 @@ export class CasinoWallet extends GameSessions {
     if (channel.playerSignature && channel.playerSignature !== '0x')
       return checkpointEvidence(channel.state, channel.playerSignature, channel.casinoSignature);
     return channel.lastResponse?.evidence || checkpointEvidence(channel.state);
+  }
+  /** The evidence that disputes the channel's pending casino bet: its saved checkpoint, and the bet with its seed. */
+  disputeEvidence(channel = this.channel!) {
+    const { request, signature, seed } = channel.pending;
+    return { ...this.evidence(channel), step: disputedStep(request, signature, seed) };
+  }
+  /** Whether a close of `channel` under way stops short of its pending casino bet, which its quote still covers. */
+  disputesClose(channel: WalletChannel) {
+    return (
+      this.disputable(channel) && BigInt(channel.pending.request.sequence) > BigInt(channel.onchain.closingSequence)
+    );
   }
   async withSavedRecord<T>(read: (record: any) => T | Promise<T>) {
     if (this.busy) throw new Error('Wait for the current wallet operation');

@@ -2,7 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bridgeTo, gameWallet, memoryStore } from '@hookedin/play/testing/game-wallet.ts';
 import { MemoryStore } from '../../client/storage.ts';
-import { rejectionCheckpoint, STATE_TYPES, checkpointEvidence } from '../../protocol/protocol.ts';
+import { id } from 'ethers';
+import {
+  rejectionCheckpoint,
+  checkpointEvidence,
+  hashState,
+  QUOTE_TYPES,
+  QUOTE_PERIOD,
+} from '../../protocol/protocol.ts';
 import { RoundClient } from '../src/round.ts';
 import type { GameReceipt } from '../../protocol/game-types.ts';
 import { createMines, fraction } from '../src/engine/index.ts';
@@ -488,7 +495,7 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
 
 test('a stake the casino cannot back fails with a plain capacity message, not a pricing error', async () => {
   const bridge = {
-    call: async () => ({ bankroll: '5000000000000000', chainId: '1' }),
+    call: async () => ({ virtualBankroll: '5000000000000000', chainId: '1' }),
     allowance: async () => ({ allowance: '100000000000000000', pending: false }),
   };
   const round = new RoundClient(bridge, coin({ payout: stake => (stake * 19n) / 10n }), undefined, {
@@ -503,7 +510,7 @@ test('a supported plan is reused across rounds and recomputed when the bankroll 
   let bankroll = 1000000000n,
     builds = 0;
   const bridge = {
-    call: async () => ({ bankroll: String(bankroll), chainId: '1' }),
+    call: async () => ({ virtualBankroll: String(bankroll), chainId: '1' }),
     allowance: async () => ({ allowance: '10000', pending: false }),
   };
   const round = new RoundClient(
@@ -546,27 +553,28 @@ test('a rejected game action survives a lost reply and reload without resampling
     attempts: any[] = [];
   w.api = async (url, body: any) => {
     if (url.endsWith('/operations')) {
-      attempts.push(body.request);
-      if (attempts.length === 1) {
+      if (!body.rejectionSignature) attempts.push(body.request);
+      if (attempts.length === 1 && !body.rejectionSignature) {
         const state = rejectionCheckpoint(w.domain, w.channel!.state, body.request);
-        const signature = await f.owner.signTypedData(w.domain, STATE_TYPES, state);
         return {
           status: 'rejected',
-          reason: 'Capacity unavailable',
+          reason: 'No quote of the casino covers this casino bet',
           request: body.request,
-          // A declined bet on the channel's own round reveals it.
-          secret: f.secretOf(body.request.round),
           state,
           operationId: body.request.operationId,
           developer: null,
-          casinoSignature: signature,
+          casinoSignature: '0x',
           evidence: checkpointEvidence(w.channel!.state, w.channel!.playerSignature, w.channel!.casinoSignature),
         };
       }
     }
     return api(url, body);
   };
+  // The game prices the step against the virtual bankroll it was told, and the quote the wallet holds by the time it
+  // signs covers none of it.
+  const told = (await w.gameInfo()).virtualBankroll;
   const bridge = bridgeFor(w, async (method, params) => {
+    if (method === 'wallet.info') return { ...(await w.gameInfo()), virtualBankroll: told };
     if (method !== 'game.casinoBet') return undefined;
     const receipt = await w.gameCasinoBet(params);
     if (receipt.status === 'rejected') throw new Error('reply lost');
@@ -576,6 +584,15 @@ test('a rejected game action survives a lost reply and reload without resampling
   const store = memoryStore();
   let round = new RoundClient(bridge, graph, undefined, { store });
   await round.start({ stake: '1000' });
+  // The casino's quote for the step covers nothing it bets, so the casino declines it, and the wallet takes that.
+  const message = {
+    channelId: w.channel!.state.channelId,
+    previousStateHash: hashState(w.domain, w.channel!.state),
+    round: id('a round'),
+    virtualBankroll: '0',
+    expiresAt: String(Math.floor(Date.now() / 1000) + QUOTE_PERIOD),
+  };
+  w.channel!.quote = { message, signature: await f.owner.signTypedData(w.domain, QUOTE_TYPES, message) };
   const before = await w.balance();
   await assert.rejects(round.action('roll'), /reply lost/);
   const ticket = structuredClone(round['data'].pending.ticket);

@@ -13,6 +13,7 @@ import {
   countersigned,
   assessBinary,
   claimOf,
+  disputedBet,
 } from '../testing/contract.ts';
 import {
   assertSignature,
@@ -23,8 +24,11 @@ import {
   OP_TYPES,
   STATE_TYPES,
   verifyEvidence,
+  owed,
+  hashState,
+  QUOTE_TYPES,
 } from '../protocol/protocol.ts';
-import { OUTCOME_SPACE } from '../protocol/risk.ts';
+import { admits, MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 
 test('a channel is its account: anyone deposits into it, the first deposit opens it, and a close ends it', async t => {
   const env = await anvil();
@@ -478,6 +482,163 @@ test('a bet settles on-chain, and only strictly newer evidence challenges a clos
   assert.equal((await f.contract.supported(jointly)).balance, 90n);
 });
 
+const now = async (env: any) => (await env.provider.getBlock('latest')).timestamp;
+
+test("a casino bet its quote covers is disputed by closing with it: won, its prize kept from the owner, until the casino's result at its sequence settles it", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, stranger] = env.wallets,
+    ch = await open(f, a, 1000n);
+  await (await f.contract.fundBankroll({ value: 10000n })).wait();
+  // A coin flip that pays 1.96 times its stake nets 96, which a virtual bankroll of 5000 admits: 2% of it is 100.
+  const terms = {
+    virtualBankroll: 5000n,
+    expiresAt: (await now(env)) + 86400,
+    stake: 100n,
+    chance: OUTCOME_SPACE / 2n,
+  };
+  const bet = await disputedBet(f, ch, { ...terms, prize: 196n });
+  assert.ok(admits(5000n, { stake: 100n, chance: OUTCOME_SPACE / 2n, prize: 196n }));
+  // Only its account disputes an open channel, only a bet its quote covers, and only with the casino's own quote.
+  await assert.rejects(
+    f.contract.connect(stranger).dispute.staticCall(bet.evidence, bet.terms),
+    reverts('Unauthorized'),
+  );
+  const large = await disputedBet(f, ch, { ...terms, prize: 300n });
+  assert.ok(!admits(5000n, { stake: 100n, chance: OUTCOME_SPACE / 2n, prize: 300n }));
+  await assert.rejects(f.contract.connect(a).dispute.staticCall(large.evidence, large.terms), reverts('InvalidTerms'));
+  const expired = await disputedBet(f, ch, { ...terms, prize: 196n, expiresAt: (await now(env)) - 1 });
+  await assert.rejects(
+    f.contract.connect(a).dispute.staticCall(expired.evidence, expired.terms),
+    reverts('InvalidTerms'),
+  );
+  const forged = { ...bet.terms, signature: await stranger.signTypedData(f.d, QUOTE_TYPES, bet.quote.message) };
+  for (const quote of [forged, { ...bet.terms, virtualBankroll: '5001' }])
+    await assert.rejects(f.contract.connect(a).dispute.staticCall(bet.evidence, quote), reverts('Unauthorized'));
+  // A settled bet is not a dispute: it has the casino's signature, which a dispute leaves out.
+  const settled = await bet.settled();
+  await assert.rejects(f.contract.connect(a).dispute.staticCall(settled.evidence, bet.terms), reverts('InvalidTerms'));
+  const house = await f.contract.withdrawableHouse();
+  const tx = await (await f.contract.connect(a).dispute(bet.evidence, bet.terms)).wait();
+  const event = tx.logs
+    .map((log: any) => f.contract.interface.parseLog(log))
+    .find((e: any) => e?.name === 'BetDisputed');
+  const brought = event.args.evidence.toObject(true);
+  assert.equal(hashOperation(f.d, brought.step.operation), hashOperation(f.d, bet.op));
+  assert.deepEqual(
+    [brought.playerSignature, brought.step.authorization, brought.step.seed],
+    [bet.evidence.playerSignature, bet.evidence.step.authorization, bet.seed],
+  );
+  // Counted as won, with its prize kept from the owner, and the account moved on to its next channel.
+  let c = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual(
+    [c.status, c.closingSequence, c.closingHash, c.closingBalance, c.disputedPrize],
+    [2n, BigInt(bet.op.sequence), hashOperation(f.d, bet.op), 1096n, 196n],
+  );
+  assert.equal(c.deadline, BigInt((await now(env)) + 86400));
+  assert.equal(await f.contract.disputedPrizes(), 196n);
+  assert.equal(await f.contract.withdrawableHouse(), house - 196n);
+  await assert.rejects(f.contract.withdrawHouse.staticCall(f.owner.address, house), reverts('InsufficientBalance'));
+  assert.equal(await f.contract.channelOf(a.address), channelId(a.address, 1));
+  // Nothing older settles it, nor another bet the account disputes at its sequence: only the casino's result there.
+  await assert.rejects(f.contract.challengeClose.staticCall(ch.evidence), reverts('InvalidState'));
+  const again = await disputedBet(f, ch, { ...terms, prize: 196n });
+  await assert.rejects(f.contract.dispute.staticCall(again.evidence, again.terms), reverts('InvalidState'));
+  await (await f.contract.connect(stranger).challengeClose(settled.evidence)).wait();
+  c = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual(
+    [c.closingSequence, c.closingHash, c.closingBalance, c.disputedPrize],
+    [BigInt(bet.op.sequence), hashState(f.d, settled.state), owed(settled.state, 1000n, 0n), 0n],
+  );
+  assert.equal(await f.contract.disputedPrizes(), 0n);
+  assert.equal(await f.contract.withdrawableHouse(), house);
+  // Settled, the close takes only strictly newer evidence again.
+  await assert.rejects(f.contract.challengeClose.staticCall(settled.evidence), reverts('InvalidState'));
+});
+
+test('a dispute nobody settles within its 24 hours pays the bet as won, and a dispute challenging a close gives the casino a full day', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b] = env.wallets,
+    ch = await open(f, a, 1000n);
+  await (await f.contract.fundBankroll({ value: 10000n })).wait();
+  const terms = { virtualBankroll: 5000n, stake: 100n, chance: OUTCOME_SPACE / 2n, prize: 196n };
+  const bet = await disputedBet(f, ch, { ...terms, expiresAt: (await now(env)) + 3 * 86400 });
+  await (await f.contract.connect(a).dispute(bet.evidence, bet.terms)).wait();
+  await assert.rejects(f.contract.finalizeClose.staticCall(ch.opening.channelId), reverts('InvalidState'));
+  await env.provider.send('evm_increaseTime', [86400]);
+  await env.provider.send('evm_mine', []);
+  await assert.rejects(f.contract.challengeClose.staticCall((await bet.settled()).evidence), reverts('InvalidState'));
+  await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
+  assert.deepEqual([(await claimOf(f, ch.opening.channelId)).amount, await f.contract.disputedPrizes()], [1096n, 0n]);
+  // The casino closes b's channel on its base; b disputes its bet an hour before the deadline, as a challenge, and the
+  // casino has a day from then to settle it.
+  const other = await open(f, b, 1000n),
+    late = await disputedBet(f, other, { ...terms, expiresAt: (await now(env)) + 3 * 86400 });
+  await (await f.contract.connect(f.owner).startClose(other.base)).wait();
+  await env.provider.send('evm_increaseTime', [23 * 3600]);
+  await env.provider.send('evm_mine', []);
+  await (await f.contract.connect(a).dispute(late.evidence, late.terms)).wait();
+  const c = await f.contract.channels(other.opening.channelId);
+  assert.equal(c.deadline, BigInt((await now(env)) + 86400));
+  assert.equal(c.disputedPrize, 196n);
+  await env.provider.send('evm_increaseTime', [23 * 3600]);
+  await env.provider.send('evm_mine', []);
+  await (await f.contract.challengeClose((await late.settled()).evidence)).wait();
+  assert.equal((await f.contract.channels(other.opening.channelId)).disputedPrize, 0n);
+});
+
+test("the contract admits a disputed bet exactly as the casino's Kelly rule does", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a] = env.wallets,
+    opened = await open(f, a, 1000n),
+    // A balance both sides signed, large enough for every stake here: the products reach 2^253.
+    ch = { ...opened, ...(await signedIncrease(f, opened, 1n << 94n)) },
+    expiresAt = (await now(env)) + 86400;
+  const agrees = async (virtualBankroll: bigint, stake: bigint, chance: bigint, prize: bigint) => {
+    const bet = await disputedBet(f, ch, { virtualBankroll, expiresAt, stake, chance, prize });
+    const taken = await f.contract
+      .connect(a)
+      .dispute.staticCall(bet.evidence, bet.terms)
+      .then(
+        () => true,
+        (error: any) => (error.revert?.name === 'InvalidTerms' ? false : Promise.reject(error)),
+      );
+    assert.equal(
+      taken,
+      admits(virtualBankroll, { stake, chance, prize }),
+      `${virtualBankroll} ${stake} ${chance} ${prize}`,
+    );
+    return taken;
+  };
+  // At the edge of the rule, whatever the stake: the largest prize admitted, and one more.
+  for (const [bankroll, stake, chance] of [
+    [5000n, 100n, OUTCOME_SPACE / 2n],
+    [MAX_BALANCE - 1n, 1n << 93n, OUTCOME_SPACE / 2n],
+    [MAX_BALANCE - 1n, 1n, 1n],
+    [10n ** 21n, 10n ** 15n, (OUTCOME_SPACE * 99n) / 100n],
+    [1n, 1n, OUTCOME_SPACE - 1n],
+  ]) {
+    let low = stake,
+      high = MAX_BALANCE - 1n;
+    while (low < high) {
+      const middle = (low + high + 1n) / 2n;
+      if (admits(bankroll, { stake, chance, prize: middle })) low = middle;
+      else high = middle - 1n;
+    }
+    assert.ok(await agrees(bankroll, stake, chance, low));
+    if (low + 1n < MAX_BALANCE) assert.ok(!(await agrees(bankroll, stake, chance, low + 1n)));
+  }
+  // A bet that pays at most its stake costs a bankroll nothing, but a bankroll of nothing takes only one paying less.
+  assert.ok(await agrees(0n, 100n, OUTCOME_SPACE - 1n, 99n));
+  assert.ok(!(await agrees(0n, 100n, OUTCOME_SPACE - 1n, 100n)));
+  assert.ok(await agrees(1n, 100n, OUTCOME_SPACE - 1n, 100n));
+});
+
 test('channel evidence rejects replay across channels and chains', async t => {
   const env = await anvil();
   t.after(() => env.close());
@@ -530,14 +691,14 @@ test('a signature is taken only in the form the contract recovers', async t => {
   }
 });
 
-test('balances are capped below 2^128 so aggregate debt cannot overflow and block protected-principal finalization', async t => {
+test('balances are capped below MAX_BALANCE so aggregate debt cannot overflow and block protected-principal finalization', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
     a = await open(f, env.wallets[1], 1n),
     b = await open(f, env.wallets[2], 1n),
     c = await open(f, env.wallets[3], 1n),
-    max = (1n << 128n) - 1n;
+    max = MAX_BALANCE - 1n;
   async function balanceEvidence(ch: any, balance: any) {
     const state = { ...ch.state, sequence: '2', balance: String(balance) };
     return checkpointEvidence(
@@ -547,7 +708,7 @@ test('balances are capped below 2^128 so aggregate debt cannot overflow and bloc
     );
   }
   // A jointly signed balance at or above the cap is not settlement evidence, however it was produced.
-  await assert.rejects(f.contract.supported(await balanceEvidence(a, 1n << 128n)));
+  await assert.rejects(f.contract.supported(await balanceEvidence(a, MAX_BALANCE)));
   await forceClose(f, env, a, await balanceEvidence(a, max));
   await forceClose(f, env, b, await balanceEvidence(b, 10n));
   assert.equal(await f.contract.unpaidWinnings(), max - 1n + 9n);
@@ -565,7 +726,7 @@ test('offline evidence and the contract enforce the same checkpoint amount bound
   t.after(() => env.close());
   const f = await deployment(env),
     ch = await open(f, env.wallets[1], 1n),
-    cap = 1n << 128n;
+    cap = MAX_BALANCE;
   for (const field of ['balance', 'deposited', 'withdrawn']) {
     for (const amount of [cap - 1n, cap, (1n << 256n) - 1n]) {
       const state = { ...ch.state, [field]: String(amount) },

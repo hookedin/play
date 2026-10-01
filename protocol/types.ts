@@ -113,6 +113,20 @@ export interface Operation {
   /** The hash of the operation's details: what it means to the wallet and the casino. */
   memo: string;
 }
+/** The casino's signed quote for the casino bet that follows a checkpoint (`QUOTE_TYPES`). */
+export interface Quote {
+  message: {
+    channelId: string;
+    previousStateHash: string;
+    /** The round the bet settles on. */
+    round: string;
+    /** What the bet is admitted against: half the casino's bankroll when it quoted. */
+    virtualBankroll: Integer;
+    /** Until when, in seconds, the bet can be disputed on-chain. */
+    expiresAt: Integer;
+  };
+  signature: string;
+}
 export interface Step {
   operation: Operation;
   authorization: string;
@@ -160,6 +174,8 @@ export interface OnchainChannel {
   closingSequence: string;
   closingHash: string;
   closingBalance: string;
+  /** The prize of the casino bet the close disputes, which house cash keeps for it until it is settled; 0 with none. */
+  disputedPrize: string;
 }
 /** A finalized channel's claim: its checkpoint and what it was owed are the channel's `closingHash` and
  * `closingBalance`, and `paid` what it has paid of that. */
@@ -173,19 +189,18 @@ export interface OnchainClaim {
   protectedRemaining: string;
   winningsRemaining: string;
 }
-/** A signed casino response: an executed step, or a joint rejection checkpoint above the request. */
+/** An executed step, or a rejection checkpoint above the request. A rejection with casinoSignature `0x` proposes
+ * the checkpoint for the player to sign; the completed rejection carries both signatures in its evidence. */
 export interface OperationResponse {
   status: 'signed' | 'rejected';
   reason?: string;
   request?: Operation;
   /** What the operation means, whose hash it signed as its memo. */
   details: Details;
-  /** A declined casino bet's round, revealed with the rejection. */
-  secret?: string;
-  /** A declined casino bet names a round the casino has no open record of, so there is no secret to reveal. */
-  lost?: true;
   /** A game's operation declined because its player already carried it out on another channel. */
   used?: true;
+  /** A casino bet its quote covers, declined as `used`: the operation the account signed on the other channel. */
+  carried?: Carried;
   state: Checkpoint;
   casinoSignature: string;
   evidence: Evidence;
@@ -194,19 +209,29 @@ export interface OperationResponse {
   /** A casino bet: the developer of its game, who earns half of its commission. A game nobody publishes has
    * none. */
   developer?: string;
-  bankroll?: string;
+  /** The quote for the channel's next casino bet, which follows `state`. */
+  quote?: Quote;
   /** An investment's response carries the casino's signed statement of the holding, and a bank
    * deposit the statement of the bank. */
   statement?: SignedStatement;
 }
+/** An operation an account signed, with what it means: the proof that a game's operation was carried out elsewhere. */
+export interface Carried {
+  operation: Operation;
+  authorization: string;
+  details: Details;
+}
 /** What a wallet sends the casino: its signed operation, what the operation means, and its
- * countersignature of the previous response. A casino bet brings the seed it names. */
+ * countersignature of the previous response. A casino bet brings the seed it names and the quote it relies on. */
 export interface Submission {
   request: Operation;
   details: Details;
   signature: string;
   acknowledgment?: { stateHash: string; signature: string };
+  /** The player's signature of a proposed rejection checkpoint, completing its cancellation. */
+  rejectionSignature?: string;
   seed?: string;
+  quote?: Quote;
 }
 /** A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer, for
  * the developer's casino bet. That casino bet reveals it: its seed, the casino's secret and their outcome, and the

@@ -52,7 +52,7 @@ const object = (value: unknown) =>
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
 /** The stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance. */
 function validateOdds(chance: unknown, prize: unknown) {
-  if (gameAmount(prize) >= MAX_BALANCE) throw new Error('A prize is below 2^128.');
+  if (gameAmount(prize) >= MAX_BALANCE) throw new Error('A prize is below 2^96.');
   if (gameAmount(chance) >= BigInt(BOUNDS.outcomeSpace))
     throw new Error('A chance counts winning outcomes out of 2^64, from 1 to 2^64 − 1.');
 }

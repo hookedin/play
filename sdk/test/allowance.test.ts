@@ -45,7 +45,7 @@ test("the allowance strip shows every push in ETH and follows its round beside t
     deliver({ hookedin: true, id: posted[0].id, result: { bounds: {} } });
     const round = new RoundClient(
       {
-        call: async () => ({ uname: 'player', chainId: '1', bankroll: String(10n ** 21n) }),
+        call: async () => ({ uname: 'player', chainId: '1', virtualBankroll: String(10n ** 21n) }),
         allowance: HookedIn.allowance,
       },
       coin({ payout: stake => (stake * 19n) / 10n }),

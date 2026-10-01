@@ -11,6 +11,7 @@ import type {
   EvidenceBundle,
   Integer,
   Json,
+  Quote,
 } from './types.ts';
 import {
   AbiCoder,
@@ -23,7 +24,7 @@ import {
   ZeroAddress,
   toUtf8Bytes,
 } from 'ethers';
-import { OUTCOME_SPACE, MAX_BALANCE, uint256 } from './risk.ts';
+import { OUTCOME_SPACE, MAX_BALANCE, admits, uint256 } from './risk.ts';
 export const json = (value: unknown) => JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? String(v) : v));
 export const plain = <T>(value: T): Json<T> => JSON.parse(json(value));
 export const same = (a: unknown, b: unknown) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -68,6 +69,14 @@ export const OP_TYPES = {
     'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
   ),
 };
+/** The casino's quote for the casino bet that follows a channel's checkpoint `previousStateHash`: the round it settles
+ * on and the virtual bankroll it is admitted against, until `expiresAt`, in seconds. The casino settles every casino bet
+ * its quote covers; the account disputes one it does not settle on-chain, before the quote expires. */
+export const QUOTE_TYPES = {
+  Quote: fields('bytes32 channelId,bytes32 previousStateHash,bytes32 round,uint256 virtualBankroll,uint256 expiresAt'),
+};
+/** How long a quote holds, in seconds. */
+export const QUOTE_PERIOD = 24 * 60 * 60;
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
@@ -273,6 +282,43 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     ...values,
   });
 }
+/** A quote the casino signed for the casino bet that follows `state`. */
+export function verifyQuote(d: Domain, quote: Quote, state: Checkpoint, operator: string) {
+  assertSignature(d, QUOTE_TYPES, quote?.message, quote?.signature, operator);
+  const { channelId, previousStateHash, round, virtualBankroll } = quote.message;
+  if (
+    !same(channelId, state.channelId) ||
+    !same(previousStateHash, hashState(d, state)) ||
+    same(round, ZeroHash) ||
+    BigInt(virtualBankroll) >= MAX_BALANCE
+  )
+    throw new Error('The quote is not for this checkpoint');
+  return quote;
+}
+/** Whether `quote` covers the casino bet `op` at `now`, in seconds: it names the bet's checkpoint and round, has not
+ * expired, and its virtual bankroll admits the bet's terms. The contract checks the same when the bet is disputed. */
+export const covers = (quote: Quote, op: Operation, now: number) =>
+  Number(op.kind) === KIND.casinoBet &&
+  same(quote.message.channelId, op.channelId) &&
+  same(quote.message.previousStateHash, op.previousStateHash) &&
+  same(quote.message.round, op.round) &&
+  BigInt(quote.message.expiresAt) >= BigInt(now) &&
+  admits(BigInt(quote.message.virtualBankroll), betTerms(op.amount, op.chance, op.prize));
+/** What the contract takes of a quote when a bet is disputed: the operation names its channel, checkpoint and round. */
+export const quoteTerms = (quote: Quote) => ({
+  virtualBankroll: String(quote.message.virtualBankroll),
+  expiresAt: String(quote.message.expiresAt),
+  signature: quote.signature,
+});
+/** The step of a casino bet the account disputes: its operation, the account's authorization and the seed, with no
+ * secret and no casino signature, which the casino's settlement brings. */
+export const disputedStep = (operation: Operation, authorization: string, seed: string): Step => ({
+  operation,
+  authorization,
+  seed,
+  secret: ZeroHash,
+  casinoSignature: '0x',
+});
 /** A game's key: the one value its bets, its commission and its public record are kept under, made from its
  * developer and the name they publish it under, so it is the same wherever the game is served. A game opened by
  * its URL alone has the key of the zero address and that URL. */
@@ -326,7 +372,7 @@ export function checkDetails(kind: number, details: Details) {
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
 const decimal = (value: unknown) => typeof value === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(value);
-/** A casino bet's terms in their one form: decimal strings, a stake and a prize below 2^128 and a chance of 1 to
+/** A casino bet's terms in their one form: decimal strings, a stake and a prize below 2^96 and a chance of 1 to
  * 2^64 − 1 outcomes. */
 export function validBet(stake: unknown, chance: unknown, prize: unknown) {
   return (
@@ -538,6 +584,7 @@ export const PROTOCOL = id(
   encoded([
     STATE_TYPES,
     OP_TYPES,
+    QUOTE_TYPES,
     ACCESS_TYPES,
     DEVELOPER_ACCESS_TYPES,
     SETTLEMENT_TYPES,

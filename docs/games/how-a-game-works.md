@@ -19,8 +19,8 @@ its origin and names every operation, so that each happens exactly once whatever
 | An ID for each operation, saved before it asks        | Sending the bet to the casino and verifying the result: signatures, the round's secret and seed, the balance change |
 | What the player sees, drawn from the verified outcome | Keeping the evidence, and settling on-chain                                                                         |
 
-The casino admits each casino bet against its bankroll and signs each result; it never runs a game's rules
-([how it works](../overview/how-it-works.md)). A game never sees a key and signs nothing. It cannot ask for arbitrary
+The casino admits each casino bet against its quote's virtual bankroll and signs each result; it never runs a game's
+rules ([how it works](../overview/how-it-works.md)). A game never sees a key and signs nothing. It cannot ask for arbitrary
 signatures, supply a bet's seed, see a round's secret before the reveal, or choose who earns its commission.
 
 ## The sandbox
@@ -73,13 +73,13 @@ field, reply and [error](../reference/bridge.md#errors).
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
 HookedIn.onAllowance(({ allowance, pending }) => render(allowance, pending)); // your page's own render
-const info = await HookedIn.info(); // the player's names, the bankroll, a recommended stake
+const info = await HookedIn.info(); // the player's names, the virtual bankroll, a recommended stake
 ```
 
 Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('0.001')` is `'1000000000000000'`, and
 `formatAmount` reads one back. [`wallet.info`](../reference/bridge.md#walletinfo) is all a game learns of the player:
-their uname, theirs for good, the alias they go by today, the casino's bankroll as last reported and a recommended
-stake. The player's address, channel and balances never cross the bridge.
+their uname, theirs for good, the alias they go by today, the virtual bankroll of the casino's latest quote and a
+recommended stake. The player's address, channel and balances never cross the bridge.
 
 ## Operation IDs
 

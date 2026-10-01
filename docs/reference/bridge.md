@@ -105,7 +105,7 @@ their first deposit, so that it keys what it saves by that name.
 | `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. `null` until the casino knows the player, which it does from their first deposit. A game keys anything of its own by it |
 | `alias`            | `string` or `null` | The name the player is shown by, written `@alias`; `null` unless they took one                                                                                                 |
 | `chainId`          | `string`           | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil                                                                               |
-| `bankroll`         | decimal string     | The casino's bankroll as last reported: what to price bets against, not a promise to admit them                                                                                |
+| `virtualBankroll`  | decimal string     | The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino bets against. The casino settles every casino bet it admits |
 | `recommendedStake` | decimal string     | A stake to start the stake field at: 10^12 wei on Sepolia and 10^15 on a local Anvil                                                                                           |
 
 ### `wallet.round`
@@ -140,19 +140,20 @@ settled receipt as a [`game.receipt`](#gamereceipt-1) event.
 
 A casino bet: settled against the casino's bankroll in the one request, on the player's own
 [round](../overview/how-it-works.md#rounds). The game's allowance drops by the stake, and rises by the prize when the
-round's 64-bit outcome is below the chance; the casino's commission is not charged to the player. The casino may
-decline the bet instead, with a signed checkpoint that leaves the balance unchanged.
+round's 64-bit outcome is below the chance; the casino's commission is not charged to the player. The casino settles
+every bet its [quote](../overview/how-it-works.md#quotes) covers, one whose terms the quote's virtual bankroll admits;
+it declines any other, with a signed checkpoint that leaves the balance unchanged.
 
 | Param    | Type           | Meaning                                          |
 | -------- | -------------- | ------------------------------------------------ |
 | `id`     | `string`       | The game's ID for the operation                  |
 | `stake`  | decimal string | Paid to enter; at most the game's allowance      |
 | `chance` | decimal string | How many of the 2^64 outcomes win: 1 to 2^64 − 1 |
-| `prize`  | decimal string | What the bet pays when it wins; below 2^128      |
+| `prize`  | decimal string | What the bet pays when it wins; below 2^96       |
 | `group`  | `string`       | Optional: the group the bet belongs to           |
 
 The outcome is a uniform integer below 2^64, so the bet wins with probability `chance / 2^64`. A chance of 0, or of
-2^64 or more, is refused with `invalid-request`: a sure loss or a sure win is no bet. So is a prize of 2^128 or more,
+2^64 or more, is refused with `invalid-request`: a sure loss or a sure win is no bet. So is a prize of 2^96 or more,
 which no balance can hold. The stake was paid to enter, so a win gains `prize − stake`, and a prize below the stake is a
 partial loss. The result is the bet's [receipt](#receipt), `settled` or `rejected`:
 
@@ -327,7 +328,7 @@ and its ID keeps returning the rejection:
   "stake": "1000000000000",
   "chance": "9223372036854775808",
   "prize": "2000000000000",
-  "reason": "The bankroll cannot take this casino bet"
+  "reason": "No quote of the casino covers this casino bet"
 }
 ```
 

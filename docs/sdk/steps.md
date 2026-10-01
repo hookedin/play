@@ -58,8 +58,9 @@ draw's outcomes. A leaf needs what is owed on it, and a node whose children need
 node needs the least cash whose bet between its children the casino's rule, [`admits`](admits.md#admits), takes at
 `bankroll`: a stake of the node's cash less the lower child's, paying the difference between the children with the
 dearer side's chance. More cash is never less safe for the bankroll, and a stake of the whole difference cannot lose it
-anything, so the search is a bisection. The casino decides against its bankroll when each bet arrives, so price against
-less than it reports: roulette prices at half. Throws a `RangeError` unless `owed` holds at least one amount, every
+anything, so the search is a bisection. The casino admits a developer's casino bet against its virtual bankroll when the
+bet arrives, so price against the virtual bankroll it reports, half its bankroll, as roulette does. Throws a
+`RangeError` unless `owed` holds at least one amount, every
 amount is a nonnegative bigint and `bankroll` is a positive one.
 
 ### `stepsCash`

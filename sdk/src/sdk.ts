@@ -21,8 +21,9 @@ export interface WalletInfo {
   /** The alias they are shown by, written `@alias`; null unless they took one. */
   alias: string | null;
   chainId: string;
-  /** The casino's bankroll as last reported: what to price bets against, not a promise to admit them. */
-  bankroll: string;
+  /** The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino
+   * bets against. The casino settles every casino bet its quote's virtual bankroll admits. */
+  virtualBankroll: string;
   recommendedStake: string;
 }
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:

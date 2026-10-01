@@ -1,4 +1,4 @@
-import type { Integer, Checkpoint, Operation } from '../protocol/types.ts';
+import type { Integer, Checkpoint, Operation, Quote } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress, hexlify, randomBytes, ZeroAddress, ZeroHash, id } from 'ethers';
 import type { Details, PlayerDeveloperBets, PublicDeveloperBet } from '../protocol/types.ts';
@@ -19,8 +19,11 @@ import {
   operation,
   outcome,
   betPayout,
-  roundId,
   seedHash,
+  covers,
+  verifyQuote,
+  verifyEvidence,
+  QUOTE_PERIOD,
   verifyShareStatement,
   sharesFor,
   valueOf,
@@ -65,8 +68,6 @@ export const OPERATIONS: Record<string, { kind: number; name: string; game?: boo
 };
 /** A payout collected or a deposit taken in adds to the balance, and commits none of it. */
 const credit = (kind: string) => OPERATIONS[kind]!.kind === KIND.credit || OPERATIONS[kind]!.kind === KIND.deposit;
-const bytes32 = (value: unknown): value is string =>
-  typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value) && !same(value, ZeroHash);
 /** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
  * counted in outcomes out of 2^64. */
 export interface CasinoBetInput {
@@ -103,11 +104,41 @@ export class ChannelClient extends WalletTransactions {
       available = BigInt(this.channel?.state.balance || 0) - allowance;
     return available < 0n ? 0n : available;
   }
-  updateBankroll(this: CasinoWallet, value: unknown) {
-    // An informational hint must never prevent accepting valid settlement evidence.
+  /** Whether the pending casino bet was signed on a quote that covered it, and so went with its seed: the casino must
+   * settle it, and the wallet countersigns no decline of it, whenever one comes. */
+  bound(this: CasinoWallet, channel = this.channel) {
+    return Boolean(channel?.pending?.quote);
+  }
+  /** Whether the pending casino bet's quote still covers it: one the casino does not settle is disputed on-chain, by
+   * closing with it, until the quote expires. */
+  disputable(this: CasinoWallet, channel = this.channel) {
+    const pending = channel?.pending;
+    return this.bound(channel) && covers(pending.quote, pending.request, Math.floor(Date.now() / 1000));
+  }
+  /** Whether the casino proves a declined operation one this account carried out on another channel: the operation
+   * the account signed there, under the same game and operation ID. */
+  carriedElsewhere(this: CasinoWallet, response: any, pending: any) {
+    const carried = response.carried;
     try {
-      this.reportedBankroll = String(gameAmount(value, false));
-    } catch {}
+      assertSignature(this.domain, OP_TYPES, carried.operation, carried.authorization, this.address);
+      return (
+        response.used === true &&
+        same(memo(carried.details), carried.operation.memo) &&
+        carried.details.id === pending.details.id &&
+        same(carried.details.game ?? '', pending.details.game ?? '') &&
+        !same(carried.operation.channelId, pending.request.channelId)
+      );
+    } catch {
+      return false;
+    }
+  }
+  /** Take up the casino's quote for the casino bet that follows `c`'s state, or none if it is not one for that state. */
+  adoptQuote(this: CasinoWallet, c: { state: Checkpoint; quote?: Quote }, quote: unknown) {
+    try {
+      c.quote = verifyQuote(this.domain, quote as Quote, c.state, this.operator);
+    } catch {
+      c.quote = undefined;
+    }
   }
   async executeCasinoBet(
     this: CasinoWallet,
@@ -181,10 +212,11 @@ export class ChannelClient extends WalletTransactions {
     const sign = async () => {
       // A credit collects what is owed: it spends nothing.
       allowed(credit(kind) ? 0n : intent.amount);
-      // The round is fixed before this wallet picks its seed, so only one secret can settle the casino bet:
-      // the wallet picks the seed and sends it with the bet.
+      // The round is fixed before this wallet picks its seed, so only one secret can settle the casino bet. The seed
+      // goes with the bet only when the casino's quote covers it, which the casino must then settle: a bet it does not
+      // cover, the casino declines without the seed, never knowing what it would have paid.
       const seed = kind === 'casino-bet' ? random() : null,
-        round = seed ? await this.ownRound() : ZeroHash;
+        quote = seed ? await this.ownQuote() : null;
       const controls = known.game ? allowPlay(this.controls, intent.amount) : this.controls;
       const request = operation(this.domain, this.channel!.state, {
         kind: intent.kind,
@@ -192,14 +224,17 @@ export class ChannelClient extends WalletTransactions {
         recipient: intent.recipient,
         chance: intent.chance,
         prize: intent.prize,
-        round,
+        round: quote ? quote.message.round : ZeroHash,
         seedHash: seed ? seedHash(seed) : ZeroHash,
         memo: memo(details),
       });
+      // A quote covers the bet only with at least half its day left, so a bet the casino leaves unanswered has hours to
+      // be disputed: one about to expire would let the casino outwait it.
+      const covered = quote && covers(quote, request, Math.floor(Date.now() / 1000) + QUOTE_PERIOD / 2);
       // Signed, then saved once: nothing leaves this wallet until the signed request is durable.
       this.pending = {
         ...(game ? { game } : {}),
-        ...(seed ? { seed } : {}),
+        ...(covered ? { seed, quote } : {}),
         kind,
         operationId,
         request,
@@ -237,7 +272,7 @@ export class ChannelClient extends WalletTransactions {
   async getReceipt(this: CasinoWallet, operationId: string) {
     return this.storage.get(this.storageKey + ':receipt:' + operationId);
   }
-  async resume(this: CasinoWallet) {
+  async resume(this: CasinoWallet): Promise<any> {
     const pending = this.pending,
       c = this.channel!;
     if (!pending?.request) throw new Error('No signed operation to recover');
@@ -253,7 +288,10 @@ export class ChannelClient extends WalletTransactions {
       details: pending.details,
       signature: pending.signature,
       acknowledgment,
-      ...(pending.seed ? { seed: pending.seed } : {}),
+      ...(pending.rejectionSignature ? { rejectionSignature: pending.rejectionSignature } : {}),
+      // Once its quote has expired, a bet goes without its seed: a casino that has not seen it could no longer be held
+      // to what it would pay.
+      ...(this.disputable() ? { seed: pending.seed, quote: pending.quote } : {}),
     };
     try {
       const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
@@ -264,7 +302,7 @@ export class ChannelClient extends WalletTransactions {
     }
   }
   /** Verify a signed result, record it and advance the channel. */
-  async accept(this: CasinoWallet, response: any, operationId: string, kind: string) {
+  async accept(this: CasinoWallet, response: any, operationId: string, kind: string): Promise<any> {
     const c = structuredClone(this.channel!),
       rejected = response.status === 'rejected',
       step = response.evidence.step,
@@ -280,12 +318,44 @@ export class ChannelClient extends WalletTransactions {
     const details: Details = c.pending!.details;
     let next: Checkpoint;
     if (rejected) {
-      // The casino declined the saved casino bet or debit with a signed unchanged-balance checkpoint above it; a
-      // credit is never declined, and `rejectionCheckpoint` takes none. The wallet countersigns only now, so the casino
-      // never holds a player-signed checkpoint that could supersede a completed result.
       next = rejectionCheckpoint(this.domain, c.state, c.pending.request);
+      if (!same(hashState(this.domain, next), hashState(this.domain, response.state)))
+        throw new Error('Result state differs from evidence');
+      // A rejection starts unsigned. The wallet agrees only after checking it cannot void a covered casino bet,
+      // unless the casino proves that game operation was carried out on another channel. Save the signature before
+      // sending it, so a lost reply recovers this cancellation without deciding again.
+      if (response.casinoSignature === '0x') {
+        if (c.pending.rejectionSignature) throw new Error('The casino has not completed the agreed rejection');
+        if (this.bound(c) && !this.carriedElsewhere(response, c.pending))
+          throw new Error(
+            'The casino declined a casino bet its quote covers: dispute it by closing without the casino.',
+          );
+        c.pending.rejectionSignature = await this.signer.signTypedData(this.domain, STATE_TYPES, next);
+        c.pending.rejection = {
+          reason: response.reason,
+          ...(response.used === true ? { used: true } : {}),
+          ...(response.carried ? { carried: response.carried } : {}),
+        };
+        await this.save(undefined, { channels: { ...this.channels, [c.state.channelId]: c } });
+        return this.resume();
+      }
       assertSignature(this.domain, STATE_TYPES, next, response.casinoSignature, this.operator);
+      const proven = verifyEvidence({
+        chainId: this.expectedChainId,
+        casino: this.config.contractAddress,
+        operator: this.operator,
+        opening: c.opening,
+        evidence: response.evidence,
+      }).state;
+      if (!same(hashState(this.domain, next), hashState(this.domain, proven)))
+        throw new Error('Rejection is not jointly signed');
+      response = { ...response, ...c.pending.rejection };
     } else {
+      // Once this wallet has signed the operation's rejection, the casino holds a checkpoint two above the base with the
+      // account's signature, which it could complete whenever it liked: taking a result now would leave the state after
+      // it at that sequence, where the rejection would supersede it. Only the rejection completes the operation.
+      if (c.pending.rejectionSignature)
+        throw new Error('The casino answered with a result after its rejection was agreed: close without the casino.');
       // The operation is the one this wallet signed, and its authorization goes into this wallet's
       // evidence: it must be the very signature this wallet made, which needs no recovering.
       if (!c.pending?.signature || !same(step.authorization, c.pending.signature))
@@ -301,22 +371,14 @@ export class ChannelClient extends WalletTransactions {
       const allowance = BigInt(this.game.allowance) + BigInt(next.balance) - BigInt(c.state.balance);
       this.game.allowance = String(allowance < 0n ? 0n : allowance);
     }
-    // A reply to a casino bet on this channel's own round names its next one. It needs no signature: this
-    // wallet picks its seed only after it has the round.
-    if (Number(op.kind) === KIND.casinoBet && same(op.round, c.round))
-      c.round = bytes32(response.nextRound) ? response.nextRound : undefined;
-    // A declined casino bet comes with its round's secret, and the seed was this wallet's, so what the bet would
-    // have paid is known now: the wallet countersigns nothing less. A round the casino says it lost is the one
-    // exception, and its receipt says so.
-    const casinoBet = Number(op.kind) === KIND.casinoBet,
-      lost = rejected && casinoBet && response.lost === true;
-    if (rejected && casinoBet && !lost && (!bytes32(response.secret) || !same(roundId(response.secret), op.round)))
-      throw new Error('The casino declined this casino bet without revealing its round');
-    const wouldHavePaid =
-      rejected && casinoBet && !lost ? betPayout(op, outcome(c.pending.seed, response.secret).value) : null;
+    const casinoBet = Number(op.kind) === KIND.casinoBet;
     c.state = next;
+    // Every reply brings the quote for the next casino bet.
+    this.adoptQuote(c, response.quote);
     c.casinoSignature = rejected ? response.casinoSignature : step.casinoSignature;
-    c.playerSignature = await this.signer.signTypedData(this.domain, STATE_TYPES, next);
+    c.playerSignature = rejected
+      ? response.evidence.playerSignature
+      : await this.signer.signTypedData(this.domain, STATE_TYPES, next);
     c.lastResponse = rejected
       ? { ...response, evidence: checkpointEvidence(next, c.playerSignature, c.casinoSignature) }
       : response;
@@ -346,10 +408,6 @@ export class ChannelClient extends WalletTransactions {
       ...(rejected ? { request: op, reason: response.reason } : {}),
       // Declined as one this player carried out on another channel: the game must not take it for a fresh decline.
       ...(rejected && response.used === true ? { used: true } : {}),
-      // The seed of a declined casino bet stays with its receipt, beside what it would have paid.
-      ...(rejected && c.pending?.seed ? { seed: c.pending.seed } : {}),
-      ...(wouldHavePaid === null ? {} : { wouldHavePaid }),
-      ...(lost ? { lost: true } : {}),
       verified: true,
       proof: c.lastResponse!.evidence,
       // The round's 64-bit outcome, and what the bet paid on it: its prize, or nothing.
@@ -384,7 +442,6 @@ export class ChannelClient extends WalletTransactions {
           }
         : {}),
     });
-    this.updateBankroll(response.bankroll);
     return receipt;
   }
   // --- Developer bets --------------------------------------------------------------------------------
@@ -900,16 +957,22 @@ export class ChannelClient extends WalletTransactions {
     }
     return collected;
   }
-  /** This channel's next round, for its next casino bet. The casino names the round first and needs no signature
-   * for it: the wallet picks its seed only afterwards, and only the round's one secret can settle a casino bet
-   * that names it. Each reply to a casino bet names the next round, so a casino bet stays a single request. */
-  async ownRound(this: CasinoWallet) {
-    const c = this.channel!;
-    if (!c.round) {
-      const { id } = await this.api(`/api/channels/${c.state.channelId}/round`, {});
-      if (!bytes32(id)) throw new Error('Invalid round');
-      c.round = id;
+  /** The casino's quote for this channel's next casino bet: its round, fixed before the wallet picks its seed, and the
+   * virtual bankroll the bet is admitted against. Each reply brings the next one, so a casino bet stays a single
+   * request; one with less than half its day left is asked for afresh, so a bet the casino leaves unanswered has hours
+   * to be disputed. */
+  async ownQuote(this: CasinoWallet) {
+    const c = this.channel!,
+      left = BigInt(c.quote?.message.expiresAt ?? 0) - BigInt(Math.floor(Date.now() / 1000));
+    if (
+      !c.quote ||
+      !same(c.quote.message.previousStateHash, hashState(this.domain, c.state)) ||
+      left < QUOTE_PERIOD / 2
+    ) {
+      const { quote } = await this.api(`/api/channels/${c.state.channelId}/quote`, {});
+      this.adoptQuote(c, quote);
+      if (!c.quote) throw new Error('The casino sent no valid quote');
     }
-    return c.round!;
+    return c.quote;
   }
 }

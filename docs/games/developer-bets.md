@@ -203,7 +203,7 @@ await save({ group, rounds, seedHashes }); // before anybody is told of it
 const bets = (await openBets()).filter(bet => bet.group === group),
   covered = bets.map(bet => bet.bet),
   owed = owedOn(bets),
-  plan = priceSteps(owed, (await developer.bankroll()) / 2n);
+  plan = priceSteps(owed, await developer.virtualBankroll());
 let node: StepNode = { lo: 0, hi: n };
 for (let level = 0; node.hi - node.lo > 1; level++) {
   const round = rounds[level]!,
@@ -238,8 +238,9 @@ await developer.settle(bets.map(bet => ({ bet: bet.bet, player: pays(bet, node.l
 
 `n` is how many outcomes the draw has. `save`, `owedOn` and `pays` are your game's own:
 [roulette's `src/table.ts`](https://github.com/hookedin/game-roulette/blob/main/src/table.ts) turns chips into what each
-pocket pays. [`developer.bankroll()`](../sdk/developer.md#bankroll) is the casino's reported bankroll; pricing at half of
-it, as roulette does, leaves room for ordinary movement. After a restart, finish the walk from what you saved: a level's
+pocket pays. [`developer.virtualBankroll()`](../sdk/developer.md#virtualbankroll) is what the casino admits casino bets
+against, half its bankroll, as it last reported it: pricing at it, as roulette does, leaves the other half for ordinary
+movement. After a restart, finish the walk from what you saved: a level's
 round, revealed already, is the step as it was placed. `ethers` comes with `@hookedin/play`; add it to your own
 dependencies to import it.
 

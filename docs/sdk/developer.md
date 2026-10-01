@@ -45,10 +45,11 @@ request only the developer may make carries a `DeveloperAccess` token signed wit
 What `createDeveloper` resolves with: one developer and one of its games. Besides the members below, `round(id)` reads
 a round as anyone may, revealed or not ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround)).
 
-#### `bankroll`
+#### `virtualBankroll`
 
-The casino's bankroll, as it last reported it in [`GET /api/status`](../casino-api/public.md#get-apistatus): what to
-price casino bets against, such as a shared draw's [binary steps](steps.md#pricesteps), not a promise to admit them.
+The casino's virtual bankroll, half its bankroll, as it last reported it in
+[`GET /api/status`](../casino-api/public.md#get-apistatus): what it admits a developer's casino bets against, and so
+what to price them against, such as a shared draw's [binary steps](steps.md#pricesteps), not a promise to admit them.
 
 #### `openRound`
 

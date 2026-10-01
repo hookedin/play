@@ -70,19 +70,21 @@ export class DisputeWorker {
             });
           continue;
         }
-        const remaining = Number(c.deadline) - observation.block.timestamp;
-        if (BigInt(state.sequence) === BigInt(c.closingSequence) && !same(stateHash, c.closingHash)) {
+        const remaining = Number(c.deadline) - observation.block.timestamp,
+          // A disputed casino bet is settled by evidence at its own sequence.
+          disputed = BigInt(c.disputedPrize) > 0n && BigInt(state.sequence) === BigInt(c.closingSequence);
+        if (BigInt(state.sequence) === BigInt(c.closingSequence) && !disputed && !same(stateHash, c.closingHash)) {
           this.alerts.push({
             channelId: state.channelId,
             severity: 'critical',
             reason: 'conflicting-sequence',
             remaining,
           });
-        } else if (BigInt(state.sequence) > BigInt(c.closingSequence)) {
+        } else if (BigInt(state.sequence) > BigInt(c.closingSequence) || disputed) {
           this.alerts.push({
             channelId: state.channelId,
             severity: remaining < 3600 ? 'critical' : 'warning',
-            reason: remaining <= 0 ? 'missed-deadline' : 'stale-close',
+            reason: remaining <= 0 ? 'missed-deadline' : disputed ? 'disputed-bet' : 'stale-close',
             remaining,
           });
           if (remaining > 0) jobs.push({ bundle, state, deadline: Number(c.deadline) });

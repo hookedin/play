@@ -1,13 +1,13 @@
 ---
 title: Economics
-description: How the casino admits a casino bet by the Kelly criterion, sets and splits its commission, and counts the bankroll it admits against.
+description: How the casino admits a casino bet by the Kelly criterion against the virtual bankroll its quote names, sets and splits its commission, and counts the bankroll.
 sidebar:
   order: 4
 ---
 
 All amounts are integers in wei. A player's wallet chooses a stake, a chance and a prize. The casino admits the casino
-bet against its current unreserved bankroll and sets its commission in the same decision, before it reads the round's
-secret. The wallet and the contract check the exact terms and the balance arithmetic. Commission is the casino's
+bet against the virtual bankroll its [quote](../overview/how-it-works.md#quotes) names, half the bankroll when it
+quoted, and sets its commission in the same decision, before it reads the round's secret. The wallet and the contract check the exact terms and the balance arithmetic. Commission is the casino's
 accounting: it is never a debit from the player, the signed operation does not carry it, and the wallet shows it on the
 receipt without verifying it.
 
@@ -15,15 +15,15 @@ A casino bet is a stake paid to enter and a prize it pays when the round's 64-bi
 bankroll it is one wager with two outcomes, and the casino's rule, the Kelly condition for that wager, has a closed
 form.
 
-| Symbol    | Meaning                                                                                       |
-| --------- | --------------------------------------------------------------------------------------------- |
-| B         | The unreserved bankroll, positive ([available capital](#available-capital-and-concurrency))   |
-| S         | The stake, debited from the player's balance                                                  |
-| G = S + W | The prize; W is what a win gains beyond the stake, negative when the prize is below the stake |
-| Q = 2^64  | The size of the outcome space                                                                 |
-| t         | The chance: how many outcomes win, 1 to Q − 1                                                 |
-| p = t / Q | The probability that the bet wins                                                             |
-| F         | The total commission, accrued on every completed casino bet, won or lost                      |
+| Symbol    | Meaning                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| B         | The virtual bankroll the quote names ([available capital](#available-capital-and-concurrency)) |
+| S         | The stake, debited from the player's balance                                                   |
+| G = S + W | The prize; W is what a win gains beyond the stake, negative when the prize is below the stake  |
+| Q = 2^64  | The size of the outcome space                                                                  |
+| t         | The chance: how many outcomes win, 1 to Q − 1                                                  |
+| p = t / Q | The probability that the bet wins                                                              |
+| F         | The total commission, accrued on every completed casino bet, won or lost                       |
 
 The house edge the player faces is `e = 1 − pG/S`. The chance is whole outcomes, so the probability is exactly `t/Q`:
 a game chooses `t`, and nothing is rounded afterwards.
@@ -58,9 +58,10 @@ with `F < S` and `W + F < B`. With `F = 0` it reduces to:
 W / B ≤ 1 − p(S + W)/S = e
 ```
 
-A net win of 1% of the available bankroll needs at least a 1% house edge, and a bet with less edge is declined. A bet
+A net win of 1% of the virtual bankroll needs at least a 1% house edge, and a bet with less edge is declined. A bet
 that can pay never risks the entire bankroll: the Kelly condition itself excludes that endpoint. There is no other
-percentage or prize cap; the 2^128 bound on amounts and the finite outcome space are the only other bounds.
+percentage or prize cap; the 2^96 bound on amounts and the finite outcome space are the only other bounds. A virtual
+bankroll of nothing admits only a bet that pays less than its stake.
 
 ## A casino bet is one wager
 
@@ -68,7 +69,9 @@ A casino bet has two outcomes, so the condition above is the whole of the casino
 `E[X / (B + X)] ≥ 0`, with `X` the bankroll's cash flow and every `B + X > 0`. `assessBet` in
 [risk.ts](../../protocol/risk.ts) checks it in exact integers; its tests replay it against exhaustive small cases and an
 independent integer-root oracle. The casino reserves the bet's liability, `max(W, 0) + F`: what the bankroll can lose
-on it.
+on it. The contract checks the same condition with `F = 0` when a covered bet is disputed: `W < B` and
+`(B − W)·S·Q ≥ B·t·(S + W)`, or `B + S > G` for a bet that pays at most its stake. Every amount and the virtual bankroll
+are below 2^96, so each side fits in 256 bits.
 
 A game with more outcomes than two plays them as casino bets of two outcomes each, each admitted by itself: a
 single-player game [collapses](../games/collapsing-bets.md) each step into one, and a shared draw is backed in
@@ -104,12 +107,12 @@ generally correct: it ignores how an outcome-independent commission changes the 
 
 The integer examples in [the vectors](../../vectors/protocol.json) (`cases`), in six-decimal illustrative units:
 
-| Available bankroll | Stake | Net win | Edge | Total commission | Each account |
-| ------------------ | ----- | ------- | ---- | ---------------- | ------------ |
-| 10,000             | 100   | 100     | 1%   | 0                | 0            |
-| 10,000             | 100   | 100     | 2%   | 1.000100         | 0.500050     |
-| 10,000             | 1,000 | 100     | 2%   | 9.182046         | 4.591023     |
-| 10,000             | 100   | 9,000   | 90%  | 0                | 0            |
+| Virtual bankroll | Stake | Net win | Edge | Total commission | Each account |
+| ---------------- | ----- | ------- | ---- | ---------------- | ------------ |
+| 10,000           | 100   | 100     | 1%   | 0                | 0            |
+| 10,000           | 100   | 100     | 2%   | 1.000100         | 0.500050     |
+| 10,000           | 1,000 | 100     | 2%   | 9.182046         | 4.591023     |
+| 10,000           | 100   | 9,000   | 90%  | 0                | 0            |
 
 The first and the last lie on the Kelly boundary: the net win's share of the bankroll equals the edge. In the second,
 conservative pricing uses `−101.000100` for a player win and `+98.999900` for a loss, while the bankroll's equity
@@ -124,19 +127,28 @@ settlement gives it ([the casino's share](../games/developer-bets.md#the-casinos
 
 The casino keeps its half of every commission in the bankroll's equity: a player's loss adds `S − F/2` to the bankroll
 and a win takes `W + F/2`, the developer's half being owed to the developer (a game nobody publishes leaves all of `F`
-in the bankroll). Admission uses the conservative full-fee condition and reserves `max(W, 0) + F` against current
-capital less the other casino bets' reservations, before it reads the round's secret, so a casino bet it admits settles
-with the commission its admission priced. One without capacity gets a signed rejection, with no commission, and its
-round revealed; a developer's casino bet that does not fit is declined the same way. Reservations last only while a bet
-is decided: they do not fund a whole future hand, and they do not stop the owner from withdrawing on-chain.
+in the bankroll). Admission uses the conservative full-fee condition against the quote's virtual bankroll and reserves
+`max(W, 0) + F` while the bet is decided, before it reads the round's secret, so a casino bet it admits settles with
+the commission its admission priced. A bet no quote covers gets a signed rejection, with no commission, revealing
+nothing. A developer's casino bet is admitted against the virtual bankroll as it stands, and one that does not fit is
+declined with its round revealed. Reservations last only while a bet is decided, and lower the virtual bankroll quoted
+meanwhile: they do not fund a whole future hand, do not bound what the quotes out at once admit, and do not stop the
+owner from withdrawing on-chain.
 
 At a consistent confirmed block, in the books that [`GET /api/status`](../casino-api/public.md#get-apistatus) reports
 and defines, the bankroll is:
 
 ```text
 bankroll = max(0, cash − activeLiabilities − claimLiabilities − commissions − reserved − escrow − banks − withdrawals)
+virtualBankroll = bankroll / 2
 ```
 
-`equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a claim on, is the same without `reserved` or the
-floor at 0. Investors widen what the Kelly rule admits exactly as the owner's funding does. Kelly admission against the
-reported bankroll neither enforces the casino's solvency nor reserves capital for a whole game.
+`reserved` includes a disputed close's possible payout above the obligation already in the books. A settled win is
+already counted in the player's signed balance. The contract's `disputedPrizes` limits owner withdrawals; it is not a
+second liability. `equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a claim on, is the same without
+`reserved` or the floor at 0. A dispute that finalizes above the signed obligation reduces equity as a loss shared by
+all holders, without burning house shares. Investors widen what the Kelly rule admits exactly as the owner's funding does. Every quote names the whole
+virtual bankroll, and a quote binds the casino for a day: the quotes out at once are not divided between them, so the
+bankroll overcommits ([limitations](../overview/architecture.md#limitations)), and admitting against half the bankroll,
+half Kelly, is the margin for it. Kelly admission against the virtual bankroll neither enforces the casino's solvency
+nor reserves capital for a whole game.

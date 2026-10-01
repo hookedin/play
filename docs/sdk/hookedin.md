@@ -177,7 +177,8 @@ Every bound the wallet holds a bet to, `{ outcomeSpace, meta, group }`, as `hell
 
 ### `WalletInfo`
 
-The result of [`wallet.info`](../reference/bridge.md#walletinfo): `{ uname, alias, chainId, bankroll, recommendedStake }`.
+The result of [`wallet.info`](../reference/bridge.md#walletinfo):
+`{ uname, alias, chainId, virtualBankroll, recommendedStake }`.
 
 ### `CasinoBetRequest`
 

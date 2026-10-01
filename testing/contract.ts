@@ -16,6 +16,9 @@ import {
   roundId,
   seedHash,
   checkpointEvidence,
+  disputedStep,
+  quoteTerms,
+  QUOTE_TYPES,
 } from '../protocol/protocol.ts';
 import { assessBet } from '../protocol/risk.ts';
 import { loadArtifact } from '../protocol/deployment.ts';
@@ -192,5 +195,64 @@ export async function signedIncrease(f: any, ch: any, amount: any) {
       await signer.signTypedData(f.d, STATE_TYPES, state),
       await f.owner.signTypedData(f.d, STATE_TYPES, state),
     ),
+  };
+}
+/** The casino's quote for the casino bet that follows the channel's checkpoint, on the round of `secret`, and a bet on
+ * it the account signed and the casino has not settled: the evidence and quote the account disputes it with. */
+export async function disputedBet(
+  f: any,
+  ch: any,
+  {
+    virtualBankroll,
+    expiresAt,
+    stake,
+    chance,
+    prize,
+    secret = id('secret ' + ++count),
+    seed = id('seed ' + count),
+  }: any,
+) {
+  const message = {
+    channelId: ch.state.channelId,
+    previousStateHash: hashState(f.d, ch.state),
+    round: roundId(secret),
+    virtualBankroll: String(virtualBankroll),
+    expiresAt: String(expiresAt),
+  };
+  const quote = { message, signature: await f.owner.signTypedData(f.d, QUOTE_TYPES, message) };
+  const op = operation(f.d, ch.state, {
+    kind: 1,
+    amount: stake,
+    chance,
+    prize,
+    round: roundId(secret),
+    seedHash: seedHash(seed),
+    memo: id('op ' + ++count),
+  });
+  const authorization = await ch.player.signTypedData(f.d, OP_TYPES, op);
+  return {
+    op,
+    secret,
+    seed,
+    quote,
+    terms: quoteTerms(quote),
+    evidence: { ...ch.evidence, step: disputedStep(op, authorization, seed) },
+    /** The casino's settlement of it: the step with the round's secret and its signature of the result. */
+    settled: async () => {
+      const next = deriveState(f.d, ch.state, op, secret, seed);
+      return {
+        state: next,
+        evidence: {
+          ...ch.evidence,
+          step: {
+            operation: op,
+            authorization,
+            seed,
+            secret,
+            casinoSignature: await f.owner.signTypedData(f.d, STATE_TYPES, next),
+          },
+        },
+      };
+    },
   };
 }

@@ -82,15 +82,16 @@ export class GameSessions extends ChannelClient {
     return { bounds: BOUNDS };
   }
   /** Everything the open game learns about the player: the uname that is theirs for good, the alias
-   * they are shown by if they took one, and what to price bets against. Their address, their channel
-   * and their balances are none of a game's business. */
-  gameInfo(this: CasinoWallet) {
+   * they are shown by if they took one, and what to price bets against: the virtual bankroll of the casino's quote,
+   * asked for once the account plays. Their address, their channel and their balances are none of a game's business. */
+  async gameInfo(this: CasinoWallet) {
     this.requireGame();
+    const quote = this.funded ? await this.ownQuote().catch(() => null) : null;
     return {
       uname: this.uname,
       alias: this.alias,
       chainId: String(this.expectedChainId),
-      bankroll: String(this.reportedBankroll),
+      virtualBankroll: String(quote?.message.virtualBankroll ?? 0),
       recommendedStake: this.recommendedStake,
     };
   }

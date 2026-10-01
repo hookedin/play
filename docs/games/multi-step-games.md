@@ -115,10 +115,10 @@ actions with bets the casino's rule admits. That is more than the state's expect
 [risk premium](collapsing-bets.md#why-the-price-exceeds-the-expected-value) that shrinks as the bankroll grows, and
 every step needs an edge of its own at its state's cash.
 
-`RoundClient` prices against half the bankroll `wallet.info` reports, on a grid of a billionth of the stake, and starts
-the round with the stake as its cash. A stake the casino cannot back is refused before anything is signed, with an
-error naming about how much it can back. The next round with the same setup reuses the prices while the bankroll still
-covers their conservative starting requirement.
+`RoundClient` prices against half the virtual bankroll `wallet.info` reports, on a grid of a billionth of the stake, and
+starts the round with the stake as its cash. A stake the casino cannot back is refused before anything is signed, with
+an error naming about how much it can back. The next round with the same setup reuses the prices while the virtual
+bankroll still covers their conservative starting requirement.
 
 ## Extra wagers
 

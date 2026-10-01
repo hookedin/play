@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { ContractFactory, id, Wallet } from 'ethers';
 import { anvil, deployment, signedIncrease, open, step, assessBinary, claimOf } from '../testing/contract.ts';
 import { baseState, checkpointEvidence, channelId, hashOperation, STATE_TYPES } from '../protocol/protocol.ts';
-import { OUTCOME_SPACE } from '../protocol/risk.ts';
+import { MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 
@@ -181,11 +181,11 @@ test('maximal winnings debt never consumes another channel principal', async t =
   const a = await channel(f, env.wallets[1], 1n),
     b = await channel(f, env.wallets[2], 1n),
     protectedChannel = await channel(f, env.wallets[3], 100n);
-  await transition(f, a, 'checkpoint', (1n << 128n) - 2n);
+  await transition(f, a, 'checkpoint', MAX_BALANCE - 2n);
   await settle(f, env, a);
   await transition(f, b, 'checkpoint', 10n);
   await settle(f, env, b);
-  assert.equal(await f.contract.unpaidWinnings(), (1n << 128n) - 2n + 10n);
+  assert.equal(await f.contract.unpaidWinnings(), MAX_BALANCE - 2n + 10n);
   await (await f.contract.fundBankroll({ value: 20n })).wait();
   await (await f.contract.claim(a.state.channelId)).wait();
   await invariants(env, f, [a, b, protectedChannel]);
@@ -237,7 +237,7 @@ test('gas profile covers full-width evidence, a long winnings queue, forced ETH 
   assert.ok(BigInt((gas as any).claimBehind71) <= (BigInt((gas as any).claimFirst) * 11n) / 10n);
   await invariants(env, f, records);
   const ch = await channel(f, env.wallets[3], 1n),
-    max = (1n << 128n) - 1n;
+    max = MAX_BALANCE - 1n;
   const base = { ...ch.state, sequence: '2', balance: String(max / 8n) };
   ch.state = base;
   ch.evidence = checkpointEvidence(

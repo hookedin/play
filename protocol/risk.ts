@@ -1,6 +1,7 @@
 export const UINT256_MAX = (1n << 256n) - 1n;
-/** Deposits and signed balances stay below 2^128 wei so aggregate claims cannot overflow. */
-export const MAX_BALANCE = 1n << 128n;
+/** Deposits, signed balances, stakes, prizes and a quote's virtual bankroll stay below 2^96 wei, so aggregate claims
+ * cannot overflow and the contract checks the Kelly condition of a disputed bet in 256 bits. */
+export const MAX_BALANCE = 1n << 96n;
 /** A round's outcome is a uniform integer below this. */
 export const OUTCOME_SPACE = 1n << 64n;
 
@@ -54,15 +55,15 @@ function isqrt(n: bigint) {
 }
 
 /**
- * A casino bet is one wager with two outcomes. With available bankroll B, stake S, net win W = prize − S and total
- * commission F, the bankroll gains S − F when the bet loses and loses W + F when it wins. The Kelly condition for
- * taking it, E[X / (B + X)] >= 0 with every B + X > 0, is exactly (B − W − F)(S − F)·2^64 >= B·chance·(S + W). Its
- * left side falls as F grows, so the largest commission that keeps it is the smaller root of that quadratic in F,
- * taken with an integer square root and checked exactly. Bigint intermediate products deliberately exceed uint256;
- * final amounts do not.
+ * A casino bet is one wager with two outcomes. With bankroll B, stake S, net win W = prize − S and total commission F,
+ * the bankroll gains S − F when the bet loses and loses W + F when it wins. The Kelly condition for taking it,
+ * E[X / (B + X)] >= 0 with every B + X > 0, is exactly (B − W − F)(S − F)·2^64 >= B·chance·(S + W). Its left side falls
+ * as F grows, so the largest commission that keeps it is the smaller root of that quadratic in F, taken with an integer
+ * square root and checked exactly. A bankroll of nothing admits only a bet that pays less than its stake. Bigint
+ * intermediate products deliberately exceed uint256; final amounts do not.
  */
 export function assessBet({ bankroll, bet }: { bankroll: bigint; bet: BetTerms }) {
-  uint256(bankroll, 'bankroll', true);
+  uint256(bankroll, 'bankroll');
   checkTerms(bet);
   const { stake: S, chance: t, prize } = bet,
     Q = OUTCOME_SPACE,
@@ -80,4 +81,16 @@ export function assessBet({ bankroll, bet }: { bankroll: bigint; bet: BetTerms }
   const liability = uint256((W > 0n ? W : 0n) + fee, 'liability');
   uint256(B + S - fee, 'bankroll after player loss', true);
   return Object.freeze({ bankroll, maxFee, fee, liability });
+}
+/** Whether `bankroll` admits a casino bet by the Kelly condition `assessBet` checks with no commission. The casino
+ * settles every bet its quote's virtual bankroll admits, and the contract checks the same condition when one is
+ * disputed. */
+export function admits(bankroll: bigint, bet: BetTerms) {
+  try {
+    assessBet({ bankroll, bet });
+    return true;
+  } catch (error) {
+    if (error instanceof RangeError) return false;
+    throw error;
+  }
 }

@@ -20,12 +20,12 @@ rises by the same amount, which widens what it can admit. The casino prices the 
 shares = amount × totalShares / equity    rounded down
 ```
 
-`equity` is the bankroll before the worst cases of the casino bets being decided, and `totalShares` every share in
-issue. The first investment made the bankroll the house built before it the house's own shares, one per wei, and the
-wallet shows shares with 18 decimals, like ETH, so a whole share began at 1 ETH. Your holding belongs to your account's
-address, not to a channel, so it outlives each of your account's channels; buying and selling need an open balance. An
-amount too small to buy a share, or a bankroll with nothing left, is declined with a signed rejection, and your balance
-is unchanged.
+`equity` is the bankroll before reservations for casino bets being decided and disputed closes, and `totalShares` every
+share in issue. The first investment made the bankroll the house built before it the house's own shares, one per wei,
+and the wallet shows shares with 18 decimals, like ETH, so a whole share began at 1 ETH. Your holding belongs to your
+account's address, not to a channel, so it outlives each of your account's channels; buying and selling need an open
+balance. An amount too small to buy a share, or a bankroll with nothing left, is declined with a signed rejection, and
+your balance is unchanged.
 
 ## The statements your wallet checks
 
@@ -72,3 +72,7 @@ shares for any such addition and has the house give up shares for any withdrawal
 the price does not move. The house cannot give up shares it does not have: what the owner withdraws beyond them is a
 loss every holder bears, and the quote reports it as `overdrawn` from then on. The Bankroll page then says how much
 more the owner has withdrawn than its own shares covered.
+
+A dispute reserves only what its proposed payout adds to obligations already in the books. Reserving and releasing
+that money changes neither equity nor shares. A close that finalizes at a different balance from the signed state,
+including an unsettled dispute paid as won, changes equity as a profit or loss shared by every holder.

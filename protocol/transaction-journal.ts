@@ -30,7 +30,7 @@ export interface JournalOptions {
   maxFeePerGas?: bigint;
   initialState?: Partial<JournalState>;
   persist?: (state: JournalState) => void;
-  /** Resolves once everything `persist` recorded is durable, for a store that writes behind. Awaited before any broadcast. */
+  /** Flushes writes behind the supplied calldata and journal. Awaited before gas estimation and every broadcast. */
   durable?: () => Promise<void>;
 }
 import fs from 'node:fs';
@@ -203,6 +203,7 @@ export class TransactionJournal {
         ['latest', 'pending'].map(tag => this.provider.getTransactionCount(this.state.signer!, tag)),
       );
       if (latest !== mempool) throw new Error('Another relayer transaction is pending');
+      await this.durable?.();
       const populated = await this.signer.populateTransaction({ ...request, chainId: this.chainId, nonce: latest });
       if (
         BigInt(populated.gasLimit!) > this.maxGasLimit ||

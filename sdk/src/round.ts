@@ -245,7 +245,7 @@ export class RoundClient {
     if (this.data?.pending) throw new Error('Recover the pending action first');
     await this.ensureAllowance(BigInt(setup.stake), BigInt(setup.stake));
     const info = await this.call('wallet.info'),
-      bankroll = BigInt(info.bankroll);
+      bankroll = BigInt(info.virtualBankroll);
     const reusable =
       this.plan &&
       JSON.stringify(this.data?.setup) === JSON.stringify(setup) &&
@@ -322,7 +322,7 @@ export class RoundClient {
       // again would change the game's odds.
       const ticket = prepareAction(
         this.plan,
-        { nodeId: this.data.nodeId, cash: BigInt(this.data.cash), bankroll: BigInt(info.bankroll) },
+        { nodeId: this.data.nodeId, cash: BigInt(this.data.cash), bankroll: BigInt(info.virtualBankroll) },
         action,
         random,
       );

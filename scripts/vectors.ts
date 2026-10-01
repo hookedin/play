@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { id, ZeroHash } from 'ethers';
+import { id, TypedDataEncoder, ZeroHash } from 'ethers';
 import type { Checkpoint, Details, Operation } from '../protocol/types.ts';
 import {
   domain,
@@ -20,9 +20,10 @@ import {
   KIND,
   PROTOCOL,
   DEVELOPER_PROTOCOL,
+  QUOTE_TYPES,
 } from '../protocol/protocol.ts';
 import { fileURLToPath } from 'node:url';
-import { assessBet, OUTCOME_SPACE } from '../protocol/risk.ts';
+import { admits, assessBet, OUTCOME_SPACE } from '../protocol/risk.ts';
 
 export function buildVectors() {
   const identity = {
@@ -127,6 +128,15 @@ export function buildVectors() {
     { id: `0x${'86'.repeat(32)}` },
   );
   const rejection = rejectionCheckpoint(d, opened.next, bet.operation);
+  // The casino's quote for the casino bet on red: its round at the checkpoint the bet follows, and a virtual bankroll
+  // that admits it. The casino signs the hash.
+  const quote = {
+    channelId: opening.channelId,
+    previousStateHash: opened.nextHash,
+    round: roundId(secret),
+    virtualBankroll: 5_000_000_000n,
+    expiresAt: 1_800_000_000n,
+  };
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     identity,
@@ -139,6 +149,11 @@ export function buildVectors() {
     outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),
+    quote: {
+      message: quote,
+      hash: TypedDataEncoder.hash(d, QUOTE_TYPES, quote),
+      admitted: admits(quote.virtualBankroll, red),
+    },
     cases,
   };
 }

@@ -7,7 +7,7 @@
     "developer": "0x4444444444444444444444444444444444444444",
     "recipient": "0x5555555555555555555555555555555555555555"
   },
-  "protocol": "0xe4d283a632a82a593e0ddc0633702a7cbf0ff75d8329a15c3db9b07a3481b034",
+  "protocol": "0x5c10d55a773fc3f64ae2338d20b901a426bdfa98495e9462b2cdc31b14ee69ac",
   "developerProtocol": "0x10a4da880c4d5b8492f58ba80d25e6a73b4c17ea6a6b33618f2961e8d899a376",
   "opening": {
     "channelId": "0x56136bdb02b44e818120154143c922d9485e19e5b7288e7176da184391d4457c",
@@ -244,6 +244,17 @@
     "withdrawn": "0"
   },
   "rejectionHash": "0x2f8c7c812377fd634e4d10c7184f4da6f85f8ae461c865cf3e9d880f84a48a2b",
+  "quote": {
+    "message": {
+      "channelId": "0x56136bdb02b44e818120154143c922d9485e19e5b7288e7176da184391d4457c",
+      "previousStateHash": "0xb6ef43debf51160a2b8a5ebe6f97a7f7810cae4e8e614711f30e6aabce1758db",
+      "round": "0xb3fa07cb7a86b16de4cb4c7161c65a7ed9988fc7fbc49598623d49d0bd6cbc11",
+      "virtualBankroll": "5000000000",
+      "expiresAt": "1800000000"
+    },
+    "hash": "0xb81a2b2a5fa3c4e844fca888c6669f01b0aceaa020450acf7de4588e44a66736",
+    "admitted": true
+  },
   "cases": [
     {
       "bankroll": "10000000000",

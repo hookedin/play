@@ -88,6 +88,11 @@ function pendingSummary({ kind, request, details, game, operationId }: any) {
   return (
     `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${request.sequence}). ` +
     'Retry sends exactly the same request again.' +
+    (wallet.disputable()
+      ? ` The casino's quote covers this bet until ${new Date(Number(wallet.pending.quote.message.expiresAt) * 1000).toLocaleString()}: Close without the casino disputes it, and the casino then has 24 hours to settle it on-chain, or it counts as won.`
+      : wallet.bound()
+        ? ' The casino left this bet unanswered until its quote expired, so it can no longer be disputed, and the wallet takes no decline of it: Close without the casino ends this balance, and the bet with it.'
+        : '') +
     (failed ? ` Last attempt: ${failed.message}${failed.code ? ` (${failed.code})` : ''}.` : '')
   );
 }
@@ -682,7 +687,9 @@ function renderWallet() {
   $('challenge-summary').textContent = state.needsChallenge
     ? challengeExpired
       ? 'The challenge deadline has passed. The casino closed with an older balance; keep your recovery bundle.'
-      : `The casino is closing your balance with an older state. Challenge it before ${new Date(Number(state.deadline) * 1000).toLocaleString()}.`
+      : state.challengeDisputes
+        ? `The casino is closing your balance without settling your casino bet. Challenge it before ${new Date(Number(state.deadline) * 1000).toLocaleString()}, which disputes the bet.`
+        : `The casino is closing your balance with an older state. Challenge it before ${new Date(Number(state.deadline) * 1000).toLocaleString()}.`
     : '';
   $<HTMLButtonElement>('challenge-now').disabled = busy || !state.needsChallenge || challengeExpired;
   $('pending-summary').textContent = wallet.transactionIntent
@@ -885,7 +892,9 @@ function renderRecovery() {
       ? `The contract holds ${plainEth(state.principal || '0')} ETH of your deposits for this balance, at saved sequence ${state.savedSequence || '0'}.`
       : '',
     closing
-      ? `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${plainEth(state.balanceAtRisk || '0')} ETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
+      ? BigInt(state.disputedPrize || 0) > 0n
+        ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${plainEth(state.disputedPrize)} ETH.`
+        : `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${plainEth(state.balanceAtRisk || '0')} ETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
       : '',
     `Last checked ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'never: refresh before acting'}.`,
   ]
@@ -1096,7 +1105,7 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
       // after a reload it waits for it.
       if (method === 'wallet.info') {
         await wallet.synced?.catch(() => {});
-        const info = wallet.gameInfo();
+        const info = await wallet.gameInfo();
         if (isCurrent()) active!.uname = info.uname;
         return info;
       }

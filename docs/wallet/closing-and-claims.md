@@ -63,7 +63,8 @@ not to its address: what your deposits cover as protected principal, and the res
 
 1. Press **Close without the casino** under Recovery, or in the banner of a pending operation. Your account sends
    `startClose` with your latest evidence, paying its network fee from the deposit address
-   ([fees and gas](#fees-and-gas)). Only your account, or the casino's owner, can start a close.
+   ([fees and gas](#fees-and-gas)); with a pending casino bet its quote covers, it sends `dispute` instead
+   ([dispute a casino bet](#dispute-a-casino-bet)). Only your account, or the casino's owner, can start a close.
 2. The contract sets the deadline 24 hours after the block that started the close (`CHALLENGE_PERIOD`, 86,400 seconds).
    Recovery shows it.
 3. Once the deadline has passed, press **Finish the close**. Anyone can send `finalizeClose`, and the claim is recorded
@@ -76,6 +77,25 @@ began, either alone or followed by the last operation the casino signed;
 channel at once, whoever started it: your next deposit opens a new balance while the old channel closes. The close pays
 your account, at your deposit address, and until your next balance opens the wallet puts nothing there into a balance
 by itself ([deposit](getting-started.md#deposit)).
+
+## Dispute a casino bet
+
+The casino must settle every casino bet its [quote](../overview/how-it-works.md#quotes) covers. One it declines, or
+leaves unanswered, stays saved in the wallet: the wallet countersigns no rejection of it, unless the casino proves it a
+game's operation your account carried out on another channel. Its banner says until when the quote covers it.
+
+**Close without the casino** then sends `dispute` with your latest evidence, the bet your account signed, its seed and
+the casino's quote, which the contract checks: the casino signed the quote for that checkpoint and round, the quote has
+not expired, and its virtual bankroll admits the bet by the casino's Kelly rule. The close counts the bet as won, and
+house cash keeps its prize from the owner until the bet is settled. The deadline is 24 hours after the dispute, which is
+the time the casino has to replace it with its result: the bet settled on the round's secret, the outcome it would have
+had. Should it not, the close finishes with the bet won. Recovery says which the close holds.
+
+A dispute must be mined before the quote expires. The wallet sends a bet with its seed only on a quote with at least
+half its day left, so a bet the casino leaves unanswered has at least 12 hours to be disputed. After the quote expires
+the wallet still takes no decline of the bet, and sends it again without its seed; it can no longer be disputed, and
+**Close without the casino** ends the balance with the bet void. On **Retry**, the wallet takes up no later state of
+the casino's in place of the bet unless your account signed past it, from another device.
 
 ## Idle channels
 
@@ -94,6 +114,10 @@ contract holds a close at a lower sequence than the evidence the wallet saved, t
 - It must be mined before the deadline, and it does not move the deadline.
 - Anyone holding the evidence can send it: you, your [watchtower](keys-and-recovery.md#the-watchtower), or the
   casino's own watcher.
+
+A close that stops short of a pending casino bet its quote covers, such as one the casino starts on the checkpoint before
+it, is challenged by disputing the bet: **Challenge the close** sends `dispute`, and the casino has 24 hours from then
+to settle the bet ([dispute a casino bet](#dispute-a-casino-bet)).
 
 The wallet sends a challenge only when you press the button. Once the deadline has passed, the proposed state is final
 and the wallet says so.
