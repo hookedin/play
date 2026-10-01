@@ -141,7 +141,7 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
     bet3 = await disputedBet(f, open3, { ...terms, expiresAt: (await now()) + 86400 });
   await (await f.contract.connect(f.owner).startClose(open3.evidence)).wait();
   result = await worker.tick([bundleOf(open3, bet3)], await observer.observe());
-  assert.ok(result.alerts.some(alert => alert.reason === 'stale-close'));
+  assert.ok(result.alerts.some(alert => alert.reason === 'unsettled-bet'));
   await env.provider.waitForTransaction(result.pending!);
   c = await f.contract.channels(open3.state.channelId);
   assert.deepEqual([c.closingSequence, c.disputedPrize], [BigInt(bet3.op.sequence), 196n]);
@@ -155,4 +155,95 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
   assert.deepEqual([c.closingSequence, c.disputedPrize], [BigInt(bet2.op.sequence), 196n]);
   // A bundle whose bet does not follow its checkpoint is refused.
   assert.throws(() => verifyEvidence({ ...bundleOf(open2, bet2), evidence: open2.base }), /does not follow/);
+});
+
+/** A worker with its own journal, and a bundle of a channel's checkpoint that carries the casino bet `bet` when given. */
+function watchtower(t: any, env: any, f: any) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId });
+  return {
+    observer,
+    worker: new DisputeWorker({
+      contract: f.contract,
+      provider: env.provider,
+      observer,
+      signer: env.wallets[9],
+      chainId: env.chainId,
+      file: path.join(directory, 'journal.json'),
+    }),
+    bundleOf: (ch: any, bet?: any, evidence = ch.evidence) => ({
+      opening: ch.opening,
+      evidence,
+      ...(bet ? { dispute: { step: bet.evidence.step, quote: bet.quote } } : {}),
+      casino: String(f.contract.target),
+      chainId: env.chainId,
+      operator: f.owner.address,
+    }),
+  };
+}
+
+test("a close's dispute is due when its quote expires, if that comes before the close's deadline", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b] = env.wallets,
+    now = async () => (await env.provider.getBlock('latest'))!.timestamp,
+    { observer, worker, bundleOf } = watchtower(t, env, f);
+  await (await f.contract.fundBankroll({ value: 10000n })).wait();
+  // b's channel closes on its base, and 12 hours later still has 12 to be challenged.
+  const stale = await open(f, b, 1000n),
+    won = await signedIncrease(f, stale, 50n);
+  await (await f.contract.connect(f.owner).startClose(stale.base)).wait();
+  await env.provider.send('evm_increaseTime', [12 * 3600]);
+  await env.provider.send('evm_mine', []);
+  // a's channel closes short of a bet whose quote expires in two minutes, though the close has a day to run.
+  const ch = await open(f, a, 1000n),
+    bet = await disputedBet(f, ch, {
+      virtualBankroll: 5000n,
+      stake: 100n,
+      chance: OUTCOME_SPACE / 2n,
+      prize: 196n,
+      expiresAt: (await now()) + 120,
+    });
+  await (await f.contract.connect(f.owner).startClose(ch.evidence)).wait();
+  const result = await worker.tick([bundleOf(stale, null, won.evidence), bundleOf(ch, bet)], await observer.observe());
+  const alert = result.alerts.find(alert => alert.channelId === ch.opening.channelId)!;
+  assert.deepEqual([alert.reason, alert.severity], ['unsettled-bet', 'critical']);
+  assert.ok(alert.remaining! <= 120);
+  // The dispute goes first; the challenge waits for the next tick.
+  await env.provider.waitForTransaction(result.pending!);
+  assert.equal((await f.contract.channels(ch.opening.channelId)).disputedPrize, 196n);
+  assert.equal((await f.contract.channels(stale.opening.channelId)).closingSequence, 0n);
+});
+
+test('a casino bet whose quote expired before anyone disputed it is reported, on an open, closing or finalized channel', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    now = async () => (await env.provider.getBlock('latest'))!.timestamp,
+    { observer, worker, bundleOf } = watchtower(t, env, f),
+    ch = await open(f, env.wallets[1], 1000n),
+    bet = await disputedBet(f, ch, {
+      virtualBankroll: 5000n,
+      stake: 100n,
+      chance: OUTCOME_SPACE / 2n,
+      prize: 196n,
+      expiresAt: (await now()) + 60,
+    }),
+    expired = async () =>
+      (await worker.tick([bundleOf(ch, bet)], await observer.observe())).alerts.map(alert => [
+        alert.reason,
+        alert.severity,
+      ]);
+  await env.provider.send('evm_increaseTime', [120]);
+  await env.provider.send('evm_mine', []);
+  // Open, the casino may still have settled it, and the wallet's newer bundle carries none.
+  assert.deepEqual(await expired(), [['expired-bet', 'warning']]);
+  await (await f.contract.connect(f.owner).startClose(ch.evidence)).wait();
+  assert.deepEqual(await expired(), [['expired-bet', 'critical']]);
+  await env.provider.send('evm_increaseTime', [86400]);
+  await env.provider.send('evm_mine', []);
+  await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
+  assert.deepEqual(await expired(), [['expired-bet', 'critical']]);
 });

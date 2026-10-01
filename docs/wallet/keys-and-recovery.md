@@ -123,21 +123,24 @@ it reads the bundle again, checks that it belongs to the deployment, observes th
 deadline has not passed. When the bundle carries a casino bet its quote covers, it sends `dispute` instead: at once when
 a close stops short of the bet, and on an open channel an hour before the quote expires, which closes the channel with
 the bet. Until then it reports `unsettled-bet`, as the casino may still settle the bet, and the wallet's next export
-then carries none. Each tick prints one JSON line, `{ time, alerts, pending, relayerBalance }`, where `pending` is
-the hash of the journal's pending transaction or `null`; a failed tick prints `{ severity: "critical", reason }` to
-standard error, and the next runs as usual. `SIGINT` and `SIGTERM` stop it after the current tick. It starts a close
-only by disputing a bet, never needs your account's key, and knows only what the bundle holds.
+then carries none. A bet whose quote expired before anyone disputed it cannot be disputed any more: it reports
+`expired-bet`. Each tick prints one JSON line, `{ time, alerts, pending, relayerBalance }`, where `pending` is the hash
+of the journal's pending transaction or `null`; a failed tick prints `{ severity: "critical", reason }` to standard
+error, and the next runs as usual. `SIGINT` and `SIGTERM` stop it after the current tick. It starts a close only by
+disputing a bet, never needs your account's key, and knows only what the bundle holds.
 
 Each alert is `{ channelId?, severity, reason, remaining?, detail? }`, where `remaining` is the seconds left before the
-challenge deadline, or before the quote expires for `unsettled-bet`:
+challenge deadline, or for `unsettled-bet` before the bet can no longer be disputed: when its quote expires, or the
+close's deadline if that comes first:
 
-| `reason`                      | Severity                                      | Meaning                                                                                                                                             |
-| ----------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stale-close`                 | `warning`; `critical` with under an hour left | The channel is closing on an older state than the evidence. A challenge is sent, or a dispute when the close stops short of the bundle's casino bet |
-| `unsettled-bet`               | `warning`; `critical` with under an hour left | The channel is open and the bundle carries a casino bet the casino has not settled. With under an hour left, a dispute is sent                      |
-| `disputed-bet`                | `warning`; `critical` with under an hour left | The close disputes a casino bet, and the evidence is at its sequence: a challenge with it settles the bet                                           |
-| `missed-deadline`             | `critical`                                    | The channel is closing on an older state than the evidence, and the deadline has passed                                                             |
-| `conflicting-sequence`        | `critical`                                    | The closing state has the evidence's sequence and a different hash                                                                                  |
-| `finalized-state-differs`     | `critical`                                    | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged                                                  |
-| `channel-defense-failed`      | `critical`                                    | Reading or verifying the channel failed, or the chain cannot settle the evidence (it took in a deposit a reorg removed); `detail` says why          |
-| `recovery-transaction-failed` | `critical`                                    | The challenge or dispute could not be sent; `detail` says why                                                                                       |
+| `reason`                      | Severity                                                | Meaning                                                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stale-close`                 | `warning`; `critical` with under an hour left           | The channel is closing on an older state than the evidence. A challenge is sent                                                                                                                               |
+| `unsettled-bet`               | `warning`; `critical` with under an hour left           | The bundle carries a casino bet the casino has not settled. A dispute is sent with under an hour left on an open channel, and at once when a close stops short of the bet                                     |
+| `expired-bet`                 | `warning` on an open channel; `critical` once it closes | The bundle carries a casino bet whose quote expired before anyone disputed it: unless the casino settles it, it ends void. On an open channel the casino may have settled it, and a newer export carries none |
+| `disputed-bet`                | `warning`; `critical` with under an hour left           | The close disputes a casino bet, and the evidence is at its sequence: a challenge with it settles the bet                                                                                                     |
+| `missed-deadline`             | `critical`                                              | The channel is closing on an older state than the evidence, and the deadline has passed                                                                                                                       |
+| `conflicting-sequence`        | `critical`                                              | The closing state has the evidence's sequence and a different hash                                                                                                                                            |
+| `finalized-state-differs`     | `critical`                                              | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged                                                                                                            |
+| `channel-defense-failed`      | `critical`                                              | Reading or verifying the channel failed, or the chain cannot settle the evidence (it took in a deposit a reorg removed); `detail` says why                                                                    |
+| `recovery-transaction-failed` | `critical`                                              | The challenge or dispute could not be sent; `detail` says why                                                                                                                                                 |

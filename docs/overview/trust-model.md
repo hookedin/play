@@ -13,8 +13,10 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
 ## What the contract enforces
 
 - **Your deposits are protected up to your final balance.** The contract holds every deposit as it arrives, as your
-  channel's principal, and the owner cannot withdraw it. Withdrawals are paid out of it first, and a close pays
-  `min(owed, principal)` out of it in full. Only winnings above your deposits depend on the shared bankroll.
+  channel's principal, and the owner cannot withdraw it. A withdrawal is paid out of it first, but only out of the
+  deposits its balance had taken in, so one that arrives later stays protected however late the withdrawal is recorded.
+  A close pays `min(owed, principal)` out of it in full. Only winnings above your deposits depend on the shared
+  bankroll.
 - **Withdrawals are paid by the contract.** A withdrawal is an operation your account signs. With the casino's signature
   of the balance after it, which your receipt keeps, anyone can have the contract record it as a claim, once, until the
   channel's close is final, and only after every withdrawal you made before it, so nobody can make a lock-in take less
@@ -75,11 +77,12 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   operation your account signed there as proof. A completed result cannot change.
 - **Keeping its record.** It records every response it signs durably before the response leaves it, so retrying an
   operation ID returns the same accepted or rejected receipt, also after a restart, and a game's operation its player
-  already carried out on another channel is declined, never carried out twice. It discloses at most one signed outcome for a
-  channel position and settles on each round's secret at most once; a round whose secret was lost settles nothing, so a
-  covered bet on it, disputed, is paid as won. A
-  persistence failure stops all further signing, and play pauses while its view of the chain is stale or while it
-  reconciles after a restart or a reorg. It runs the exact protocol revision it pins from this repository.
+  already carried out on another channel is declined, never carried out twice. It discloses at most one signed outcome
+  for a channel position, which the contract does not check: a casino that also signed a withdrawal it declined could
+  have that recorded, and the withdrawals you made after it then only come back to you with the close. It settles on
+  each round's secret at most once; a round whose secret was lost settles nothing, so a covered bet on it, disputed, is
+  paid as won. A persistence failure stops all further signing, and play pauses while its view of the chain is stale or
+  while it reconciles after a restart or a reorg. It runs the exact protocol revision it pins from this repository.
 - **Watching channels.** It closes a channel nobody has played on for 7 days
   ([idle channels](../wallet/closing-and-claims.md#idle-channels)), challenges stale closes of the channels it knows and
   settles the casino bets disputed on them, in its own interest: its watcher does not protect you against the casino.

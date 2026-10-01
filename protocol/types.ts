@@ -168,7 +168,8 @@ export interface OnchainChannel {
   player: string;
   /** Everything ever deposited into the channel: what a state is owed is worked out from it. */
   deposited: string;
-  /** The deposits the contract still holds for the channel, which withdrawals are paid out of first. */
+  /** The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
+   * those its checkpoint took in. */
   principal: string;
   /** Everything the channel's withdrawals have made into claims. */
   claimed: string;

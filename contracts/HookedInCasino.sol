@@ -107,7 +107,8 @@ contract HookedInCasino {
         uint8 status;
         // Everything ever deposited into the channel: what a state is owed is worked out from it.
         uint256 deposited;
-        // The deposits the contract still holds for the channel, which withdrawals are paid out of first.
+        // The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
+        // those its checkpoint took in.
         uint256 principal;
         // Everything the channel's withdrawals have made into claims, which it records in order: a withdrawal is recorded
         // once this has passed the `withdrawn` of the checkpoint it follows.
@@ -115,7 +116,8 @@ contract HookedInCasino {
         uint256 closingSequence;
         bytes32 closingHash;
         uint256 closingBalance;
-        // The prize of the casino bet the close disputes, until evidence at its sequence settles it; 0 with none.
+        // The prize of the casino bet the close disputes, until evidence at its sequence settles it, and kept by a close
+        // that finalized with it won; 0 with none.
         uint256 disputedPrize;
     }
 
@@ -263,11 +265,11 @@ contract HookedInCasino {
 
     // Anyone may have a withdrawal recorded: an operation the account signed, followed by the checkpoint the casino signed
     // after it. It becomes a claim once, in the order the account signed its channel's withdrawals, until the channel is
-    // finalized: out of the channel's deposits first, and the rest winnings in the queue behind every claim before it.
-    // What house cash reaches is paid to its recipient at once; the claim keeps the rest, or all of it if the recipient
-    // refuses the payment, for anyone to collect. One never recorded comes back with the close, which is owed what the
-    // channel's states withdrew and did not make claims. A withdrawal to this contract locks the balance in: it goes into
-    // the account's current channel as deposits.
+    // finalized: out of the deposits its checkpoint took in first, and the rest winnings in the queue behind every claim
+    // before it. What house cash reaches is paid to its recipient at once; the claim keeps the rest, or all of it if the
+    // recipient refuses the payment, for anyone to collect. One never recorded comes back with the close, which is owed
+    // what the channel's states withdrew and did not make claims. A withdrawal to this contract locks the balance in: it
+    // goes into the account's current channel as deposits.
     function withdraw(Evidence calldata evidence) external nonReentrant {
         Operation calldata op = evidence.step.operation;
         if (op.kind != KIND_WITHDRAWAL) revert InvalidTerms();
@@ -281,7 +283,10 @@ contract HookedInCasino {
         c.claimed += op.amount;
         // Recorded during a close, the close owes that much less.
         if (c.status == STATUS_CLOSING) c.closingBalance = op.amount < c.closingBalance ? c.closingBalance - op.amount : 0;
-        uint256 principal = op.amount < c.principal ? op.amount : c.principal;
+        // A deposit its checkpoint did not take in stays the channel's, for its close. Recorded in order, the withdrawals
+        // before it drew on no more than this checkpoint took in.
+        uint256 available = c.principal + s.deposited - c.deposited;
+        uint256 principal = op.amount < available ? op.amount : available;
         uint256 winnings = op.amount - principal;
         c.principal -= principal;
         unpaidWinnings += winnings;
@@ -479,8 +484,6 @@ contract HookedInCasino {
         c.status = STATUS_FINALIZED;
         bytes32 stateHash = c.closingHash;
         uint256 balance = c.closingBalance;
-        // A casino bet still disputed stays won.
-        c.disputedPrize = 0;
         uint256 principal = balance < c.principal ? balance : c.principal;
         uint256 winnings = balance - principal;
         protectedPrincipal = protectedPrincipal - c.principal + principal;

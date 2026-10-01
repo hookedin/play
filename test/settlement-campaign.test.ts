@@ -61,8 +61,8 @@ async function invariants(env: any, f: any, records: any, withdrawals: string[] 
       assert.ok(collectable <= claim.protectedRemaining + claim.winningsRemaining);
       covered += BigInt(collectable) - BigInt(claim.protectedRemaining);
       if (c.status === 3n) assert.equal(claim.amount, claim.paid + claim.protectedRemaining + claim.winningsRemaining);
-      // Only a closing channel disputes a bet.
-      if (c.disputedPrize) assert.equal(c.status, 2n);
+      // Only a closing channel disputes a bet, and a finalized one keeps the prize its close paid as won.
+      if (c.disputedPrize) assert.ok(c.status >= 2n);
       return { ch, c, claim };
     }),
   );

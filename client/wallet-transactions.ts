@@ -514,12 +514,12 @@ export class WalletTransactions {
     await this.refresh();
     return hash;
   }
-  /** Withdraw `amount` of the balance, or all of it, to an address: another HookedIn account's address puts it into that
-   * account's balance. The balance pays it at once, and the contract makes it a claim once anyone sends the operation
-   * and the casino's signature after it, which the casino does straight away: it pays the address what the channel's
-   * deposits and house cash cover, and the rest as house cash arrives. One the casino cannot pay now is declined, with
-   * why. With `fromAddress`, or no balance open, everything at this account's address goes to the address instead,
-   * less the network fee. */
+  /** Withdraw `amount` of the balance, or all of it, to an address: another HookedIn account's address puts it into
+   * that account's balance. The balance pays it at once, and the contract makes it a claim once anyone sends the
+   * operation and the casino's signature after it, which the casino does straight away: it pays the address what the
+   * deposits the balance has taken in and house cash cover, and the rest as house cash arrives. One the casino cannot
+   * pay now is declined, with why. With `fromAddress`, or no balance open, everything at this account's address goes
+   * to the address instead, less the network fee. */
   async withdraw(this: CasinoWallet, to: string, amount?: Integer, { fromAddress = false } = {}) {
     const recipient = getAddress(to.trim());
     if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
@@ -540,8 +540,8 @@ export class WalletTransactions {
     return receipt;
   }
   /** Lock in the balance: withdraw all of it to the contract itself, which puts it into this account's channel as
-   * deposits it holds, for the balance to take in. The channel's deposits pay back what they cover, and house cash pays
-   * the rest, the winnings. The casino sends it at once, and pays its fee. */
+   * deposits it holds, for the balance to take in. The deposits the balance has taken in pay back what they cover, and
+   * house cash pays the rest, the winnings. The casino sends it at once, and pays its fee. */
   async lockIn(this: CasinoWallet) {
     const c = this.channel,
       balance = BigInt(c?.state.balance || 0);

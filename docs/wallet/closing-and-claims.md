@@ -30,9 +30,7 @@ Locking in closes the open game first, and your balance is empty until it has ta
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
 channel is open and your balance holds more than the deposits the contract holds for it. The casino declines a lock-in
 that house cash cannot pay now, like any withdrawal, and your balance is as it was. Once it is in, a close pays all of
-that balance as protected principal, and withdrawing it needs no house cash, until you win more. A deposit that reaches
-the channel while the lock-in is on its way is the exception: the lock-in takes it as its own deposits, and pays that
-much less of your winnings, which stay winnings. Lock in again once the deposit is in your balance.
+that balance as protected principal, and withdrawing it needs no house cash, until you win more.
 
 ## Withdraw
 
@@ -42,19 +40,20 @@ operation with that signature, the evidence your receipt holds, to the contract'
 ([functions that change state](../reference/contract.md#functions-that-change-state)); anyone may send it. The contract
 records each withdrawal once, under its ID, the hash of its operation, and in the order you made them.
 
-The contract pays out of your channel's deposits first, so what you have at risk stays as it was. The rest, the
-winnings, joins the queue of every claim's winnings: what house cash reaches is paid at once, and the rest stays owed
-under **Waiting to be paid** ([claims and collection](#claims-and-collection)). A recipient that refuses the payment
-leaves all of it owed. Anyone can check the chain: `claims(id)` says what the contract still owes of a withdrawal, and
-the `Withdrawal` event to whom, how much and in which transaction it was recorded.
+The contract pays it first out of the deposits your balance had taken in when you made it, so what you have at risk
+stays as it was; a deposit that arrives later stays in your channel. The rest, the winnings, joins the queue of every
+claim's winnings: what house cash reaches is paid at once, and the rest stays owed under **Waiting to be paid**
+([claims and collection](#claims-and-collection)). A recipient that refuses the payment leaves all of it owed. Anyone
+can check the chain: `claims(id)` says what the contract still owes of a withdrawal, and the `Withdrawal` event to whom,
+how much and in which transaction it was recorded.
 
-The casino takes a withdrawal on only when the contract can pay all of it now: out of the deposits your channel will
-still hold once the withdrawals it owes from it are paid, and house cash that no claim counts on, less what the
-withdrawals it owes will take from it. A withdrawal your deposits cover needs no house cash. It declines the rest like
-any declined debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It also declines a
-withdrawal to an address that would refuse a payment from the contract, which it tries first with the contract's
-100,000 gas: _That address does not accept a payment from the contract_. Withdrawing everything leaves the channel open
-with an empty balance.
+The casino takes a withdrawal on only when the contract can pay all of it now: out of the deposits your balance has
+taken in that the withdrawals it owes from it leave, and house cash that no claim counts on, less what the withdrawals
+it owes will take from it. A withdrawal your deposits cover needs no house cash. It declines the rest like any declined
+debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It also declines a withdrawal to an
+address that would refuse a payment from the contract, which it tries first with the contract's 100,000 gas: _That
+address does not accept a payment from the contract_. Withdrawing everything leaves the channel open with an empty
+balance.
 
 The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent. One
 not sent yet offers **Send it now** in Activity once every withdrawal you made before it from that balance is sent. A

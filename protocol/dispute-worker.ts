@@ -54,12 +54,14 @@ export class DisputeWorker {
         const c =
           observedChannels?.get(channelId) ||
           (await this.observer.contractRead(this.contract, 'channels', [channelId], observation.block));
-        // Read the claimed sequence before verifying anything: an open channel needs no defense but for a casino bet
-        // the casino has not settled, so signature verification runs only for those and for channels that are closing
-        // or finalized behind us.
-        const claimed = Number(bundle.evidence.step.operation.kind)
-          ? BigInt(bundle.evidence.base.sequence) + 1n
-          : BigInt(bundle.evidence.base.sequence);
+        // Read the claimed sequence, a casino bet's when the bundle carries one, before verifying anything: an open
+        // channel needs no defense but for a casino bet the casino has not settled, so signature verification runs only
+        // for those and for channels that are closing or finalized behind us.
+        const claimed = bundle.dispute
+          ? BigInt(bundle.dispute.step.operation.sequence)
+          : Number(bundle.evidence.step.operation.kind)
+            ? BigInt(bundle.evidence.base.sequence) + 1n
+            : BigInt(bundle.evidence.base.sequence);
         if (
           !(Number(c.status) === 1 && bundle.dispute) &&
           Number(c.status) !== 2 &&
@@ -77,6 +79,13 @@ export class DisputeWorker {
             sequence: BigInt(bet.step.operation.sequence),
             expiresAt: Number(bet.quote.message.expiresAt),
           };
+        // A casino bet its quote no longer covers cannot be disputed: unless the casino settles it, it ends void.
+        if (bundle.dispute && !bet && claimed > BigInt(c.closingSequence))
+          this.alerts.push({
+            channelId: state.channelId,
+            severity: Number(c.status) === 1 ? 'warning' : 'critical',
+            reason: 'expired-bet',
+          });
         if (Number(c.status) === 1) {
           // Disputing closes the channel, so it waits until the bet's quote is about to expire: the casino may still
           // settle it, and the wallet's newer bundle then has no bet to dispute.
@@ -102,23 +111,25 @@ export class DisputeWorker {
             });
           continue;
         }
-        const remaining = Number(c.deadline) - observation.block.timestamp,
-          // A disputed casino bet is settled by evidence at its own sequence.
-          disputed = BigInt(c.disputedPrize) > 0n && BigInt(state.sequence) === BigInt(c.closingSequence),
+        // A disputed casino bet is settled by evidence at its own sequence.
+        const disputed = BigInt(c.disputedPrize) > 0n && BigInt(state.sequence) === BigInt(c.closingSequence),
           // A close that stops short of a casino bet the casino has not settled is challenged by disputing the bet,
-          // which counts it as won.
-          short = dispute && dispute.sequence > BigInt(c.closingSequence) ? dispute : null;
+          // which counts it as won, while its quote holds.
+          short = dispute && dispute.sequence > BigInt(c.closingSequence) ? dispute : null,
+          deadline = short ? Math.min(short.expiresAt, Number(c.deadline)) : Number(c.deadline),
+          remaining = deadline - observation.block.timestamp;
         if (short || BigInt(state.sequence) > BigInt(c.closingSequence) || disputed) {
           this.alerts.push({
             channelId: state.channelId,
             severity: remaining < 3600 ? 'critical' : 'warning',
-            reason: remaining <= 0 ? 'missed-deadline' : disputed ? 'disputed-bet' : 'stale-close',
+            reason:
+              remaining <= 0 ? 'missed-deadline' : disputed ? 'disputed-bet' : short ? 'unsettled-bet' : 'stale-close',
             remaining,
           });
           if (remaining > 0)
             jobs.push({
               state,
-              deadline: Number(c.deadline),
+              deadline,
               ...(short ?? { method: 'challengeClose', args: [bundle.evidence], sequence: BigInt(state.sequence) }),
             });
         } else if (BigInt(state.sequence) === BigInt(c.closingSequence) && !same(stateHash, c.closingHash))

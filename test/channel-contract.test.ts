@@ -255,6 +255,37 @@ test('a lock-in records after the withdrawals signed before it, so it locks in a
   await assert.rejects(f.contract.withdraw.staticCall(out.evidence), reverts('InvalidState'));
 });
 
+test('a withdrawal draws only on the deposits its checkpoint took in, so a deposit that lands before it is recorded stays protected', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b] = env.wallets,
+    contract = await f.contract.getAddress(),
+    recipient = Wallet.createRandom().address;
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  // 1000 deposited and 500 won, all 1500 withdrawn; the account deposits 500 more before anyone sends it.
+  const ch = await open(f, a, 1000n),
+    won = { ...ch, ...(await signedIncrease(f, ch, 500n)) },
+    out = await step(f, won, 5, 1500n, { recipient });
+  await (await f.contract.connect(a).deposit(a.address, { value: 500n })).wait();
+  await (await f.contract.withdraw(out.evidence)).wait();
+  // House cash pays the winnings, and the late deposit stays the channel's: its close is owed it, all protected.
+  assert.equal(await env.provider.getBalance(recipient), 1500n);
+  assert.equal((await f.contract.channels(ch.opening.channelId)).principal, 500n);
+  assert.equal(await f.contract.withdrawableHouse(), 500n);
+  await forceClose(f, env, ch, await countersigned(f, won, out), a);
+  const close = await claimOf(f, ch.opening.channelId);
+  assert.deepEqual([close.amount, close.protectedRemaining, close.winningsRemaining], [500n, 500n, 0n]);
+  // A lock-in the same: 1500 locked in beside a late deposit of 500 leaves all 2000 protected.
+  const other = await open(f, b, 1000n),
+    lock = await step(f, { ...other, ...(await signedIncrease(f, other, 500n)) }, 5, 1500n, { recipient: contract });
+  await (await f.contract.connect(b).deposit(b.address, { value: 500n })).wait();
+  await (await f.contract.withdraw(lock.evidence)).wait();
+  const c = await f.contract.channels(other.opening.channelId);
+  assert.deepEqual([c.deposited, c.principal], [3000n, 2000n]);
+  assert.equal(await f.contract.withdrawableHouse(), 0n);
+});
+
 test('a close nets out what a checkpoint took in that the chain does not hold, so every signed checkpoint closes', async t => {
   const env = await anvil();
   t.after(() => env.close());
@@ -589,9 +620,10 @@ test('a dispute nobody settles within its 24 hours pays the bet as won, and a di
   await env.provider.send('evm_mine', []);
   await assert.rejects(f.contract.challengeClose.staticCall((await bet.settled()).evidence), reverts('InvalidState'));
   await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
+  // The finalized channel keeps the prize its close paid as won.
   assert.deepEqual(
     [(await claimOf(f, ch.opening.channelId)).amount, (await f.contract.channels(ch.opening.channelId)).disputedPrize],
-    [1096n, 0n],
+    [1096n, 196n],
   );
   // The casino closes b's channel on its base; b disputes its bet an hour before the deadline, as a challenge, and the
   // casino has a day from then to settle it.
