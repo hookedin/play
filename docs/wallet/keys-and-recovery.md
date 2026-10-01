@@ -32,7 +32,7 @@ balance from the casino: the latest state it holds of your channel, with the rep
 that its evidence carries your own signatures and the casino's, and signs the state itself; a declined operation's state
 moves no money. [Bankroll shares](bankroll-fund.md#the-statements-your-wallet-checks) follow the same way.
 
-What stays in the browser it happened in: receipts and activity, [play limits](getting-started.md#games-and-their-allowances),
+What stays in the browser it happened in: receipts and activity, [game allowances](getting-started.md#games-and-their-allowances),
 each game's saved state, the payout of a developer bet placed there, whose receipt is its proof, and a withdrawal the
 contract still owes, which that channel's [recovery bundle](#recovery-bundles) carries.
 

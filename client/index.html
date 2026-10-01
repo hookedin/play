@@ -60,7 +60,6 @@
     </div>
 
     <main>
-      <p id="play-pause-banner" class="banner warning hidden" role="status"></p>
       <div id="connection-banner" class="banner hidden" role="status"></div>
       <div id="challenge-banner" class="banner warning hidden" role="alert">
         <span id="challenge-summary"></span><button id="challenge-now" class="button small">Challenge the close</button>
@@ -465,42 +464,6 @@
             </div>
             <p id="address-send-help" class="help"></p>
           </details>
-        </section>
-        <section class="setting" aria-labelledby="play-limits-title">
-          <h3 id="play-limits-title">Play limits and breaks</h3>
-          <p class="muted">
-            These controls apply to this account in this browser, across all games and tabs. They cannot prevent play in
-            another browser or account. Deposit limits cover ETH this browser adds from your deposit address; incoming
-            transfers cannot be blocked. Daily limits reset at 00:00 UTC. Withdrawals and recovery stay available.
-          </p>
-          <form id="play-limits-form">
-            <label for="limit-deposit">Daily deposits (ETH)</label
-            ><input id="limit-deposit" inputmode="decimal" placeholder="No limit" />
-            <label for="limit-loss">Daily losses (ETH)</label
-            ><input id="limit-loss" inputmode="decimal" placeholder="No limit" />
-            <label for="limit-minutes">Session length (minutes)</label
-            ><input id="limit-minutes" type="number" min="1" max="1440" step="1" placeholder="No limit" />
-            <p class="help">
-              A bet must fit within what is left of the daily loss limit. Wins do not undo losses; developer bets and
-              payments count their full stake. Sessions end with a 15-minute break. Lower limits apply now; increases or
-              removal wait 24 hours.
-            </p>
-            <button class="button small" type="submit">Save limits</button>
-          </form>
-          <p id="play-limits-status" class="help" role="status"></p>
-          <label for="play-pause">Pause deposits and play</label>
-          <div class="field-row">
-            <select id="play-pause">
-              <option value="900000">15 minutes</option>
-              <option value="86400000">24 hours</option>
-              <option value="604800000">7 days</option>
-              <option value="2592000000">30 days</option></select
-            ><button id="pause-play" class="button" type="button">Start break</button>
-          </div>
-          <p class="help">
-            A break cannot be shortened. For help, contact
-            <a href="mailto:support@hookedin.com">support@hookedin.com</a>.
-          </p>
         </section>
         <section class="setting" aria-labelledby="name-title">
           <h3 id="name-title">Your name</h3>

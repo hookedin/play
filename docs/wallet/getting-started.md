@@ -35,7 +35,7 @@ you have open opens again under it.
 
 Then send Sepolia ETH to the address: free test ETH from the faucet the tab links to, or a withdrawal from another
 player's balance. The wallet checks the address every 4 seconds while the page is visible and adds what arrives to your
-balance, within your daily deposit limit; ETH too small to cover its fee waits for more.
+balance; ETH too small to cover its fee waits for more.
 
 Each deposit is one transaction, `deposit`, into your account's channel, and your first opens it. After two
 confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the
@@ -47,8 +47,7 @@ A deposit of everything at the address keeps back the most its transaction can c
 your balance has taken the deposit in, the wallet asks the casino to lend it that, so your balance holds all the address
 had. The casino lends no more than the rule the wallet prices transactions by allows for the block before the
 deposit's: 20% over an estimate of the gas the deposit used, which a node makes up to 1.5% high, at twice that block's
-base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less, and one your daily
-limit cut short is lent nothing. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
+base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
 leaves it in the balance, and your next withdrawal, transfer or close pays it back first.
 
 ETH stays at the deposit address instead, for fees or to withdraw elsewhere, while **Add ETH that arrives at my deposit
@@ -91,16 +90,6 @@ allowance caps what the game may risk, and moves no money:
 The wallet does not refuse a bet for paying back little: a game can spend its whole allowance on poor bets, and your
 [bets](bets-and-receipts.md) show what each game really paid back.
 
-**Play limits and breaks**, in Settings, set a daily deposit limit, a daily loss limit and a session length, or start a
-break of 15 minutes, 24 hours, 7 days or 30 days. They cover the selected account in this browser, across its games and
-tabs; another browser, profile or account plays independently, and clearing browser storage removes them. Daily usage
-resets at 00:00 UTC. The deposit limit covers what this browser adds from your deposit address to your balance, and the
-rest waits at the address; it cannot stop anyone else depositing into your channel. A new bet must fit the loss left
-for the day: a casino bet counts its loss once settled, and a win does not undo losses already counted; developer bets
-and payments count their whole stake. Once a session's time is up, new play waits for a 15-minute break. Lowering a
-limit applies at once; raising or removing one waits 24 hours, and a break cannot be shortened. Deposits and new play
-pause, while withdrawals, recovery and settling an operation already signed go on.
-
 ## Withdraw
 
 On the wallet's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be
@@ -122,7 +111,7 @@ much can be withdrawn now, and your balance is as it was. A withdrawal needs the
 
 **Send ETH out of my deposit address**, under **Deposits** in Settings, sends everything held at your deposit address to
 the address you name, less the network fee, and leaves your balance as it is. It is for ETH that stays at the address:
-it works during a break, past a deposit limit and while no balance is open.
+it works with **Add ETH that arrives at my deposit address to my balance** off and while no balance is open.
 
 ## Your name
 

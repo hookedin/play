@@ -24,7 +24,6 @@ import {
   gasLimitFor,
   sameTransactionIntent,
 } from '../protocol/transaction-recovery.ts';
-import { depositRemaining, recordPlay } from './play-controls.ts';
 /** What the wallet signs by itself as money comes into the balance: a deposit taken in, and the loan of its network
  * fee. It goes before anything else the player signs. */
 export const inbound = (kind?: string) => kind === 'taken-in' || kind === 'loan';
@@ -50,9 +49,6 @@ export class WalletTransactions {
     const { address, signer, provider, contract } = this;
     const value = BigInt(overrides.value ?? 0);
     if (value < 0n) throw new Error('Transaction value cannot be negative.');
-    const remaining = method === 'deposit' ? depositRemaining(this.controls) : null;
-    if (remaining !== null && value > remaining)
-      throw new Error('Your play controls limit deposits. ETH stays at your address for withdrawal or recovery.');
     // A deposit of everything the address holds is priced before its value is known, and keeps that price.
     const fees = overrides.gasLimit
       ? {
@@ -164,8 +160,8 @@ export class WalletTransactions {
         'Transaction exceeds the fee caps (2,000,000 gas, 200 gwei, 0.05 ETH total). Check the RPC or use independent recovery with reviewed fees',
       );
   }
-  /** What this account's address can put into its balance within its deposit limit: everything but the deposit's own
-   * fee, priced once for both the amount and the transaction. `whole` says it is everything, short of no limit. */
+  /** What this account's address can put into its balance: everything but the deposit's own fee, priced once for both
+   * the amount and the transaction. */
   async depositable(this: CasinoWallet) {
     await this.assertNetwork();
     const [balance, fees] = await Promise.all([
@@ -174,14 +170,7 @@ export class WalletTransactions {
     ]);
     const rest = balance - fees.maxCost;
     this.depositFee = fees.maxCost;
-    const remaining = depositRemaining(this.controls),
-      amount = rest > 0n ? rest : 0n;
-    return {
-      amount: remaining !== null && remaining < amount ? remaining : amount,
-      fee: fees.maxCost,
-      overrides: fees.overrides,
-      whole: rest > 0n && (remaining === null || remaining >= rest),
-    };
+    return { amount: rest > 0n ? rest : 0n, fee: fees.maxCost, overrides: fees.overrides };
   }
   /** Move money from this account's address into its channel: the contract opens the channel with the account's first
    * deposit, and the balance takes the money in once the casino has seen it confirmed. With no amount, everything the
@@ -189,20 +178,15 @@ export class WalletTransactions {
   async deposit(this: CasinoWallet, amount?: Integer) {
     await this.exclusive(async () => {
       if (amount !== undefined) return this.depositLocked(amount);
-      const { amount: all, overrides, whole } = await this.depositable();
-      if (!all)
-        throw new Error(
-          depositRemaining(this.controls) === 0n
-            ? 'Your play controls limit deposits. ETH stays at your address for withdrawal or recovery.'
-            : 'Your address holds too little to add after network fees.',
-        );
-      return this.depositLocked(all, overrides, whole);
+      const { amount: all, overrides } = await this.depositable();
+      if (!all) throw new Error('Your address holds too little to add after network fees.');
+      return this.depositLocked(all, overrides, true);
     });
     await this.refresh();
     await this.takeDeposits();
   }
-  /** ETH at this address goes into its balance within the deposit limit while the wallet `sweeps`. An amount smaller
-   * than its own fee stays where it is. */
+  /** ETH at this address goes into its balance while the wallet `sweeps`. An amount smaller than its own fee stays
+   * where it is. */
   async sweep(this: CasinoWallet) {
     // While collateral is offered, ETH at the address pays for it first.
     if (this.buying) return this.buyOffered();
@@ -210,8 +194,8 @@ export class WalletTransactions {
     const added = await this.exclusive(
       async () => {
         if (!this.sweeps) return null;
-        const { amount, fee, overrides, whole } = await this.depositable();
-        return amount > fee ? this.depositLocked(amount, overrides, whole) : null;
+        const { amount, fee, overrides } = await this.depositable();
+        return amount > fee ? this.depositLocked(amount, overrides, true) : null;
       },
       { wait: true },
     );
@@ -550,7 +534,7 @@ export class WalletTransactions {
   }
   async recordTransaction(this: CasinoWallet, receipt: TransactionReceipt, status = 'confirmed') {
     const record = this.transactionRecord(receipt, this.transactionIntent, status);
-    await this.save(record, { transactionIntent: null, controls: recordPlay(this.controls, record) });
+    await this.save(record, { transactionIntent: null });
   }
   transactionRecovery(this: CasinoWallet) {
     return { provider: this.provider, observer: this.observer, confirmations: this.config.confirmations };

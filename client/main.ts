@@ -3,7 +3,6 @@ import qrcode from 'qrcode-generator';
 import { CasinoWallet } from './wallet.ts';
 import { validateWithdrawal } from './withdrawal.ts';
 import { passkeyKey } from './passkey.ts';
-import { playControls, depositRemaining } from './play-controls.ts';
 import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
@@ -159,27 +158,8 @@ function markSaved() {
   localStorage.setItem(savedSetting(), '1');
   renderWallet();
 }
-/** The play limits and breaks, the deposit address, and whether this account's key is saved outside this browser. */
+/** The deposit address, and whether this account's key is saved outside this browser. */
 function renderSafety() {
-  const controls = playControls(wallet.controls),
-    limits = controls.limits;
-  const describeLimit = (value: string | null) => (value === null ? 'no limit' : `${ether(value)} ETH`);
-  $('play-limits-status').textContent =
-    `Today: ${plainEth(controls.deposited)} ETH deposited; ${plainEth(controls.lost)} ETH in losses. Limits: deposits ${describeLimit(limits.deposit)}, losses ${describeLimit(limits.loss)}, session ${limits.minutes === null ? 'no limit' : `${limits.minutes} minutes`}.${controls.pending ? ` Requested increases take effect ${new Date(controls.pending.at).toLocaleString()}.` : ''}`;
-  const now = Date.now(),
-    sessionEnd = controls.sessionStarted + (limits.minutes ?? 0) * 60000;
-  const sessionMessage =
-    controls.sessionStarted && limits.minutes !== null && now < sessionEnd + 15 * 60000
-      ? now < sessionEnd
-        ? `Your play session ends at ${new Date(sessionEnd).toLocaleTimeString()}. A 15-minute break follows.`
-        : `Your session has ended. Take a break until ${new Date(sessionEnd + 15 * 60000).toLocaleTimeString()}.`
-      : '';
-  const pauseMessage =
-    controls.pausedUntil > now
-      ? `Play and deposits paused until ${new Date(controls.pausedUntil).toLocaleString()}. Withdrawals and recovery are available.`
-      : sessionMessage;
-  $('play-pause-banner').classList.toggle('hidden', !pauseMessage);
-  $('play-pause-banner').textContent = pauseMessage;
   if (safetyAccount !== wallet.storageKey) {
     safetyAccount = wallet.storageKey;
     $<HTMLTextAreaElement>('exported-key').value = '';
@@ -187,9 +167,6 @@ function renderSafety() {
     $('export-key').textContent = "Show this wallet's private key";
     for (const id of ['withdraw-to', 'withdraw-amount', 'address-send-to']) $<HTMLInputElement>(id).value = '';
     $<HTMLInputElement>('withdraw-into').checked = false;
-    $<HTMLInputElement>('limit-deposit').value = limits.deposit === null ? '' : ether(limits.deposit);
-    $<HTMLInputElement>('limit-loss').value = limits.loss === null ? '' : ether(limits.loss);
-    $<HTMLInputElement>('limit-minutes').value = String(limits.minutes ?? '');
   }
   const saved = localStorage.getItem(savedSetting()) !== null;
   $('deposit-save').hidden = saved;
@@ -210,45 +187,13 @@ function renderSafety() {
   }
   const held = BigInt(wallet.publicState.nativeBalance || 0),
     fee = wallet.depositFee;
-  const remaining = depositRemaining(controls);
   const whole = fee > 0n && held > fee ? held - fee : 0n,
-    net = remaining !== null && whole > remaining ? remaining : whole,
-    // Only a deposit of everything at the address is lent its fee: not one the daily limit cuts short.
-    lent = net === whole ? wallet.feeLoan(net, fee) : 0n;
+    lent = wallet.feeLoan(whole, fee);
   $('deposit-fee').textContent =
-    remaining === 0n
-      ? 'Your play break or daily deposit limit keeps incoming ETH at this address. You can withdraw it.'
-      : fee > 0n
-        ? `Address balance ${ether(held)} ETH. Estimated maximum network fee ${ether(fee)} ETH. Up to ${ether(net + lent)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}${lent ? ': the casino lends you the network fee, and your next withdrawal pays it back' : ''}. The final fee is recorded in Activity.`
-        : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
+    fee > 0n
+      ? `Address balance ${ether(held)} ETH. Estimated maximum network fee ${ether(fee)} ETH. Up to ${ether(whole + lent)} ETH can be added now${lent ? ': the casino lends you the network fee, and your next withdrawal pays it back' : ''}. The final fee is recorded in Activity.`
+      : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
 }
-$('play-limits-form').addEventListener('submit', event => {
-  event.preventDefault();
-  void task(async () => {
-    const value = (id: string) => {
-      const typed = $<HTMLInputElement>(id).value.trim();
-      if (!typed) return null;
-      const amount = ethAmount(typed);
-      if (amount === null) throw new Error('Enter a positive ETH limit or leave it empty.');
-      return String(amount);
-    };
-    const minutes = $<HTMLInputElement>('limit-minutes').value.trim();
-    await wallet.setPlayLimits({
-      deposit: value('limit-deposit'),
-      loss: value('limit-loss'),
-      minutes: minutes ? Number(minutes) : null,
-    });
-    toast('Limits saved. Reductions apply now; increases or removal wait 24 hours.');
-  });
-});
-act(
-  'pause-play',
-  async () => {
-    await wallet.pausePlay(Number($<HTMLSelectElement>('play-pause').value));
-    abandonGame();
-  },
-  'Your break has started. You can still withdraw or recover your balance.',
-);
 
 /** Show a notice above everything, an open dialog too: the top layer stacks in the order things are shown. */
 function showOnTop(notice: HTMLElement) {
@@ -668,7 +613,7 @@ function renderWallet() {
                   ? `Your balance is closing: ETH sent here waits until you choose what to do with it.${held}`
                   : !wallet.autoDeposit
                     ? `ETH sent here stays at this address: adding it to your balance by itself is off in Settings.${held}`
-                    : `Waiting for ETH. Deposits are added after network confirmation, within your daily limit.${wallet.config.loanLimit == null ? ' The network fee of adding them comes out of them.' : ' The casino lends you the network fee of adding them, and your next withdrawal pays it back.'}`;
+                    : `Waiting for ETH. Deposits are added after network confirmation.${wallet.config.loanLimit == null ? ' The network fee of adding them comes out of them.' : ' The casino lends you the network fee of adding them, and your next withdrawal pays it back.'}`;
   if ($('deposit-status').textContent !== depositStatus) $('deposit-status').textContent = depositStatus;
   const addable = (wallet.forceClosed || !wallet.autoDeposit) && !wallet.recoveryOnly && !closing && atAddress > 0n;
   $('add-to-balance').classList.toggle('hidden', !addable);

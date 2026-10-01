@@ -46,7 +46,6 @@ import {
 import { describeBet } from '../protocol/risk.ts';
 import { gameAmount, gameError, gameRef, META } from './bridge.ts';
 import { WalletTransactions, inbound } from './wallet-transactions.ts';
-import { allowPlay, recordPlay } from './play-controls.ts';
 const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
  * developer bet, a payment, an investment and a bank deposit are debits, a withdrawal names the address it pays, a
@@ -227,7 +226,6 @@ export class ChannelClient extends WalletTransactions {
       // cover, the casino declines without the seed, never knowing what it would have paid.
       const seed = kind === 'casino-bet' ? random() : null,
         quote = seed ? await this.ownQuote() : null;
-      const controls = known.game ? allowPlay(this.controls, intent.amount) : this.controls;
       const request = operation(this.domain, this.channel!.state, {
         kind: intent.kind,
         amount: intent.amount,
@@ -252,7 +250,7 @@ export class ChannelClient extends WalletTransactions {
         details,
         signature: await this.signer.signTypedData(this.domain, OP_TYPES, request),
       };
-      await this.save(undefined, { controls });
+      await this.save();
     };
     // The wallet's own background work finishes first: an operation waits for it rather than failing as busy.
     return this.exclusive(
@@ -442,7 +440,6 @@ export class ChannelClient extends WalletTransactions {
     });
     c.pending = null;
     await this.save(receipt, {
-      controls: recordPlay(this.controls, receipt),
       channels: { ...this.channels, [c.state.channelId]: c },
       ...(invested ? { fund: invested.fund } : {}),
       ...(banked ? { bank: banked } : {}),

@@ -255,8 +255,6 @@ test('validation excludes wallet signing and private key methods from the iframe
     'personal_sign',
     'wallet.authorize',
     'wallet.approve',
-    'wallet.setLimits',
-    'wallet.resume',
   ]) {
     assert.throws(() => validateRequest(request(1, method)), /not available to games/, method);
   }

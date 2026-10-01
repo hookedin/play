@@ -211,7 +211,7 @@ tab opens and again before signing, and signs none above 300,000 gas at the gas 
 it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it
 is small ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where
 the wallet keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes
-into your balance while the channel is open, within your deposit limit. Starting **Close without the casino** turns that
+into your balance while the channel is open. Starting **Close without the casino** turns that
 off, so ETH sent for its fee stays at the address even if starting the close fails. A failure before signing leaves the
 balance open, and the close can be tried again; a signed close keeps its saved transaction to retry. Recovery shows the
 ETH the address holds for fees. You can also turn it off under **Deposits** in Settings and send ETH to the address, or
