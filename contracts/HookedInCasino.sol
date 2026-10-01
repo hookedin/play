@@ -3,10 +3,13 @@ pragma solidity ^0.8.28;
 
 /// @notice One trusted casino owner signs balances and controls the shared bankroll.
 /// Players must challenge stale closures within 24 hours to protect their latest balance, and anyone can dispute a
-/// casino bet the owner's quote covers for them until the quote expires. Anyone can buy collateral the owner offers for
-/// a channel, which protects its winnings from the owner.
+/// casino bet the owner's quote covers for them until the quote expires, which keeps its win from the owner as far as
+/// house cash is free. Anyone can buy collateral the owner offers for a channel, which protects its winnings from the
+/// owner.
 contract HookedInCasino {
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
+    // How long the casino has to settle a disputed casino bet before it counts as won.
+    uint256 public constant DISPUTE_PERIOD = 7 days;
     // Every deposit, and every signed balance, deposited, withdrawn and loan total, is below 2^96 wei, as is every stake,
     // prize and quoted virtual bankroll: no realistic number of claims can overflow the uint256 aggregate debt and block
     // a finalization or a withdrawal, and a disputed bet's Kelly condition fits in 256 bits.
@@ -123,9 +126,9 @@ contract HookedInCasino {
         // The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
         // those its checkpoint took in.
         uint256 principal;
-        // House cash locked into the channel by the collateral offers bought for it: it pays the channel's withdrawals what
-        // its deposits do not, before house cash does, and its close what it is owed above them. The owner cannot withdraw
-        // it, and what the close is not owed returns to house cash.
+        // House cash locked into the channel by the collateral offers bought for it and by its disputes: it pays the
+        // channel's withdrawals what its deposits do not, before house cash does, and its close what it is owed above them.
+        // The owner cannot withdraw it, and what the close is not owed returns to house cash.
         uint256 collateral;
         // Everything the channel's withdrawals have made into claims, which it records in order: a withdrawal is recorded
         // once this has passed the `withdrawn` of the checkpoint it follows.
@@ -136,6 +139,8 @@ contract HookedInCasino {
         // The prize of the casino bet the close disputes, until evidence at its sequence settles it, and kept by a close
         // that finalized with it won; 0 with none.
         uint256 disputedPrize;
+        // The part of `collateral` the dispute locked, until evidence settles the bet; 0 with none.
+        uint256 disputeHold;
     }
 
     /// What the contract owes, and to whom: a finalized channel's close, under the channel's ID, or a withdrawal or a
@@ -504,13 +509,29 @@ contract HookedInCasino {
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
+        // Settling a disputed bet ends the close a challenge period later, if that is sooner.
+        if (c.disputedPrize != 0 && block.timestamp + CHALLENGE_PERIOD < c.deadline) {
+            c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
+        }
         c.disputedPrize = 0;
+        // Settled, a disputed bet's hold returns to house cash but for what the close is now owed above the channel's
+        // deposits and its other collateral.
+        uint256 hold = c.disputeHold < c.collateral ? c.disputeHold : c.collateral;
+        uint256 rest = c.principal + c.collateral - hold;
+        uint256 kept = c.closingBalance > rest ? c.closingBalance - rest : 0;
+        if (kept < hold) {
+            c.collateral -= hold - kept;
+            protectedFunds -= hold - kept;
+        }
+        c.disputeHold = 0;
         emit CloseChallenged(s.channelId, s.sequence, c.closingHash);
     }
 
     // A casino bet the casino has not settled, which its quote covers: anyone disputes it before the quote expires, which
     // closes the channel with it or challenges its close. It counts as won until evidence at its sequence settles it; the
-    // casino has 24 hours from the dispute to send that.
+    // casino has 7 days from the dispute to send that. What winning it adds above the channel's deposits and collateral
+    // moves from house cash into its collateral, its hold, as far as house cash is free, so the owner cannot take it while
+    // the casino settles the bet.
     function dispute(Evidence calldata evidence, Quote calldata quote) external nonReentrant {
         Step calldata step = evidence.step;
         Operation calldata op = step.operation;
@@ -531,11 +552,18 @@ contract HookedInCasino {
         } else if (c.status != STATUS_CLOSING || block.timestamp >= c.deadline || s.sequence <= c.closingSequence) {
             revert InvalidState();
         }
-        c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
+        c.deadline = uint64(block.timestamp + DISPUTE_PERIOD);
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
         c.disputedPrize = op.prize;
+        uint256 held = c.principal + c.collateral;
+        uint256 hold = op.prize > op.amount ? op.prize - op.amount : 0;
+        if (held + hold > c.closingBalance) hold = c.closingBalance > held ? c.closingBalance - held : 0;
+        if (hold > withdrawableHouse()) hold = withdrawableHouse();
+        c.collateral += hold;
+        c.disputeHold += hold;
+        protectedFunds += hold;
         emit BetDisputed(s.channelId, evidence);
     }
 
@@ -553,7 +581,7 @@ contract HookedInCasino {
         protectedFunds = protectedFunds - held + protectedAmount;
         // The claim holds the protected amount from here on, and its winnings join the queue behind every claim before it. A
         // close owed nothing leaves no claim.
-        (c.principal, c.collateral) = (0, 0);
+        (c.principal, c.collateral, c.disputeHold) = (0, 0, 0);
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
         if (balance != 0) claims[channelId] = Claim(c.player, c.player, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);

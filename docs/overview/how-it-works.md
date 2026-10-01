@@ -57,7 +57,8 @@ check and keep them. A withdrawal or a transfer names whom it pays in the operat
 
 **Principal, collateral and winnings.** The channel's principal is its deposits, which the contract protects:
 withdrawals and a close are paid out of it first. The casino can lock house cash into the channel beside it as
-**collateral**, which anyone buys on-chain at the price the casino's signed offer names, and which pays next, until
+**collateral**, which anyone buys on-chain at the price the casino's signed offer names, or a dispute locks for the
+bet it disputes, and which pays next, until
 withdrawals use it up or the channel closes. What the balance holds above both, its
 **winnings**, is owed from the shared bankroll until the contract pays it, or until you
 [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
@@ -91,8 +92,8 @@ it holds, and whose terms its virtual bankroll admits by the casino's
 The casino settles every casino bet a quote covers. The wallet sends the seed with a covered bet only, so the casino
 declines any other without learning what it would have paid. A covered bet the casino declines or leaves unanswered
 stays saved in the wallet, which **disputes** it by closing the channel with it before the quote expires, as a
-watchtower holding its recovery bundle does: the contract counts it as won, and gives the casino 24 hours to settle it
-with the round's secret
+watchtower holding its recovery bundle does: the contract counts it as won, locks what it would win into the channel as
+collateral, as far as house cash is free, and gives the casino 7 days to settle it with the round's secret
 ([closing and claims](../wallet/closing-and-claims.md#dispute-a-casino-bet)). The casino declines a covered bet only as
 a game's operation its player carried out on another channel, with the operation the account signed there as proof.
 
@@ -184,8 +185,8 @@ Only a close ends a channel, and either side can start one alone with its latest
 sides signed, or the channel's base, either alone or followed by one operation the account authorized and the casino
 signed. That starts a fixed 24-hour window, and the account's next deposit opens its next channel at once. Anyone with
 strictly newer evidence can replace the close's state before the deadline, and the deadline moves only for a dispute:
-a covered casino bet the account closes with, or challenges with, gives the casino 24 hours from then to replace it with
-its result. After it,
+a covered casino bet the account closes with, or challenges with, gives the casino 7 days from then to replace it with
+its result, which ends the close 24 hours later if that is sooner. After it,
 anyone can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
 **claim**: up to the channel's principal and collateral it is protected, `min(owed, principal + collateral)`, and the
 rest is winnings, paid first

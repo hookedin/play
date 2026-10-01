@@ -6,9 +6,10 @@ sidebar:
 ---
 
 The contract protects what it owes: your deposits, the collateral locked into your channel and your recorded winnings,
-from everyone, the owner included. Everything else depends on the casino: house cash, winnings not yet recorded, and a
-disputed bet's prize until its close is final. You protect a win by recording it, with a withdrawal or a lock-in, or
-before you win it by buying collateral, keep your evidence and watch your channel.
+from everyone, the owner included. Everything else depends on the casino: house cash and winnings not yet recorded. You
+protect a win by recording it, with a withdrawal or a lock-in, or before you win it by buying collateral, keep your
+evidence and watch your channel. Disputing a bet locks what it would win into your channel as collateral, as far as
+house cash is free.
 A game, its developer and a bankroll fund share each carry trust of their own, set out below.
 
 ## What the contract enforces
@@ -42,11 +43,14 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   its round, the virtual bankroll it is admitted against and an expiry a day away. The casino must settle a bet the
   quote's virtual bankroll admits by the casino's Kelly rule. One it leaves unsettled, anyone with your evidence disputes
   before the quote expires, which closes your channel with it: it counts as won until the casino settles it on-chain
-  with the round's secret, which it has 24 hours from the dispute to do. A bet still disputed then is won, and its
-  winnings are recorded with the close.
+  with the round's secret, which it has 7 days from the dispute to do. The dispute moves what winning the bet adds
+  above your deposits and collateral from house cash into your collateral, as far as house cash is free when it is
+  mined, so the owner cannot take it meanwhile. Settled, the bet keeps of it what your close is then owed above your
+  deposits and other collateral, until the close is final. A bet still disputed then is won, and its winnings are
+  recorded with the close.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
   claim, with no casino server involved. The challenge window is a fixed 24 hours; only a dispute moves it, to give the
-  casino a full day to settle the disputed bet.
+  casino a week to settle the disputed bet, and settling it ends the close 24 hours later if that is sooner.
 - **Recorded winnings come before the owner.** Finalizing a close, or recording a withdrawal, records its unpaid
   winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
   of an earlier one, and the owner cannot withdraw the cash they are owed. Winnings not yet recorded have none of this.
@@ -63,8 +67,8 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   on the shared bankroll: a withdrawal's winnings and a close's wait in the queue for house cash. Neither replenishment nor a payout
   deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is covered. This
   is a deliberate choice of capital efficiency. Until a win is recorded, the cash that would pay it is house cash, which
-  the owner can withdraw; so is the cash for a disputed bet's prize until its close is final, when the prize joins the
-  same queue.
+  the owner can withdraw. A dispute locks a disputed bet's win only out of house cash that is free when it is mined: an
+  owner that withdraws first, or keeps no house cash, leaves the win to the queue.
 - **The bankroll overcommits.** This is a limitation. The quotes out at once are not divided between them: each admits
   bets against the whole virtual bankroll as it was when quoted, and holds for a day. The bets on many quotes can
   together stake more than the Kelly rule lets the bankroll take at once, and win more than it holds; what it cannot

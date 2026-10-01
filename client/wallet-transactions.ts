@@ -849,7 +849,7 @@ export class WalletTransactions {
     });
   }
   /** Close the balance without the casino. A pending casino bet the casino's quote covers is disputed with it: the
-   * casino then has 24 hours to settle it on-chain, or it counts as won. */
+   * casino then has 7 days to settle it on-chain, or it counts as won. */
   async startClose(this: CasinoWallet) {
     const result = await this.exclusive(async () => {
       if (!this.channel) throw new Error('No active channel');

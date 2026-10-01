@@ -101,6 +101,7 @@ const CHANNEL_FIELDS = [
   'closingHash',
   'closingBalance',
   'disputedPrize',
+  'disputeHold',
 ];
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
   sepolia: { id: 11155111n, name: 'Sepolia', stake: '1000000000000' },
@@ -640,6 +641,8 @@ export class CasinoWallet extends GameSessions {
       ),
       // The prize of the casino bet the close disputes, until the casino settles it: 0 with none.
       disputedPrize: closing?.onchain.disputedPrize || '0',
+      // The house cash the dispute locked into the close's collateral, until the casino settles the bet: 0 with none.
+      disputeHold: closing?.onchain.disputeHold || '0',
       // What the contract still owes: closed balances, under their channels, and withdrawals it has not paid in full.
       claims: [
         ...Object.values(this.channels)

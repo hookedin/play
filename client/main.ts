@@ -90,7 +90,7 @@ function pendingSummary({ kind, request, details, game, operationId }: any) {
     `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${request.sequence}). ` +
     'Retry sends exactly the same request again.' +
     (wallet.disputable()
-      ? ` The casino's quote covers this bet until ${new Date(Number(wallet.pending.quote.message.expiresAt) * 1000).toLocaleString()}: Close without the casino disputes it, and the casino then has 24 hours to settle it on-chain, or it counts as won.`
+      ? ` The casino's quote covers this bet until ${new Date(Number(wallet.pending.quote.message.expiresAt) * 1000).toLocaleString()}: Close without the casino disputes it, and the casino then has 7 days to settle it on-chain, or it counts as won.`
       : wallet.bound()
         ? ' The casino left this bet unanswered until its quote expired, so it can no longer be disputed, and the wallet takes no decline of it: Close without the casino ends this balance, and the bet with it.'
         : '') +
@@ -634,7 +634,7 @@ function renderWallet() {
   $('balance-note').textContent = arriving
     ? `${plainEth(arriving)} ETH of it is on its way into your balance.`
     : state.closingChannelId && !state.channelId
-      ? 'Your last balance is closing: finish the close under Settings → Recovery once its 24 hours are up, and collect it. A deposit opens your next balance.'
+      ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
       : loan
         ? `What games play with. The casino lent you the ${plainEth(loan)} ETH network fee of your deposits: your next withdrawal pays it back.`
         : 'What games play with.';
@@ -991,7 +991,7 @@ function renderRecovery() {
       : '',
     closing
       ? BigInt(state.disputedPrize || 0) > 0n
-        ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${plainEth(state.disputedPrize)} ETH.`
+        ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${plainEth(state.disputedPrize)} ETH. Meanwhile the contract holds ${plainEth(state.disputeHold || '0')} ETH of house cash for it, which the casino cannot take.`
         : `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${plainEth(state.balanceAtRisk || '0')} ETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
       : '',
     `Last checked ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'never: refresh before acting'}.`,

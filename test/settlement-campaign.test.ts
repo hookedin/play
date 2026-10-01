@@ -63,8 +63,10 @@ async function invariants(env: any, f: any, records: any, withdrawals: string[] 
       assert.ok(collectable <= claim.protectedRemaining + claim.winningsRemaining);
       covered += BigInt(collectable) - BigInt(claim.protectedRemaining);
       if (c.status === 3n) assert.equal(claim.amount, claim.paid + claim.protectedRemaining + claim.winningsRemaining);
-      // Only a closing channel disputes a bet, and a finalized one keeps the prize its close paid as won.
+      // Only a closing channel disputes a bet, and a finalized one keeps the prize its close paid as won. A hold lasts
+      // only while the bet is disputed.
       if (c.disputedPrize) assert.ok(c.status >= 2n);
+      if (c.disputeHold) assert.ok(c.status === 2n && c.disputedPrize);
       return { ch, c, claim };
     }),
   );
@@ -122,22 +124,24 @@ for (const initialSeed of [1, 4294967295])
           const timestamp = (await env.provider.getBlock('latest'))!.timestamp;
           if (BigInt(timestamp) >= c.deadline) await (await f.contract.finalizeClose(ch.state.channelId)).wait();
           else if (choice < 3) {
-            // The casino settles a disputed bet with its result at the bet's sequence, which leaves the deadline as it is.
-            // Otherwise only strictly newer evidence is accepted; re-submitting the proposed state reverts.
+            // The casino settles a disputed bet with its result at the bet's sequence, which ends the close a day later
+            // if that is sooner. Otherwise only strictly newer evidence is accepted; re-submitting the proposed state
+            // reverts.
             if (c.disputedPrize) {
-              const settled = await ch.bet.settled();
-              await (await f.contract.challengeClose(settled.evidence)).wait();
+              const settled = await ch.bet.settled(),
+                receipt = await (await f.contract.challengeClose(settled.evidence)).wait(),
+                ends = BigInt((await env.provider.getBlock(receipt.blockNumber))!.timestamp) + 86400n;
               const after = await f.contract.channels(ch.state.channelId);
               assert.deepEqual(
                 [after.disputedPrize, after.closingHash, after.deadline],
-                [0n, hashState(f.d, settled.state), c.deadline],
+                [0n, hashState(f.d, settled.state), ends < c.deadline ? ends : c.deadline],
               );
             } else if (BigInt(ch.state.sequence) > c.closingSequence) {
               await (await f.contract.challengeClose(ch.evidence)).wait();
               assert.equal((await f.contract.channels(ch.state.channelId)).deadline, c.deadline);
             } else await assert.rejects(f.contract.challengeClose(ch.evidence));
           } else {
-            await env.provider.send('evm_increaseTime', [86401]);
+            await env.provider.send('evm_increaseTime', [Number(c.deadline) - timestamp + 1]);
             await env.provider.send('evm_mine', []);
             await (await f.contract.finalizeClose(ch.state.channelId)).wait();
           }

@@ -152,8 +152,8 @@ bankroll overcommits ([limitations](../overview/architecture.md#limitations)), a
 half Kelly, is the margin for it. Kelly admission against the virtual bankroll neither enforces the casino's solvency
 nor reserves capital for a whole game.
 
-[Collateral](contract.md#collateral) is house cash locked into a channel, and stays the bankroll's: `claimLiabilities`
-counts only claims, so locking it moves neither the bankroll nor what quotes admit, only the house cash a withdrawal can
-count on, which is as much as the casino offers. What a channel's close is not owed of it returns to house cash. What
+[Collateral](contract.md#collateral) is house cash locked into a channel, by an offer bought or by a dispute, and
+stays the bankroll's: `claimLiabilities` counts only claims, so locking it moves neither the bankroll nor what quotes
+admit, only the house cash a withdrawal can count on. What a channel's close is not owed of it returns to house cash. What
 collateral sells for, at `collateralRate`, a share of its amount paid once, is the bankroll's as the casino's half of a
 commission is: equity rises by it, and the house takes no shares for it.

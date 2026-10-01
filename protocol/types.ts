@@ -189,8 +189,8 @@ export interface OnchainChannel {
   /** The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
    * those its checkpoint took in. */
   principal: string;
-  /** House cash the collateral bought for the channel locks into it: it pays what the deposits do not, before house
-   * cash, and what the close is not owed returns to house cash. */
+  /** House cash the collateral bought for the channel and its disputes lock into it: it pays what the deposits do not,
+   * before house cash, and what the close is not owed returns to house cash. */
   collateral: string;
   /** Everything the channel's withdrawals have made into claims. */
   claimed: string;
@@ -201,6 +201,8 @@ export interface OnchainChannel {
   closingBalance: string;
   /** The prize of the casino bet the close disputes, until evidence at its sequence settles it; 0 with none. */
   disputedPrize: string;
+  /** The part of `collateral` the dispute locked, until evidence settles the bet; 0 with none. */
+  disputeHold: string;
 }
 /** A finalized channel's claim: its checkpoint and what it was owed are the channel's `closingHash` and
  * `closingBalance`, and `paid` what it has paid of that. */

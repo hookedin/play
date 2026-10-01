@@ -360,7 +360,7 @@ export function receiptSummary(
       : receipt.kind === 'close-started'
         ? 'A close without the casino can be challenged for 24 hours. Then finish it under Settings → Recovery.'
         : receipt.kind === 'bet-disputed'
-          ? 'The casino has 24 hours to settle the disputed bet on-chain; if it does not, the bet counts as won. Then finish the close under Settings → Recovery.'
+          ? 'The casino has 7 days to settle the disputed bet on-chain; if it does not, the bet counts as won. Its result ends the close a day later. Then finish the close under Settings → Recovery.'
           : receipt.kind === 'closure'
             ? 'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.'
             : undefined;

@@ -125,10 +125,13 @@ game's operation your account carried out on another channel. Its banner says un
 **Close without the casino** then sends `dispute` with your latest evidence, the bet your account signed, its seed and
 the casino's quote, which the contract checks: the casino signed the quote for that checkpoint and round, the quote has
 not expired, and its virtual bankroll admits the bet by the casino's Kelly rule. The close counts the bet as won. The
-deadline is 24 hours after the dispute, which is the time the casino has to replace it with its result: the bet settled
-on the round's secret, the outcome it would have had. Should it not, the close finishes with the bet won, and its
-winnings are recorded with the close's claim. Until then they are not: the cash that would pay them is house cash.
-Recovery says which the close holds.
+deadline is 7 days after the dispute, which is the time the casino has to replace it with its result: the bet settled
+on the round's secret, the outcome it would have had. Its result moves the deadline to 24 hours after it, if that is
+sooner, so a settled bet's close ends like any other. Should it not, the close finishes with the bet won, and its
+winnings are recorded with the close's claim. Meanwhile the dispute locks what winning the bet adds above your deposits
+and collateral into your [collateral](#collateral), out of the house cash that is free when it is mined, so the owner
+cannot take it: it pays the close if the bet stays won, and returns to house cash once the casino settles it lost.
+Recovery says which the close holds, and the house cash held for it.
 
 Anyone can send the dispute: the bet and its quote are in the channel's
 [recovery bundle](keys-and-recovery.md#recovery-bundles), from which a
@@ -155,12 +158,12 @@ contract holds a close at a lower sequence than the evidence the wallet saved, t
 **Challenge the close**, which sends `challengeClose` with your newer evidence in place of the proposed state.
 
 - A challenge must carry a strictly higher sequence than the proposed state.
-- It must be mined before the deadline, and it does not move the deadline.
+- It must be mined before the deadline, and never extends it.
 - Anyone holding the evidence can send it: you, your [watchtower](keys-and-recovery.md#the-watchtower), or the
   casino's own watcher.
 
 A close that stops short of a pending casino bet its quote covers, such as one the casino starts on the checkpoint before
-it, is challenged by disputing the bet: **Challenge the close** sends `dispute`, and the casino has 24 hours from then
+it, is challenged by disputing the bet: **Challenge the close** sends `dispute`, and the casino has 7 days from then
 to settle the bet ([dispute a casino bet](#dispute-a-casino-bet)).
 
 The wallet sends a challenge only when you press the button. Once the deadline has passed, the proposed state is final
