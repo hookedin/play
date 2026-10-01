@@ -93,8 +93,9 @@ pause, while withdrawals, recovery and settling an operation already signed go o
 On the Wallet dialog's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be a valid one other than the zero address, your own deposit address and the casino's
 contract, into which [lock in](closing-and-claims.md#lock-in-your-balance) moves a balance. Your account signs a
 withdrawal of that amount to that address and the casino signs your balance after it at once: your balance pays it now,
-and you play on with the rest. The contract then pays the address, out of your deposits first and the bankroll for the
-rest ([withdraw](closing-and-claims.md#withdraw)). To give a friend ETH to play with, enter their deposit address:
+and you play on with the rest. The contract then pays the address, out of your deposits first, then your
+[collateral](closing-and-claims.md#collateral), and the bankroll for the rest
+([withdraw](closing-and-claims.md#withdraw)). To give a friend ETH to play with, enter their deposit address:
 their wallet puts it into their balance.
 
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how

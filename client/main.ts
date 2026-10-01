@@ -7,7 +7,7 @@ import { playControls, depositRemaining } from './play-controls.ts';
 import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { withLock } from './storage.ts';
-import { json, same, verifyEvidence, gameKey } from '../protocol/protocol.ts';
+import { json, same, verifyEvidence, gameKey, collateralPrice } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import {
   activityJSON,
@@ -597,9 +597,7 @@ function renderWallet() {
     status = Number(state.channelStatus),
     closing = status === 2 || Boolean(wallet.channel?.closing);
   for (const id of ['balance-amount', 'sheet-balance']) $(id).textContent = plainEth(balance);
-  const protectedAmount = BigInt(state.principal || 0) < balance ? BigInt(state.principal || 0) : balance;
-  $('balance-protection').textContent =
-    `${plainEth(protectedAmount)} ETH backed by your contract deposits. ${plainEth(balance - protectedAmount)} ETH above those deposits depends on available bankroll cash until locked in under Recovery.`;
+  renderCollateral();
   renderSafety();
   $('balance-note').textContent = arriving
     ? `${plainEth(arriving)} ETH of it is on its way into your balance.`
@@ -729,6 +727,38 @@ function renderWallet() {
   renderGameAccount();
 }
 
+/** A rate in millionths, as a percentage with no trailing zeros. */
+const rateText = (rate: bigint) => percent(rate).replace(/\.?0+%$/, '%');
+/** What the contract holds for the balance, its deposits and collateral, and collateral to buy at the casino's rate. */
+function renderCollateral() {
+  const state = wallet.publicState,
+    balance = BigInt(state.balance || 0),
+    deposits = BigInt(state.principal || 0),
+    collateral = BigInt(state.collateral || 0),
+    held = deposits + collateral,
+    rate = state.collateralRate == null ? null : BigInt(state.collateralRate),
+    amount = ethAmount($<HTMLInputElement>('collateral-buy-amount').value.trim()),
+    buying = state.buying;
+  $('held-deposits').textContent = plainEth(deposits);
+  $('collateral-amount').textContent = plainEth(collateral);
+  $('protected-amount').textContent = plainEth(held < balance ? held : balance);
+  $('collateral-rate').textContent = rate === null ? '—' : `${rateText(rate)} once`;
+  $('balance-protection').textContent =
+    balance > held
+      ? `${plainEth(balance - held)} ETH of your balance is winnings above them, which the bankroll pays only as it has the cash until you lock it in under Recovery or buy collateral for it.`
+      : `All of your balance is protected${held > balance ? `, and ${plainEth(held - balance)} ETH more that you win would be too` : ''}.`;
+  const button = $<HTMLButtonElement>('buy-collateral');
+  button.disabled = uiBusy || wallet.busy || !wallet.funded || rate === null || !amount || Boolean(buying);
+  button.textContent =
+    amount && rate !== null ? `Buy for ${plainEth(collateralPrice(amount, rate))} ETH` : 'Buy collateral';
+  $('collateral-help').textContent = buying
+    ? `Send ${plainEth(BigInt(buying.price) + 2n * wallet.depositFee)} ETH or more to your deposit address by ${new Date(Number(buying.expiresAt) * 1000).toLocaleTimeString()}, the price and its network fee: the wallet buys ${plainEth(buying.amount)} ETH of collateral with it before it adds anything to your balance.`
+    : !wallet.funded
+      ? 'Deposit to open a balance, then buy collateral for it.'
+      : rate === null
+        ? 'The casino offers no collateral right now.'
+        : `Collateral costs ${rateText(rate)} of its amount, once, paid from your deposit address with the network fee. It stays locked for this balance until the balance closes, as much as the casino's house cash allows.`;
+}
 /** What each row of a list was built from, so that a row that has not changed is not built again. */
 const signatures = new WeakMap<Element, string>();
 /** Keep a list's rows in step with `items`, by key. A row whose signature is unchanged stays mounted, keeping its open
@@ -889,7 +919,7 @@ function renderRecovery() {
   $('channel-observation').classList.toggle('hidden', !state.channelId && !closing);
   $('channel-observation').textContent = [
     open
-      ? `The contract holds ${plainEth(state.principal || '0')} ETH of your deposits for this balance, at saved sequence ${state.savedSequence || '0'}.`
+      ? `The contract holds ${plainEth(state.principal || '0')} ETH of your deposits and ${plainEth(state.collateral || '0')} ETH of collateral for this balance, at saved sequence ${state.savedSequence || '0'}.`
       : '',
     closing
       ? BigInt(state.disputedPrize || 0) > 0n
@@ -903,9 +933,13 @@ function renderRecovery() {
   $('challenge-deadline').textContent =
     closing && deadline ? `The close can be challenged until ${new Date(deadline * 1000).toLocaleString()}.` : '';
   $<HTMLButtonElement>('channel-export').disabled = !(wallet.channel || wallet.closingChannel) || busy;
-  // Locking in moves winnings into the deposits: with none above them, there is nothing to lock in.
+  // Locking in moves winnings into the deposits: with none above the deposits and collateral, there is nothing to lock
+  // in.
   $<HTMLButtonElement>('channel-lock').disabled =
-    !open || BigInt(state.balance || 0) <= BigInt(state.principal || 0) || Boolean(wallet.pending) || busy;
+    !open ||
+    BigInt(state.balance || 0) <= BigInt(state.principal || 0) + BigInt(state.collateral || 0) ||
+    Boolean(wallet.pending) ||
+    busy;
   $<HTMLButtonElement>('channel-start-close').disabled =
     Number(state.channelStatus) !== 1 || Boolean(wallet.transactionIntent) || busy;
   $('channel-start-close').textContent =
@@ -1686,7 +1720,7 @@ act('add-to-balance', async () => {
   await wallet.deposit();
   funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
 });
-for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source'])
+for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source', 'collateral-buy-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
   $<HTMLInputElement>('withdraw-amount').value = ether(wallet.channel?.state.balance || 0);
@@ -1706,6 +1740,17 @@ act('withdraw', async () => {
     receipt.withdrawal
       ? `Withdrew ${ether(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
       : `Withdrew ${ether(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
+  );
+});
+act('buy-collateral', async () => {
+  const amount = ethAmount($<HTMLInputElement>('collateral-buy-amount').value.trim());
+  if (!amount) throw new Error('Enter how much collateral to buy.');
+  const bought = await wallet.buyCollateral(amount);
+  $<HTMLInputElement>('collateral-buy-amount').value = '';
+  toast(
+    bought
+      ? `Bought ${plainEth(amount)} ETH of collateral: the contract holds it for your balance.`
+      : 'Send its price to your deposit address: the wallet buys the collateral as soon as it arrives.',
   );
 });
 act('invest', async () => {

@@ -8,6 +8,7 @@ import type {
   Evidence,
   PlayerDeveloperBet,
   Quote,
+  CollateralOffer,
 } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
@@ -89,6 +90,7 @@ const CHANNEL_FIELDS = [
   'player',
   'deposited',
   'principal',
+  'collateral',
   'claimed',
   'status',
   'deadline',
@@ -207,6 +209,9 @@ export class CasinoWallet extends GameSessions {
   /** The fee the last deposit was priced at: the sweep leaves alone an address holding less than twice it, since a
    * deposit of that would cost more than half of it. */
   depositFee = 0n;
+  /** The casino's offer of collateral the account asked to buy, until it is bought or expires: the sweep buys it with
+   * ETH at the account's address before it adds anything to the balance. */
+  buying: CollateralOffer | null = null;
   /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */
   tokens = new Map<string, { expiresAt: number; header: string }>();
   declare actionDone: Promise<void> | undefined;
@@ -358,6 +363,7 @@ export class CasinoWallet extends GameSessions {
           storageKey,
           domain: domain(this.expectedChainId, this.config.contractAddress),
           lastChainCheck: 0,
+          buying: null,
         });
         this.hydrate(await this.storage.get(storageKey));
       };
@@ -579,8 +585,13 @@ export class CasinoWallet extends GameSessions {
       nativeBalance: this.nativeBalance || '0',
       channelId: c?.state.channelId || null,
       channelStatus: c?.onchain?.status || '0',
-      // The deposits the contract still holds for this balance.
+      // The deposits the contract still holds for this balance, and the collateral locked into it.
       principal: open ? c.onchain.principal : '0',
+      collateral: open ? c.onchain.collateral : '0',
+      // What collateral costs at the casino, in millionths of the amount; none while the casino offers none.
+      collateralRate: this.recoveryOnly ? null : (this.config?.collateralRate ?? null),
+      // The collateral offer waiting for ETH at the address.
+      buying: this.buying && plain(this.buying.message),
       observedAt: this.lastChainCheck || 0,
       savedSequence: c?.state.sequence || '0',
       // The channel whose close is under way, beside the open one.

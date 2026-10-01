@@ -42,4 +42,6 @@ cannot take one back once its bankroll has moved. The quotes out at once are not
 against the whole virtual bankroll as it was when quoted. Together the bets on them can stake more than the Kelly rule
 lets the bankroll take at once, and win more than it holds, which then waits in the winnings queue. The virtual
 bankroll is half the bankroll, a half-Kelly margin and the only one. Dividing the bankroll between the quotes out would
-bound it, at the cost of every player's limits shrinking with the number of players holding a quote.
+bound it, at the cost of every player's limits shrinking with the number of players holding a quote. A player who wants
+winnings that wait for nothing buys [collateral](../wallet/closing-and-claims.md#collateral), which takes them out of
+the queue up to its amount.

@@ -150,7 +150,7 @@ export async function gameWallet({
       playerSignature: await player.signTypedData(d, STATE_TYPES, state),
       casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
       registered: true,
-      onchain: { status: '1', deposited: String(deposit), principal: String(deposit), claimed: '0' },
+      onchain: { status: '1', deposited: String(deposit), principal: String(deposit), collateral: '0', claimed: '0' },
     };
   };
   const first = await openChannel(deposit);

@@ -21,6 +21,8 @@ import {
   PROTOCOL,
   DEVELOPER_PROTOCOL,
   QUOTE_TYPES,
+  OFFER_TYPES,
+  collateralPrice,
 } from '../protocol/protocol.ts';
 import { fileURLToPath } from 'node:url';
 import { admits, assessBet, OUTCOME_SPACE } from '../protocol/risk.ts';
@@ -137,6 +139,13 @@ export function buildVectors() {
     virtualBankroll: 5_000_000_000n,
     expiresAt: 1_800_000_000n,
   };
+  // The casino's offer of collateral for the channel at a rate of 1%, in millionths of the amount: what buying it pays.
+  const offer = {
+    channelId: opening.channelId,
+    amount: 2_000_000_000n,
+    price: collateralPrice(2_000_000_000n, 10_000n),
+    expiresAt: 1_800_000_000n,
+  };
   return {
     warning: 'Public deterministic test seeds; never use these for a funded deployment.',
     identity,
@@ -154,6 +163,7 @@ export function buildVectors() {
       hash: TypedDataEncoder.hash(d, QUOTE_TYPES, quote),
       admitted: admits(quote.virtualBankroll, red),
     },
+    offer: { message: offer, rate: 10_000n, hash: TypedDataEncoder.hash(d, OFFER_TYPES, offer) },
     cases,
   };
 }

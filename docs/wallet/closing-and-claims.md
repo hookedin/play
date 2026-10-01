@@ -1,34 +1,57 @@
 ---
 title: Closing and claims
-description: Locking in your balance, how a withdrawal is paid, closing without the casino, the 24-hour challenge window and collecting a claim.
+description: Collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 24-hour challenge window and collecting a claim.
 sidebar:
   order: 3
 ---
 
 Your balance is a channel in the HookedIn contract. Withdrawing takes part or all of it out while the channel stays
 open. Without the casino you close the channel alone, with your latest evidence and a 24-hour window, and then collect
-what it is owed. The **Wallet** page, `/wallet`, shows your balance with any money still arriving, what the contract
-still owes you under **Waiting to be paid**, your [developer bets](bets-and-receipts.md#developer-bets), and
-**Recovery**.
+what it is owed. The **Wallet** page, `/wallet`, shows your balance with any money still arriving, what protects it
+under **Protection**, what the contract still owes you under **Waiting to be paid**, your
+[developer bets](bets-and-receipts.md#developer-bets), and **Recovery**.
+
+## Collateral
+
+**Protection**, on the Wallet page, shows what the contract holds for your balance: your deposits, and collateral, the
+casino's cash locked into your channel. How much of your balance they protect, and how much more you could win and
+have protected, is beside them. What your balance holds above them is winnings, which only house cash pays.
+
+Collateral protects what you win before you win it. The casino offers it at its rate, a share of the amount paid once,
+which Protection shows. Enter an amount and **Buy for … ETH**: the wallet asks the casino for an offer, checks its
+signature and that its price is the rate, and buys it on-chain from your deposit address, the price and the network fee
+both paid there ([contract](../reference/contract.md#collateral)). In that one transaction the contract moves that much
+house cash into your channel, where the casino can no longer take it, or the purchase reverts and only the fee is spent.
+The casino offers as much as its house cash allows, and an offer holds for an hour.
+
+When your deposit address holds too little, Protection says how much to send there and by when: the wallet buys the
+collateral with it as soon as it arrives, before it adds anything to your balance, and the rest goes in after. Activity
+shows **Collateral bought**.
+
+A withdrawal is paid out of your deposits first, then out of your collateral, and only then out of house cash; a close
+the same. Collateral adds nothing to what you are owed: what your close is not owed, collateral included, returns to
+house cash, and only a close ends it, an [idle](#idle-channels) one's among them.
 
 ## Recovery
 
 **Recovery**, at the foot of the Wallet page, shows the channel behind your balance and any older one whose close is
-under way: the deposits the contract holds for it and the sequence of your latest evidence; for a closing one, the
+under way: the deposits and collateral the contract holds for it and the sequence of your latest evidence; for a closing one, the
 sequence the close proposes beside yours, how much less it holds, any challenge on its way and the deadline; and when
 the wallet last read the chain. Its actions are the rest of this page and
 [recovery bundles](keys-and-recovery.md#recovery-bundles). Locking in needs the casino; the rest do not.
 
 ## Lock in your balance
 
-What your balance holds above your deposits is winnings, a claim on the shared bankroll. **Lock in my balance**, under
+What your balance holds above your deposits and collateral is winnings, a claim on the shared bankroll. **Lock in my
+balance**, under
 Recovery, makes all of your balance deposits: your account signs a [withdrawal](#withdraw) of the whole balance to the
 contract itself, which the casino signs at once and sends to the contract, paying its fee. Your deposits pay back what
-they cover and house cash the rest, and all of it goes into your channel as deposits the contract holds.
+they cover, your collateral the next part and house cash the rest, and all of it goes into your channel as deposits
+the contract holds.
 
 Locking in closes the open game first, and your balance is empty until it has taken those deposits in:
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
-channel is open and your balance holds more than the deposits the contract holds for it. The casino declines a lock-in
+channel is open and your balance holds more than the deposits and collateral the contract holds for it. The casino declines a lock-in
 that house cash cannot pay now, like any withdrawal, and your balance is as it was. Once it is in, a close pays all of
 that balance as protected principal, and withdrawing it needs no house cash, until you win more.
 
@@ -41,15 +64,16 @@ operation with that signature, the evidence your receipt holds, to the contract'
 records each withdrawal once, under its ID, the hash of its operation, and in the order you made them.
 
 The contract pays it first out of the deposits your balance had taken in when you made it, so what you have at risk
-stays as it was; a deposit that arrives later stays in your channel. The rest, the winnings, joins the queue of every
+stays as it was; a deposit that arrives later stays in your channel. Your [collateral](#collateral) pays the next part.
+The rest, the winnings, joins the queue of every
 claim's winnings: what house cash reaches is paid at once, and the rest stays owed under **Waiting to be paid**
 ([claims and collection](#claims-and-collection)). A recipient that refuses the payment leaves all of it owed. Anyone
 can check the chain: `claims(id)` says what the contract still owes of a withdrawal, and the `Withdrawal` event to whom,
 how much and in which transaction it was recorded.
 
 The casino takes a withdrawal on only when the contract can pay all of it now: out of the deposits your balance has
-taken in that the withdrawals it owes from it leave, and house cash that no claim counts on, less what the withdrawals
-it owes will take from it. A withdrawal your deposits cover needs no house cash. It declines the rest like any declined
+taken in and the collateral that the withdrawals it owes from it leave, and house cash that no claim counts on, less
+what the withdrawals it owes will take from it. A withdrawal your deposits and collateral cover needs no house cash. It declines the rest like any declined
 debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It also declines a withdrawal to an
 address that would refuse a payment from the contract, which it tries first with the contract's 100,000 gas: _That
 address does not accept a payment from the contract_. Withdrawing everything leaves the channel open with an empty
@@ -105,8 +129,9 @@ the casino's in place of the bet unless your account signed past it, from anothe
 
 ## Idle channels
 
-When nobody has played on your channel for 7 days, it holds more deposits than it is owed and no withdrawal from it is
-owed, the casino closes it on its latest state, so what you lost comes back to house cash. Once the close's 24 hours are
+When nobody has played on your channel for 7 days, it holds more deposits and collateral than it is owed and no
+withdrawal from it is owed, the casino closes it on its latest state, so what you lost, and the collateral you no longer
+need, comes back to house cash. Once the close's 24 hours are
 up, the casino finishes it and collects what it pays you, to your deposit address. Your next deposit opens your next
 channel.
 
@@ -132,8 +157,8 @@ and the wallet says so.
 
 Finalizing records a claim for what the close is owed, in two parts:
 
-- **Protected principal**, `min(owed, principal)`, where `principal` is the deposits the contract holds for the channel:
-  paid in full whenever the claim is collected.
+- **Protected principal**, `min(owed, principal + collateral)`, where `principal` is the deposits the contract holds
+  for the channel and `collateral` its collateral: paid in full whenever the claim is collected.
 - **Winnings**, whatever is above it: they join the queue of every claim's winnings, first in, first out.
 
 A withdrawal is a claim too, under its ID, with its principal and winnings worked out the same way when it is recorded.

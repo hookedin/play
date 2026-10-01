@@ -50,9 +50,11 @@ its **details**, whose hash the operation signs as its `memo`. The contract neve
 check and keep them. A withdrawal names whom it pays in the operation itself, as its `recipient`.
 [Signed messages](../reference/signed-messages.md) has every field.
 
-**Principal and winnings.** The channel's principal is what the contract protects: withdrawals and a close are paid out
-of it first. What the balance holds above it, its **winnings**, is owed from the shared bankroll until the contract pays
-it, or until you [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
+**Principal, collateral and winnings.** The channel's principal is what the contract protects: withdrawals and a close
+are paid out of it first. The casino can lock house cash into the channel beside it as **collateral**, which anyone buys
+on-chain at the price the casino's signed offer names, and which pays next. What the balance holds above both, its
+**winnings**, is owed from the shared bankroll until the contract pays it, or until you
+[lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
 
 ## Rounds
 
@@ -163,7 +165,8 @@ from the lower balance. With that evidence, which your receipt keeps, anyone can
 withdrawal with `withdraw`, and the casino does straight away. Another account's address is its deposit address, whose
 wallet puts what arrives there into its balance: that is how you fund a friend's balance.
 
-The contract pays a withdrawal out of the channel's principal first, and its winnings from house cash, in the order
+The contract pays a withdrawal out of the channel's principal first, then its collateral, and its winnings from house
+cash, in the order
 the account made them ([withdrawals](../reference/contract.md#withdrawals)). The casino takes a withdrawal on only when
 all of it can be paid now, and otherwise declines it, leaving the balance unchanged
 ([what you trust the casino for](trust-model.md#what-you-trust-the-casino-for)).
@@ -177,7 +180,8 @@ strictly newer evidence can replace the close's state before the deadline, and t
 a covered casino bet the account closes with, or challenges with, gives the casino 24 hours from then to replace it with
 its result. After it,
 anyone can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
-**claim**: up to the channel's principal it is protected, `min(owed, principal)`, and the rest is winnings, paid first
+**claim**: up to the channel's principal and collateral it is protected, `min(owed, principal + collateral)`, and the
+rest is winnings, paid first
 in, first out as cash arrives. Collecting is a separate transaction. The casino closes a channel nobody plays on
 ([idle channels](../wallet/closing-and-claims.md#idle-channels)), and
 [closing and claims](../wallet/closing-and-claims.md) walks through each step.

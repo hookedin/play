@@ -11,6 +11,8 @@ import {
   withdrawalRecorded,
   verifyEvidence,
   quoteTerms,
+  offerTerms,
+  verifyOffer,
   STATE_TYPES,
 } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
@@ -180,6 +182,8 @@ export class WalletTransactions {
   /** ETH at this address goes into its balance within the deposit limit while the wallet `sweeps`. An amount smaller
    * than its own fee stays where it is. */
   async sweep(this: CasinoWallet) {
+    // While collateral is offered, ETH at the address pays for it first.
+    if (this.buying) return this.buyOffered();
     if (!this.sweeps) return;
     const added = await this.exclusive(
       async () => {
@@ -193,6 +197,65 @@ export class WalletTransactions {
       await this.refresh();
       await this.takeDeposits();
     }
+  }
+  /** Buy `amount` of collateral for the open balance at the casino's rate: the casino offers it, signed, and this
+   * account pays its price from its address in one transaction, which locks the collateral into its channel or does
+   * nothing. ETH the address does not hold yet is waited for while the offer lasts, and the sweep buys with it before
+   * it adds anything to the balance. Says whether it is bought. */
+  async buyCollateral(this: CasinoWallet, amount: bigint) {
+    const c = this.channel;
+    if (!this.funded || !c) throw new Error('Open a balance before buying collateral.');
+    if (this.recoveryOnly || this.config.collateralRate == null)
+      throw new Error('The casino offers no collateral now.');
+    const { offer } = await this.api(`/api/channels/${c.state.channelId}/collateral`, { amount: String(amount) }, c);
+    this.buying = verifyOffer(
+      this.domain,
+      offer,
+      c.state.channelId,
+      amount,
+      BigInt(this.config.collateralRate),
+      this.operator,
+    );
+    this.render();
+    return this.buyOffered();
+  }
+  /** Buy the collateral offered once this account's address holds its price and fee, under the wallet's lock. An
+   * offer about to expire is let go. */
+  async buyOffered(this: CasinoWallet) {
+    const bought = await this.exclusive(
+      async () => {
+        const offer = this.buying;
+        if (!offer) return false;
+        // Sent this late, it could expire before a block takes it.
+        if (BigInt(offer.message.expiresAt) < BigInt(Math.floor(Date.now() / 1000) + 120)) {
+          this.buying = null;
+          return false;
+        }
+        const price = BigInt(offer.message.price),
+          balance = await this.provider.getBalance(this.address, 'pending');
+        if (balance <= price) return false;
+        const fees = await this.transactionFees('buyCollateral', offerTerms(offer), price).catch(error => {
+          if (error.code !== 'CALL_EXCEPTION') throw error;
+          // One the contract refuses stays refused: the house cash it would lock is gone.
+          this.buying = null;
+          throw new Error(
+            'The contract refuses this offer now: the house cash it would lock is spoken for. Ask again.',
+          );
+        });
+        if (balance < price + fees.maxCost) return false;
+        // Sent, the offer is bought or spent.
+        this.buying = null;
+        this.onProgress('Buying collateral…');
+        await this.waitTransaction(
+          await this.sendTransaction('buyCollateral', offerTerms(offer), { value: price, ...fees.overrides }),
+        );
+        return true;
+      },
+      { wait: true },
+    );
+    this.render();
+    if (bought) await this.refresh();
+    return bought;
   }
   /** A deposit into this account's channel, under the wallet's lock. While it runs, `depositing` says what it adds. */
   async depositLocked(this: CasinoWallet, amount: Integer, fees: Record<string, any> = {}) {
@@ -344,7 +407,8 @@ export class WalletTransactions {
   transactionRecord(this: CasinoWallet, receipt: TransactionReceipt, intent: any, status = 'confirmed') {
     const sent = intent?.method === 'send';
     let amount = status === 'confirmed' ? intent?.value || '0' : '0',
-      to: string | undefined = sent ? intent.to : undefined;
+      to: string | undefined = sent ? intent.to : undefined,
+      collateral: string | undefined;
     for (const log of receipt.logs || []) {
       // ETH sent from the address calls no contract: whatever its recipient logs is not the casino's.
       if (sent || status !== 'confirmed' || !same(log.address, intent?.to || this.config.contractAddress)) continue;
@@ -355,6 +419,7 @@ export class WalletTransactions {
           amount = String(event.args.amount);
           to = event.args.recipient;
         }
+        if (event?.name === 'CollateralBought') collateral = String(event.args.amount);
       } catch {}
     }
     return {
@@ -363,20 +428,23 @@ export class WalletTransactions {
           ? 'transaction'
           : intent?.method === 'deposit'
             ? 'deposit'
-            : ['claim', 'claimTo', 'send'].includes(intent?.method)
-              ? 'withdrawal'
-              : intent?.method === 'withdraw'
-                ? 'withdrawal-sent'
-                : intent?.method === 'startClose'
-                  ? 'close-started'
-                  : intent?.method === 'dispute'
-                    ? 'bet-disputed'
-                    : intent?.method === 'finalizeClose'
-                      ? 'closure'
-                      : 'dispute',
+            : intent?.method === 'buyCollateral'
+              ? 'collateral'
+              : ['claim', 'claimTo', 'send'].includes(intent?.method)
+                ? 'withdrawal'
+                : intent?.method === 'withdraw'
+                  ? 'withdrawal-sent'
+                  : intent?.method === 'startClose'
+                    ? 'close-started'
+                    : intent?.method === 'dispute'
+                      ? 'bet-disputed'
+                      : intent?.method === 'finalizeClose'
+                        ? 'closure'
+                        : 'dispute',
       operationId: 'tx:' + receipt.hash,
       amount,
       ...(to && !same(to, this.address) ? { to } : {}),
+      ...(collateral ? { collateral } : {}),
       txHash: receipt.hash,
       ...(receipt.fee === undefined ? {} : { fee: String(receipt.fee) }),
       blockNumber: receipt.blockNumber,

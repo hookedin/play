@@ -5,6 +5,7 @@ import {
   id,
   Signature,
   solidityPackedKeccak256,
+  TypedDataEncoder,
   verifyTypedData,
   Wallet,
   ZeroAddress,
@@ -23,6 +24,7 @@ import {
   assessBinary,
   claimOf,
   disputedBet,
+  offered,
 } from '../testing/contract.ts';
 import {
   assertSignature,
@@ -36,6 +38,7 @@ import {
   owed,
   hashState,
   QUOTE_TYPES,
+  OFFER_TYPES,
 } from '../protocol/protocol.ts';
 import { admits, MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 
@@ -284,6 +287,98 @@ test('a withdrawal draws only on the deposits its checkpoint took in, so a depos
   const c = await f.contract.channels(other.opening.channelId);
   assert.deepEqual([c.deposited, c.principal], [3000n, 2000n]);
   assert.equal(await f.contract.withdrawableHouse(), 0n);
+});
+
+test("anyone buys the casino's collateral offer for a channel, once and before it expires, and it pays the channel's winnings before house cash", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, buyer] = env.wallets,
+    recipient = Wallet.createRandom().address,
+    ch = await open(f, a, 1000n),
+    now = BigInt((await env.provider.getBlock('latest'))!.timestamp);
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  const { offer, buy, attempt } = await offered(f, ch.opening.channelId, 600n, 6n, now + 3600n);
+  // The buyer pays the price the casino signed, no other.
+  await assert.rejects(attempt(buyer, 5n), reverts('Unauthorized'));
+  await buy(buyer);
+  const c = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual([c.principal, c.collateral, c.deposited], [1000n, 600n, 1000n]);
+  assert.deepEqual(
+    [await f.contract.protectedPrincipal(), await f.contract.collateralSales(), await f.contract.withdrawableHouse()],
+    [1600n, 6n, 406n],
+  );
+  assert.equal(await f.contract.offersBought(TypedDataEncoder.hash(f.d, OFFER_TYPES, offer.message)), true);
+  // The owner cannot take it back, and nobody buys an offer twice.
+  await assert.rejects(f.contract.withdrawHouse.staticCall(f.owner.address, 407n), reverts('InsufficientBalance'));
+  await assert.rejects(attempt(buyer), reverts('InvalidState'));
+  // Nor beyond house cash, for a channel that is not open or closing, or once the offer has expired.
+  await assert.rejects(
+    (await offered(f, ch.opening.channelId, 407n, 0n, now + 3600n)).attempt(buyer),
+    reverts('InsufficientBalance'),
+  );
+  await assert.rejects(
+    (await offered(f, channelId(buyer.address, 0), 1n, 0n, now + 3600n)).attempt(buyer),
+    reverts('InvalidState'),
+  );
+  const late = await offered(f, ch.opening.channelId, 1n, 0n, now + 60n);
+  await env.provider.send('evm_increaseTime', [120]);
+  await env.provider.send('evm_mine', []);
+  await assert.rejects(late.attempt(buyer), reverts('InvalidState'));
+  // 800 won, and all 1800 withdrawn: the deposits pay 1000, the collateral 600 and house cash only the last 200.
+  const won = { ...ch, ...(await signedIncrease(f, ch, 800n)) },
+    out = await step(f, won, 5, 1800n, { recipient });
+  await (await f.contract.withdraw(out.evidence)).wait();
+  assert.equal(await env.provider.getBalance(recipient), 1800n);
+  const after = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual([after.principal, after.collateral], [0n, 0n]);
+  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.withdrawableHouse()], [0n, 206n]);
+});
+
+test('a close is paid out of the collateral what its deposits do not cover, a lock-in makes it deposits, and what the account lost returns to house cash', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b] = env.wallets,
+    now = BigInt((await env.provider.getBlock('latest'))!.timestamp);
+  await (await f.contract.fundBankroll({ value: 2000n })).wait();
+  // An offer at no price is collateral the casino gives. 300 won: the close is owed 1300, all of it protected.
+  const ch = await open(f, a, 1000n),
+    later = now + 7n * 86400n;
+  await (await offered(f, ch.opening.channelId, 500n, 0n, later)).buy(a);
+  await forceClose(f, env, { ...ch, ...(await signedIncrease(f, ch, 300n)) }, undefined, a);
+  const close = await claimOf(f, ch.opening.channelId);
+  assert.deepEqual([close.amount, close.protectedRemaining, close.winningsRemaining], [1300n, 1300n, 0n]);
+  assert.equal((await f.contract.channels(ch.opening.channelId)).collateral, 0n);
+  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.withdrawableHouse()], [1300n, 1700n]);
+  // A lock-in draws the deposits, then the collateral, and puts all of it back as deposits.
+  const other = await open(f, b, 1000n);
+  await (await offered(f, other.opening.channelId, 500n, 0n, later)).buy(b);
+  const won = { ...other, ...(await signedIncrease(f, other, 300n)) },
+    lock = await step(f, won, 5, 1300n, { recipient: await f.contract.getAddress() });
+  await (await f.contract.withdraw(lock.evidence)).wait();
+  let c = await f.contract.channels(other.opening.channelId);
+  assert.deepEqual([c.deposited, c.principal, c.collateral], [2300n, 1300n, 200n]);
+  // 900 lost after it: the close is owed 400, and the other 900 of deposits and the 200 of collateral return to house
+  // cash.
+  const taken = await step(f, { ...other, state: lock.state, evidence: await countersigned(f, won, lock) }, 4, 1300n),
+    lost = await step(
+      f,
+      { ...other, state: taken.state, evidence: await countersigned(f, { ...other, state: lock.state }, taken) },
+      2,
+      900n,
+    );
+  await forceClose(
+    f,
+    env,
+    { ...other, evidence: await countersigned(f, { ...other, state: taken.state }, lost) },
+    undefined,
+    b,
+  );
+  c = await f.contract.channels(other.opening.channelId);
+  assert.deepEqual([c.closingBalance, c.principal, c.collateral], [400n, 0n, 0n]);
+  assert.equal((await claimOf(f, other.opening.channelId)).protectedRemaining, 400n);
+  assert.equal(await f.contract.protectedPrincipal(), 1700n);
 });
 
 test('a close nets out what a checkpoint took in that the chain does not hold, so every signed checkpoint closes', async t => {

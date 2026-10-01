@@ -1,6 +1,6 @@
 ---
 title: Signed messages
-description: The EIP-712 domain, the eleven signed structures, the IDs and hashes built from them, and the test vectors that fix them.
+description: The EIP-712 domain, the thirteen signed structures, the IDs and hashes built from them, and the test vectors that fix them.
 sidebar:
   order: 2
 ---
@@ -41,6 +41,7 @@ The contract exposes the two it uses as `hashState` and `hashOperation`.
 | `Checkpoint`      | `bytes32 channelId`, `uint256 sequence`, `bytes32 previousStateHash`, `bytes32 transitionHash`, `uint256 balance`, `uint256 deposited`, `uint256 withdrawn`                                                        | The casino, and the account when it countersigns | Contract, wallet, casino |
 | `Operation`       | `bytes32 channelId`, `bytes32 previousStateHash`, `uint256 sequence`, `uint256 kind`, `uint256 amount`, `address recipient`, `uint64 chance`, `uint256 prize`, `bytes32 round`, `bytes32 seedHash`, `bytes32 memo` | The account                                      | Contract, casino, wallet |
 | `Quote`           | `bytes32 channelId`, `bytes32 previousStateHash`, `bytes32 round`, `uint256 virtualBankroll`, `uint256 expiresAt`                                                                                                  | The casino                                       | Wallet, casino, contract |
+| `CollateralOffer` | `bytes32 channelId`, `uint256 amount`, `uint256 price`, `uint256 expiresAt`                                                                                                                                        | The casino                                       | Wallet, contract         |
 | `Access`          | `bytes32 channelId`, `uint256 expiresAt`                                                                                                                                                                           | The account                                      | Casino                   |
 | `DeveloperAccess` | `address developer`, `uint256 expiresAt`                                                                                                                                                                           | The developer                                    | Casino                   |
 | `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                                                  | The developer                                    | Casino, wallet           |
@@ -340,6 +341,16 @@ the payout.
 
 ## Other signed messages
 
+### Collateral offers
+
+A _collateral offer_ is the casino's offer to lock `amount` of house cash into a channel as
+[collateral](contract.md#collateral) for `price`, signed as `CollateralOffer` and sent as `{message, signature}`.
+Anyone buys it on-chain with `buyCollateral`, paying the price, once and until `expiresAt`, in Unix seconds, an hour
+after the casino signed it. The casino prices it at its rate, `collateralRate` in
+[`GET /api/config`](../casino-api/public.md#get-apiconfig), in millionths of the amount:
+`price = ceil(amount × collateralRate / 1,000,000)` (`collateralPrice`), which the wallet checks before it buys. A wallet
+asks for one with [`POST /api/channels/:id/collateral`](../casino-api/channels.md#post-apichannelsidcollateral).
+
 ### Access tokens
 
 `Access(channelId, expiresAt)` and `DeveloperAccess(developer, expiresAt)` authenticate API requests. `expiresAt` is a
@@ -424,7 +435,7 @@ The first three are `BOUNDS`, which `GET /api/config` reports as `bounds`:
 `{"outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64}`.
 
 `PROTOCOL` fixes everything a wallet and the casino must agree on. It is the keccak-256 of the UTF-8 bytes of the
-twelve EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
+thirteen EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
 canonical JSON of the rules they apply alike. An `encodeType` string is a structure's name and its fields, as in
 `Access(bytes32 channelId,uint256 expiresAt)`. The rules:
 
@@ -459,6 +470,7 @@ the hashing and pricing rules in numbers.
 | `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                   |
 | `rejection`, `rejectionHash`    | The checkpoint that declines the casino bet instead, and its hash                                                                                                                                                                                 |
 | `quote`                         | The casino's quote for the casino bet: its `message`, the `hash` the casino signs, and whether its virtual bankroll of `5000000000` `admitted` the bet                                                                                            |
+| `offer`                         | The casino's offer of `2000000000` of collateral for the channel: its `message`, priced at the `rate` of `10000` millionths, and the `hash` the casino signs                                                                                      |
 | `cases`                         | Four casino bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                     |
 | `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                |
 

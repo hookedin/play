@@ -10,6 +10,7 @@ import {
   assessBinary,
   claimOf,
   disputedBet,
+  offered,
 } from '../testing/contract.ts';
 import {
   baseState,
@@ -54,7 +55,7 @@ async function invariants(env: any, f: any, records: any, withdrawals: string[] 
         claimOf(f, channelId),
         f.contract.collectable(channelId),
       ]);
-      principal += c.status < 3n ? c.principal : claim.protectedRemaining;
+      principal += c.status < 3n ? c.principal + c.collateral : claim.protectedRemaining;
       debt += claim.winningsRemaining;
       // Collecting pays the claim's principal, and no more winnings than it is owed.
       assert.ok(collectable >= claim.protectedRemaining);
@@ -98,7 +99,8 @@ for (const initialSeed of [1, 4294967295])
     const records = [],
       withdrawals: string[] = [],
       active = new Map();
-    let seed = initialSeed;
+    let seed = initialSeed,
+      sales = 0n;
     const random = (n: any) => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       return seed % n;
@@ -178,7 +180,7 @@ for (const initialSeed of [1, 4294967295])
           const amount = BigInt(1 + random(Number(ch.state.balance))),
             contract = await f.contract.getAddress(),
             recipient = [player.address, Wallet.createRandom().address, contract][random(3)],
-            before: bigint = (await f.contract.channels(ch.state.channelId)).principal,
+            before = await f.contract.channels(ch.state.channelId),
             sent = await transition(f, ch, 5, amount, { recipient });
           if (ch.behind) await assert.rejects(f.contract.withdraw.staticCall(sent));
           else if (!random(4)) ch.behind = true;
@@ -186,17 +188,33 @@ for (const initialSeed of [1, 4294967295])
             await (await f.contract.connect(env.wallets[8]).withdraw(sent)).wait();
             const claimId = hashOperation(f.d, sent.step.operation),
               claim = await f.contract.claims(claimId),
-              after = (await f.contract.channels(ch.state.channelId)).principal;
+              after = await f.contract.channels(ch.state.channelId);
             withdrawals.push(claimId);
-            // What a lock-in was paid went into the channel as deposits.
-            const locked = recipient === contract ? amount - claim.protectedRemaining - claim.winningsRemaining : 0n;
-            assert.equal(after, before - (amount < before ? amount : before) + locked);
+            // It drew on the deposits its checkpoint took in, then the collateral; what a lock-in was paid went into the
+            // channel as deposits.
+            const held: bigint = before.principal + before.collateral,
+              available: bigint = held + BigInt(ch.state.deposited) - before.deposited,
+              locked = recipient === contract ? amount - claim.protectedRemaining - claim.winningsRemaining : 0n;
+            assert.equal(after.principal + after.collateral, held - (amount < available ? amount : available) + locked);
           }
         } else if (choice === 4)
           // Somebody else deposits into the open channel.
           await (await f.contract.connect(env.wallets[8]).deposit(player.address, { value: 7n })).wait();
-        else if (choice === 5) await (await f.contract.fundBankroll({ value: BigInt(1 + random(500)) })).wait();
-        else if (choice === 6) {
+        else if (choice === 5) {
+          await (await f.contract.fundBankroll({ value: BigInt(1 + random(500)) })).wait();
+          if (random(3)) {
+            // Somebody buys collateral the casino offers for the channel, as far as house cash goes.
+            const amount = BigInt(1 + random(300)),
+              price = BigInt(random(3)),
+              expiresAt = BigInt((await env.provider.getBlock('latest'))!.timestamp + 3600),
+              offer = await offered(f, ch.state.channelId, amount, price, expiresAt);
+            if (amount > (await f.contract.withdrawableHouse())) await assert.rejects(offer.attempt(env.wallets[8]));
+            else {
+              await offer.buy(env.wallets[8]);
+              sales += price;
+            }
+          }
+        } else if (choice === 6) {
           const cash = await f.contract.withdrawableHouse();
           if (cash) await (await f.contract.withdrawHouse(f.owner.address, cash)).wait();
         } else {
@@ -212,6 +230,7 @@ for (const initialSeed of [1, 4294967295])
         }
       }
       const rows = await invariants(env, f, records, withdrawals);
+      assert.equal(await f.contract.collateralSales(), sales);
       for (const [who, ch] of active) if (rows.find(row => row.ch === ch).c.status === 3n) active.delete(who);
     }
   });

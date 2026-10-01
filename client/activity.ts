@@ -207,6 +207,7 @@ export function receiptSummary(
             : (
                 {
                   deposit: 'Deposited',
+                  collateral: 'Collateral bought',
                   withdrawal: 'Withdrawn',
                   'lock-in': 'Balance locked in',
                   'withdrawal-sent': 'Withdrawal sent',
@@ -238,7 +239,7 @@ export function receiptSummary(
             ? 'Invested'
             : receipt.kind === 'redeem'
               ? 'Owed to you'
-              : ['payment', 'developer-bet', 'bank'].includes(receipt.kind)
+              : ['payment', 'developer-bet', 'bank', 'collateral'].includes(receipt.kind)
                 ? 'Sent'
                 : receipt.kind === 'closure'
                   ? 'Claim recorded'
@@ -262,6 +263,8 @@ export function receiptSummary(
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
+  if (receipt.kind === 'collateral' && receipt.collateral)
+    description = `${ether(receipt.collateral)} ETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`;
   if (receipt.kind === 'invest')
     description = `Bought ${ether(receipt.shares)} shares; you hold ${ether(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${ether(receipt.balance)} ETH`;
   if (receipt.kind === 'redeem')

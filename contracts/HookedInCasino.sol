@@ -3,7 +3,8 @@ pragma solidity ^0.8.28;
 
 /// @notice One trusted casino owner signs balances and controls the shared bankroll.
 /// Players must challenge stale closures within 24 hours to protect their latest balance, and anyone can dispute a
-/// casino bet the owner's quote covers for them until the quote expires.
+/// casino bet the owner's quote covers for them until the quote expires. Anyone can buy collateral the owner offers for
+/// a channel, which protects its winnings from the owner.
 contract HookedInCasino {
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
     // Every deposit, and every signed balance, deposited and withdrawn total, is below 2^96 wei, as is every stake, prize
@@ -31,6 +32,8 @@ contract HookedInCasino {
     bytes32 constant QUOTE_TYPEHASH = keccak256(
         "Quote(bytes32 channelId,bytes32 previousStateHash,bytes32 round,uint256 virtualBankroll,uint256 expiresAt)"
     );
+    bytes32 constant OFFER_TYPEHASH =
+        keccak256("CollateralOffer(bytes32 channelId,uint256 amount,uint256 price,uint256 expiresAt)");
     // The struct hash of the all-zero operation: the one encoding of "no step".
     bytes32 constant EMPTY_OPERATION =
         keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, address(0), 0, 0, bytes32(0), bytes32(0), bytes32(0)));
@@ -39,10 +42,14 @@ contract HookedInCasino {
     // Historical signatures remain valid for the lifetime of this deployment.
     address public immutable owner;
 
+    /// What the owner cannot withdraw and no winnings are paid out of: every channel's deposits and collateral, and every
+    /// claim's protected part.
     uint256 public protectedPrincipal;
     uint256 public unpaidWinnings;
     /// Every claim's winnings, in the order the claims were recorded: the queue house cash pays them in.
     uint256 public queuedWinnings;
+    /// What every collateral offer bought has paid.
+    uint256 public collateralSales;
     bool transient private entered;
 
     /// `deposited` is how much of the channel's on-chain deposits the balance has taken in, and `withdrawn` how much it
@@ -110,6 +117,10 @@ contract HookedInCasino {
         // The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
         // those its checkpoint took in.
         uint256 principal;
+        // House cash locked into the channel by the collateral offers bought for it: it pays the channel's withdrawals what
+        // its deposits do not, before house cash does, and its close what it is owed above them. The owner cannot withdraw
+        // it, and what the close is not owed returns to house cash.
+        uint256 collateral;
         // Everything the channel's withdrawals have made into claims, which it records in order: a withdrawal is recorded
         // once this has passed the `withdrawn` of the checkpoint it follows.
         uint256 claimed;
@@ -138,8 +149,11 @@ contract HookedInCasino {
     mapping(bytes32 => Claim) public claims;
     /// How many of an account's channels have started closing: the number of its current one.
     mapping(address => uint256) public channelIndex;
+    /// The owner's collateral offers bought, each once, by the hash the owner signed.
+    mapping(bytes32 => bool) public offersBought;
     event ChannelOpened(bytes32 indexed channelId, address indexed player);
     event ChannelDeposit(bytes32 indexed channelId, uint256 amount, uint256 deposited);
+    event CollateralBought(bytes32 indexed channelId, bytes32 indexed offer, uint256 amount, uint256 price);
     event Withdrawal(bytes32 indexed withdrawalId, bytes32 indexed channelId, address indexed recipient, uint256 amount);
     event CloseStarted(bytes32 indexed channelId, uint256 sequence, bytes32 stateHash, uint256 deadline);
     event CloseChallenged(bytes32 indexed channelId, uint256 sequence, bytes32 stateHash);
@@ -263,13 +277,36 @@ contract HookedInCasino {
         emit HouseWithdrawal(recipient, amount);
     }
 
+    // Anyone buys collateral the owner offers for an open or closing channel, once and before the offer expires: the
+    // price joins house cash, and the amount moves from house cash into the channel's collateral. It adds nothing to
+    // what the channel is owed. An offer at no price is collateral the owner gives.
+    function buyCollateral(bytes32 channelId, uint256 amount, uint256 expiresAt, bytes calldata signature)
+        external
+        payable
+        nonReentrant
+    {
+        // The buyer pays the price: paying anything else is buying an offer the owner did not sign.
+        bytes32 offer = _digest(keccak256(abi.encode(OFFER_TYPEHASH, channelId, amount, msg.value, expiresAt)));
+        if (_signer(offer, signature) != owner) revert Unauthorized();
+        Channel storage c = channels[channelId];
+        if (offersBought[offer] || block.timestamp > expiresAt || (c.status != STATUS_OPEN && c.status != STATUS_CLOSING)) {
+            revert InvalidState();
+        }
+        if (amount > withdrawableHouse()) revert InsufficientBalance();
+        offersBought[offer] = true;
+        c.collateral += amount;
+        protectedPrincipal += amount;
+        collateralSales += msg.value;
+        emit CollateralBought(channelId, offer, amount, msg.value);
+    }
+
     // Anyone may have a withdrawal recorded: an operation the account signed, followed by the checkpoint the casino signed
     // after it. It becomes a claim once, in the order the account signed its channel's withdrawals, until the channel is
-    // finalized: out of the deposits its checkpoint took in first, and the rest winnings in the queue behind every claim
-    // before it. What house cash reaches is paid to its recipient at once; the claim keeps the rest, or all of it if the
-    // recipient refuses the payment, for anyone to collect. One never recorded comes back with the close, which is owed
-    // what the channel's states withdrew and did not make claims. A withdrawal to this contract locks the balance in: it
-    // goes into the account's current channel as deposits.
+    // finalized: out of the deposits its checkpoint took in first, then the channel's collateral, and the rest winnings in
+    // the queue behind every claim before it. What house cash reaches is paid to its recipient at once; the claim keeps
+    // the rest, or all of it if the recipient refuses the payment, for anyone to collect. One never recorded comes back
+    // with the close, which is owed what the channel's states withdrew and did not make claims. A withdrawal to this
+    // contract locks the balance in: it goes into the account's current channel as deposits.
     function withdraw(Evidence calldata evidence) external nonReentrant {
         Operation calldata op = evidence.step.operation;
         if (op.kind != KIND_WITHDRAWAL) revert InvalidTerms();
@@ -286,9 +323,12 @@ contract HookedInCasino {
         // A deposit its checkpoint did not take in stays the channel's, for its close. Recorded in order, the withdrawals
         // before it drew on no more than this checkpoint took in.
         uint256 available = c.principal + s.deposited - c.deposited;
-        uint256 principal = op.amount < available ? op.amount : available;
+        uint256 deposits = op.amount < available ? op.amount : available;
+        uint256 collateral = op.amount - deposits < c.collateral ? op.amount - deposits : c.collateral;
+        uint256 principal = deposits + collateral;
         uint256 winnings = op.amount - principal;
-        c.principal -= principal;
+        c.principal -= deposits;
+        c.collateral -= collateral;
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
         emit Withdrawal(id, s.channelId, op.recipient, op.amount);
@@ -484,12 +524,14 @@ contract HookedInCasino {
         c.status = STATUS_FINALIZED;
         bytes32 stateHash = c.closingHash;
         uint256 balance = c.closingBalance;
-        uint256 principal = balance < c.principal ? balance : c.principal;
+        // The deposits pay first and the collateral the rest; what neither pays is winnings.
+        uint256 held = c.principal + c.collateral;
+        uint256 principal = balance < held ? balance : held;
         uint256 winnings = balance - principal;
-        protectedPrincipal = protectedPrincipal - c.principal + principal;
+        protectedPrincipal = protectedPrincipal - held + principal;
         // The claim holds the principal from here on, and its winnings join the queue behind every claim before it. A
         // close owed nothing leaves no claim.
-        c.principal = 0;
+        (c.principal, c.collateral) = (0, 0);
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
         if (balance != 0) claims[channelId] = Claim(c.player, c.player, principal, winnings, winnings != 0 ? queuedWinnings : 0);

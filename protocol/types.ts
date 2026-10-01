@@ -127,6 +127,19 @@ export interface Quote {
   };
   signature: string;
 }
+/** The casino's signed offer of collateral for a channel (`OFFER_TYPES`), which anyone buys on-chain. */
+export interface CollateralOffer {
+  message: {
+    channelId: string;
+    /** The house cash it locks into the channel. */
+    amount: Integer;
+    /** What buying it pays the contract. */
+    price: Integer;
+    /** Until when, in seconds, it can be bought. */
+    expiresAt: Integer;
+  };
+  signature: string;
+}
 export interface Step {
   operation: Operation;
   authorization: string;
@@ -171,6 +184,9 @@ export interface OnchainChannel {
   /** The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
    * those its checkpoint took in. */
   principal: string;
+  /** House cash the collateral bought for the channel locks into it: it pays what the deposits do not, before house
+   * cash, and what the close is not owed returns to house cash. */
+  collateral: string;
   /** Everything the channel's withdrawals have made into claims. */
   claimed: string;
   status: string;

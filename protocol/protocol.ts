@@ -12,6 +12,7 @@ import type {
   Integer,
   Json,
   Quote,
+  CollateralOffer,
 } from './types.ts';
 import {
   AbiCoder,
@@ -77,6 +78,14 @@ export const QUOTE_TYPES = {
 };
 /** How long a quote holds, in seconds. */
 export const QUOTE_PERIOD = 24 * 60 * 60;
+/** The casino's offer of collateral for a channel: `amount` of house cash, locked into the channel for `price`, which
+ * whoever buys it pays the contract, once and before `expiresAt`, in seconds. */
+export const OFFER_TYPES = {
+  CollateralOffer: fields('bytes32 channelId,uint256 amount,uint256 price,uint256 expiresAt'),
+};
+/** What `amount` of collateral costs at the casino's rate, in millionths of the amount: rounded up, so it costs
+ * something. */
+export const collateralPrice = (amount: bigint, rate: bigint) => (amount * rate + 999_999n) / 1_000_000n;
 export const ACCESS_TYPES = {
   Access: fields('bytes32 channelId,uint256 expiresAt'),
 };
@@ -304,6 +313,29 @@ export const covers = (quote: Quote, op: Operation, now: number) =>
   same(quote.message.round, op.round) &&
   BigInt(quote.message.expiresAt) >= BigInt(now) &&
   admits(BigInt(quote.message.virtualBankroll), betTerms(op.amount, op.chance, op.prize));
+/** A collateral offer the casino signed for `amount` on the channel `channelId`, at the price its `rate` gives. */
+export function verifyOffer(
+  d: Domain,
+  offer: CollateralOffer,
+  channelId: string,
+  amount: bigint,
+  rate: bigint,
+  operator: string,
+) {
+  assertSignature(d, OFFER_TYPES, offer?.message, offer?.signature, operator);
+  const { message } = offer;
+  if (!same(message.channelId, channelId) || BigInt(message.amount) !== amount)
+    throw new Error('The offer is not for this collateral');
+  if (BigInt(message.price) !== collateralPrice(amount, rate)) throw new Error("The casino's offer is not at its rate");
+  return offer;
+}
+/** What the contract takes of an offer to buy it, the price being what the buyer pays. */
+export const offerTerms = ({ message, signature }: CollateralOffer) => [
+  message.channelId,
+  String(message.amount),
+  String(message.expiresAt),
+  signature,
+];
 /** What the contract takes of a quote when a bet is disputed: the operation names its channel, checkpoint and round. */
 export const quoteTerms = (quote: Quote) => ({
   virtualBankroll: String(quote.message.virtualBankroll),
@@ -607,6 +639,7 @@ export const PROTOCOL = id(
     STATE_TYPES,
     OP_TYPES,
     QUOTE_TYPES,
+    OFFER_TYPES,
     ACCESS_TYPES,
     DEVELOPER_ACCESS_TYPES,
     SETTLEMENT_TYPES,

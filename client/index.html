@@ -126,8 +126,48 @@
           ><button class="button" type="button" data-wallet-tab="withdraw">Withdraw</button
           ><a class="text-button" href="/activity" data-page="activity">All activity →</a>
         </div>
-        <p id="balance-protection" class="help"></p>
         <p id="developer-earnings" class="muted hidden"></p>
+        <section id="collateral" class="card" aria-labelledby="collateral-title">
+          <h2 id="collateral-title">Protection</h2>
+          <p class="muted">
+            What the contract holds for your balance: your deposits, and collateral, the casino's cash locked into your
+            balance. Collateral pays your winnings before the bankroll does, and the casino cannot take it back until
+            your balance closes.
+          </p>
+          <dl class="figures">
+            <div>
+              <dt>Your deposits</dt>
+              <dd><span id="held-deposits">—</span> ETH</dd>
+            </div>
+            <div>
+              <dt>Collateral</dt>
+              <dd><span id="collateral-amount">—</span> ETH</dd>
+            </div>
+            <div>
+              <dt>Protected</dt>
+              <dd><span id="protected-amount">—</span> ETH</dd>
+            </div>
+            <div>
+              <dt>Collateral costs</dt>
+              <dd id="collateral-rate">—</dd>
+            </div>
+          </dl>
+          <p id="balance-protection" class="help"></p>
+          <div class="field-row">
+            <div class="amount-input">
+              <input
+                id="collateral-buy-amount"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="0.01"
+                aria-label="Collateral to buy"
+              /><span>ETH</span>
+            </div>
+            <button id="buy-collateral" class="button" type="button">Buy collateral</button>
+          </div>
+          <p id="collateral-help" class="help"></p>
+        </section>
         <section id="claims" class="card hidden" aria-labelledby="claims-title">
           <h2 id="claims-title">Waiting to be paid</h2>
           <p class="muted">

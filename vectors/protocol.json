@@ -7,7 +7,7 @@
     "developer": "0x4444444444444444444444444444444444444444",
     "recipient": "0x5555555555555555555555555555555555555555"
   },
-  "protocol": "0x5c10d55a773fc3f64ae2338d20b901a426bdfa98495e9462b2cdc31b14ee69ac",
+  "protocol": "0x8c87327d0d30c9ef9b3c2f51e6e897b7da4975934a7c5ee30700ee7cf34231c6",
   "developerProtocol": "0x10a4da880c4d5b8492f58ba80d25e6a73b4c17ea6a6b33618f2961e8d899a376",
   "opening": {
     "channelId": "0x56136bdb02b44e818120154143c922d9485e19e5b7288e7176da184391d4457c",
@@ -254,6 +254,16 @@
     },
     "hash": "0xb81a2b2a5fa3c4e844fca888c6669f01b0aceaa020450acf7de4588e44a66736",
     "admitted": true
+  },
+  "offer": {
+    "message": {
+      "channelId": "0x56136bdb02b44e818120154143c922d9485e19e5b7288e7176da184391d4457c",
+      "amount": "2000000000",
+      "price": "20000000",
+      "expiresAt": "1800000000"
+    },
+    "rate": "10000",
+    "hash": "0xa70fca8a58c19c0d1ef577ab4ce2624ef85acf4f84a8ce67d6bede19ef4e8d2f"
   },
   "cases": [
     {

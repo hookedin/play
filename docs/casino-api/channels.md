@@ -244,6 +244,19 @@ table says. `refused` answers a `request.channelId` other than `:id`, a bad sign
 operation that is not the channel's next, an amount above the balance, and a casino bet whose chance or prize breaks the
 rules.
 
+## Collateral
+
+### `POST /api/channels/:id/collateral`
+
+Signs the casino's [offer](../reference/signed-messages.md#collateral-offers) of collateral for the channel, `{offer}`,
+as `{message, signature}`: `amount` of house cash locked into the channel for `price`, at the casino's
+`collateralRate` ([`GET /api/config`](public.md#get-apiconfig)), which anyone buys on-chain with
+[`buyCollateral`](../reference/contract.md#collateral) within the hour. The body is `{amount}`, the collateral in wei as
+a decimal string, below 2^96 (`400` `invalid` otherwise). The casino offers no more than the house cash no claim,
+disputed close or withdrawal it owes counts on, and refuses more ("At most … ETH of collateral is on offer now"). An
+offer reserves nothing: what is bought first is locked, and one bought once that cash has gone reverts. `channel-closed`
+answers a channel that is not open.
+
 ## Payouts and developer bets
 
 ### `GET /api/channels/:id/payouts`

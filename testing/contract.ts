@@ -19,6 +19,8 @@ import {
   disputedStep,
   quoteTerms,
   QUOTE_TYPES,
+  OFFER_TYPES,
+  offerTerms,
 } from '../protocol/protocol.ts';
 import { assessBet } from '../protocol/risk.ts';
 import { loadArtifact } from '../protocol/deployment.ts';
@@ -195,6 +197,19 @@ export async function signedIncrease(f: any, ch: any, amount: any) {
       await signer.signTypedData(f.d, STATE_TYPES, state),
       await f.owner.signTypedData(f.d, STATE_TYPES, state),
     ),
+  };
+}
+/** The casino's offer of `amount` of collateral for a channel at `price`, which `buy` buys from `buyer` on-chain and
+ * `attempt` tries without sending. */
+export async function offered(f: any, channelId: string, amount: bigint, price: bigint, expiresAt: bigint) {
+  const message = { channelId, amount: String(amount), price: String(price), expiresAt: String(expiresAt) };
+  const offer = { message, signature: await f.owner.signTypedData(f.d, OFFER_TYPES, message) };
+  return {
+    offer,
+    buy: async (buyer: any, value = price) =>
+      (await f.contract.connect(buyer).buyCollateral(...offerTerms(offer), { value })).wait(),
+    attempt: (buyer: any, value = price) =>
+      f.contract.connect(buyer).buyCollateral.staticCall(...offerTerms(offer), { value }),
   };
 }
 /** The casino's quote for the casino bet that follows the channel's checkpoint, on the round of `secret`, and a bet on
