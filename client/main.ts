@@ -1201,19 +1201,6 @@ function gameCard(route: { owner: string; name: string }, game: Published & { na
     gameIcon(game.url, name),
     h('h3', null, name),
     h('span', { className: 'catalog-link' }, `${route.owner}/${route.name}`),
-    h(
-      'span',
-      {
-        className: 'catalog-record',
-        title: `Every bet anyone has placed in ${name}`,
-        onclick: event => {
-          event.preventDefault();
-          event.stopPropagation();
-          void openGameRecord(key);
-        },
-      },
-      'Every bet ↗',
-    ),
   );
 }
 /** Every game a profile publishes, as cards. */
@@ -1907,7 +1894,6 @@ for (const id of ['wallet-name-link', 'menu-profile'])
     if (wallet.uname) void openProfile(showName(wallet));
   });
 $('network-name').textContent = wallet.networkName;
-$('test-network').textContent = `${wallet.networkName} · Test ETH only · Do not send real ETH`;
 // The account is saved with a passkey, whose secret is its key, or as the key itself in a file.
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
   button.addEventListener('click', async () => {
@@ -1929,7 +1915,8 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
     // A game open under the account it replaced opens again under this one.
     if (playing && !active) void route();
   });
-$('deposit-instructions').textContent = `Send test ETH on ${wallet.networkName} to your deposit address`;
+$('deposit-instructions').textContent =
+  `Send test ETH on ${wallet.networkName} to your deposit address, never real ETH`;
 $<HTMLAnchorElement>('casino-status').href = casinoURL + '/api/status';
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
 const initialRoute = parseRoute(new URL(location.href));

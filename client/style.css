@@ -492,19 +492,6 @@ label {
   margin: 8px 12px;
 }
 
-.test-network {
-  line-height: 16px;
-  position: sticky;
-  top: 60px;
-  z-index: 10;
-  background: var(--bg);
-  padding: 6px 12px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-}
-
 /* Pages. */
 main {
   flex: 1;
@@ -880,14 +867,6 @@ main:has(> #page-play:not(.hidden)) > .banner {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
-.catalog-record {
-  margin-top: 4px;
-  color: #b5a8e5;
-  font-size: 11px;
-}
-.catalog-record:hover {
-  text-decoration: underline;
-}
 .game-card.skeleton {
   aspect-ratio: 1;
   border-radius: 22px;
@@ -965,7 +944,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
 #page-play {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 88px);
+  min-height: calc(100vh - 60px);
 }
 .game-viewport {
   position: relative;
@@ -975,7 +954,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .game-viewport iframe {
   flex: 1;
   width: 100%;
-  min-height: calc(100vh - 88px);
+  min-height: calc(100vh - 60px);
   border: 0;
   background: transparent;
 }
@@ -1686,9 +1665,6 @@ body:has(#page-play:not(.hidden)) .footer {
     height: 56px;
     padding: 0 12px;
   }
-  .test-network {
-    top: 56px;
-  }
   .brand {
     margin-right: auto;
   }
@@ -1730,10 +1706,10 @@ body:has(#page-play:not(.hidden)) .footer {
     margin-left: 0;
   }
   #page-play {
-    min-height: calc(100vh - 84px);
+    min-height: calc(100vh - 56px);
   }
   .game-viewport iframe {
-    min-height: calc(100dvh - 84px);
+    min-height: calc(100dvh - 56px);
   }
   .page-head {
     flex-direction: column;
