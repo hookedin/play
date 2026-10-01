@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { anvil, deployment, disputedBet, open, signedIncrease } from '../testing/contract.ts';
-import { hashState, verifyEvidence } from '../protocol/protocol.ts';
+import { hashState, json, verifyEvidence } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 import { DisputeWorker } from '../protocol/dispute-worker.ts';
@@ -117,7 +117,18 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
       casino: String(f.contract.target),
       chainId: env.chainId,
       operator: f.owner.address,
-    });
+    }),
+    // A tick that must dispute: its own transaction goes out and lands, or the failure says what the tick did instead.
+    disputed = async (bundle: any) => {
+      const previous = worker.outbox.state.pending?.hash ?? null,
+        result = await worker.tick([bundle], await observer.observe()),
+        status =
+          result.pending && result.pending !== previous
+            ? (await env.provider.waitForTransaction(result.pending))!.status
+            : null;
+      assert.equal(status, 1, 'no dispute landed: ' + json({ previous, status, ...result }));
+      return result;
+    };
   // An open channel's bet waits while its quote holds for more than an hour: the casino may still settle it.
   const open1 = await open(f, a, 1000n),
     bet1 = await disputedBet(f, open1, { ...terms, expiresAt: (await now()) + 2 * 3600 }),
@@ -130,9 +141,8 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
   );
   await env.provider.send('evm_increaseTime', [3601]);
   await env.provider.send('evm_mine', []);
-  result = await worker.tick([bundle1], await observer.observe());
+  result = await disputed(bundle1);
   assert.ok(result.alerts.some(alert => alert.reason === 'unsettled-bet' && alert.severity === 'critical'));
-  await env.provider.waitForTransaction(result.pending!);
   let c = await f.contract.channels(open1.state.channelId);
   assert.deepEqual([c.status, c.closingSequence, c.disputedPrize], [2n, BigInt(bet1.op.sequence), 196n]);
   // A close on the very checkpoint the bet follows is challenged by disputing it.
@@ -140,17 +150,15 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
     open3 = await open(f, d, 1000n),
     bet3 = await disputedBet(f, open3, { ...terms, expiresAt: (await now()) + 86400 });
   await (await f.contract.connect(f.owner).startClose(open3.evidence)).wait();
-  result = await worker.tick([bundleOf(open3, bet3)], await observer.observe());
+  result = await disputed(bundleOf(open3, bet3));
   assert.ok(result.alerts.some(alert => alert.reason === 'unsettled-bet'));
-  await env.provider.waitForTransaction(result.pending!);
   c = await f.contract.channels(open3.state.channelId);
   assert.deepEqual([c.closingSequence, c.disputedPrize], [BigInt(bet3.op.sequence), 196n]);
   // A close on an older checkpoint is challenged by disputing the bet, not with the bundle's checkpoint.
   const open2 = await open(f, b, 1000n),
     bet2 = await disputedBet(f, open2, { ...terms, expiresAt: (await now()) + 86400 });
   await (await f.contract.connect(f.owner).startClose(open2.base)).wait();
-  result = await worker.tick([bundleOf(open2, bet2)], await observer.observe());
-  await env.provider.waitForTransaction(result.pending!);
+  await disputed(bundleOf(open2, bet2));
   c = await f.contract.channels(open2.state.channelId);
   assert.deepEqual([c.closingSequence, c.disputedPrize], [BigInt(bet2.op.sequence), 196n]);
   // A bundle whose bet does not follow its checkpoint is refused.
@@ -182,6 +190,33 @@ function watchtower(t: any, env: any, f: any) {
     }),
   };
 }
+
+test("a watchtower's dispute estimated in its close's own second still has the gas to land in the next", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    { observer, worker, bundleOf } = watchtower(t, env, f);
+  await (await f.contract.fundBankroll({ value: 10000n })).wait();
+  const ch = await open(f, env.wallets[1], 1000n),
+    bet = await disputedBet(f, ch, {
+      virtualBankroll: 5000n,
+      stake: 100n,
+      chance: OUTCOME_SPACE / 2n,
+      prize: 196n,
+      expiresAt: (await env.provider.getBlock('latest'))!.timestamp + 86400,
+    }),
+    close = await (await f.contract.connect(f.owner).startClose(ch.base)).wait(),
+    { timestamp } = await close.getBlock();
+  // The gas is estimated in the close's own second, where the dispute leaves its deadline as it is, and the dispute is
+  // mined in the next.
+  await env.provider.send('evm_setAutomine', [false]);
+  await env.provider.send('evm_setNextBlockTimestamp', [timestamp]);
+  const result = await worker.tick([bundleOf(ch, bet)], await observer.observe());
+  await env.provider.send('evm_mine', [timestamp + 1]);
+  assert.equal((await env.provider.getTransactionReceipt(result.pending!))!.status, 1);
+  const c = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual([c.closingSequence, c.disputedPrize], [BigInt(bet.op.sequence), 196n]);
+});
 
 test("a close's dispute is due when its quote expires, if that comes before the close's deadline", async t => {
   const env = await anvil();

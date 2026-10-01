@@ -16,7 +16,12 @@ import {
   STATE_TYPES,
 } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
-import { confirmedReceipt, findNonceTransaction, sameTransactionIntent } from '../protocol/transaction-recovery.ts';
+import {
+  confirmedReceipt,
+  findNonceTransaction,
+  gasLimitFor,
+  sameTransactionIntent,
+} from '../protocol/transaction-recovery.ts';
 import { depositRemaining, recordPlay } from './play-controls.ts';
 /** Everything that signs or recovers an on-chain transaction: deposits, withdrawals, closes, claims,
  * challenges, fee caps, nonce recovery and confirmed-receipt bookkeeping. The wallet
@@ -119,7 +124,7 @@ export class WalletTransactions {
     ) {
       throw new Error('Network fees could not be estimated. Try again before choosing an amount.');
     }
-    const gasLimit = (estimate * 120n + 99n) / 100n;
+    const gasLimit = gasLimitFor(estimate);
     this.checkTransactionBudget(gasLimit, fees.maxFeePerGas);
     return {
       maxCost: gasLimit * fees.maxFeePerGas,

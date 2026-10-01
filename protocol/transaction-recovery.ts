@@ -29,6 +29,10 @@ async function nonceAt(context: RecoveryContext, address: string, block: ChainBl
   return context.observer ? context.observer.corroborate('account nonce', read) : read(context.provider);
 }
 
+/** The gas limit to send for `estimate`: an estimate holds only for the block it was made against, and in a later block
+ * block.timestamp alone can make the same call cost more, as rewriting a close's deadline does. */
+export const gasLimitFor = (estimate: bigint) => (estimate * 120n + 99n) / 100n;
+
 /** Read the consumed nonce on one corroborated branch, then check it is still canonical. */
 export async function confirmedNonce(context: RecoveryContext, address: string) {
   const block = await confirmedBlock(context),

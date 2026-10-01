@@ -37,7 +37,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { keccak256, Transaction } from 'ethers';
 import { json, same } from './protocol.ts';
-import { confirmedReceipt, confirmedNonce } from './transaction-recovery.ts';
+import { confirmedReceipt, confirmedNonce, gasLimitFor } from './transaction-recovery.ts';
 
 export function atomicJSON(file: string, value: unknown) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
@@ -205,6 +205,7 @@ export class TransactionJournal {
       if (latest !== mempool) throw new Error('Another relayer transaction is pending');
       await this.durable?.();
       const populated = await this.signer.populateTransaction({ ...request, chainId: this.chainId, nonce: latest });
+      if (request.gasLimit == null) populated.gasLimit = gasLimitFor(BigInt(populated.gasLimit!));
       if (
         BigInt(populated.gasLimit!) > this.maxGasLimit ||
         BigInt((populated.maxFeePerGas ?? populated.gasPrice)!) > this.maxFeePerGas
