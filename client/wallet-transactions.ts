@@ -220,14 +220,19 @@ export class WalletTransactions {
     return this.buyOffered();
   }
   /** Buy the collateral offered once this account's address holds its price and fee, under the wallet's lock. An
-   * offer about to expire is let go. */
+   * offer about to expire is let go, and so is one whose balance has started closing: ETH that arrives then is for
+   * the close's fees, and collateral would only protect the close. */
   async buyOffered(this: CasinoWallet) {
     const bought = await this.exclusive(
       async () => {
         const offer = this.buying;
         if (!offer) return false;
-        // Sent this late, it could expire before a block takes it.
-        if (BigInt(offer.message.expiresAt) < BigInt(Math.floor(Date.now() / 1000) + 120)) {
+        if (
+          !this.funded ||
+          offer.message.channelId !== this.channel!.state.channelId ||
+          // Sent this late, it could expire before a block takes it.
+          BigInt(offer.message.expiresAt) < BigInt(Math.floor(Date.now() / 1000) + 120)
+        ) {
           this.buying = null;
           return false;
         }

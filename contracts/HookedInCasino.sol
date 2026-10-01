@@ -44,7 +44,7 @@ contract HookedInCasino {
 
     /// What the owner cannot withdraw and no winnings are paid out of: every channel's deposits and collateral, and every
     /// claim's protected part.
-    uint256 public protectedPrincipal;
+    uint256 public protectedFunds;
     uint256 public unpaidWinnings;
     /// Every claim's winnings, in the order the claims were recorded: the queue house cash pays them in.
     uint256 public queuedWinnings;
@@ -254,7 +254,7 @@ contract HookedInCasino {
         if (c.deposited + amount >= MAX_BALANCE) revert InvalidTerms();
         c.deposited += amount;
         c.principal += amount;
-        protectedPrincipal += amount;
+        protectedFunds += amount;
         emit ChannelDeposit(channelId, amount, c.deposited);
     }
 
@@ -265,7 +265,7 @@ contract HookedInCasino {
 
     // What no deposit and no unpaid winning is owed.
     function withdrawableHouse() public view returns (uint256) {
-        uint256 owed = protectedPrincipal + unpaidWinnings;
+        uint256 owed = protectedFunds + unpaidWinnings;
         return address(this).balance > owed ? address(this).balance - owed : 0;
     }
 
@@ -295,7 +295,7 @@ contract HookedInCasino {
         if (amount > withdrawableHouse()) revert InsufficientBalance();
         offersBought[offer] = true;
         c.collateral += amount;
-        protectedPrincipal += amount;
+        protectedFunds += amount;
         collateralSales += msg.value;
         emit CollateralBought(channelId, offer, amount, msg.value);
     }
@@ -325,17 +325,17 @@ contract HookedInCasino {
         uint256 available = c.principal + s.deposited - c.deposited;
         uint256 deposits = op.amount < available ? op.amount : available;
         uint256 collateral = op.amount - deposits < c.collateral ? op.amount - deposits : c.collateral;
-        uint256 principal = deposits + collateral;
-        uint256 winnings = op.amount - principal;
+        uint256 protectedAmount = deposits + collateral;
+        uint256 winnings = op.amount - protectedAmount;
         c.principal -= deposits;
         c.collateral -= collateral;
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
         emit Withdrawal(id, s.channelId, op.recipient, op.amount);
         uint256 reached = _reached(queuedWinnings, winnings);
-        if (_send(id, c.player, op.recipient, principal, reached)) (principal, winnings) = (0, winnings - reached);
-        if (principal + winnings != 0) {
-            claims[id] = Claim(c.player, op.recipient, principal, winnings, winnings != 0 ? queuedWinnings : 0);
+        if (_send(id, c.player, op.recipient, protectedAmount, reached)) (protectedAmount, winnings) = (0, winnings - reached);
+        if (protectedAmount + winnings != 0) {
+            claims[id] = Claim(c.player, op.recipient, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
         }
     }
 
@@ -526,19 +526,19 @@ contract HookedInCasino {
         uint256 balance = c.closingBalance;
         // The deposits pay first and the collateral the rest; what neither pays is winnings.
         uint256 held = c.principal + c.collateral;
-        uint256 principal = balance < held ? balance : held;
-        uint256 winnings = balance - principal;
-        protectedPrincipal = protectedPrincipal - held + principal;
-        // The claim holds the principal from here on, and its winnings join the queue behind every claim before it. A
+        uint256 protectedAmount = balance < held ? balance : held;
+        uint256 winnings = balance - protectedAmount;
+        protectedFunds = protectedFunds - held + protectedAmount;
+        // The claim holds the protected amount from here on, and its winnings join the queue behind every claim before it. A
         // close owed nothing leaves no claim.
         (c.principal, c.collateral) = (0, 0);
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
-        if (balance != 0) claims[channelId] = Claim(c.player, c.player, principal, winnings, winnings != 0 ? queuedWinnings : 0);
-        emit CloseFinalized(channelId, c.player, stateHash, balance, principal, winnings);
+        if (balance != 0) claims[channelId] = Claim(c.player, c.player, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
+        emit CloseFinalized(channelId, c.player, stateHash, balance, protectedAmount, winnings);
     }
 
-    /// What collecting a claim pays now: its principal, and as much of its winnings as house cash reaches.
+    /// What collecting a claim pays now: its protected amount, and as much of its winnings as house cash reaches.
     function collectable(bytes32 id) external view returns (uint256) {
         Claim storage k = claims[id];
         return k.protectedRemaining + _reached(k.queueEnd, k.winningsRemaining);
@@ -547,7 +547,7 @@ contract HookedInCasino {
     // How much of `winnings`, ending at `queueEnd` in the winnings queue, house cash reaches. It pays the queue in order:
     // all of it but the unpaid winnings at its end that it cannot cover.
     function _reached(uint256 queueEnd, uint256 winnings) private view returns (uint256) {
-        uint256 cash = address(this).balance - protectedPrincipal;
+        uint256 cash = address(this).balance - protectedFunds;
         uint256 reached = queuedWinnings - (unpaidWinnings > cash ? unpaidWinnings - cash : 0);
         uint256 waiting = queueEnd > reached ? queueEnd - reached : 0;
         return winnings > waiting ? winnings - waiting : 0;
@@ -572,22 +572,22 @@ contract HookedInCasino {
     // the claims behind it. A refused collection reverts.
     function _pay(bytes32 id) private {
         Claim storage k = claims[id];
-        uint256 principal = k.protectedRemaining;
+        uint256 protectedAmount = k.protectedRemaining;
         uint256 winnings = _reached(k.queueEnd, k.winningsRemaining);
         (k.protectedRemaining, k.winningsRemaining) = (0, k.winningsRemaining - winnings);
-        if (!_send(id, k.beneficiary, k.recipient, principal, winnings)) revert TransferFailed();
+        if (!_send(id, k.beneficiary, k.recipient, protectedAmount, winnings)) revert TransferFailed();
     }
 
-    // Pays a claim's principal and winnings: into its beneficiary's current channel when the recipient is this contract,
+    // Pays a claim's protected amount and winnings: into its beneficiary's current channel when the recipient is this contract,
     // and otherwise sent with 100,000 gas, whatever the recipient returns left uncopied so it costs the sender nothing.
     // Says whether the recipient took it; a refusal leaves all of it owed.
-    function _send(bytes32 id, address beneficiary, address recipient, uint256 principal, uint256 winnings)
+    function _send(bytes32 id, address beneficiary, address recipient, uint256 protectedAmount, uint256 winnings)
         private
         returns (bool ok)
     {
-        uint256 amount = principal + winnings;
+        uint256 amount = protectedAmount + winnings;
         if (amount == 0) return true;
-        protectedPrincipal -= principal;
+        protectedFunds -= protectedAmount;
         unpaidWinnings -= winnings;
         if (recipient == address(this)) {
             _deposit(beneficiary, amount);
@@ -598,7 +598,7 @@ contract HookedInCasino {
             }
         }
         if (ok) emit ClaimPayment(id, recipient, amount);
-        else (protectedPrincipal, unpaidWinnings) = (protectedPrincipal + principal, unpaidWinnings + winnings);
+        else (protectedFunds, unpaidWinnings) = (protectedFunds + protectedAmount, unpaidWinnings + winnings);
     }
 
 }

@@ -58,7 +58,7 @@ const receipt = await HookedIn.developerBet({
   a `game.receipt` event. The wallet looks every 4 seconds while its tab is visible; a page that hears from your server
   that a bet has settled calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload,
   `HookedIn.receipt(id)` finds the bet.
-- Until the wallet collects it, what a bet is paid is the casino's promise, outside the principal the contract
+- Until the wallet collects it, what a bet is paid is the casino's promise, outside what the contract
   protects.
 
 ## Meta

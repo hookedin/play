@@ -141,7 +141,7 @@ export const betTerms = (stake: Integer, chance: Integer, prize: Integer) => ({
 });
 /** The bankroll fund. Investing is a debit that names it as its counterparty, and divesting a credit
  * from it. An investor trusts the casino completely: a share is its promise of a part of the
- * bankroll, not protected principal. */
+ * bankroll, not money the contract protects. */
 export const FUND_ID = id('HOOKEDIN/BANKROLL');
 /** The casino signs a statement for every change to a holding. `shares` is what the holder has
  * afterwards. `equity` and `totalShares` are the fund just before the change, which fix the price

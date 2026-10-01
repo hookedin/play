@@ -50,9 +50,10 @@ its **details**, whose hash the operation signs as its `memo`. The contract neve
 check and keep them. A withdrawal names whom it pays in the operation itself, as its `recipient`.
 [Signed messages](../reference/signed-messages.md) has every field.
 
-**Principal, collateral and winnings.** The channel's principal is what the contract protects: withdrawals and a close
-are paid out of it first. The casino can lock house cash into the channel beside it as **collateral**, which anyone buys
-on-chain at the price the casino's signed offer names, and which pays next. What the balance holds above both, its
+**Principal, collateral and winnings.** The channel's principal is its deposits, which the contract protects:
+withdrawals and a close are paid out of it first. The casino can lock house cash into the channel beside it as
+**collateral**, which anyone buys on-chain at the price the casino's signed offer names, and which pays next, until
+withdrawals use it up or the channel closes. What the balance holds above both, its
 **winnings**, is owed from the shared bankroll until the contract pays it, or until you
 [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
 

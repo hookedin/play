@@ -16,14 +16,15 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
 - **Your deposits are protected up to your final balance.** The contract holds every deposit as it arrives, as your
   channel's principal, and the owner cannot withdraw it. A withdrawal is paid out of it first, but only out of the
   deposits its balance had taken in, so one that arrives later stays protected however late the withdrawal is recorded.
-  A close pays `min(owed, principal)` out of it in full. Only winnings above your deposits and collateral depend on the
-  shared bankroll.
+  A close pays `min(owed, principal + collateral)` out of it and your collateral in full. Only winnings above your
+  deposits and collateral depend on the shared bankroll.
 - **Collateral protects winnings before they are won.** The casino offers
   [collateral](../reference/contract.md#collateral) for your channel at its rate, signed, and anyone buys the offer
   on-chain at the price it names: in that one transaction the contract moves that much house cash into your channel,
   where the owner cannot withdraw it, or the purchase reverts and costs nothing but its fee. A withdrawal draws on it
   after your deposits, and a close is paid out of it what your deposits do not cover. It adds nothing to what you are
-  owed: what your close is not owed returns to house cash, and only a close ends it.
+  owed: what your close is not owed returns to house cash. Withdrawals use it up, and it has no minimum term: the
+  casino's owner can start a close at any time, and the price is never refunded.
 - **Withdrawals are paid by the contract.** A withdrawal is an operation your account signs. With the casino's signature
   of the balance after it, which your receipt keeps, anyone can have the contract record it as a claim, once, until the
   channel's close is final, and only after every withdrawal you made before it, so nobody can make a lock-in take less
@@ -155,7 +156,7 @@ A developer can keep a stake by never settling; the game's public record then sh
 
 A game can make its developer bets provably fair with a scheme of its own, which anyone can check against what the
 casino publishes; [roulette](https://github.com/hookedin/game-roulette#fairness-and-trust) does. What a developer bet
-is paid is the casino's promise until your wallet collects it, and until then it is outside the principal the contract
+is paid is the casino's promise until your wallet collects it, and until then it is outside what the contract
 protects. A developer's bank reserves nothing: whether a developer can pay its bets is between the developer and its
 players ([settled trade-offs](architecture.md#settled-trade-offs)).
 

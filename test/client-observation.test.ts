@@ -126,9 +126,17 @@ function observingWallet(storage = new MemoryStore()) {
     channelId: ACTIVE,
   });
   wallet.channels[ACTIVE] = {
-    state: { channelId: ACTIVE, balance: '10', deposited: '10', sequence: '1', index: '0', length: '1' },
+    state: {
+      channelId: ACTIVE,
+      balance: '10',
+      deposited: '10',
+      withdrawn: '0',
+      sequence: '1',
+      index: '0',
+      length: '1',
+    },
     opening: { channelId: ACTIVE, player: ZeroAddress, index: '0' },
-    onchain: { status: '1', deposited: '10', principal: '10', claimed: '0' },
+    onchain: { status: '1', deposited: '10', principal: '10', collateral: '0', claimed: '0' },
   } as any;
   const block = { number: 10, hash: id('block') };
   wallet.observer = {
@@ -325,4 +333,19 @@ test('an action waits for the optional storage commit without being rejected as 
   write.resolve!();
   await Promise.all([details, action]);
   assert.equal(ran, true);
+});
+
+test('a withdrawal not yet recorded counts against the deposits and collateral that protect the balance', () => {
+  const wallet = observingWallet(),
+    c = wallet.channel!;
+  // 100 deposited, 100 of collateral bought, 50 withdrawn and not recorded on-chain.
+  c.state = { ...c.state, balance: '50', deposited: '100', withdrawn: '50' };
+  c.onchain = { ...c.onchain, deposited: '100', principal: '100', collateral: '100' };
+  const protection = () => [wallet.render().unprotected, wallet.render().spare];
+  assert.deepEqual(protection(), ['0', '100']);
+  // Won up to 200: recording the withdrawal leaves 150 of deposits and collateral, so 50 of it is unprotected.
+  c.state.balance = '200';
+  assert.deepEqual(protection(), ['50', '0']);
+  c.onchain = { ...c.onchain, principal: '50', claimed: '50' };
+  assert.deepEqual(protection(), ['50', '0']);
 });

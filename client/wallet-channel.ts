@@ -685,7 +685,7 @@ export class ChannelClient extends WalletTransactions {
 
   /** Invest in the casino's bankroll: a debit from this channel that buys shares at the going
    * price. The money becomes the casino's to bet with. A share is the casino's promise of a part of
-   * the bankroll, not protected principal: the wallet can prove what it holds, never what it is worth. */
+   * the bankroll, not money the contract protects: the wallet can prove what it holds, never what it is worth. */
   async invest(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
     return this.perform('invest', { amount, source: FUND_ID }, operationId);
   }

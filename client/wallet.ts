@@ -577,10 +577,19 @@ export class CasinoWallet extends GameSessions {
       closing = this.closingChannel,
       open = c && Number(c.onchain?.status) === 1,
       // Deposited into the open channel and not taken into its balance yet: the player's all the same.
-      arriving = open ? BigInt(c.onchain.deposited) - BigInt(c.state.deposited) : 0n;
+      arriving = open ? BigInt(c.onchain.deposited) - BigInt(c.state.deposited) : 0n,
+      balance = open ? BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n) : 0n,
+      // What the channel's deposits and collateral cover of what its close would be owed, the withdrawals not yet
+      // recorded included, which the contract pays out of them first: what is left uncovered is the balance's
+      // winnings, which only house cash pays.
+      uncovered = open
+        ? owed(c.state, c.onchain.deposited, c.onchain.claimed) -
+          BigInt(c.onchain.principal) -
+          BigInt(c.onchain.collateral)
+        : 0n;
     this.publicState = {
       address: this.address,
-      balance: open ? String(BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n)) : '0',
+      balance: String(balance),
       arriving: String(arriving > 0n ? arriving : 0n),
       nativeBalance: this.nativeBalance || '0',
       channelId: c?.state.channelId || null,
@@ -588,6 +597,9 @@ export class CasinoWallet extends GameSessions {
       // The deposits the contract still holds for this balance, and the collateral locked into it.
       principal: open ? c.onchain.principal : '0',
       collateral: open ? c.onchain.collateral : '0',
+      // How much of the balance they leave unprotected, and how much more it could win and have protected.
+      unprotected: String(uncovered <= 0n ? 0n : uncovered < balance ? uncovered : balance),
+      spare: String(uncovered < 0n ? -uncovered : 0n),
       // What collateral costs at the casino, in millionths of the amount; none while the casino offers none.
       collateralRate: this.recoveryOnly ? null : (this.config?.collateralRate ?? null),
       // The collateral offer waiting for ETH at the address.

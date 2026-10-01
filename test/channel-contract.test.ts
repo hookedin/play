@@ -54,7 +54,7 @@ test('a channel is its account: anyone deposits into it, the first deposit opens
   await (await f.contract.connect(a).deposit(a.address, { value: 300n })).wait();
   const onchain = await f.contract.channels(ch.opening.channelId);
   assert.deepEqual([onchain.player, onchain.status, onchain.deposited, onchain.principal], [a.address, 1n, 800n, 800n]);
-  assert.equal(await f.contract.protectedPrincipal(), 800n);
+  assert.equal(await f.contract.protectedFunds(), 800n);
   for (const [to, value] of [
     [a.address, 0n],
     [ZeroAddress, 1n],
@@ -117,7 +117,7 @@ test('anyone has a withdrawal made a claim, once: paid at once as far as deposit
   const c = await f.contract.channels(ch.opening.channelId);
   assert.deepEqual([c.principal, c.claimed], [0n, 1300n]);
   assert.deepEqual(
-    [await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings(), await f.contract.withdrawableHouse()],
+    [await f.contract.protectedFunds(), await f.contract.unpaidWinnings(), await f.contract.withdrawableHouse()],
     [0n, 200n, 0n],
   );
   // The rest once there is cash, collected by anyone.
@@ -170,14 +170,14 @@ test('a withdrawal to a recipient that refuses payment is still a claim, owed in
     [claim.beneficiary, claim.recipient, claim.protectedRemaining, claim.winningsRemaining],
     [a.address, String(receiver.target), 1000n, 100n],
   );
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings()], [1000n, 100n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.unpaidWinnings()], [1000n, 100n]);
   await assert.rejects(f.contract.withdraw.staticCall(out.evidence), reverts('InvalidState'));
   await assert.rejects(f.contract.claim.staticCall(claimId), reverts('TransferFailed'));
   // Only the account redirects it, and the claim pays in full there.
   await assert.rejects(f.contract.connect(other).claimTo.staticCall(claimId, to), reverts('Unauthorized'));
   await (await f.contract.connect(a).claimTo(claimId, to)).wait();
   assert.equal(await env.provider.getBalance(to), 1100n);
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings()], [0n, 0n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.unpaidWinnings()], [0n, 0n]);
 });
 
 test("a withdrawal pays any address, a friend's HookedIn address among them, and one to the contract locks the balance in", async t => {
@@ -192,7 +192,7 @@ test("a withdrawal pays any address, a friend's HookedIn address among them, and
   await (await f.contract.withdraw(sent.evidence)).wait();
   assert.equal(await env.provider.getBalance(friend), 400n);
   assert.deepEqual(
-    [(await f.contract.channels(ch.opening.channelId)).principal, await f.contract.protectedPrincipal()],
+    [(await f.contract.channels(ch.opening.channelId)).principal, await f.contract.protectedFunds()],
     [600n, 600n],
   );
   // Winnings above the deposits are locked in by withdrawing the whole balance to the contract itself: its deposits
@@ -209,7 +209,7 @@ test("a withdrawal pays any address, a friend's HookedIn address among them, and
   assert.deepEqual([mine.deposited, mine.principal], [1900n, 900n]);
   // Paid in full at once, it leaves no claim: the channel's `claimed` records it.
   assert.deepEqual([claim.beneficiary, mine.claimed], [ZeroAddress, 1300n]);
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings()], [900n, 0n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.unpaidWinnings()], [900n, 0n]);
   assert.equal(await f.contract.withdrawableHouse(), 200n);
 });
 
@@ -232,7 +232,7 @@ test('a lock-in house cash cannot cover yet goes in as far as it reaches, and th
   await (await f.contract.fundBankroll({ value: 500n })).wait();
   await (await f.contract.connect(env.wallets[8]).claim(claimId)).wait();
   assert.deepEqual(await mine(), [2500n, 1500n]);
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.unpaidWinnings()], [1500n, 0n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.unpaidWinnings()], [1500n, 0n]);
 });
 
 test('a lock-in records after the withdrawals signed before it, so it locks in all that is left', async t => {
@@ -305,7 +305,7 @@ test("anyone buys the casino's collateral offer for a channel, once and before i
   const c = await f.contract.channels(ch.opening.channelId);
   assert.deepEqual([c.principal, c.collateral, c.deposited], [1000n, 600n, 1000n]);
   assert.deepEqual(
-    [await f.contract.protectedPrincipal(), await f.contract.collateralSales(), await f.contract.withdrawableHouse()],
+    [await f.contract.protectedFunds(), await f.contract.collateralSales(), await f.contract.withdrawableHouse()],
     [1600n, 6n, 406n],
   );
   assert.equal(await f.contract.offersBought(TypedDataEncoder.hash(f.d, OFFER_TYPES, offer.message)), true);
@@ -332,7 +332,7 @@ test("anyone buys the casino's collateral offer for a channel, once and before i
   assert.equal(await env.provider.getBalance(recipient), 1800n);
   const after = await f.contract.channels(ch.opening.channelId);
   assert.deepEqual([after.principal, after.collateral], [0n, 0n]);
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.withdrawableHouse()], [0n, 206n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.withdrawableHouse()], [0n, 206n]);
 });
 
 test('a close is paid out of the collateral what its deposits do not cover, a lock-in makes it deposits, and what the account lost returns to house cash', async t => {
@@ -350,7 +350,7 @@ test('a close is paid out of the collateral what its deposits do not cover, a lo
   const close = await claimOf(f, ch.opening.channelId);
   assert.deepEqual([close.amount, close.protectedRemaining, close.winningsRemaining], [1300n, 1300n, 0n]);
   assert.equal((await f.contract.channels(ch.opening.channelId)).collateral, 0n);
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.withdrawableHouse()], [1300n, 1700n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.withdrawableHouse()], [1300n, 1700n]);
   // A lock-in draws the deposits, then the collateral, and puts all of it back as deposits.
   const other = await open(f, b, 1000n);
   await (await offered(f, other.opening.channelId, 500n, 0n, later)).buy(b);
@@ -378,7 +378,7 @@ test('a close is paid out of the collateral what its deposits do not cover, a lo
   c = await f.contract.channels(other.opening.channelId);
   assert.deepEqual([c.closingBalance, c.principal, c.collateral], [400n, 0n, 0n]);
   assert.equal((await claimOf(f, other.opening.channelId)).protectedRemaining, 400n);
-  assert.equal(await f.contract.protectedPrincipal(), 1700n);
+  assert.equal(await f.contract.protectedFunds(), 1700n);
 });
 
 test('a close nets out what a checkpoint took in that the chain does not hold, so every signed checkpoint closes', async t => {
@@ -575,7 +575,7 @@ test("a lock-in during a close goes into the account's next channel, and so does
   await (await f.contract.connect(ch.player).claimTo(ch.state.channelId, contract)).wait();
   assert.deepEqual(await next(), [1n, 150n, 150n]);
   assert.equal((await claimOf(f, ch.state.channelId)).paid, 50n);
-  assert.deepEqual([await f.contract.protectedPrincipal(), await f.contract.withdrawableHouse()], [150n, 0n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.withdrawableHouse()], [150n, 0n]);
 });
 
 test('a bet settles on-chain, and only strictly newer evidence challenges a close', async t => {
@@ -929,7 +929,7 @@ test('the winnings queue pays in finalization order, and any claim collects what
   for (const channelId of [...ids].reverse()) await (await f.contract.claim(channelId)).wait();
   for (const channelId of ids) assert.equal((await claimOf(f, channelId)).paid, 11n);
   assert.equal(await f.contract.unpaidWinnings(), 0n);
-  assert.equal(await f.contract.protectedPrincipal(), 0n);
+  assert.equal(await f.contract.protectedFunds(), 0n);
   assert.equal(await env.provider.getBalance(await f.contract.getAddress()), 0n);
 });
 

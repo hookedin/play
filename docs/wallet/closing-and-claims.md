@@ -15,7 +15,8 @@ under **Protection**, what the contract still owes you under **Waiting to be pai
 
 **Protection**, on the Wallet page, shows what the contract holds for your balance: your deposits, and collateral, the
 casino's cash locked into your channel. How much of your balance they protect, and how much more you could win and
-have protected, is beside them. What your balance holds above them is winnings, which only house cash pays.
+have protected, is beside them, after any withdrawal not yet recorded on-chain, which they pay first. What your balance
+holds above them is winnings, which only house cash pays.
 
 Collateral protects what you win before you win it. The casino offers it at its rate, a share of the amount paid once,
 which Protection shows. Enter an amount and **Buy for … ETH**: the wallet asks the casino for an offer, checks its
@@ -25,12 +26,15 @@ house cash into your channel, where the casino can no longer take it, or the pur
 The casino offers as much as its house cash allows, and an offer holds for an hour.
 
 When your deposit address holds too little, Protection says how much to send there and by when: the wallet buys the
-collateral with it as soon as it arrives, before it adds anything to your balance, and the rest goes in after. Activity
+collateral with it as soon as it arrives, before it adds anything to your balance, and the rest goes in after. Once
+your balance has started closing it buys nothing: what arrives then stays for the close's fees. Activity
 shows **Collateral bought**.
 
 A withdrawal is paid out of your deposits first, then out of your collateral, and only then out of house cash; a close
-the same. Collateral adds nothing to what you are owed: what your close is not owed, collateral included, returns to
-house cash, and only a close ends it, an [idle](#idle-channels) one's among them.
+the same. So withdrawing uses collateral up, and nothing tops it up. Collateral adds nothing to what you are owed, and
+it lasts only until your channel closes: what the close is not owed, collateral included, returns to house cash. It has
+no minimum term: the casino's owner can start a close at any time, as it does for an [idle](#idle-channels) channel,
+and the price is never refunded.
 
 ## Recovery
 
@@ -51,9 +55,9 @@ the contract holds.
 
 Locking in closes the open game first, and your balance is empty until it has taken those deposits in:
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
-channel is open and your balance holds more than the deposits and collateral the contract holds for it. The casino declines a lock-in
-that house cash cannot pay now, like any withdrawal, and your balance is as it was. Once it is in, a close pays all of
-that balance as protected principal, and withdrawing it needs no house cash, until you win more.
+channel is open and Protection shows part of your balance unprotected. The casino declines a lock-in that house cash
+cannot pay now, like any withdrawal, and your balance is as it was. Once it is in, a close pays all of that balance out
+of deposits, and withdrawing it needs no house cash, until you win more.
 
 ## Withdraw
 
@@ -82,7 +86,7 @@ balance.
 The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent. One
 not sent yet offers **Send it now** in Activity once every withdrawal you made before it from that balance is sent. A
 withdrawal can be sent until its channel's close is finished; one nobody sent by then comes back to you with the close,
-not to its address: what your deposits cover as protected principal, and the rest as winnings.
+not to its address: what your deposits and collateral cover as its protected amount, and the rest as winnings.
 
 ## Close without the casino
 
@@ -157,17 +161,17 @@ and the wallet says so.
 
 Finalizing records a claim for what the close is owed, in two parts:
 
-- **Protected principal**, `min(owed, principal + collateral)`, where `principal` is the deposits the contract holds
+- **Protected amount**, `min(owed, principal + collateral)`, where `principal` is the deposits the contract holds
   for the channel and `collateral` its collateral: paid in full whenever the claim is collected.
 - **Winnings**, whatever is above it: they join the queue of every claim's winnings, first in, first out.
 
-A withdrawal is a claim too, under its ID, with its principal and winnings worked out the same way when it is recorded.
+A withdrawal is a claim too, under its ID, with its protected amount and winnings worked out the same way when it is recorded.
 
 **Waiting to be paid**, on the Wallet page, lists every claim of this account that is still owed something, a closed
 balance's or a withdrawal's, 20 at a time, those of older channels included, with where it pays, what it is owed and
 what can be collected now:
 
-- **Collect** sends `claim(id)`, which anyone may send. It pays the claim's protected principal and whatever of its
+- **Collect** sends `claim(id)`, which anyone may send. It pays the claim's protected amount and whatever of its
   winnings house cash reaches to the claim's recipient: your account for a closed balance and the withdrawal's address
   for a withdrawal, unless you have redirected it.
 - **Collect there**, with an address, sends `claimTo(id, recipient)`, which only your
@@ -178,7 +182,7 @@ what can be collected now:
 Winnings are paid as the contract has cash for them, oldest first
 ([the winnings queue](../reference/contract.md#the-winnings-queue)): a claim collects what of its winnings house cash
 covers in one call, however far back it waits, and can be collected again as more cash arrives. The owner can never
-withdraw protected principal or unpaid winnings. A payment to an address is sent with 100,000 gas; a recipient that
+withdraw a protected amount or unpaid winnings. A payment to an address is sent with 100,000 gas; a recipient that
 rejects it, or needs more gas to accept it, makes the collection revert and leaves the claim whole: collect to another
 address.
 

@@ -77,7 +77,7 @@ async function invariants(env: any, f: any, records: any, withdrawals: string[] 
     covered += BigInt(collectable) - BigInt(claim.protectedRemaining);
   }
   const [p, unpaid, cash, withdrawal] = await Promise.all([
-    f.contract.protectedPrincipal(),
+    f.contract.protectedFunds(),
     f.contract.unpaidWinnings(),
     env.provider.getBalance(await f.contract.getAddress()),
     f.contract.withdrawableHouse(),
