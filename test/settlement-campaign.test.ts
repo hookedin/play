@@ -18,6 +18,7 @@ import {
   channelId,
   hashOperation,
   hashState,
+  recordWithdrawals,
   STATE_TYPES,
 } from '../protocol/protocol.ts';
 import { MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
@@ -103,7 +104,8 @@ for (const initialSeed of [1, 4294967295])
       sales = 0n;
     const random = (n: any) => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed % n;
+      // The high bits: a power-of-two modulus leaves the low ones cycling.
+      return Math.floor((seed / 2 ** 32) * n);
     };
     for (let i = 0; i < 96; i++) {
       const who = 1 + random(6),
@@ -175,32 +177,43 @@ for (const initialSeed of [1, 4294967295])
         } else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
           // A withdrawal, to the account's address, another, or the contract itself as a lock-in, which anyone has
           // made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest owed in
-          // the winnings queue. One is at times never sent, and then, as withdrawals record in the order they were
-          // signed, none after it: the close returns them.
+          // the winnings queue. It at times waits, while deposits arrive and are taken in, and as withdrawals record in
+          // the order they were signed, so do those after it; one still waiting when the channel closes comes back
+          // with the close.
           const amount = BigInt(1 + random(Number(ch.state.balance))),
             contract = await f.contract.getAddress(),
             recipient = [player.address, Wallet.createRandom().address, contract][random(3)],
-            before = await f.contract.channels(ch.state.channelId),
             sent = await transition(f, ch, 5, amount, { recipient });
-          if (ch.behind) await assert.rejects(f.contract.withdraw.staticCall(sent));
-          else if (!random(4)) ch.behind = true;
-          else {
-            await (await f.contract.connect(env.wallets[8]).withdraw(sent)).wait();
-            const claimId = hashOperation(f.d, sent.step.operation),
-              claim = await f.contract.claims(claimId),
-              after = await f.contract.channels(ch.state.channelId);
-            withdrawals.push(claimId);
-            // It drew on the deposits its checkpoint took in, then the collateral; what a lock-in was paid went into the
-            // channel as deposits.
-            const held: bigint = before.principal + before.collateral,
-              available: bigint = held + BigInt(ch.state.deposited) - before.deposited,
-              locked = recipient === contract ? amount - claim.protectedRemaining - claim.winningsRemaining : 0n;
-            assert.equal(after.principal + after.collateral, held - (amount < available ? amount : available) + locked);
+          (ch.owing ??= []).push(sent);
+          if (ch.owing.length > 1) await assert.rejects(f.contract.withdraw.staticCall(sent));
+          if (random(2)) {
+            // Recorded, they leave the deposits and collateral the wallet's prediction says, by the contract's rule:
+            // what a lock-in was paid goes back into the channel as deposits.
+            const before = await f.contract.channels(ch.state.channelId),
+              predicted = recordWithdrawals(
+                before,
+                ch.owing.map((owed: any) => ({ amount: owed.step.operation.amount, deposited: owed.base.deposited })),
+              );
+            let locked = 0n;
+            for (const owed of ch.owing.splice(0)) {
+              await (await f.contract.connect(env.wallets[8]).withdraw(owed)).wait();
+              const claimId = hashOperation(f.d, owed.step.operation),
+                claim = await f.contract.claims(claimId);
+              withdrawals.push(claimId);
+              if (owed.step.operation.recipient === contract)
+                locked += BigInt(owed.step.operation.amount) - claim.protectedRemaining - claim.winningsRemaining;
+            }
+            const after = await f.contract.channels(ch.state.channelId);
+            assert.deepEqual([after.principal - locked, after.collateral], [predicted.principal, predicted.collateral]);
           }
-        } else if (choice === 4)
-          // Somebody else deposits into the open channel.
-          await (await f.contract.connect(env.wallets[8]).deposit(player.address, { value: 7n })).wait();
-        else if (choice === 5) {
+        } else if (choice === 4) {
+          // Somebody else deposits into the open channel, which its balance at times takes in.
+          await (
+            await f.contract.connect(env.wallets[8]).deposit(player.address, { value: BigInt(1 + random(500)) })
+          ).wait();
+          const { deposited } = await f.contract.channels(ch.state.channelId);
+          if (random(2)) await transition(f, ch, 4, deposited - BigInt(ch.state.deposited));
+        } else if (choice === 5) {
           await (await f.contract.fundBankroll({ value: BigInt(1 + random(500)) })).wait();
           if (random(3)) {
             // Somebody buys collateral the casino offers for the channel, as far as house cash goes.

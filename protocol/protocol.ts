@@ -270,6 +270,60 @@ export function owed(
     taken = BigInt(state.deposited) + BigInt(claimed);
   return due > taken ? due - taken : 0n;
 }
+/** The deposits of `principal`, those a channel still holds, that the contract pays a withdrawal out of when its
+ * checkpoint took in `deposited` of the channel's `deposited`: a deposit it did not take in stays the channel's. */
+export function depositsTakenIn(channel: { deposited: Integer }, principal: bigint, deposited: Integer) {
+  const deposits = principal + BigInt(deposited) - BigInt(channel.deposited);
+  return deposits < 0n ? 0n : deposits > principal ? principal : deposits;
+}
+/** A channel's deposits and collateral once the contract has recorded `withdrawals`, those it owes, each with the
+ * `deposited` of its checkpoint, in the order they were signed, and what they take of house cash: each is paid out of
+ * the deposits its checkpoint took in, then the collateral, and the rest out of house cash. What one to the contract
+ * itself pays goes back into the channel as deposits, which this leaves out: no checkpoint before it took them in. */
+export function recordWithdrawals(
+  channel: { deposited: Integer; principal: Integer; collateral: Integer },
+  withdrawals: { amount: Integer; deposited: Integer }[],
+) {
+  let principal = BigInt(channel.principal),
+    collateral = BigInt(channel.collateral),
+    cash = 0n;
+  for (const withdrawal of withdrawals) {
+    const amount = BigInt(withdrawal.amount),
+      available = depositsTakenIn(channel, principal, withdrawal.deposited),
+      deposits = amount < available ? amount : available,
+      locked = amount - deposits < collateral ? amount - deposits : collateral;
+    principal -= deposits;
+    collateral -= locked;
+    cash += amount - deposits - locked;
+  }
+  return { principal, collateral, cash };
+}
+/** What protects the balance of a channel in `state`: the deposits and collateral the contract holds for it once it has
+ * recorded `withdrawals`, those it owes, and what of the balance, with what the channel holds that it has not taken in
+ * yet, they protect. `covered` is what a close then pays out of them, `uncovered` the winnings above them, which only
+ * house cash pays, and `missing` the deposits the balance took in that the chain does not hold, which a close is owed
+ * only once they land again; `spare` is what more it could win and have protected. */
+export function protection(
+  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
+  channel: { deposited: Integer; principal: Integer; collateral: Integer },
+  withdrawals: { amount: Integer; deposited: Integer }[],
+) {
+  const left = recordWithdrawals(channel, withdrawals),
+    held = left.principal + left.collateral,
+    arriving = BigInt(channel.deposited) - BigInt(state.deposited),
+    balance = BigInt(state.balance) + (arriving > 0n ? arriving : 0n),
+    // What a close is owed once they are recorded.
+    due = owed(state, channel.deposited, state.withdrawn),
+    covered = due < held ? due : held;
+  return {
+    deposits: left.principal,
+    collateral: left.collateral,
+    covered,
+    uncovered: due - covered,
+    missing: balance - due,
+    spare: held - covered,
+  };
+}
 /** Whether the contract has recorded the withdrawal `evidence` proves: it records a channel's withdrawals in the order
  * they were signed, so once the channel's `claimed` has passed the `withdrawn` of the checkpoint the withdrawal
  * follows. What stays owed of it is a claim under its ID; one paid in full at once leaves none. */

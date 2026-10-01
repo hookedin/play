@@ -732,19 +732,25 @@ const rateText = (rate: bigint) => percent(rate).replace(/\.?0+%$/, '%');
 /** What the contract holds for the balance, its deposits and collateral, and collateral to buy at the casino's rate. */
 function renderCollateral() {
   const state = wallet.publicState,
-    unprotected = BigInt(state.unprotected || 0),
-    spare = BigInt(state.spare || 0),
+    p = state.protection || { deposits: 0, collateral: 0, covered: 0, uncovered: 0, missing: 0, spare: 0 },
+    [uncovered, missing, spare] = [p.uncovered, p.missing, p.spare].map(BigInt),
     rate = state.collateralRate == null ? null : BigInt(state.collateralRate),
     amount = ethAmount($<HTMLInputElement>('collateral-buy-amount').value.trim()),
     buying = state.buying;
-  $('held-deposits').textContent = plainEth(state.principal || 0);
-  $('collateral-amount').textContent = plainEth(state.collateral || 0);
-  $('protected-amount').textContent = plainEth(BigInt(state.balance || 0) - unprotected);
+  $('held-deposits').textContent = plainEth(p.deposits);
+  $('collateral-amount').textContent = plainEth(p.collateral);
+  $('protected-amount').textContent = plainEth(p.covered);
   $('collateral-rate').textContent = rate === null ? '—' : `${rateText(rate)} once`;
-  $('balance-protection').textContent =
-    unprotected > 0n
-      ? `${plainEth(unprotected)} ETH of your balance is winnings above them, which the bankroll pays only as it has the cash until you lock it in under Recovery or buy collateral for it.`
-      : `All of your balance is protected${spare > 0n ? `, and ${plainEth(spare)} ETH more that you win would be too` : ''}.`;
+  $('balance-protection').textContent = [
+    missing > 0n
+      ? `${plainEth(missing)} ETH of your balance is deposits the chain does not hold: a close is owed them only once they land again.`
+      : '',
+    uncovered > 0n
+      ? `${plainEth(uncovered)} ETH of your balance is winnings above them, which the bankroll pays only as it has the cash until you lock it in under Recovery or buy collateral for it.`
+      : `${missing > 0n ? 'The rest' : 'All'} of your balance is protected${spare > 0n ? `, and ${plainEth(spare)} ETH more that you win would be too` : ''}.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
   const button = $<HTMLButtonElement>('buy-collateral');
   button.disabled = uiBusy || wallet.busy || !wallet.funded || rate === null || !amount || Boolean(buying);
   button.textContent =
@@ -933,7 +939,7 @@ function renderRecovery() {
   $<HTMLButtonElement>('channel-export').disabled = !(wallet.channel || wallet.closingChannel) || busy;
   // Locking in moves winnings into the deposits: with all of the balance protected, there is nothing to lock in.
   $<HTMLButtonElement>('channel-lock').disabled =
-    !open || BigInt(state.unprotected || 0) === 0n || Boolean(wallet.pending) || busy;
+    !open || !BigInt(state.protection?.uncovered || 0) || Boolean(wallet.pending) || busy;
   $<HTMLButtonElement>('channel-start-close').disabled =
     Number(state.channelStatus) !== 1 || Boolean(wallet.transactionIntent) || busy;
   $('channel-start-close').textContent =

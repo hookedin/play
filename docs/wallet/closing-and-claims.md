@@ -14,9 +14,12 @@ under **Protection**, what the contract still owes you under **Waiting to be pai
 ## Collateral
 
 **Protection**, on the Wallet page, shows what the contract holds for your balance: your deposits, and collateral, the
-casino's cash locked into your channel. How much of your balance they protect, and how much more you could win and
-have protected, is beside them, after any withdrawal not yet recorded on-chain, which they pay first. What your balance
-holds above them is winnings, which only house cash pays.
+casino's cash locked into your channel. They are shown as the contract leaves them once it has recorded every
+withdrawal it still owes, which it pays out of them by [its rule](#withdraw); a withdrawal made on another device, whose
+proof this browser does not hold, is counted as paid out of all your deposits. How much of your balance they protect,
+and how much more you could win and have protected, is beside them. What your balance holds above them is winnings,
+which only house cash pays, and a deposit it took in that a reorganisation of the chain undid is shown apart: a close
+is owed it only once it lands again.
 
 Collateral protects what you win before you win it. The casino offers it at its rate, a share of the amount paid once,
 which Protection shows. Enter an amount and **Buy for … ETH**: the wallet asks the casino for an offer, checks its

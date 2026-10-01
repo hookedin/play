@@ -32,6 +32,8 @@ import {
   KIND,
   assertProtocol,
   owed,
+  protection,
+  withdrawalRecorded,
   disputedStep,
 } from '../protocol/protocol.ts';
 import {
@@ -572,21 +574,31 @@ export class CasinoWallet extends GameSessions {
     this.render();
     return this.profile;
   }
+  /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
+   * checkpoint took in: those this browser made, from their proofs, and any made on another device, whose proof is not
+   * here, taken to draw on every deposit. */
+  owing(c: WalletChannel) {
+    const proven = this.history
+        .map(entry => entry.withdrawal && entry.proof)
+        .filter(
+          proof =>
+            proof &&
+            same(proof.step.operation.channelId, c.state.channelId) &&
+            !withdrawalRecorded(c.onchain.claimed, proof),
+        )
+        .sort((a, b) => (BigInt(a.base.withdrawn) < BigInt(b.base.withdrawn) ? -1 : 1))
+        .map(proof => ({ amount: proof.step.operation.amount, deposited: proof.base.deposited })),
+      unproven =
+        BigInt(c.state.withdrawn) - BigInt(c.onchain.claimed) - proven.reduce((n, w) => n + BigInt(w.amount), 0n);
+    return unproven > 0n ? [{ amount: unproven, deposited: c.onchain.deposited }, ...proven] : proven;
+  }
   render() {
     const c = this.channel,
       closing = this.closingChannel,
       open = c && Number(c.onchain?.status) === 1,
       // Deposited into the open channel and not taken into its balance yet: the player's all the same.
       arriving = open ? BigInt(c.onchain.deposited) - BigInt(c.state.deposited) : 0n,
-      balance = open ? BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n) : 0n,
-      // What the channel's deposits and collateral cover of what its close would be owed, the withdrawals not yet
-      // recorded included, which the contract pays out of them first: what is left uncovered is the balance's
-      // winnings, which only house cash pays.
-      uncovered = open
-        ? owed(c.state, c.onchain.deposited, c.onchain.claimed) -
-          BigInt(c.onchain.principal) -
-          BigInt(c.onchain.collateral)
-        : 0n;
+      balance = open ? BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n) : 0n;
     this.publicState = {
       address: this.address,
       balance: String(balance),
@@ -597,9 +609,8 @@ export class CasinoWallet extends GameSessions {
       // The deposits the contract still holds for this balance, and the collateral locked into it.
       principal: open ? c.onchain.principal : '0',
       collateral: open ? c.onchain.collateral : '0',
-      // How much of the balance they leave unprotected, and how much more it could win and have protected.
-      unprotected: String(uncovered <= 0n ? 0n : uncovered < balance ? uncovered : balance),
-      spare: String(uncovered < 0n ? -uncovered : 0n),
+      // What protects the balance once the contract has recorded the withdrawals it owes.
+      protection: open ? plain(protection(c.state, c.onchain, this.owing(c))) : null,
       // What collateral costs at the casino, in millionths of the amount; none while the casino offers none.
       collateralRate: this.recoveryOnly ? null : (this.config?.collateralRate ?? null),
       // The collateral offer waiting for ETH at the address.

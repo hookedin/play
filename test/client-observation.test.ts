@@ -335,17 +335,36 @@ test('an action waits for the optional storage commit without being rejected as 
   assert.equal(ran, true);
 });
 
-test('a withdrawal not yet recorded counts against the deposits and collateral that protect the balance', () => {
+test("the balance's protection follows the contract's rule for the withdrawals it has not recorded yet", () => {
   const wallet = observingWallet(),
     c = wallet.channel!;
-  // 100 deposited, 100 of collateral bought, 50 withdrawn and not recorded on-chain.
-  c.state = { ...c.state, balance: '50', deposited: '100', withdrawn: '50' };
-  c.onchain = { ...c.onchain, deposited: '100', principal: '100', collateral: '100' };
-  const protection = () => [wallet.render().unprotected, wallet.render().spare];
-  assert.deepEqual(protection(), ['0', '100']);
-  // Won up to 200: recording the withdrawal leaves 150 of deposits and collateral, so 50 of it is unprotected.
-  c.state.balance = '200';
-  assert.deepEqual(protection(), ['50', '0']);
-  c.onchain = { ...c.onchain, principal: '50', claimed: '50' };
-  assert.deepEqual(protection(), ['50', '0']);
+  /** What the balance shows as covered, uncovered, missing and spare, with the channel's checkpoint and on-chain record
+   * and the withdrawals this browser made. */
+  const protection = (state: any, onchain: any, withdrawals: [amount: string, base: any][] = []) => {
+    c.state = { ...c.state, ...state };
+    c.onchain = { ...c.onchain, ...onchain };
+    wallet.history = withdrawals.map(([amount, base], i) => ({
+      withdrawal: id('withdrawal ' + i),
+      proof: { base, step: { operation: { channelId: ACTIVE, amount } } },
+    }));
+    const { covered, uncovered, missing, spare } = wallet.render().protection;
+    return [covered, uncovered, missing, spare].map(Number);
+  };
+  // 100 deposited, 100 of collateral bought, 50 withdrawn and not recorded: they pay it out of the deposits first.
+  const fifty: [string, any][] = [['50', { withdrawn: '0', deposited: '100' }]];
+  let onchain = { deposited: '100', principal: '100', collateral: '100', claimed: '0' };
+  assert.deepEqual(protection({ balance: '50', deposited: '100', withdrawn: '50' }, onchain, fifty), [50, 0, 0, 100]);
+  // Won up to 200: 150 is left to protect it, and it stays so once the withdrawal is recorded.
+  assert.deepEqual(protection({ balance: '200' }, onchain, fifty), [150, 50, 0, 0]);
+  assert.deepEqual(protection({}, { principal: '50', claimed: '50' }, fifty), [150, 50, 0, 0]);
+  // 100 deposited and 200 won, 250 withdrawn and not recorded, then 100 more deposited and taken in: the withdrawal is
+  // paid out of only the 100 its checkpoint took in, and the later deposit stays protected.
+  const late: [string, any][] = [['250', { withdrawn: '0', deposited: '100' }]];
+  onchain = { deposited: '200', principal: '200', collateral: '0', claimed: '0' };
+  assert.deepEqual(protection({ balance: '150', deposited: '200', withdrawn: '250' }, onchain, late), [100, 50, 0, 0]);
+  // Made on another device, its proof is not here: it is taken to draw on every deposit.
+  assert.deepEqual(protection({}, onchain), [0, 150, 0, 0]);
+  // A deposit the balance took in that a reorganisation took off the chain is shown apart, never as protected.
+  onchain = { deposited: '1', principal: '1', collateral: '0', claimed: '0' };
+  assert.deepEqual(protection({ balance: '101', deposited: '101', withdrawn: '0' }, onchain), [1, 0, 100, 0]);
 });

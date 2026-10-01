@@ -39,6 +39,7 @@ import {
   hashState,
   QUOTE_TYPES,
   OFFER_TYPES,
+  protection,
 } from '../protocol/protocol.ts';
 import { admits, MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 
@@ -287,6 +288,49 @@ test('a withdrawal draws only on the deposits its checkpoint took in, so a depos
   const c = await f.contract.channels(other.opening.channelId);
   assert.deepEqual([c.deposited, c.principal], [3000n, 2000n]);
   assert.equal(await f.contract.withdrawableHouse(), 0n);
+});
+
+test('what the wallet shows protecting a balance is what the close protects once the withdrawals it owes are recorded', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, buyer] = env.wallets,
+    recipient = Wallet.createRandom().address,
+    now = BigInt((await env.provider.getBlock('latest'))!.timestamp),
+    after = async (ch: any, result: any) => ({
+      ...ch,
+      state: result.state,
+      evidence: await countersigned(f, ch, result),
+    });
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  // 100 deposited, 50 of collateral bought and 200 won; 250 withdrawn, then 100 more deposited and taken in, 20
+  // withdrawn, 30 more deposited and not taken in, and 100 more won. Neither withdrawal is recorded yet.
+  let ch: any = await open(f, a, 100n);
+  await (await offered(f, ch.opening.channelId, 50n, 0n, now + 3600n)).buy(buyer);
+  ch = { ...ch, ...(await signedIncrease(f, ch, 200n)) };
+  const first = await step(f, ch, 5, 250n, { recipient });
+  ch = await after(ch, first);
+  await (await f.contract.connect(a).deposit(a.address, { value: 100n })).wait();
+  ch = await after(ch, await step(f, ch, 4, 100n));
+  const second = await step(f, ch, 5, 20n, { recipient });
+  ch = await after(ch, second);
+  await (await f.contract.connect(a).deposit(a.address, { value: 30n })).wait();
+  ch = { ...ch, ...(await signedIncrease(f, ch, 100n)) };
+  const shown = protection(
+    ch.state,
+    await f.contract.channels(ch.opening.channelId),
+    [first, second].map(({ evidence }) => ({
+      amount: evidence.step.operation.amount,
+      deposited: evidence.base.deposited,
+    })),
+  );
+  // The first is paid out of the 100 its checkpoint took in and the collateral, the second out of the later deposit,
+  // and the rest of the deposits protect the balance of 260.
+  assert.deepEqual([shown.covered, shown.uncovered, shown.missing, shown.spare], [110n, 150n, 0n, 0n]);
+  for (const { evidence } of [first, second]) await (await f.contract.withdraw(evidence)).wait();
+  await forceClose(f, env, ch);
+  const close = await claimOf(f, ch.opening.channelId);
+  assert.deepEqual([close.protectedRemaining, close.winningsRemaining], [shown.covered, shown.uncovered]);
 });
 
 test("anyone buys the casino's collateral offer for a channel, once and before it expires, and it pays the channel's winnings before house cash", async t => {
