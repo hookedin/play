@@ -114,7 +114,7 @@ The casino keeps the tally for the publishing account's address, and a HookedIn 
 ([open the wallet](../wallet/getting-started.md#open-the-wallet)) collects it by itself, with a balance open, as a
 credit that account signs into its balance. Nobody at the casino approves or sends anything, nothing moves on-chain,
 and the bankroll does not change: money the casino owed you becomes your signed balance, which settles like any other
-([closing and claims](../wallet/closing-and-claims.md)). The Wallet page shows what your games have earned and how much
+([closing and claims](../wallet/closing-and-claims.md)). The wallet shows, under your balance, what your games have earned and how much
 of it is collected.
 
 Every developer's totals are public: [`GET /api/status`](../casino-api/public.md#get-apistatus) lists them under

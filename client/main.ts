@@ -119,7 +119,7 @@ const wallet = new CasinoWallet({
   onChange: () => renderWallet(),
   onProgress: message => {
     $('operation-text').textContent = message;
-    $('operation-status').classList.remove('hidden');
+    showOnTop($('operation-status'));
     clearTimeout(statusTimer);
     statusTimer = undefined;
   },
@@ -131,24 +131,26 @@ const wallet = new CasinoWallet({
   },
 });
 
-function withdrawalFromChannel() {
-  return (
-    Number(wallet.publicState.channelStatus) === 1 &&
-    !wallet.channel?.closing &&
-    $<HTMLSelectElement>('withdraw-source').value !== 'address'
-  );
-}
-function withdrawalRequest() {
-  const channel = withdrawalFromChannel();
-  return validateWithdrawal({
+/** A withdrawal from the open balance, as Withdraw has it. */
+const withdrawalRequest = () =>
+  validateWithdrawal({
     destination: $<HTMLInputElement>('withdraw-to').value,
     ownAddress: wallet.address,
     contractAddress: wallet.config.contractAddress,
     amount: $<HTMLInputElement>('withdraw-amount').value,
-    maximum: channel ? wallet.withdrawable() : BigInt(wallet.publicState.nativeBalance || 0),
-    channel,
+    maximum: wallet.withdrawable(),
+    channel: true,
   });
-}
+/** Everything at the deposit address, to the address Settings names. */
+const addressSendRequest = () =>
+  validateWithdrawal({
+    destination: $<HTMLInputElement>('address-send-to').value,
+    ownAddress: wallet.address,
+    contractAddress: wallet.config.contractAddress,
+    amount: '',
+    maximum: BigInt(wallet.publicState.nativeBalance || 0),
+    channel: false,
+  });
 let safetyAccount = '',
   depositURI = '';
 /** Whether the player has this account's key outside this browser: a passkey, a key file or their own import. */
@@ -183,8 +185,7 @@ function renderSafety() {
     $<HTMLTextAreaElement>('exported-key').value = '';
     $('exported-key').classList.add('hidden');
     $('export-key').textContent = "Show this wallet's private key";
-    for (const id of ['withdraw-to', 'withdraw-amount']) $<HTMLInputElement>(id).value = '';
-    $<HTMLSelectElement>('withdraw-source').value = 'balance';
+    for (const id of ['withdraw-to', 'withdraw-amount', 'address-send-to']) $<HTMLInputElement>(id).value = '';
     $<HTMLInputElement>('withdraw-into').checked = false;
     $<HTMLInputElement>('limit-deposit').value = limits.deposit === null ? '' : ether(limits.deposit);
     $<HTMLInputElement>('limit-loss').value = limits.loss === null ? '' : ether(limits.loss);
@@ -194,7 +195,7 @@ function renderSafety() {
   $('deposit-save').hidden = saved;
   $('deposit-ready').hidden = !saved;
   $('key-status').textContent = saved
-    ? 'Saved. Sign in with your passkey, or import your key under Accounts, to open this account on another device.'
+    ? 'Saved. Sign in with your passkey, or import your key, to open this account on another device.'
     : "This account's key is only in this browser. Save it with a passkey or a key file before you deposit.";
   for (const button of document.querySelectorAll<HTMLElement>('[data-key="create"], #menu-sign-in'))
     button.hidden = saved;
@@ -244,17 +245,22 @@ act(
   'pause-play',
   async () => {
     await wallet.pausePlay(Number($<HTMLSelectElement>('play-pause').value));
-    closeGame();
+    abandonGame();
   },
   'Your break has started. You can still withdraw or recover your balance.',
 );
 
+/** Show a notice above everything, an open dialog too: the top layer stacks in the order things are shown. */
+function showOnTop(notice: HTMLElement) {
+  if (notice.matches(':popover-open')) notice.hidePopover();
+  notice.showPopover();
+}
 function toast(message: string, error = false) {
   $('toast').textContent = message;
   $('toast').classList.toggle('error', error);
-  $('toast').classList.remove('hidden');
+  showOnTop($('toast'));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $('toast').classList.add('hidden'), error ? 7500 : 4500);
+  toastTimer = setTimeout(() => $('toast').hidePopover(), error ? 7500 : 4500);
 }
 
 /** One user action at a time. A background poll holding the wallet finishes first. */
@@ -313,25 +319,31 @@ function closeGame() {
   allowanceLock = null;
   if ($<HTMLDialogElement>('allowance-dialog').open) $<HTMLDialogElement>('allowance-dialog').close('');
 }
-/** The game went away without navigation (a balance or account change): the lobby replaces its URL. */
+/** The game went away without navigation (a balance or account change): the lobby replaces its URL, or the wallet open
+ * over it closes onto the lobby. */
 function abandonGame() {
   closeGame();
   if (!$('page-play').classList.contains('hidden')) {
     showPage('library');
-    history.replaceState(null, '', '/');
+    history.replaceState(null, '', walletRoute() ? location.pathname : '/');
   }
 }
 
 /** The pages with a path of their own, and what they are called. */
 const PAGES: Record<string, { path: string; title: string }> = {
   library: { path: '/', title: 'Games' },
-  wallet: { path: '/wallet', title: 'Wallet' },
   games: { path: '/games', title: 'My games' },
   bets: { path: '/bets', title: 'Bets' },
   bankroll: { path: '/bankroll', title: 'Bankroll' },
-  settings: { path: '/settings', title: 'Settings' },
-  activity: { path: '/activity', title: 'Activity' },
 };
+/** The wallet's tabs, each with a path of its own: Deposit is `/wallet`, the others `/wallet/<tab>`. */
+type WalletTab = 'deposit' | 'withdraw' | 'activity' | 'settings';
+const walletPath = (tab: WalletTab) => (tab === 'deposit' ? '/wallet' : `/wallet/${tab}`);
+/** The wallet tab the URL names, if it names one. */
+function walletRoute() {
+  const target = parseRoute(new URL(location.href));
+  return typeof target === 'object' && 'wallet' in target ? target.wallet : null;
+}
 const gamePath = (route: GameRoute) =>
   'url' in route ? `/games/custom?url=${encodeURIComponent(route.url)}` : `/${route.owner}/${route.name}`;
 /** How a player is written: an alias wears `@`, a uname wears `~`. */
@@ -347,10 +359,6 @@ function showPage(page: string) {
     page === 'library'
       ? 'HookedIn'
       : `${page === 'play' && active ? active.identity.name : page === 'profile' ? $('profile-name').textContent : (PAGES[page]?.title ?? page)} · HookedIn`;
-  if (page === 'activity') {
-    renderActivity();
-    void refreshActivity();
-  }
   if (page === 'bets') renderBets();
   if (page === 'games') {
     renderMyGames();
@@ -407,20 +415,25 @@ function navigate(page: string, push = true, path = PAGES[page]!.path) {
     if (!push) history.pushState(null, '', active.path);
     return toast('Wait for the current operation to finish before leaving the game.', true);
   }
+  $<HTMLDialogElement>('wallet-dialog').close();
   showPage(page);
   closeGame();
   if (push && location.pathname !== path) history.pushState(null, '', path);
 }
-/** Every page has a URL: `/`, `/wallet`, `/games`, `/bets`, `/bankroll`, `/settings`, `/activity`, `/@<alias>` or
- * `/~<uname>` for a player, the same and `/<game>` for a game they publish, `/games/<key>` for a game's public record,
- * and `/games/custom?url=<url>`. */
-function parseRoute(url: URL): string | GameRoute | { profile: string } | { record: string } | { unknown: string } {
+/** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<alias>` or `/~<uname>` for a player, the same and
+ * `/<game>` for a game they publish, `/games/<key>` for a game's public record, and `/games/custom?url=<url>`; and the
+ * wallet over a page, `/wallet` and `/wallet/<tab>`. */
+function parseRoute(
+  url: URL,
+): string | GameRoute | { profile: string } | { record: string } | { wallet: WalletTab } | { unknown: string } {
   // A player's sigil survives a link that encodes it: `encodeURIComponent` writes `@` as `%40`, and the
   // static host decodes the path the same way before it serves this page.
   let pathname = url.pathname;
   try {
     pathname = decodeURIComponent(pathname);
   } catch {}
+  const tab = /^\/wallet(?:\/(withdraw|activity|settings))?$/.exec(pathname);
+  if (tab) return { wallet: (tab[1] ?? 'deposit') as WalletTab };
   const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
@@ -430,6 +443,9 @@ function parseRoute(url: URL): string | GameRoute | { profile: string } | { reco
 }
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
+  if (typeof target === 'object' && 'wallet' in target) return showWallet(target.wallet);
+  // Anywhere else, the wallet is closed.
+  $<HTMLDialogElement>('wallet-dialog').close();
   if (typeof target === 'string') return navigate(target, push);
   if ('unknown' in target) {
     navigate('library', false, '/');
@@ -439,7 +455,14 @@ async function route(push = false) {
   if ('profile' in target) return void openProfile(target.profile, push);
   if ('record' in target) return void openGameRecord(target.record, push);
   if (active && active.path === gamePath(target)) return showPage('play');
-  const opened = await task(async () => {
+  if (!(await openGame(target, push))) {
+    showPage('library');
+    history.replaceState(null, '', '/');
+  }
+}
+/** Open the game a route names: true once it is open. */
+const openGame = (target: GameRoute, push = false) =>
+  task(async () => {
     if ('url' in target) await loadGame(target.url, target, push);
     else {
       const published = await wallet.api(`/api/players/${target.owner}/${target.name}`);
@@ -448,11 +471,6 @@ async function route(push = false) {
     }
     return true;
   });
-  if (!opened) {
-    showPage('library');
-    history.replaceState(null, '', '/');
-  }
-}
 
 /** The total wallet balance stays visible while games display their own allowance. */
 function renderMoney() {
@@ -472,7 +490,8 @@ function renderGameAccount() {
   if (active.uname !== undefined && wallet.uname !== active.uname) {
     active.uname = undefined;
     active.pushed = null;
-    active.frame.src = active.frame.src;
+    // In place of its history entry: Back still leaves the game, and a close of the wallet over it comes back to it.
+    active.frame.contentWindow?.location.replace(active.frame.src);
   }
   if ($<HTMLDialogElement>('allowance-dialog').open) renderAllowanceDialog();
   // The game's own allowance view follows the wallet: top-ups and recoveries push without polling.
@@ -559,26 +578,34 @@ function openAllowanceDialog(amount?: bigint) {
   });
 }
 
-// --- The wallet: the balance, what comes in at the deposit address, and withdrawals -----------------------
+// --- The wallet: the balance, what comes in at the deposit address, withdrawals, activity and settings ----------
 
-type WalletTab = 'deposit' | 'withdraw';
-/** The wallet's dialog, on one of its tabs, and why it opened when it was not the player's own click. */
+let walletTab: WalletTab = 'deposit';
+/** The wallet's dialog on one of its tabs, over the page it opens on, and why it opened when it was not the player's own
+ * click. Opening it is a step in the history, which closing it goes back from. */
 function openWallet(tab: WalletTab = 'deposit', reason = '') {
   $('account-menu').hidePopover?.();
   $('wallet-reason').textContent = reason;
   $('wallet-reason').hidden = !reason;
-  selectTab(tab);
-  const dialog = $<HTMLDialogElement>('wallet-dialog');
-  if (!dialog.open) dialog.showModal();
-  renderWallet();
+  if (!$<HTMLDialogElement>('wallet-dialog').open) history.pushState({ over: true }, '', walletPath(tab));
+  showWallet(tab);
 }
-function selectTab(tab: WalletTab) {
+/** The wallet on `tab`. A tab has a path, but no step in the history of its own: Back closes the wallet. */
+function showWallet(tab: WalletTab) {
+  walletTab = tab;
+  if (location.pathname !== walletPath(tab)) history.replaceState(history.state, '', walletPath(tab));
+  document.title = 'Wallet · HookedIn';
   for (const button of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-tab]'))
     button.setAttribute('aria-selected', String(button.dataset.tab === tab));
   for (const panel of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-panel]'))
     panel.hidden = panel.dataset.panel !== tab;
+  const dialog = $<HTMLDialogElement>('wallet-dialog');
+  if (!dialog.open) dialog.showModal();
+  dialog.scrollTop = 0;
   // What sending a withdrawal costs now, for Max and the help to count with.
   if (tab === 'withdraw' && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
+  if (tab === 'activity') void refreshActivity();
+  renderWallet();
 }
 /** Once money has moved, the wallet has done its work. */
 function funded(message: string) {
@@ -601,13 +628,13 @@ function renderWallet() {
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
     status = Number(state.channelStatus),
     closing = status === 2 || Boolean(wallet.channel?.closing);
-  for (const id of ['balance-amount', 'sheet-balance']) $(id).textContent = plainEth(balance);
+  $('balance-amount').textContent = plainEth(balance);
   renderCollateral();
   renderSafety();
   $('balance-note').textContent = arriving
     ? `${plainEth(arriving)} ETH of it is on its way into your balance.`
     : state.closingChannelId && !state.channelId
-      ? 'Your last balance is closing: finish the close under Recovery once its 24 hours are up, and collect it. A deposit opens your next balance.'
+      ? 'Your last balance is closing: finish the close under Settings → Recovery once its 24 hours are up, and collect it. A deposit opens your next balance.'
       : loan
         ? `What games play with. The casino lent you the ${plainEth(loan)} ETH network fee of your deposits: your next withdrawal pays it back.`
         : 'What games play with.';
@@ -650,53 +677,57 @@ function renderWallet() {
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
 
-  // Withdraw: part of the signed balance, or all of it with Max, which the casino then pays to the address entered; or
-  // what the deposit address holds, which is all there is with no balance open.
-  const c = withdrawalFromChannel() ? wallet.channel : null,
+  // Withdraw: part of the signed balance, or all of it with Max, which the casino then pays to the address entered.
+  const open = status === 1 && !closing,
     request = withdrawalRequest(),
-    amount = request.amount;
-  $('withdraw-source-field').hidden = status !== 1 || closing;
-  $('withdraw-amount-field').classList.toggle('hidden', !c);
-  $('withdraw-max').classList.toggle('hidden', !c);
-  $('withdraw-into-field').classList.toggle('hidden', !c);
-  const into = Boolean(c) && $<HTMLInputElement>('withdraw-into').checked,
+    amount = request.amount,
+    into = $<HTMLInputElement>('withdraw-into').checked,
     // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
     charges = [
       wallet.withdrawalFee ? `the casino ${plainEth(wallet.withdrawalFee)} ETH for sending it` : '',
       loan ? `back the ${plainEth(loan)} ETH network fee the casino lent you` : '',
     ].filter(Boolean);
-  // A withdrawal from the balance signs the casino's fee only once it is shown.
+  $('withdraw-form').classList.toggle('hidden', !open);
+  // A withdrawal signs the casino's fee only once it is shown.
   $<HTMLButtonElement>('withdraw').disabled =
     busy ||
     !ready ||
-    Boolean(c && !wallet.withdrawalFee) ||
+    !open ||
+    !wallet.withdrawalFee ||
     Boolean(request.error) ||
     Boolean(wallet.transactionIntent) ||
-    Boolean(c && wallet.pending) ||
-    Boolean(c && wallet.recoveryOnly);
-  $('withdraw').textContent =
-    amount !== null
-      ? `${into ? 'Transfer' : 'Withdraw'} ${ether(amount)} ETH`
-      : c
-        ? into
-          ? 'Transfer'
-          : 'Withdraw'
-        : 'Withdraw address funds';
+    Boolean(wallet.pending) ||
+    wallet.recoveryOnly;
+  $('withdraw').textContent = `${into ? 'Transfer' : 'Withdraw'}${amount === null ? '' : ` ${ether(amount)} ETH`}`;
   $('withdraw-help').textContent = !ready
     ? 'Connecting to your wallet…'
-    : wallet.channel && closing && !atAddress
-      ? 'Your balance is closing: once its 24-hour window ends, finish the close under Recovery and collect it.'
-      : c && wallet.recoveryOnly
-        ? 'The casino is unavailable: close without it under Wallet → Recovery.'
-        : c && inbound(wallet.pending?.kind)
-          ? 'A deposit is on its way into your balance. Withdraw once it has arrived.'
-          : wallet.transactionIntent || (c && wallet.pending)
-            ? 'Finish the operation in flight first.'
-            : request.error ||
-              (c
-                ? `${into ? "That account's HookedIn balance receives" : 'The address receives'} ${ether(amount!)} ETH.${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`
-                : 'All ETH at your deposit address is sent, less the network fee. This does not withdraw your balance. Keep enough gas at this address if you need recovery transactions.');
-  $('withdraw-help').classList.toggle('check-failed', Boolean(request.error));
+    : closing
+      ? 'Your balance is closing: once its 24-hour window ends, finish the close under Settings → Recovery and collect it.'
+      : !open
+        ? 'No balance is open: your first deposit opens one.'
+        : wallet.recoveryOnly
+          ? 'The casino is unavailable: close without it under Settings → Recovery.'
+          : inbound(wallet.pending?.kind)
+            ? 'A deposit is on its way into your balance. Withdraw once it has arrived.'
+            : wallet.transactionIntent || wallet.pending
+              ? 'Finish the operation in flight first.'
+              : request.error ||
+                `${into ? "That account's HookedIn balance receives" : 'The address receives'} ${ether(amount!)} ETH.${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`;
+  $('withdraw-help').classList.toggle('check-failed', open && Boolean(request.error));
+
+  // Settings → Deposits: everything at the deposit address, out to another address.
+  const send = addressSendRequest(),
+    typed = Boolean($<HTMLInputElement>('address-send-to').value.trim());
+  $<HTMLButtonElement>('address-send').disabled =
+    busy || !ready || !observed || Boolean(send.error) || Boolean(wallet.transactionIntent);
+  $('address-send-help').textContent = !observed
+    ? 'Checking your deposit address…'
+    : !atAddress
+      ? 'Your deposit address is empty.'
+      : typed && send.error
+        ? send.error
+        : `Your deposit address holds ${plainEth(atAddress)} ETH. Check the full address before confirming.`;
+  $('address-send-help').classList.toggle('check-failed', typed && Boolean(send.error));
 
   $('pending-banner').classList.toggle(
     'hidden',
@@ -735,15 +766,15 @@ function renderWallet() {
   accounts.disabled = busy;
   $<HTMLButtonElement>('select-saved-wallet').disabled = busy || !addresses.length;
   // The notice of what the wallet was doing goes a moment after it is done, however often the page renders meanwhile.
-  if (!busy && !statusTimer && !$('operation-status').classList.contains('hidden'))
+  if (!busy && !statusTimer && $('operation-status').matches(':popover-open'))
     statusTimer = setTimeout(() => {
-      $('operation-status').classList.add('hidden');
+      $('operation-status').hidePopover();
       statusTimer = undefined;
     }, 2200);
   if (!$('page-bets').classList.contains('hidden')) renderBets();
   if (!$('page-games').classList.contains('hidden')) renderMyGames();
   renderDeveloperBets();
-  if (!$('page-activity').classList.contains('hidden')) renderActivity();
+  if (walletTab === 'activity' && $<HTMLDialogElement>('wallet-dialog').open) renderActivity();
   renderClaims();
   renderRecovery();
   renderGameAccount();
@@ -978,7 +1009,7 @@ function renderRecovery() {
   $('channel-start-close').textContent =
     wallet.channel?.closing && Number(state.channelStatus) === 1 ? 'Retry close' : 'Close without the casino';
   $('recovery-gas').textContent =
-    `Your deposit address holds ${plainEth(state.nativeBalance || 0)} ETH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; change this in Settings when ready.' : ''}`;
+    `Your deposit address holds ${plainEth(state.nativeBalance || 0)} ETH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; turn them back on under Deposits when ready.' : ''}`;
   $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
   $<HTMLButtonElement>('channel-finalize').disabled = !closing || Date.now() / 1000 < deadline || busy;
 }
@@ -1688,13 +1719,27 @@ $<HTMLButtonElement>('allowance-deposit').addEventListener('click', () => {
   openWallet('deposit');
 });
 for (const id of ['wallet-button', 'hero-deposit']) $(id).addEventListener('click', () => openWallet('deposit'));
-for (const button of document.querySelectorAll<HTMLElement>('[data-wallet-tab]'))
-  button.addEventListener('click', () => openWallet(button.dataset.walletTab as WalletTab));
+for (const link of document.querySelectorAll<HTMLElement>('[data-wallet-tab]'))
+  link.addEventListener('click', event => {
+    event.preventDefault();
+    openWallet(link.dataset.walletTab as WalletTab);
+  });
 for (const button of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-tab]'))
-  button.addEventListener('click', () => selectTab(button.dataset.tab as WalletTab));
+  button.addEventListener('click', () => showWallet(button.dataset.tab as WalletTab));
 $('wallet-dialog')
   .querySelector('[data-close]')!
   .addEventListener('click', () => $<HTMLDialogElement>('wallet-dialog').close());
+// The player closed the wallet, where a route did not: the page it opened over comes back, as Back brings it, or the
+// lobby, under a wallet opened by its link.
+$('wallet-dialog').addEventListener('close', () => {
+  $('wallet-reason').hidden = true;
+  if (!walletRoute()) return;
+  if (history.state?.over) history.back();
+  else {
+    history.replaceState(null, '', '/');
+    void route();
+  }
+});
 $<HTMLInputElement>('allowance-slider').addEventListener('input', () => {
   $<HTMLInputElement>('allowance-amount').value = ether(
     sliderAmount(wallet.playableBalance(), $<HTMLInputElement>('allowance-slider').value),
@@ -1740,7 +1785,7 @@ act('add-to-balance', async () => {
   await wallet.deposit();
   funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
 });
-for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source', 'withdraw-into', 'collateral-buy-amount'])
+for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-into', 'address-send-to', 'collateral-buy-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
   $<HTMLInputElement>('withdraw-amount').value = ether(wallet.withdrawable());
@@ -1748,12 +1793,11 @@ $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
 });
 act('withdraw', async () => {
   const { to, amount, error } = withdrawalRequest();
-  if (error || !to) throw new Error(error || 'Enter a destination address.');
-  const open = withdrawalFromChannel(),
-    into = open && $<HTMLInputElement>('withdraw-into').checked;
+  if (error || !to || amount === null) throw new Error(error || 'Enter a destination address.');
+  const into = $<HTMLInputElement>('withdraw-into').checked;
   // A partial withdrawal leaves the open game its allowance; a whole one takes back what the game holds.
-  if (open && amount !== null && amount >= wallet.withdrawable()) abandonGame();
-  const receipt = await wallet.withdraw(to, amount ?? undefined, { fromAddress: !open, into });
+  if (amount >= wallet.withdrawable()) abandonGame();
+  const receipt = await wallet.withdraw(to, amount, { into });
   $<HTMLInputElement>('withdraw-to').value = '';
   $<HTMLInputElement>('withdraw-amount').value = '';
   $<HTMLInputElement>('withdraw-into').checked = false;
@@ -1761,10 +1805,15 @@ act('withdraw', async () => {
   toast(
     into
       ? `Transferred ${ether(receipt.amount)} ETH: the contract puts it into the HookedIn balance of ${short(to)}.`
-      : receipt.withdrawal
-        ? `Withdrew ${ether(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
-        : `Withdrew ${ether(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
+      : `Withdrew ${ether(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`,
   );
+});
+act('address-send', async () => {
+  const { to, error } = addressSendRequest();
+  if (error || !to) throw new Error(error || 'Enter a destination address.');
+  const receipt = await wallet.withdrawAddress(to);
+  $<HTMLInputElement>('address-send-to').value = '';
+  toast(`Sent ${ether(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`);
 });
 act('buy-collateral', async () => {
   const amount = ethAmount($<HTMLInputElement>('collateral-buy-amount').value.trim());
@@ -1954,7 +2003,7 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
   button.addEventListener('click', async () => {
     $('account-menu').hidePopover?.();
     const how = button.dataset.key,
-      playing = Boolean(active) && how !== 'file';
+      playing = how === 'file' ? null : (active?.path ?? null);
     await task(async () => {
       if (how === 'file') {
         download(`hookedin-${wallet.address}.txt`, wallet.exportKey() + '\n', 'text/plain');
@@ -1967,8 +2016,8 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
       markSaved();
       toast(how === 'create' ? 'Your wallet is saved with your passkey.' : 'Signed in with your passkey.');
     });
-    // A game open under the account it replaced opens again under this one.
-    if (playing && !active) void route();
+    // A game open under the account it replaced opens again under this one, under the wallet if that is open.
+    if (playing && !active) void openGame(parseRoute(new URL(playing, location.origin)) as GameRoute);
   });
 $('deposit-instructions').textContent =
   `Send test ETH on ${wallet.networkName} to your deposit address, never real ETH`;
@@ -1976,6 +2025,7 @@ $<HTMLAnchorElement>('casino-status').href = casinoURL + '/api/status';
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
 const initialRoute = parseRoute(new URL(location.href));
 showPage(typeof initialRoute === 'string' ? initialRoute : 'library');
+if (typeof initialRoute === 'object' && 'wallet' in initialRoute) showWallet(initialRoute.wallet);
 const startup = Promise.withResolvers<void>();
 /** Games opened by an early click wait here, so their session opens against the started wallet. */
 const walletStarted = startup.promise;
@@ -1991,7 +2041,7 @@ try {
   await wallet.start().finally(startup.resolve);
   if (wallet.recoveryOnly)
     warn(
-      'The casino is unavailable or has changed. Your balance stays safe in the contract: export, close, challenge and collect all work from Wallet → Recovery. Playing and depositing need the casino. Reload to reconnect.',
+      'The casino is unavailable or has changed. Your balance stays safe in the contract: export, close, challenge and collect all work from Wallet → Settings → Recovery. Playing and depositing need the casino. Reload to reconnect.',
     );
   // Everything with ETH waits for the deployment check, and a failed one shows here.
   wallet.verified.catch((error: any) => warn(`${error.shortMessage || error.message} Reload to check again.`));
@@ -2003,6 +2053,6 @@ try {
   await route();
 } catch (error: any) {
   warn(`${error.shortMessage || error.message} Reload this page.`);
-  for (const id of ['setup-wallet', 'add-to-balance', 'withdraw', 'import-wallet'])
+  for (const id of ['setup-wallet', 'add-to-balance', 'withdraw', 'address-send', 'import-wallet'])
     $<HTMLButtonElement>(id).disabled = true;
 }

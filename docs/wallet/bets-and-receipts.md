@@ -88,8 +88,8 @@ Anyone can judge a game by what it has paid, without taking the game's word for 
 
 ## Developer bets
 
-A developer bet's stake is with the game's developer from the moment it is placed. The Wallet page lists your developer
-bets under **Developer bets** until what each was paid has been collected:
+A developer bet's stake is with the game's developer from the moment it is placed. The wallet's Activity tab lists your
+developer bets under **Developer bets** until what each was paid has been collected:
 
 | Status                    | Meaning                                                                       |
 | ------------------------- | ----------------------------------------------------------------------------- |
@@ -106,7 +106,7 @@ balance: the contract protects neither ([trust model](../overview/trust-model.md
 
 ## Activity
 
-**Activity**, `/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, bankroll and
+**Activity**, the wallet's tab at `/wallet/activity`, lists every receipt the wallet keeps, newest first: bets, payments, rejections, bankroll and
 bank movements, withdrawals and transfers, the network fees of deposits the casino lent (**Network fee lent**), and your
 deposits, closes, challenges and collections, each with its operation ID or its transaction and the raw JSON behind it.
 The wallet keeps the latest 100 receipts, and beyond them every receipt still to be settled: a developer bet still open,
@@ -114,7 +114,7 @@ and a withdrawal, transfer or lock-in not yet paid or returned.
 
 A withdrawal is **Withdrawal on its way** until the contract has paid it, and **Withdrawn** after; a transfer is
 **Transfer on its way**, then **Transferred**. Its **Network fee** is what your balance paid the casino for sending it.
-What the contract recorded without the cash to pay it waits under **Waiting to be paid** on the Wallet page
+What the contract recorded without the cash to pay it waits under **Waiting to be paid** in the wallet
 ([claims and collection](closing-and-claims.md#claims-and-collection)), and one nobody sent before its channel's close
 was final is **Withdrawal returned**: the close was owed it back. Each shows its **Withdrawal ID**, the hash of its
 operation, and once recorded the transaction that recorded it. One the casino has not sent offers **Send it now** once

@@ -45,15 +45,15 @@
         <strong id="menu-name">Your account</strong><span id="menu-uname" class="handle"></span>
       </div>
       <a href="/" data-page="library">Games</a>
-      <a href="/wallet" data-page="wallet">Wallet</a>
+      <a href="/wallet" data-wallet-tab="deposit">Wallet</a>
       <a href="/bets" data-page="bets">Bets</a>
-      <a href="/activity" data-page="activity">Activity</a>
+      <a href="/wallet/activity" data-wallet-tab="activity">Activity</a>
       <details>
         <summary>Developer and bankroll</summary>
         <a href="/games" data-page="games">My games</a>
         <a href="/bankroll" data-page="bankroll">Bankroll</a>
       </details>
-      <a href="/settings" data-page="settings">Settings</a>
+      <a href="/wallet/settings" data-wallet-tab="settings">Settings</a>
       <a href="mailto:support@hookedin.com">Contact support</a>
       <button id="menu-sign-in" class="text-button" type="button" data-key="sign-in">Sign in with a passkey</button>
       <a id="menu-profile" href="/" class="hidden">Public profile</a>
@@ -111,108 +111,6 @@
         <div id="frame-slot" class="game-viewport"></div>
       </section>
 
-      <section id="page-wallet" class="page hidden">
-        <h1>Wallet</h1>
-        <div class="money">
-          <div class="money-card balance">
-            <span class="label">Balance</span>
-            <strong><span id="balance-amount">—</span> <small>ETH</small></strong>
-            <span id="balance-note" class="muted">What games play with.</span>
-          </div>
-        </div>
-        <div class="actions">
-          <button class="button primary" type="button" data-wallet-tab="deposit">Deposit</button
-          ><button class="button" type="button" data-wallet-tab="withdraw">Withdraw</button
-          ><a class="text-button" href="/activity" data-page="activity">All activity →</a>
-        </div>
-        <p id="developer-earnings" class="muted hidden"></p>
-        <section id="collateral" class="card" aria-labelledby="collateral-title">
-          <h2 id="collateral-title">Protection</h2>
-          <p class="muted">
-            What the contract holds for your balance: your deposits, and collateral, the casino's cash locked into your
-            balance. Withdrawals are paid out of them first, and collateral pays your winnings before the bankroll does.
-            The casino cannot take it back until your balance closes.
-          </p>
-          <dl class="figures">
-            <div>
-              <dt>Your deposits</dt>
-              <dd><span id="held-deposits">—</span> ETH</dd>
-            </div>
-            <div>
-              <dt>Collateral</dt>
-              <dd><span id="collateral-amount">—</span> ETH</dd>
-            </div>
-            <div>
-              <dt>Protected</dt>
-              <dd><span id="protected-amount">—</span> ETH</dd>
-            </div>
-            <div>
-              <dt>Collateral costs</dt>
-              <dd id="collateral-rate">—</dd>
-            </div>
-          </dl>
-          <p id="balance-protection" class="help"></p>
-          <div class="field-row">
-            <div class="amount-input">
-              <input
-                id="collateral-buy-amount"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="0.01"
-                aria-label="Collateral to buy"
-              /><span>ETH</span>
-            </div>
-            <button id="buy-collateral" class="button" type="button">Buy collateral</button>
-          </div>
-          <p id="collateral-help" class="help"></p>
-        </section>
-        <section id="claims" class="card hidden" aria-labelledby="claims-title">
-          <h2 id="claims-title">Waiting to be paid</h2>
-          <p class="muted">
-            What the contract still owes you: closed balances, and withdrawals it could not pay in full. Winnings are
-            paid as the bankroll has the cash, oldest first.
-          </p>
-          <div id="claim-list" class="claim-list"></div>
-        </section>
-        <section id="developer-bets" class="card hidden" aria-labelledby="developer-bets-title">
-          <div class="section-head">
-            <h2 id="developer-bets-title">Developer bets</h2>
-            <button id="refresh-developer-bets" class="text-button" type="button">Check now ↻</button>
-          </div>
-          <p id="developer-bets-status" class="muted" role="status"></p>
-          <div id="wallet-developer-bets" class="list"></div>
-        </section>
-        <details class="card recovery">
-          <summary>
-            <h2>Recovery</h2>
-            <span class="muted">Lock in, close, challenge and collect</span>
-          </summary>
-          <p id="channel-status" class="mono">No balance open</p>
-          <p id="channel-observation" class="muted"></p>
-          <p id="recovery-gas" class="help"></p>
-          <p id="challenge-deadline" class="muted"></p>
-          <p class="muted">
-            Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
-            challenge that close within 24 hours with your saved evidence. The contract holds your deposits for it: Lock
-            in my balance transfers all of it into your own channel as deposits, the bankroll paying out your winnings,
-            less the casino's fee for sending it and what the casino lent you. Keep a current recovery bundle somewhere
-            safe.
-          </p>
-          <p id="storage-status" class="muted"></p>
-          <div class="actions">
-            <button id="channel-export" class="button small" type="button">Export recovery bundle</button
-            ><button id="keep-storage" class="button small" type="button">Keep this wallet's data</button
-            ><button id="channel-lock" class="button small" type="button">Lock in my balance</button
-            ><button id="channel-start-close" class="button small" type="button">Close without the casino</button
-            ><button id="channel-challenge" class="button small" type="button">Challenge the close</button
-            ><button id="channel-finalize" class="button small" type="button">Finish the close</button>
-          </div>
-          <label for="channel-import">Import a recovery bundle</label>
-          <input id="channel-import" type="file" accept="application/json" />
-        </details>
-      </section>
-
       <section id="page-bets" class="page hidden">
         <div class="page-head">
           <div>
@@ -237,28 +135,6 @@
         </div>
         <div id="bet-list" class="bet-table"></div>
         <p id="bet-empty" class="empty hidden"></p>
-      </section>
-
-      <section id="page-activity" class="page hidden">
-        <div class="page-head">
-          <div>
-            <h1>Activity</h1>
-            <p id="history-status" class="muted" role="status"></p>
-          </div>
-          <button id="refresh-wallet" class="button small" type="button">Refresh ↻</button>
-        </div>
-        <div class="toolbar">
-          <input
-            id="activity-search"
-            type="search"
-            placeholder="Search events, amounts, operation IDs or transactions…"
-            aria-label="Search your activity"
-            autocomplete="off"
-          />
-          <span id="activity-visible-count" class="muted">0 events</span>
-        </div>
-        <div id="activity-list" class="list"></div>
-        <p id="activity-empty" class="empty hidden"></p>
       </section>
 
       <section id="page-games" class="page hidden">
@@ -365,118 +241,6 @@
         </div>
       </section>
 
-      <section id="page-settings" class="page hidden">
-        <h1>Settings</h1>
-        <section class="card" aria-labelledby="play-limits-title">
-          <h2 id="play-limits-title">Play limits and breaks</h2>
-          <p class="muted">
-            These controls apply to this account in this browser, across all games and tabs. They cannot prevent play in
-            another browser or account. Deposit limits cover ETH this browser adds from your deposit address; incoming
-            transfers cannot be blocked. Daily limits reset at 00:00 UTC. Withdrawals and recovery stay available.
-          </p>
-          <form id="play-limits-form">
-            <label for="limit-deposit">Daily deposits (ETH)</label
-            ><input id="limit-deposit" inputmode="decimal" placeholder="No limit" />
-            <label for="limit-loss">Daily losses (ETH)</label
-            ><input id="limit-loss" inputmode="decimal" placeholder="No limit" />
-            <label for="limit-minutes">Session length (minutes)</label
-            ><input id="limit-minutes" type="number" min="1" max="1440" step="1" placeholder="No limit" />
-            <p class="help">
-              A bet must fit within what is left of the daily loss limit. Wins do not undo losses; developer bets and
-              payments count their full stake. Sessions end with a 15-minute break. Lower limits apply now; increases or
-              removal wait 24 hours.
-            </p>
-            <button class="button small" type="submit">Save limits</button>
-          </form>
-          <p id="play-limits-status" class="help" role="status"></p>
-          <label for="play-pause">Pause deposits and play</label>
-          <select id="play-pause">
-            <option value="900000">15 minutes</option>
-            <option value="86400000">24 hours</option>
-            <option value="604800000">7 days</option>
-            <option value="2592000000">30 days</option>
-          </select>
-          <button id="pause-play" class="button small" type="button">Start break</button>
-          <p class="help">
-            A break cannot be shortened. For help, contact
-            <a href="mailto:support@hookedin.com">support@hookedin.com</a>.
-          </p>
-        </section>
-        <section class="card" aria-labelledby="name-title">
-          <h2 id="name-title">Your name</h2>
-          <p class="muted">
-            All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
-            yours for good; an alias, <code>@like-this</code>, is a shorter name you go by instead.
-          </p>
-          <p class="name-line">
-            <a id="wallet-name-link" href="/"><strong id="wallet-name">—</strong></a>
-            <span id="wallet-uname" class="handle"></span>
-          </p>
-          <div class="field-row">
-            <input
-              id="alias-input"
-              type="text"
-              maxlength="20"
-              pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
-              autocomplete="off"
-              placeholder="Choose an alias"
-              aria-label="Alias"
-            /><button id="pick-alias" class="button" type="button">Save alias</button>
-          </div>
-          <p id="alias-note" class="muted"></p>
-          <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
-        </section>
-        <section class="card" aria-labelledby="deposits-title">
-          <h2 id="deposits-title">Deposits</h2>
-          <label class="check"
-            ><input id="auto-deposit" type="checkbox" checked /> Add ETH that arrives at my deposit address to my
-            balance</label
-          >
-          <p class="muted">
-            On, everything that arrives goes in. Adding it costs a network fee, which the casino lends you when it is
-            small next to the deposit and your next withdrawal pays back. Off, it stays at the address, to pay for
-            transactions you send yourself, such as closing without the casino.
-          </p>
-        </section>
-        <section class="card" aria-labelledby="keys-title">
-          <h2 id="keys-title">Your key</h2>
-          <p id="key-status" class="muted"></p>
-          <div class="actions">
-            <button class="button small" type="button" data-key="create">Save with a passkey</button
-            ><button class="button small" type="button" data-key="sign-in">Sign in with a passkey</button
-            ><button class="button small" type="button" data-key="file">Save a key file</button>
-          </div>
-          <p class="muted">
-            A passkey opens this account only on this site. A key file opens it in any copy of this wallet, even one you
-            run yourself.
-          </p>
-          <button id="export-key" class="text-button" type="button">Show this wallet's private key</button>
-          <textarea id="exported-key" class="key-field hidden" readonly aria-label="Private key"></textarea>
-          <p class="muted">
-            Anyone who sees this key can take everything this wallet holds. Never paste it into a site or a message.
-          </p>
-        </section>
-        <section class="card" aria-labelledby="accounts-title">
-          <h2 id="accounts-title">Accounts</h2>
-          <label for="saved-wallets">Accounts saved in this browser</label>
-          <div class="field-row">
-            <select id="saved-wallets"></select
-            ><button id="select-saved-wallet" class="button" type="button">Switch</button>
-          </div>
-          <label for="import-key">Import a private key</label>
-          <div class="field-row">
-            <input id="import-key" type="password" placeholder="0x…" autocomplete="off" /><button
-              id="import-wallet"
-              class="button"
-              type="button"
-            >
-              Import
-            </button>
-          </div>
-          <p class="muted">Switching accounts closes the open game. Save the key of every account you fund.</p>
-        </section>
-      </section>
-
       <section id="page-gamebets" class="page hidden">
         <div class="page-head">
           <div>
@@ -517,23 +281,35 @@
       <a href="https://hookedin.com/docs/" target="_blank" rel="noopener noreferrer">Docs ↗</a>
       <a href="https://github.com/hookedin/play" target="_blank" rel="noopener noreferrer">Source ↗</a>
     </footer>
-    <div id="operation-status" class="operation-status hidden" role="status">
+    <div id="operation-status" class="operation-status" popover="manual" role="status">
       <span class="spinner"></span><span id="operation-text"></span>
     </div>
-    <div id="toast" class="toast hidden" role="alert"></div>
+    <div id="toast" class="toast" popover="manual" role="alert"></div>
 
-    <dialog id="wallet-dialog" class="sheet" aria-labelledby="wallet-title">
+    <dialog id="wallet-dialog" class="sheet wallet-sheet" aria-labelledby="wallet-title">
       <div class="sheet-head">
         <h2 id="wallet-title">Wallet</h2>
         <button class="close" type="button" data-close aria-label="Close">×</button>
       </div>
       <div class="money-card balance sheet-balance">
-        <span class="label">Balance</span><strong><span id="sheet-balance">—</span> <small>ETH</small></strong>
+        <span class="label">Balance</span><strong><span id="balance-amount">—</span> <small>ETH</small></strong>
+        <span id="balance-note" class="muted">What games play with.</span>
+        <span id="developer-earnings" class="muted hidden"></span>
       </div>
       <p id="wallet-reason" class="help" hidden></p>
-      <div class="tabs" role="tablist" aria-label="Move money">
+      <section id="claims" class="claims hidden" aria-labelledby="claims-title">
+        <h3 id="claims-title">Waiting to be paid</h3>
+        <p class="muted">
+          What the contract still owes you: closed balances, and withdrawals it could not pay in full. Winnings are paid
+          as the bankroll has the cash, oldest first.
+        </p>
+        <div id="claim-list" class="claim-list"></div>
+      </section>
+      <div class="tabs" role="tablist" aria-label="Wallet">
         <button role="tab" type="button" data-tab="deposit" aria-selected="true">Deposit</button
-        ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button>
+        ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button
+        ><button role="tab" type="button" data-tab="activity" aria-selected="false">Activity</button
+        ><button role="tab" type="button" data-tab="settings" aria-selected="false">Settings</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
         <div id="deposit-save" class="safety-note">
@@ -581,14 +357,7 @@
         </p>
       </section>
       <section class="tab-panel" data-panel="withdraw" hidden>
-        <div id="withdraw-source-field">
-          <label for="withdraw-source">Withdraw from</label
-          ><select id="withdraw-source">
-            <option value="balance">Balance</option>
-            <option value="address">Deposit address · less network fee</option>
-          </select>
-        </div>
-        <div id="withdraw-amount-field">
+        <div id="withdraw-form">
           <label for="withdraw-amount">Amount (ETH)</label>
           <input
             id="withdraw-amount"
@@ -598,15 +367,237 @@
             placeholder="Enter an amount"
             spellcheck="false"
           />
+          <button id="withdraw-max" class="text-button" type="button">Max</button>
+          <label for="withdraw-to">To</label>
+          <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
+          <label class="check"
+            ><input id="withdraw-into" type="checkbox" /> Put it into that account's HookedIn balance</label
+          >
+          <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         </div>
-        <button id="withdraw-max" class="text-button" type="button">Max</button>
-        <label for="withdraw-to">To</label>
-        <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
-        <label id="withdraw-into-field" class="check"
-          ><input id="withdraw-into" type="checkbox" /> Put it into that account's HookedIn balance</label
-        >
-        <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
+      </section>
+      <section class="tab-panel" data-panel="activity" hidden>
+        <section id="developer-bets" class="setting hidden" aria-labelledby="developer-bets-title">
+          <div class="section-head">
+            <h3 id="developer-bets-title">Developer bets</h3>
+            <button id="refresh-developer-bets" class="text-button" type="button">Check now ↻</button>
+          </div>
+          <p id="developer-bets-status" class="muted" role="status"></p>
+          <div id="wallet-developer-bets" class="list"></div>
+        </section>
+        <div class="toolbar">
+          <input
+            id="activity-search"
+            type="search"
+            placeholder="Search events, amounts, operation IDs or transactions…"
+            aria-label="Search your activity"
+            autocomplete="off"
+          />
+          <span id="activity-visible-count" class="muted">0 events</span>
+          <button id="refresh-wallet" class="text-button" type="button">Refresh ↻</button>
+        </div>
+        <p id="history-status" class="muted" role="status"></p>
+        <div id="activity-list" class="list"></div>
+        <p id="activity-empty" class="empty hidden"></p>
+      </section>
+      <section class="tab-panel" data-panel="settings" hidden>
+        <section class="setting" aria-labelledby="keys-title">
+          <h3 id="keys-title">Backup and keys</h3>
+          <p id="key-status" class="muted"></p>
+          <div class="actions">
+            <button class="button small" type="button" data-key="create">Save with a passkey</button
+            ><button class="button small" type="button" data-key="sign-in">Sign in with a passkey</button
+            ><button class="button small" type="button" data-key="file">Save a key file</button>
+          </div>
+          <p class="muted">
+            A passkey opens this account only on this site. A key file opens it in any copy of this wallet, even one you
+            run yourself.
+          </p>
+          <button id="export-key" class="text-button" type="button">Show this wallet's private key</button>
+          <textarea id="exported-key" class="key-field hidden" readonly aria-label="Private key"></textarea>
+          <p class="muted">
+            Anyone who sees this key can take everything this wallet holds. Never paste it into a site or a message.
+          </p>
+          <label for="saved-wallets">Accounts saved in this browser</label>
+          <div class="field-row">
+            <select id="saved-wallets"></select
+            ><button id="select-saved-wallet" class="button" type="button">Switch</button>
+          </div>
+          <label for="import-key">Import a private key</label>
+          <div class="field-row">
+            <input id="import-key" type="password" placeholder="0x…" autocomplete="off" /><button
+              id="import-wallet"
+              class="button"
+              type="button"
+            >
+              Import
+            </button>
+          </div>
+          <p class="muted">Save the key of every account you fund.</p>
+        </section>
+        <section class="setting" aria-labelledby="deposits-title">
+          <h3 id="deposits-title">Deposits</h3>
+          <label class="check"
+            ><input id="auto-deposit" type="checkbox" checked /> Add ETH that arrives at my deposit address to my
+            balance</label
+          >
+          <p class="muted">
+            On, everything that arrives goes in. Adding it costs a network fee, which the casino lends you when it is
+            small next to the deposit and your next withdrawal pays back. Off, it stays at the address, to pay for
+            transactions you send yourself, such as closing without the casino.
+          </p>
+          <details class="address-send">
+            <summary>Send ETH out of my deposit address</summary>
+            <p class="muted">
+              Everything at your deposit address goes to the address you name, less the network fee. Your balance stays
+              as it is. Closing, challenging and finishing a close without the casino need ETH at this address.
+            </p>
+            <label for="address-send-to">To</label>
+            <div class="field-row">
+              <input id="address-send-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" /><button
+                id="address-send"
+                class="button"
+                type="button"
+              >
+                Send
+              </button>
+            </div>
+            <p id="address-send-help" class="help"></p>
+          </details>
+        </section>
+        <section class="setting" aria-labelledby="play-limits-title">
+          <h3 id="play-limits-title">Play limits and breaks</h3>
+          <p class="muted">
+            These controls apply to this account in this browser, across all games and tabs. They cannot prevent play in
+            another browser or account. Deposit limits cover ETH this browser adds from your deposit address; incoming
+            transfers cannot be blocked. Daily limits reset at 00:00 UTC. Withdrawals and recovery stay available.
+          </p>
+          <form id="play-limits-form">
+            <label for="limit-deposit">Daily deposits (ETH)</label
+            ><input id="limit-deposit" inputmode="decimal" placeholder="No limit" />
+            <label for="limit-loss">Daily losses (ETH)</label
+            ><input id="limit-loss" inputmode="decimal" placeholder="No limit" />
+            <label for="limit-minutes">Session length (minutes)</label
+            ><input id="limit-minutes" type="number" min="1" max="1440" step="1" placeholder="No limit" />
+            <p class="help">
+              A bet must fit within what is left of the daily loss limit. Wins do not undo losses; developer bets and
+              payments count their full stake. Sessions end with a 15-minute break. Lower limits apply now; increases or
+              removal wait 24 hours.
+            </p>
+            <button class="button small" type="submit">Save limits</button>
+          </form>
+          <p id="play-limits-status" class="help" role="status"></p>
+          <label for="play-pause">Pause deposits and play</label>
+          <div class="field-row">
+            <select id="play-pause">
+              <option value="900000">15 minutes</option>
+              <option value="86400000">24 hours</option>
+              <option value="604800000">7 days</option>
+              <option value="2592000000">30 days</option></select
+            ><button id="pause-play" class="button" type="button">Start break</button>
+          </div>
+          <p class="help">
+            A break cannot be shortened. For help, contact
+            <a href="mailto:support@hookedin.com">support@hookedin.com</a>.
+          </p>
+        </section>
+        <section class="setting" aria-labelledby="name-title">
+          <h3 id="name-title">Your name</h3>
+          <p class="muted">
+            All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
+            yours for good; an alias, <code>@like-this</code>, is a shorter name you go by instead.
+          </p>
+          <p class="name-line">
+            <a id="wallet-name-link" href="/"><strong id="wallet-name">—</strong></a>
+            <span id="wallet-uname" class="handle"></span>
+          </p>
+          <div class="field-row">
+            <input
+              id="alias-input"
+              type="text"
+              maxlength="20"
+              pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
+              autocomplete="off"
+              placeholder="Choose an alias"
+              aria-label="Alias"
+            /><button id="pick-alias" class="button" type="button">Save alias</button>
+          </div>
+          <p id="alias-note" class="muted"></p>
+          <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
+        </section>
+        <details id="collateral" class="setting fold">
+          <summary>
+            <h3 id="collateral-title">Protection</h3>
+            <span class="muted">Deposits and collateral</span>
+          </summary>
+          <p class="muted">
+            What the contract holds for your balance: your deposits, and collateral, the casino's cash locked into your
+            balance. Withdrawals are paid out of them first, and collateral pays your winnings before the bankroll does.
+            The casino cannot take it back until your balance closes.
+          </p>
+          <dl class="figures">
+            <div>
+              <dt>Your deposits</dt>
+              <dd><span id="held-deposits">—</span> ETH</dd>
+            </div>
+            <div>
+              <dt>Collateral</dt>
+              <dd><span id="collateral-amount">—</span> ETH</dd>
+            </div>
+            <div>
+              <dt>Protected</dt>
+              <dd><span id="protected-amount">—</span> ETH</dd>
+            </div>
+            <div>
+              <dt>Collateral costs</dt>
+              <dd id="collateral-rate">—</dd>
+            </div>
+          </dl>
+          <p id="balance-protection" class="help"></p>
+          <div class="field-row">
+            <div class="amount-input">
+              <input
+                id="collateral-buy-amount"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="0.01"
+                aria-label="Collateral to buy"
+              /><span>ETH</span>
+            </div>
+            <button id="buy-collateral" class="button" type="button">Buy collateral</button>
+          </div>
+          <p id="collateral-help" class="help"></p>
+        </details>
+        <details class="setting fold recovery">
+          <summary>
+            <h3>Recovery</h3>
+            <span class="muted">Lock in, close, challenge and collect</span>
+          </summary>
+          <p id="channel-status" class="mono">No balance open</p>
+          <p id="channel-observation" class="muted"></p>
+          <p id="recovery-gas" class="help"></p>
+          <p id="challenge-deadline" class="muted"></p>
+          <p class="muted">
+            Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
+            challenge that close within 24 hours with your saved evidence. The contract holds your deposits for it: Lock
+            in my balance transfers all of it into your own channel as deposits, the bankroll paying out your winnings,
+            less the casino's fee for sending it and what the casino lent you. Keep a current recovery bundle somewhere
+            safe.
+          </p>
+          <p id="storage-status" class="muted"></p>
+          <div class="actions">
+            <button id="channel-export" class="button small" type="button">Export recovery bundle</button
+            ><button id="keep-storage" class="button small" type="button">Keep this wallet's data</button
+            ><button id="channel-lock" class="button small" type="button">Lock in my balance</button
+            ><button id="channel-start-close" class="button small" type="button">Close without the casino</button
+            ><button id="channel-challenge" class="button small" type="button">Challenge the close</button
+            ><button id="channel-finalize" class="button small" type="button">Finish the close</button>
+          </div>
+          <label for="channel-import">Import a recovery bundle</label>
+          <input id="channel-import" type="file" accept="application/json" />
+        </details>
       </section>
     </dialog>
 

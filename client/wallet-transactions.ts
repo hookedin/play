@@ -382,7 +382,7 @@ export class WalletTransactions {
     }
   }
   /** Send everything at this account's address, less the network fee, to another address, as a saved transaction like
-   * any other: how Withdraw empties the address. Under the wallet's lock. Returns the withdrawal's record. */
+   * any other: how withdrawAddress empties the address. Under the wallet's lock. Returns the withdrawal's record. */
   async sendAll(this: CasinoWallet, recipient: string) {
     await this.assertNetwork();
     const [fees, balance, gasLimit] = await Promise.all([
@@ -681,18 +681,11 @@ export class WalletTransactions {
    * its fee for sending it, all at once, and the contract makes it a claim once anyone sends the operation and the
    * casino's signature after it, which the casino does straight away: it pays the address, or puts into that account's
    * balance as deposits, what the deposits the balance has taken in and house cash cover, and the rest as house cash
-   * arrives. One the casino cannot pay now is declined, with why. With `fromAddress`, or no balance open, everything at
-   * this account's address goes to the address instead, less the network fee. */
-  async withdraw(this: CasinoWallet, to: string, amount?: Integer, { fromAddress = false, into = false } = {}) {
-    const recipient = getAddress(to.trim());
-    if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
-      throw new Error('A withdrawal cannot pay that address: name another.');
-    const c = this.channel;
-    if (fromAddress || !c || Number(c.onchain?.status) !== 1 || c.closing) {
-      const receipt = await this.exclusive(() => this.sendAll(recipient));
-      await this.refresh();
-      return receipt;
-    }
+   * arrives. One the casino cannot pay now is declined, with why. */
+  async withdraw(this: CasinoWallet, to: string, amount?: Integer, { into = false } = {}) {
+    const recipient = this.recipient(to),
+      c = this.channel;
+    if (!c || Number(c.onchain?.status) !== 1 || c.closing) throw new Error('No balance is open to withdraw from.');
     if (into && same(recipient, this.address)) throw new Error('Lock in your balance under Recovery instead.');
     const fee = await this.signedWithdrawalFee(),
       withdrawable = this.withdrawable(),
@@ -711,6 +704,21 @@ export class WalletTransactions {
     );
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this withdrawal.');
     return receipt;
+  }
+  /** Send everything at this account's address to another address, less the network fee: the way out for ETH that
+   * stays at the address, which never touches the balance. */
+  async withdrawAddress(this: CasinoWallet, to: string) {
+    const recipient = this.recipient(to);
+    const receipt = await this.exclusive(() => this.sendAll(recipient));
+    await this.refresh();
+    return receipt;
+  }
+  /** An address a withdrawal can pay: never the zero address or the contract. */
+  recipient(this: CasinoWallet, to: string) {
+    const recipient = getAddress(to.trim());
+    if (same(recipient, ZeroAddress) || same(recipient, this.config.contractAddress))
+      throw new Error('A withdrawal cannot pay that address: name another.');
+    return recipient;
   }
   /** What a withdrawal or a transfer can take of the open balance: all of it but its loan, which it pays back, and the
    * casino's fee for sending it, as last asked for. */

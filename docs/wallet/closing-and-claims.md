@@ -7,13 +7,13 @@ sidebar:
 
 Your balance is a channel in the HookedIn contract. Withdrawing takes part or all of it out while the channel stays
 open. Without the casino you close the channel alone, with your latest evidence and a 24-hour window, and then collect
-what it is owed. The **Wallet** page, `/wallet`, shows your balance with any money still arriving, what protects it
-under **Protection**, what the contract still owes you under **Waiting to be paid**, your
-[developer bets](bets-and-receipts.md#developer-bets), and **Recovery**.
+what it is owed. The wallet shows your balance with any money still arriving, and what the contract still owes you
+under **Waiting to be paid**; its Settings tab, `/wallet/settings`, shows what protects your balance under
+**Protection**, and **Recovery**.
 
 ## Collateral
 
-**Protection**, on the Wallet page, shows what the contract holds for your balance: your deposits, and collateral, the
+**Protection**, in the wallet's Settings, shows what the contract holds for your balance: your deposits, and collateral, the
 casino's cash locked into your channel. They are shown as the contract leaves them once it has recorded every
 withdrawal it still owes, which it pays out of them by [its rule](#withdraw); a withdrawal made on another device, whose
 proof this browser does not hold, is counted as paid out of all your deposits. How much of your balance they protect,
@@ -41,7 +41,7 @@ and the price is never refunded.
 
 ## Recovery
 
-**Recovery**, at the foot of the Wallet page, shows the channel behind your balance and any older one whose close is
+**Recovery**, at the foot of the wallet's Settings, shows the channel behind your balance and any older one whose close is
 under way: the deposits and collateral the contract holds for it and the sequence of your latest evidence; for a closing one, the
 sequence the close proposes beside yours, how much less it holds, any challenge on its way and the deadline; and when
 the wallet last read the chain. Its actions are the rest of this page and
@@ -177,7 +177,7 @@ Finalizing records a claim for what the close is owed, in two parts:
 A withdrawal or a transfer is a claim too, under its ID, with its protected amount and winnings worked out the same way
 when it is recorded.
 
-**Waiting to be paid**, on the Wallet page, lists every claim of this account that is still owed something, a closed
+**Waiting to be paid**, above the wallet's tabs, lists every claim of this account that is still owed something, a closed
 balance's or a withdrawal's, 20 at a time, those of older channels included, with where it pays, what it is owed and
 what can be collected now:
 

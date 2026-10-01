@@ -674,9 +674,6 @@ main:has(> #page-play:not(.hidden)) {
   font-size: 12px;
   line-height: 1.6;
 }
-#page-wallet .actions .text-button {
-  margin-left: auto;
-}
 
 /* Banners, the notice of what the wallet is doing, and toasts. */
 .banner {
@@ -703,12 +700,11 @@ main:has(> #page-play:not(.hidden)) {
 main:has(> #page-play:not(.hidden)) > .banner {
   margin: 12px 16px;
 }
+/* Popovers, so that they show above an open dialog. */
 .operation-status {
   position: fixed;
-  left: 50%;
-  bottom: 24px;
-  z-index: 30;
-  display: flex;
+  inset: auto auto 24px 50%;
+  margin: 0;
   align-items: center;
   gap: 10px;
   padding: 11px 16px;
@@ -717,8 +713,12 @@ main:has(> #page-play:not(.hidden)) > .banner {
   border-radius: 999px;
   background: #171d2a;
   box-shadow: 0 16px 40px #0009;
+  color: var(--text);
   font-size: 13px;
   white-space: nowrap;
+}
+.operation-status:popover-open {
+  display: flex;
 }
 .spinner {
   width: 14px;
@@ -735,9 +735,8 @@ main:has(> #page-play:not(.hidden)) > .banner {
 }
 .toast {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 40;
+  inset: auto 20px 20px auto;
+  margin: 0;
   max-width: min(420px, calc(100vw - 40px));
   padding: 13px 16px;
   border: 1px solid var(--line-strong);
@@ -745,6 +744,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
   border-radius: 10px;
   background: #171d2a;
   box-shadow: 0 16px 40px #0009;
+  color: var(--text);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -988,6 +988,23 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .sheet.wide {
   width: min(780px, calc(100vw - 24px));
 }
+/* The wallet: held at the top, so its tabs stay where they are whatever a tab shows, and in reach however far it
+ * scrolls. */
+.wallet-sheet {
+  width: min(620px, calc(100vw - 24px));
+  max-height: calc(100dvh - 64px);
+  margin-top: 40px;
+  padding-top: 0;
+}
+.wallet-sheet .sheet-head {
+  padding-top: 20px;
+}
+.wallet-sheet .tabs {
+  position: sticky;
+  top: 10px;
+  z-index: 1;
+  box-shadow: 0 0 0 10px #141925;
+}
 .sheet::backdrop {
   background: #04060bcc;
   backdrop-filter: blur(3px);
@@ -1047,7 +1064,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
   display: flex;
   flex-direction: column;
 }
-/* The wallet dialog: the balance, the address ETH comes in at and what happens to it, and the way out. */
+/* The wallet dialog: the balance, the address ETH comes in at and what happens to it, the way out and the rest. */
 .sheet-balance {
   margin-top: 14px;
   padding: 12px 14px;
@@ -1070,6 +1087,40 @@ main:has(> #page-play:not(.hidden)) > .banner {
   flex: 1;
   font-size: 12px;
   line-height: 1.5;
+}
+#withdraw-form {
+  display: contents;
+}
+.claims {
+  margin-top: 14px;
+}
+.claims > .muted {
+  margin-top: 6px;
+}
+.setting {
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.setting:first-child {
+  border-top: 0;
+}
+.setting > .muted,
+.setting > .help {
+  margin-top: 8px;
+}
+.setting .figures {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.address-send {
+  margin-top: 12px;
+}
+.address-send summary {
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.address-send > .muted {
+  margin-top: 8px;
 }
 #deposit-status {
   font-size: 13px;
@@ -1611,7 +1662,7 @@ button.bet-row:hover {
   flex: 1 1 220px;
   width: auto;
 }
-.recovery summary {
+.fold summary {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -1619,20 +1670,20 @@ button.bet-row:hover {
   list-style: none;
   cursor: pointer;
 }
-.recovery summary::-webkit-details-marker {
+.fold summary::-webkit-details-marker {
   display: none;
 }
-.recovery summary h2::after {
+.fold summary h3::after {
   content: ' +';
   color: var(--accent);
 }
-.recovery[open] summary h2::after {
+.fold[open] summary h3::after {
   content: ' −';
 }
-.recovery[open] summary {
+.fold[open] summary {
   margin-bottom: 14px;
 }
-.recovery > p + p {
+.fold > p + p {
   margin-top: 8px;
 }
 
@@ -1786,14 +1837,14 @@ body:has(#page-play:not(.hidden)) .footer {
     max-width: none;
     border-radius: 16px 16px 0 0;
   }
+  .wallet-sheet {
+    height: calc(100dvh - 24px);
+    max-height: none;
+  }
   .operation-status {
     bottom: 16px;
     max-width: calc(100vw - 32px);
     white-space: normal;
-  }
-  #page-wallet .actions .text-button {
-    margin-left: 0;
-    flex-basis: 100%;
   }
 }
 @media (prefers-reduced-motion: reduce) {

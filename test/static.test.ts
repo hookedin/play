@@ -68,7 +68,7 @@ test('simultaneous tab reloads serve complete files throughout preview rebuilds'
     assert.match(await reply.text(), /<title>Wallet<\/title>/);
     assert.match(reply.headers.get('content-security-policy')!, /default-src 'self'/);
   }
-  const assets = await Promise.all([fetch(base + '/'), fetch(base + '/main.js'), fetch(base + '/settings')]);
+  const assets = await Promise.all([fetch(base + '/'), fetch(base + '/main.js'), fetch(base + '/wallet/settings')]);
   assert.deepEqual(
     assets.map(reply => reply.status),
     [200, 200, 200],
@@ -80,13 +80,12 @@ test('wallet routes resolve to the client page without exposing other files', as
   const base = await serve(t),
     page = await (await fetch(base + '/')).text();
   for (const route of [
-    '/account',
     '/wallet',
+    '/wallet/activity',
+    '/wallet/settings',
     '/games',
     '/bets',
     '/bankroll',
-    '/settings',
-    '/activity',
     '/games/dice',
     '/@hookedin/dice',
     '/%40hookedin/dice',

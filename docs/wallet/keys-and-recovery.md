@@ -12,7 +12,7 @@ key. Your own copy of that state, your evidence, is what lets you settle when th
 ## Your key
 
 The wallet keeps your key in this browser. Before your first deposit, save it, under **Save your wallet** on the Deposit
-tab or **Your key** in Settings:
+tab or **Backup and keys** in Settings:
 
 - **Save with a passkey** makes a passkey for play.hookedin.com, which your device or password manager keeps and syncs
   to your other devices as it does any passkey. The account's key is the passkey's secret for the wallet, its
@@ -20,7 +20,7 @@ tab or **Your key** in Settings:
   passkey** gives the same key wherever the passkey is. Each passkey you make is an account of its own. A passkey works
   only at play.hookedin.com, and only on devices whose passkeys support PRF; the wallet says when they do not.
 - **Save a key file** downloads `hookedin-<address>.txt`, which holds the key itself. **Import a private key**, under
-  Accounts in Settings, opens it in any copy of the wallet, including one you [build yourself](#recovery-mode). Anyone
+  Backup and keys in Settings, opens it in any copy of the wallet, including one you [build yourself](#recovery-mode). Anyone
   who has the file can take everything the account holds.
 
 **Show this wallet's private key** shows the key of the account in use. Nobody can recover a lost key for you.
@@ -44,7 +44,7 @@ could not tell. A current recovery bundle settles your balance without trusting 
 
 ## Recovery bundles
 
-**Export recovery bundle**, under Recovery on the Wallet page, saves `hookedin-channel-<channelId>.json` for your
+**Export recovery bundle**, under Recovery in the wallet's Settings, saves `hookedin-channel-<channelId>.json` for your
 balance's channel, and one for a channel still closing beside it; **Export evidence** beside a closed balance's claim,
 and the banner of a pending operation, do the same. A bundle names the deployment, the channel and its latest evidence,
 and holds the evidence of each of your withdrawals and transfers the contract may still owe something and a casino bet

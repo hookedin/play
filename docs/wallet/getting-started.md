@@ -13,13 +13,18 @@ On your first visit the wallet makes your **account**: an Ethereum key in this b
 with your money. Its address is your **deposit address**. Nothing needs setting up to open games; before your first
 deposit you [save your key](keys-and-recovery.md#your-key).
 
+**Wallet** in the top bar opens the wallet over the page you are on, a game going on under it: your balance, what the
+contract still owes you, and four tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw`, **Activity** at
+`/wallet/activity` and **Settings** at `/wallet/settings`. Each address opens the wallet on its tab, over the library
+when it is a link. Closing it, or Back, brings the page under it back.
+
 This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
 offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet
 has checked the casino's contract on-chain, and a banner says so if that check fails
 ([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
-**Accounts**, in Settings, keeps every key this browser made or imported, and **Import a private key** makes one your
-account. Switching accounts closes the open game.
+**Backup and keys**, in Settings, keeps every key this browser made or imported, and **Import a private key** makes one
+your account. A game you have open opens again under the account you switch to.
 
 ## Deposit
 
@@ -34,7 +39,7 @@ balance, within your daily deposit limit; ETH too small to cover its fee waits f
 
 Each deposit is one transaction, `deposit`, into your account's channel, and your first opens it. After two
 confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the
-money into your balance; until then the Wallet page shows it as arriving, and a close would pay it back all the same.
+money into your balance; until then the wallet shows it as arriving, and a close would pay it back all the same.
 From then on bets need no transactions. Anyone can deposit into your channel through the contract, naming your deposit
 address, and the wallet takes it in the same way.
 
@@ -43,11 +48,11 @@ your balance has taken the deposit in, the wallet asks the casino to lend it tha
 had. The casino lends no more than the rule the wallet prices transactions by allows for the block before the
 deposit's: 20% over an estimate of the gas the deposit used, which a node makes up to 1.5% high, at twice that block's
 base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less, and one your daily
-limit cut short is lent nothing. The Wallet page shows the loan. Bets can stake it, but an investment or a bank deposit
+limit cut short is lent nothing. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
 leaves it in the balance, and your next withdrawal, transfer or close pays it back first.
 
 ETH stays at the deposit address instead, for fees or to withdraw elsewhere, while **Add ETH that arrives at my deposit
-address to my balance** is off in Settings, while the casino is unavailable, and from the start of a close until your
+address to my balance** is off under **Deposits** in Settings, while the casino is unavailable, and from the start of a close until your
 next balance opens ([closing and claims](closing-and-claims.md)). **Add to balance**, on the Deposit tab, adds it when
 you choose.
 
@@ -98,7 +103,7 @@ pause, while withdrawals, recovery and settling an operation already signed go o
 
 ## Withdraw
 
-On the Wallet dialog's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be
+On the wallet's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be
 a valid one other than the zero address, your own deposit address and the casino's contract. Your account signs a
 withdrawal of that amount to that address and the casino signs your balance after it at once: your balance pays it now,
 and you play on with the rest. The contract then pays the address, out of your deposits first, then your
@@ -115,9 +120,9 @@ much can be withdrawn now, and your balance is as it was. A withdrawal needs the
 ([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)); without the casino,
 [close without the casino](closing-and-claims.md#close-without-the-casino).
 
-**Deposit address**, under **Withdraw from**, sends everything held at your deposit address, less the network fee, and
-leaves your balance as it is. It works during a break or past a deposit limit, and it is the only source while no
-balance is open.
+**Send ETH out of my deposit address**, under **Deposits** in Settings, sends everything held at your deposit address to
+the address you name, less the network fee, and leaves your balance as it is. It is for ETH that stays at the address:
+it works during a break, past a deposit limit and while no balance is open.
 
 ## Your name
 
