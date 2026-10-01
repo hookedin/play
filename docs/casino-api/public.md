@@ -1,6 +1,6 @@
 ---
 title: Public endpoints
-description: The routes anyone may call, for the deployment, health and books, the bankroll fund, players, games' records, rounds, developer bets and the local faucet.
+description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the bankroll fund, players, games' records, rounds, developer bets and the local faucet.
 sidebar:
   order: 1
 ---
@@ -31,6 +31,7 @@ nothing else here on trust ([how it pins its deployment](../reference/deployment
 | `explorerUrl`        | string or null | `"https://sepolia.etherscan.io"` on Sepolia, `null` otherwise                                                                           |
 | `bounds`             | object         | `{outcomeSpace, meta, group}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to          |
 | `collateralRate`     | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                           |
+| `loanLimit`          | string         | The most network fee the casino [lends](channels.md#post-apichannelsidoperations) a deposit, in millionths of the deposit               |
 
 ### `GET /api/status`
 
@@ -60,7 +61,7 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cash`                             | Pool cash: the contract's balance                                                                                                           |
 | `protectedFunds`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                   |
-| `activeLiabilities`                | What open and closing channels are owed: their signed balances, and the deposits they have not taken in                                     |
+| `activeLiabilities`                | What open and closing channels are owed: their signed balances less their loans, and the deposits they have not taken in                    |
 | `openWinnings`                     | What open and closing channels are owed above the deposits and collateral the contract holds for them: winnings, which only house cash pays |
 | `collateral`                       | The [collateral](../reference/contract.md#collateral) open and closing channels hold, which pays their winnings before house cash           |
 | `collateralSales`                  | What collateral has sold for, the contract's `collateralSales`: the bankroll's, as commission is                                            |
@@ -87,6 +88,13 @@ won more than house cash can pay now, [as a withdrawal counts it](channels.md#po
 every winner can withdraw now), `operator-gas-low` (the key that sends challenges and withdrawals holds less than 0.01
 ETH for their gas) or `withdrawal-unsent` (a withdrawal the casino took on could not be sent yet; `detail` says why). An
 alert, like `observationError`, names no channel.
+
+### `GET /api/withdrawal-fee`
+
+What a withdrawal or a transfer pays the casino for sending it to the contract, `{fee}`, in wei as a decimal string:
+150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, at the network's gas price, which the casino reads and
+holds for a minute. The casino declines an operation whose `fee` is below it
+([operations](channels.md#post-apichannelsidoperations)). `paused` answers while the gas price cannot be read.
 
 ## The bankroll fund
 

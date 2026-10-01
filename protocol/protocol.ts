@@ -62,12 +62,12 @@ export function hashJSON(context: unknown) {
 }
 export const STATE_TYPES = {
   Checkpoint: fields(
-    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn',
+    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn,uint256 loan',
   ),
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
+    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint256 fee,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
   ),
 };
 /** The casino's quote for the casino bet that follows a channel's checkpoint `previousStateHash`: the round it settles
@@ -250,6 +250,7 @@ export function baseState(channelId: string): Checkpoint {
     balance: '0',
     deposited: '0',
     withdrawn: '0',
+    loan: '0',
   };
 }
 /** Whether evidence is its channel's base, unsigned. */
@@ -258,16 +259,16 @@ const unsignedBase = (evidence: Evidence) =>
   evidence.casinoSignature === '0x' &&
   canonicalJSON(plain(evidence.base)) === canonicalJSON(baseState(evidence.base.channelId));
 /** What a close of the channel in `state` is owed: its balance, whatever of the channel's on-chain `deposited` it has
- * not taken in yet, and what it withdrew that is not yet a claim, less what the channel's claims took (`claimed`) that
- * it did not withdraw and what it took in that the chain does not hold; never below nothing. The contract works it out
- * the same way. */
+ * not taken in yet, and what it withdrew that is not yet a claim, less its loan, what the channel's claims took
+ * (`claimed`) that it did not withdraw and what it took in that the chain does not hold; never below nothing. The
+ * contract works it out the same way. */
 export function owed(
-  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
+  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn' | 'loan'>,
   deposited: Integer,
   claimed: Integer,
 ) {
   const due = BigInt(state.balance) + BigInt(deposited) + BigInt(state.withdrawn),
-    taken = BigInt(state.deposited) + BigInt(claimed);
+    taken = BigInt(state.deposited) + BigInt(claimed) + BigInt(state.loan);
   return due > taken ? due - taken : 0n;
 }
 /** The deposits of `principal`, those a channel still holds, that the contract pays a withdrawal out of when its
@@ -278,8 +279,9 @@ export function depositsTakenIn(channel: { deposited: Integer }, principal: bigi
 }
 /** A channel's deposits and collateral once the contract has recorded `withdrawals`, those it owes, each with the
  * `deposited` of its checkpoint, in the order they were signed, and what they take of house cash: each is paid out of
- * the deposits its checkpoint took in, then the collateral, and the rest out of house cash. What one to the contract
- * itself pays goes back into the channel as deposits, which this leaves out: no checkpoint before it took them in. */
+ * the deposits its checkpoint took in, then the collateral, and the rest out of house cash. What a transfer to the
+ * account itself pays goes back into its channel as deposits, which this leaves out: no checkpoint before it took
+ * them in. */
 export function recordWithdrawals(
   channel: { deposited: Integer; principal: Integer; collateral: Integer },
   withdrawals: { amount: Integer; deposited: Integer }[],
@@ -299,19 +301,20 @@ export function recordWithdrawals(
   return { principal, collateral, cash };
 }
 /** What protects the balance of a channel in `state`: the deposits and collateral the contract holds for it once it has
- * recorded `withdrawals`, those it owes, and what of the balance, with what the channel holds that it has not taken in
- * yet, they protect. `covered` is what a close then pays out of them, `uncovered` the winnings above them, which only
- * house cash pays, and `missing` the deposits the balance took in that the chain does not hold, which a close is owed
- * only once they land again; `spare` is what more it could win and have protected. */
+ * recorded `withdrawals`, those it owes, and what of the balance less its loan, with what the channel holds that it has
+ * not taken in yet, they protect. `covered` is what a close then pays out of them, `uncovered` the winnings above them,
+ * which only house cash pays, and `missing` the deposits the balance took in that the chain does not hold, which a
+ * close is owed only once they land again; `spare` is what more it could win and have protected. */
 export function protection(
-  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
+  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn' | 'loan'>,
   channel: { deposited: Integer; principal: Integer; collateral: Integer },
   withdrawals: { amount: Integer; deposited: Integer }[],
 ) {
   const left = recordWithdrawals(channel, withdrawals),
     held = left.principal + left.collateral,
     arriving = BigInt(channel.deposited) - BigInt(state.deposited),
-    balance = BigInt(state.balance) + (arriving > 0n ? arriving : 0n),
+    own = BigInt(state.balance) + (arriving > 0n ? arriving : 0n) - BigInt(state.loan),
+    balance = own > 0n ? own : 0n,
     // What a close is owed once they are recorded.
     due = owed(state, channel.deposited, state.withdrawn),
     covered = due < held ? due : held;
@@ -337,6 +340,7 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
     kind: 0,
     amount: 0,
     recipient: ZeroAddress,
+    fee: 0,
     chance: 0n,
     prize: 0n,
     round: ZeroHash,
@@ -431,8 +435,8 @@ export const BOUNDS = {
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
  * developer bet, whose meta alone says what it is) or what it pays into (an investment or a bank deposit); a credit
- * what it collects from; a deposit and a withdrawal nothing but themselves, a withdrawal's recipient being in the
- * operation. Only what names a game carries a group. Every field is in one form, so
+ * what it collects from; a deposit, a withdrawal, a transfer and a loan nothing but themselves, a withdrawal's and a
+ * transfer's recipient being in the operation. Only what names a game carries a group. Every field is in one form, so
  * one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
@@ -453,7 +457,7 @@ export function checkDetails(kind: number, details: Details) {
         ? named !== counterparty
         : kind === KIND.credit
           ? counterparty && !named
-          : [KIND.deposit, KIND.withdrawal].includes(kind as 4) && !counterparty && !named)
+          : [KIND.deposit, KIND.withdrawal, KIND.transfer, KIND.loan].includes(kind as 4) && !counterparty && !named)
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
@@ -501,8 +505,19 @@ export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigin
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
  * the operation itself; a developer bet is a debit that pays its stake to its developer's bank; a deposit takes in
  * money the player deposited into the channel on-chain; a withdrawal takes out what the contract owes its recipient,
- * and one to the contract itself puts it into the account's own channel as deposits. */
-export const KIND = { none: 0, casinoBet: 1, debit: 2, credit: 3, deposit: 4, withdrawal: 5 } as const;
+ * and a transfer what it puts into its recipient account's current channel as deposits, which locks the balance in
+ * when that account is its own, each paying the casino its fee for sending it; a loan is money the casino lends the
+ * balance, which a withdrawal, a transfer or a close pays back first. */
+export const KIND = {
+  none: 0,
+  casinoBet: 1,
+  debit: 2,
+  credit: 3,
+  deposit: 4,
+  withdrawal: 5,
+  transfer: 6,
+  loan: 7,
+} as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
   if (
     !same(base.channelId, op.channelId) ||
@@ -520,11 +535,13 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
   };
   const kind = Number(op.kind),
     balance = uint256(BigInt(base.balance)),
-    amount = uint256(BigInt(op.amount));
+    amount = uint256(BigInt(op.amount)),
+    fee = uint256(BigInt(op.fee));
   const casinoBet = kind === KIND.casinoBet,
     credit = kind === KIND.credit,
     deposit = kind === KIND.deposit,
-    pays = kind === KIND.withdrawal;
+    loan = kind === KIND.loan,
+    pays = kind === KIND.withdrawal || kind === KIND.transfer;
   if (!Object.values(KIND).includes(kind as 1) || kind === KIND.none) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A casino bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
@@ -546,10 +563,13 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
         !same(op.round, ZeroHash) ||
         !same(secret, ZeroHash) ||
         !same(seed, ZeroHash)) ||
-    // Only a withdrawal names a recipient, and never nobody: the contract itself for one into the account's own channel.
-    (pays ? same(op.recipient, ZeroAddress) : !same(op.recipient, ZeroAddress)) ||
+    // Only a withdrawal and a transfer name a recipient, never nobody and never the contract, and pay a fee.
+    (pays
+      ? same(op.recipient, ZeroAddress) || same(op.recipient, d.verifyingContract)
+      : !same(op.recipient, ZeroAddress) || fee !== 0n) ||
     amount === 0n ||
-    amount >= MAX_BALANCE
+    amount >= MAX_BALANCE ||
+    fee >= MAX_BALANCE
   )
     throw new Error(
       casinoBet
@@ -558,35 +578,40 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
           ? 'Invalid credit'
           : deposit
             ? 'Invalid deposit'
-            : pays
-              ? 'Invalid withdrawal'
-              : 'Invalid debit',
+            : loan
+              ? 'Invalid loan'
+              : pays
+                ? 'Invalid withdrawal'
+                : 'Invalid debit',
     );
-  if (credit || deposit) {
+  if (credit || deposit || loan) {
     next.balance = String(balance + amount);
     // A deposit takes in money the contract holds for this channel; a close checks it does.
     if (deposit) next.deposited = String(BigInt(base.deposited) + amount);
+    if (loan) next.loan = String(BigInt(base.loan) + amount);
   } else {
-    if (amount > balance)
+    // A withdrawal or a transfer pays the loan back, and its fee as well.
+    const repaid = pays ? BigInt(base.loan) + fee : 0n;
+    if (amount + repaid > balance)
       throw new Error(casinoBet ? 'Invalid casino bet commitment or balance' : 'Insufficient balance');
-    next.balance = String(balance - amount + (casinoBet ? betPayout(op, outcome(seed, secret).value) : 0n));
+    next.balance = String(balance - amount - repaid + (casinoBet ? betPayout(op, outcome(seed, secret).value) : 0n));
     // A withdrawal counts what it takes out, so a close can tell what never became a claim.
-    if (pays) next.withdrawn = String(BigInt(base.withdrawn) + amount);
+    if (pays) Object.assign(next, { withdrawn: String(BigInt(base.withdrawn) + amount), loan: '0' });
   }
-  if ([next.balance, next.deposited, next.withdrawn].some(amount => BigInt(amount) >= MAX_BALANCE))
+  if ([next.balance, next.deposited, next.withdrawn, next.loan].some(amount => BigInt(amount) >= MAX_BALANCE))
     throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
-/** A joint checkpoint above an authorized casino bet, debit or withdrawal supersedes it without consuming entropy or
- * money. */
+/** A joint checkpoint above an authorized casino bet, debit, withdrawal, transfer or loan supersedes it without
+ * consuming entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
-    ![KIND.casinoBet, KIND.debit, KIND.withdrawal].includes(Number(op.kind) as 1) ||
+    ![KIND.casinoBet, KIND.debit, KIND.withdrawal, KIND.transfer, KIND.loan].includes(Number(op.kind) as 1) ||
     !same(op.channelId, base.channelId) ||
     !same(op.previousStateHash, hashState(d, base)) ||
     BigInt(op.sequence) !== BigInt(base.sequence) + 1n
   )
-    throw new Error('Rejection must identify the next casino bet, debit or withdrawal');
+    throw new Error('Rejection must identify the next casino bet, debit, withdrawal, transfer or loan');
   return {
     ...base,
     sequence: String(uint256(BigInt(op.sequence) + 1n)),
@@ -613,6 +638,7 @@ const emptyStep = (): Step => ({
     kind: 0,
     amount: 0,
     recipient: ZeroAddress,
+    fee: 0,
     chance: 0,
     prize: 0,
     round: ZeroHash,
@@ -650,7 +676,7 @@ export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   const state = Number(evidence.step.operation.kind)
     ? verifyStep(d, evidence.base, evidence.step, opening.player, operator)
     : evidence.base;
-  if ([state.balance, state.deposited, state.withdrawn].some(amount => BigInt(amount) >= MAX_BALANCE))
+  if ([state.balance, state.deposited, state.withdrawn, state.loan].some(amount => BigInt(amount) >= MAX_BALANCE))
     throw new Error('Balance exceeds the protocol maximum');
   // The details beside a step say what it meant, and are only as good as the memo it signed.
   if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))

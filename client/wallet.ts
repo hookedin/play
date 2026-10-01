@@ -48,6 +48,7 @@ import { saveAccounts, readAccounts } from './accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { GameSessions } from './wallet-games.ts';
+import { inbound } from './wallet-transactions.ts';
 import { changeLimits, depositRemaining, playControls } from './play-controls.ts';
 import type { PlayControls, PlayLimits } from './play-controls.ts';
 export interface WalletOptions {
@@ -211,6 +212,8 @@ export class CasinoWallet extends GameSessions {
   /** The fee the last deposit was priced at: the sweep leaves alone an address holding less than twice it, since a
    * deposit of that would cost more than half of it. */
   depositFee = 0n;
+  /** What the casino last said sending a withdrawal or a transfer to the contract costs. */
+  withdrawalFee = 0n;
   /** The casino's offer of collateral the account asked to buy, until it is bought or expires: the sweep buys it with
    * ETH at the account's address before it adds anything to the balance. */
   buying: CollateralOffer | null = null;
@@ -451,7 +454,7 @@ export class CasinoWallet extends GameSessions {
       !this.storageFailed &&
       !this.transactionIntent &&
       !this.missingChannel &&
-      !(this.pending && this.pending.kind !== 'taken-in') &&
+      !(this.pending && !inbound(this.pending.kind)) &&
       (c ? Number(c.onchain?.status) <= 1 && !c.closing : !this.forceClosed) &&
       BigInt(this.nativeBalance || 0) > 2n * this.depositFee
     );
@@ -606,6 +609,10 @@ export class CasinoWallet extends GameSessions {
       nativeBalance: this.nativeBalance || '0',
       channelId: c?.state.channelId || null,
       channelStatus: c?.onchain?.status || '0',
+      // What the casino lent the balance, which a withdrawal, a transfer or a close pays back first, and what a
+      // withdrawal can take.
+      loan: open ? c.state.loan : '0',
+      withdrawable: String(this.withdrawable()),
       // The deposits the contract still holds for this balance, and the collateral locked into it.
       principal: open ? c.onchain.principal : '0',
       collateral: open ? c.onchain.collateral : '0',
@@ -644,8 +651,9 @@ export class CasinoWallet extends GameSessions {
             observedAt: v.observedAt,
             ...v.claim,
           })),
+        // A transfer's claim is the account's it went to.
         ...this.history
-          .filter(entry => entry.withdrawal && entry.recorded && !entry.paid)
+          .filter(entry => entry.withdrawal && entry.recorded && !entry.paid && entry.kind !== 'transfer')
           .map(entry => ({
             id: entry.withdrawal,
             to: entry.to,
@@ -1069,7 +1077,7 @@ export class CasinoWallet extends GameSessions {
         const op = proof.step.operation;
         let next;
         try {
-          if (Number(op.kind) !== KIND.withdrawal) throw new Error('Not a withdrawal');
+          if (![KIND.withdrawal, KIND.transfer].includes(Number(op.kind) as 5)) throw new Error('Not a withdrawal');
           next = verifyStep(this.domain, proof.base, proof.step, this.address, this.operator);
         } catch {
           throw new Error('The bundle names a withdrawal that is not one this account and the casino signed');
@@ -1079,7 +1087,12 @@ export class CasinoWallet extends GameSessions {
         known.add(id);
         withdrawals.push(
           plain({
-            kind: same(op.recipient, this.config.contractAddress) ? 'lock-in' : 'withdrawal',
+            kind:
+              Number(op.kind) === KIND.withdrawal
+                ? 'withdrawal'
+                : same(op.recipient, this.address)
+                  ? 'lock-in'
+                  : 'transfer',
             operationId: 'withdrawal:' + id,
             status: 'signed',
             verified: true,
@@ -1087,7 +1100,8 @@ export class CasinoWallet extends GameSessions {
             stake: op.amount,
             amount: op.amount,
             withdrawal: id,
-            to: getAddress(op.recipient),
+            to: this.destination(op),
+            fee: op.fee,
             paid: false,
             balance: next.balance,
             createdAt: new Date().toISOString(),

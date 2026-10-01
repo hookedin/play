@@ -195,11 +195,13 @@
           <p class="muted">
             Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
             challenge that close within 24 hours with your saved evidence. The contract holds your deposits for it: Lock
-            in my balance withdraws all of it into your own channel as deposits, the bankroll paying out your winnings.
+            in my balance transfers all of it into your own channel as deposits, the bankroll paying out your winnings.
             Keep a current recovery bundle somewhere safe.
           </p>
+          <p id="storage-status" class="muted"></p>
           <div class="actions">
             <button id="channel-export" class="button small" type="button">Export recovery bundle</button
+            ><button id="keep-storage" class="button small" type="button">Keep this wallet's data</button
             ><button id="channel-lock" class="button small" type="button">Lock in my balance</button
             ><button id="channel-start-close" class="button small" type="button">Close without the casino</button
             ><button id="channel-challenge" class="button small" type="button">Challenge the close</button
@@ -430,8 +432,9 @@
             balance</label
           >
           <p class="muted">
-            On, everything that arrives goes in, less the network fee of adding it. Off, it stays at the address, to pay
-            for transactions you send yourself, such as closing without the casino.
+            On, everything that arrives goes in. Adding it costs a network fee, which the casino lends you when it is
+            small next to the deposit and your next withdrawal pays back. Off, it stays at the address, to pay for
+            transactions you send yourself, such as closing without the casino.
           </p>
         </section>
         <section class="card" aria-labelledby="keys-title">
@@ -597,6 +600,9 @@
         <button id="withdraw-max" class="text-button" type="button">Max</button>
         <label for="withdraw-to">To</label>
         <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
+        <label id="withdraw-into-field" class="check"
+          ><input id="withdraw-into" type="checkbox" /> Put it into that account's HookedIn balance</label
+        >
         <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         <p id="withdraw-help" class="help"></p>
       </section>

@@ -6,6 +6,7 @@ import { passkeyKey } from './passkey.ts';
 import { playControls, depositRemaining } from './play-controls.ts';
 import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
+import { inbound } from './wallet-transactions.ts';
 import { withLock } from './storage.ts';
 import { json, same, verifyEvidence, gameKey, collateralPrice } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
@@ -144,7 +145,7 @@ function withdrawalRequest() {
     ownAddress: wallet.address,
     contractAddress: wallet.config.contractAddress,
     amount: $<HTMLInputElement>('withdraw-amount').value,
-    maximum: BigInt(channel ? wallet.channel?.state.balance || 0 : wallet.publicState.nativeBalance || 0),
+    maximum: channel ? wallet.withdrawable() : BigInt(wallet.publicState.nativeBalance || 0),
     channel,
   });
 }
@@ -152,10 +153,8 @@ let safetyAccount = '',
   depositURI = '';
 /** Whether the player has this account's key outside this browser: a passkey, a key file or their own import. */
 const savedSetting = () => `hookedin:saved:${wallet.address.toLowerCase()}`;
-/** The player has this account's key. Persistent storage keeps this browser's copy from being cleared to make room. */
 function markSaved() {
   localStorage.setItem(savedSetting(), '1');
-  void navigator.storage?.persist?.();
   renderWallet();
 }
 /** The play limits and breaks, the deposit address, and whether this account's key is saved outside this browser. */
@@ -186,6 +185,7 @@ function renderSafety() {
     $('export-key').textContent = "Show this wallet's private key";
     for (const id of ['withdraw-to', 'withdraw-amount']) $<HTMLInputElement>(id).value = '';
     $<HTMLSelectElement>('withdraw-source').value = 'balance';
+    $<HTMLInputElement>('withdraw-into').checked = false;
     $<HTMLInputElement>('limit-deposit').value = limits.deposit === null ? '' : ether(limits.deposit);
     $<HTMLInputElement>('limit-loss').value = limits.loss === null ? '' : ether(limits.loss);
     $<HTMLInputElement>('limit-minutes').value = String(limits.minutes ?? '');
@@ -212,11 +212,12 @@ function renderSafety() {
   const remaining = depositRemaining(controls);
   let net = fee > 0n && held > fee ? held - fee : 0n;
   if (remaining !== null && net > remaining) net = remaining;
+  const lent = wallet.feeLoan(net, fee);
   $('deposit-fee').textContent =
     remaining === 0n
       ? 'Your play break or daily deposit limit keeps incoming ETH at this address. You can withdraw it.'
       : fee > 0n
-        ? `Address balance ${ether(held)} ETH. Estimated maximum network fee ${ether(fee)} ETH. Up to ${ether(net)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}. The final fee is recorded in Activity.`
+        ? `Address balance ${ether(held)} ETH. Estimated maximum network fee ${ether(fee)} ETH. Up to ${ether(net + lent)} ETH can be added now${remaining !== null ? ' within your daily limit' : ''}${lent ? ': the casino lends you the network fee, and your next withdrawal pays it back' : ''}. The final fee is recorded in Activity.`
         : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
 }
 $('play-limits-form').addEventListener('submit', event => {
@@ -575,6 +576,8 @@ function selectTab(tab: WalletTab) {
     button.setAttribute('aria-selected', String(button.dataset.tab === tab));
   for (const panel of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-panel]'))
     panel.hidden = panel.dataset.panel !== tab;
+  // What sending a withdrawal costs now, for Max and the help to count with.
+  if (tab === 'withdraw' && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
 }
 /** Once money has moved, the wallet has done its work. */
 function funded(message: string) {
@@ -592,6 +595,7 @@ function renderWallet() {
   const observed = Boolean(state.observedAt);
   const balance = BigInt(state.balance || 0),
     arriving = BigInt(state.arriving || 0),
+    loan = BigInt(state.loan || 0),
     // What the deposit address holds, read from the chain: until it has been, there is nothing to show.
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
     status = Number(state.channelStatus),
@@ -603,7 +607,9 @@ function renderWallet() {
     ? `${plainEth(arriving)} ETH of it is on its way into your balance.`
     : state.closingChannelId && !state.channelId
       ? 'Your last balance is closing: finish the close under Recovery once its 24 hours are up, and collect it. A deposit opens your next balance.'
-      : 'What games play with.';
+      : loan
+        ? `What games play with. ${plainEth(loan)} ETH of it is the network fee of your deposits, which the casino lent you: your next withdrawal pays it back.`
+        : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
   $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
@@ -634,7 +640,7 @@ function renderWallet() {
                   ? `Your balance is closing: ETH sent here waits until you choose what to do with it.${held}`
                   : !wallet.autoDeposit
                     ? `ETH sent here stays at this address: adding it to your balance by itself is off in Settings.${held}`
-                    : 'Waiting for ETH. Deposits are added after network confirmation, less the network fee and within your daily limit.';
+                    : `Waiting for ETH. Deposits are added after network confirmation, within your daily limit.${wallet.config.loanLimit == null ? ' The network fee of adding them comes out of them.' : ' The casino lends you the network fee of adding them, and your next withdrawal pays it back.'}`;
   if ($('deposit-status').textContent !== depositStatus) $('deposit-status').textContent = depositStatus;
   const addable = (wallet.forceClosed || !wallet.autoDeposit) && !wallet.recoveryOnly && !closing && atAddress > 0n;
   $('add-to-balance').classList.toggle('hidden', !addable);
@@ -651,6 +657,13 @@ function renderWallet() {
   $('withdraw-source-field').hidden = status !== 1 || closing;
   $('withdraw-amount-field').classList.toggle('hidden', !c);
   $('withdraw-max').classList.toggle('hidden', !c);
+  $('withdraw-into-field').classList.toggle('hidden', !c);
+  const into = Boolean(c) && $<HTMLInputElement>('withdraw-into').checked,
+    // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
+    charges = [
+      wallet.withdrawalFee ? `the casino ${plainEth(wallet.withdrawalFee)} ETH for sending it` : '',
+      loan ? `back the ${plainEth(loan)} ETH network fee the casino lent you` : '',
+    ].filter(Boolean);
   $<HTMLButtonElement>('withdraw').disabled =
     busy ||
     !ready ||
@@ -659,26 +672,32 @@ function renderWallet() {
     Boolean(c && wallet.pending) ||
     Boolean(c && wallet.recoveryOnly);
   $('withdraw').textContent =
-    amount !== null ? `Withdraw ${ether(amount)} ETH` : c ? 'Withdraw' : 'Withdraw address funds';
+    amount !== null
+      ? `${into ? 'Transfer' : 'Withdraw'} ${ether(amount)} ETH`
+      : c
+        ? into
+          ? 'Transfer'
+          : 'Withdraw'
+        : 'Withdraw address funds';
   $('withdraw-help').textContent = !ready
     ? 'Connecting to your wallet…'
     : wallet.channel && closing && !atAddress
       ? 'Your balance is closing: once its 24-hour window ends, finish the close under Recovery and collect it.'
       : c && wallet.recoveryOnly
         ? 'The casino is unavailable: close without it under Wallet → Recovery.'
-        : c && wallet.pending?.kind === 'taken-in'
+        : c && inbound(wallet.pending?.kind)
           ? 'A deposit is on its way into your balance. Withdraw once it has arrived.'
           : wallet.transactionIntent || (c && wallet.pending)
             ? 'Finish the operation in flight first.'
             : request.error ||
               (c
-                ? `The address receives ${ether(amount!)} ETH, with no fee taken out: another HookedIn account's address puts it into that balance. Check the full address before confirming.`
+                ? `${into ? "That account's HookedIn balance receives" : 'The address receives'} ${ether(amount!)} ETH.${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`
                 : 'All ETH at your deposit address is sent, less the network fee. This does not withdraw your balance. Keep enough gas at this address if you need recovery transactions.');
   $('withdraw-help').classList.toggle('check-failed', Boolean(request.error));
 
   $('pending-banner').classList.toggle(
     'hidden',
-    !((wallet.pending && wallet.pending.kind !== 'taken-in') || wallet.transactionIntent) || busy,
+    !((wallet.pending && !inbound(wallet.pending.kind)) || wallet.transactionIntent) || busy,
   );
   const challengeExpired = Date.now() / 1000 >= Number(state.deadline);
   $('challenge-banner').classList.toggle('hidden', !state.needsChallenge);
@@ -860,7 +879,8 @@ function renderActivity() {
 }
 /** One receipt as Activity lists it, with the facts behind it. */
 function activityEntry(receipt: any) {
-  const operation = receipt.proof?.step?.operation;
+  // A declined operation's proof is the checkpoint above it, with no step: the operation is the one it declined.
+  const operation = receipt.request ?? receipt.proof?.step?.operation;
   const channelId = operation?.channelId || receipt.proof?.base?.channelId;
   const presentation = receiptSummary(receipt, wallet.config.contractAddress);
   const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
@@ -868,7 +888,14 @@ function activityEntry(receipt: any) {
   if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
   if (receipt.commission !== undefined) facts.push(['Commission', `${ether(receipt.commission)} ETH`]);
   if (receipt.to)
-    facts.push(['To', same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to]);
+    facts.push([
+      'To',
+      same(receipt.to, wallet.config.contractAddress)
+        ? 'Your own channel, as deposits'
+        : receipt.kind === 'transfer'
+          ? `The HookedIn balance of ${receipt.to}`
+          : receipt.to,
+    ]);
   if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
   // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away: the
   // oldest of its channel first, since the contract records them in order.
@@ -1707,26 +1734,30 @@ act('add-to-balance', async () => {
   await wallet.deposit();
   funded(`Added ${plainEth(BigInt(wallet.publicState.balance || 0) - before)} ETH to your balance.`);
 });
-for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source', 'collateral-buy-amount'])
+for (const id of ['withdraw-to', 'withdraw-amount', 'withdraw-source', 'withdraw-into', 'collateral-buy-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
-  $<HTMLInputElement>('withdraw-amount').value = ether(wallet.channel?.state.balance || 0);
+  $<HTMLInputElement>('withdraw-amount').value = ether(wallet.withdrawable());
   renderWallet();
 });
 act('withdraw', async () => {
   const { to, amount, error } = withdrawalRequest();
   if (error || !to) throw new Error(error || 'Enter a destination address.');
-  const open = withdrawalFromChannel();
+  const open = withdrawalFromChannel(),
+    into = open && $<HTMLInputElement>('withdraw-into').checked;
   // A partial withdrawal leaves the open game its allowance; a whole one takes back what the game holds.
-  if (open && amount !== null && amount >= BigInt(wallet.channel?.state.balance || 0)) abandonGame();
-  const receipt = await wallet.withdraw(to, amount ?? undefined, { fromAddress: !open });
+  if (open && amount !== null && amount >= wallet.withdrawable()) abandonGame();
+  const receipt = await wallet.withdraw(to, amount ?? undefined, { fromAddress: !open, into });
   $<HTMLInputElement>('withdraw-to').value = '';
   $<HTMLInputElement>('withdraw-amount').value = '';
+  $<HTMLInputElement>('withdraw-into').checked = false;
   $<HTMLDialogElement>('wallet-dialog').close();
   toast(
-    receipt.withdrawal
-      ? `Withdrew ${ether(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
-      : `Withdrew ${ether(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
+    into
+      ? `Transferred ${ether(receipt.amount)} ETH: the contract puts it into the HookedIn balance of ${short(to)}.`
+      : receipt.withdrawal
+        ? `Withdrew ${ether(receipt.amount)} ETH: the contract pays it to ${short(to)}, and Activity shows when it has.`
+        : `Withdrew ${ether(receipt.amount)} ETH to ${short(to)}. Activity shows the transaction and its fee.`,
   );
 });
 act('buy-collateral', async () => {
@@ -1769,6 +1800,18 @@ act('channel-export', async () => {
   for (const channelId of new Set([wallet.channelId, wallet.closingChannel?.state.channelId]))
     if (channelId) downloadEvidence(await wallet.exportEvidence(channelId));
 });
+/** Whether the browser keeps the wallet's data or may clear it to free disk space; `ask` asks it to keep it. */
+async function renderStorage(ask: boolean) {
+  const kept = Boolean(await (ask ? navigator.storage?.persist?.() : navigator.storage?.persisted?.()));
+  $('keep-storage').hidden = kept;
+  $('storage-status').textContent = kept
+    ? "This browser keeps the wallet's data."
+    : ask
+      ? "This browser declined to keep the wallet's data, so a full disk can erase your evidence with it. Your recovery bundle is the copy that lasts: export it after you play or withdraw."
+      : "This browser may clear the wallet's data, your evidence with it, to free disk space.";
+}
+void renderStorage(false);
+$('keep-storage').addEventListener('click', () => void renderStorage(true));
 act(
   'channel-lock',
   async () => {
@@ -1943,7 +1986,7 @@ try {
   renderWallet();
   renderActivity();
   void refreshActivity();
-  if (wallet.pending && wallet.pending.kind !== 'taken-in')
+  if (wallet.pending && !inbound(wallet.pending.kind))
     toast('An operation is saved and unfinished. Use Retry above to finish it safely.');
   await route();
 } catch (error: any) {

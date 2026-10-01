@@ -28,8 +28,10 @@ export interface Checkpoint {
   balance: Integer;
   /** How much of the channel's on-chain deposits the balance has taken in. A close adds the rest. */
   deposited: Integer;
-  /** How much the balance has paid out in withdrawals. A close adds what did not become a claim. */
+  /** How much the balance has paid out in withdrawals and transfers. A close adds what did not become a claim. */
   withdrawn: Integer;
+  /** How much of the balance the casino lent it. A withdrawal, a transfer or a close pays it back first. */
+  loan: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
  * under; or, for a game opened by its URL alone, the zero address and that URL. */
@@ -100,8 +102,11 @@ export interface Operation {
   kind: Integer;
   /** A casino bet's stake, paid to enter; otherwise the amount debited or credited. */
   amount: Integer;
-  /** Whom a withdrawal pays; the zero address for any other kind. */
+  /** Whom a withdrawal pays, or the account a transfer goes into; the zero address for any other kind. */
   recipient: string;
+  /** What a withdrawal or a transfer pays the casino for sending it to the contract, out of the balance; zero for any
+   * other kind. */
+  fee: Integer;
   /** A casino bet's probability, counted in outcomes out of 2^64: it wins when its round's outcome is below this. */
   chance: Integer;
   /** What a casino bet pays when it wins. */

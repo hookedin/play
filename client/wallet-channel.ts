@@ -45,13 +45,13 @@ import {
 } from '../protocol/protocol.ts';
 import { describeBet } from '../protocol/risk.ts';
 import { gameAmount, gameError, gameRef, META } from './bridge.ts';
-import { WalletTransactions } from './wallet-transactions.ts';
+import { WalletTransactions, inbound } from './wallet-transactions.ts';
 import { allowPlay, recordPlay } from './play-controls.ts';
 const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
- * developer bet, a payment, an investment and a bank deposit are debits, a withdrawal names its recipient (a lock-in is
- * one to the contract), a payout collected is a credit, and money deposited into the channel is taken in with a
- * deposit. */
+ * developer bet, a payment, an investment and a bank deposit are debits, a withdrawal names the address it pays, a
+ * transfer the account it goes into (a lock-in is one to this account itself), a payout collected is a credit, money
+ * deposited into the channel is taken in with a deposit, and the network fee of a deposit is a loan the casino makes. */
 export const OPERATIONS: Record<string, { kind: number; name: string; game?: boolean }> = {
   'casino-bet': { kind: KIND.casinoBet, name: 'casino bet', game: true },
   payment: { kind: KIND.debit, name: 'game payment', game: true },
@@ -59,15 +59,17 @@ export const OPERATIONS: Record<string, { kind: number; name: string; game?: boo
   invest: { kind: KIND.debit, name: 'bankroll investment' },
   bank: { kind: KIND.debit, name: 'bank deposit' },
   withdrawal: { kind: KIND.withdrawal, name: 'withdrawal' },
-  'lock-in': { kind: KIND.withdrawal, name: 'lock-in' },
+  transfer: { kind: KIND.transfer, name: 'transfer' },
+  'lock-in': { kind: KIND.transfer, name: 'lock-in' },
   divest: { kind: KIND.credit, name: 'bankroll payout' },
   earnings: { kind: KIND.credit, name: 'earnings payout' },
   'developer-bet-payout': { kind: KIND.credit, name: 'developer bet payout' },
   withdrawn: { kind: KIND.credit, name: 'bank withdrawal' },
   'taken-in': { kind: KIND.deposit, name: 'deposit' },
+  loan: { kind: KIND.loan, name: 'network fee loan' },
 };
-/** A payout collected or a deposit taken in adds to the balance, and commits none of it. */
-const credit = (kind: string) => OPERATIONS[kind]!.kind === KIND.credit || OPERATIONS[kind]!.kind === KIND.deposit;
+/** A payout collected, a deposit taken in or a loan adds to the balance, and commits none of it. */
+const credit = (kind: string) => [KIND.credit, KIND.deposit, KIND.loan].includes(OPERATIONS[kind]!.kind as 3);
 /** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
  * counted in outcomes out of 2^64. */
 export interface CasinoBetInput {
@@ -160,13 +162,14 @@ export class ChannelClient extends WalletTransactions {
   async perform(this: CasinoWallet, kind: string, input: any, operationId: string, game?: GameIntent) {
     this.requireDurableState();
     // A deposit on its way into the balance goes first: nothing else is signed before the casino has signed it.
-    if (kind !== 'taken-in' && this.pending?.kind === 'taken-in') await this.takeDeposits();
+    if (!inbound(kind) && inbound(this.pending?.kind)) await this.takeDeposits();
     const known = OPERATIONS[kind];
     if (!known) throw new Error('Unknown wallet operation');
     const intent = {
       kind: known.kind,
       amount: BigInt(kind === 'casino-bet' ? input.stake : input.amount),
       recipient: input.recipient ? getAddress(input.recipient) : ZeroAddress,
+      fee: BigInt(input.fee ?? 0),
       chance: kind === 'casino-bet' ? BigInt(input.chance) : 0n,
       prize: kind === 'casino-bet' ? BigInt(input.prize) : 0n,
     };
@@ -174,7 +177,8 @@ export class ChannelClient extends WalletTransactions {
     // game's, so which game that is has one source of truth: the session this wallet has open; the game may give
     // them a group. An investment, a bank deposit and a payout name what they pay into or collect from.
     const details: Details = plain({
-      id: id(operationId),
+      // A loan is known by the hash of the deposit transaction whose network fee it lends: one loan for each.
+      id: kind === 'loan' ? input.transaction : id(operationId),
       ...(known.game ? { game: gameRef(this.requireGame().identity) } : {}),
       ...(input.group ? { group: input.group } : {}),
       ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
@@ -182,7 +186,9 @@ export class ChannelClient extends WalletTransactions {
     });
     const matches = (operation: Operation, signed: Details) => {
       if (
-        (['kind', 'amount', 'chance', 'prize'] as const).some(key => BigInt(operation[key]) !== BigInt(intent[key])) ||
+        (['kind', 'amount', 'fee', 'chance', 'prize'] as const).some(
+          key => BigInt(operation[key]) !== BigInt(intent[key]),
+        ) ||
         !same(operation.recipient, intent.recipient) ||
         canonicalJSON(signed) !== canonicalJSON(details)
       )
@@ -222,6 +228,7 @@ export class ChannelClient extends WalletTransactions {
         kind: intent.kind,
         amount: intent.amount,
         recipient: intent.recipient,
+        fee: intent.fee,
         chance: intent.chance,
         prize: intent.prize,
         round: quote ? quote.message.round : ZeroHash,
@@ -396,10 +403,13 @@ export class ChannelClient extends WalletTransactions {
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null,
       banked =
         kind === 'bank' && !rejected ? this.bankStatement(response.statement, hashOperation(this.domain, op)) : null,
-      // A developer bet is known by the hash of the operation that placed it, and a withdrawal is a claim under it.
+      // A developer bet is known by the hash of the operation that placed it, and a withdrawal or a transfer is a claim
+      // under it.
       developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null,
       withdrawal =
-        ['withdrawal', 'lock-in'].includes(kind) && !rejected ? hashOperation(this.domain, op).toLowerCase() : null;
+        ['withdrawal', 'transfer', 'lock-in'].includes(kind) && !rejected
+          ? hashOperation(this.domain, op).toLowerCase()
+          : null;
     const receipt = plain({
       kind,
       operationId,
@@ -420,7 +430,7 @@ export class ChannelClient extends WalletTransactions {
       details,
       ...(developerBet ? { bet: developerBet } : {}),
       // Where it goes: the contract records it as a claim under the withdrawal's ID once anyone sends the proof.
-      ...(withdrawal ? { withdrawal, to: getAddress(op.recipient), paid: false } : {}),
+      ...(withdrawal ? { withdrawal, to: this.destination(op), fee: op.fee, paid: false } : {}),
       ...(invested ? { shares: invested.minted, holding: invested.fund.shares } : {}),
       commission,
       balance: next.balance,

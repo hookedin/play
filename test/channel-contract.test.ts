@@ -133,8 +133,8 @@ test('anyone has a withdrawal made a claim, once: paid at once as far as deposit
   await assert.rejects(f.contract.withdraw.staticCall(all.evidence), reverts('InvalidState'));
   await (await f.contract.connect(a).startClose(won.evidence)).wait();
   assert.equal((await f.contract.channels(ch.opening.channelId)).closingBalance, 0n);
-  // Only a withdrawal names a recipient, and never nobody: the contract refuses either before it looks at the casino's
-  // signature. There is no other kind.
+  // Only a withdrawal and a transfer name a recipient, never nobody and never the contract: the contract refuses any
+  // other before it looks at the casino's signature. There is no other kind.
   const naming = async (kind: number, to: string) => {
     const op = operation(f.d, won.state, { kind, amount: 1n, recipient: to, memo: id('names a recipient') });
     const authorization = await a.signTypedData(f.d, OP_TYPES, op);
@@ -144,8 +144,10 @@ test('anyone has a withdrawal made a claim, once: paid at once as far as deposit
     };
   };
   await assert.rejects(f.contract.supported(await naming(2, recipient)), reverts('InvalidTerms'));
-  await assert.rejects(f.contract.supported(await naming(5, ZeroAddress)), reverts('InvalidTerms'));
-  await assert.rejects(f.contract.supported(await naming(6, recipient)), reverts('InvalidTerms'));
+  for (const kind of [5, 6])
+    for (const nobody of [ZeroAddress, await f.contract.getAddress()])
+      await assert.rejects(f.contract.supported(await naming(kind, nobody)), reverts('InvalidTerms'));
+  await assert.rejects(f.contract.supported(await naming(8, recipient)), reverts('InvalidTerms'));
 });
 
 test('a withdrawal to a recipient that refuses payment is still a claim, owed in full, which its account redirects', async t => {
@@ -181,7 +183,7 @@ test('a withdrawal to a recipient that refuses payment is still a claim, owed in
   assert.deepEqual([await f.contract.protectedFunds(), await f.contract.unpaidWinnings()], [0n, 0n]);
 });
 
-test("a withdrawal pays any address, a friend's HookedIn address among them, and one to the contract locks the balance in", async t => {
+test("a withdrawal pays any address, a friend's HookedIn address among them, and a transfer to the account itself locks the balance in", async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
@@ -196,12 +198,12 @@ test("a withdrawal pays any address, a friend's HookedIn address among them, and
     [(await f.contract.channels(ch.opening.channelId)).principal, await f.contract.protectedFunds()],
     [600n, 600n],
   );
-  // Winnings above the deposits are locked in by withdrawing the whole balance to the contract itself: its deposits
-  // pay what they cover, house cash the rest, and all of it goes into the account's channel as deposits. No ETH moves.
+  // Winnings above the deposits are locked in by transferring the whole balance to the account itself: its deposits pay
+  // what they cover, house cash the rest, and all of it goes into the account's channel as deposits. No ETH moves.
   await (await f.contract.fundBankroll({ value: 500n })).wait();
   const contract = await f.contract.getAddress(),
     won = await signedIncrease(f, { ...ch, state: sent.state }, 300n),
-    locked = await step(f, { ...ch, ...won }, 5, 900n, { recipient: contract }),
+    locked = await step(f, { ...ch, ...won }, 6, 900n, { recipient: a.address }),
     held = await env.provider.getBalance(contract);
   await (await f.contract.withdraw(locked.evidence)).wait();
   assert.equal(await env.provider.getBalance(contract), held);
@@ -220,7 +222,7 @@ test('a lock-in house cash cannot cover yet goes in as far as it reaches, and th
   const f = await deployment(env),
     ch = await open(f, env.wallets[1], 1000n),
     won = { ...ch, ...(await signedIncrease(f, ch, 500n)) },
-    locked = await step(f, won, 5, 1500n, { recipient: await f.contract.getAddress() }),
+    locked = await step(f, won, 6, 1500n, { recipient: env.wallets[1].address }),
     claimId = hashOperation(f.d, locked.evidence.step.operation),
     mine = async () => {
       const c = await f.contract.channels(ch.opening.channelId);
@@ -240,14 +242,13 @@ test('a lock-in records after the withdrawals signed before it, so it locks in a
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
-    contract = await f.contract.getAddress(),
     ch = await open(f, env.wallets[1], 1000n);
   await (await f.contract.fundBankroll({ value: 1000n })).wait();
   // 500 won; 500 withdrawn to someone, then the other 1000 locked in.
   const won = { ...ch, ...(await signedIncrease(f, ch, 500n)) },
     out = await step(f, won, 5, 500n, { recipient: Wallet.createRandom().address }),
-    lock = await step(f, { ...ch, state: out.state, evidence: await countersigned(f, won, out) }, 5, 1000n, {
-      recipient: contract,
+    lock = await step(f, { ...ch, state: out.state, evidence: await countersigned(f, won, out) }, 6, 1000n, {
+      recipient: ch.player.address,
     });
   // Sent first, the lock-in would leave half of what it locks in unprotected: it waits for the withdrawal.
   await assert.rejects(f.contract.withdraw.staticCall(lock.evidence), reverts('InvalidState'));
@@ -259,12 +260,72 @@ test('a lock-in records after the withdrawals signed before it, so it locks in a
   await assert.rejects(f.contract.withdraw.staticCall(out.evidence), reverts('InvalidState'));
 });
 
+test("a transfer goes into its recipient account's current channel as deposits, and what house cash cannot pay yet is that account's claim", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b] = env.wallets,
+    ch = await open(f, a, 1000n),
+    friend = await open(f, b, 100n),
+    won = { ...ch, ...(await signedIncrease(f, ch, 500n)) },
+    sent = await step(f, won, 6, 1200n, { recipient: b.address }),
+    claimId = hashOperation(f.d, sent.evidence.step.operation),
+    theirs = async () => {
+      const c = await f.contract.channels(friend.opening.channelId);
+      return [c.deposited, c.principal];
+    };
+  // With no house cash, the deposits go across at once and 200 of winnings wait in the queue, owed to the friend.
+  await (await f.contract.withdraw(sent.evidence)).wait();
+  assert.deepEqual(await theirs(), [1100n, 1100n]);
+  const claim = await f.contract.claims(claimId);
+  assert.deepEqual(
+    [claim.beneficiary, claim.recipient, claim.winningsRemaining],
+    [b.address, await f.contract.getAddress(), 200n],
+  );
+  await (await f.contract.fundBankroll({ value: 200n })).wait();
+  await (await f.contract.connect(env.wallets[8]).claim(claimId)).wait();
+  assert.deepEqual(await theirs(), [1300n, 1300n]);
+  assert.deepEqual([await f.contract.protectedFunds(), await f.contract.withdrawableHouse()], [1300n, 0n]);
+});
+
+test("a loan is the casino's money in the balance: a withdrawal or a transfer pays it back with its fee, a close is owed the balance less it, and what a balance cannot repay is forgiven", async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    [, a, b, c] = env.wallets,
+    recipient = Wallet.createRandom().address;
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  const lend = async (ch: any, amount: bigint) => {
+    const lent = await step(f, ch, 7, amount);
+    return { ...ch, state: lent.state, evidence: await countersigned(f, ch, lent) };
+  };
+  // 1000 deposited and 10 lent: the balance holds 1010, and a withdrawal of 600 with a fee of 5 takes 615 of it. The
+  // recipient is paid the 600; the loan and the fee stay with the house.
+  const ch = await lend(await open(f, a, 1000n), 10n),
+    out = await step(f, ch, 5, 600n, { recipient, fee: 5n });
+  assert.deepEqual([out.state.balance, out.state.withdrawn, out.state.loan], ['395', '600', '0']);
+  await (await f.contract.withdraw(out.evidence)).wait();
+  assert.equal(await env.provider.getBalance(recipient), 600n);
+  await forceClose(f, env, ch, await countersigned(f, ch, out), a);
+  assert.equal((await claimOf(f, ch.opening.channelId)).amount, 395n);
+  // A close pays the loan back first: 300 won on 1000 with 10 lent is owed 1300.
+  const other = await lend(await open(f, b, 1000n), 10n);
+  await forceClose(f, env, { ...other, ...(await signedIncrease(f, other, 300n)) }, undefined, b);
+  assert.equal((await claimOf(f, other.opening.channelId)).amount, 1300n);
+  // All of it lost, the loan with it: the close is owed nothing. House cash is what it was funded with, the 1000 lost
+  // and the 5 of the first close's fee, less the 300 won: the loans cost it nothing.
+  const busted = await lend(await open(f, c, 1000n), 10n),
+    lost = await step(f, busted, 2, 1010n);
+  await forceClose(f, env, busted, await countersigned(f, busted, lost), c);
+  assert.equal((await claimOf(f, busted.opening.channelId)).amount, 0n);
+  assert.equal(await f.contract.withdrawableHouse(), 1705n);
+});
+
 test('a withdrawal draws only on the deposits its checkpoint took in, so a deposit that lands before it is recorded stays protected', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
     [, a, b] = env.wallets,
-    contract = await f.contract.getAddress(),
     recipient = Wallet.createRandom().address;
   await (await f.contract.fundBankroll({ value: 1000n })).wait();
   // 1000 deposited and 500 won, all 1500 withdrawn; the account deposits 500 more before anyone sends it.
@@ -282,7 +343,7 @@ test('a withdrawal draws only on the deposits its checkpoint took in, so a depos
   assert.deepEqual([close.amount, close.protectedRemaining, close.winningsRemaining], [500n, 500n, 0n]);
   // A lock-in the same: 1500 locked in beside a late deposit of 500 leaves all 2000 protected.
   const other = await open(f, b, 1000n),
-    lock = await step(f, { ...other, ...(await signedIncrease(f, other, 500n)) }, 5, 1500n, { recipient: contract });
+    lock = await step(f, { ...other, ...(await signedIncrease(f, other, 500n)) }, 6, 1500n, { recipient: b.address });
   await (await f.contract.connect(b).deposit(b.address, { value: 500n })).wait();
   await (await f.contract.withdraw(lock.evidence)).wait();
   const c = await f.contract.channels(other.opening.channelId);
@@ -399,7 +460,7 @@ test('a close is paid out of the collateral what its deposits do not cover, a lo
   const other = await open(f, b, 1000n);
   await (await offered(f, other.opening.channelId, 500n, 0n, later)).buy(b);
   const won = { ...other, ...(await signedIncrease(f, other, 300n)) },
-    lock = await step(f, won, 5, 1300n, { recipient: await f.contract.getAddress() });
+    lock = await step(f, won, 6, 1300n, { recipient: b.address });
   await (await f.contract.withdraw(lock.evidence)).wait();
   let c = await f.contract.channels(other.opening.channelId);
   assert.deepEqual([c.deposited, c.principal, c.collateral], [2300n, 1300n, 200n]);
@@ -599,7 +660,7 @@ test("a lock-in during a close goes into the account's next channel, and so does
     contract = await f.contract.getAddress(),
     ch = await open(f, env.wallets[1], 100n),
     win = await signedIncrease(f, ch, 50n),
-    lockIn = await step(f, { ...ch, ...win }, 5, 100n, { recipient: contract });
+    lockIn = await step(f, { ...ch, ...win }, 6, 100n, { recipient: ch.player.address });
   await (await f.contract.fundBankroll({ value: 50n })).wait();
   await (await f.contract.startClose(lockIn.evidence)).wait();
   await (await f.contract.withdraw(lockIn.evidence)).wait();

@@ -161,14 +161,18 @@ export function receiptSummary(
           invest: 'Investment declined',
           bank: 'Bank deposit declined',
           withdrawal: 'Withdrawal declined',
+          transfer: 'Transfer declined',
           'lock-in': 'Lock-in declined',
+          loan: 'Loan declined',
         } as Record<string, string>
       )[receipt.kind],
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: 'neutral',
       amount: `0 ETH`,
       amountLabel: 'Balance change',
-      description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'lock-in'].includes(receipt.kind)
+      description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'transfer', 'lock-in', 'loan'].includes(
+        receipt.kind,
+      )
         ? 'Your balance is unchanged.'
         : 'Your balance is unchanged. You can place another bet.',
       notice: receipt.reason,
@@ -203,12 +207,16 @@ export function receiptSummary(
           : receipt.withdrawal && !receipt.paid
             ? receipt.kind === 'lock-in'
               ? 'Locking in'
-              : 'Withdrawal on its way'
+              : receipt.kind === 'transfer'
+                ? 'Transfer on its way'
+                : 'Withdrawal on its way'
             : (
                 {
                   deposit: 'Deposited',
+                  loan: 'Network fee lent',
                   collateral: 'Collateral bought',
                   withdrawal: 'Withdrawn',
+                  transfer: 'Transferred',
                   'lock-in': 'Balance locked in',
                   'withdrawal-sent': 'Withdrawal sent',
                   'close-started': 'Close started',
@@ -233,19 +241,21 @@ export function receiptSummary(
       ? 'Deposited'
       : receipt.kind === 'withdrawal'
         ? 'Paid out'
-        : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
-          ? 'Received'
-          : receipt.kind === 'invest'
-            ? 'Invested'
-            : receipt.kind === 'redeem'
-              ? 'Owed to you'
-              : ['payment', 'developer-bet', 'bank', 'collateral'].includes(receipt.kind)
-                ? 'Sent'
-                : receipt.kind === 'closure'
-                  ? 'Claim recorded'
-                  : ['withdrawal-sent', 'close-started', 'bet-disputed', 'dispute'].includes(receipt.kind)
-                    ? 'No payment'
-                    : `ETH received`;
+        : receipt.kind === 'loan'
+          ? 'Lent to you'
+          : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
+            ? 'Received'
+            : receipt.kind === 'invest'
+              ? 'Invested'
+              : receipt.kind === 'redeem'
+                ? 'Owed to you'
+                : ['payment', 'developer-bet', 'bank', 'collateral'].includes(receipt.kind)
+                  ? 'Sent'
+                  : receipt.kind === 'closure'
+                    ? 'Claim recorded'
+                    : ['withdrawal-sent', 'close-started', 'bet-disputed', 'dispute'].includes(receipt.kind)
+                      ? 'No payment'
+                      : `ETH received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (played) {
@@ -286,13 +296,22 @@ export function receiptSummary(
     description = `Taken from your bank and collected into your balance. Balance ${ether(receipt.balance)} ETH`;
   if (receipt.kind === 'earnings')
     description = `Commission your games earned, collected into your balance. Balance ${ether(receipt.balance)} ETH`;
-  // The contract makes a withdrawal or a lock-in a claim under its ID once the casino, or anyone, sends it, and pays
-  // what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into the
-  // account's own channel.
+  if (receipt.kind === 'loan')
+    description = `The network fee your deposit ${receipt.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${ether(receipt.balance)} ETH`;
+  // The contract makes a withdrawal, a transfer or a lock-in a claim under its ID once the casino, or anyone, sends it,
+  // and pays what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into
+  // the account's own channel, and a transfer into the channel of the account it names.
   if (receipt.withdrawal) {
-    const into = same(receipt.to, contract);
+    const into = same(receipt.to, contract),
+      transfer = receipt.kind === 'transfer',
+      repaid = BigInt(receipt.proof?.base?.loan ?? 0),
+      fee = BigInt(receipt.fee ?? 0),
+      charges = [
+        fee ? `the casino ${ether(fee)} ETH for sending it` : '',
+        repaid ? `back the ${ether(repaid)} ETH network fee the casino lent it` : '',
+      ].filter(Boolean);
     status = receipt.paid
-      ? into
+      ? into || transfer
         ? 'In as deposits'
         : 'Paid on-chain'
       : receipt.returned
@@ -301,22 +320,39 @@ export function receiptSummary(
           ? 'Part waits for the bankroll'
           : 'Waiting to be paid';
     tone = receipt.paid ? 'positive' : receipt.returned ? 'neutral' : 'warning';
-    amountLabel = receipt.paid ? (into ? 'Locked in' : 'Paid out') : receipt.returned ? 'In the claim' : 'To be paid';
+    amountLabel = receipt.paid
+      ? into
+        ? 'Locked in'
+        : transfer
+          ? 'Transferred'
+          : 'Paid out'
+      : receipt.returned
+        ? 'In the claim'
+        : 'To be paid';
     description = [
       `${receipt.kind === 'lock-in' ? 'All of your balance' : 'From your balance'} ${
-        into ? 'into your own channel, as deposits the contract holds' : `to ${receipt.to}`
+        into
+          ? 'into your own channel, as deposits the contract holds'
+          : transfer
+            ? `into the HookedIn balance of ${receipt.to}`
+            : `to ${receipt.to}`
       }.`,
+      charges.length ? `Your balance paid ${charges.join(' and paid ')}.` : '',
       receipt.paid
         ? into
           ? 'The contract has put it in, and your balance takes it in as a deposit.'
-          : 'The contract has paid it.'
+          : transfer
+            ? 'The contract has put it into that balance.'
+            : 'The contract has paid it.'
         : receipt.returned
           ? 'It never became a claim, so the close returned it: it is part of what your closed balance is owed, under Waiting to be paid.'
           : receipt.recorded
-            ? `The contract still owes ${ether(receipt.owed)} ETH of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
-            : "The contract makes it a claim under the withdrawal's ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.",
+            ? `The contract still owes ${ether(receipt.owed)} ETH of it, paid as the bankroll has the cash${transfer ? ', into that balance' : ': collect it under Waiting to be paid'}.`
+            : 'The contract makes it a claim under its ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.',
       `Balance ${ether(receipt.balance)} ETH`,
-    ].join(' ');
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
   const notice =
     receipt.status === 'orphaned'

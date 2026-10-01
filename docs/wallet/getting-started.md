@@ -30,13 +30,18 @@ you have open opens again under it.
 
 Then send Sepolia ETH to the address: free test ETH from the faucet the tab links to, or a withdrawal from another
 player's balance. The wallet checks the address every 4 seconds while the page is visible and adds what arrives to your
-balance, less the network fee and within your daily deposit limit; ETH too small to cover its fee waits for more.
+balance, within your daily deposit limit; ETH too small to cover its fee waits for more.
 
 Each deposit is one transaction, `deposit`, into your account's channel, and your first opens it. After two
 confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the
 money into your balance; until then the Wallet page shows it as arriving, and a close would pay it back all the same.
 From then on bets need no transactions. Anyone can deposit into your channel through the contract, naming your deposit
 address, and the wallet takes it in the same way.
+
+A deposit of everything at the address keeps back the most its transaction can cost, its gas limit at its fee cap. Once
+your balance has taken the deposit in, the wallet asks the casino to lend it exactly that, when it is at most 1% of the
+deposit, so your balance holds all the address had. The Wallet page shows the loan, and your next withdrawal, transfer
+or close pays it back first. A deposit your daily limit cut short is lent nothing.
 
 ETH stays at the deposit address instead, for fees or to withdraw elsewhere, while **Add ETH that arrives at my deposit
 address to my balance** is off in Settings, while the casino is unavailable, and from the start of a close until your
@@ -90,13 +95,17 @@ pause, while withdrawals, recovery and settling an operation already signed go o
 
 ## Withdraw
 
-On the Wallet dialog's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be a valid one other than the zero address, your own deposit address and the casino's
-contract, into which [lock in](closing-and-claims.md#lock-in-your-balance) moves a balance. Your account signs a
+On the Wallet dialog's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be
+a valid one other than the zero address, your own deposit address and the casino's contract. Your account signs a
 withdrawal of that amount to that address and the casino signs your balance after it at once: your balance pays it now,
 and you play on with the rest. The contract then pays the address, out of your deposits first, then your
 [collateral](closing-and-claims.md#collateral), and the bankroll for the rest
-([withdraw](closing-and-claims.md#withdraw)). To give a friend ETH to play with, enter their deposit address:
-their wallet puts it into their balance.
+([withdraw](closing-and-claims.md#withdraw)). Your balance also pays the casino a fee for sending the withdrawal to the
+contract, which the tab shows, and pays back what the casino lent it: **Max** is your balance less both.
+
+**Put it into that account's HookedIn balance** makes it a transfer instead: the contract puts it into the balance of
+the account at that address, as deposits. That is how you give a friend ETH to play with. The casino declines a
+transfer to an address with no HookedIn balance.
 
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
 much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight

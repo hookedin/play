@@ -29,9 +29,10 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   of the balance after it, which your receipt keeps, anyone can have the contract record it as a claim, once, until the
   channel's close is final, and only after every withdrawal you made before it, so nobody can make a lock-in take less
   of your deposits than it should. The contract pays at once what your deposits and house cash cover and owes the rest;
-  a recipient that refuses the payment leaves all of it owed. One never recorded comes back to you with the close.
-- **Losses are real.** A close is owed your final balance, and the deposits above it return to house cash. Nothing
-  refunds what you lost.
+  a recipient that refuses the payment leaves all of it owed. One never recorded comes back to you with the close. A
+  transfer, a withdrawal into another account's balance, is recorded the same way and paid into that balance.
+- **Losses are real.** A close is owed your final balance, less what the casino lent it, and the deposits above that
+  return to house cash. Nothing refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no
   signature, either alone or followed by one operation your account authorized and the casino signed, settled by the
   secret and seed that hash to what the bet named, or by a casino bet the casino's quote covers, disputed.
@@ -73,7 +74,8 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   it can count on cover all of it, and declines it otherwise, so a withdrawal is normally paid in full the moment it is sent. It sends
   each it takes on to the contract once, oldest first and one transaction at a time, and owes it until a confirmed block
   shows it recorded, whoever sent it, or its channel's close final without it. One it cannot send yet waits while the
-  next is sent, and its public status says why. Play never waits for a withdrawal.
+  next is sent, and its public status says why. Play never waits for a withdrawal. It pays the gas, and charges a fee
+  for it that it sets from the network's gas price.
 - **Admitting bets.** The casino admits each casino bet against its quote's virtual bankroll with a Kelly rule, and
   sets its commission against the same figure. It names the virtual bankroll it quotes: half its bankroll, by its own
   books.
@@ -99,8 +101,8 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
 
 These are an operator's promises, but for settling a covered casino bet, which the contract enforces. The wallet is
 built not to need them: it verifies every signature, preimage and balance change itself, keeps the evidence, can send a
-withdrawal to the contract itself and can settle on-chain alone, by closing and by disputing. What it cannot verify is
-availability and liquidity.
+withdrawal to the contract without the casino and can settle on-chain alone, by closing and by disputing. What it cannot
+verify is availability and liquidity.
 
 ## What you do yourself
 
@@ -186,7 +188,7 @@ The wallet checks:
 - whether the contract has recorded each withdrawal, by its ID, and what it still owes of it;
 - game URLs and every bridge request.
 
-It takes on the casino's word: commission, the virtual bankroll a quote names, the fund's equity and total shares, the
-developer earnings tally, a developer bank's balance, and, on a device without your evidence, that the state it holds
-of your balance is the latest. It takes on the developer's word what a developer bet pays and which bet a collapsed
-step draws, and on the game's word everything a game shows.
+It takes on the casino's word: commission, the virtual bankroll a quote names, the withdrawal fee up to 300,000 gas at
+the gas price the wallet reads itself, the fund's equity and total shares, the developer earnings tally, a developer bank's balance, and, on a device without your evidence, that the
+state it holds of your balance is the latest. It takes on the developer's word what a developer bet pays and which bet a
+collapsed step draws, and on the game's word everything a game shows.

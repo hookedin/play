@@ -175,15 +175,22 @@ for (const initialSeed of [1, 4294967295])
             assert.equal((await f.contract.channels(ch.state.channelId)).disputedPrize, q.prize);
           } else await (await f.contract.connect(player).startClose(ch.base)).wait();
         } else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
-          // A withdrawal, to the account's address, another, or the contract itself as a lock-in, which anyone has
-          // made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest owed in
-          // the winnings queue. It at times waits, while deposits arrive and are taken in, and as withdrawals record in
-          // the order they were signed, so do those after it; one still waiting when the channel closes comes back
-          // with the close.
-          const amount = BigInt(1 + random(Number(ch.state.balance))),
-            contract = await f.contract.getAddress(),
-            recipient = [player.address, Wallet.createRandom().address, contract][random(3)],
-            sent = await transition(f, ch, 5, amount, { recipient });
+          // At times the casino lends the balance something first, which the withdrawal pays back, or a close if none
+          // does.
+          if (!random(4)) await transition(f, ch, 7, BigInt(1 + random(50)));
+          // It pays the loan back, and at times the casino a fee for sending it.
+          const fee = BigInt(random(3)),
+            free = BigInt(ch.state.balance) - BigInt(ch.state.loan) - fee;
+          if (free <= 0n) continue;
+          // A withdrawal, to the account's address or another, or a transfer to the account itself as a lock-in, which
+          // anyone has made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest
+          // owed in the winnings queue. It at times waits, while deposits arrive and are taken in, and as withdrawals
+          // record in the order they were signed, so do those after it; one still waiting when the channel closes comes
+          // back with the close.
+          const amount = BigInt(1 + random(Number(free))),
+            pick = random(3),
+            recipient = pick === 1 ? Wallet.createRandom().address : player.address,
+            sent = await transition(f, ch, pick === 2 ? 6 : 5, amount, { recipient, fee });
           (ch.owing ??= []).push(sent);
           if (ch.owing.length > 1) await assert.rejects(f.contract.withdraw.staticCall(sent));
           if (random(2)) {
@@ -200,7 +207,7 @@ for (const initialSeed of [1, 4294967295])
               const claimId = hashOperation(f.d, owed.step.operation),
                 claim = await f.contract.claims(claimId);
               withdrawals.push(claimId);
-              if (owed.step.operation.recipient === contract)
+              if (Number(owed.step.operation.kind) === 6)
                 locked += BigInt(owed.step.operation.amount) - claim.protectedRemaining - claim.winningsRemaining;
             }
             const after = await f.contract.channels(ch.state.channelId);

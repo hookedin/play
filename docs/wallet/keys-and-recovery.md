@@ -23,8 +23,7 @@ tab or **Your key** in Settings:
   Accounts in Settings, opens it in any copy of the wallet, including one you [build yourself](#recovery-mode). Anyone
   who has the file can take everything the account holds.
 
-**Show this wallet's private key** shows the key of the account in use. Nobody can recover a lost key for you. Once you
-save your key, the wallet asks the browser to keep its storage rather than clear it to make room.
+**Show this wallet's private key** shows the key of the account in use. Nobody can recover a lost key for you.
 
 ## On another device
 
@@ -48,9 +47,13 @@ could not tell. A current recovery bundle settles your balance without trusting 
 **Export recovery bundle**, under Recovery on the Wallet page, saves `hookedin-channel-<channelId>.json` for your
 balance's channel, and one for a channel still closing beside it; **Export evidence** beside a closed balance's claim,
 and the banner of a pending operation, do the same. A bundle names the deployment, the channel and its latest evidence,
-and holds the evidence of each of your withdrawals the contract may still owe something and a casino bet the casino has
-not settled, with its quote ([its fields](../reference/signed-messages.md#evidence)); it holds no keys, no game data and
-no pricing. It changes with every operation, so export it again after you play or withdraw.
+and holds the evidence of each of your withdrawals and transfers the contract may still owe something and a casino bet
+the casino has not settled, with its quote ([its fields](../reference/signed-messages.md#evidence)); it holds no keys,
+no game data and no pricing. It changes with every operation, so export it again after you play or withdraw.
+
+A browser may clear a site's data to free disk space, your evidence with the wallet's. **Keep this wallet's data**,
+under Recovery, asks it not to; Recovery says whether it does. Firefox asks you, and other browsers decide for
+themselves. When the browser declines, your recovery bundle is the copy that lasts.
 
 **Import a recovery bundle**, under Recovery, reads one back while no operation or transaction is pending. The wallet
 refuses a bundle of another chain, contract, owner or account, one older than or conflicting with its saved checkpoint,

@@ -131,4 +131,26 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   // A withdrawal whose claim its account collects into the contract names that, not the address it first paid.
   const redirected = receiptSummary({ ...sent, to: contract, recorded: true, owed: '500' }, contract);
   assert.match(redirected.description!, /^From your balance into your own channel, as deposits the contract holds\./);
+  // A transfer goes into the HookedIn balance of the account it names.
+  const transfer = receiptSummary({ ...sent, kind: 'transfer', recorded: true, paid: true, owed: '0' }, contract);
+  assert.deepEqual(
+    [transfer.title, transfer.status, transfer.amountLabel],
+    ['Transferred', 'In as deposits', 'Transferred'],
+  );
+  assert.match(transfer.description!, /^From your balance into the HookedIn balance of 0x3333.*\./);
+  // One that paid the casino its fee for sending it, and back a loan, says so.
+  const repaying = receiptSummary({ ...sent, fee: '2', proof: { base: { loan: '5' } } }, contract);
+  assert.match(
+    repaying.description!,
+    /Your balance paid the casino .* ETH for sending it and paid back the .* ETH network fee the casino lent it\./,
+  );
+});
+
+test('a loan reads as the network fee the casino lent the balance', () => {
+  const lent = receiptSummary(
+    { kind: 'loan', status: 'signed', amount: '5', details: { id: '0x' + 'b'.repeat(64) }, balance: '15' },
+    contract,
+  );
+  assert.deepEqual([lent.title, lent.amountLabel], ['Network fee lent', 'Lent to you']);
+  assert.match(lent.description!, /your next withdrawal or transfer pays it back first/);
 });

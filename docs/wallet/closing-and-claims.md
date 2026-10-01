@@ -50,11 +50,10 @@ the wallet last read the chain. Its actions are the rest of this page and
 ## Lock in your balance
 
 What your balance holds above your deposits and collateral is winnings, a claim on the shared bankroll. **Lock in my
-balance**, under
-Recovery, makes all of your balance deposits: your account signs a [withdrawal](#withdraw) of the whole balance to the
-contract itself, which the casino signs at once and sends to the contract, paying its fee. Your deposits pay back what
-they cover, your collateral the next part and house cash the rest, and all of it goes into your channel as deposits
-the contract holds.
+balance**, under Recovery, makes your balance deposits: your account signs a [transfer](#withdraw) to your own account
+of all of it but its loan and the fee for sending it, which the transfer pays as well. The casino signs it at once and
+sends it to the contract. Your deposits pay back what they cover, your collateral the next part and house cash the rest,
+and all of it goes into your channel as deposits the contract holds.
 
 Locking in closes the open game first, and your balance is empty until it has taken those deposits in:
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
@@ -65,8 +64,10 @@ of deposits, and withdrawing it needs no house cash, until you win more.
 ## Withdraw
 
 A [withdrawal](getting-started.md#withdraw) is an operation your account signs that names the address it pays as its
-`recipient`. The casino signs the checkpoint after it at once, so your balance is lower from then on, and sends the
-operation with that signature, the evidence your receipt holds, to the contract's `withdraw`
+`recipient`. Your balance pays it, pays back what the casino lent it ([deposit](getting-started.md#deposit)) and pays
+the casino's fee for sending it to the contract ([fees and gas](#fees-and-gas)). The casino signs the checkpoint after
+it at once, so your balance is lower from then on, and sends the operation with that signature, the evidence your
+receipt holds, to the contract's `withdraw`
 ([functions that change state](../reference/contract.md#functions-that-change-state)); anyone may send it. The contract
 records each withdrawal once, under its ID, the hash of its operation, and in the order you made them.
 
@@ -91,6 +92,11 @@ not sent yet offers **Send it now** in Activity once every withdrawal you made b
 withdrawal can be sent until its channel's close is finished; one nobody sent by then comes back to you with the close,
 not to its address: what your deposits and collateral cover as its protected amount, and the rest as winnings.
 
+A [transfer](getting-started.md#withdraw) is a withdrawal into another account's balance, its `recipient` being that
+account: the contract records it the same way and pays it into that account's current channel as deposits, and what
+stays owed of it is that account's claim. The casino declines a transfer to an address it knows no balance for: _That
+address has no HookedIn balance to transfer into_.
+
 ## Close without the casino
 
 1. Press **Close without the casino** under Recovery, or in the banner of a pending operation. Your account sends
@@ -105,10 +111,10 @@ not to its address: what your deposits and collateral cover as its protected amo
 
 The evidence is your latest countersigned checkpoint, or the channel's base while nothing has been signed since it
 began, either alone or followed by the last operation the casino signed;
-[finalization](../reference/contract.md#finalization) says what it is owed. A close moves your account to its next
-channel at once, whoever started it: your next deposit opens a new balance while the old channel closes. The close pays
-your account, at your deposit address, and until your next balance opens the wallet puts nothing there into a balance
-by itself ([deposit](getting-started.md#deposit)).
+[finalization](../reference/contract.md#finalization) says what it is owed, what the casino lent your balance coming off
+it first. A close moves your account to its next channel at once, whoever started it: your next deposit opens a new
+balance while the old channel closes. The close pays your account, at your deposit address, and until your next balance
+opens the wallet puts nothing there into a balance by itself ([deposit](getting-started.md#deposit)).
 
 ## Dispute a casino bet
 
@@ -168,7 +174,8 @@ Finalizing records a claim for what the close is owed, in two parts:
   for the channel and `collateral` its collateral: paid in full whenever the claim is collected.
 - **Winnings**, whatever is above it: they join the queue of every claim's winnings, first in, first out.
 
-A withdrawal is a claim too, under its ID, with its protected amount and winnings worked out the same way when it is recorded.
+A withdrawal or a transfer is a claim too, under its ID, with its protected amount and winnings worked out the same way
+when it is recorded.
 
 **Waiting to be paid**, on the Wallet page, lists every claim of this account that is still owed something, a closed
 balance's or a withdrawal's, 20 at a time, those of older channels included, with where it pays, what it is owed and
@@ -191,15 +198,20 @@ address.
 
 ## Fees and gas
 
-Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account;
-the casino sends withdrawals and lock-ins to the contract, and pays their fees. The wallet caps each at 2,000,000 gas,
-200 gwei per gas and 0.05 ETH in total fees, and stops before signing when the network's estimate is higher; the casino
-cannot raise these caps. A deposit's fee comes out of what it deposits. Every other transaction needs its fee at your
-deposit address, where the wallet keeps nothing back: with **Add ETH that arrives at my deposit address to my balance**
-on, what arrives goes into your balance while the channel is open, within your deposit limit. Starting **Close without
-the casino** turns that off, so ETH sent for its fee stays at the address even if starting the close fails. A failure
-before signing leaves the balance open, and the close can be tried again; a signed close keeps its saved transaction to
-retry. Recovery shows the ETH the address holds for fees. You can also turn it off under **Deposits** in Settings and
-send ETH to the address, or have somebody relay the transaction: anyone can send `withdraw`, `challengeClose`,
-`finalizeClose` and `claim`, and only your account or the casino can send `startClose`. A pending transaction shows
-**Retry** and **Speed up** ([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)).
+Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account.
+The wallet caps each at 2,000,000 gas, 200 gwei per gas and 0.05 ETH in total fees, and stops before signing when the
+network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals, transfers and lock-ins
+to the contract and pays their gas, and each pays the casino a fee for it out of your balance: 150,000 gas, about what
+sending one costs, at the network's gas price
+([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
+tab opens and again before signing, and signs none above 300,000 gas at the gas price it reads itself, or above the fee
+it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it
+is small ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where
+the wallet keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes
+into your balance while the channel is open, within your deposit limit. Starting **Close without the casino** turns that
+off, so ETH sent for its fee stays at the address even if starting the close fails. A failure before signing leaves the
+balance open, and the close can be tried again; a signed close keeps its saved transaction to retry. Recovery shows the
+ETH the address holds for fees. You can also turn it off under **Deposits** in Settings and send ETH to the address, or
+have somebody relay the transaction: anyone can send `withdraw`, `challengeClose`, `finalizeClose` and `claim`, and only
+your account or the casino can send `startClose`. A pending transaction shows **Retry** and **Speed up**
+([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)).

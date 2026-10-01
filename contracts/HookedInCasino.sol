@@ -7,9 +7,9 @@ pragma solidity ^0.8.28;
 /// a channel, which protects its winnings from the owner.
 contract HookedInCasino {
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
-    // Every deposit, and every signed balance, deposited and withdrawn total, is below 2^96 wei, as is every stake, prize
-    // and quoted virtual bankroll: no realistic number of claims can overflow the uint256 aggregate debt and block a
-    // finalization or a withdrawal, and a disputed bet's Kelly condition fits in 256 bits.
+    // Every deposit, and every signed balance, deposited, withdrawn and loan total, is below 2^96 wei, as is every stake,
+    // prize and quoted virtual bankroll: no realistic number of claims can overflow the uint256 aggregate debt and block
+    // a finalization or a withdrawal, and a disputed bet's Kelly condition fits in 256 bits.
     uint256 public constant MAX_BALANCE = 1 << 96;
     uint8 private constant STATUS_UNOPENED = 0;
     uint8 private constant STATUS_OPEN = 1;
@@ -21,13 +21,15 @@ contract HookedInCasino {
     uint256 private constant KIND_CREDIT = 3;
     uint256 private constant KIND_DEPOSIT = 4;
     uint256 private constant KIND_WITHDRAWAL = 5;
+    uint256 private constant KIND_TRANSFER = 6;
+    uint256 private constant KIND_LOAN = 7;
     bytes32 public constant OUTCOME_DOMAIN = keccak256("HOOKEDIN/OUTCOME");
     bytes32 constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 constant STATE_TYPEHASH = keccak256(
-        "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn)"
+        "Checkpoint(bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn,uint256 loan)"
     );
     bytes32 constant OP_TYPEHASH = keccak256(
-        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo)"
+        "Operation(bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint256 fee,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo)"
     );
     bytes32 constant QUOTE_TYPEHASH = keccak256(
         "Quote(bytes32 channelId,bytes32 previousStateHash,bytes32 round,uint256 virtualBankroll,uint256 expiresAt)"
@@ -36,7 +38,7 @@ contract HookedInCasino {
         keccak256("CollateralOffer(bytes32 channelId,uint256 amount,uint256 price,uint256 expiresAt)");
     // The struct hash of the all-zero operation: the one encoding of "no step".
     bytes32 constant EMPTY_OPERATION =
-        keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, address(0), 0, 0, bytes32(0), bytes32(0), bytes32(0)));
+        keccak256(abi.encode(OP_TYPEHASH, bytes32(0), bytes32(0), 0, 0, 0, address(0), 0, 0, 0, bytes32(0), bytes32(0), bytes32(0)));
     // The same authority signs settlement evidence and withdraws house funds.
     // It can create winnings claims; no separate key can make those promises safe.
     // Historical signatures remain valid for the lifetime of this deployment.
@@ -52,8 +54,9 @@ contract HookedInCasino {
     uint256 public collateralSales;
     bool transient private entered;
 
-    /// `deposited` is how much of the channel's on-chain deposits the balance has taken in, and `withdrawn` how much it
-    /// has paid out in withdrawals. A close adds the deposits not taken in, and the withdrawals not yet claims.
+    /// `deposited` is how much of the channel's on-chain deposits the balance has taken in, `withdrawn` how much it has
+    /// paid out in withdrawals and transfers, and `loan` how much of the balance the casino lent it. A close adds the
+    /// deposits not taken in and the withdrawals not yet claims, and pays the loan back first.
     struct Checkpoint {
         bytes32 channelId;
         uint256 sequence;
@@ -62,19 +65,22 @@ contract HookedInCasino {
         uint256 balance;
         uint256 deposited;
         uint256 withdrawn;
+        uint256 loan;
     }
 
-    /// The contract settles money: a casino bet, a debit, a credit, a deposit or a withdrawal. What an operation means to
-    /// the wallet and the casino (its name, its game, what it pays into or collects from) is the hash `memo`,
-    /// which the contract does not read.
+    /// The contract settles money: a casino bet, a debit, a credit, a deposit, a withdrawal, a transfer or a loan. What an
+    /// operation means to the wallet and the casino (its name, its game, what it pays into or collects from) is the hash
+    /// `memo`, which the contract does not read.
     struct Operation {
         bytes32 channelId;
         bytes32 previousStateHash;
         uint256 sequence;
         uint256 kind;
         uint256 amount;
-        // Whom a withdrawal pays.
+        // Whom a withdrawal pays: an address, or for a transfer the account whose current channel it goes into.
         address recipient;
+        // What a withdrawal or a transfer pays the casino for sending it to this contract, out of the balance.
+        uint256 fee;
         // A casino bet pays `prize` when its round's 64-bit outcome is below `chance`.
         uint64 chance;
         uint256 prize;
@@ -132,10 +138,10 @@ contract HookedInCasino {
         uint256 disputedPrize;
     }
 
-    /// What the contract owes, and to whom: a finalized channel's close, under the channel's ID, or a withdrawal, under
-    /// the hash of its operation. The beneficiary is the account, which may redirect it. A recipient that is this contract
-    /// is the beneficiary's current channel: what the claim pays goes into it as deposits. A withdrawal paid in full at
-    /// once, and a close owed nothing, leave no claim.
+    /// What the contract owes, and to whom: a finalized channel's close, under the channel's ID, or a withdrawal or a
+    /// transfer, under the hash of its operation. The beneficiary is the account it is owed to, a transfer's being the
+    /// account it goes to, which may redirect it. A recipient that is this contract is the beneficiary's current channel:
+    /// what the claim pays goes into it as deposits. One paid in full at once, and a close owed nothing, leave no claim.
     struct Claim {
         address beneficiary;
         address recipient;
@@ -300,16 +306,18 @@ contract HookedInCasino {
         emit CollateralBought(channelId, offer, amount, msg.value);
     }
 
-    // Anyone may have a withdrawal recorded: an operation the account signed, followed by the checkpoint the casino signed
-    // after it. It becomes a claim once, in the order the account signed its channel's withdrawals, until the channel is
-    // finalized: out of the deposits its checkpoint took in first, then the channel's collateral, and the rest winnings in
-    // the queue behind every claim before it. What house cash reaches is paid to its recipient at once; the claim keeps
-    // the rest, or all of it if the recipient refuses the payment, for anyone to collect. One never recorded comes back
-    // with the close, which is owed what the channel's states withdrew and did not make claims. A withdrawal to this
-    // contract locks the balance in: it goes into the account's current channel as deposits.
+    // Anyone may have a withdrawal or a transfer recorded: an operation the account signed, followed by the checkpoint the
+    // casino signed after it. It becomes a claim once, in the order the account signed its channel's withdrawals and
+    // transfers, until the channel is finalized: out of the deposits its checkpoint took in first, then the channel's
+    // collateral, and the rest winnings in the queue behind every claim before it. What house cash reaches is paid at
+    // once: a withdrawal to its recipient, and a transfer into its recipient account's current channel as deposits, which
+    // locks the balance in when that account is its own. The claim keeps the rest, or all of a withdrawal if its recipient
+    // refuses the payment, for anyone to collect. One never recorded comes back with the close, which is owed what the
+    // channel's states withdrew and did not make claims.
     function withdraw(Evidence calldata evidence) external nonReentrant {
         Operation calldata op = evidence.step.operation;
-        if (op.kind != KIND_WITHDRAWAL) revert InvalidTerms();
+        bool transfer = op.kind == KIND_TRANSFER;
+        if (op.kind != KIND_WITHDRAWAL && !transfer) revert InvalidTerms();
         (Checkpoint memory s, bytes32 id) = _derive(evidence.base, _signedBase(evidence), evidence.step, false);
         Channel storage c = channels[s.channelId];
         // Every earlier withdrawal of the channel is a claim already, and this one is not; and a checkpoint pays out only
@@ -332,10 +340,12 @@ contract HookedInCasino {
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
         emit Withdrawal(id, s.channelId, op.recipient, op.amount);
+        // A transfer is owed to the account it goes to, and paid into its current channel.
+        (address beneficiary, address recipient) = transfer ? (op.recipient, address(this)) : (c.player, op.recipient);
         uint256 reached = _reached(queuedWinnings, winnings);
-        if (_send(id, c.player, op.recipient, protectedAmount, reached)) (protectedAmount, winnings) = (0, winnings - reached);
+        if (_send(id, beneficiary, recipient, protectedAmount, reached)) (protectedAmount, winnings) = (0, winnings - reached);
         if (protectedAmount + winnings != 0) {
-            claims[id] = Claim(c.player, op.recipient, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
+            claims[id] = Claim(beneficiary, recipient, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
         }
     }
 
@@ -358,10 +368,14 @@ contract HookedInCasino {
         next.previousStateHash = baseHash;
         next.transitionHash = keccak256(abi.encode(operationHash, step.secret));
         bool casinoBet = op.kind == KIND_CASINO_BET;
-        bool pays = op.kind == KIND_WITHDRAWAL;
-        if (op.amount == 0 || op.amount >= MAX_BALANCE) revert InvalidTerms();
-        // Only a withdrawal names a recipient, and never nobody.
-        if (pays ? op.recipient == address(0) : op.recipient != address(0)) revert InvalidTerms();
+        bool pays = op.kind == KIND_WITHDRAWAL || op.kind == KIND_TRANSFER;
+        if (op.amount == 0 || op.amount >= MAX_BALANCE || op.fee >= MAX_BALANCE) revert InvalidTerms();
+        // Only a withdrawal and a transfer name a recipient, never nobody and never this contract, and pay a fee.
+        if (
+            pays
+                ? op.recipient == address(0) || op.recipient == address(this)
+                : op.recipient != address(0) || op.fee != 0
+        ) revert InvalidTerms();
         // A casino bet names two hashes: its round, the hash of a secret the casino fixed first, and the hash
         // of a seed. Only that secret and that seed settle it, and every bet on one round and seed
         // shares one outcome. Whoever holds one of the two cannot know the outcome before both are out.
@@ -380,15 +394,21 @@ contract HookedInCasino {
         if (op.kind == KIND_CREDIT) {
             // The casino attests what the credit collects. Principal and liquidity do not move.
             next.balance += op.amount;
+        } else if (op.kind == KIND_LOAN) {
+            // The casino lends: the balance can stake it, and a withdrawal, a transfer or a close pays it back first.
+            next.balance += op.amount;
+            next.loan += op.amount;
         } else if (op.kind == KIND_DEPOSIT) {
             // The balance takes in money deposited on-chain; a close checks it was.
             next.balance += op.amount;
             next.deposited += op.amount;
         } else if (casinoBet || op.kind == KIND_DEBIT || pays) {
-            // The stake is paid to enter; a casino bet pays its prize when the outcome is below its chance.
-            if (op.amount > base.balance) revert InvalidTerms();
-            next.balance -= op.amount;
-            if (pays) next.withdrawn += op.amount;
+            // The stake is paid to enter; a casino bet pays its prize when the outcome is below its chance. A withdrawal or
+            // a transfer pays the loan back and its fee as well.
+            uint256 repaid = pays ? base.loan + op.fee : 0;
+            if (op.amount + repaid > base.balance) revert InvalidTerms();
+            next.balance -= op.amount + repaid;
+            if (pays) (next.withdrawn, next.loan) = (next.withdrawn + op.amount, 0);
             if (
                 casinoBet
                     && (disputed || uint64(uint256(keccak256(abi.encode(OUTCOME_DOMAIN, step.seed, step.secret)))) < op.chance)
@@ -408,13 +428,15 @@ contract HookedInCasino {
         if (c.status == STATUS_UNOPENED) revert InvalidState();
         h = hashState(evidence.base);
         if (
-            h != hashState(Checkpoint(evidence.base.channelId, 0, bytes32(0), bytes32(0), 0, 0, 0))
+            h != hashState(Checkpoint(evidence.base.channelId, 0, bytes32(0), bytes32(0), 0, 0, 0, 0))
                 && (_signer(h, evidence.playerSignature) != c.player || _signer(h, evidence.casinoSignature) != owner)
         ) revert Unauthorized();
     }
 
     function _bounded(Checkpoint memory s) private pure {
-        if (s.balance >= MAX_BALANCE || s.deposited >= MAX_BALANCE || s.withdrawn >= MAX_BALANCE) revert InvalidState();
+        if (s.balance >= MAX_BALANCE || s.deposited >= MAX_BALANCE || s.withdrawn >= MAX_BALANCE || s.loan >= MAX_BALANCE) {
+            revert InvalidState();
+        }
     }
 
     function supported(Evidence calldata evidence) public view returns (Checkpoint memory result) {
@@ -443,12 +465,12 @@ contract HookedInCasino {
     }
 
     // What a supported state is owed: its balance, the deposits it has not taken in, and what it withdrew that is not yet a
-    // claim, less what the channel's claims took that it did not withdraw and what it took in that the chain does not
-    // hold; never below nothing. Every signed state can close.
+    // claim, less its loan, what the channel's claims took that it did not withdraw and what it took in that the chain
+    // does not hold; never below nothing. Every signed state can close.
     function _owed(Checkpoint memory s) private view returns (uint256) {
         Channel storage c = channels[s.channelId];
         uint256 owed = s.balance + c.deposited + s.withdrawn;
-        uint256 taken = s.deposited + c.claimed;
+        uint256 taken = s.deposited + c.claimed + s.loan;
         return owed > taken ? owed - taken : 0;
     }
 

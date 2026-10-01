@@ -70,7 +70,7 @@ for (const location of ['cached', 'pending'])
     wallet.render = (() => {}) as any;
     wallet.openGame(testGame());
     const input = { stake: 10n, chance: 123n, prize: 30n };
-    const operation = { kind: 1, amount: '10', recipient: ZeroAddress, chance: '123', prize: '30' };
+    const operation = { kind: 1, amount: '10', recipient: ZeroAddress, fee: '0', chance: '123', prize: '30' };
     const details = { id: id('operation'), game: gameRef(testGame()) };
     const receipt = { operationId: 'operation', details, proof: { step: { operation } } };
     if (location === 'cached') await storage.put('wallet:receipt:operation', receipt);
@@ -103,7 +103,7 @@ test('payment retries reject changed amounts and explicit receipt lookup needs n
     operationId: 'payment',
     amount: '1',
     details: { id: id('payment'), game: gameRef(testGame()) },
-    proof: { step: { operation: { kind: 2, amount: '1', recipient: ZeroAddress, chance: '0', prize: '0' } } },
+    proof: { step: { operation: { kind: 2, amount: '1', recipient: ZeroAddress, fee: '0', chance: '0', prize: '0' } } },
   };
   await storage.put('wallet:receipt:payment', receipt);
   assert.deepEqual(await wallet.getReceipt('payment'), receipt);
@@ -131,6 +131,7 @@ function observingWallet(storage = new MemoryStore()) {
       balance: '10',
       deposited: '10',
       withdrawn: '0',
+      loan: '0',
       sequence: '1',
       index: '0',
       length: '1',
@@ -367,4 +368,7 @@ test("the balance's protection follows the contract's rule for the withdrawals i
   // A deposit the balance took in that a reorganisation took off the chain is shown apart, never as protected.
   onchain = { deposited: '1', principal: '1', collateral: '0', claimed: '0' };
   assert.deepEqual(protection({ balance: '101', deposited: '101', withdrawn: '0' }, onchain), [1, 0, 100, 0]);
+  // What the casino lent the balance is not the account's: a close is owed the balance less it.
+  onchain = { deposited: '100', principal: '100', collateral: '0', claimed: '0' };
+  assert.deepEqual(protection({ balance: '110', deposited: '100', loan: '10' }, onchain), [100, 0, 0, 0]);
 });
