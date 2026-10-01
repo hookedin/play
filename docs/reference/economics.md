@@ -144,8 +144,7 @@ virtualBankroll = bankroll / 2
 ```
 
 `reserved` includes a disputed close's possible payout above the obligation already in the books. A settled win is
-already counted in the player's signed balance. The contract's `disputedPrizes` limits owner withdrawals; it is not a
-second liability. `equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a claim on, is the same without
+already counted in the player's signed balance. `equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a claim on, is the same without
 `reserved` or the floor at 0. A dispute that finalizes above the signed obligation reduces equity as a loss shared by
 all holders, without burning house shares. Investors widen what the Kelly rule admits exactly as the owner's funding does. Every quote names the whole
 virtual bankroll, and a quote binds the casino for a day: the quotes out at once are not divided between them, so the

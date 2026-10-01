@@ -48,15 +48,16 @@ could not tell. A current recovery bundle settles your balance without trusting 
 **Export recovery bundle**, under Recovery on the Wallet page, saves `hookedin-channel-<channelId>.json` for your
 balance's channel, and one for a channel still closing beside it; **Export evidence** beside a closed balance's claim,
 and the banner of a pending operation, do the same. A bundle names the deployment, the channel and its latest evidence,
-and holds the evidence of each of your withdrawals the contract may still owe something
-([its fields](../reference/signed-messages.md#evidence)); it holds no keys, no game data and no pricing. It changes with
-every operation, so export it again after you play or withdraw.
+and holds the evidence of each of your withdrawals the contract may still owe something and a casino bet the casino has
+not settled, with its quote ([its fields](../reference/signed-messages.md#evidence)); it holds no keys, no game data and
+no pricing. It changes with every operation, so export it again after you play or withdraw.
 
 **Import a recovery bundle**, under Recovery, reads one back while no operation or transaction is pending. The wallet
 refuses a bundle of another chain, contract, owner or account, one older than or conflicting with its saved checkpoint,
 one for a channel the contract does not hold for this account, and one holding a withdrawal your account and the casino
 did not sign. From an imported bundle the wallet can close, challenge, finalize and collect, and play on when it holds
-the latest state the casino has; its withdrawals join Activity like ones this browser sent.
+the latest state the casino has; its withdrawals join Activity like ones this browser sent. A casino bet it carries is
+for a [watchtower](#the-watchtower) to dispute: the wallet that imports the bundle does not take it up.
 
 ## When a reply is lost
 
@@ -100,8 +101,8 @@ npm run dev
 
 ## The watchtower
 
-The watchtower watches one channel from its recovery bundle and challenges a stale close for you, from a machine you
-run, with a relayer key of its own: an account apart from yours, with ETH for gas, in `HOOKEDIN_RELAYER_KEY`. It runs
+The watchtower watches one channel from its recovery bundle and challenges a stale close for you, or disputes a casino
+bet the casino left unsettled, from a machine you run, with a relayer key of its own: an account apart from yours, with ETH for gas, in `HOOKEDIN_RELAYER_KEY`. It runs
 from a checkout of this repository:
 
 ```sh
@@ -119,20 +120,24 @@ On start it checks the deployed code and owner against the release's pinned arti
 stops if either differs; outside Anvil it refuses a `witnessRpcUrl` on the same host as `rpcUrl`. Then every 4 seconds
 it reads the bundle again, checks that it belongs to the deployment, observes the chain through both RPCs, and sends
 `challengeClose`, saved in the journal first, when the contract is closing on an older state than the bundle's and the
-deadline has not passed. Each tick prints one JSON line, `{ time, alerts, pending, relayerBalance }`, where `pending` is
+deadline has not passed. When the bundle carries a casino bet its quote covers, it sends `dispute` instead: at once when
+a close stops short of the bet, and on an open channel an hour before the quote expires, which closes the channel with
+the bet. Until then it reports `unsettled-bet`, as the casino may still settle the bet, and the wallet's next export
+then carries none. Each tick prints one JSON line, `{ time, alerts, pending, relayerBalance }`, where `pending` is
 the hash of the journal's pending transaction or `null`; a failed tick prints `{ severity: "critical", reason }` to
-standard error, and the next runs as usual. `SIGINT` and `SIGTERM` stop it after the current tick. It cannot start a
-close, never needs your account's key, and knows only what the bundle holds.
+standard error, and the next runs as usual. `SIGINT` and `SIGTERM` stop it after the current tick. It starts a close
+only by disputing a bet, never needs your account's key, and knows only what the bundle holds.
 
 Each alert is `{ channelId?, severity, reason, remaining?, detail? }`, where `remaining` is the seconds left before the
-challenge deadline:
+challenge deadline, or before the quote expires for `unsettled-bet`:
 
-| `reason`                      | Severity                                      | Meaning                                                                                                                                    |
-| ----------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `stale-close`                 | `warning`; `critical` with under an hour left | The channel is closing on an older state than the evidence. A challenge is sent                                                            |
-| `disputed-bet`                | `warning`; `critical` with under an hour left | The close disputes a casino bet, and the evidence is at its sequence: a challenge with it settles the bet                                  |
-| `missed-deadline`             | `critical`                                    | The channel is closing on an older state than the evidence, and the deadline has passed                                                    |
-| `conflicting-sequence`        | `critical`                                    | The closing state has the evidence's sequence and a different hash                                                                         |
-| `finalized-state-differs`     | `critical`                                    | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged                                         |
-| `channel-defense-failed`      | `critical`                                    | Reading or verifying the channel failed, or the chain cannot settle the evidence (it took in a deposit a reorg removed); `detail` says why |
-| `recovery-transaction-failed` | `critical`                                    | The challenge could not be sent; `detail` says why                                                                                         |
+| `reason`                      | Severity                                      | Meaning                                                                                                                                             |
+| ----------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stale-close`                 | `warning`; `critical` with under an hour left | The channel is closing on an older state than the evidence. A challenge is sent, or a dispute when the close stops short of the bundle's casino bet |
+| `unsettled-bet`               | `warning`; `critical` with under an hour left | The channel is open and the bundle carries a casino bet the casino has not settled. With under an hour left, a dispute is sent                      |
+| `disputed-bet`                | `warning`; `critical` with under an hour left | The close disputes a casino bet, and the evidence is at its sequence: a challenge with it settles the bet                                           |
+| `missed-deadline`             | `critical`                                    | The channel is closing on an older state than the evidence, and the deadline has passed                                                             |
+| `conflicting-sequence`        | `critical`                                    | The closing state has the evidence's sequence and a different hash                                                                                  |
+| `finalized-state-differs`     | `critical`                                    | The channel finalized on a state older than the evidence. A finalized channel cannot be challenged                                                  |
+| `channel-defense-failed`      | `critical`                                    | Reading or verifying the channel failed, or the chain cannot settle the evidence (it took in a deposit a reorg removed); `detail` says why          |
+| `recovery-transaction-failed` | `critical`                                    | The challenge or dispute could not be sent; `detail` says why                                                                                       |

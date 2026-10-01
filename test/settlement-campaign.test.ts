@@ -1,8 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ContractFactory, id, Wallet } from 'ethers';
-import { anvil, deployment, signedIncrease, open, step, assessBinary, claimOf } from '../testing/contract.ts';
-import { baseState, checkpointEvidence, channelId, hashOperation, STATE_TYPES } from '../protocol/protocol.ts';
+import {
+  anvil,
+  deployment,
+  signedIncrease,
+  open,
+  step,
+  assessBinary,
+  claimOf,
+  disputedBet,
+} from '../testing/contract.ts';
+import {
+  baseState,
+  checkpointEvidence,
+  channelId,
+  hashOperation,
+  hashState,
+  STATE_TYPES,
+} from '../protocol/protocol.ts';
 import { MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 import { verifyDeployment, loadArtifact } from '../protocol/deployment.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
@@ -45,6 +61,8 @@ async function invariants(env: any, f: any, records: any, withdrawals: string[] 
       assert.ok(collectable <= claim.protectedRemaining + claim.winningsRemaining);
       covered += BigInt(collectable) - BigInt(claim.protectedRemaining);
       if (c.status === 3n) assert.equal(claim.amount, claim.paid + claim.protectedRemaining + claim.winningsRemaining);
+      // Only a closing channel disputes a bet.
+      if (c.disputedPrize) assert.equal(c.status, 2n);
       return { ch, c, claim };
     }),
   );
@@ -100,8 +118,17 @@ for (const initialSeed of [1, 4294967295])
           const timestamp = (await env.provider.getBlock('latest'))!.timestamp;
           if (BigInt(timestamp) >= c.deadline) await (await f.contract.finalizeClose(ch.state.channelId)).wait();
           else if (choice < 3) {
-            // Only strictly newer evidence is accepted; re-submitting the proposed state reverts.
-            if (BigInt(ch.state.sequence) > c.closingSequence) {
+            // The casino settles a disputed bet with its result at the bet's sequence, which leaves the deadline as it is.
+            // Otherwise only strictly newer evidence is accepted; re-submitting the proposed state reverts.
+            if (c.disputedPrize) {
+              const settled = await ch.bet.settled();
+              await (await f.contract.challengeClose(settled.evidence)).wait();
+              const after = await f.contract.channels(ch.state.channelId);
+              assert.deepEqual(
+                [after.disputedPrize, after.closingHash, after.deadline],
+                [0n, hashState(f.d, settled.state), c.deadline],
+              );
+            } else if (BigInt(ch.state.sequence) > c.closingSequence) {
               await (await f.contract.challengeClose(ch.evidence)).wait();
               assert.equal((await f.contract.channels(ch.state.channelId)).deadline, c.deadline);
             } else await assert.rejects(f.contract.challengeClose(ch.evidence));
@@ -127,8 +154,23 @@ for (const initialSeed of [1, 4294967295])
               seed: id('seed:' + initialSeed + ':' + i),
             });
           } else await transition(f, ch, 'checkpoint', BigInt(1 + random(500)));
-        } else if (choice === 3) await (await f.contract.connect(player).startClose(ch.base)).wait();
-        else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
+        } else if (choice === 3) {
+          if (random(3) && BigInt(ch.state.balance) >= 10n) {
+            // A casino bet its quote covers that the casino leaves unsettled: anyone disputes it, which closes the
+            // channel with it counted as won.
+            const q = assessBinary({ bankroll: 1000000n, stake: 10n, netWin: 10n, chance: OUTCOME_SPACE / 4n });
+            ch.bet = await disputedBet(f, ch, {
+              virtualBankroll: 1000000n,
+              expiresAt: (await env.provider.getBlock('latest'))!.timestamp + 86400,
+              stake: q.stake,
+              chance: q.chance,
+              prize: q.prize,
+              seed: id('dispute:' + initialSeed + ':' + i),
+            });
+            await (await f.contract.connect(env.wallets[8]).dispute(ch.bet.evidence, ch.bet.terms)).wait();
+            assert.equal((await f.contract.channels(ch.state.channelId)).disputedPrize, q.prize);
+          } else await (await f.contract.connect(player).startClose(ch.base)).wait();
+        } else if (choice === 9 && BigInt(ch.state.balance) > 0n) {
           // A withdrawal, to the account's address, another, or the contract itself as a lock-in, which anyone has
           // made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest owed in
           // the winnings queue. One is at times never sent, and then, as withdrawals record in the order they were

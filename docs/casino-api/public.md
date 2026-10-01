@@ -66,14 +66,13 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | `escrow`                               | Payouts awarded and not yet collected                                                                                                           |
 | `banks`                                | Everything in developers' banks                                                                                                                 |
 | `withdrawals`                          | Withdrawals the casino has taken on, until the chain records them or their channel's close returns them                                         |
-| `disputedPrizes`                       | The contract's `disputedPrizes`: the prizes of casino bets closes dispute, which it keeps from the owner until each is settled                  |
 | `houseFeesEarned`                      | The casino's own commission, in total                                                                                                           |
 | `reserved`                             | The worst cases of casino bets being decided, plus disputed closes' possible payouts above obligations already in the books                     |
 | `equity`                               | The bankroll before reservations: what fund shares are a claim on                                                                               |
 | `unreservedBankroll`                   | `equity − reserved`; it can be negative                                                                                                         |
 | `bankroll`                             | `max(0, unreservedBankroll)`: the betting bankroll                                                                                              |
 | `virtualBankroll`                      | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a developer's casino bet is admitted against              |
-| `withdrawableHouse`                    | `max(0, cash − protectedPrincipal − unpaidWinnings − disputedPrizes)`, as the contract's `withdrawableHouse()`                                  |
+| `withdrawableHouse`                    | `max(0, cash − protectedPrincipal − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                   |
 
 `alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
 left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older checkpoint than the

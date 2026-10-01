@@ -82,8 +82,9 @@ it holds, and whose terms its virtual bankroll admits by the casino's
 
 The casino settles every casino bet a quote covers. The wallet sends the seed with a covered bet only, so the casino
 declines any other without learning what it would have paid. A covered bet the casino declines or leaves unanswered
-stays saved in the wallet, which **disputes** it by closing the channel with it before the quote expires: the contract
-counts it as won, keeps its prize from the owner, and gives the casino 24 hours to settle it with the round's secret
+stays saved in the wallet, which **disputes** it by closing the channel with it before the quote expires, as a
+watchtower holding its recovery bundle does: the contract counts it as won, and gives the casino 24 hours to settle it
+with the round's secret
 ([closing and claims](../wallet/closing-and-claims.md#dispute-a-casino-bet)). The casino declines a covered bet only as
 a game's operation its player carried out on another channel, with the operation the account signed there as proof.
 

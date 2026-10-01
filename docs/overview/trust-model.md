@@ -5,10 +5,10 @@ sidebar:
   order: 2
 ---
 
-The contract enforces how a channel settles, pays its withdrawals and settles the casino bets the casino's quotes
-cover. The casino is trusted for its bankroll, its accounting and its availability. You keep your evidence, take out or
-lock in what you win and watch your channel. A game, its developer and a bankroll fund share each carry trust of their
-own, set out below.
+The contract protects what it owes: your deposits and your recorded winnings, from everyone, the owner included.
+Everything else depends on the casino: house cash, winnings not yet recorded, and a disputed bet's prize until its close
+is final. You protect a win by recording it, with a withdrawal or a lock-in, keep your evidence and watch your channel.
+A game, its developer and a bankroll fund share each carry trust of their own, set out below.
 
 ## What the contract enforces
 
@@ -29,15 +29,16 @@ own, set out below.
   chain and to this contract.
 - **A casino bet its quote covers is settled.** Every reply brings the casino's signed quote for your next casino bet:
   its round, the virtual bankroll it is admitted against and an expiry a day away. The casino must settle a bet the
-  quote's virtual bankroll admits by the casino's Kelly rule. One it leaves unsettled, you dispute by closing with it
-  before the quote expires: it counts as won, and house cash keeps its prize from the owner, until the casino settles it
-  on-chain with the round's secret, which it has 24 hours from the dispute to do.
+  quote's virtual bankroll admits by the casino's Kelly rule. One it leaves unsettled, anyone with your evidence disputes
+  before the quote expires, which closes your channel with it: it counts as won until the casino settles it on-chain
+  with the round's secret, which it has 24 hours from the dispute to do. A bet still disputed then is won, and its
+  winnings are recorded with the close.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
   claim, with no casino server involved. The challenge window is a fixed 24 hours; only a dispute moves it, to give the
   casino a full day to settle the disputed bet.
-- **Winnings are recorded, and paid in order.** Finalizing a close, or recording a withdrawal, records its unpaid
+- **Recorded winnings come before the owner.** Finalizing a close, or recording a withdrawal, records its unpaid
   winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
-  of an earlier one, and the owner cannot withdraw them.
+  of an earlier one, and the owner cannot withdraw the cash they are owed. Winnings not yet recorded have none of this.
 - **The contract is fixed.** It cannot be upgraded or paused, and its owner is set once, by deploying it.
 
 [The contract reference](../reference/contract.md) has every function and the conditions it checks.
@@ -50,8 +51,9 @@ own, set out below.
 - **Paying winnings.** What your balance holds above your deposits, your winnings, is an unsecured claim on the shared
   bankroll: a withdrawal's winnings and a close's wait in the queue for house cash. Neither replenishment nor a payout
   deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is covered. This
-  is a deliberate choice of capital efficiency. A disputed bet's prize is kept from the owner while it is disputed, and
-  once won it waits in the same queue.
+  is a deliberate choice of capital efficiency. Until a win is recorded, the cash that would pay it is house cash, which
+  the owner can withdraw; so is the cash for a disputed bet's prize until its close is final, when the prize joins the
+  same queue.
 - **The bankroll overcommits.** This is a limitation. The quotes out at once are not divided between them: each admits
   bets against the whole virtual bankroll as it was when quoted, and holds for a day. The bets on many quotes can
   together stake more than the Kelly rule lets the bankroll take at once, and win more than it holds; what it cannot
@@ -97,18 +99,20 @@ availability and liquidity.
   [watchtower](../wallet/keys-and-recovery.md#the-watchtower).
 - **Dispute a covered bet the casino leaves unsettled.** A casino bet its quote covers that the casino declines or does
   not answer stays saved in the wallet, which disputes it when you press **Close without the casino**, or **Challenge
-  the close** when the casino closes short of it. The dispute must be mined before the quote expires, a day after the
-  casino signed it.
+  the close** when the casino closes short of it. Its recovery bundle carries it, so a
+  [watchtower](../wallet/keys-and-recovery.md#the-watchtower) disputes it for you an hour before the quote expires.
+  The dispute must be mined before the quote expires, a day after the casino signed it.
 - **Keep your key, and your evidence.** Your key is your account: save it with a passkey or a key file. Your latest
   signed state is your proof. The wallet keeps it, and on another device takes up the casino's copy, which is the
   casino's word; export recovery bundles to settle without trusting it
   ([keys and recovery](../wallet/keys-and-recovery.md)).
-- **Take out or lock in what you win.** What your balance holds above your deposits is a claim on the shared bankroll
-  until the contract pays it: withdraw it, or [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance).
+- **Record what you win.** What your balance holds above your deposits is the casino's to pay until it is recorded:
+  withdraw it, or [lock it in](../wallet/closing-and-claims.md#lock-in-your-balance), which records it and pays what
+  house cash covers into your channel as deposits.
 - **Keep ETH for the exit.** Closing, challenging, finalizing and collecting are transactions, and your account pays
   their fees from the deposit address, where the wallet keeps nothing back
-  ([fees and gas](../wallet/closing-and-claims.md#fees-and-gas)). Anyone can send a challenge, a finalization or a
-  collection for you.
+  ([fees and gas](../wallet/closing-and-claims.md#fees-and-gas)). Anyone can send a challenge, a dispute, a
+  finalization or a collection for you.
 - **Set each game's allowance.** You choose how much each game may play with, and the wallet holds it to that.
 
 ## What a game can and cannot do

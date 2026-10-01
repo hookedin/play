@@ -2,8 +2,8 @@
 pragma solidity ^0.8.28;
 
 /// @notice One trusted casino owner signs balances and controls the shared bankroll.
-/// Players must challenge stale closures within 24 hours to protect their latest balance, and can dispute a casino bet
-/// the owner's quote covers until the quote expires.
+/// Players must challenge stale closures within 24 hours to protect their latest balance, and anyone can dispute a
+/// casino bet the owner's quote covers for them until the quote expires.
 contract HookedInCasino {
     uint256 public constant CHALLENGE_PERIOD = 24 hours;
     // Every deposit, and every signed balance, deposited and withdrawn total, is below 2^96 wei, as is every stake, prize
@@ -43,8 +43,6 @@ contract HookedInCasino {
     uint256 public unpaidWinnings;
     /// Every claim's winnings, in the order the claims were recorded: the queue house cash pays them in.
     uint256 public queuedWinnings;
-    /// The prizes of the casino bets closes are disputing: house cash the owner cannot withdraw until each is settled.
-    uint256 public disputedPrizes;
     bool transient private entered;
 
     /// `deposited` is how much of the channel's on-chain deposits the balance has taken in, and `withdrawn` how much it
@@ -115,10 +113,9 @@ contract HookedInCasino {
         // once this has passed the `withdrawn` of the checkpoint it follows.
         uint256 claimed;
         uint256 closingSequence;
-        // The hash of the closing state, or of the disputed operation while a casino bet is disputed.
         bytes32 closingHash;
         uint256 closingBalance;
-        // The prize of the casino bet the close disputes, kept from the owner's house withdrawals until it is settled.
+        // The prize of the casino bet the close disputes, until evidence at its sequence settles it; 0 with none.
         uint256 disputedPrize;
     }
 
@@ -250,9 +247,9 @@ contract HookedInCasino {
         emit BankrollFunded(msg.sender, msg.value);
     }
 
-    // What no deposit, no unpaid winning and no disputed prize is owed.
+    // What no deposit and no unpaid winning is owed.
     function withdrawableHouse() public view returns (uint256) {
-        uint256 owed = protectedPrincipal + unpaidWinnings + disputedPrizes;
+        uint256 owed = protectedPrincipal + unpaidWinnings;
         return address(this).balance > owed ? address(this).balance - owed : 0;
     }
 
@@ -274,14 +271,13 @@ contract HookedInCasino {
     function withdraw(Evidence calldata evidence) external nonReentrant {
         Operation calldata op = evidence.step.operation;
         if (op.kind != KIND_WITHDRAWAL) revert InvalidTerms();
-        Checkpoint memory s = supported(evidence);
+        (Checkpoint memory s, bytes32 id) = _derive(evidence.base, _signedBase(evidence), evidence.step, false);
         Channel storage c = channels[s.channelId];
         // Every earlier withdrawal of the channel is a claim already, and this one is not; and a checkpoint pays out only
         // deposits the chain holds.
         if (c.status == STATUS_FINALIZED || c.claimed != evidence.base.withdrawn || s.deposited > c.deposited) {
             revert InvalidState();
         }
-        bytes32 id = hashOperation(op);
         c.claimed += op.amount;
         // Recorded during a close, the close owes that much less.
         if (c.status == STATUS_CLOSING) c.closingBalance = op.amount < c.closingBalance ? c.closingBalance - op.amount : 0;
@@ -298,19 +294,19 @@ contract HookedInCasino {
         }
     }
 
-    // Every field an operation kind does not use must be zero, so each signed
-    // operation has exactly one meaning and one encoding. A disputed casino bet has no secret and no casino signature
-    // yet, and counts as won.
+    // The checkpoint a step leads to from its base, and the hash of its operation. Every field an operation kind does not
+    // use must be zero, so each signed operation has exactly one meaning and one encoding. A disputed casino bet has no
+    // secret and no casino signature yet, and counts as won.
     function _derive(Checkpoint calldata base, bytes32 baseHash, Step calldata step, bool disputed)
         private
         view
-        returns (Checkpoint memory next)
+        returns (Checkpoint memory next, bytes32 operationHash)
     {
         Operation calldata op = step.operation;
         if (op.channelId != base.channelId || op.previousStateHash != baseHash || op.sequence != base.sequence + 1) {
             revert InvalidState();
         }
-        bytes32 operationHash = hashOperation(op);
+        operationHash = hashOperation(op);
         if (_signer(operationHash, step.authorization) != channels[base.channelId].player) revert Unauthorized();
         next = base;
         next.sequence = op.sequence;
@@ -327,11 +323,13 @@ contract HookedInCasino {
         // Any other kind leaves all of it zero.
         if (
             casinoBet
-                ? op.chance == 0 || op.prize == 0 || op.prize >= MAX_BALANCE || op.round == bytes32(0)
-                    || op.seedHash == bytes32(0)
-                    || (disputed ? step.secret != bytes32(0) : keccak256(abi.encodePacked(step.secret)) != op.round)
-                    || keccak256(abi.encodePacked(step.seed)) != op.seedHash
-                : disputed || op.chance != 0 || op.prize != 0 || op.round != bytes32(0) || op.seedHash != bytes32(0)
+                ? op.chance == 0 || op.prize == 0 || op.prize >= MAX_BALANCE
+                    || (
+                        disputed
+                            ? step.secret != bytes32(0) || step.casinoSignature.length != 0
+                            : keccak256(abi.encodePacked(step.secret)) != op.round
+                    ) || keccak256(abi.encodePacked(step.seed)) != op.seedHash
+                : op.chance != 0 || op.prize != 0 || op.round != bytes32(0) || op.seedHash != bytes32(0)
                     || step.secret != bytes32(0) || step.seed != bytes32(0)
         ) revert InvalidTerms();
         if (op.kind == KIND_CREDIT) {
@@ -355,9 +353,8 @@ contract HookedInCasino {
         } else {
             revert InvalidTerms();
         }
-        if (disputed ? step.casinoSignature.length != 0 : _signer(hashState(next), step.casinoSignature) != owner) {
-            revert InvalidState();
-        }
+        _bounded(next);
+        if (!disputed && _signer(hashState(next), step.casinoSignature) != owner) revert InvalidState();
     }
 
     // The evidence's base: the channel's zero checkpoint, which needs no signature, or one both sides signed.
@@ -386,10 +383,10 @@ contract HookedInCasino {
                     || _operationStruct(step.operation) != EMPTY_OPERATION
             ) revert InvalidTerms();
             result = evidence.base;
+            _bounded(result);
         } else {
-            result = _derive(evidence.base, h, evidence.step, false);
+            (result,) = _derive(evidence.base, h, evidence.step, false);
         }
-        _bounded(result);
     }
 
     // Whether a virtual bankroll admits a casino bet: the Kelly condition of its two outcomes with no commission, as
@@ -414,7 +411,7 @@ contract HookedInCasino {
     function startClose(Evidence calldata evidence) external nonReentrant {
         Checkpoint memory s = supported(evidence);
         Channel storage c = channels[s.channelId];
-        if (c.status != STATUS_OPEN || block.timestamp > type(uint64).max - CHALLENGE_PERIOD) revert InvalidState();
+        if (c.status != STATUS_OPEN) revert InvalidState();
         if (msg.sender != c.player && msg.sender != owner) revert Unauthorized();
         c.status = STATUS_CLOSING;
         channelIndex[c.player] += 1;
@@ -440,20 +437,18 @@ contract HookedInCasino {
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
-        disputedPrizes -= c.disputedPrize;
         c.disputedPrize = 0;
         emit CloseChallenged(s.channelId, s.sequence, c.closingHash);
     }
 
-    // A casino bet the casino has not settled, which its quote covers: its account disputes it before the quote expires,
-    // by closing with it, and anyone can challenge a close with it. It counts as won, and house cash keeps its prize from
-    // the owner, until evidence at its sequence settles it; the casino has 24 hours from the dispute to send that.
+    // A casino bet the casino has not settled, which its quote covers: anyone disputes it before the quote expires, which
+    // closes the channel with it or challenges its close. It counts as won until evidence at its sequence settles it; the
+    // casino has 24 hours from the dispute to send that.
     function dispute(Evidence calldata evidence, Quote calldata quote) external nonReentrant {
         Step calldata step = evidence.step;
         Operation calldata op = step.operation;
         if (op.kind != KIND_CASINO_BET) revert InvalidTerms();
-        Checkpoint memory s = _derive(evidence.base, _signedBase(evidence), step, true);
-        _bounded(s);
+        (Checkpoint memory s,) = _derive(evidence.base, _signedBase(evidence), step, true);
         bytes32 quoteHash = keccak256(
             abi.encode(QUOTE_TYPEHASH, op.channelId, op.previousStateHash, op.round, quote.virtualBankroll, quote.expiresAt)
         );
@@ -464,18 +459,15 @@ contract HookedInCasino {
         ) revert InvalidTerms();
         Channel storage c = channels[s.channelId];
         if (c.status == STATUS_OPEN) {
-            if (msg.sender != c.player) revert Unauthorized();
             c.status = STATUS_CLOSING;
             channelIndex[c.player] += 1;
         } else if (c.status != STATUS_CLOSING || block.timestamp >= c.deadline || s.sequence <= c.closingSequence) {
             revert InvalidState();
         }
-        if (block.timestamp > type(uint64).max - CHALLENGE_PERIOD) revert InvalidState();
         c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
         c.closingSequence = s.sequence;
-        c.closingHash = hashOperation(op);
+        c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
-        disputedPrizes = disputedPrizes - c.disputedPrize + op.prize;
         c.disputedPrize = op.prize;
         emit BetDisputed(s.channelId, evidence);
     }
@@ -488,7 +480,6 @@ contract HookedInCasino {
         bytes32 stateHash = c.closingHash;
         uint256 balance = c.closingBalance;
         // A casino bet still disputed stays won.
-        disputedPrizes -= c.disputedPrize;
         c.disputedPrize = 0;
         uint256 principal = balance < c.principal ? balance : c.principal;
         uint256 winnings = balance - principal;

@@ -9,10 +9,13 @@ export interface DisputeAlert {
   remaining?: number;
   detail?: string;
 }
-import { domain, hashState, verifyEvidence, same } from './protocol.ts';
+import { covers, domain, hashState, quoteTerms, verifyEvidence, same } from './protocol.ts';
 import { TransactionJournal } from './transaction-journal.ts';
+/** How long before its quote expires the watcher disputes a casino bet the casino has not settled, in seconds. */
+export const DISPUTE_MARGIN = 3600;
 
-/** Evidence-driven watcher: no channel private keys are needed to challenge. */
+/** Evidence-driven watcher: no channel private keys are needed to challenge a close, or to dispute a casino bet the
+ * casino leaves unsettled. */
 export class DisputeWorker {
   declare contract: Contract;
   declare provider: JsonRpcProvider;
@@ -51,14 +54,43 @@ export class DisputeWorker {
         const c =
           observedChannels?.get(channelId) ||
           (await this.observer.contractRead(this.contract, 'channels', [channelId], observation.block));
-        // Read the claimed sequence before verifying anything: an open channel needs no defense,
-        // so signature verification runs only for channels that are closing or finalized behind us.
+        // Read the claimed sequence before verifying anything: an open channel needs no defense but for a casino bet
+        // the casino has not settled, so signature verification runs only for those and for channels that are closing
+        // or finalized behind us.
         const claimed = Number(bundle.evidence.step.operation.kind)
           ? BigInt(bundle.evidence.base.sequence) + 1n
           : BigInt(bundle.evidence.base.sequence);
-        if (Number(c.status) !== 2 && !(Number(c.status) === 3 && claimed > BigInt(c.closingSequence))) continue;
+        if (
+          !(Number(c.status) === 1 && bundle.dispute) &&
+          Number(c.status) !== 2 &&
+          !(Number(c.status) === 3 && claimed > BigInt(c.closingSequence))
+        )
+          continue;
         const { state } = verifyEvidence(bundle);
-        const stateHash = hashState(domain(bundle.chainId, bundle.casino), state);
+        const stateHash = hashState(domain(bundle.chainId, bundle.casino), state),
+          now = observation.block.timestamp,
+          bet =
+            bundle.dispute && covers(bundle.dispute.quote, bundle.dispute.step.operation, now) ? bundle.dispute : null,
+          dispute = bet && {
+            method: 'dispute',
+            args: [{ ...bundle.evidence, step: bet.step }, quoteTerms(bet.quote)],
+            sequence: BigInt(bet.step.operation.sequence),
+            expiresAt: Number(bet.quote.message.expiresAt),
+          };
+        if (Number(c.status) === 1) {
+          // Disputing closes the channel, so it waits until the bet's quote is about to expire: the casino may still
+          // settle it, and the wallet's newer bundle then has no bet to dispute.
+          if (!dispute) continue;
+          const remaining = dispute.expiresAt - now;
+          this.alerts.push({
+            channelId: state.channelId,
+            severity: remaining < DISPUTE_MARGIN ? 'critical' : 'warning',
+            reason: 'unsettled-bet',
+            remaining,
+          });
+          if (remaining < DISPUTE_MARGIN) jobs.push({ state, deadline: dispute.expiresAt, ...dispute });
+          continue;
+        }
         if (Number(c.status) === 3) {
           // The channel finalized on its closing checkpoint.
           if (!same(c.closingHash, stateHash))
@@ -72,23 +104,30 @@ export class DisputeWorker {
         }
         const remaining = Number(c.deadline) - observation.block.timestamp,
           // A disputed casino bet is settled by evidence at its own sequence.
-          disputed = BigInt(c.disputedPrize) > 0n && BigInt(state.sequence) === BigInt(c.closingSequence);
-        if (BigInt(state.sequence) === BigInt(c.closingSequence) && !disputed && !same(stateHash, c.closingHash)) {
-          this.alerts.push({
-            channelId: state.channelId,
-            severity: 'critical',
-            reason: 'conflicting-sequence',
-            remaining,
-          });
-        } else if (BigInt(state.sequence) > BigInt(c.closingSequence) || disputed) {
+          disputed = BigInt(c.disputedPrize) > 0n && BigInt(state.sequence) === BigInt(c.closingSequence),
+          // A close that stops short of a casino bet the casino has not settled is challenged by disputing the bet,
+          // which counts it as won.
+          short = dispute && dispute.sequence > BigInt(c.closingSequence) ? dispute : null;
+        if (short || BigInt(state.sequence) > BigInt(c.closingSequence) || disputed) {
           this.alerts.push({
             channelId: state.channelId,
             severity: remaining < 3600 ? 'critical' : 'warning',
             reason: remaining <= 0 ? 'missed-deadline' : disputed ? 'disputed-bet' : 'stale-close',
             remaining,
           });
-          if (remaining > 0) jobs.push({ bundle, state, deadline: Number(c.deadline) });
-        }
+          if (remaining > 0)
+            jobs.push({
+              state,
+              deadline: Number(c.deadline),
+              ...(short ?? { method: 'challengeClose', args: [bundle.evidence], sequence: BigInt(state.sequence) }),
+            });
+        } else if (BigInt(state.sequence) === BigInt(c.closingSequence) && !same(stateHash, c.closingHash))
+          this.alerts.push({
+            channelId: state.channelId,
+            severity: 'critical',
+            reason: 'conflicting-sequence',
+            remaining,
+          });
       } catch (error: any) {
         this.alerts.push({
           channelId,
@@ -111,12 +150,12 @@ export class DisputeWorker {
       const pending = this.outbox.state.pending;
       if (pending) await this.outbox.submit(pending.action, null);
       else
-        for (const { bundle, state } of jobs) {
+        for (const { state, method, args, sequence } of jobs) {
           // Signatures alone do not establish that this contract can settle the evidence: a bundle can come from another
-          // deployment, whose channels have the same IDs. The most urgent challenge it can settle goes out; one it
+          // deployment, whose channels have the same IDs. The most urgent transaction it can settle goes out; one it
           // cannot is reported and blocks no other.
           try {
-            await this.observer.contractRead(this.contract, 'challengeClose', [bundle.evidence], observation.block);
+            await this.observer.contractRead(this.contract, method, args, observation.block);
           } catch (error: any) {
             this.alerts.push({
               channelId: state.channelId,
@@ -126,8 +165,11 @@ export class DisputeWorker {
             });
             continue;
           }
-          const tx = await this.contract.challengeClose.populateTransaction(bundle.evidence);
-          await this.outbox.submit('challenge:' + state.channelId + ':' + state.sequence, tx);
+          const tx = await this.contract[method].populateTransaction(...args);
+          await this.outbox.submit(
+            (method === 'dispute' ? 'dispute:' : 'challenge:') + state.channelId + ':' + sequence,
+            tx,
+          );
           break;
         }
     } catch (error: any) {

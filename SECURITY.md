@@ -14,7 +14,7 @@ A useful report says which component and revision is affected, what an attacker 
 
 - The settlement contract, [contracts/HookedInCasino.sol](contracts/HookedInCasino.sol): loss or freezing of protected principal, a withdrawal paid twice or out of cash a claim is owed, bypassing the challenge window, replay of evidence, incorrect winnings allocation, unauthorized withdrawals.
 - The wallet, [client/](client/): key exposure, accepting a result, rejection, payout or share statement it should refuse, losing or downgrading saved evidence, escaping the game iframe boundary, signing something other than what is shown.
-- The shared protocol and the watchtower, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, the watchtower failing to challenge with valid evidence.
+- The shared protocol and the watchtower, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, the watchtower failing to challenge with valid evidence or to dispute a casino bet its bundle holds.
 - The game SDK and the house's games, [sdk/](sdk/) and [games/](games/): step pricing that disagrees with the risk rule, a game losing its saved round, a developer's server giving away the seed of its casino bet before it places it.
 - The build: anything that makes the published `dist/`, or a game's, differ from what these sources produce.
 

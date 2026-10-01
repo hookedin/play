@@ -167,23 +167,25 @@ secret. Kind 0 appears nowhere else. The casino's replies carry evidence in this
 A wallet exports evidence as a bundle (`EvidenceBundle` in [types.ts](../../protocol/types.ts)), which a wallet imports
 and the [watchtower](../wallet/keys-and-recovery.md#the-watchtower) reads:
 
-| Field         | Type       | Meaning                                                                                                                                                                 |
-| ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chainId`     | string     | The chain, as a decimal string                                                                                                                                          |
-| `casino`      | address    | The contract                                                                                                                                                            |
-| `operator`    | address    | The casino, the contract's owner                                                                                                                                        |
-| `opening`     | object     | `{channelId, player, index}`                                                                                                                                            |
-| `evidence`    | Evidence   | The latest evidence of the channel                                                                                                                                      |
-| `details`     | Details    | Optional: the details of the step's operation, whose hash is its `memo`                                                                                                 |
-| `withdrawals` | Evidence[] | Optional: the evidence of each of the account's withdrawals the contract may still owe something, whose step is the withdrawal ([withdrawals](contract.md#withdrawals)) |
+| Field         | Type       | Meaning                                                                                                                                                                                                                         |
+| ------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chainId`     | string     | The chain, as a decimal string                                                                                                                                                                                                  |
+| `casino`      | address    | The contract                                                                                                                                                                                                                    |
+| `operator`    | address    | The casino, the contract's owner                                                                                                                                                                                                |
+| `opening`     | object     | `{channelId, player, index}`                                                                                                                                                                                                    |
+| `evidence`    | Evidence   | The latest evidence of the channel                                                                                                                                                                                              |
+| `details`     | Details    | Optional: the details of the step's operation, whose hash is its `memo`                                                                                                                                                         |
+| `withdrawals` | Evidence[] | Optional: the evidence of each of the account's withdrawals the contract may still owe something, whose step is the withdrawal ([withdrawals](contract.md#withdrawals))                                                         |
+| `dispute`     | object     | Optional: `{step, quote}`, a casino bet the account sent with its seed on a [quote](#quotes) that covers it, which the casino has not settled: its disputed step, which follows the checkpoint `evidence` proves, and the quote |
 
 `verifyEvidence` in [protocol.ts](../../protocol/protocol.ts) checks a bundle's signatures, none for evidence on the
-channel's base, and returns the checkpoint it proves.
+channel's base, and those of its `dispute`, and returns the checkpoint it proves. A bundle with a `dispute` carries the
+checkpoint itself, with the empty step.
 
 A casino bet a quote covers that the casino has not settled is disputed with a _disputed step_: its operation, the
 account's `authorization` and the `seed`, with a zero `secret` and `casinoSignature` `0x`. Only the contract's
-`dispute` takes it, with the quote ([disputes](contract.md#disputes)); the casino settles it with the step of its
-result, at the same sequence.
+`dispute` takes it, with the quote, from anyone ([disputes](contract.md#disputes)); the casino settles it with the step
+of its result, at the same sequence.
 
 ## Operations
 

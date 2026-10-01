@@ -152,6 +152,9 @@ export interface EvidenceBundle {
   /** The evidence of each of the account's withdrawals the contract may still owe something: the operation the account
    * signed and the casino's signature after it. Each is a claim of its own once recorded, under the operation's hash. */
   withdrawals?: Evidence[];
+  /** The casino bet the account sent with its seed on a quote that covers it, which the casino has not settled: its
+   * disputed step, which follows the checkpoint `evidence` proves, and the quote. Anyone disputes it with them. */
+  dispute?: { step: Step; quote: Quote };
 }
 export interface Deployment {
   chainId: Integer;
@@ -174,7 +177,7 @@ export interface OnchainChannel {
   closingSequence: string;
   closingHash: string;
   closingBalance: string;
-  /** The prize of the casino bet the close disputes, which house cash keeps for it until it is settled; 0 with none. */
+  /** The prize of the casino bet the close disputes, until evidence at its sequence settles it; 0 with none. */
   disputedPrize: string;
 }
 /** A finalized channel's claim: its checkpoint and what it was owed are the channel's `closingHash` and

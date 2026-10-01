@@ -569,6 +569,28 @@ export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   // The details beside a step say what it meant, and are only as good as the memo it signed.
   if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))
     throw new Error('Details differ from the operation they describe');
+  // A casino bet the casino has not settled follows the checkpoint itself: the account signed it with its seed, on the
+  // casino's quote for that checkpoint and its round.
+  if (bundle.dispute !== undefined) {
+    const { step, quote } = bundle.dispute,
+      op = step.operation;
+    if (
+      Number(evidence.step.operation.kind) ||
+      Number(op.kind) !== KIND.casinoBet ||
+      !same(op.channelId, state.channelId) ||
+      !same(op.previousStateHash, hashState(d, state)) ||
+      BigInt(op.sequence) !== BigInt(state.sequence) + 1n ||
+      !same(seedHash(step.seed), op.seedHash) ||
+      !same(step.secret, ZeroHash) ||
+      step.casinoSignature !== '0x' ||
+      !same(quote.message.channelId, op.channelId) ||
+      !same(quote.message.previousStateHash, op.previousStateHash) ||
+      !same(quote.message.round, op.round)
+    )
+      throw new Error('The disputed bet does not follow the checkpoint');
+    assertSignature(d, OP_TYPES, op, step.authorization, opening.player);
+    assertSignature(d, QUOTE_TYPES, quote.message, quote.signature, operator);
+  }
   return { state };
 }
 /** A developer's commission. It accrues to the developer's address, the developer's own channel shows

@@ -1000,6 +1000,8 @@ export class CasinoWallet extends GameSessions {
         withdrawals: record.history
           .filter((entry: any) => entry.withdrawal && !entry.paid && !entry.returned)
           .map((entry: any) => entry.proof),
+        // A casino bet the casino has not settled, which a watchtower disputes before its quote expires.
+        ...(this.disputable(c) ? { dispute: { step: this.disputeEvidence(c).step, quote: c.pending.quote } } : {}),
       });
     });
   }

@@ -30,7 +30,9 @@ Locking in closes the open game first, and your balance is empty until it has ta
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
 channel is open and your balance holds more than the deposits the contract holds for it. The casino declines a lock-in
 that house cash cannot pay now, like any withdrawal, and your balance is as it was. Once it is in, a close pays all of
-that balance as protected principal, and withdrawing it needs no house cash, until you win more.
+that balance as protected principal, and withdrawing it needs no house cash, until you win more. A deposit that reaches
+the channel while the lock-in is on its way is the exception: the lock-in takes it as its own deposits, and pays that
+much less of your winnings, which stay winnings. Lock in again once the deposit is in your balance.
 
 ## Withdraw
 
@@ -86,10 +88,15 @@ game's operation your account carried out on another channel. Its banner says un
 
 **Close without the casino** then sends `dispute` with your latest evidence, the bet your account signed, its seed and
 the casino's quote, which the contract checks: the casino signed the quote for that checkpoint and round, the quote has
-not expired, and its virtual bankroll admits the bet by the casino's Kelly rule. The close counts the bet as won, and
-house cash keeps its prize from the owner until the bet is settled. The deadline is 24 hours after the dispute, which is
-the time the casino has to replace it with its result: the bet settled on the round's secret, the outcome it would have
-had. Should it not, the close finishes with the bet won. Recovery says which the close holds.
+not expired, and its virtual bankroll admits the bet by the casino's Kelly rule. The close counts the bet as won. The
+deadline is 24 hours after the dispute, which is the time the casino has to replace it with its result: the bet settled
+on the round's secret, the outcome it would have had. Should it not, the close finishes with the bet won, and its
+winnings are recorded with the close's claim. Until then they are not: the cash that would pay them is house cash.
+Recovery says which the close holds.
+
+Anyone can send the dispute: the bet and its quote are in the channel's
+[recovery bundle](keys-and-recovery.md#recovery-bundles), from which a
+[watchtower](keys-and-recovery.md#the-watchtower) disputes it an hour before the quote expires.
 
 A dispute must be mined before the quote expires. The wallet sends a bet with its seed only on a quote with at least
 half its day left, so a bet the casino leaves unanswered has at least 12 hours to be disputed. After the quote expires
