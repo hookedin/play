@@ -159,8 +159,8 @@ owner's.
 
 A withdrawal (kind 5) is an operation the account signs that takes `amount` from the balance and names a `recipient`;
 the balance pays it at once, in the checkpoint the casino signs after it, with its `loan` back and its `fee`, what it
-pays the casino for sending it to the contract: the fee leaves the balance, nothing pays it out, and so it stays house
-cash. A transfer (kind 6) is a withdrawal whose `recipient` is an account, and differs only in where it pays, below.
+pays the casino for sending it to the contract: the fee leaves the balance and nothing pays it out, so it stays in the
+channel's `principal` until the close, which is not owed it, and then becomes house cash. A transfer (kind 6) is a withdrawal whose `recipient` is an account, and differs only in where it pays, below.
 `withdraw` records one on evidence whose step is that operation, with the casino's signature of that checkpoint, and
 anyone may send it:
 

@@ -39,9 +39,12 @@ From then on bets need no transactions. Anyone can deposit into your channel thr
 address, and the wallet takes it in the same way.
 
 A deposit of everything at the address keeps back the most its transaction can cost, its gas limit at its fee cap. Once
-your balance has taken the deposit in, the wallet asks the casino to lend it exactly that, when it is at most 1% of the
-deposit, so your balance holds all the address had. The Wallet page shows the loan, and your next withdrawal, transfer
-or close pays it back first. A deposit your daily limit cut short is lent nothing.
+your balance has taken the deposit in, the wallet asks the casino to lend it that, so your balance holds all the address
+had. The casino lends no more than the rule the wallet prices transactions by allows for the block before the
+deposit's: 20% over an estimate of the gas the deposit used, which a node makes up to 1.5% high, at twice that block's
+base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less, and one your daily
+limit cut short is lent nothing. The Wallet page shows the loan. Bets can stake it, but an investment or a bank deposit
+leaves it in the balance, and your next withdrawal, transfer or close pays it back first.
 
 ETH stays at the deposit address instead, for fees or to withdraw elsewhere, while **Add ETH that arrives at my deposit
 address to my balance** is off in Settings, while the casino is unavailable, and from the start of a close until your

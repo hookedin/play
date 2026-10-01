@@ -48,8 +48,11 @@ export function validateWithdrawal(input: WithdrawalInput): WithdrawalValidation
       error ??= typed
         ? 'Enter an ETH amount above zero, with at most 18 decimal places.'
         : 'Enter an amount or choose Max.';
-    else if (amount > input.maximum) error ??= `Your balance holds ${ether(input.maximum)} ETH.`;
+    else if (amount > input.maximum) error ??= `At most ${ether(input.maximum)} ETH can be withdrawn.`;
   }
-  if (input.maximum <= 0n) error ??= 'Nothing to withdraw: your balance is empty.';
+  if (input.maximum <= 0n)
+    error ??= input.channel
+      ? 'Nothing to withdraw: your balance holds no more than the fee for sending it and what the casino lent you.'
+      : 'Nothing to withdraw: your deposit address is empty.';
   return { to, amount, error };
 }

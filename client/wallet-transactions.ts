@@ -19,6 +19,7 @@ import {
 import { mapBounded } from '../protocol/concurrency.ts';
 import {
   confirmedReceipt,
+  depositLoan,
   findNonceTransaction,
   gasLimitFor,
   sameTransactionIntent,
@@ -317,19 +318,16 @@ export class WalletTransactions {
   }
   /** Take into the balance what was deposited into the open channel and not taken in yet: a deposit operation, which
    * the casino signs once it has seen the money confirmed. Then borrow the network fee of each deposit of everything
-   * the address held: the most its transaction could cost, which it kept back, so the balance holds all the address
-   * had. The casino lends it when it is at most its `loanLimit`, in millionths of the deposit, and a withdrawal, a
-   * transfer or a close pays it back first. One that is waiting for the casino is asked again. */
+   * the address held: what its transaction kept back, so the balance holds all the address had, up to what the rule
+   * the wallet prices its transactions by allows (`depositLoan`). The casino lends it when it is at most its
+   * `loanLimit`, in millionths of the deposit, and a withdrawal, a transfer or a close pays it back first. One that is
+   * waiting for the casino is asked again. */
   async takeDeposits(this: CasinoWallet) {
     const c = this.channel,
       pending = this.pending;
     if (pending)
       return inbound(pending.kind)
-        ? this.perform(
-            pending.kind,
-            { amount: pending.request.amount, transaction: pending.details.id },
-            pending.operationId,
-          )
+        ? this.borrow(pending.kind, pending.request.amount, pending.details.id, pending.operationId)
         : null;
     if (!this.funded || !c || !c.registered) return null;
     const waiting = BigInt(c.onchain.deposited) - BigInt(c.state.deposited);
@@ -345,9 +343,43 @@ export class WalletTransactions {
         !lent.has(`loan:${entry.txHash}`) &&
         this.feeLoan(BigInt(entry.amount), BigInt(entry.lend)),
     );
-    return deposit
-      ? this.perform('loan', { amount: deposit.lend, transaction: deposit.txHash }, `loan:${deposit.txHash}`)
-      : null;
+    if (!deposit) return null;
+    const receipt = await this.provider.getTransactionReceipt(deposit.txHash),
+      before = receipt && (await this.provider.getBlock(receipt.blockNumber - 1));
+    if (!receipt || before?.baseFeePerGas == null) return null;
+    const { fees } = deposit.intent,
+      amount = depositLoan(
+        {
+          gasLimit: BigInt(fees.gasLimit),
+          maxFeePerGas: BigInt(fees.maxFeePerGas),
+          maxPriorityFeePerGas: BigInt(fees.maxPriorityFeePerGas),
+        },
+        receipt.gasUsed,
+        before.baseFeePerGas,
+      );
+    return this.borrow('loan', amount, deposit.txHash, `loan:${deposit.txHash}`);
+  }
+  /** Sign and send money coming into the balance. A loan the casino answered at a state this wallet has since taken up
+   * from another device is refused when asked again, for good: its deposit asks no more. */
+  async borrow(this: CasinoWallet, kind: string, amount: Integer, transaction: string, operationId: string) {
+    try {
+      return await this.perform(kind, { amount, transaction }, operationId);
+    } catch (error: any) {
+      if (kind !== 'loan' || error.code !== 'id-conflict' || error.status !== 409) throw error;
+      await this.exclusive(
+        async () => {
+          if (this.pending?.operationId !== operationId) return;
+          const deposit = this.history.find(entry => entry.lend && same(entry.txHash ?? '', transaction));
+          this.pending = null;
+          this.pendingError = null;
+          if (!deposit) return this.save();
+          const { lend, ...answered } = deposit;
+          await this.save(answered);
+        },
+        { wait: true },
+      );
+      return null;
+    }
   }
   /** Send everything at this account's address, less the network fee, to another address, as a saved transaction like
    * any other: how Withdraw empties the address. Under the wallet's lock. Returns the withdrawal's record. */

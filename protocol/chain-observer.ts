@@ -165,6 +165,7 @@ export class ChainObserver {
         blockHash: r.blockHash,
         blockNumber: r.blockNumber,
         status: r.status,
+        gasUsed: String(r.gasUsed),
         from: r.from,
         to: r.to,
         index: r.index,

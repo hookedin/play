@@ -210,9 +210,10 @@ function renderSafety() {
   const held = BigInt(wallet.publicState.nativeBalance || 0),
     fee = wallet.depositFee;
   const remaining = depositRemaining(controls);
-  let net = fee > 0n && held > fee ? held - fee : 0n;
-  if (remaining !== null && net > remaining) net = remaining;
-  const lent = wallet.feeLoan(net, fee);
+  const whole = fee > 0n && held > fee ? held - fee : 0n,
+    net = remaining !== null && whole > remaining ? remaining : whole,
+    // Only a deposit of everything at the address is lent its fee: not one the daily limit cuts short.
+    lent = net === whole ? wallet.feeLoan(net, fee) : 0n;
   $('deposit-fee').textContent =
     remaining === 0n
       ? 'Your play break or daily deposit limit keeps incoming ETH at this address. You can withdraw it.'
@@ -608,7 +609,7 @@ function renderWallet() {
     : state.closingChannelId && !state.channelId
       ? 'Your last balance is closing: finish the close under Recovery once its 24 hours are up, and collect it. A deposit opens your next balance.'
       : loan
-        ? `What games play with. ${plainEth(loan)} ETH of it is the network fee of your deposits, which the casino lent you: your next withdrawal pays it back.`
+        ? `What games play with. The casino lent you the ${plainEth(loan)} ETH network fee of your deposits: your next withdrawal pays it back.`
         : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
@@ -664,9 +665,11 @@ function renderWallet() {
       wallet.withdrawalFee ? `the casino ${plainEth(wallet.withdrawalFee)} ETH for sending it` : '',
       loan ? `back the ${plainEth(loan)} ETH network fee the casino lent you` : '',
     ].filter(Boolean);
+  // A withdrawal from the balance signs the casino's fee only once it is shown.
   $<HTMLButtonElement>('withdraw').disabled =
     busy ||
     !ready ||
+    Boolean(c && !wallet.withdrawalFee) ||
     Boolean(request.error) ||
     Boolean(wallet.transactionIntent) ||
     Boolean(c && wallet.pending) ||
@@ -952,6 +955,9 @@ function renderRecovery() {
     open
       ? `The contract holds ${plainEth(state.principal || '0')} ETH of your deposits and ${plainEth(state.collateral || '0')} ETH of collateral for this balance, at saved sequence ${state.savedSequence || '0'}.`
       : '',
+    open && wallet.withdrawalFee
+      ? `Locking in pays the casino ${plainEth(wallet.withdrawalFee)} ETH for sending it.`
+      : '',
     closing
       ? BigInt(state.disputedPrize || 0) > 0n
         ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${plainEth(state.disputedPrize)} ETH.`
@@ -966,7 +972,7 @@ function renderRecovery() {
   $<HTMLButtonElement>('channel-export').disabled = !(wallet.channel || wallet.closingChannel) || busy;
   // Locking in moves winnings into the deposits: with all of the balance protected, there is nothing to lock in.
   $<HTMLButtonElement>('channel-lock').disabled =
-    !open || !BigInt(state.protection?.uncovered || 0) || Boolean(wallet.pending) || busy;
+    !open || !BigInt(state.protection?.uncovered || 0) || !wallet.withdrawalFee || Boolean(wallet.pending) || busy;
   $<HTMLButtonElement>('channel-start-close').disabled =
     Number(state.channelStatus) !== 1 || Boolean(wallet.transactionIntent) || busy;
   $('channel-start-close').textContent =
@@ -1819,8 +1825,14 @@ act(
     closeGame();
     await wallet.lockIn();
   },
-  'Locking in: all of your balance goes into deposits the contract holds, in one transaction the casino sends.',
+  'Locking in: your balance, less the fee for sending it and what the casino lent you, goes into deposits the contract holds, in one transaction the casino sends.',
 );
+// What locking in costs now, shown before it is signed.
+$('channel-lock')
+  .closest('details')!
+  .addEventListener('toggle', event => {
+    if ((event.target as HTMLDetailsElement).open && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
+  });
 for (const id of ['channel-challenge', 'challenge-now'])
   act(id, () => wallet.challengeClose(), 'Your latest saved balance is submitted.');
 act(

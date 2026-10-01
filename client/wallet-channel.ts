@@ -201,8 +201,12 @@ export class ChannelClient extends WalletTransactions {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
         if (debit > BigInt(this.game.allowance))
           throw gameError('insufficient-allowance', "Bet exceeds the game's allowance");
-      } else if (debit > this.availableBalance())
-        throw new Error("Debit exceeds your balance less the game's allowance");
+      } else if (
+        // Only a bet stakes what the casino lent the balance: money moved into the fund or a bank leaves it.
+        debit + (['invest', 'bank'].includes(kind) ? BigInt(this.channel!.state.loan) : 0n) >
+        this.availableBalance()
+      )
+        throw new Error("Debit exceeds your balance less the game's allowance and what the casino lent it");
       if (kind === 'casino-bet')
         try {
           describeBet(betTerms(intent.amount, intent.chance, intent.prize));

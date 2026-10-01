@@ -142,9 +142,9 @@ the casino's in place of the bet unless your account signed past it, from anothe
 
 ## Idle channels
 
-When nobody has played on your channel for 7 days, it holds more deposits and collateral than it is owed and no
-withdrawal from it is owed, the casino closes it on its latest state, so what you lost, and the collateral you no longer
-need, comes back to house cash. Once the close's 24 hours are
+When nobody has played on your channel for 7 days, it holds more deposits and collateral than it is owed, by more than
+the gas of closing it, and no withdrawal from it is owed, the casino closes it on its latest state, so what you lost,
+and the collateral you no longer need, comes back to house cash. Once the close's 24 hours are
 up, the casino finishes it and collects what it pays you, to your deposit address. Your next deposit opens your next
 channel.
 

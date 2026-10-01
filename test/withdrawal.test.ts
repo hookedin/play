@@ -43,7 +43,7 @@ test('channel withdrawal requires an explicit positive decimal amount without ro
   }
   const excess = validateWithdrawal({ ...input, amount: '2.000000000000000001' });
   assert.equal(excess.amount, parseEther('2.000000000000000001'));
-  assert.match(excess.error!, /balance holds 2 ETH\./);
+  assert.match(excess.error!, /At most 2 ETH can be withdrawn\./);
 });
 
 test('withdrawal validates destination checksum and refuses zero and own addresses', () => {

@@ -195,8 +195,9 @@
           <p class="muted">
             Your balance is a channel in the HookedIn contract. If the casino ever closes it with an older balance,
             challenge that close within 24 hours with your saved evidence. The contract holds your deposits for it: Lock
-            in my balance transfers all of it into your own channel as deposits, the bankroll paying out your winnings.
-            Keep a current recovery bundle somewhere safe.
+            in my balance transfers all of it into your own channel as deposits, the bankroll paying out your winnings,
+            less the casino's fee for sending it and what the casino lent you. Keep a current recovery bundle somewhere
+            safe.
           </p>
           <p id="storage-status" class="muted"></p>
           <div class="actions">
@@ -571,7 +572,8 @@
         </div>
         <p class="help">
           Only send test ETH on the named network. Other assets or networks are not supported. Deposits require network
-          confirmations and a second transaction to add ETH to your balance; its fee is deducted.
+          confirmations and a second transaction to add ETH to your balance, whose fee the casino lends you when it adds
+          everything at your address.
         </p>
         <p class="help">
           Need help with a deposit or withdrawal? <a href="mailto:support@hookedin.com">Contact support</a>. Never send
