@@ -51,7 +51,16 @@ export class BrowserStore {
           finish();
         };
         r.onupgradeneeded = () => r.result.createObjectStore('records');
-        r.onsuccess = () => settle(() => resolve(r.result));
+        // Another tab deleting the wallet's data closes this connection and reloads the page, so nothing here writes the
+        // deleted data back.
+        r.onsuccess = () =>
+          settle(() => {
+            r.result.onversionchange = () => {
+              r.result.close();
+              location.reload();
+            };
+            resolve(r.result);
+          });
         r.onerror = () => settle(() => reject(r.error));
         r.onblocked = () => settle(() => reject(new Error('Another tab has this wallet open. Close it and reload.')));
       });
@@ -79,6 +88,15 @@ export class BrowserStore {
   }
   async put(key: string, value: unknown) {
     return this.commit([[key, value]]);
+  }
+  /** Delete every record, in every tab: this tab writes nothing more, and every other reloads. */
+  async clear() {
+    this.db?.close();
+    await new Promise<void>((resolve, reject) => {
+      const r = indexedDB.deleteDatabase('hookedin-wallet-v1');
+      r.onsuccess = () => resolve();
+      r.onerror = () => reject(r.error);
+    });
   }
   /** Synchronous read/modify/write in one transaction, including across tabs. */
   async update<T = any>(key: string, change: (value: T | undefined) => T): Promise<T> {

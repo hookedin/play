@@ -6,7 +6,7 @@ import { passkeyKey } from './passkey.ts';
 import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
-import { withLock } from './storage.ts';
+import { BrowserStore, withLock } from './storage.ts';
 import { json, same, verifyEvidence, gameKey, collateralPrice } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import {
@@ -111,7 +111,9 @@ const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const HOUSE = 'hookedin';
 /** How many games one profile holds. */
 const MAX_GAMES = 100;
+const storage = new BrowserStore();
 const wallet = new CasinoWallet({
+  storage,
   casinoURL,
   network,
   trustedDeployment: config.deployment,
@@ -1887,6 +1889,22 @@ act(
   },
   'Switched account.',
 );
+/** Delete everything the wallet keeps in this browser, in every tab, and load it again, which opens a new account. */
+act('start-over', async () => {
+  const accounts = wallet.savedAddresses?.length ?? 0,
+    held = BigInt(wallet.publicState.balance || 0) + BigInt(wallet.publicState.nativeBalance || 0);
+  const warning = [
+    'Start over? This deletes everything this wallet keeps in this browser and opens a new, empty account.',
+    `It deletes the private key of ${accounts > 1 ? `all ${accounts} accounts` : 'the account'} saved here, with their evidence, receipts, activity and game allowances.${held ? ` This account holds ${plainEth(held)} ETH.` : ''}`,
+    `${wallet.address && localStorage.getItem(savedSetting()) === null ? 'This account’s key is saved nowhere else. ' : ''}An account whose key you have not saved with a passkey or a key file is lost for good, with all its money. A passkey stays on your device, and signing in with it opens its account again.`,
+    'This cannot be undone.',
+  ].join('\n\n');
+  if (!confirm(warning)) return;
+  wallet.destroy();
+  localStorage.clear();
+  await storage.clear();
+  location.replace('/');
+});
 // A field with a button beside it does what the button does on Enter.
 for (const [field, button] of [
   ['alias-input', 'pick-alias'],

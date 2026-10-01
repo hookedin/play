@@ -25,6 +25,11 @@ tab or **Backup and keys** in Settings:
 
 **Show this wallet's private key** shows the key of the account in use. Nobody can recover a lost key for you.
 
+**Start over**, under Backup and keys, deletes everything the wallet keeps in this browser, in every tab: the key of every
+account saved here, with its evidence, receipts, activity and game allowances. The wallet then opens a new, empty
+account. It warns you first, and says how much the account in use holds. An account whose key is saved nowhere else is
+lost with everything it holds; a passkey stays on your device, and **Sign in with a passkey** opens its account again.
+
 ## On another device
 
 Sign in with your passkey, from the account menu or the Deposit tab, or import your key, and the wallet takes up your

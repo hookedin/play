@@ -24,7 +24,8 @@ has checked the casino's contract on-chain, and a banner says so if that check f
 ([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
 **Backup and keys**, in Settings, keeps every key this browser made or imported, and **Import a private key** makes one
-your account. A game you have open opens again under the account you switch to.
+your account. A game you have open opens again under the account you switch to. **Start over** deletes them all and
+opens a new account ([your key](keys-and-recovery.md#your-key)).
 
 ## Deposit
 
