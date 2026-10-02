@@ -360,9 +360,9 @@ export function receiptSummary(
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or retry it from your deposit address with the saved transaction details.'
       : receipt.kind === 'close-started'
-        ? 'A close without the casino can be challenged for 24 hours. Then finish it under Settings → Recovery.'
+        ? 'A close without the casino can be challenged for 7 days. Then finish it under Settings → Recovery.'
         : receipt.kind === 'bet-disputed'
-          ? 'The casino has 7 days to settle the disputed bet on-chain; if it does not, the bet counts as won. Its result ends the close a day later. Then finish the close under Settings → Recovery.'
+          ? 'The casino has 7 days to settle the disputed bet on-chain; if it does not, the bet counts as won. Then finish the close under Settings → Recovery.'
           : receipt.kind === 'closure'
             ? 'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.'
             : undefined;

@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.37;
 
 /// @notice One trusted casino owner signs balances and controls the shared bankroll.
-/// Players must challenge stale closures within 24 hours to protect their latest balance, and anyone can dispute a
+/// Players must challenge stale closures within 7 days to protect their latest balance, and anyone can dispute a
 /// casino bet the owner's quote covers for them until the quote expires, which keeps its win from the owner as far as
 /// house cash is free. Anyone can buy collateral the owner offers for a channel, which protects its winnings from the
 /// owner.
 contract HookedInCasino {
-    uint256 public constant CHALLENGE_PERIOD = 24 hours;
-    // How long the casino has to settle a disputed casino bet before it counts as won.
-    uint256 public constant DISPUTE_PERIOD = 7 days;
+    // How long a close takes newer evidence, and how long the casino has to settle a casino bet disputed in it before
+    // it counts as won: long enough for a player away from the wallet, or a casino that is down, to answer.
+    uint256 public constant CHALLENGE_PERIOD = 7 days;
     // Every deposit, and every signed balance, deposited, withdrawn and loan total, is below 2^96 wei, as is every stake,
     // prize and quoted virtual bankroll: no realistic number of claims can overflow the uint256 aggregate debt and block
     // a finalization or a withdrawal, and a disputed bet's Kelly condition fits in 256 bits.
@@ -168,8 +168,9 @@ contract HookedInCasino {
     event Withdrawal(bytes32 indexed withdrawalId, bytes32 indexed channelId, address indexed recipient, uint256 amount);
     event CloseStarted(bytes32 indexed channelId, uint256 sequence, bytes32 stateHash, uint256 deadline);
     event CloseChallenged(bytes32 indexed channelId, uint256 sequence, bytes32 stateHash);
-    // The evidence a dispute brought: all the casino needs to settle the bet at its sequence.
-    event BetDisputed(bytes32 indexed channelId, Evidence evidence);
+    // The close's new deadline, and the evidence the dispute brought: all the casino needs to settle the bet at its
+    // sequence.
+    event BetDisputed(bytes32 indexed channelId, uint256 deadline, Evidence evidence);
     event CloseFinalized(
         bytes32 indexed channelId,
         address indexed beneficiary,
@@ -334,14 +335,16 @@ contract HookedInCasino {
         // Recorded during a close, the close owes that much less.
         if (c.status == STATUS_CLOSING) c.closingBalance = op.amount < c.closingBalance ? c.closingBalance - op.amount : 0;
         // A deposit its checkpoint did not take in stays the channel's, for its close. Recorded in order, the withdrawals
-        // before it drew on no more than this checkpoint took in.
-        uint256 available = c.principal + s.deposited - c.deposited;
+        // before it drew on no more than this checkpoint took in, unless the owner signed two histories.
+        uint256 available = c.principal + s.deposited > c.deposited ? c.principal + s.deposited - c.deposited : 0;
         uint256 deposits = op.amount < available ? op.amount : available;
         uint256 collateral = op.amount - deposits < c.collateral ? op.amount - deposits : c.collateral;
         uint256 protectedAmount = deposits + collateral;
         uint256 winnings = op.amount - protectedAmount;
         c.principal -= deposits;
         c.collateral -= collateral;
+        // A dispute's hold is part of the collateral, never more than what is left of it.
+        if (c.disputeHold > c.collateral) c.disputeHold = c.collateral;
         unpaidWinnings += winnings;
         queuedWinnings += winnings;
         emit Withdrawal(id, s.channelId, op.recipient, op.amount);
@@ -427,15 +430,16 @@ contract HookedInCasino {
         if (!disputed && _signer(hashState(next), step.casinoSignature) != owner) revert InvalidState();
     }
 
-    // The evidence's base: the channel's zero checkpoint, which needs no signature, or one both sides signed.
+    // The evidence's base: the channel's zero checkpoint, which carries no signature, or one both sides signed.
     function _signedBase(Evidence calldata evidence) private view returns (bytes32 h) {
         Channel storage c = channels[evidence.base.channelId];
         if (c.status == STATUS_UNOPENED) revert InvalidState();
         h = hashState(evidence.base);
-        if (
-            h != hashState(Checkpoint(evidence.base.channelId, 0, bytes32(0), bytes32(0), 0, 0, 0, 0))
-                && (_signer(h, evidence.playerSignature) != c.player || _signer(h, evidence.casinoSignature) != owner)
-        ) revert Unauthorized();
+        if (h == hashState(Checkpoint(evidence.base.channelId, 0, bytes32(0), bytes32(0), 0, 0, 0, 0))) {
+            if (evidence.playerSignature.length != 0 || evidence.casinoSignature.length != 0) revert InvalidTerms();
+        } else if (_signer(h, evidence.playerSignature) != c.player || _signer(h, evidence.casinoSignature) != owner) {
+            revert Unauthorized();
+        }
     }
 
     function _bounded(Checkpoint memory s) private pure {
@@ -509,14 +513,10 @@ contract HookedInCasino {
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
-        // Settling a disputed bet ends the close a challenge period later, if that is sooner.
-        if (c.disputedPrize != 0 && block.timestamp + CHALLENGE_PERIOD < c.deadline) {
-            c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
-        }
         c.disputedPrize = 0;
         // Settled, a disputed bet's hold returns to house cash but for what the close is now owed above the channel's
         // deposits and its other collateral.
-        uint256 hold = c.disputeHold < c.collateral ? c.disputeHold : c.collateral;
+        uint256 hold = c.disputeHold;
         uint256 rest = c.principal + c.collateral - hold;
         uint256 kept = c.closingBalance > rest ? c.closingBalance - rest : 0;
         if (kept < hold) {
@@ -528,10 +528,10 @@ contract HookedInCasino {
     }
 
     // A casino bet the casino has not settled, which its quote covers: anyone disputes it before the quote expires, which
-    // closes the channel with it or challenges its close. It counts as won until evidence at its sequence settles it; the
-    // casino has 7 days from the dispute to send that. What winning it adds above the channel's deposits and collateral
-    // moves from house cash into its collateral, its hold, as far as house cash is free, so the owner cannot take it while
-    // the casino settles the bet.
+    // closes the channel with it or challenges its close. It counts as won until evidence at its sequence settles it,
+    // which the casino has a challenge period from the dispute to send. What winning it adds above the channel's deposits
+    // and collateral moves from house cash into its collateral, its hold, as far as house cash is free, so the owner
+    // cannot take it while the casino settles the bet.
     function dispute(Evidence calldata evidence, Quote calldata quote) external nonReentrant {
         Step calldata step = evidence.step;
         Operation calldata op = step.operation;
@@ -552,7 +552,7 @@ contract HookedInCasino {
         } else if (c.status != STATUS_CLOSING || block.timestamp >= c.deadline || s.sequence <= c.closingSequence) {
             revert InvalidState();
         }
-        c.deadline = uint64(block.timestamp + DISPUTE_PERIOD);
+        c.deadline = uint64(block.timestamp + CHALLENGE_PERIOD);
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
@@ -564,7 +564,7 @@ contract HookedInCasino {
         c.collateral += hold;
         c.disputeHold += hold;
         protectedFunds += hold;
-        emit BetDisputed(s.channelId, evidence);
+        emit BetDisputed(s.channelId, c.deadline, evidence);
     }
 
     // Finalization only establishes debt, owed to the player; collection is an independent transaction.

@@ -91,6 +91,8 @@ export async function accessFor(d: any, opening: any, signer: any) {
 }
 /** A casino bet's odds: it pays `prize` when the round's outcome falls below `chance`. */
 export const below = (chance: any, prize: any) => ({ chance, prize });
+/** Whether a rejection is the contract's custom error `name`. */
+export const reverts = (name: string) => (error: any) => error.revert?.name === name;
 /** A casino bet that wins `netWin` when the outcome falls below `chance`, priced by the casino's admission rule. */
 export function assessBinary({ bankroll, stake, netWin, chance }: Record<string, bigint>) {
   const prize = stake + netWin,
@@ -147,7 +149,7 @@ export async function claimOf(f: any, channelId: string) {
 /** A close without the other side: started with `evidence`, then finalized once the challenge period is over. */
 export async function forceClose(f: any, env: any, ch: any, evidence = ch.evidence, by = ch.player) {
   await (await f.contract.connect(by).startClose(evidence)).wait();
-  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_increaseTime', [7 * 86400 + 1]);
   await env.provider.send('evm_mine', []);
   return (await f.contract.finalizeClose(evidence.base.channelId)).wait();
 }

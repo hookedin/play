@@ -226,13 +226,13 @@ test("a close's dispute is due when its quote expires, if that comes before the 
     now = async () => (await env.provider.getBlock('latest'))!.timestamp,
     { observer, worker, bundleOf } = watchtower(t, env, f);
   await (await f.contract.fundBankroll({ value: 10000n })).wait();
-  // b's channel closes on its base, and 12 hours later still has 12 to be challenged.
+  // b's channel closes on its base, and 12 hours later still has six and a half days to be challenged.
   const stale = await open(f, b, 1000n),
     won = await signedIncrease(f, stale, 50n);
   await (await f.contract.connect(f.owner).startClose(stale.base)).wait();
   await env.provider.send('evm_increaseTime', [12 * 3600]);
   await env.provider.send('evm_mine', []);
-  // a's channel closes short of a bet whose quote expires in two minutes, though the close has a day to run.
+  // a's channel closes short of a bet whose quote expires in two minutes, though the close has a week to run.
   const ch = await open(f, a, 1000n),
     bet = await disputedBet(f, ch, {
       virtualBankroll: 5000n,
@@ -277,7 +277,7 @@ test('a casino bet whose quote expired before anyone disputed it is reported, on
   assert.deepEqual(await expired(), [['expired-bet', 'warning']]);
   await (await f.contract.connect(f.owner).startClose(ch.evidence)).wait();
   assert.deepEqual(await expired(), [['expired-bet', 'critical']]);
-  await env.provider.send('evm_increaseTime', [86400]);
+  await env.provider.send('evm_increaseTime', [7 * 86400]);
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
   assert.deepEqual(await expired(), [['expired-bet', 'critical']]);

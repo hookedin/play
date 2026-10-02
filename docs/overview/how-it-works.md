@@ -183,10 +183,10 @@ all of it can be paid now, and otherwise declines it, leaving the balance unchan
 
 Only a close ends a channel, and either side can start one alone with its latest evidence: the latest balance both
 sides signed, or the channel's base, either alone or followed by one operation the account authorized and the casino
-signed. That starts a fixed 24-hour window, and the account's next deposit opens its next channel at once. Anyone with
+signed. That starts a 7-day window, and the account's next deposit opens its next channel at once. Anyone with
 strictly newer evidence can replace the close's state before the deadline, and the deadline moves only for a dispute:
 a covered casino bet the account closes with, or challenges with, gives the casino 7 days from then to replace it with
-its result, which ends the close 24 hours later if that is sooner. After it,
+its result. After it,
 anyone can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
 **claim**: up to the channel's principal and collateral it is protected, `min(owed, principal + collateral)`, and the
 rest is winnings, paid first

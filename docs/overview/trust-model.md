@@ -49,8 +49,8 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   deposits and other collateral, until the close is final. A bet still disputed then is won, and its winnings are
   recorded with the close.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
-  claim, with no casino server involved. The challenge window is a fixed 24 hours; only a dispute moves it, to give the
-  casino a week to settle the disputed bet, and settling it ends the close 24 hours later if that is sooner.
+  claim, with no casino server involved. The challenge window is 7 days; only a dispute moves it, to 7 days from the
+  dispute, which is the time the casino has to settle the disputed bet.
 - **Recorded winnings come before the owner.** Finalizing a close, or recording a withdrawal, records its unpaid
   winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
   of an earlier one, and the owner cannot withdraw the cash they are owed. Winnings not yet recorded have none of this.
@@ -111,7 +111,7 @@ verify is availability and liquidity.
 ## What you do yourself
 
 - **Watch your channel.** Either side can start a unilateral close, and the casino could close with an older signed
-  state. A challenge with your newer evidence must be mined within 24 hours of the close starting, or the older, lower
+  state. A challenge with your newer evidence must be mined within 7 days of the close starting, or the older, lower
   balance becomes final. Opening the wallet does not send a challenge: you press **Challenge the close**, or run a
   [watchtower](../wallet/keys-and-recovery.md#the-watchtower).
 - **Dispute a covered bet the casino leaves unsettled.** A casino bet its quote covers that the casino declines or does

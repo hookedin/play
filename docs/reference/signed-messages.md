@@ -166,7 +166,7 @@ operation the account signed there: `{operation, authorization, details}`.
 ### Evidence
 
 `Evidence{Checkpoint base; bytes playerSignature; bytes casinoSignature; Step step}` is what the contract settles on.
-`base` is the channel's [base](#the-base), which needs no signatures (the wallet sends `0x`), or another checkpoint
+`base` is the channel's [base](#the-base), which carries no signatures (both are `0x`), or another checkpoint
 signed by the account and the casino. `step` is one step from the base, or the _empty step_: the all-zero operation
 (`kind` 0, every number, address and hash zero), `authorization` and `casinoSignature` both `0x`, and a zero seed and
 secret. Kind 0 appears nowhere else. The casino's replies carry evidence in this form,

@@ -25,6 +25,7 @@ import {
   claimOf,
   disputedBet,
   offered,
+  reverts,
 } from '../testing/contract.ts';
 import {
   assertSignature,
@@ -40,6 +41,7 @@ import {
   QUOTE_TYPES,
   OFFER_TYPES,
   protection,
+  recordWithdrawals,
 } from '../protocol/protocol.ts';
 import { admits, MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 
@@ -81,7 +83,7 @@ test('a channel is its account: anyone deposits into it, the first deposit opens
   // first settles, while the first closes.
   assert.equal(await f.contract.channelOf(a.address), channelId(a.address, 1));
   const next = await open(f, a, 100n, b);
-  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_increaseTime', [7 * 86400 + 1]);
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
   assert.equal((await claimOf(f, ch.opening.channelId)).protectedRemaining, 800n);
@@ -93,8 +95,6 @@ test('a channel is its account: anyone deposits into it, the first deposit opens
   await (await f.contract.claim(ch.opening.channelId)).wait();
   assert.equal((await claimOf(f, ch.opening.channelId)).paid, 800n);
 });
-
-const reverts = (name: string) => (error: any) => error.revert?.name === name;
 
 test('anyone has a withdrawal made a claim, once: paid at once as far as deposits and house cash go, the rest in turn', async t => {
   const env = await anvil();
@@ -449,7 +449,7 @@ test('a close is paid out of the collateral what its deposits do not cover, a lo
   await (await f.contract.fundBankroll({ value: 2000n })).wait();
   // An offer at no price is collateral the casino gives. 300 won: the close is owed 1300, all of it protected.
   const ch = await open(f, a, 1000n),
-    later = now + 7n * 86400n;
+    later = now + 30n * 86400n;
   await (await offered(f, ch.opening.channelId, 500n, 0n, later)).buy(a);
   await forceClose(f, env, { ...ch, ...(await signedIncrease(f, ch, 300n)) }, undefined, a);
   const close = await claimOf(f, ch.opening.channelId);
@@ -563,7 +563,7 @@ test('a close moves the account to its next channel at once, and withdrawals are
   await (await f.contract.withdraw(later.evidence)).wait();
   assert.equal((await closing()).closingBalance, 600n);
   assert.equal(await env.provider.getBalance(recipient), 400n);
-  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_increaseTime', [7 * 86400 + 1]);
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
   assert.equal((await claimOf(f, ch.opening.channelId)).protectedRemaining, 600n);
@@ -641,7 +641,7 @@ test('withdrawals are recorded in the order the account signed them, and with a 
         assert.equal(c.closingBalance, due > 0n ? due : 0n, order.join(', '));
       }
     }
-    await env.provider.send('evm_increaseTime', [86401]);
+    await env.provider.send('evm_increaseTime', [7 * 86400 + 1]);
     await env.provider.send('evm_mine', []);
     await (await f.contract.finalizeClose(ch.state.channelId)).wait();
     const claim = await claimOf(f, ch.state.channelId);
@@ -651,6 +651,34 @@ test('withdrawals are recorded in the order the account signed them, and with a 
     assert.equal(await f.contract.withdrawableHouse(), 60n);
     assert.equal(await env.provider.send('evm_revert', [snapshot]), true);
   }
+});
+
+test('a withdrawal on a second history the owner signed draws none of the deposits the first one paid out', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    recipient = Wallet.createRandom().address;
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  // One history takes in the 10 deposited and withdraws all of it.
+  const ch = await open(f, env.wallets[1], 10n);
+  await (await f.contract.withdraw((await step(f, ch, 5, 10n, { recipient })).evidence)).wait();
+  // Another, from the channel's base, takes in nothing: credited 20, it withdraws 10, then 5, which the contract records
+  // after the first history's withdrawal, as the wallet predicts: out of house cash.
+  const base = { ...ch, state: ch.base.base, evidence: ch.base },
+    credited = { ...base, ...(await signedIncrease(f, base, 20n)) },
+    first = await step(f, credited, 5, 10n, { recipient }),
+    second = await step(
+      f,
+      { ...credited, state: first.state, evidence: await countersigned(f, credited, first) },
+      5,
+      5n,
+      { recipient },
+    ),
+    predicted = recordWithdrawals(await f.contract.channels(ch.opening.channelId), [{ amount: '5', deposited: '0' }]);
+  await (await f.contract.withdraw(second.evidence)).wait();
+  const c = await f.contract.channels(ch.opening.channelId);
+  assert.deepEqual([c.principal, c.collateral, predicted.cash], [predicted.principal, predicted.collateral, 5n]);
+  assert.equal(await env.provider.getBalance(recipient), 15n);
 });
 
 test("a lock-in during a close goes into the account's next channel, and so does a claim collected into the contract", async t => {
@@ -673,7 +701,7 @@ test("a lock-in during a close goes into the account's next channel, and so does
     };
   assert.notEqual(nextId, ch.state.channelId);
   assert.deepEqual(await next(), [1n, 100n, 100n]);
-  await env.provider.send('evm_increaseTime', [86401]);
+  await env.provider.send('evm_increaseTime', [7 * 86400 + 1]);
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.state.channelId)).wait();
   // The close is owed 50 of winnings, which house cash covers: collected into the contract, it joins them.
@@ -706,7 +734,7 @@ test('a bet settles on-chain, and only strictly newer evidence challenges a clos
   assert.equal((await f.contract.channels(ch.opening.channelId)).deadline, deadline);
   await assert.rejects(f.contract.challengeClose(ch.evidence));
   await assert.rejects(f.contract.finalizeClose(ch.opening.channelId));
-  await env.provider.send('evm_increaseTime', [86400]);
+  await env.provider.send('evm_increaseTime', [7 * 86400]);
   await env.provider.send('evm_mine', []);
   await assert.rejects(f.contract.challengeClose(bet.evidence));
   await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
@@ -788,7 +816,8 @@ test("a casino bet its quote covers is disputed by anyone, closing with it: won 
     [c.status, c.closingSequence, c.closingHash, c.closingBalance, c.disputedPrize],
     [2n, BigInt(bet.op.sequence), hashState(f.d, won), 1096n, 196n],
   );
-  assert.equal(c.deadline, BigInt((await now(env)) + 7 * 86400));
+  const disputedUntil = c.deadline;
+  assert.deepEqual([disputedUntil, event.args.deadline], [BigInt((await now(env)) + 7 * 86400), disputedUntil]);
   assert.deepEqual([c.collateral, c.disputeHold, await f.contract.withdrawableHouse()], [96n, 96n, house - 96n]);
   assert.equal(await f.contract.channelOf(a.address), channelId(a.address, 1));
   // Nothing older settles it, nor another bet the account disputes at its sequence: only the casino's result there.
@@ -801,8 +830,8 @@ test("a casino bet its quote covers is disputed by anyone, closing with it: won 
     [c.closingSequence, c.closingHash, c.closingBalance, c.disputedPrize],
     [BigInt(bet.op.sequence), hashState(f.d, settled.state), owed(settled.state, 1000n, 0n), 0n],
   );
-  // Settled, the close ends a day later, and takes only strictly newer evidence again.
-  assert.equal(c.deadline, BigInt((await now(env)) + 86400));
+  // Settled, the close keeps its deadline, and takes only strictly newer evidence again.
+  assert.equal(c.deadline, disputedUntil);
   await assert.rejects(f.contract.challengeClose.staticCall(settled.evidence), reverts('InvalidState'));
 });
 
@@ -828,12 +857,12 @@ test('a dispute nobody settles within its 7 days pays the bet as won, and a disp
     [(await claimOf(f, ch.opening.channelId)).amount, (await f.contract.channels(ch.opening.channelId)).disputedPrize],
     [1096n, 196n],
   );
-  // The casino closes b's channel on its base; b disputes its bet an hour before the deadline, as a challenge, and the
-  // casino has a week from then to settle it. Settled half a day before that, the close still ends then.
+  // The casino closes b's channel on its base; b disputes its bet two days in, as a challenge, and the casino has a week
+  // from then to settle it. Settled half a day before that, the close still ends then.
   const other = await open(f, b, 1000n),
     late = await disputedBet(f, other, { ...terms, expiresAt: (await now(env)) + 3 * 86400 });
   await (await f.contract.connect(f.owner).startClose(other.base)).wait();
-  await env.provider.send('evm_increaseTime', [23 * 3600]);
+  await env.provider.send('evm_increaseTime', [2 * 86400]);
   await env.provider.send('evm_mine', []);
   await (await f.contract.connect(a).dispute(late.evidence, late.terms)).wait();
   const c = await f.contract.channels(other.opening.channelId);
@@ -905,7 +934,7 @@ test("a dispute holds what the bet would win out of free house cash until the ca
   assert.deepEqual([...(await held(lost)), await house()], [904n, 904n, 0n]);
   await (await f.contract.challengeClose((await ticketBet.settled()).evidence)).wait();
   assert.deepEqual([...(await held(lost)), await house()], [0n, 0n, 904n]);
-  await later(1);
+  await later(7);
   for (const ch of [kept, lost]) await (await f.contract.finalizeClose(ch.opening.channelId)).wait();
   assert.deepEqual(
     [
@@ -927,6 +956,18 @@ test("a dispute holds what the bet would win out of free house cash until the ca
     capped = await disputedBet(f, short, await flip());
   await (await f.contract.dispute(capped.evidence, capped.terms)).wait();
   assert.deepEqual([...(await held(short)), await house()], [4n, 4n, 0n]);
+  // A withdrawal signed before the bet and recorded during the dispute takes the deposits, then the collateral: the hold
+  // is no more than what is left of it. 10 deposited and 40 won, 45 withdrawn, then a bet of 5 that would win 95.
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  const deposited = await open(f, env.wallets[6], 10n),
+    up = { ...deposited, ...(await signedIncrease(f, deposited, 40n)) },
+    out = await step(f, up, 5, 45n, { recipient: Wallet.createRandom().address }),
+    left = { ...up, state: out.state, evidence: await countersigned(f, up, out) },
+    drawn = await disputedBet(f, left, { ...(await flip()), stake: 5n, chance: OUTCOME_SPACE / 40n, prize: 100n });
+  await (await f.contract.dispute(drawn.evidence, drawn.terms)).wait();
+  assert.deepEqual(await held(left), [95n, 95n]);
+  await (await f.contract.withdraw(out.evidence)).wait();
+  assert.deepEqual(await held(left), [60n, 60n]);
 });
 
 test("the contract admits a disputed bet exactly as the casino's Kelly rule does", async t => {
@@ -1028,6 +1069,11 @@ test('a signature is taken only in the form the contract recovers', async t => {
     await assert.rejects(f.contract.supported({ ...evidence, casinoSignature: signature }));
     assert.throws(() => assertSignature(f.d, STATE_TYPES, state, signature, owner), /Invalid signature/);
   }
+  // A channel's base carries no signature: one given anyway is refused.
+  const { base } = await fund(f, env.wallets[2]);
+  await f.contract.supported(base);
+  for (const signatures of [{ playerSignature: evidence.casinoSignature }, { casinoSignature: '0x00' }])
+    await assert.rejects(f.contract.supported({ ...base, ...signatures }), reverts('InvalidTerms'));
 });
 
 test('balances are capped below MAX_BALANCE so aggregate debt cannot overflow and block protected-principal finalization', async t => {

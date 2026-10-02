@@ -651,7 +651,7 @@ function renderSend(
   $(`${send}-help`).textContent = !ready
     ? 'Connecting to your wallet…'
     : closing
-      ? 'Your balance is closing: once its 24-hour window ends, finish the close under Settings → Recovery and collect it.'
+      ? 'Your balance is closing: once its 7-day window ends, finish the close under Settings → Recovery and collect it.'
       : !open
         ? 'No balance is open: your first deposit opens one.'
         : wallet.recoveryOnly
@@ -1877,11 +1877,7 @@ function downloadEvidence(report: any) {
 }
 act('export-evidence', async () => downloadEvidence(await wallet.exportEvidence()));
 for (const id of ['start-close', 'channel-start-close'])
-  act(
-    id,
-    () => wallet.startClose(),
-    'Close started. It can be challenged for 24 hours; keep watching until it is done.',
-  );
+  act(id, () => wallet.startClose(), 'Close started. It can be challenged for 7 days; keep watching until it is done.');
 act('recover-wallet', () => wallet.recover(), 'The saved operation is finished. Reopen its game to carry on.');
 act(
   'speed-up-transaction',

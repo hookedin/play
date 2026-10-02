@@ -1,12 +1,12 @@
 ---
 title: Closing and claims
-description: Collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 24-hour challenge window and collecting a claim.
+description: Collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 7-day challenge window and collecting a claim.
 sidebar:
   order: 3
 ---
 
 Your balance is a channel in the HookedIn contract. Withdrawing takes part or all of it out while the channel stays
-open. Without the casino you close the channel alone, with your latest evidence and a 24-hour window, and then collect
+open. Without the casino you close the channel alone, with your latest evidence and a 7-day window, and then collect
 what it is owed. The wallet shows your balance with any money still arriving, and what the contract still owes you
 under **Waiting to be paid**; Settings shows what protects your balance under **Protection**, at
 `/settings/protection`, and the ways to close and collect under **Recovery**, at `/settings/recovery`.
@@ -103,7 +103,7 @@ address has no HookedIn balance to transfer into_.
    `startClose` with your latest evidence, paying its network fee from the deposit address
    ([fees and gas](#fees-and-gas)); with a pending casino bet its quote covers, it sends `dispute` instead
    ([dispute a casino bet](#dispute-a-casino-bet)). Only your account, or the casino's owner, can start a close.
-2. The contract sets the deadline 24 hours after the block that started the close (`CHALLENGE_PERIOD`, 86,400 seconds).
+2. The contract sets the deadline 7 days after the block that started the close (`CHALLENGE_PERIOD`, 604,800 seconds).
    Recovery shows it.
 3. Once the deadline has passed, press **Finish the close**. Anyone can send `finalizeClose`, and the claim is recorded
    at the state the close ended with.
@@ -126,8 +126,7 @@ game's operation your account carried out on another channel. Its banner says un
 the casino's quote, which the contract checks: the casino signed the quote for that checkpoint and round, the quote has
 not expired, and its virtual bankroll admits the bet by the casino's Kelly rule. The close counts the bet as won. The
 deadline is 7 days after the dispute, which is the time the casino has to replace it with its result: the bet settled
-on the round's secret, the outcome it would have had. Its result moves the deadline to 24 hours after it, if that is
-sooner, so a settled bet's close ends like any other. Should it not, the close finishes with the bet won, and its
+on the round's secret, the outcome it would have had. Should it not, the close finishes with the bet won, and its
 winnings are recorded with the close's claim. Meanwhile the dispute locks what winning the bet adds above your deposits
 and collateral into your [collateral](#collateral), out of the house cash that is free when it is mined, so the owner
 cannot take it: it pays the close if the bet stays won, and returns to house cash once the casino settles it lost.
@@ -147,7 +146,7 @@ the casino's in place of the bet unless your account signed past it, from anothe
 
 When nobody has played on your channel for 7 days, it holds more deposits and collateral than it is owed, by more than
 the gas of closing it, and no withdrawal from it is owed, the casino closes it on its latest state, so what you lost,
-and the collateral you no longer need, comes back to house cash. Once the close's 24 hours are
+and the collateral you no longer need, comes back to house cash. Once the close's 7 days are
 up, the casino finishes it and collects what it pays you, to your deposit address. Your next deposit opens your next
 channel.
 
