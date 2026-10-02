@@ -426,8 +426,46 @@ label {
   gap: 9px;
   min-width: 0;
   margin-right: 10px;
-  padding-left: 14px;
+  padding: 4px 8px 4px 14px;
+  border: 0;
   border-left: 1px solid var(--line);
+  background: none;
+  color: inherit;
+}
+.game-title::after {
+  content: '▾';
+  color: var(--muted);
+  font-size: 11px;
+}
+.game-title:hover strong {
+  color: #cfc2ff;
+}
+/* Under the game's name: its bets, the player's own and everyone's. */
+.game-title {
+  anchor-name: --game-title;
+}
+.account-menu.game-menu {
+  inset: auto;
+  width: auto;
+  min-width: 220px;
+  margin-top: 8px;
+  position-anchor: --game-title;
+  position-area: bottom span-right;
+}
+.account-menu.game-menu > button {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.account-menu.game-menu > button:hover {
+  background: var(--raised);
 }
 .game-title .game-icon {
   flex: none;
@@ -637,6 +675,11 @@ main:has(> #page-play:not(.hidden)) {
 }
 .toolbar input {
   flex: 1;
+}
+.toolbar select {
+  flex: none;
+  width: auto;
+  max-width: 40%;
 }
 .toolbar > .muted {
   flex: none;
@@ -1066,6 +1109,11 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .wallet-sheet .sheet-head {
   padding-top: 20px;
 }
+/* One sheet, two places: the wallet's money, and Settings. */
+#wallet-dialog[data-section='settings'] [data-section='wallet'],
+#wallet-dialog[data-section='wallet'] [data-section='settings'] {
+  display: none;
+}
 .wallet-sheet .tabs {
   position: sticky;
   top: 10px;
@@ -1108,15 +1156,19 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .tabs {
   display: flex;
   gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
   margin: 18px 0 4px;
   padding: 4px;
   border-radius: 10px;
   background: var(--bg);
 }
 .tabs button {
-  flex: 1;
+  flex: 1 0 auto;
   height: 34px;
+  padding: 0 10px;
   border: 0;
+  white-space: nowrap;
   border-radius: 7px;
   background: none;
   color: var(--muted);

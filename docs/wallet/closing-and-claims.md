@@ -8,8 +8,8 @@ sidebar:
 Your balance is a channel in the HookedIn contract. Withdrawing takes part or all of it out while the channel stays
 open. Without the casino you close the channel alone, with your latest evidence and a 24-hour window, and then collect
 what it is owed. The wallet shows your balance with any money still arriving, and what the contract still owes you
-under **Waiting to be paid**; its Settings tab, `/wallet/settings`, shows what protects your balance under
-**Protection**, and **Recovery**.
+under **Waiting to be paid**; Settings shows what protects your balance under **Protection**, at
+`/settings/protection`, and the ways to close and collect under **Recovery**, at `/settings/recovery`.
 
 ## Collateral
 

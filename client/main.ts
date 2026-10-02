@@ -197,6 +197,12 @@ function renderSafety() {
       : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
 }
 
+/** Open a sheet over the page, and take the focus into it: a game frame that had it is inert under the sheet, and keys
+ * and clicks would go nowhere. */
+function showSheet(dialog: HTMLDialogElement) {
+  if (!dialog.open) dialog.showModal();
+  if (!dialog.contains(document.activeElement)) dialog.querySelector<HTMLElement>('.close')?.focus();
+}
 /** Show a notice above everything, an open dialog too: the top layer stacks in the order things are shown. */
 function showOnTop(notice: HTMLElement) {
   if (notice.matches(':popover-open')) notice.hidePopover();
@@ -283,9 +289,21 @@ const PAGES: Record<string, { path: string; title: string }> = {
   bets: { path: '/bets', title: 'Bets' },
   bankroll: { path: '/bankroll', title: 'Bankroll' },
 };
-/** The wallet's tabs, each with a path of its own: Deposit is `/wallet`, the others `/wallet/<tab>`. */
-type WalletTab = 'deposit' | 'withdraw' | 'activity' | 'settings';
-const walletPath = (tab: WalletTab) => (tab === 'deposit' ? '/wallet' : `/wallet/${tab}`);
+/** The sheet's tabs, each with a path of its own: the wallet's money under `/wallet`, and Settings, a tab for each thing
+ * they are for, under `/settings`. */
+const SHEET_TABS = {
+  deposit: '/wallet',
+  withdraw: '/wallet/withdraw',
+  activity: '/wallet/activity',
+  profile: '/settings',
+  keys: '/settings/keys',
+  deposits: '/settings/deposits',
+  protection: '/settings/protection',
+  recovery: '/settings/recovery',
+};
+type WalletTab = keyof typeof SHEET_TABS;
+const walletPath = (tab: WalletTab) => SHEET_TABS[tab];
+const inSettings = (tab: WalletTab) => SHEET_TABS[tab].startsWith('/settings');
 /** The wallet tab the URL names, if it names one. */
 function walletRoute() {
   const target = parseRoute(new URL(location.href));
@@ -358,6 +376,8 @@ function renderFund() {
   for (const id of ['divest', 'divest-all']) $<HTMLButtonElement>(id).disabled = uiBusy || !open || !f || !shares;
 }
 function navigate(page: string, push = true, path = PAGES[page]!.path) {
+  // The bets page shows the game its path names, or every game.
+  if (page === 'bets') betGame = new URL(path, location.origin).searchParams.get('game')?.toLowerCase() ?? '';
   if (wallet.busy && active && wallet.pending?.game?.key === active.identity.key) {
     if (!push) history.pushState(null, '', active.path);
     return toast('Wait for the current operation to finish before leaving the game.', true);
@@ -368,8 +388,9 @@ function navigate(page: string, push = true, path = PAGES[page]!.path) {
   if (push && location.pathname !== path) history.pushState(null, '', path);
 }
 /** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<alias>` or `/~<uname>` for a player, the same and
- * `/<game>` for a game they publish, `/games/<key>` for a game's public record, and `/games/custom?url=<url>`; and the
- * wallet over a page, `/wallet` and `/wallet/<tab>`. */
+ * `/<game>` for a game they publish, `/games/<key>` for a game's public record, `/games/custom?url=<url>`, and
+ * `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page, `/wallet[/<tab>]` and
+ * `/settings[/<tab>]`. */
 function parseRoute(
   url: URL,
 ): string | GameRoute | { profile: string } | { record: string } | { wallet: WalletTab } | { unknown: string } {
@@ -379,8 +400,8 @@ function parseRoute(
   try {
     pathname = decodeURIComponent(pathname);
   } catch {}
-  const tab = /^\/wallet(?:\/(withdraw|activity|settings))?$/.exec(pathname);
-  if (tab) return { wallet: (tab[1] ?? 'deposit') as WalletTab };
+  const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === pathname);
+  if (tab) return { wallet: tab };
   const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
@@ -393,7 +414,8 @@ async function route(push = false) {
   if (typeof target === 'object' && 'wallet' in target) return showWallet(target.wallet);
   // Anywhere else, the wallet is closed.
   $<HTMLDialogElement>('wallet-dialog').close();
-  if (typeof target === 'string') return navigate(target, push);
+  if (typeof target === 'string')
+    return navigate(target, push, target === 'bets' ? location.pathname + location.search : undefined);
   if ('unknown' in target) {
     navigate('library', false, '/');
     history.replaceState(null, '', '/');
@@ -532,7 +554,7 @@ function openAllowanceDialog(amount?: bigint, developerBets = false) {
   });
 }
 
-// --- The wallet: the balance, what comes in at the deposit address, withdrawals, activity and settings ----------
+// --- The wallet: the balance, what comes in at the deposit address, withdrawals and activity; and Settings ---------
 
 let walletTab: WalletTab = 'deposit';
 /** The wallet's dialog on one of its tabs, over the page it opens on, and why it opened when it was not the player's own
@@ -544,20 +566,24 @@ function openWallet(tab: WalletTab = 'deposit', reason = '') {
   if (!$<HTMLDialogElement>('wallet-dialog').open) history.pushState({ over: true }, '', walletPath(tab));
   showWallet(tab);
 }
-/** The wallet on `tab`. A tab has a path, but no step in the history of its own: Back closes the wallet. */
+/** The wallet, or Settings, on `tab`. A tab has a path, but no step in the history of its own: Back closes the sheet. */
 function showWallet(tab: WalletTab) {
   walletTab = tab;
   if (location.pathname !== walletPath(tab)) history.replaceState(history.state, '', walletPath(tab));
-  document.title = 'Wallet · HookedIn';
+  const section = inSettings(tab) ? 'Settings' : 'Wallet';
+  $('wallet-dialog').dataset.section = section.toLowerCase();
+  $('wallet-title').textContent = section;
+  document.title = `${section} · HookedIn`;
   for (const button of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-tab]'))
     button.setAttribute('aria-selected', String(button.dataset.tab === tab));
   for (const panel of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-panel]'))
     panel.hidden = panel.dataset.panel !== tab;
   const dialog = $<HTMLDialogElement>('wallet-dialog');
-  if (!dialog.open) dialog.showModal();
+  showSheet(dialog);
   dialog.scrollTop = 0;
-  // What sending a withdrawal costs now, for Max and the help to count with.
-  if (tab === 'withdraw' && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
+  // What sending a withdrawal costs now, for Max and the help to count with, and what locking in costs, shown before it
+  // is signed.
+  if ((tab === 'withdraw' || tab === 'recovery') && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
   if (tab === 'activity') void refreshActivity();
   renderWallet();
 }
@@ -1203,6 +1229,9 @@ async function loadGame(url: string, gameRoute: GameRoute, push = true, publishe
     h('strong', null, identity.name),
     ...(active.publisher ? [h('span', { className: 'handle' }, active.publisher)] : []),
   );
+  $('game-my-bets').textContent = `Your bets in ${identity.name}`;
+  $('game-all-bets').textContent = `Everyone's bets in ${identity.name}`;
+  $<HTMLAnchorElement>('game-all-bets').href = `/games/${identity.key.toLowerCase()}`;
   showPage('play');
   if (push && location.pathname + location.search !== path) history.pushState(null, '', path);
   renderGameAccount();
@@ -1257,6 +1286,7 @@ async function openProfile(name: string, push = true) {
   $('profile-name').textContent = name;
   $('profile-uname').textContent = '';
   $('profile-since').textContent = '';
+  $('profile-own').classList.add('hidden');
   $('profile-stats').replaceChildren();
   const games = $('profile-games');
   games.textContent = 'Loading…';
@@ -1269,6 +1299,8 @@ async function openProfile(name: string, push = true) {
     $('profile-uname').textContent = profile.alias ? '~' + profile.uname : '';
     document.title = `${showName(profile)} · HookedIn`;
     $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
+    // Your own page is what others see of you; your name is set in Settings, and your bets are yours alone.
+    $('profile-own').classList.toggle('hidden', !wallet.uname || profile.uname !== wallet.uname);
     $('profile-stats').replaceChildren(
       h(
         'div',
@@ -1419,7 +1451,7 @@ function showBet(row: BetRow) {
   );
   $('bet-dialog').scrollTop = 0;
   // A bet opened from its group's list replaces the list in the dialog already open.
-  if (!$<HTMLDialogElement>('bet-dialog').open) $<HTMLDialogElement>('bet-dialog').showModal();
+  showSheet($<HTMLDialogElement>('bet-dialog'));
 }
 /** A list is rebuilt only when what it shows has changed. The wallet renders on every poll, and a
  * row replaced under the player's cursor takes their click with it. */
@@ -1428,20 +1460,35 @@ const betSignature = (rows: readonly BetRow[], extra = '') =>
 let shownBets = '\u0000',
   shownPlayed = '\u0000';
 const NO_BETS = 'No bets yet. Play a game with ETH, and your bets show here.';
+/** The game the bets page shows, by its key, as `/bets?game=<key>` names it; every game when empty. */
+let betGame = '';
+const betsPath = () => (betGame ? `/bets?game=${betGame}` : '/bets');
 function renderBets() {
   const rows = ownBets();
   $<HTMLButtonElement>('refresh-bets').disabled = historyBusy || !wallet.address;
+  // A game to choose for every game played, and the one asked for even before it has a bet.
+  const games = new Map(rows.flatMap(row => (row.key ? [[row.key.toLowerCase(), row.game] as const] : [])));
+  if (betGame && !games.has(betGame)) games.set(betGame, knownGames.get(betGame)?.name ?? 'This game');
+  const select = $<HTMLSelectElement>('bet-game'),
+    options = [['', 'All games'], ...[...games].sort((a, b) => a[1].localeCompare(b[1]))];
+  if (json(options) !== json([...select.options].map(option => [option.value, option.text])))
+    select.replaceChildren(...options.map(([key, name]) => new Option(name, key)));
+  select.value = betGame;
   const signature = betSignature(rows);
-  if (signature === shownBets) return;
-  shownBets = signature;
-  $('bet-list').replaceChildren(...betElements(rows, showBet));
+  if (signature !== shownBets) {
+    shownBets = signature;
+    $('bet-list').replaceChildren(...betElements(rows, showBet));
+  }
   filterList('bet');
 }
-/** A list of bets, the ones a game grouped standing together as one row. */
+/** A list of bets, the ones a game grouped standing together as one row, each knowing its game. */
 function betElements(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
-  return groupRows(rows).map(group =>
-    group.length === 1 ? betRowElement(group[0]!, onOpen) : groupRowElement(group, bets => showGroup(bets, onOpen)),
-  );
+  return groupRows(rows).map(group => {
+    const element =
+      group.length === 1 ? betRowElement(group[0]!, onOpen) : groupRowElement(group, bets => showGroup(bets, onOpen));
+    element.dataset.game = group[0]!.key?.toLowerCase() ?? '';
+    return element;
+  });
 }
 /** The bets of one group, each opening in full where this wallet kept its receipt. */
 function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
@@ -1450,17 +1497,18 @@ function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
   $('bet-detail-title').textContent = `${last.game} · ${last.group}`;
   $('bet-detail').replaceChildren(h('div', { className: 'bet-table' }, ...rows.map(row => betRowElement(row, onOpen))));
   $('bet-dialog').scrollTop = 0;
-  if (!$<HTMLDialogElement>('bet-dialog').open) $<HTMLDialogElement>('bet-dialog').showModal();
+  showSheet($<HTMLDialogElement>('bet-dialog'));
 }
 /** Show the rows of a list, of bets or events, that hold every word typed in its search, and count them. */
 function filterList(name: 'activity' | 'bet' | 'gamebets') {
   const terms = $<HTMLInputElement>(`${name}-search`).value.trim().toLowerCase().split(/\s+/).filter(Boolean),
-    events = name === 'activity';
+    events = name === 'activity',
+    game = name === 'bet' ? betGame : '';
   let visible = 0,
     total = 0;
   for (const row of $(`${name}-list`).children as HTMLCollectionOf<HTMLElement>) {
     const text = `${row.textContent} ${row.dataset.search ?? ''}`.toLowerCase(),
-      matches = terms.every(term => text.includes(term)),
+      matches = (!game || row.dataset.game === game) && terms.every(term => text.includes(term)),
       // A group's row stands for every bet in it.
       count = Number(row.dataset.bets ?? 1);
     row.classList.toggle('hidden', !matches);
@@ -1468,7 +1516,7 @@ function filterList(name: 'activity' | 'bet' | 'gamebets') {
     if (matches) visible += count;
   }
   $(`${name}-visible-count`).textContent =
-    `${terms.length ? `${visible} / ` : ''}${total} ${events ? 'event' : 'bet'}${total === 1 ? '' : 's'}`;
+    `${terms.length || game ? `${visible} / ` : ''}${total} ${events ? 'event' : 'bet'}${total === 1 ? '' : 's'}`;
   const empty = $(`${name}-empty`);
   empty.classList.toggle('hidden', visible !== 0);
   empty.textContent = terms.length
@@ -1477,9 +1525,11 @@ function filterList(name: 'activity' | 'bet' | 'gamebets') {
       : 'No bet matches that. Try a game, an amount, a bet number or an operation ID.'
     : events
       ? 'No activity yet. Events will appear here as you use the wallet and games.'
-      : name === 'bet'
-        ? NO_BETS
-        : 'Nobody has placed a bet in this game yet.';
+      : game
+        ? 'No bets in this game yet.'
+        : name === 'bet'
+          ? NO_BETS
+          : 'Nobody has placed a bet in this game yet.';
 }
 /** One line per game: what this wallet staked in it, what came back, and what its bets were worth. */
 function renderMyGames() {
@@ -1649,6 +1699,32 @@ async function openGameRecord(key: string, push = true) {
 window.addEventListener('popstate', () => void route(false));
 for (const name of ['activity', 'bet', 'gamebets'] as const)
   $(`${name}-search`).addEventListener('input', () => filterList(name));
+$<HTMLSelectElement>('bet-game').addEventListener('change', () => {
+  betGame = $<HTMLSelectElement>('bet-game').value;
+  history.replaceState(null, '', betsPath());
+  filterList('bet');
+});
+/** The open game's own bets, over it, so the game plays on; and everyone's, on its public record. */
+$('game-my-bets').addEventListener('click', () => {
+  $('game-menu').hidePopover();
+  if (!active) return;
+  const { key, name } = active.identity,
+    rows = ownBets().filter(row => row.key?.toLowerCase() === key.toLowerCase());
+  $('bet-detail-eyebrow').textContent = 'Your bets';
+  $('bet-detail-title').textContent = name;
+  $('bet-detail').replaceChildren(
+    rows.length
+      ? h('div', { className: 'bet-table' }, ...betElements(rows, showBet))
+      : h('p', { className: 'empty' }, `No bets in ${name} yet.`),
+  );
+  $('bet-dialog').scrollTop = 0;
+  showSheet($<HTMLDialogElement>('bet-dialog'));
+});
+$('game-all-bets').addEventListener('click', event => {
+  event.preventDefault();
+  $('game-menu').hidePopover();
+  if (active) void openGameRecord(active.identity.key.toLowerCase());
+});
 for (const id of ['refresh-bets', 'refresh-developer-bets', 'refresh-wallet'])
   $(id).addEventListener('click', () => void refreshActivity());
 $<HTMLFormElement>('custom-form').addEventListener('submit', event => {
@@ -1850,17 +1926,15 @@ act(
   },
   'Locking in: your balance, less the fee for sending it and what the casino lent you, goes into deposits the contract holds, in one transaction the casino sends.',
 );
-// What locking in costs now, shown before it is signed.
-$('channel-lock')
-  .closest('details')!
-  .addEventListener('toggle', event => {
-    if ((event.target as HTMLDetailsElement).open && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
-  });
 for (const id of ['channel-challenge', 'challenge-now'])
   act(id, () => wallet.challengeClose(), 'Your latest saved balance is submitted.');
 act(
   'channel-finalize',
-  () => wallet.finalizeClose(),
+  async () => {
+    await wallet.finalizeClose();
+    // What the close is owed waits in the wallet, to collect.
+    showWallet('deposit');
+  },
   'The close is done. Collect what it is owed under Waiting to be paid.',
 );
 $<HTMLInputElement>('channel-import').addEventListener('change', event => {
@@ -2031,7 +2105,7 @@ try {
   await wallet.start().finally(startup.resolve);
   if (wallet.recoveryOnly)
     warn(
-      'The casino is unavailable or has changed. Your balance stays safe in the contract: export, close, challenge and collect all work from Wallet → Settings → Recovery. Playing and depositing need the casino. Reload to reconnect.',
+      'The casino is unavailable or has changed. Your balance stays safe in the contract: export, close, challenge and collect all work from Settings → Recovery. Playing and depositing need the casino. Reload to reconnect.',
     );
   // Everything with ETH waits for the deployment check, and a failed one shows here.
   wallet.verified.catch((error: any) => warn(`${error.shortMessage || error.message} Reload to check again.`));

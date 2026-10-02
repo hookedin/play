@@ -15,7 +15,9 @@ what it was paid has been collected, and each payment a game made within a [grou
 it put at risk, payout, result and return. **At risk** is what a casino bet staked, which can be less than the stake the
 game shows when the game keeps part of it back ([what is given up](../games/collapsing-bets.md#what-is-given-up)); a
 payment shows what it paid the house, and pays nothing back. It is read from the receipts the wallet keeps
-([Activity](#activity)); rejected requests, and payments outside a group, are not listed.
+([Activity](#activity)); rejected requests, and payments outside a group, are not listed. Choose a game to see its bets
+alone, at `/bets?game=<key>`. While you play, the game's name in the top bar opens **Your bets in** the game, over it,
+and **Everyone's bets in** it, its [public record](#a-games-public-record).
 
 Opening a casino bet shows everything its receipt holds: where the round's outcome landed against the bet's chance; the
 prize and chance you signed and the return they make; your seed and the casino's secret, checked again against the

@@ -19,7 +19,13 @@
       <a class="brand" href="/" data-page="library" aria-label="HookedIn games"
         ><img src="/brand/hookedin-mark.svg" width="22" height="30" alt="" /><span>HookedIn</span></a
       >
-      <span id="game-title" class="game-title hidden"></span>
+      <button
+        id="game-title"
+        class="game-title hidden"
+        type="button"
+        popovertarget="game-menu"
+        aria-label="This game's bets"
+      ></button>
       <nav class="topnav" aria-label="Main">
         <a class="nav-link" href="/" data-page="library">Games</a>
         <a class="nav-link" href="/bets" data-page="bets">Bets</a>
@@ -46,10 +52,15 @@
         <span class="avatar" aria-hidden="true">◈</span><span id="account-name" class="account-name">Account</span>
       </button>
     </header>
+    <div id="game-menu" class="account-menu game-menu" popover>
+      <button id="game-my-bets" type="button">Your bets here</button>
+      <a id="game-all-bets" href="/">Everyone's bets here</a>
+    </div>
     <div id="account-menu" class="account-menu" popover>
       <div class="menu-head">
         <strong id="menu-name">Your account</strong><span id="menu-uname" class="handle"></span>
       </div>
+      <a id="menu-profile" href="/" class="hidden">Your profile</a>
       <a href="/" data-page="library">Games</a>
       <a href="/wallet" data-wallet-tab="deposit">Wallet</a>
       <a href="/bets" data-page="bets">Bets</a>
@@ -59,10 +70,9 @@
         <a href="/games" data-page="games">My games</a>
         <a href="/bankroll" data-page="bankroll">Bankroll</a>
       </details>
-      <a href="/wallet/settings" data-wallet-tab="settings">Settings</a>
+      <a href="/settings" data-wallet-tab="profile">Settings</a>
       <a href="mailto:support@hookedin.com">Contact support</a>
       <button id="menu-sign-in" class="text-button" type="button" data-key="sign-in">Sign in with a passkey</button>
-      <a id="menu-profile" href="/" class="hidden">Public profile</a>
     </div>
 
     <main>
@@ -129,6 +139,9 @@
           <button id="refresh-bets" class="button small" type="button">Refresh ↻</button>
         </div>
         <div class="toolbar">
+          <select id="bet-game" aria-label="Game">
+            <option value="">All games</option>
+          </select>
           <input
             id="bet-search"
             type="search"
@@ -275,6 +288,10 @@
         <h1 id="profile-name"></h1>
         <p id="profile-uname" class="handle"></p>
         <p id="profile-since" class="muted"></p>
+        <div id="profile-own" class="actions hidden">
+          <a class="button small" href="/settings" data-wallet-tab="profile">Edit your name</a
+          ><a class="button small" href="/bets" data-page="bets">Your bets</a>
+        </div>
         <div id="profile-stats" class="money"></div>
         <h2 id="profile-games-heading" class="section-title">Games they publish</h2>
         <div id="profile-games" class="game-grid"></div>
@@ -291,18 +308,18 @@
     </div>
     <div id="toast" class="toast" popover="manual" role="alert"></div>
 
-    <dialog id="wallet-dialog" class="sheet wallet-sheet" aria-labelledby="wallet-title">
+    <dialog id="wallet-dialog" class="sheet wallet-sheet" aria-labelledby="wallet-title" data-section="wallet">
       <div class="sheet-head">
         <h2 id="wallet-title">Wallet</h2>
         <button class="close" type="button" data-close aria-label="Close">×</button>
       </div>
-      <div class="money-card balance sheet-balance">
+      <div class="money-card balance sheet-balance" data-section="wallet">
         <span class="label">Balance</span><strong><span id="balance-amount">—</span> <small>ETH</small></strong>
         <span id="balance-note" class="muted">What games play with.</span>
         <span id="developer-earnings" class="muted hidden"></span>
       </div>
-      <p id="wallet-reason" class="help" hidden></p>
-      <section id="claims" class="claims hidden" aria-labelledby="claims-title">
+      <p id="wallet-reason" class="help" hidden data-section="wallet"></p>
+      <section id="claims" class="claims hidden" aria-labelledby="claims-title" data-section="wallet">
         <h3 id="claims-title">Waiting to be paid</h3>
         <p class="muted">
           What the contract still owes you: closed balances, and withdrawals it could not pay in full. Winnings are paid
@@ -310,11 +327,17 @@
         </p>
         <div id="claim-list" class="claim-list"></div>
       </section>
-      <div class="tabs" role="tablist" aria-label="Wallet">
+      <div class="tabs" role="tablist" aria-label="Wallet" data-section="wallet">
         <button role="tab" type="button" data-tab="deposit" aria-selected="true">Deposit</button
         ><button role="tab" type="button" data-tab="withdraw" aria-selected="false">Withdraw</button
-        ><button role="tab" type="button" data-tab="activity" aria-selected="false">Activity</button
-        ><button role="tab" type="button" data-tab="settings" aria-selected="false">Settings</button>
+        ><button role="tab" type="button" data-tab="activity" aria-selected="false">Activity</button>
+      </div>
+      <div class="tabs" role="tablist" aria-label="Settings" data-section="settings">
+        <button role="tab" type="button" data-tab="profile" aria-selected="false">Profile</button
+        ><button role="tab" type="button" data-tab="keys" aria-selected="false">Keys</button
+        ><button role="tab" type="button" data-tab="deposits" aria-selected="false">Deposits</button
+        ><button role="tab" type="button" data-tab="protection" aria-selected="false">Protection</button
+        ><button role="tab" type="button" data-tab="recovery" aria-selected="false">Recovery</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
         <div id="deposit-save" class="safety-note">
@@ -406,7 +429,33 @@
         <div id="activity-list" class="list"></div>
         <p id="activity-empty" class="empty hidden"></p>
       </section>
-      <section class="tab-panel" data-panel="settings" hidden>
+      <section class="tab-panel" data-panel="profile" hidden>
+        <section class="setting" aria-labelledby="name-title">
+          <h3 id="name-title">Your name</h3>
+          <p class="muted">
+            All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
+            yours for good; an alias, <code>@like-this</code>, is a shorter name you go by instead.
+          </p>
+          <p class="name-line">
+            <a id="wallet-name-link" href="/"><strong id="wallet-name">—</strong></a>
+            <span id="wallet-uname" class="handle"></span>
+          </p>
+          <div class="field-row">
+            <input
+              id="alias-input"
+              type="text"
+              maxlength="20"
+              pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
+              autocomplete="off"
+              placeholder="Choose an alias"
+              aria-label="Alias"
+            /><button id="pick-alias" class="button" type="button">Save alias</button>
+          </div>
+          <p id="alias-note" class="muted"></p>
+          <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
+        </section>
+      </section>
+      <section class="tab-panel" data-panel="keys" hidden>
         <section class="setting" aria-labelledby="keys-title">
           <h3 id="keys-title">Backup and keys</h3>
           <p id="key-status" class="muted"></p>
@@ -446,8 +495,9 @@
             account.
           </p>
         </section>
-        <section class="setting" aria-labelledby="deposits-title">
-          <h3 id="deposits-title">Deposits</h3>
+      </section>
+      <section class="tab-panel" data-panel="deposits" hidden>
+        <section class="setting">
           <label class="check"
             ><input id="auto-deposit" type="checkbox" checked /> Add ETH that arrives at my deposit address to my
             balance</label
@@ -476,35 +526,9 @@
             <p id="address-send-help" class="help"></p>
           </details>
         </section>
-        <section class="setting" aria-labelledby="name-title">
-          <h3 id="name-title">Your name</h3>
-          <p class="muted">
-            All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
-            yours for good; an alias, <code>@like-this</code>, is a shorter name you go by instead.
-          </p>
-          <p class="name-line">
-            <a id="wallet-name-link" href="/"><strong id="wallet-name">—</strong></a>
-            <span id="wallet-uname" class="handle"></span>
-          </p>
-          <div class="field-row">
-            <input
-              id="alias-input"
-              type="text"
-              maxlength="20"
-              pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
-              autocomplete="off"
-              placeholder="Choose an alias"
-              aria-label="Alias"
-            /><button id="pick-alias" class="button" type="button">Save alias</button>
-          </div>
-          <p id="alias-note" class="muted"></p>
-          <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
-        </section>
-        <details id="collateral" class="setting fold">
-          <summary>
-            <h3 id="collateral-title">Protection</h3>
-            <span class="muted">Deposits and collateral</span>
-          </summary>
+      </section>
+      <section class="tab-panel" data-panel="protection" hidden>
+        <section id="collateral" class="setting">
           <p class="muted">
             What the contract holds for your balance: your deposits, and collateral, the casino's cash locked into your
             balance. Withdrawals are paid out of them first, and collateral pays your winnings before the bankroll does.
@@ -543,12 +567,10 @@
             <button id="buy-collateral" class="button" type="button">Buy collateral</button>
           </div>
           <p id="collateral-help" class="help"></p>
-        </details>
-        <details class="setting fold recovery">
-          <summary>
-            <h3>Recovery</h3>
-            <span class="muted">Lock in, close, challenge and collect</span>
-          </summary>
+        </section>
+      </section>
+      <section class="tab-panel" data-panel="recovery" hidden>
+        <section class="setting recovery">
           <p id="channel-status" class="mono">No balance open</p>
           <p id="channel-observation" class="muted"></p>
           <p id="recovery-gas" class="help"></p>
@@ -571,7 +593,7 @@
           </div>
           <label for="channel-import">Import a recovery bundle</label>
           <input id="channel-import" type="file" accept="application/json" />
-        </details>
+        </section>
       </section>
     </dialog>
 

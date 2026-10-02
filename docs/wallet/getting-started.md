@@ -14,16 +14,18 @@ with your money. Its address is your **deposit address**. Nothing needs setting 
 deposit you [save your key](keys-and-recovery.md#your-key).
 
 **Wallet** in the top bar opens the wallet over the page you are on, a game going on under it: your balance, what the
-contract still owes you, and four tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw`, **Activity** at
-`/wallet/activity` and **Settings** at `/wallet/settings`. Each address opens the wallet on its tab, over the library
-when it is a link. Closing it, or Back, brings the page under it back.
+contract still owes you, and three tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw` and **Activity**
+at `/wallet/activity`. **Settings**, in the account menu, opens the same way at `/settings`, with a tab for each thing
+it is for: **Profile** at `/settings` for your name, **Keys** at `/settings/keys`, **Deposits** at
+`/settings/deposits`, **Protection** at `/settings/protection` and **Recovery** at `/settings/recovery`. Each address
+opens its tab, over the library when it is a link. Closing it, or Back, brings the page under it back.
 
 This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
 offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet
 has checked the casino's contract on-chain, and a banner says so if that check fails
 ([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
-**Backup and keys**, in Settings, keeps every key this browser made or imported, and **Import a private key** makes one
+**Backup and keys**, under **Keys** in Settings, keeps every key this browser made or imported, and **Import a private key** makes one
 your account. A game you have open opens again under the account you switch to. **Start over** deletes them all and
 opens a new account ([your key](keys-and-recovery.md#your-key)).
 
@@ -129,12 +131,14 @@ knows it at your first deposit, and a game you have open then loads again, to sa
 games, developers and other players learn about you.
 
 An **alias** is a shorter name you are shown by instead, written with an at sign, such as `@Bob`. Take one, or give it
-up, under **Your name** in Settings; either needs an open balance, and the rules are those of
+up, under **Profile** in Settings; either needs an open balance, and the rules are those of
 [`POST /api/channels/:id/alias`](../casino-api/channels.md#post-apichannelsidalias). Your uname stays yours either way,
 and both names find you.
 
 `/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they have
 played with what they staked and won, and the games they publish ([publishing](../games/publishing.md#publish-it)).
+**Your profile**, in the account menu, is your own page as others see it, with the way to your name in Settings and to
+your bets, which are yours alone.
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.
