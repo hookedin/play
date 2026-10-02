@@ -350,8 +350,8 @@ function renderFund() {
   const f = fundStatus,
     open = wallet.funded && !wallet.recoveryOnly,
     shares = BigInt(wallet.fund?.shares || 0);
-  $('fund-value').textContent = f ? formatAmount(f.value) : '—';
-  $('fund-equity').textContent = f ? formatAmount(f.equity) : '—';
+  $('fund-value').textContent = f ? formatAmount(f.value, 0) : '—';
+  $('fund-equity').textContent = f ? formatAmount(f.equity, 0) : '—';
   // Shares are counted like µETH, in units of 10^12: one began at 1 µETH, and the price is what the bankroll has made
   // or lost since.
   $('fund-price').textContent =
@@ -454,13 +454,16 @@ function renderGameAccount() {
     balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay();
   $('game-title').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('hidden', !game || !funded);
+  // Balances read in whole µETH, cut off, with every digit on hover.
   $('game-allowance-amount').replaceChildren(
-    ...(allowance ? [formatAmount(allowance), h('small', { title: 'A millionth of an ETH' }, 'µETH')] : ['Set']),
+    ...(allowance ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'µETH')] : ['Set']),
   );
+  $('game-allowance-amount').title = allowance ? `${exact(allowance)} µETH` : '';
   $('wallet-button-amount').replaceChildren(
-    formatAmount(balance),
+    formatAmount(balance, 0),
     h('small', { title: 'A millionth of an ETH' }, 'µETH'),
   );
+  $('wallet-button-amount').title = `${exact(balance)} µETH`;
   $('wallet-button-amount').classList.toggle('hidden', !funded || allowance > 0n);
   $('wallet-button-label').textContent = funded && balance > 0n ? 'Wallet' : 'Deposit';
   $('hero-deposit').classList.toggle('hidden', funded || !wallet.address);
@@ -494,7 +497,7 @@ function renderAllowanceDialog() {
     amount = typedAmount($<HTMLInputElement>('allowance-amount').value.trim() || '0');
   } catch {}
   const valid = amount >= 0n && amount <= total;
-  $('allowance-total').textContent = `${formatAmount(total)} µETH, your balance`;
+  $('allowance-total').textContent = `${formatAmount(total, 0)} µETH, your balance`;
   $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
   $('allowance-help').textContent = !valid
@@ -693,7 +696,8 @@ function renderWallet() {
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
     status = Number(state.channelStatus),
     closing = status === 2 || Boolean(wallet.channel?.closing);
-  $('balance-amount').textContent = formatAmount(balance);
+  $('balance-amount').textContent = formatAmount(balance, 0);
+  $('balance-amount').title = `${exact(balance)} µETH`;
   renderCollateral();
   renderSafety();
   const inPlay = wallet.inPlay();
@@ -823,9 +827,9 @@ function renderCollateral() {
     rate = state.collateralRate == null ? null : BigInt(state.collateralRate),
     amount = positiveAmount($<HTMLInputElement>('collateral-buy-amount').value.trim()),
     buying = state.buying;
-  $('held-deposits').textContent = formatAmount(p.deposits);
-  $('collateral-amount').textContent = formatAmount(p.collateral);
-  $('protected-amount').textContent = formatAmount(p.covered);
+  $('held-deposits').textContent = formatAmount(p.deposits, 0);
+  $('collateral-amount').textContent = formatAmount(p.collateral, 0);
+  $('protected-amount').textContent = formatAmount(p.covered, 0);
   $('collateral-rate').textContent = rate === null ? '—' : `${rateText(rate)} once`;
   $('balance-protection').textContent = [
     missing > 0n
@@ -1442,7 +1446,8 @@ function renderProfile() {
 async function refreshBank() {
   if (!wallet.channel?.registered) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();
-  $('bank-balance').textContent = `${exact(balance)} µETH`;
+  $('bank-balance').textContent = `${formatAmount(balance, 0)} µETH`;
+  $('bank-balance').title = `${exact(balance)} µETH`;
 }
 
 // --- What you play, and what it paid ---------------------------------------------------------

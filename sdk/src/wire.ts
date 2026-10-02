@@ -15,7 +15,8 @@ export function parseAmount(value: string) {
 }
 
 /** Wei as the player reads them, in µETH: thousands grouped, cut off (never rounded) at `places` decimals, a gwei by
- * default, without trailing zeros. A positive amount too small for that reads `<0.001`. */
+ * default, or whole µETH with none, as a balance reads, without trailing zeros. A positive amount too small for that
+ * reads `<0.001`, or `<1`. */
 export function formatAmount(value: string | number | bigint, places = 3) {
   try {
     const wei = BigInt(value),
@@ -24,7 +25,7 @@ export function formatAmount(value: string | number | bigint, places = 3) {
       unit = 10n ** BigInt(DECIMALS),
       whole = (positive / unit).toString().replace(/\B(?=(\d{3})+$)/g, ','),
       fractional = (positive % unit).toString().padStart(DECIMALS, '0').slice(0, places).replace(/0+$/, '');
-    if (positive > 0n && whole === '0' && !fractional) return `${sign}<0.${'0'.repeat(places - 1)}1`;
+    if (positive > 0n && whole === '0' && !fractional) return `${sign}<${places ? `0.${'0'.repeat(places - 1)}` : ''}1`;
     return `${sign}${whole}${fractional ? '.' + fractional : ''}`;
   } catch {
     return '—';

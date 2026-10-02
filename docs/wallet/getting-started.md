@@ -21,8 +21,9 @@ it is for: **Profile** at `/settings` for your name, **Keys** at `/settings/keys
 `/settings/recovery`. Each address
 opens its tab, over the library when it is a link. Closing it, or Back, brings the page under it back.
 
-The wallet, its games and hookedin.com count money in **µETH**, millionths of an ETH: 0.01 ETH is 10,000 µETH, and an
-amount is shown cut off at a thousandth of a µETH, a gwei, never rounded, with every digit on hover or in full.
+The wallet, its games and hookedin.com count money in **µETH**, millionths of an ETH: 0.01 ETH is 10,000 µETH. Amounts
+are cut off, never rounded: a balance in whole µETH, and a stake, a payout or a fee at a thousandth of a µETH, a gwei,
+with every digit on hover or in full.
 
 This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
 offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet

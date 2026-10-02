@@ -122,14 +122,15 @@ after the point, spaces trimmed. It throws an `Error` whose message is for the p
 
 #### `formatAmount`
 
-Wei in µETH as the player reads them, as the wallet shows every amount: thousands grouped, truncated (never rounded) to
-`places` decimal places, 3 by default, a gwei, with trailing zeros dropped. A positive amount that truncates to nothing
-reads `<0.001`, a negative one keeps its sign, and a value `BigInt` cannot read returns `—`. Write the unit after it,
-`µETH`.
+Wei in µETH as the player reads them, as the wallet shows them: thousands grouped, truncated (never rounded) to
+`places` decimal places, 3 by default, a gwei, with trailing zeros dropped; the wallet shows a balance with 0, in whole
+µETH. A positive amount that truncates to nothing reads `<0.001`, or `<1` with no places, a negative one keeps its sign,
+and a value `BigInt` cannot read returns `—`. Write the unit after it, `µETH`.
 
 ```ts
 HookedIn.formatAmount('1234567891999999999999'); // '1,234,567,891.999'
 HookedIn.formatAmount('1'); // '<0.001'
+HookedIn.formatAmount('48710895123456789', 0); // '48,710'
 ```
 
 #### `exactAmount`

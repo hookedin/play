@@ -19,6 +19,9 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     assert.equal(HookedIn.formatAmount('1234567891999999999999'), '1,234,567,891.999');
     assert.equal(HookedIn.formatAmount('-1500000000000'), '-1.5');
     assert.equal(HookedIn.formatAmount('1'), '<0.001');
+    // A balance reads in whole µETH.
+    assert.equal(HookedIn.formatAmount('48710895123456789', 0), '48,710');
+    assert.equal(HookedIn.formatAmount('1', 0), '<1');
     assert.equal(HookedIn.exactAmount('1234567891999999999999'), '1234567891.999999999999');
     assert.throws(() => HookedIn.parseAmount('0.0000000000001'), /12 decimal places/);
     assert.throws(() => HookedIn.parseAmount('0'), /greater than zero/);
