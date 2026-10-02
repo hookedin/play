@@ -230,7 +230,7 @@ document.addEventListener('keydown', event => {
 function scaleStake(up: boolean) {
   try {
     const wei = BigInt(HookedIn.parseAmount(stakeInput.value));
-    stakeInput.value = HookedIn.exactAmount(up ? wei * 2n : wei / 2n || 1n);
+    stakeInput.value = HookedIn.exactAmount(up ? wei * 2n : HookedIn.wholeStake(wei / 2n));
   } catch {}
 }
 $('half').addEventListener('click', () => scaleStake(false));

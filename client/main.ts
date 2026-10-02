@@ -19,7 +19,7 @@ import {
   receiptSummary,
   signedAmount,
 } from './activity.ts';
-import { exactAmount, formatAmount } from '../sdk/src/wire.ts';
+import { exactAmount, formatAmount, MICRO_ETH } from '../sdk/src/wire.ts';
 import {
   betDetail,
   betRowElement,
@@ -95,8 +95,6 @@ function pendingSummary({ kind, request, details, game, operationId }: any) {
 }
 // The launcher names the network and the casino in config.js.
 const { network, casino: casinoURL } = config;
-/** The allowance a game is offered first, until the player sets one of their own. */
-const firstAllowance = network === 'local' ? '100000000000000000' : '100000000000000';
 let active: ActiveGame | null = null,
   uiBusy = false,
   toastTimer: ReturnType<typeof setTimeout> | undefined,
@@ -480,44 +478,48 @@ function renderGameAccount() {
 }
 /** The slider runs linearly from nothing to the whole playable balance, a hundredth of it a step. */
 const SLIDER_STEPS = 100n;
-const sliderAmount = (total: bigint, value: string) => (total * BigInt(value)) / SLIDER_STEPS;
-// The last allowance the player chose for a game is only the next suggestion; authority comes from the dialog alone.
-const allowanceSetting = () => `hookedin:${network}:game-allowance:${active?.identity.key}`;
+const sliderAmount = (total: bigint, value: string) => wholeMicro((total * BigInt(value)) / SLIDER_STEPS);
+/** An allowance is whole µETH: wei cut down to them. */
+const wholeMicro = (wei: bigint) => wei - (wei % MICRO_ETH);
+/** A whole number of µETH the player typed, as wei: null for anything else. */
+const typedWhole = (text: string) => (/^\d{1,30}$/.test(text.trim()) ? BigInt(text.trim()) * MICRO_ETH : null);
 /** The wallet's own dialog: the sole grant of spending authority over ETH. It says what the game may play with now,
  * what it would, and out of how much, because those are the whole of what is being authorized. */
 function renderAllowanceDialog() {
   if (!active) return;
   const name = active.identity.name;
-  const allowance = BigInt(wallet.game?.allowance || '0');
+  // The dialog deals in whole µETH: the allowance as it stands reads cut down to them, as the top bar shows it.
+  const allowance = wholeMicro(BigInt(wallet.game?.allowance || '0'));
   $('allowance-title').textContent = allowance > 0n ? `Change the allowance for ${name}` : `Play ${name} with ETH`;
   const total = allowable(),
-    slider = $<HTMLInputElement>('allowance-slider');
-  let amount = -1n;
-  try {
-    amount = typedAmount($<HTMLInputElement>('allowance-amount').value.trim() || '0');
-  } catch {}
-  const valid = amount >= 0n && amount <= total;
+    slider = $<HTMLInputElement>('allowance-slider'),
+    amount = typedWhole($<HTMLInputElement>('allowance-amount').value || '0') ?? -1n,
+    valid = amount >= 0n && amount <= total,
+    shown = formatAmount(amount, 0);
   $('allowance-total').textContent = `${formatAmount(total, 0)} µETH, your balance`;
   $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
   $('allowance-help').textContent = !valid
     ? amount > total
-      ? `That is more than your balance of ${exact(total)} µETH.`
-      : 'Enter an amount in µETH.'
+      ? `That is more than your balance of ${formatAmount(total, 0)} µETH.`
+      : 'Enter a whole number of µETH.'
     : total === 0n
       ? 'Your balance is empty. Deposit to play with ETH.'
       : amount === allowance
         ? `This is ${name}'s allowance now.`
         : amount > allowance
-          ? `${name} may play with ${exact(amount - allowance)} µETH more.`
-          : `${exact(allowance - amount)} µETH comes back to your balance.`;
+          ? `${name} may play with up to ${shown} µETH.`
+          : `${name} may play with up to ${shown} µETH, and the rest stays in your balance.`;
   $('allowance-help').classList.toggle('check-failed', !valid);
   $<HTMLButtonElement>('allowance-confirm').disabled = !valid || amount === allowance || uiBusy || wallet.busy;
-  $('allowance-confirm').textContent = !valid
-    ? 'Allow'
-    : amount < allowance
-      ? `Take back ${exact(allowance - amount)} µETH`
-      : `Allow ${exact(amount)} µETH`;
+  $('allowance-confirm').textContent =
+    !valid || amount === allowance
+      ? 'Allow'
+      : amount === 0n
+        ? 'Take it all back'
+        : amount < allowance
+          ? `Lower to ${shown} µETH`
+          : `Allow ${shown} µETH`;
 }
 /** What the player may allow the open game: the playable balance less what its groups hold, which stays theirs. */
 const allowable = () => {
@@ -541,23 +543,20 @@ function openAllowanceDialog(amount?: bigint, developerBets = false) {
   // The game page shows nothing but the game, so the dialog that grants it money says who it is, and what it may do.
   const host = new URL(active.frame.src).host;
   $('allowance-who').textContent = active.publisher
-    ? `Published by ${active.publisher}, served from ${host}. Its developer earns half of each casino bet's commission.`
-    : `Served from ${host}. Nobody publishes it, so nobody earns from it.`;
+    ? `Published by ${active.publisher}, served from ${host}.`
+    : `Served from ${host}.`;
   // Only a published game has a developer to bet against.
   allowingDeveloperBets = Boolean(active.publisher) && (developerBets || wallet.game.developerBets);
   $('allowance-developer').hidden = !allowingDeveloperBets;
   $('allowance-developer-text').textContent =
     `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into their bank at once, and they decide what each bet pays. Neither the casino nor your wallet can check that result, so allow this only for a developer you trust.`;
-  const total = allowable(),
+  // The dialog starts at the allowance as it stands, nothing for a game just opened, or at what the game asked for,
+  // in whole µETH that cover it.
+  const total = wholeMicro(allowable()),
     allowance = BigInt(wallet.game?.allowance || '0'),
-    // What the game asked for, never more; or the allowance as it is, or what the player last chose.
-    suggested =
-      amount && amount > 0n
-        ? allowance + amount
-        : allowance > 0n
-          ? allowance
-          : BigInt(localStorage.getItem(allowanceSetting()) || firstAllowance);
-  $<HTMLInputElement>('allowance-amount').value = exactAmount(suggested > total ? total : suggested);
+    asked = amount && amount > 0n ? allowance + amount : allowance,
+    suggested = amount && amount > 0n ? wholeMicro(asked + MICRO_ETH - 1n) : wholeMicro(asked);
+  $<HTMLInputElement>('allowance-amount').value = String((suggested > total ? total : suggested) / MICRO_ETH);
   renderAllowanceDialog();
   if (!dialog.open) dialog.showModal();
   $<HTMLInputElement>('allowance-amount').select();
@@ -1809,14 +1808,14 @@ $<HTMLFormElement>('allowance-form').addEventListener('submit', event => {
   event.preventDefault();
   void task(async () => {
     if (!active) return;
-    const amount = typedAmount($<HTMLInputElement>('allowance-amount').value.trim() || '0');
+    const amount = typedWhole($<HTMLInputElement>('allowance-amount').value || '0');
+    if (amount === null) throw new Error('Enter a whole number of µETH.');
     // An allowance is held against other tabs.
     await holdGameAllowance();
     await wallet.setGameAllowance(String(amount), allowingDeveloperBets);
-    localStorage.setItem(allowanceSetting(), String(amount));
     toast(
       amount
-        ? `${active.identity.name} may play with up to ${exact(amount)} µETH${allowingDeveloperBets ? ', developer bets included' : ''}.`
+        ? `${active.identity.name} may play with up to ${formatAmount(amount, 0)} µETH${allowingDeveloperBets ? ', developer bets included' : ''}.`
         : `${active.identity.name} may play with nothing.`,
     );
     $<HTMLDialogElement>('allowance-dialog').close(String(amount));
@@ -1861,8 +1860,8 @@ $('wallet-dialog').addEventListener('close', () => {
   }
 });
 $<HTMLInputElement>('allowance-slider').addEventListener('input', () => {
-  $<HTMLInputElement>('allowance-amount').value = exactAmount(
-    sliderAmount(allowable(), $<HTMLInputElement>('allowance-slider').value),
+  $<HTMLInputElement>('allowance-amount').value = String(
+    sliderAmount(allowable(), $<HTMLInputElement>('allowance-slider').value) / MICRO_ETH,
   );
   renderAllowanceDialog();
 });

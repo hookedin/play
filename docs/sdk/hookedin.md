@@ -116,9 +116,9 @@ HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:3byt9
 
 #### `parseAmount`
 
-What the player typed, in µETH, a millionth of an ETH, as whole wei in a decimal string: digits with at most 12 places
-after the point, spaces trimmed. It throws an `Error` whose message is for the player,
-`Enter an amount in µETH, with up to 12 decimal places.` or, for zero, `Enter an amount greater than zero.`
+What the player typed, a whole number of µETH, a millionth of an ETH, as wei in a decimal string: digits only, spaces
+trimmed. Every stake a player chooses is whole µETH. It throws an `Error` whose message is for the player,
+`Enter a whole number of µETH.` or, for zero, `Enter an amount greater than zero.`
 
 #### `formatAmount`
 
@@ -137,6 +137,17 @@ HookedIn.formatAmount('48710895123456789', 0); // '48,710'
 
 Every digit of an amount in µETH, `formatAmount` to 12 places without grouping: what belongs in a field the player
 edits.
+
+#### `wholeStake`
+
+`wholeStake(wei, units = 1n)`: the stake a player can choose at or below `wei`, in wei: whole µETH, a multiple of
+`units` of them, and at least that. A page halves a stake with it, and a game whose bets are halved again, as
+blackjack's insurance is, keeps its stakes even with `units` 2.
+
+```ts
+HookedIn.wholeStake(1500000000000n); // 1000000000000n, 1 µETH
+HookedIn.wholeStake(1n, 2n); // 2000000000000n, 2 µETH
+```
 
 #### `initializeGame`
 

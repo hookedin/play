@@ -524,11 +524,14 @@ function stepStake(up: boolean) {
   } catch {
     return;
   }
-  const magnitude = 10n ** BigInt(wei.toString().length - 1);
+  // The ladder runs in whole µETH, as every bet a player chooses does.
+  const micro = BigInt(HookedIn.parseAmount('1')),
+    units = wei / micro,
+    magnitude = 10n ** BigInt(units.toString().length - 1);
   const next = up
-    ? [1n, 2n, 5n, 10n].map(m => m * magnitude).find(value => value > wei)!
-    : ([5n, 2n, 1n].map(m => m * magnitude).find(value => value < wei) ?? (magnitude > 1n ? magnitude / 2n : wei));
-  stakeInput.value = HookedIn.exactAmount(next);
+    ? [1n, 2n, 5n, 10n].map(m => m * magnitude).find(value => value > units)!
+    : ([5n, 2n, 1n].map(m => m * magnitude).find(value => value < units) ?? (magnitude > 1n ? magnitude / 2n : units));
+  stakeInput.value = HookedIn.exactAmount(next * micro);
 }
 $('bet-up').addEventListener('click', () => stepStake(true));
 $('bet-down').addEventListener('click', () => stepStake(false));

@@ -87,8 +87,9 @@ game may risk, and moves no money:
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
   taken in: a deposit still arriving cannot raise it.
 - It lives only in this tab's memory. Leaving the game, reloading or closing the tab takes it back: every time you open
-  a game it starts with nothing, and asks again. The wallet remembers the last allowance you chose only as the next
-  suggestion, and gives a game nothing without your word in its dialog.
+  a game it starts with nothing, and asks again. The dialog deals in whole µETH, and starts at what the game holds now,
+  nothing for a game just opened, unless the game asked for an amount: then at that, in whole µETH that cover it. The
+  wallet gives a game nothing without your word in its dialog.
 - Every verified result of the game's own operations moves it: a stake lowers it as it is bet, and a win raises it once
   the game has shown it, so the figure gives no result away before the game does, and stands still while a round is
   played. Until then the wallet's window says how much of your balance is in play. A game can lose everything it

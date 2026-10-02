@@ -1,7 +1,7 @@
 /** HookedIn game bridge. This script runs inside a sandboxed iframe that keeps the game host's origin. */
 import type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
 import type { Round } from '../../protocol/types.ts';
-import { exactAmount, formatAmount, parseAmount, playerScope } from './wire.ts';
+import { exactAmount, formatAmount, parseAmount, playerScope, wholeStake } from './wire.ts';
 export type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
 
 /** Every bound a bet is held to, as the wallet reports them. They are part of the protocol revision the wallet
@@ -149,6 +149,7 @@ export const HookedIn = Object.freeze({
   parseAmount,
   formatAmount,
   exactAmount,
+  wholeStake,
   /** Read-only startup: who is playing and where to keep what the game saves for them, and the recommended stake in
    * the stake field unless the player has edited it meanwhile. */
   async initializeGame({ stakeInput }: { stakeInput: HTMLInputElement }) {

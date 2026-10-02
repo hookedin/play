@@ -175,7 +175,7 @@ stakeInput.addEventListener('input', odds);
 function scaleStake(up: boolean) {
   const amount = stake();
   if (amount === null) return;
-  stakeInput.value = HookedIn.exactAmount(up ? amount * 2n : amount / 2n || 1n);
+  stakeInput.value = HookedIn.exactAmount(up ? amount * 2n : HookedIn.wholeStake(amount / 2n));
   odds();
 }
 $('half').addEventListener('click', () => scaleStake(false));

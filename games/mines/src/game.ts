@@ -189,7 +189,7 @@ const scale = (id: string, by: (wei: bigint) => bigint) =>
     } catch {}
     edited();
   });
-scale('half', wei => (wei > 1n ? wei / 2n : wei));
+scale('half', wei => HookedIn.wholeStake(wei / 2n));
 scale('double', wei => wei * 2n);
 // Space bets and cashes out, unless a field or a button has the key.
 document.addEventListener('keydown', event => {
