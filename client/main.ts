@@ -599,7 +599,9 @@ function showWallet(tab: WalletTab) {
   // is signed.
   if (['withdraw', 'transfer', 'recovery'].includes(tab) && wallet.channel)
     void wallet.quoteWithdrawalFee().catch(() => {});
-  if (tab === 'activity') void refreshActivity();
+  if (tab === 'activity') void refreshWallet();
+  // The deposit address is checked for ETH every 20 seconds while it is shown.
+  wallet.showDeposit(tab === 'deposit');
   renderWallet();
 }
 /** Once money has moved, the wallet has done its work. */
@@ -683,6 +685,7 @@ function renderSend(
 function renderWallet() {
   renderFund();
   renderProfile();
+  $<HTMLButtonElement>('refresh-wallet').disabled = historyBusy || !wallet.address;
   if (!wallet.address) return;
   const state = wallet.publicState;
   if (active?.channelId && active.channelId !== wallet.channelId) abandonGame();
@@ -901,7 +904,6 @@ function renderDeveloperBets() {
     ? `This may be out of date. ${wallet.developerBetError}`
     : 'Bets waiting for their developers, and what they were paid on its way to your balance.';
   $('developer-bets-status').classList.toggle('check-failed', Boolean(wallet.developerBetError));
-  $<HTMLButtonElement>('refresh-developer-bets').disabled = historyBusy || wallet.busy || !wallet.channel;
   syncRows(
     $('wallet-developer-bets'),
     bets,
@@ -926,7 +928,6 @@ function renderDeveloperBets() {
 }
 
 function renderActivity() {
-  $<HTMLButtonElement>('refresh-wallet').disabled = historyBusy || !wallet.address;
   const refreshError = historyError?.shortMessage || historyError?.message || historyError || wallet.detailsError;
   $('history-status').textContent =
     historyError || wallet.detailsError
@@ -1135,16 +1136,15 @@ function transactionLink(hash: string) {
   );
 }
 
-/** The user-initiated refresh; the wallet's own loop observes, polls and audits otherwise. */
-async function refreshActivity() {
+/** Check now what the wallet's own loop checks every 10 minutes, and the activity's details with it. */
+async function refreshWallet() {
   if (historyBusy || !wallet.address || !wallet.reader) return;
   historyBusy = true;
   historyError = null;
-  renderActivity();
+  renderWallet();
   try {
-    await wallet.refresh();
+    await wallet.check();
     await wallet.refreshDetails();
-    await wallet.collectPayouts();
   } catch (error) {
     historyError = error;
   } finally {
@@ -1795,8 +1795,7 @@ $('game-all-bets').addEventListener('click', event => {
   $('game-menu').hidePopover();
   if (active) void openGameRecord(active.identity.key.toLowerCase());
 });
-for (const id of ['refresh-bets', 'refresh-developer-bets', 'refresh-wallet'])
-  $(id).addEventListener('click', () => void refreshActivity());
+for (const id of ['refresh-bets', 'refresh-wallet']) $(id).addEventListener('click', () => void refreshWallet());
 $<HTMLFormElement>('custom-form').addEventListener('submit', event => {
   event.preventDefault();
   const url = $<HTMLInputElement>('custom-url').value.trim();
@@ -1853,6 +1852,7 @@ $('wallet-dialog')
 // lobby, under a wallet opened by its link.
 $('wallet-dialog').addEventListener('close', () => {
   $('wallet-reason').hidden = true;
+  wallet.showDeposit(false);
   if (!walletRoute()) return;
   if (history.state?.over) history.back();
   else {
@@ -2196,7 +2196,7 @@ try {
   wallet.verified.catch((error: any) => warn(`${error.shortMessage || error.message} Reload to check again.`));
   renderWallet();
   renderActivity();
-  void refreshActivity();
+  void refreshWallet();
   if (wallet.pending && !inbound(wallet.pending.kind))
     toast('An operation is saved and unfinished. Use Retry above to finish it safely.');
   await route();

@@ -90,6 +90,10 @@ export interface GameIntent {
   kept?: string;
 }
 export const HISTORICAL_CHANNEL_BATCH = 16;
+/** How often the wallet checks the chain and the casino by itself, in milliseconds: every 10 minutes, and every 20
+ * seconds while the page shows the deposit address. An operation signs only on a check at most `CHECK_EVERY` old. */
+export const CHECK_EVERY = 600_000,
+  DEPOSIT_CHECK_EVERY = 20_000;
 /** What the wallet keeps of an on-chain channel record. */
 const CHANNEL_FIELDS = [
   'player',
@@ -167,7 +171,9 @@ export class CasinoWallet extends GameSessions {
   declare provider: JsonRpcProvider;
   declare witnessProvider: JsonRpcProvider | undefined;
   declare observer: ChainObserver;
-  declare timer: ReturnType<typeof setInterval> | undefined;
+  declare timer: ReturnType<typeof setTimeout> | undefined;
+  /** Whether the page shows the deposit address, which the wallet then checks for ETH every 20 seconds. */
+  declare depositShown: boolean;
   /** The deployment check: the contract's code and operator, read from two independent RPCs. */
   declare verified: Promise<unknown>;
   /** The deployment check, then the current account's first chain observation and casino reconciliation. */
@@ -252,6 +258,7 @@ export class CasinoWallet extends GameSessions {
       profile: null,
       developerEarnings: null,
       busy: false,
+      depositShown: false,
     });
     this.hydrate(undefined);
   }
@@ -322,16 +329,33 @@ export class CasinoWallet extends GameSessions {
     this.verified.catch(() => {});
     const saved = await saveAccounts(this.storage, this.expectedChainId, { create: true });
     await this.useKey(saved.accounts[saved.selected!], { select: false });
-    // The single observation loop; the page only re-renders from wallet state. A hidden tab does not poll.
-    this.timer = setInterval(() => {
-      if (!this.busy && !globalThis.document?.hidden)
-        void this.refresh()
-          .then(() => this.sweep().catch(error => console.error('Adding ETH to your balance failed', error)))
-          .then(() => this.collectPayouts().catch(error => console.error('Collecting payouts failed', error)))
-          .catch(() => {});
-    }, 4000);
-    this.timer.unref?.();
+    this.schedule();
     return this;
+  }
+  /** The single observation loop; the page only re-renders from wallet state. A hidden tab does not check. */
+  schedule() {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(
+      () => {
+        this.schedule();
+        if (!this.busy && !globalThis.document?.hidden)
+          void this.check().catch(error => console.error('Checking the chain and the casino failed', error));
+      },
+      this.depositShown ? DEPOSIT_CHECK_EVERY : CHECK_EVERY,
+    );
+    this.timer.unref?.();
+  }
+  /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
+  async check() {
+    await this.refresh();
+    await this.sweep().catch(error => console.error('Adding ETH to your balance failed', error));
+    await this.collectPayouts();
+  }
+  /** The page shows the deposit address, or stops showing it. */
+  showDeposit(shown: boolean) {
+    if (shown === this.depositShown) return;
+    this.depositShown = shown;
+    if (this.timer) this.schedule();
   }
   /** Switch to the account of a key, saved in this browser from then on. Its saved state loads at once; its first
    * look at the chain and the casino follows the deployment check, in synced. */
@@ -884,12 +908,13 @@ export class CasinoWallet extends GameSessions {
       this.render();
     }
   }
-  ready(): asserts this is this & { channel: WalletChannel } {
+  /** Refuses unless this wallet may sign on its channel now. A check older than `CHECK_EVERY` is made again first,
+   * under the channel lock the caller holds. */
+  async ready() {
     this.requireDurableState();
     this.requireService();
+    if (!this.lastChainCheck || Date.now() - this.lastChainCheck > CHECK_EVERY) await this.refreshLocked();
     if (!this.funded) throw new Error('Open or recover a channel before playing');
-    if (!this.lastChainCheck || Date.now() - this.lastChainCheck > 60000)
-      throw new Error('Chain observations stale; refresh before playing');
   }
   async api(path: string, body: unknown = undefined, channel: WalletChannel | null = this.channel) {
     if (body !== undefined) this.requireDurableState();
@@ -1119,7 +1144,8 @@ export class CasinoWallet extends GameSessions {
     await this.refresh();
   }
   destroy() {
-    clearInterval(this.timer);
+    clearTimeout(this.timer);
+    this.timer = undefined;
     this.provider?.destroy();
     this.witnessProvider?.destroy();
   }

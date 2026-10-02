@@ -641,12 +641,6 @@ main:has(> #page-play:not(.hidden)) {
 .section-title {
   margin: 32px 0 14px;
 }
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
 .card {
   margin-top: 16px;
   padding: 20px;
@@ -1151,7 +1145,8 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .sheet-head .eyebrow {
   margin-bottom: 6px;
 }
-.close {
+.close,
+.refresh {
   flex: none;
   width: 32px;
   height: 32px;
@@ -1163,7 +1158,12 @@ main:has(> #page-play:not(.hidden)) > .banner {
   font-size: 22px;
   line-height: 1;
 }
-.close:hover {
+/* Refresh sits beside Close, both to the right of the title. */
+.refresh {
+  margin: -4px -10px 0 auto;
+}
+.close:hover,
+.refresh:hover {
   background: var(--raised);
   color: var(--text);
 }

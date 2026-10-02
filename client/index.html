@@ -312,7 +312,8 @@
     <dialog id="wallet-dialog" class="sheet wallet-sheet" aria-labelledby="wallet-title" data-section="wallet">
       <div class="sheet-head">
         <h2 id="wallet-title">Wallet</h2>
-        <button class="close" type="button" data-close aria-label="Close">×</button>
+        <button id="refresh-wallet" class="refresh" type="button" aria-label="Refresh" title="Check now">↻</button
+        ><button class="close" type="button" data-close aria-label="Close">×</button>
       </div>
       <div class="money-card balance sheet-balance" data-section="wallet">
         <span class="label">Balance</span
@@ -413,10 +414,7 @@
       </section>
       <section class="tab-panel" data-panel="activity" hidden>
         <section id="developer-bets" class="setting hidden" aria-labelledby="developer-bets-title">
-          <div class="section-head">
-            <h3 id="developer-bets-title">Developer bets</h3>
-            <button id="refresh-developer-bets" class="text-button" type="button">Check now ↻</button>
-          </div>
+          <h3 id="developer-bets-title">Developer bets</h3>
           <p id="developer-bets-status" class="muted" role="status"></p>
           <div id="wallet-developer-bets" class="list"></div>
         </section>
@@ -429,7 +427,6 @@
             autocomplete="off"
           />
           <span id="activity-visible-count" class="muted">0 events</span>
-          <button id="refresh-wallet" class="text-button" type="button">Refresh ↻</button>
         </div>
         <p id="history-status" class="muted" role="status"></p>
         <div id="activity-list" class="list"></div>

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { keccak256, parseEther, toUtf8Bytes } from 'ethers';
-import { CasinoWallet } from '../client/wallet.ts';
+import { CasinoWallet, CHECK_EVERY } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
 
 /** A wallet whose address, RPC, signer and contract are stubs: what it signs is recorded, and nothing is broadcast. */
@@ -183,10 +183,25 @@ test('only a local casino that says so offers its faucet', async () => {
   await assert.rejects(sepolia.setupDemo(), /local only/);
 });
 
-test('stale independent observations pause off-chain play', () => {
+test('an operation on a check older than CHECK_EVERY checks again first, and pauses when it cannot', async () => {
   const { wallet } = fixture();
   wallet.channelId = 'test';
   wallet.channels = { test: { state: { balance: '1' }, onchain: { status: 1 }, registered: true } as any };
-  wallet.lastChainCheck = Date.now() - 61000;
-  assert.throws(() => wallet.ready(), /stale/);
+  let checks = 0;
+  wallet.refreshLocked = async () => {
+    checks++;
+    throw new Error('RPC down');
+  };
+  wallet.lastChainCheck = Date.now() - CHECK_EVERY + 5000;
+  await wallet.ready();
+  assert.equal(checks, 0);
+  wallet.lastChainCheck = Date.now() - CHECK_EVERY - 1000;
+  await assert.rejects(wallet.ready(), /RPC down/);
+  wallet.refreshLocked = async () => {
+    checks++;
+    wallet.lastChainCheck = Date.now();
+    return wallet.publicState;
+  };
+  await wallet.ready();
+  assert.equal(checks, 2);
 });

@@ -101,7 +101,8 @@ developer bets under **Developer bets** until what each was paid has been collec
 | Payout collected          | The payout is in your balance                                                 |
 | Settled · no payout       | Settled for nothing: there is nothing to collect                              |
 
-The wallet asks the casino for your settled bets every 4 seconds while its tab is visible. For each, it checks the
+The wallet asks the casino for your settled bets every 10 minutes while its tab is visible, when you press ↻ beside
+its title, and at once when the game asks about the bet. For each, it checks the
 developer's signed `Settlement` against the bet you signed (its hash, its stake and its developer) and signs a credit
 for exactly what the settlement pays you, into your balance; the game that placed the bet hears of it while open, and
 the payout joins its allowance once the game has shown the result. Stakes with developers and payouts not yet collected are apart from your signed

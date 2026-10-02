@@ -179,7 +179,7 @@ export class GameSessions extends ChannelClient {
     // It waits for the wallet's own background work rather than failing as busy.
     return this.exclusive(
       async () => {
-        this.ready();
+        await this.ready();
         const game = this.requireGame();
         if (n > this.playableBalance() - this.inPlay()) throw new Error('The allowance exceeds your balance');
         if (developerBets && BigInt(game.identity.developer) === 0n)

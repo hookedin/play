@@ -1,7 +1,6 @@
 // Compile-time checks for the application APIs. This file is never executed.
 import type { Domain, Opening, Checkpoint, Operation, EvidenceBundle } from '../protocol/types.ts';
 import type { Store } from '../client/storage.ts';
-import type { CasinoWallet, WalletChannel } from '../client/wallet.ts';
 import { baseState, operation, deriveState, verifyEvidence, plain } from '../protocol/protocol.ts';
 
 function checkProtocol(d: Domain, opening: Opening, state: Checkpoint, op: Operation, bundle: EvidenceBundle) {
@@ -28,12 +27,3 @@ async function checkStorage(store: Store) {
 
 void checkProtocol;
 void checkStorage;
-
-function checkSelectedChannel(wallet: CasinoWallet) {
-  // @ts-expect-error An initialized wallet need not have an open channel.
-  const unchecked: WalletChannel = wallet.channel;
-  wallet.ready();
-  const ready: WalletChannel = wallet.channel;
-  return { unchecked, ready };
-}
-void checkSelectedChannel;

@@ -42,8 +42,9 @@ a passkey** to open the account of one you made before, or **Save a key file ins
 you have open opens again under it.
 
 Then send Sepolia ETH to the address: free test ETH from the faucet the tab links to, or a withdrawal from another
-player's balance. The wallet checks the address every 4 seconds while the page is visible and adds what arrives to your
-balance; ETH too small to cover its fee waits for more.
+player's balance. While the Deposit tab is open and the page visible, the wallet checks the address every 20 seconds and
+adds what arrives to your balance; otherwise it checks every 10 minutes, or at once when you press ↻ beside the
+wallet's title. ETH too small to cover its fee waits for more.
 
 Each deposit is one transaction, `deposit`, into your account's channel, and your first opens it. After two
 confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the

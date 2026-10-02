@@ -252,7 +252,7 @@ export async function gameWallet({
       channelId: first.opening.channelId,
       channels: { [first.opening.channelId]: structuredClone(first) },
     });
-    wallet.ready = () => {
+    wallet.ready = async () => {
       wallet.requireDurableState();
       if (!wallet.channel) throw new Error('No channel');
     };

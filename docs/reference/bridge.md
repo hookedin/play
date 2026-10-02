@@ -331,7 +331,7 @@ The wallet sends this unasked, with `event` in place of an envelope ID, to the g
 ### `game.receipt`
 
 A developer bet this game placed has been settled by its developer and collected by the wallet. The wallet looks for
-settled bets every 4 seconds while its tab is visible, and at once when the game asks [`game.receipt`](#gamereceipt)
+settled bets every 10 minutes while its tab is visible, and at once when the game asks [`game.receipt`](#gamereceipt)
 about an open one; it sends the event while the game is open.
 
 It carries `receipt`, the bet's [receipt](#receipt) as `game.developerBet` answered it, now `settled` and with its

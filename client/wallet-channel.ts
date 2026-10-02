@@ -270,7 +270,7 @@ export class ChannelClient extends WalletTransactions {
             throw gameError('id-conflict', 'Operation ID is bound to a different game');
           return cached;
         }
-        this.ready();
+        await this.ready();
         if (!this.pending) await sign();
         else {
           if (this.pending.operationId !== operationId)
@@ -670,7 +670,7 @@ export class ChannelClient extends WalletTransactions {
    * before it is sent, and what it takes out is owed to this account, collected into the open channel. */
   async withdrawBank(this: CasinoWallet, amount: Integer) {
     return this.exclusive(async () => {
-      this.ready();
+      await this.ready();
       const held = { ...this.bank };
       if (!held.withdrawing) {
         const bank = await this.bankBalance();
@@ -845,7 +845,7 @@ export class ChannelClient extends WalletTransactions {
     // A redemption follows the latest statement: a wallet that missed some takes them up before it signs.
     await this.syncFund();
     return this.exclusive(async () => {
-      this.ready();
+      await this.ready();
       if (!this.fund.redeeming) {
         if (BigInt(shares) <= 0n || BigInt(shares) > BigInt(this.fund.shares))
           throw new Error('Not that many shares to redeem');

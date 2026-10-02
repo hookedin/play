@@ -60,7 +60,7 @@ const receipt = await HookedIn.developerBet({
 - Once you settle a bet, the wallet checks your signed settlement and collects what it pays into the player's balance.
   While the game is open, it adds that to the bet's group, which joins the allowance once the page ends the group with
   [`HookedIn.end`](../sdk/hookedin.md#end), and pushes the receipt, `settled` with its `payout`, as a `game.receipt`
-  event. The wallet looks every 4 seconds while its tab is visible; a page that hears from your server
+  event. The wallet looks only every 10 minutes while its tab is visible, so a page that hears from your server
   that a bet has settled calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload,
   `HookedIn.receipt(id)` finds the bet.
 - Until the wallet collects it, what a bet is paid is the casino's promise, outside what the contract

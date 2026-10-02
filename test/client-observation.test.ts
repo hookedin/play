@@ -66,7 +66,7 @@ for (const location of ['cached', 'pending'])
     const storage = new MemoryStore(),
       wallet = new CasinoWallet({ network: 'local', storage });
     wallet.storageKey = 'wallet';
-    wallet.ready = () => {};
+    wallet.ready = async () => {};
     wallet.render = (() => {}) as any;
     wallet.openGame(testGame());
     const input = { stake: 10n, chance: 123n, prize: 30n };
