@@ -135,8 +135,10 @@ async function act(label: string, work: () => Promise<string>, tile = -1) {
 }
 async function bet() {
   const wei = HookedIn.parseAmount(stake.value),
-    m = Number(mines.value),
-    picks = coveredPicks(BigInt(wei), m, BigInt((await HookedIn.info()).virtualBankroll));
+    m = Number(mines.value);
+  // The allowance first: a player with nothing to allow is sent to Deposit, before the casino has priced anything.
+  await round.ensureAllowance(BigInt(wei), BigInt(wei));
+  const picks = coveredPicks(BigInt(wei), m, BigInt((await HookedIn.info()).virtualBankroll));
   if (!picks) throw new RangeError('no pick is covered');
   show(await round.start({ stake: wei, mines: m, picks }));
   return picks < TILES - m

@@ -39,6 +39,9 @@ export interface CasinoBetRequest {
   prize: string;
   /** A label for bets that belong together, such as the steps of one hand. */
   group?: string;
+  /** What of its group's cash stays out of the bet and with the group, such as the least a step of a round is sure to
+   * leave it: the wallet keeps it out of the allowance it shows, as it does what the group won, until the group ends. */
+  kept?: string;
 }
 /** A developer bet: a bet against the game's developer, whose bank takes the stake at once and who settles it when
  * they choose. `meta` is the game's own JSON, saying what the bet is, which the casino keeps and never reads. The

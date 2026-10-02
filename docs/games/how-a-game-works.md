@@ -56,7 +56,8 @@ verified winnings.
 - The wallet's top bar names the game, by the name it is published under, and shows its allowance in place of the
   player's balance. The player opens the dialog from there to change the allowance or take it all back. A page shows
   no header, allowance or balance of its own: only the game.
-- Leaving the game, reloading or closing the tab releases the allowance. The money never left the player's balance.
+- Leaving the game, reloading or closing the tab takes the allowance back, its leave to place developer bets with it:
+  a game opens with nothing every time. The money never left the player's balance.
 - One game per wallet holds an allowance at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](#lost-replies)).
@@ -172,7 +173,7 @@ no uname until their first deposit, and the wallet then loads the page again. `R
 
 ## Reloads and tabs
 
-- A reload releases the allowance. The state at your origin survives, and every settled step's money is in the channel
+- A reload takes back the allowance. The state at your origin survives, and every settled step's money is in the channel
   balance: a resumed round asks for an allowance again.
 - Saved state stays in this browser and does not follow the player to another device; a round left unfinished leaves
   the player the cash it held.

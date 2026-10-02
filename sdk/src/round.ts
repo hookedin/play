@@ -306,6 +306,8 @@ export class RoundClient {
     // what they win out of the allowance it shows until the round ends.
     const group = this.data.id;
     let receipt;
+    // What the step keeps of the round's cash stays out of the allowance the wallet shows, with the round: the cash of
+    // the lower of the classes a bet goes between, which the round has whatever the outcome, or what a payment leaves.
     if (ticket.kind === 'casino-bet')
       // The branch drawn is one bet: the stake at risk, and the prize it pays below its chance.
       receipt = await this.call('game.casinoBet', {
@@ -314,8 +316,10 @@ export class RoundClient {
         chance: ticket.bet.chance,
         prize: ticket.bet.prize,
         group,
+        kept: ticket.lose.cash,
       });
-    else if (ticket.kind === 'payment') receipt = await this.call('game.payment', { id, amount: ticket.amount, group });
+    else if (ticket.kind === 'payment')
+      receipt = await this.call('game.payment', { id, amount: ticket.amount, group, kept: ticket.cash });
     else receipt = { kind: 'noop' };
     await this.resolve(receipt);
     if (receipt.status === 'rejected')

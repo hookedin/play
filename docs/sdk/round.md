@@ -44,7 +44,9 @@ the allowance the wallet shows, until the game calls [`HookedIn.end(state.id)`](
 seen how the round ended. The round asks the player for more when what the round may stake, the allowance and what it
 holds, is short of what the step needs, draws the step's branch with the page's own randomness
 ([`prepareAction`](engine.md#prepareaction)) and saves it with a fresh operation ID before it sends anything, and then
-sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing. A bet wins when the receipt's outcome is
+sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing, each with what it `kept` of the round's
+cash: the cash of the lower class a bet goes between, or what a payment leaves, so the round's whole stake leaves the
+allowance the wallet shows with its first step. A bet wins when the receipt's outcome is
 below its chance, which fixes the class of states it reaches, and the outcome draws the state within it; the verified
 payout must be the prize when the bet won and `0` otherwise, or the step throws. A declined step stays saved under a
 fresh operation ID, the same bet, never drawn again. A step whose reply was lost stays saved under its own, and the

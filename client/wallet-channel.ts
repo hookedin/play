@@ -199,7 +199,7 @@ export class ChannelClient extends WalletTransactions {
     const allowed = (debit: bigint) => {
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
-        if (debit > BigInt(this.gameAllowance(game.group).allowance))
+        if (debit + BigInt(game.kept ?? 0) > BigInt(this.gameAllowance(game.group).allowance))
           throw gameError('insufficient-allowance', "Bet exceeds the game's allowance");
         if (kind === 'developer-bet' && !this.game.developerBets)
           throw gameError(
@@ -386,7 +386,12 @@ export class ChannelClient extends WalletTransactions {
       const change = BigInt(next.balance) - BigInt(c.state.balance),
         staked = rejected || credit(kind) ? 0n : BigInt(op.amount),
         won = change + staked;
-      this.gameSettled(won < 0n ? -change : staked, won < 0n ? 0n : won, game.group);
+      this.gameSettled(
+        won < 0n ? -change : staked,
+        won < 0n ? 0n : won,
+        game.group,
+        rejected ? 0n : BigInt(game.kept ?? 0),
+      );
     }
     const casinoBet = Number(op.kind) === KIND.casinoBet;
     c.state = next;

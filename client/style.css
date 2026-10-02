@@ -1275,6 +1275,15 @@ main:has(> #page-play:not(.hidden)) > .banner {
   margin-top: 10px;
   font-size: 12px;
 }
+/* A note in a grid of cards, such as a profile with no games, takes the whole row. */
+.grid-note {
+  grid-column: 1 / -1;
+}
+.bet-round-summary {
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
 .permissions {
   display: grid;
   gap: 8px;
@@ -1877,7 +1886,9 @@ body:has(#page-play:not(.hidden)) .footer {
   .network,
   .account-name,
   .game-title .handle,
-  .game-allowance > small {
+  .game-title .game-icon,
+  /* Playing, the game's allowance is the amount the bar shows. */
+  .topbar:has(.game-title:not(.hidden)) .wallet-button-amount {
     display: none;
   }
   /* Playing, the game's name takes the room the brand leaves. */

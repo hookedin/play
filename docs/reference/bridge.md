@@ -94,15 +94,16 @@ The wallet's top bar shows the game's allowance, in place of the player's balanc
 gives a result away before the game shows it, and never moves while a round is played, the wallet holds a group's
 winnings apart:
 
-- A stake leaves the allowance when it is bet.
-- What a bet in a group wins, a developer bet's collected payout included, stays with the group, out of the allowance
-  and the balance the player sees. The group's own later bets stake it first; no other bet can.
+- A stake leaves the allowance when it is bet, and so does what a bet in a group says it `kept` of the group's cash:
+  the least a step of a round is sure to leave it, which stays the round's whatever the outcome.
+- What a bet in a group wins, a developer bet's collected payout included, stays with the group, with what it kept,
+  out of the allowance and the balance the player sees. The group's own later bets stake it first; no other bet can.
 - [`game.end`](#gameend) ends a group once the player has seen how it ended, and what it holds joins the allowance.
   Leaving the game ends every group.
 - A bet with no group is shown as it settles.
 
-A multi-step round is one group, so the figure drops by the stake on its first step and stays there until the game ends
-the round. The money is the player's throughout: it is in their balance, and the wallet's own window says how much of
+A multi-step round is one group, so the figure drops by the whole stake on its first step and stays there until the
+game ends the round. [`RoundClient`](../sdk/round.md#roundclient) sends each step's `kept` itself. The money is the player's throughout: it is in their balance, and the wallet's own window says how much of
 it is in play.
 
 ## Methods
@@ -163,13 +164,14 @@ has one; the casino's commission is not charged to the player. The casino settle
 every bet its [quote](../overview/how-it-works.md#quotes) covers, one whose terms the quote's virtual bankroll admits;
 it declines any other, with a signed checkpoint that leaves the balance unchanged.
 
-| Param    | Type           | Meaning                                                              |
-| -------- | -------------- | -------------------------------------------------------------------- |
-| `id`     | `string`       | The game's ID for the operation                                      |
-| `stake`  | decimal string | Paid to enter; at most the game's allowance and what its group holds |
-| `chance` | decimal string | How many of the 2^64 outcomes win: 1 to 2^64 − 1                     |
-| `prize`  | decimal string | What the bet pays when it wins; below 2^96                           |
-| `group`  | `string`       | Optional: the group the bet belongs to                               |
+| Param    | Type           | Meaning                                                                                                                                                                                                          |
+| -------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`     | `string`       | The game's ID for the operation                                                                                                                                                                                  |
+| `stake`  | decimal string | Paid to enter; at most the game's allowance and what its group holds                                                                                                                                             |
+| `chance` | decimal string | How many of the 2^64 outcomes win: 1 to 2^64 − 1                                                                                                                                                                 |
+| `prize`  | decimal string | What the bet pays when it wins; below 2^96                                                                                                                                                                       |
+| `group`  | `string`       | Optional: the group the bet belongs to                                                                                                                                                                           |
+| `kept`   | decimal string | Optional, in a group: what of the group's cash stays out of the bet, with the group ([groups](#groups-and-the-allowance-the-player-sees)); with the stake, at most the game's allowance and what its group holds |
 
 The outcome is a uniform integer below 2^64, so the bet wins with probability `chance / 2^64`. A chance of 0, or of
 2^64 or more, is refused with `invalid-request`: a sure loss or a sure win is no bet. So is a prize of 2^96 or more,
@@ -254,11 +256,12 @@ bets: `invalid-request`. The developer's side is the [developer kit](../sdk/deve
 
 A payment to the bankroll: the balance drops by `amount`, with no chance involved and no commission.
 
-| Param    | Type           | Meaning                                                             |
-| -------- | -------------- | ------------------------------------------------------------------- |
-| `id`     | `string`       | The game's ID for the operation                                     |
-| `amount` | decimal string | What is paid; at most the game's allowance and what its group holds |
-| `group`  | `string`       | Optional: the group the payment belongs to                          |
+| Param    | Type           | Meaning                                                              |
+| -------- | -------------- | -------------------------------------------------------------------- |
+| `id`     | `string`       | The game's ID for the operation                                      |
+| `amount` | decimal string | What is paid; at most the game's allowance and what its group holds  |
+| `group`  | `string`       | Optional: the group the payment belongs to                           |
+| `kept`   | decimal string | Optional, in a group: what of the group's cash the payment leaves it |
 
 The result is the payment's receipt, `settled` or `rejected`. It carries no amount.
 

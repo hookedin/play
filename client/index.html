@@ -131,9 +131,8 @@
           <div>
             <h1>Bets</h1>
             <p class="muted">
-              Your bets among the latest 100 receipts this wallet keeps, each with what it put at risk, which a game can
-              make less than its stake by keeping part back, and a round's steps together. Open one for its odds, its
-              outcome and the proof.
+              Your latest bets, newest first, from the 100 receipts this browser keeps. A round of several steps is one
+              row. Open a bet for its odds, its outcome and the proof.
             </p>
           </div>
           <button id="refresh-bets" class="button small" type="button">Refresh ↻</button>
@@ -440,6 +439,7 @@
             <a id="wallet-name-link" href="/"><strong id="wallet-name">—</strong></a>
             <span id="wallet-uname" class="handle"></span>
           </p>
+          <a id="settings-profile" class="text-button hidden" href="/">See your profile as others do</a>
           <div class="field-row">
             <input
               id="alias-input"
@@ -643,7 +643,9 @@
             <li>The money stays in your balance. The allowance is the most this game may put at risk.</li>
             <li>It can lose all of it, winnings included, on its bets and payments, and not a wei more.</li>
             <li>What a round wins joins the allowance once the game has shown how the round ended.</li>
-            <li>Leaving the game or closing the tab takes back what is left. Change it any time.</li>
+            <li>
+              Leaving the game takes back what is left: it starts with nothing when you come back. Change it any time.
+            </li>
             <li>
               No game says what it pays back: your wallet works out each casino bet's odds before it signs, and your
               bets show what a game really paid.

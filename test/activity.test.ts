@@ -38,7 +38,7 @@ test('a developer bet shows its result apart from its collection, and a zero pay
   assert.deepEqual([won.status, won.title], ['Payout collected', 'Developer bet won']);
 });
 
-test('bet summaries show the payout against the stake and retain exact wei amounts', () => {
+test('bet summaries show the payout against the stake, cut to six decimals, never rounded up', () => {
   const receipt = {
     kind: 'casino-bet',
     status: 'signed',
@@ -49,14 +49,14 @@ test('bet summaries show the payout against the stake and retain exact wei amoun
     balance: '999999999999999999',
   };
   const win = receiptSummary(receipt, contract);
-  assert.equal(win.amount, '+0.001234567890123456 ETH');
+  assert.equal(win.amount, '+0.001234 ETH');
   assert.equal(win.status, 'Signed off-chain');
   assert.match(win.description!, /Balance 0.999999999999999999 ETH/);
   assert.equal(win.amountLabel, 'Net game result');
   assert.equal(win.title, 'Casino bet won');
-  assert.match(win.description!, /Paid 0.002234567890123456 ETH of up to 0.005 ETH · RTP 97.0000%/);
+  assert.match(win.description!, /Paid 0.002234 ETH of up to 0.005 ETH · RTP 97.0000%/);
   const loss = receiptSummary({ ...receipt, payout: '0', stake: '1' }, contract);
-  assert.equal(loss.amount, '−0.000000000000000001 ETH');
+  assert.equal(loss.amount, '−<0.000001 ETH');
   assert.equal(loss.tone, 'negative');
   // A prize below the stake is a partial loss, and a prize equal to it moves nothing.
   const partial = receiptSummary({ ...receipt, payout: '400000000000000' }, contract);

@@ -123,7 +123,7 @@ One player's profile; `:name` is `~` and a uname or `@` and an alias.
 | `uname`        | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                                    |
 | `alias`        | string or null | The alias they took                                                                                                                                                                                                                         |
 | `since`        | number         | When the casino first knew them                                                                                                                                                                                                             |
-| `stats`        | object         | `{plays, staked, won}`: how many bets of theirs have settled (a number), what those bets staked and what they paid                                                                                                                          |
+| `stats`        | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |
 | `games`        | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
 
 ### `GET /api/players/:name/:game`
@@ -150,8 +150,9 @@ and reveals do not appear. An unknown key answers with totals of zero and no bet
 | `totals`        | object  | `{bets, staked, paid, expected, priced}`, below                                                                       |
 | `bets`          | array   | `{index, kind, uname, alias, group?, stake, chance?, prize?, payout, at}`, below                                      |
 
-The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. `bets` is a number;
-`staked` and `paid` are what the bets staked and paid. `expected` is what the casino bets were expected to pay, times
+The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. `bets` is a number,
+the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
+staked and paid, a round's steps each on its own, so only `paid − staked` is what the players came out with. `expected` is what the casino bets were expected to pay, times
 2^64 (the sum of their prizes times their chances), and `priced` is what those bets staked, so their return is
 `expected / (priced × 2^64)`. A developer bet has no odds and counts in neither.
 

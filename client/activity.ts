@@ -53,8 +53,15 @@ export function timeOf(at: string | number, className: string, short = false) {
 export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
 /** An exact amount in ETH, a whole one without a trailing `.0`. */
 export const ether = (value: bigint | string | number) => formatEther(value).replace(/\.0$/, '');
-/** A gain or a loss in ETH, with its sign. */
-export const signedEth = (value: bigint) => `${value < 0n ? '−' : '+'}${ether(value < 0n ? -value : value)} ETH`;
+/** An amount in ETH as a list shows it: cut off, never rounded up, at six decimals, without trailing zeros; one too
+ * small for that reads `<0.000001`. A bet or an event opened in full has the exact amount. */
+export const shortEth = (value: bigint | string | number) => {
+  const wei = BigInt(value),
+    unit = 10n ** 12n;
+  return wei > 0n && wei < unit ? '<0.000001' : ether(wei - (wei % unit));
+};
+/** A gain or a loss in ETH, with its sign, as a list shows it. */
+export const signedEth = (value: bigint) => `${value < 0n ? '−' : '+'}${shortEth(value < 0n ? -value : value)} ETH`;
 /** JSON as the wallet shows it: a Copy JSON button with its status, above the text. */
 export function jsonBlock(text: string, title: string) {
   const status = h('span', { className: 'activity-copy-status', role: 'status' });
@@ -133,7 +140,7 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
         : bet.collected
           ? 'Payout collected'
           : 'Payout ready',
-    amount: `${ether(amount)} ETH`,
+    amount: `${shortEth(amount)} ETH`,
     amountLabel: !settled
       ? 'Stake with the developer'
       : bet.payout === '0'
@@ -234,7 +241,7 @@ export function receiptSummary(
                   transaction: 'Transaction',
                 } as Record<string, string>
               )[receipt.kind] || receipt.kind;
-  let amount = `${ether(settled ? receipt.amount || '0' : '0')} ETH`;
+  let amount = `${shortEth(settled ? receipt.amount || '0' : '0')} ETH`;
   let amountLabel = !settled
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
@@ -262,10 +269,10 @@ export function receiptSummary(
     amount = settled ? signedEth(net) : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
     if (settled) tone = net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral';
-    description = `Stake ${ether(receipt.stake)} ETH · Paid ${ether(receipt.payout ?? 0)} ETH${
+    description = `Stake ${shortEth(receipt.stake)} ETH · Paid ${shortEth(receipt.payout ?? 0)} ETH${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${ether(receipt.maxPayout)} ETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
+        : ` of up to ${shortEth(receipt.maxPayout)} ETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
     }${receipt.kind === 'casino-bet' ? ` · Balance ${ether(receipt.balance)} ETH` : ''}`;
   } else if (
     settled &&

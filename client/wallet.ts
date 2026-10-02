@@ -86,6 +86,8 @@ export interface GameIntent {
   developer: string;
   /** The group whose bets the operation's result belongs to, while the game holds back what they won. */
   group?: string;
+  /** What of the group's cash stays out of the operation and with the group. */
+  kept?: string;
 }
 export const HISTORICAL_CHANNEL_BATCH = 16;
 /** What the wallet keeps of an on-chain channel record. */

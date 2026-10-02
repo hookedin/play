@@ -117,9 +117,9 @@ function validate(data: any) {
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
   } else {
     const fields = {
-      'game.casinoBet': ['id', 'stake', 'chance', 'prize', 'group'],
+      'game.casinoBet': ['id', 'stake', 'chance', 'prize', 'group', 'kept'],
       'game.developerBet': ['id', 'stake', 'meta', 'group'],
-      'game.payment': ['id', 'amount', 'group'],
+      'game.payment': ['id', 'amount', 'group', 'kept'],
       'game.receipt': ['id'],
     }[data.method as string]!;
     if (!only(params, fields)) throw new Error('Unexpected game request field.');
@@ -127,6 +127,11 @@ function validate(data: any) {
     for (const field of ['stake', 'amount']) if (fields.includes(field)) gameAmount(params[field]);
     if (params.group !== undefined && !validGroup(params.group))
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
+    // What stays with the group is the group's: a bet keeps nothing back outside one.
+    if (params.kept !== undefined) {
+      gameAmount(params.kept, false);
+      if (params.group === undefined) throw new Error('Only a bet in a group keeps cash with it.');
+    }
     // A casino bet settles now against the bankroll, on the player's own round. A developer bet is its developer's
     // to settle, on its developer's word: its meta is the game's own, which the casino keeps and never reads.
     if (data.method === 'game.casinoBet') validateOdds(params.chance, params.prize);

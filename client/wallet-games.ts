@@ -55,6 +55,8 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
  */
 export class GameSessions extends ChannelClient {
   game: GameSession | null = null;
+  /** A game opens with nothing to play with, every time: only the player's own word in the wallet's dialog gives it
+   * an allowance. */
   openGame(this: CasinoWallet, identity: GameIdentity) {
     this.game = {
       key: identity.key,
@@ -96,15 +98,18 @@ export class GameSessions extends ChannelClient {
     game.allowance = String(BigInt(game.allowance) + BigInt(won));
     this.render();
   }
-  /** An operation of the open game settled, `spent` taken and `won` paid: a bet in a group stakes what the group holds
-   * first and leaves what it won with the group; anything else takes from and pays into the allowance at once. */
-  gameSettled(this: CasinoWallet, spent: bigint, won: bigint, group?: string) {
+  /** An operation of the open game settled, `spent` taken and `won` paid, with `kept` of its group's cash staying out
+   * of it: a bet in a group takes what it stakes and keeps from what the group holds first, and leaves what it kept
+   * and won with the group, so a round's whole stake leaves the allowance with its first step; anything else takes
+   * from and pays into the allowance at once. */
+  gameSettled(this: CasinoWallet, spent: bigint, won: bigint, group?: string, kept = 0n) {
     const game = this.game!,
       held = BigInt((group && game.table[group]) || 0n),
-      drawn = spent < held ? spent : held,
-      allowance = BigInt(game.allowance) - (spent - drawn) + (group ? 0n : won);
+      needed = spent + (group ? kept : 0n),
+      drawn = needed < held ? needed : held,
+      allowance = BigInt(game.allowance) - (needed - drawn) + (group ? 0n : won);
     game.allowance = String(allowance < 0n ? 0n : allowance);
-    if (group) game.table = { ...game.table, [group]: String(held - drawn + won) };
+    if (group) game.table = { ...game.table, [group]: String(held - drawn + kept + won) };
   }
   /** What a game page learns when it loads: every bound a bet is held to, as the protocol this wallet and its casino
    * share has them. */
@@ -153,7 +158,7 @@ export class GameSessions extends ChannelClient {
   }
   /** Which game asks, as its receipts remember it: its key, its own name for the operation, what it calls itself
    * and its developer. */
-  gameIntent(this: CasinoWallet, id: string, group?: string): GameIntent {
+  gameIntent(this: CasinoWallet, id: string, group?: string, kept?: string): GameIntent {
     const game = this.requireGame();
     return {
       key: game.key,
@@ -161,6 +166,7 @@ export class GameSessions extends ChannelClient {
       name: game.identity.name,
       developer: game.identity.developer,
       ...(group ? { group } : {}),
+      ...(group && kept ? { kept } : {}),
     };
   }
   /** The only grant of spending authority: the open game's allowance, how much of the balance it may risk, and
@@ -200,7 +206,7 @@ export class GameSessions extends ChannelClient {
           ...group,
         },
         this.gameOperationId(request.id),
-        this.gameIntent(request.id, request.group),
+        this.gameIntent(request.id, request.group, request.kept),
       ),
     );
   }
@@ -219,13 +225,13 @@ export class GameSessions extends ChannelClient {
       ),
     );
   }
-  async gamePayment(this: CasinoWallet, request: { id: string; amount: string; group?: string }) {
+  async gamePayment(this: CasinoWallet, request: { id: string; amount: string; group?: string; kept?: string }) {
     return gameReceipt(
       request.id,
       await this.payBankroll(
         gameAmount(request.amount),
         this.gameOperationId(request.id),
-        this.gameIntent(request.id, request.group),
+        this.gameIntent(request.id, request.group, request.kept),
         request.group,
       ),
     );

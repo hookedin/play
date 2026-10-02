@@ -1,6 +1,6 @@
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { betPayout, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
-import { activityJSON, ether, h, jsonBlock, percent, signedEth, timeOf } from './activity.ts';
+import { activityJSON, ether, h, jsonBlock, percent, shortEth, signedEth, timeOf } from './activity.ts';
 
 /**
  * One settled bet, however it was read: from this wallet's own receipt, or from a game's public
@@ -45,6 +45,7 @@ export const realisedReturn = (staked: bigint, paid: bigint) =>
   staked > 0n ? (paid * 1_000_000n + staked / 2n) / staked : null;
 
 export interface BetTotals {
+  /** Bets, a round's steps counting once. */
   bets: number;
   staked: bigint;
   paid: bigint;
@@ -55,9 +56,30 @@ export interface BetTotals {
 }
 /** What a row put at risk is called: a payment of a game's round is money paid to the house. */
 const stakeLabel = (row: BetRow) => (row.receipt?.kind === 'payment' ? 'Paid in' : 'At risk');
-/** Bets, added up. */
+/** What a round took from outside itself, its bets oldest first: each step stakes what the round's earlier steps paid
+ * before anything more, so this is the most the round was ever down, what the player put in. */
+export function putIn(rows: readonly BetRow[]) {
+  let held = 0n,
+    most = 0n;
+  for (const row of rows) {
+    held -= row.stake;
+    if (-held > most) most = -held;
+    held += row.payout;
+  }
+  return most;
+}
+/** Bets, added up, a round's steps as one, with what they took from outside their rounds. */
 export function betTotals(rows: readonly BetRow[]) {
-  const totals: BetTotals = { bets: rows.length, staked: 0n, paid: 0n, expected: 0n, priced: 0n, net: 0n };
+  const rounds = groupRows(rows),
+    totals: BetTotals & { putIn: bigint } = {
+      bets: rounds.length,
+      putIn: rounds.reduce((sum, round) => sum + putIn(round), 0n),
+      staked: 0n,
+      paid: 0n,
+      expected: 0n,
+      priced: 0n,
+      net: 0n,
+    };
   for (const row of rows) {
     totals.staked += row.stake;
     totals.paid += row.payout;
@@ -70,14 +92,17 @@ export function betTotals(rows: readonly BetRow[]) {
 }
 
 const tone = (net: bigint) => (net < 0n ? 'negative' : net > 0n ? 'positive' : '');
-/** One figure under its label, as a bet's row and a bet in full both show it. */
-const figure = (label: string, value: string, className = '') =>
+/** One figure under its label, as a bet's row and a bet in full both show it; `exact`, when the figure is cut short. */
+const figure = (label: string, value: string, className = '', exact = '') =>
   h(
     'div',
-    { className: `bet-figure ${className}`.trim() },
+    { className: `bet-figure ${className}`.trim(), ...(exact ? { title: exact } : {}) },
     h('span', { className: 'bet-figure-value' }, value),
     h('span', { className: 'bet-figure-label' }, label),
   );
+/** An amount as a row shows it, short, with the exact one on hover. */
+const amount = (label: string, wei: bigint, className = '') =>
+  figure(label, `${shortEth(wei)} ETH`, className, `${ether(wei)} ETH`);
 
 /** How much went in, how much came back, and both returns side by side: one card, or none for no bets. */
 export function totalCards(totals: BetTotals) {
@@ -103,8 +128,7 @@ export function totalCards(totals: BetTotals) {
         'p',
         null,
         `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
-          `They paid back ${realised === null ? '—' : percent(realised)}: ` +
-          `${ether(totals.paid)} ETH for ${ether(totals.staked)} ETH at risk.`,
+          `They paid back ${realised === null ? '—' : percent(realised)}.`,
       ),
       h('p', { className: `bet-net ${totals.net < 0n ? 'negative' : 'positive'}` }, signedEth(totals.net)),
     ),
@@ -128,12 +152,12 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const net = row.payout - row.stake,
     item = rowElement(row, net, onOpen && (() => onOpen(row)));
   item.append(
-    figure(stakeLabel(row), `${ether(row.stake)} ETH`),
-    figure(
-      row.maxPayout === undefined || row.maxPayout === null ? 'Paid' : `Paid of up to ${ether(row.maxPayout)} ETH`,
-      `${ether(row.payout)} ETH`,
+    amount(stakeLabel(row), row.stake),
+    amount(
+      row.maxPayout === undefined || row.maxPayout === null ? 'Paid' : `Paid of up to ${shortEth(row.maxPayout)} ETH`,
+      row.payout,
     ),
-    figure('Result', signedEth(net), tone(net)),
+    figure('Result', signedEth(net), tone(net), `${ether(net < 0n ? -net : net)} ETH`),
     figure(
       'Return of this bet',
       row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
@@ -167,22 +191,21 @@ export function groupRows(rows: readonly BetRow[]): BetRow[][] {
   }
   return order;
 }
-/** One row for a group of bets: its label, how many, and what they came to together. Only the net is summed:
- * a sequential game stakes again what its last step paid, so adding up its stakes or its payouts would count
- * the same money more than once. */
+/** One row for a round, a group of bets: what it took from the player, its bets, and what it came to. Its stakes and
+ * payouts are not added up: a round's steps stake again what its last step paid, which would count the same money
+ * more than once. Its label is the game's own, often a long ID: it is searched, not shown. */
 export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonly BetRow[]) => void) {
   const last = rows.at(-1)!,
     net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n),
     item = rowElement(last, net, onOpen && (() => onOpen(rows)));
   item.append(
-    figure('Group', last.group!, 'bet-group'),
-    figure('Bets', String(rows.length)),
-    figure('Result', signedEth(net), tone(net)),
+    amount('Put in', putIn(rows)),
+    figure('Bets in one round', String(rows.length)),
+    figure('Result', signedEth(net), tone(net), `${ether(net < 0n ? -net : net)} ETH`),
   );
   item.dataset.search =
-    `group ${last.group} ${rows.map(row => row.operation ?? `bet #${row.index}`).join(' ')}`.toLowerCase();
-  item.dataset.bets = String(rows.length);
-  item.title = onOpen ? `Open the ${rows.length} bets of ${last.group}` : `The ${rows.length} bets of ${last.group}`;
+    `round group ${last.group} ${rows.map(row => row.operation ?? `bet #${row.index}`).join(' ')}`.toLowerCase();
+  item.title = onOpen ? `Open the round's ${rows.length} bets` : `The round's ${rows.length} bets`;
   return item;
 }
 

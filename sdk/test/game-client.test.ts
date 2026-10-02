@@ -11,6 +11,7 @@ import {
   QUOTE_PERIOD,
 } from '../../protocol/protocol.ts';
 import { RoundClient } from '../src/round.ts';
+import { validateRequest } from '../../client/bridge.ts';
 import type { GameReceipt } from '../../protocol/game-types.ts';
 import { createMines, fraction } from '../src/engine/index.ts';
 import { coin } from './coin.ts';
@@ -45,6 +46,9 @@ test('the allowance lives in memory: leaving the game releases it, and nothing a
   const reloaded = await f.reload();
   assert.equal(reloaded.game, null);
   assert.equal(reloaded.availableBalance(), 1000000n);
+  // Opened again, a game starts with nothing to play with.
+  w.openGame(f.identity('a'));
+  assert.deepEqual(w.gameAllowance(), { allowance: '0', pending: false, developerBets: false });
 });
 
 test('a group keeps what its bets win out of the allowance until the game ends it, and only its own bets stake it', async () => {
@@ -78,6 +82,29 @@ test('a group keeps what its bets win out of the allowance until the game ends i
   w.gameEnd('round');
   w.gameEnd('never-placed');
   assert.deepEqual([w.gameAllowance().allowance, w.inPlay()], [String(500n + held), 0n]);
+});
+
+test("what a bet keeps of its group's cash leaves the allowance with its stake, and stays with the group", async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity());
+  await w.setGameAllowance('1000');
+  // A round's first step stakes 10 and keeps 4 of the round's 14: all 14 leave the allowance the player sees.
+  const receipt = await w.gameCasinoBet({ ...terms('step-1'), group: 'round', kept: '4' }),
+    won = BigInt(receipt.payout!);
+  assert.equal(w.gameAllowance().allowance, '986');
+  assert.equal(w.inPlay(), 4n + won);
+  // A bet keeps nothing outside a group, and its stake and what it keeps fit what the group may stake.
+  assert.throws(
+    () => validateRequest({ hookedin: true, id: 1, method: 'game.casinoBet', params: { ...terms('x'), kept: '1' } }),
+    /Only a bet in a group/,
+  );
+  await assert.rejects(
+    w.gameCasinoBet({ ...terms('step-2'), group: 'round', kept: String(986n + 4n + won) }),
+    /game's allowance/,
+  );
+  w.gameEnd('round');
+  assert.equal(w.gameAllowance().allowance, String(990n + won));
 });
 
 test('a game places developer bets only once the player allows them, and only a published game can be', async () => {

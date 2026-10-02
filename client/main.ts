@@ -17,9 +17,19 @@ import {
   h,
   percent,
   receiptSummary,
+  shortEth,
   signedEth,
 } from './activity.ts';
-import { betDetail, betRowElement, betTotals, groupRowElement, groupRows, measuredReturn, totalCards } from './bets.ts';
+import {
+  betDetail,
+  betRowElement,
+  betTotals,
+  groupRowElement,
+  groupRows,
+  measuredReturn,
+  putIn,
+  totalCards,
+} from './bets.ts';
 import type { BetRow } from './bets.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
@@ -477,7 +487,7 @@ function renderAllowanceDialog() {
   if (!active) return;
   const name = active.identity.name;
   const allowance = BigInt(wallet.game?.allowance || '0');
-  $('allowance-title').textContent = allowance > 0n ? `Change ${name}'s allowance` : `Play ${name} with ETH`;
+  $('allowance-title').textContent = allowance > 0n ? `Change the allowance for ${name}` : `Play ${name} with ETH`;
   const total = allowable(),
     slider = $<HTMLInputElement>('allowance-slider');
   let amount = -1n;
@@ -580,6 +590,8 @@ function showWallet(tab: WalletTab) {
     panel.hidden = panel.dataset.panel !== tab;
   const dialog = $<HTMLDialogElement>('wallet-dialog');
   showSheet(dialog);
+  // On a phone the tabs scroll sideways: the one shown is never cut off.
+  dialog.querySelector<HTMLElement>(`[data-tab="${tab}"]`)!.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   dialog.scrollTop = 0;
   // What sending a withdrawal costs now, for Max and the help to count with, and what locking in costs, shown before it
   // is signed.
@@ -696,7 +708,21 @@ function renderWallet() {
               ? 'Finish the operation in flight first.'
               : request.error ||
                 `${into ? "That account's HookedIn balance receives" : 'The address receives'} ${ether(amount!)} ETH.${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`;
-  $('withdraw-help').classList.toggle('check-failed', open && Boolean(request.error));
+  // A form not yet touched is told what it needs, not that it is wrong.
+  const touched = Boolean(
+    $<HTMLInputElement>('withdraw-to').value.trim() || $<HTMLInputElement>('withdraw-amount').value.trim(),
+  );
+  $('withdraw-help').classList.toggle('check-failed', open && touched && Boolean(request.error));
+  if (
+    ready &&
+    open &&
+    !touched &&
+    request.error &&
+    !wallet.pending &&
+    !wallet.transactionIntent &&
+    !wallet.recoveryOnly
+  )
+    $('withdraw-help').textContent = 'Enter an amount, or Max, and the address that should receive it.';
 
   // Settings → Deposits: everything at the deposit address, out to another address.
   const send = addressSendRequest(),
@@ -1300,23 +1326,28 @@ async function openProfile(name: string, push = true) {
     document.title = `${showName(profile)} · HookedIn`;
     $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
     // Your own page is what others see of you; your name is set in Settings, and your bets are yours alone.
-    $('profile-own').classList.toggle('hidden', !wallet.uname || profile.uname !== wallet.uname);
+    const own = Boolean(wallet.uname) && profile.uname === wallet.uname;
+    $('profile-own').classList.toggle('hidden', !own);
+    $('profile-games-heading').textContent = own ? 'Games you publish' : 'Games they publish';
     $('profile-stats').replaceChildren(
       h(
         'div',
         { className: 'money-card' },
         h('span', { className: 'label' }, 'Bets'),
         h('strong', null, String(profile.stats.plays)),
-        h(
-          'span',
-          { className: 'muted' },
-          `Staked ${eth(profile.stats.staked, 4)} ETH · won ${eth(profile.stats.won, 4)} ETH`,
-        ),
+        h('span', { className: 'muted' }, `Net ${signedEth(BigInt(profile.stats.net))}`),
       ),
     );
     const cards = profileCards(showName(profile), profile.games);
     if (cards.length) games.replaceChildren(...cards);
-    else games.textContent = `${showName(profile)} publishes no games.`;
+    else
+      games.replaceChildren(
+        h(
+          'p',
+          { className: 'muted grid-note' },
+          own ? 'You publish no games.' : `${showName(profile)} publishes no games.`,
+        ),
+      );
   } catch (error: any) {
     $('profile-since').textContent = error.code === 'not-found' ? 'Nobody goes by that name.' : error.message;
     games.replaceChildren();
@@ -1338,8 +1369,10 @@ function renderProfile() {
   const uname = wallet.alias && wallet.uname ? '~' + wallet.uname : '';
   $('menu-uname').textContent = uname;
   $('wallet-uname').textContent = uname;
-  $<HTMLAnchorElement>('menu-profile').href = name ? `/${name}` : '/';
-  $('menu-profile').classList.toggle('hidden', !name);
+  for (const id of ['menu-profile', 'settings-profile']) {
+    $<HTMLAnchorElement>(id).href = name ? `/${name}` : '/';
+    $(id).classList.toggle('hidden', !name);
+  }
   $('wallet-name').textContent = name ?? 'No name yet: your first deposit gives you one.';
   $<HTMLAnchorElement>('wallet-name-link').href = name ? `/${name}` : '/';
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !open;
@@ -1492,10 +1525,19 @@ function betElements(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
 }
 /** The bets of one group, each opening in full where this wallet kept its receipt. */
 function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
-  const last = rows.at(-1)!;
-  $('bet-detail-eyebrow').textContent = `One group, ${rows.length} bets`;
-  $('bet-detail-title').textContent = `${last.game} · ${last.group}`;
-  $('bet-detail').replaceChildren(h('div', { className: 'bet-table' }, ...rows.map(row => betRowElement(row, onOpen))));
+  const last = rows.at(-1)!,
+    net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n);
+  $('bet-detail-eyebrow').textContent = `One round, ${rows.length} bets`;
+  $('bet-detail-title').textContent = last.game;
+  // The round first, as the player played it; then its bets, each staking what the last one paid.
+  $('bet-detail').replaceChildren(
+    h(
+      'p',
+      { className: 'bet-round-summary', title: `Group ${last.group}` },
+      `You put in ${shortEth(putIn(rows))} ETH and ${net < 0n ? 'lost' : net > 0n ? 'won' : 'broke even'}${net ? ` ${shortEth(net < 0n ? -net : net)} ETH` : ''}. Each bet below stakes what the bet before it paid.`,
+    ),
+    h('div', { className: 'bet-table' }, ...rows.map(row => betRowElement(row, onOpen))),
+  );
   $('bet-dialog').scrollTop = 0;
   showSheet($<HTMLDialogElement>('bet-dialog'));
 }
@@ -1508,12 +1550,11 @@ function filterList(name: 'activity' | 'bet' | 'gamebets') {
     total = 0;
   for (const row of $(`${name}-list`).children as HTMLCollectionOf<HTMLElement>) {
     const text = `${row.textContent} ${row.dataset.search ?? ''}`.toLowerCase(),
-      matches = (!game || row.dataset.game === game) && terms.every(term => text.includes(term)),
-      // A group's row stands for every bet in it.
-      count = Number(row.dataset.bets ?? 1);
+      matches = (!game || row.dataset.game === game) && terms.every(term => text.includes(term));
+    // A round's row counts once, as the player played it.
     row.classList.toggle('hidden', !matches);
-    total += count;
-    if (matches) visible += count;
+    total++;
+    if (matches) visible++;
   }
   $(`${name}-visible-count`).textContent =
     `${terms.length || game ? `${visible} / ` : ''}${total} ${events ? 'event' : 'bet'}${total === 1 ? '' : 's'}`;
@@ -1563,8 +1604,8 @@ function renderMyGames() {
         known = key ? knownGames.get(key) : undefined;
       const figures: [string, string, string?][] = [
         ['Bets', String(totals.bets)],
-        ['At risk', `${ether(totals.staked)} ETH`],
-        ['Paid back', `${ether(totals.paid)} ETH`],
+        ['Put in', `${shortEth(totals.putIn)} ETH`],
+        ['Paid back', `${shortEth(totals.putIn + totals.net)} ETH`],
         ['Your result', signedEth(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
         ['Return of your bets', expected === null ? '—' : percent(expected)],
       ];
@@ -2055,7 +2096,7 @@ act(
   () => wallet.pickAlias(null),
   () => `You are ~${wallet.uname}.`,
 );
-for (const id of ['wallet-name-link', 'menu-profile'])
+for (const id of ['wallet-name-link', 'menu-profile', 'settings-profile'])
   $(id).addEventListener('click', event => {
     event.preventDefault();
     $('account-menu').hidePopover?.();

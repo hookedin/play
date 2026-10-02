@@ -54,10 +54,11 @@ lose, so its bets pay back less of what they stake than the game does of its sta
 
 A game can give its bets and payments a **group**, a label of up to 64 characters that ties them together: the steps of
 one hand, the bets of one spin, one match. **Bets** shows the bets and payments of one group in one game as a single
-row, with how many it holds and their net result, so a round comes to what the game showed: a cash-out that pays the
-house part of what its bet won is that round's payment. Opening the row lists each one. Only the net is added up: a
-multi-step game stakes again what its last step paid, so adding its stakes or its payouts would count the same money
-more than once.
+row, a round, with what you **put in**, how many bets it holds and their net result, so a round comes to what the game
+showed: a cash-out that pays the house part of what its bet won is that round's payment. Opening the row says what the
+round came to, then lists each bet. A round's stakes and payouts are not added up: a multi-step game stakes again what
+its last step paid, so they would count the same money more than once. What you put in is the most the round was ever
+down, and the counts of bets here, in My games, on your profile and in a game's public record count a round once.
 
 ## Rejected bets
 
