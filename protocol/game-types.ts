@@ -19,8 +19,13 @@ export interface GameIdentity {
 export interface GameSession {
   key: string;
   identity: GameIdentity;
-  /** Decimal wei the game may still risk, including its winnings. */
+  /** Decimal wei the game may still risk: its allowance, as the player sees and sets it. */
   allowance: string;
+  /** Whether the player let it place developer bets, which its developer settles. */
+  developerBets: boolean;
+  /** What each group's bets have won and the game has not shown yet, by group: it stays out of the allowance and
+   * the balance the player sees until the game ends the group, and only that group's bets may stake it. */
+  table: Record<string, string>;
 }
 /** A casino bet: settled against the casino's bankroll in the request that places it, on the player's own round.
  * The stake is paid to enter, and the bet pays `prize` when the round's 64-bit outcome is below `chance`. */
@@ -68,8 +73,9 @@ export interface GameReceipt {
   payout?: string;
   reason?: string;
 }
-/** What the wallet pushes to the game: its allowance and whether an operation awaits recovery. */
+/** What the game may stake, whether an operation awaits recovery, and whether it may place developer bets. */
 export interface GameAllowance {
   allowance: string;
   pending: boolean;
+  developerBets: boolean;
 }

@@ -6,13 +6,13 @@ import { compileGameAsync, landing, rngFromBytes } from './engine/engine.ts';
 import type { CashClass } from './engine/transition.ts';
 import { admits } from './admits.ts';
 import { formatAmount, playerScope } from './wire.ts';
-import type { GameAllowance } from '../../protocol/game-types.ts';
 export interface RoundEvent {
   action: string;
   label?: string;
 }
 export interface RoundState {
-  /** Unique per started round, so a game can apply a finished round to its own state exactly once. */
+  /** Unique per started round, so a game can apply a finished round to its own state exactly once; also the group of
+   * the round's bets, which the game ends with `HookedIn.end(id)` once the player has seen how the round ended. */
   id: string;
   /** What `start` was given: the stake, and whatever else the game's graph is built from. */
   setup: { stake: string; [key: string]: unknown };
@@ -26,10 +26,9 @@ export interface RoundState {
   pending: boolean;
   settlement: any;
 }
-/** What the helper needs from the SDK: requests, and the wallet's latest pushed allowance. */
+/** What the helper needs from the SDK: its requests. */
 export interface RoundBridge {
   call: (method: string, params?: any) => Promise<any>;
-  allowance: () => Promise<GameAllowance>;
 }
 /** Where a round lives between reloads: the game's own origin storage, keyed per game and per player. */
 export interface RoundStore {
@@ -59,18 +58,13 @@ const browserStore: RoundStore = {
   remove: key => localStorage.removeItem(key),
 };
 export class RoundClient {
-  /** The game's allowance as the wallet last reported it. */
-  private latest!: GameAllowance;
   private data: any = null;
   private plan: GamePlan | null = null;
   private planKey = '';
   private storageKey = '';
-  /** A step is settling: the wallet's balance already holds its result, the round does not yet. */
-  busy = false;
-  /** Whoever follows the round's cash and busy state, such as the allowance strip. */
-  private listeners = new Set<() => void>();
+  /** A step is settling. */
+  private busy = false;
   private readonly call: RoundBridge['call'];
-  private readonly allowance: RoundBridge['allowance'];
   private readonly graph: (setup: any) => GameGraph;
   private readonly funding?: FundingTable;
   private readonly store: RoundStore;
@@ -91,22 +85,10 @@ export class RoundClient {
     } = {},
   ) {
     this.call = bridge.call;
-    this.allowance = bridge.allowance;
     this.graph = graph;
     this.funding = funding;
     this.store = store;
     this.name = name;
-  }
-  /** Calls `listener` whenever the round's cash or busy state may have changed: after every `restore`, `start` and
-   * `action`. Returns a function that stops it. */
-  onChange(listener: () => void) {
-    this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
-  }
-  private changed() {
-    for (const listener of this.listeners) listener();
   }
   /** The graph this page builds for a setup, and the rules it is played under: the graph's hash. A round saved
    * under other rules is not one this page can finish. */
@@ -140,30 +122,20 @@ export class RoundClient {
       return loadFundedGame(graph, this.funding, scale, admits);
     return compileGameAsync(graph, { admits, bankrollFloor, cashQuantum, initialCash: BigInt(setup.stake) });
   }
-  /** The cash inside an unfinished round: part of the game's allowance, and the player's to keep if they stop. */
-  inHand() {
-    const state = this.state();
-    return state && !state.terminal ? BigInt(state.cash) : 0n;
-  }
   /** Reload the round from this origin's storage and apply any result the wallet settled meanwhile. */
   async restore(): Promise<RoundState | null> {
-    try {
-      await this.load();
-      // A reply may have been lost after the wallet settled; its receipt is retrievable by the step's own ID.
-      if (this.data?.pending && this.data.pending.ticket.kind !== 'noop') {
-        const receipt = await this.call('game.receipt', { id: this.data.pending.id });
-        if (receipt) await this.resolve(receipt);
-      }
-      return this.state();
-    } finally {
-      this.changed();
+    await this.load();
+    // A reply may have been lost after the wallet settled; its receipt is retrievable by the step's own ID.
+    if (this.data?.pending && this.data.pending.ticket.kind !== 'noop') {
+      const receipt = await this.call('game.receipt', { id: this.data.pending.id });
+      if (receipt) await this.resolve(receipt);
     }
+    return this.state();
   }
   /** Read the round as this origin's storage holds it. */
   private async load() {
     const info = await this.call('wallet.info');
     this.storageKey = `hookedin:round:${this.name}:${playerScope(info)}`;
-    this.latest = await this.allowance();
     const saved = this.store.get(this.storageKey);
     this.data = saved ? JSON.parse(saved) : null;
     if (!this.data) {
@@ -214,15 +186,16 @@ export class RoundClient {
     this.store.set(this.storageKey, JSON.stringify(plain(this.data)));
   }
   /**
-   * Ask the wallet for a larger allowance; the player decides in the wallet's own dialog. The suggestion covers a
-   * few more rounds so one authorization lasts.
+   * Ask the wallet for a larger allowance when `group` may stake less than `required`; the player decides in the
+   * wallet's own dialog. The suggestion covers a few more rounds so one authorization lasts.
    */
-  async ensureAllowance(required: bigint, stake: bigint) {
-    if (BigInt(this.latest.allowance) >= required) return;
-    const shortfall = required - BigInt(this.latest.allowance);
-    const result = await this.call('game.requestAllowance', { amount: String(shortfall + 4n * stake) });
-    this.latest = { allowance: result.allowance, pending: result.pending };
-    if (BigInt(this.latest.allowance) < required)
+  async ensureAllowance(required: bigint, stake: bigint, group?: string) {
+    const available = async () =>
+      BigInt((await this.call('game.allowance', group === undefined ? {} : { group })).allowance);
+    const before = await available();
+    if (before >= required) return;
+    await this.call('game.requestAllowance', { amount: String(required - before + 4n * stake) });
+    if ((await available()) < required)
       throw new Error('Allow this game more ETH to play, or deposit if your balance is empty.');
   }
   /** Another tab of this game changed the round: reload it and tell the caller. Browser only. */
@@ -234,13 +207,6 @@ export class RoundClient {
     });
   }
   async start(setup: { stake: string; [key: string]: unknown }) {
-    try {
-      return await this.begin(setup);
-    } finally {
-      this.changed();
-    }
-  }
-  private async begin(setup: { stake: string; [key: string]: unknown }) {
     await this.load();
     if (this.data?.pending) throw new Error('Recover the pending action first');
     await this.ensureAllowance(BigInt(setup.stake), BigInt(setup.stake));
@@ -301,7 +267,6 @@ export class RoundClient {
       return await this.step(action);
     } finally {
       this.busy = false;
-      this.changed();
     }
   }
   /** With a step pending, `action` sends that step again under the ID it was saved with, and the wallet answers an
@@ -314,7 +279,11 @@ export class RoundClient {
       const node = getNode(this.plan, this.data.nodeId);
       const selected = node.kind === 'decision' ? node.actions.find(a => a.id === action) : undefined;
       if (!selected) throw new Error('Illegal game action');
-      await this.ensureAllowance(BigInt(this.data.cash) + selected.additionalCash, BigInt(this.data.setup.stake));
+      await this.ensureAllowance(
+        BigInt(this.data.cash) + selected.additionalCash,
+        BigInt(this.data.setup.stake),
+        this.data.id,
+      );
       const info = await this.call('wallet.info'),
         random = rngFromBytes(bytes => crypto.getRandomValues(bytes));
       // The page draws the step's branch now, and a step without a bet its successor. Both are saved with the step's
@@ -333,7 +302,8 @@ export class RoundClient {
     }
     const { ticket, id } = this.data.pending;
     if (ticket.actionId !== action) throw new Error('Retry the pending action first');
-    // Every step of one round carries the round's ID as its group, so the wallet shows them as one game.
+    // Every step of one round carries the round's ID as its group, so the wallet shows them as one game, and keeps
+    // what they win out of the allowance it shows until the round ends.
     const group = this.data.id;
     let receipt;
     if (ticket.kind === 'casino-bet')
@@ -347,7 +317,6 @@ export class RoundClient {
       });
     else if (ticket.kind === 'payment') receipt = await this.call('game.payment', { id, amount: ticket.amount, group });
     else receipt = { kind: 'noop' };
-    this.latest = await this.allowance();
     await this.resolve(receipt);
     if (receipt.status === 'rejected')
       throw new Error(receipt.reason || 'The casino declined this step; retry this action or stop the game');

@@ -7,7 +7,7 @@ behaviour('the test casino', async () => {
     allowance = '100000',
     playing = async (wallet = f.wallet) => {
       wallet.openGame(f.identity());
-      await wallet.setGameAllowance(allowance);
+      await wallet.setGameAllowance(allowance, true);
       return wallet;
     };
   await playing();
@@ -17,7 +17,7 @@ behaviour('the test casino', async () => {
     developer: async () => f.developer,
     async replaceChannel() {
       await f.replaceChannel();
-      await f.wallet.setGameAllowance(allowance);
+      await f.wallet.setGameAllowance(allowance, true);
     },
     async forget() {
       const wallet = await playing(await f.forget());

@@ -71,16 +71,22 @@ A published game's developer is the account that published it: it earns half of 
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
 all of its commission, and it takes no developer bets.
 
-A game plays only with the allowance you give it in the wallet's own dialog, which opens when the game asks; every
-word in it is the wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab instead. The
-allowance caps what the game may risk, and moves no money:
+While a game is open, the top bar names it and shows its allowance, in place of your balance once you have set one;
+**Allowance** there opens the wallet's own dialog, which also opens when the game asks. Every word in it is the
+wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab instead. The allowance caps what the
+game may risk, and moves no money:
 
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
   taken in: a deposit still arriving cannot raise it.
 - It lives only in this tab's memory. Leaving the game, reloading or closing the tab releases it, and the game asks
   again next time; the wallet remembers the last allowance you chose only as the next suggestion.
-- Every verified result of the game's own operations moves it: a win raises it and a loss lowers it. A game can lose
-  everything it holds, its winnings included, and not a wei more.
+- Every verified result of the game's own operations moves it: a stake lowers it as it is bet, and a win raises it once
+  the game has shown it, so the figure gives no result away before the game does, and stands still while a round is
+  played. Until then the wallet's window says how much of your balance is in play. A game can lose everything it
+  holds, its winnings included, and not a wei more.
+- Casino bets need nothing more: your wallet checks their odds and their results. A developer bet is a bet against the
+  game's developer, who takes the stake and decides what it pays, so the dialog asks you to allow developer bets apart,
+  and warns you first. Taking the whole allowance back takes that leave back too.
 - A withdrawal lowers it to what stays in your balance, if it was more; taking out everything, or locking in, closes
   the game.
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation

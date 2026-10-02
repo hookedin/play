@@ -84,6 +84,8 @@ export interface GameIntent {
   name: string;
   /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
   developer: string;
+  /** The group whose bets the operation's result belongs to, while the game holds back what they won. */
+  group?: string;
 }
 export const HISTORICAL_CHANNEL_BATCH = 16;
 /** What the wallet keeps of an on-chain channel record. */

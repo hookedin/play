@@ -43,19 +43,11 @@ const pending = new Map<
   number,
   { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
 >();
-const allowanceListeners = new Set<(allowance: GameAllowance) => void>();
 const receiptListeners = new Set<(receipt: GameReceipt) => void>();
-// The wallet pushes the allowance right after the iframe loads and on every change; there is nothing to poll.
-let latest: GameAllowance | null = null;
 window.addEventListener('message', event => {
   if (event.source !== window.parent) return;
   const message = event.data;
   if (!message || message.hookedin !== true) return;
-  if (message.event === 'game.allowance') {
-    latest = { allowance: String(message.allowance), pending: message.pending === true };
-    for (const listener of allowanceListeners) listener(latest);
-    return;
-  }
   // A developer bet's developer has settled it, and the wallet has checked and collected what it was paid.
   if (message.event === 'game.receipt') {
     for (const listener of receiptListeners) listener(message.receipt);
@@ -72,7 +64,7 @@ window.addEventListener('message', event => {
   else request.reject(new Error('The wallet returned an invalid response.'));
 });
 
-/** How long the page waits for the wallet: for a reply, or for the first allowance it pushes. */
+/** How long the page waits for the wallet's reply. */
 const timeout = 180000;
 const timedOut = () => new HookedInError('timeout', 'The wallet did not respond. Check the client, then reconnect.');
 const call = (method: string, params: Record<string, unknown> = {}) =>
@@ -100,32 +92,6 @@ const hello = (): Promise<{ bounds: WalletBounds }> =>
   }));
 if (window.parent !== window) hello().catch(() => {});
 
-/** The wallet pushes the game's allowance whenever it changes, including stops and top-ups. */
-const onAllowance = (listener: (allowance: GameAllowance) => void) => {
-  allowanceListeners.add(listener);
-  return () => {
-    allowanceListeners.delete(listener);
-  };
-};
-/** The last pushed allowance; the first push if none has come yet. */
-const allowance = async (): Promise<GameAllowance> => {
-  await hello();
-  return (
-    latest ??
-    new Promise((resolve, reject) => {
-      const stop = onAllowance(value => {
-        clearTimeout(timer);
-        stop();
-        resolve(value);
-      });
-      const timer = setTimeout(() => {
-        stop();
-        reject(timedOut());
-      }, timeout);
-    })
-  );
-};
-
 /** Scope game storage to this page and to the player: games sharing a host and accounts sharing a browser must not
  * see each other's state. It keys on the player's uname, so taking or giving up an alias does not lose what they
  * had. */
@@ -140,13 +106,24 @@ export const HookedIn = Object.freeze({
    * its seed, its secret, its outcome and the developer's casino bet on it. A game whose players share a draw checks
    * its rounds here. */
   round: (id: string): Promise<Round> => call('wallet.round', { id }),
-  allowance,
-  onAllowance,
-  /** Ask the player for a larger allowance: `amount` more than the game has now. The wallet shows its own dialog, in
-   * its own words, where the player sets the game's allowance; the reply says whether they did, and the allowance
-   * after it. */
-  requestAllowance: (options: { amount?: bigint | string } = {}): Promise<GameAllowance & { allowed: boolean }> =>
-    call('game.requestAllowance', options.amount === undefined ? {} : { amount: String(options.amount) }),
+  /** What the game may stake now, whether an operation awaits recovery, and whether it may place developer bets. With
+   * `group`, what a bet of that group may stake: the allowance and what the group has won and not shown yet. The wallet
+   * shows the player the allowance itself, in its top bar. */
+  allowance: (group?: string): Promise<GameAllowance> => call('game.allowance', group === undefined ? {} : { group }),
+  /** Ask the player for a larger allowance: `amount` more than the game has now, and with `developerBets`, leave to
+   * place developer bets too, which the wallet warns about. The wallet shows its own dialog, in its own words, where the
+   * player sets the game's allowance; the reply says whether they did, and the allowance after it. */
+  requestAllowance: (
+    options: { amount?: bigint | string; developerBets?: boolean } = {},
+  ): Promise<GameAllowance & { allowed: boolean }> =>
+    call('game.requestAllowance', {
+      ...(options.amount === undefined ? {} : { amount: String(options.amount) }),
+      ...(options.developerBets ? { developerBets: true } : {}),
+    }),
+  /** The player has seen how `group` ended. Until then, what its bets won stays out of the allowance and the balance
+   * the wallet shows, so they never give a result away before the game does; and the group's own bets may stake it.
+   * A stake leaves them when it is bet. Leaving the game ends every group. */
+  end: (group: string): Promise<null> => call('game.end', { group }),
   /** The receipt of an earlier operation by your own `id`, or `null` if this wallet has none. For an open developer
    * bet the wallet also asks the casino: once its developer has settled it, the wallet collects it and `onReceipt`
    * hears. */
@@ -172,8 +149,8 @@ export const HookedIn = Object.freeze({
   parseAmount,
   formatAmount,
   exactAmount,
-  /** Read-only startup: who is playing and the game's allowance, and the recommended stake in the stake field
-   * unless the player has edited it meanwhile. */
+  /** Read-only startup: who is playing and where to keep what the game saves for them, and the recommended stake in
+   * the stake field unless the player has edited it meanwhile. */
   async initializeGame({ stakeInput }: { stakeInput: HTMLInputElement }) {
     const initialStake = stakeInput.value;
     let edited = false;
@@ -183,7 +160,7 @@ export const HookedIn = Object.freeze({
     stakeInput.addEventListener('input', onEdit);
     try {
       const wallet: WalletInfo = await call('wallet.info');
-      const started = { wallet, allowance: await allowance(), scope: storageScope(wallet) };
+      const started = { wallet, scope: storageScope(wallet) };
       if (!edited && stakeInput.value === initialStake && /^[1-9]\d{0,77}$/.test(String(wallet.recommendedStake)))
         stakeInput.value = exactAmount(wallet.recommendedStake);
       return started;

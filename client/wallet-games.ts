@@ -60,6 +60,8 @@ export class GameSessions extends ChannelClient {
       key: identity.key,
       identity: { ...identity, developer: getAddress(identity.developer) },
       allowance: '0',
+      developerBets: false,
+      table: {},
     };
     this.render();
   }
@@ -71,9 +73,38 @@ export class GameSessions extends ChannelClient {
     if (!this.game) throw gameError('game-closed', 'No game is open');
     return this.game;
   }
-  gameAllowance(this: CasinoWallet): GameAllowance {
+  /** What the open game may stake; with `group`, what a bet of that group may: the allowance and what the group has
+   * won and the game has not shown yet. */
+  gameAllowance(this: CasinoWallet, group?: string): GameAllowance {
     const game = this.requireGame();
-    return { allowance: game.allowance, pending: this.pending?.game?.key === game.key };
+    return {
+      allowance: String(BigInt(game.allowance) + BigInt((group && game.table[group]) || 0)),
+      pending: this.pending?.game?.key === game.key,
+      developerBets: game.developerBets,
+    };
+  }
+  /** What the open game's groups have won and it has not shown yet: still the player's, and in their balance. */
+  inPlay(this: CasinoWallet) {
+    return Object.values(this.game?.table ?? {}).reduce((sum, amount) => sum + BigInt(amount), 0n);
+  }
+  /** The open game has shown how a group ended: what the group won joins its allowance. */
+  gameEnd(this: CasinoWallet, group: string) {
+    const game = this.requireGame(),
+      { [group]: won, ...rest } = game.table;
+    if (won === undefined) return;
+    game.table = rest;
+    game.allowance = String(BigInt(game.allowance) + BigInt(won));
+    this.render();
+  }
+  /** An operation of the open game settled, `spent` taken and `won` paid: a bet in a group stakes what the group holds
+   * first and leaves what it won with the group; anything else takes from and pays into the allowance at once. */
+  gameSettled(this: CasinoWallet, spent: bigint, won: bigint, group?: string) {
+    const game = this.game!,
+      held = BigInt((group && game.table[group]) || 0n),
+      drawn = spent < held ? spent : held,
+      allowance = BigInt(game.allowance) - (spent - drawn) + (group ? 0n : won);
+    game.allowance = String(allowance < 0n ? 0n : allowance);
+    if (group) game.table = { ...game.table, [group]: String(held - drawn + won) };
   }
   /** What a game page learns when it loads: every bound a bet is held to, as the protocol this wallet and its casino
    * share has them. */
@@ -122,14 +153,21 @@ export class GameSessions extends ChannelClient {
   }
   /** Which game asks, as its receipts remember it: its key, its own name for the operation, what it calls itself
    * and its developer. */
-  gameIntent(this: CasinoWallet, id: string): GameIntent {
+  gameIntent(this: CasinoWallet, id: string, group?: string): GameIntent {
     const game = this.requireGame();
-    return { key: game.key, id, name: game.identity.name, developer: game.identity.developer };
+    return {
+      key: game.key,
+      id,
+      name: game.identity.name,
+      developer: game.identity.developer,
+      ...(group ? { group } : {}),
+    };
   }
-  /** The only grant of spending authority: the open game's allowance, how much of the balance it may risk.
-   * The allowance lives in this tab's memory and signs nothing, so it can be set while an operation is
-   * pending; what that operation has already committed is simply not the player's to allow. */
-  async setGameAllowance(this: CasinoWallet, amount: string) {
+  /** The only grant of spending authority: the open game's allowance, how much of the balance it may risk, and
+   * whether it may place developer bets with it, which only a published game can. The allowance lives in this tab's
+   * memory and signs nothing, so it can be set while an operation is pending; what that operation has already
+   * committed is simply not the player's to allow. What the game's groups hold stays with them. */
+  async setGameAllowance(this: CasinoWallet, amount: string, developerBets = this.game?.developerBets ?? false) {
     const n = gameAmount(amount, false);
     this.requireGame();
     // It waits for the wallet's own background work rather than failing as busy.
@@ -137,8 +175,12 @@ export class GameSessions extends ChannelClient {
       async () => {
         this.ready();
         const game = this.requireGame();
-        if (n > this.playableBalance()) throw new Error('The allowance exceeds your balance');
+        if (n > this.playableBalance() - this.inPlay()) throw new Error('The allowance exceeds your balance');
+        if (developerBets && BigInt(game.identity.developer) === 0n)
+          throw new Error('Only a published game places developer bets');
         game.allowance = String(n);
+        // Taking the whole allowance back takes back every permission with it.
+        game.developerBets = n > 0n && developerBets;
         this.render();
       },
       { wait: true },
@@ -158,7 +200,7 @@ export class GameSessions extends ChannelClient {
           ...group,
         },
         this.gameOperationId(request.id),
-        this.gameIntent(request.id),
+        this.gameIntent(request.id, request.group),
       ),
     );
   }
@@ -173,7 +215,7 @@ export class GameSessions extends ChannelClient {
       await this.placeDeveloperBet(
         { stake: gameAmount(request.stake), meta: request.meta, ...group },
         this.gameOperationId(request.id),
-        this.gameIntent(request.id),
+        this.gameIntent(request.id, request.group),
       ),
     );
   }
@@ -183,7 +225,7 @@ export class GameSessions extends ChannelClient {
       await this.payBankroll(
         gameAmount(request.amount),
         this.gameOperationId(request.id),
-        this.gameIntent(request.id),
+        this.gameIntent(request.id, request.group),
         request.group,
       ),
     );

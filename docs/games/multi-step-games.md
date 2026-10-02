@@ -62,11 +62,9 @@ Each flip returns 95% of what it risks, which leaves the casino the edge it need
 ```ts title="src/game.ts"
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
-import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import { doubleUp } from './rules.ts';
 
 const round = new RoundClient(HookedIn, doubleUp);
-mountAllowance(document.getElementById('allowance')!, { round });
 
 // On startup: the saved round, with any step the wallet settled while the page was away.
 let state = await round.restore().catch(error => {
@@ -79,6 +77,7 @@ async function play(action: string) {
   if (!state || state.terminal) state = await round.start({ stake: HookedIn.parseAmount('0.0001') });
   state = await round.action(action); // 'flip' or 'take'
   render(state); // state.nodeId, state.cash, state.actions, state.events
+  if (state.terminal) await HookedIn.end(state.id); // the round is over on the page
 }
 round.watch(() => render(round.state())); // another tab moved the round
 ```
@@ -93,8 +92,11 @@ round.watch(() => render(round.state())); // another tab moved the round
   anything is signed, and checked against the wallet's verified payout.
 - The state says where the round stands ([`RoundState`](../sdk/round.md#roundstate)): `cash` is what the round holds,
   which the player keeps if they stop, and `events` are each step's action and label, to redraw the round after a
-  reload. `mountAllowance(element, { round })` leaves that cash out of the game's allowance and stands still while a
-  step settles, so the figure moves once a round.
+  reload.
+- Each step's bet is in the round's group, `state.id`, so the allowance in the wallet's top bar drops by the stake on
+  the first step and then stands still, while the round's cash stays with the round.
+  [`HookedIn.end(state.id)`](../sdk/hookedin.md#end), once the page has shown how the round ended, adds what it paid
+  ([groups](how-a-game-works.md#groups)).
 
 ## One step is one bet
 

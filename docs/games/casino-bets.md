@@ -59,7 +59,8 @@ async function flip(stake: bigint) {
   // Name the operation and save it before the wallet signs anything.
   const id = crypto.randomUUID();
   localStorage.setItem(key, JSON.stringify({ id, stake: String(stake) }));
-  const receipt = await HookedIn.casinoBet({ id, ...wire(flipBet(stake)) });
+  // In a group of its own, so what it wins shows in the wallet's top bar only once the page has shown the flip.
+  const receipt = await HookedIn.casinoBet({ id, ...wire(flipBet(stake)), group: id });
   localStorage.removeItem(key);
   return receipt;
 }
@@ -67,6 +68,7 @@ async function flip(stake: bigint) {
 const receipt = await flip(BigInt(HookedIn.parseAmount('0.0001')));
 if (receipt.status === 'settled') show(BigInt(receipt.outcome!) < HEADS ? 'Heads' : 'Tails', receipt.payout);
 else show(`Declined: ${receipt.reason}`); // the balance is unchanged
+await HookedIn.end(receipt.id); // the flip is on the page
 ```
 
 `show` is your page's own. A `settled` receipt carries the round's `outcome` and the `payout`, the prize or 0; a

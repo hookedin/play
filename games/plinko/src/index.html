@@ -10,20 +10,6 @@
   </head>
   <body>
     <main>
-      <header class="game-head">
-        <div>
-          <div class="eyebrow">HOOKEDIN ORIGINALS</div>
-          <div class="game-title">
-            <h1>Plinko</h1>
-            <span class="edition">EVERY BOARD, EVERY DROP</span>
-          </div>
-        </div>
-        <div class="head-tools">
-          <button class="tool" id="fast" type="button" aria-pressed="false">Fast</button>
-          <button class="tool" id="mute" type="button" aria-pressed="false">Sound on</button>
-        </div>
-      </header>
-      <div id="allowance" class="allowance" data-state="connecting"></div>
       <div class="table">
         <section class="stage board" aria-label="Plinko board">
           <canvas id="board" aria-hidden="true"></canvas>
@@ -78,8 +64,9 @@
         Every ball is its own bet. Tap Drop, or press Space, as fast as you like.
       </div>
       <footer class="foot">
-        <div class="foot-note">
-          A sandboxed game by HookedIn Studio.<br />Your funds stay in the independent client.
+        <div class="foot-tools">
+          <button class="tool" id="fast" type="button" aria-pressed="false">Fast</button>
+          <button class="tool" id="mute" type="button" aria-pressed="false">Sound on</button>
         </div>
         <details class="rules">
           <summary>How it works</summary>

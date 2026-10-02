@@ -1,5 +1,4 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
-import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import { createSynth } from '@hookedin/play/sdk/synth';
 import { DropClient } from './drop.ts';
 import type { DropConfig, Landed } from './drop.ts';
@@ -14,7 +13,6 @@ const QUEUE = 20;
 const drops = new DropClient(HookedIn);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const allowance = mountAllowance($('allowance'));
 const synth = createSynth();
 const stakeInput = $<HTMLInputElement>('stake');
 let lastTick = 0;
@@ -120,7 +118,6 @@ function render() {
   $('stat-best').textContent = stats.best ? times(stats.best) : '—';
   $('stat-net').textContent = `${stats.net > 0n ? '+' : ''}${HookedIn.formatAmount(stats.net, 9)}`;
   $('stat-net').dataset.sign = stats.net > 0n ? 'up' : stats.net < 0n ? 'down' : '';
-  allowance.setBusy(working);
 }
 
 function celebrate(hundredths: number) {
@@ -134,15 +131,14 @@ function celebrate(hundredths: number) {
   $('flash').classList.remove('hidden');
   setTimeout(() => $('flash').classList.add('hidden'), 900);
 }
-/** The ball falls after the money has settled; its winnings join the shown allowance when it lands. */
+/** The ball falls after the money has settled; its winnings join the allowance the wallet shows when it lands. */
 function fly(landed: Landed) {
   if (landed.rows !== rows || landed.risk !== risk) setBoard(landed.rows, landed.risk);
   const payout = BigInt(landed.payout),
     bucket = landed.turns.filter(Boolean).length,
     hundredths = multipliers(landed.rows, landed.risk)[bucket];
-  allowance.withhold(payout);
   void board.launch(landed.turns, fast).then(() => {
-    allowance.withhold(-payout);
+    void HookedIn.end(landed.group).catch(() => {});
     stats = {
       balls: stats.balls + 1,
       best: Math.max(stats.best, hundredths),
@@ -173,7 +169,6 @@ async function work() {
       else left--;
       const config: DropConfig = { rows, risk, stake: HookedIn.parseAmount(stakeInput.value) };
       board.hover(true);
-      allowance.hold(true);
       let landed: Landed;
       try {
         landed = await drops.drop(config);
@@ -181,7 +176,6 @@ async function work() {
         board.hover(false);
       }
       fly(landed);
-      allowance.hold(false);
       render();
       await new Promise(resolve => setTimeout(resolve, fast ? 90 : 220));
     }
@@ -189,7 +183,6 @@ async function work() {
     queued = left = 0;
     message(error.message, true);
   } finally {
-    allowance.hold(false);
     working = false;
     render();
   }
@@ -207,7 +200,7 @@ function request() {
 
 async function recover() {
   try {
-    allowance.update((await HookedIn.initializeGame({ stakeInput })).allowance);
+    await HookedIn.initializeGame({ stakeInput });
     const landed = await drops.restore();
     ready = true;
     if (landed) {

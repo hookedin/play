@@ -1,7 +1,6 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import type { RoundState } from '@hookedin/play/sdk/round';
-import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import type { Rational } from '@hookedin/play/sdk/engine';
 import { TILES, coveredPicks, minesGraph, multiplier, payout } from './rules.ts';
 
@@ -10,8 +9,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const stake = $<HTMLInputElement>('stake'),
   mines = $<HTMLSelectElement>('mines'),
   play = $<HTMLButtonElement>('play'),
-  random = $<HTMLButtonElement>('random'),
-  allowance = mountAllowance($('allowance'), { round });
+  random = $<HTMLButtonElement>('random');
 for (let count = 1; count < TILES; count++)
   mines.add(new Option(String(count), String(count), count === 3, count === 3));
 const tiles = Array.from({ length: TILES }, (_, index) => {
@@ -74,7 +72,6 @@ function render() {
     { mines: m, stake: wei } = state ? setupOf(state) : { mines: Number(mines.value), stake: '0' },
     more = open && actions.includes('reveal'),
     picking = ready && !busy && more;
-  allowance.setBusy(Boolean(busy) || !ready);
   for (const id of ['stake', 'mines', 'half', 'double']) $<HTMLInputElement>(id).disabled = Boolean(busy) || open;
   tiles.forEach((tile, i) => {
     const kind = gems.includes(i) ? 'gem' : mine === i ? 'mine' : '';
@@ -149,7 +146,10 @@ async function bet() {
 async function pick(tile: number) {
   const state = await round.action('reveal');
   show(state, tile);
-  if (state.nodeId === 'mines:loss') return `A mine. You lost ${amount(state.contributed)}.`;
+  if (state.nodeId === 'mines:loss') {
+    await HookedIn.end(state.id);
+    return `A mine. You lost ${amount(state.contributed)}.`;
+  }
   const { mines: m, picks } = setupOf(state),
     count = found(state);
   if (count === TILES - m) return 'Every gem found. Cash out.';
@@ -160,6 +160,8 @@ async function pick(tile: number) {
 async function cashOut() {
   const state = await round.action('cash-out');
   show(state);
+  // The round is over on the board: what it won joins the allowance the wallet shows.
+  await HookedIn.end(state.id);
   return `You cashed out ${amount(state.cash)}.`;
 }
 
@@ -197,7 +199,7 @@ document.addEventListener('keydown', event => {
 
 async function connect() {
   try {
-    allowance.update((await HookedIn.initializeGame({ stakeInput: stake })).allowance);
+    await HookedIn.initializeGame({ stakeInput: stake });
     // Ready before the round is restored: a round this page cannot finish is let go with a word, and the player
     // plays on.
     ready = true;

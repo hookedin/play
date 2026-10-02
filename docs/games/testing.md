@@ -54,23 +54,24 @@ store, a random player and one open channel on the local chain, 31337, wired to 
 `bankroll` is what the stub covers casino bets with, whose half its quotes name as the virtual bankroll, and `bank` what
 the developer's bank holds before any developer bet pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
 
-| Member                       | What it is                                                                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wallet`                     | The player's wallet. Open a game with `openGame(identity)` and give it an allowance with `setGameAllowance(amount)` before it bets                |
-| `bridge`                     | The game's side of the bridge to `wallet`, a [`TestBridge`](#testbridge), to hand to `RoundClient` or your own client                             |
-| `identity(name?, declared?)` | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about it. Every name given here is published |
-| `developer`                  | A stub [`Developer`](../sdk/developer.md#developer) with the fixture's key, serving the game named `test`, to hand to your server's code          |
-| `storage`, `owner`, `player` | What the wallet saves, the stub casino's signing key, and the player's key                                                                        |
-| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the developer's bank holds                                                 |
-| `secretOf(round)`            | A round's secret, which only the casino knows until it reveals the round                                                                          |
-| `reload()`                   | A wallet started afresh from what this one saved, as a reload of the page starts one                                                              |
-| `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                          |
-| `forget()`                   | A wallet that has lost every receipt, as the same account on another device has                                                                   |
+| Member                       | What it is                                                                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wallet`                     | The player's wallet. Open a game with `openGame(identity)` and give it an allowance with `setGameAllowance(amount, developerBets?)` before it bets |
+| `bridge`                     | The game's side of the bridge to `wallet`, a [`TestBridge`](#testbridge), to hand to `RoundClient` or your own client                              |
+| `identity(name?, declared?)` | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about it. Every name given here is published  |
+| `developer`                  | A stub [`Developer`](../sdk/developer.md#developer) with the fixture's key, serving the game named `test`, to hand to your server's code           |
+| `storage`, `owner`, `player` | What the wallet saves, the stub casino's signing key, and the player's key                                                                         |
+| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the developer's bank holds                                                  |
+| `secretOf(round)`            | A round's secret, which only the casino knows until it reveals the round                                                                           |
+| `reload()`                   | A wallet started afresh from what this one saved, as a reload of the page starts one                                                               |
+| `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                           |
+| `forget()`                   | A wallet that has lost every receipt, as the same account on another device has                                                                    |
 
-The wallet methods a test calls are `openGame(identity)`, `setGameAllowance(amount)` (a decimal string of wei, as the
-player sets it in the wallet's dialog), `gameAllowance()` (the open game's `{ allowance, pending }`), `closeGame()`,
-`balance()` (the channel's signed balance, a bigint) and `playableBalance()` (that balance less what a pending operation
-commits), from [client/wallet-games.ts](../../client/wallet-games.ts) and
+The wallet methods a test calls are `openGame(identity)`, `setGameAllowance(amount, developerBets?)` (a decimal string
+of wei, as the player sets it in the wallet's dialog, and `true` to allow developer bets too, which a game needs before
+its first developer bet), `gameAllowance(group?)` (what [`game.allowance`](../reference/bridge.md#gameallowance)
+answers), `gameEnd(group)`, `inPlay()` (what the open game's groups hold), `closeGame()`, `balance()` (the channel's
+signed balance, a bigint) and `playableBalance()` (that balance less what a pending operation commits), from [client/wallet-games.ts](../../client/wallet-games.ts) and
 [client/wallet-channel.ts](../../client/wallet-channel.ts).
 
 What the stub holds a game to:
@@ -91,15 +92,15 @@ What the stub holds a game to:
 `bridgeTo(wallet)` is a game's side of the bridge to any wallet, such as one `reload()` returns. Every request goes
 through the checks the wallet's bridge makes, with an envelope ID above the last, and on to the wallet's own methods.
 The player agrees to every `game.requestAllowance`: the allowance rises by the amount asked, or by the whole playable
-balance when none is, up to the playable balance. Every receipt the wallet pushes reaches the `onReceipt` listeners of
+balance when none is, up to the playable balance, with developer bets when the game asks for them. Every receipt the wallet pushes reaches the `onReceipt` listeners of
 every bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
 refusal.
 
 ### `TestBridge`
 
 What `bridgeTo` returns, and what [`RoundClient`](../sdk/round.md#roundbridge) and a game's own client take: `call`
-sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, `allowance` is the open game's
-`{ allowance, pending }`, and `onReceipt` hears pushed receipts and returns a function that stops the listener.
+sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, and `onReceipt` hears pushed receipts and returns a
+function that stops the listener.
 
 ## Testing a multi-step game
 

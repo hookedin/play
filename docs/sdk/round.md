@@ -39,8 +39,10 @@ if (state.actions.includes('cash-out')) state = await round.action('cash-out');
 | `store`   | Where the round is saved, a [`RoundStore`](#roundstore). `localStorage` by default                            |
 | `name`    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
 
-Each step is at most one operation, whose group is the round's `id`. The round asks the player for more when the
-game's allowance is short of what the step needs, draws the step's branch with the page's own randomness
+Each step is at most one operation, whose group is the round's `id`: what the steps win stays with the round, out of
+the allowance the wallet shows, until the game calls [`HookedIn.end(state.id)`](hookedin.md#end) once the player has
+seen how the round ended. The round asks the player for more when what the round may stake, the allowance and what it
+holds, is short of what the step needs, draws the step's branch with the page's own randomness
 ([`prepareAction`](engine.md#prepareaction)) and saves it with a fresh operation ID before it sends anything, and then
 sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing. A bet wins when the receipt's outcome is
 below its chance, which fixes the class of states it reaches, and the outcome draws the state within it; the verified
@@ -76,7 +78,7 @@ with the bridge's errors.
 Starts a round at the graph's root with `setup.stake`, a decimal string of wei, as its cash; the setup goes to `graph`
 and is saved with the round. It throws `Recover the pending action first` while a step is pending, which `restore`
 resolves. It makes sure the game's allowance covers the stake, prices the graph, and saves the round under a fresh
-`id`, replacing a saved unfinished round, whose cash is in the game's allowance already. It places no bet; the first
+`id`, replacing a saved unfinished round, whose cash is in the player's balance already. It places no bet; the first
 `action` does. It throws the pricing error above, `Allow this game more ETH to play, or deposit if your balance is empty.` when the player does not
 allow the game enough, and the bridge's errors.
 
@@ -112,43 +114,31 @@ Follows other tabs of the game: when another tab writes this round's key in `loc
 calls the listener, ignoring a failed restore. It does nothing where there is no `window`, and a listener cannot be
 removed.
 
-#### `inHand`
-
-The cash inside an unfinished round, or `0n`: part of the game's allowance, and the player's to keep if they stop.
-
 #### `ensureAllowance`
 
-Makes sure the game's allowance, as the last `restore`, `start` or `action` read it, covers `required`. When it does
-not, it asks the player for the shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
-`Allow this game more ETH to play, or deposit if your balance is empty.` if the allowance is still short.
-
-#### `busy`
-
-`true` while `action` runs: the wallet's balance holds the step's result before the round does.
-
-#### `onChange`
-
-Calls a listener after every `restore`, `start` and `action`, whether it resolved or threw: whenever the round's cash or
-`busy` may have changed. Returns a function that stops it. [`mountAllowance`](allowance-and-synth.md#mountallowance)
-redraws the strip with it.
+`ensureAllowance(required, stake, group?)` makes sure the game may stake `required`, or with `group`, that a bet in that
+group may ([`game.allowance`](../reference/bridge.md#gameallowance)). When it may not, it asks the player for the
+shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
+`Allow this game more ETH to play, or deposit if your balance is empty.` if it is still short. `start` and `action`
+call it; a page calls it to ask before something of its own, such as reels that spin before a resumed step.
 
 ## Types
 
 ### `RoundState`
 
-| Field         | Meaning                                                                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | The round's own ID, a UUID fixed at `start`. It is the group of each step, and lets a game apply a finished round to its own state exactly once |
-| `setup`       | The setup `start` was given, as JSON: its `stake`, and whatever else the game's graph is built from, such as Samson's `mode`                    |
-| `nodeId`      | The graph node the round is at                                                                                                                  |
-| `cash`        | The round's cash at this node, a decimal string of wei. At a terminal node, what the round paid                                                 |
-| `contributed` | The stake plus the `additionalCash` of every step taken                                                                                         |
-| `terminal`    | The round is finished                                                                                                                           |
-| `actions`     | The actions the node offers: only the pending step's while one is pending, none at a terminal node                                              |
-| `actionCosts` | The `additionalCash` of each of the node's actions, as decimal strings                                                                          |
-| `events`      | Every step taken, in order                                                                                                                      |
-| `pending`     | A step is saved and its result not applied                                                                                                      |
-| `settlement`  | The last step's result, or `null` before the first                                                                                              |
+| Field         | Meaning                                                                                                                                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | The round's own ID, a UUID fixed at `start`. It is the group of each step, which the game ends once the player has seen the round end, and lets a game apply a finished round to its own state exactly once |
+| `setup`       | The setup `start` was given, as JSON: its `stake`, and whatever else the game's graph is built from, such as Samson's `mode`                                                                                |
+| `nodeId`      | The graph node the round is at                                                                                                                                                                              |
+| `cash`        | The round's cash at this node, a decimal string of wei. At a terminal node, what the round paid                                                                                                             |
+| `contributed` | The stake plus the `additionalCash` of every step taken                                                                                                                                                     |
+| `terminal`    | The round is finished                                                                                                                                                                                       |
+| `actions`     | The actions the node offers: only the pending step's while one is pending, none at a terminal node                                                                                                          |
+| `actionCosts` | The `additionalCash` of each of the node's actions, as decimal strings                                                                                                                                      |
+| `events`      | Every step taken, in order                                                                                                                                                                                  |
+| `pending`     | A step is saved and its result not applied                                                                                                                                                                  |
+| `settlement`  | The last step's result, or `null` before the first                                                                                                                                                          |
 
 A settled step's `settlement` is `{ kind, won?, chance?, payout, outcome, draw }`. `kind` is `casino-bet`, `payment` or
 `noop`. A casino bet's `won` says whether its outcome was below its `chance`, and its `payout` and `outcome` are the
@@ -165,8 +155,8 @@ One step taken: its `action`, and the `label` of the outcome it led to when the 
 
 ### `RoundBridge`
 
-What the helper needs of the SDK: `call`, a bridge request, and `allowance`, the game's allowance as the wallet last
-pushed it. `HookedIn` and a [test bridge](../games/testing.md#testbridge) are both round bridges.
+What the helper needs of the SDK: `call`, a bridge request. `HookedIn` and a [test bridge](../games/testing.md#testbridge)
+are both round bridges.
 
 ### `RoundStore`
 

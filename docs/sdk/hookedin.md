@@ -13,9 +13,6 @@ what the wallet checks and answers.
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
-const shown = document.querySelector('#allowance')!;
-HookedIn.onAllowance(({ allowance }) => (shown.textContent = `${HookedIn.formatAmount(allowance)} ETH`));
-
 const stake = HookedIn.parseAmount('0.000001'); // '1000000000000' wei
 const answer = await HookedIn.requestAllowance({ amount: stake });
 if (answer.allowed) {
@@ -26,10 +23,14 @@ if (answer.allowed) {
     // Half the outcomes win 1.98 times the stake: a 99% return.
     chance: String(1n << 63n),
     prize: String((BigInt(stake) * 198n) / 100n),
+    group: id, // what it wins stays out of the allowance the wallet shows until the page has shown the result
   });
   // receipt.payout is the prize when receipt.outcome, the round's 64-bit outcome, is below the chance, or '0'.
+  await HookedIn.end(id); // once the page has shown it
 }
 ```
+
+The wallet's top bar names the game and shows its allowance, so a page holds only the game.
 
 ## The bridge
 
@@ -66,20 +67,22 @@ A developer's round as the casino shows it to anyone, read through the player's 
 
 #### `allowance`
 
-The game's allowance as the wallet last pushed it, a [`GameAllowance`](#gameallowance). It greets the wallet first and
-rejects as [`hello`](#hello) does, with `no-wallet` outside a frame; when nothing has been pushed yet, it waits for the
-first push, and rejects with `timeout` if none arrives within 180,000 ms.
-
-#### `onAllowance`
-
-Calls a listener with every [`game.allowance`](../reference/bridge.md#gameallowance) push, and returns a function that
-stops it. A listener added later hears only later pushes; `allowance()` reads the current one.
+[`game.allowance`](../reference/bridge.md#gameallowance), a [`GameAllowance`](#gameallowance): what the game may stake
+now, or with `group`, what a bet in that group may stake.
 
 #### `requestAllowance`
 
 [`game.requestAllowance`](../reference/bridge.md#gamerequestallowance): asks the player for `amount` more than the game
-holds, a suggestion the wallet's own dialog shows, and resolves once they have decided with `allowed`, and the game's
-`allowance` and `pending` after it.
+holds, a suggestion the wallet's own dialog shows, and with `developerBets: true`, to allow developer bets too, which
+the dialog warns about. It resolves once they have decided with `allowed` and the game's
+[`GameAllowance`](#gameallowance) after it.
+
+#### `end`
+
+[`game.end`](../reference/bridge.md#gameend): the player has seen how `group` ended, so what its bets won joins the
+allowance the wallet shows. Call it once the result is on the page, such as when a ball lands: until then the wallet's
+figures give nothing away, and stand still while a round is played
+([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)).
 
 #### `receipt`
 
@@ -134,9 +137,9 @@ Every digit of an amount, `formatAmount` to 18 places: what belongs in a field t
 
 #### `initializeGame`
 
-A page's start: it waits for `wallet.info` and the first allowance, and fills `stakeInput` with the recommended stake
-unless the player edited it meanwhile. It resolves with the player's `wallet.info` as `wallet`, the game's `allowance`,
-and `scope`, the page's [`storageScope`](#storagescope). It signs nothing and asks the player nothing.
+A page's start: it waits for `wallet.info`, and fills `stakeInput` with the recommended stake unless the player edited
+it meanwhile. It resolves with the player's `wallet.info` as `wallet`, and `scope`, the page's
+[`storageScope`](#storagescope). It signs nothing and asks the player nothing.
 
 ## Error class
 
@@ -166,9 +169,9 @@ async function place(bet: CasinoBetRequest) {
 
 ### `GameAllowance`
 
-`{ allowance, pending }`, what the wallet pushes as [`game.allowance`](../reference/bridge.md#gameallowance): what the
-game may still risk in this tab, winnings included, in wei, and whether a signed operation awaits recovery in the
-wallet.
+`{ allowance, pending, developerBets }`, what [`game.allowance`](../reference/bridge.md#gameallowance) answers: what the
+game may stake in this tab, in wei, whether a signed operation awaits recovery in the wallet, and whether the player
+allows the game's developer bets.
 
 ### `WalletBounds`
 

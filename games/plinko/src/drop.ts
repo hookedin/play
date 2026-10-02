@@ -16,6 +16,8 @@ export interface DropConfig {
   stake: string;
 }
 export interface Landed extends DropConfig {
+  /** The drop's round, the group of its bet: the page ends it once the ball has landed. */
+  group: string;
   payout: string;
   /** The ball's turns, true for right; their sum is the bucket. */
   turns: boolean[];
@@ -67,6 +69,7 @@ export class DropClient {
     this.store.set(shown, state.id);
     const { rows, risk, stake } = state.setup as unknown as DropConfig;
     return {
+      group: state.id,
       rows,
       risk,
       stake,

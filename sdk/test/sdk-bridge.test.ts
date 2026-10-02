@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('the game SDK greets the wallet, accepts only parent-window replies, delivers allowance pushes and numbers its requests upwards', async () => {
+test('the game SDK greets the wallet, accepts only parent-window replies, sends its typed methods and numbers its requests upwards', async () => {
   const posted: any[] = [],
     listeners: ((event: any) => void)[] = [];
   const parent = { postMessage: (message: any) => posted.push(message) };
@@ -9,13 +9,8 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
   try {
     const { HookedIn, HookedInError } = await import('../src/sdk.ts');
     const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
-    // The page greets the wallet as it loads, and an allowance the wallet pushes reaches the game at once.
+    // The page greets the wallet as it loads.
     assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
-    const early: any[] = [];
-    const stopEarly = HookedIn.onAllowance(allowance => early.push(allowance));
-    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '3', pending: false });
-    assert.deepEqual(early, [{ allowance: '3', pending: false }]);
-    stopEarly();
     const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
@@ -45,28 +40,27 @@ test('the game SDK greets the wallet, accepts only parent-window replies, delive
     ] as const)
       listeners.forEach(listener => listener({ source, data: { hookedin: true, id, result } }));
     assert.equal(await reply, 'real');
-    const allowances: any[] = [];
-    const stop = HookedIn.onAllowance(allowance => allowances.push(allowance));
-    deliver({}, { hookedin: true, event: 'game.allowance', allowance: '7', enabled: true, pending: false });
-    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '7', pending: false, stray: true });
-    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '0', pending: 'yes' });
-    assert.deepEqual(allowances, [
-      { allowance: '7', pending: false },
-      { allowance: '0', pending: false },
-    ]);
-    stop();
-    deliver(parent, { hookedin: true, event: 'game.allowance', allowance: '9', enabled: true, pending: false });
-    assert.equal(allowances.length, 2);
-    const asked = HookedIn.requestAllowance({ amount: 12n });
-    const sent = posted.at(-1);
-    assert.equal(sent.method, 'game.requestAllowance');
-    assert.deepEqual(sent.params, { amount: '12' });
-    deliver(parent, {
-      hookedin: true,
-      id: sent.id,
-      result: { allowed: false, allowance: '7', pending: false },
-    });
-    assert.equal((await asked).allowed, false);
+    // The allowance is asked for, the whole of it or what one group may stake; asking for more can ask for developer
+    // bets too; and a group the player has seen ends.
+    const asks = [
+      HookedIn.allowance(),
+      HookedIn.allowance('hand-1'),
+      HookedIn.requestAllowance({ amount: 12n }),
+      HookedIn.requestAllowance({ developerBets: true }),
+      HookedIn.end('hand-1'),
+    ];
+    assert.deepEqual(
+      posted.slice(-5).map(({ method, params }) => ({ method, params })),
+      [
+        { method: 'game.allowance', params: {} },
+        { method: 'game.allowance', params: { group: 'hand-1' } },
+        { method: 'game.requestAllowance', params: { amount: '12' } },
+        { method: 'game.requestAllowance', params: { developerBets: true } },
+        { method: 'game.end', params: { group: 'hand-1' } },
+      ],
+    );
+    for (const { id } of posted.slice(-5)) deliver(parent, { hookedin: true, id, result: null });
+    assert.deepEqual(await Promise.all(asks), [null, null, null, null, null]);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
     const bet = { id: 'coin', stake: '5', chance: '9', prize: '10', group: 'hand-1' };
     const calls = [HookedIn.casinoBet(bet), HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } })];
@@ -126,15 +120,11 @@ test('allowance() refuses outside a frame as call does, a greeting that failed i
     const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver({ hookedin: true, id: posted.at(-1).id, result: hello });
     assert.deepEqual(await greeting, hello);
-    // Greeted, with nothing pushed: allowance() waits as long as a request would, then gives up.
+    // A wallet that never answers: the request gives up.
     const silent = HookedIn.allowance();
     await new Promise(resolve => setImmediate(resolve));
     t.mock.timers.tick(180000);
     await assert.rejects(silent, refused('timeout'));
-    // A push ends the wait.
-    const pushed = HookedIn.allowance();
-    deliver({ hookedin: true, event: 'game.allowance', allowance: '5', pending: false });
-    assert.deepEqual(await pushed, { allowance: '5', pending: false });
   } finally {
     delete (globalThis as any).window;
   }

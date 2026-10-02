@@ -45,20 +45,31 @@ verified winnings.
 
 - A game starts with an allowance of zero, and the wallet's own dialog is the only grant. It asks with
   `HookedIn.requestAllowance({ amount })`, where `amount` is how much more it suggests; every word in the dialog is the
-  wallet's. The reply says whether the player set an allowance (`allowed`), and the resulting `allowance` and `pending`.
-  When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and the reply says
-  `allowed: false`.
-- The wallet pushes `game.allowance` with `{ allowance, pending }` when the page loads and whenever either changes.
-  `HookedIn.onAllowance` hears it, and `HookedIn.allowance()` resolves to the latest.
-- Every bet and payment must fit the allowance. Verified winnings raise it; stakes and payments lower it.
-- In the dialog the player can also lower the allowance, or take it all back.
+  wallet's. The reply says whether the player set an allowance (`allowed`), and the resulting `allowance`, `pending`
+  and `developerBets`. When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and
+  the reply says `allowed: false`.
+- Developer bets are allowed apart: the dialog warns that the game's developer takes their stakes and decides what
+  they pay, and only a request with `developerBets: true` asks for them. Casino bets need no more than the allowance,
+  since the wallet checks their odds and their results itself.
+- `HookedIn.allowance()` reads it. Every bet and payment must fit it. Stakes and payments lower it as they are made;
+  verified winnings raise it, a group's once the game has ended the group.
+- The wallet's top bar names the game, by the name it is published under, and shows its allowance in place of the
+  player's balance. The player opens the dialog from there to change the allowance or take it all back. A page shows
+  no header, allowance or balance of its own: only the game.
 - Leaving the game, reloading or closing the tab releases the allowance. The money never left the player's balance.
 - One game per wallet holds an allowance at a time, across tabs.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](#lost-replies)).
 
-[`mountAllowance`](../sdk/allowance-and-synth.md#mountallowance) draws the strip the house games show: the allowance,
-labelled **Game allowance**, with an **Adjust allowance** button.
+### Groups
+
+The figure in the top bar must not give a result away before the page shows it, nor move while a round is played. So
+what a bet in a group wins stays with its group, out of the allowance and balance the player sees, until the page
+calls [`HookedIn.end(group)`](../sdk/hookedin.md#end); only the group's own bets stake it meanwhile. Give every bet a
+group, and end it once the result is on the page: when the ball lands, the reels stop or the round is over.
+`RoundClient` puts each step in its round's group; end it with `HookedIn.end(state.id)`. A multi-step round then moves
+the figure twice: down by the stake on its first step, and up by what it paid when it ends
+([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)).
 
 ## The bridge
 
@@ -72,8 +83,8 @@ field, reply and [error](../reference/bridge.md#errors).
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
-HookedIn.onAllowance(({ allowance, pending }) => render(allowance, pending)); // your page's own render
 const info = await HookedIn.info(); // the player's names, the virtual bankroll, a recommended stake
+const { allowance, pending } = await HookedIn.allowance(); // what the game may stake, and whether a bet awaits recovery
 ```
 
 Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('0.001')` is `'1000000000000000'`, and

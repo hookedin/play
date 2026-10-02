@@ -8,7 +8,7 @@ import { chromium } from 'playwright-core';
 
 const games = ['dice', 'mines', 'plinko', 'samson'];
 
-test('game allowances and complete stake amounts are readable on phones and tablets', async t => {
+test('complete stake amounts are readable on phones and tablets, on pages that hold only the game', async t => {
   const server = http.createServer(async (req, res) => {
     const parts = new URL(req.url!, 'http://localhost').pathname.split('/').filter(Boolean);
     if (!parts.length) return void res.writeHead(200, { 'content-type': 'text/html' }).end('<!doctype html>');
@@ -51,16 +51,13 @@ test('game allowances and complete stake amounts are readable on phones and tabl
                 }
               : null;
         iframe.contentWindow!.postMessage({ hookedin: true, id: request.id, result }, '*');
-        iframe.contentWindow!.postMessage(
-          { hookedin: true, event: 'game.allowance', allowance: '1234567890123456789', pending: false },
-          '*',
-        );
       });
       iframe.src = url;
     }, `${base}/${game}/`);
     const frame = page.frameLocator('iframe');
-    await frame.getByText('Game allowance', { exact: true }).waitFor();
-    await frame.getByRole('button', { name: 'Adjust allowance', exact: true }).waitFor();
+    await frame.locator('#stake').waitFor();
+    // The wallet's top bar names the game and shows its allowance: the page has neither.
+    assert.equal(await frame.locator('h1, #allowance, .game-head').count(), 0, `${game} draws a header of its own`);
     for (const width of [320, 390, 720, 761, 1024]) {
       await page.setViewportSize({ width, height: 900 });
       for (const value of ['0.000001', '0.123456789012345678', '0.000000000000000001']) {

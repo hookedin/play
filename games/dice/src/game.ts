@@ -1,7 +1,6 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import type { RoundState } from '@hookedin/play/sdk/round';
-import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import { CHANCE_MAX, CHANCE_MIN, diceGraph, winPayout } from './rules.ts';
 
 /** What Auto cycles through: the rolls one press plays, where 0 is a single roll. */
@@ -10,7 +9,6 @@ const AUTO = [0, 10, 50, 100];
 const HISTORY = 10;
 const round = new RoundClient(HookedIn, diceGraph);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const allowance = mountAllowance($('allowance'), { round });
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const stakeInput = $<HTMLInputElement>('stake'),
   slider = $<HTMLInputElement>('chance'),
@@ -70,7 +68,6 @@ function render() {
   autoButton.textContent = auto ? `Auto · ${auto}` : 'Auto';
   autoButton.setAttribute('aria-pressed', String(auto > 0));
   for (const id of ['stake', 'chance', 'chance-text', 'half', 'double']) $<HTMLInputElement>(id).disabled = locked;
-  allowance.setBusy(!ready || running);
   $('die').classList.toggle('rolling', running);
 }
 /** A finished roll: the verified outcome read on a 0–100 scale, where under the win chance wins. */
@@ -104,6 +101,8 @@ async function roll() {
       session = await round.start({ stake: HookedIn.parseAmount(stakeInput.value), chanceBps: chance() });
     if (!session.terminal) session = await round.action('roll');
     show(session);
+    // The roll is on the page: what it won joins the allowance the wallet shows.
+    await HookedIn.end(session.id);
     return true;
   } catch (error: any) {
     try {
@@ -136,7 +135,7 @@ async function press() {
 }
 async function recover() {
   try {
-    allowance.update((await HookedIn.initializeGame({ stakeInput })).allowance);
+    await HookedIn.initializeGame({ stakeInput });
     // Ready before the round is restored: a round this page cannot finish is let go with a word, and
     // the player plays on.
     ready = true;

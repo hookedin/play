@@ -4,7 +4,7 @@ Pick a win chance, pick a stake, roll. A reference game for [HookedIn](https://p
 
 ## How to play
 
-1. Set what the game may spend from your wallet with **Adjust allowance**.
+1. Set what the game may spend from your wallet with **Allowance** in the wallet's top bar.
 2. Set the win chance with the slider, from 10% to 90% in steps of 0.5%, or type it.
 3. Enter a stake, or halve or double it with **½** and **2×**, and press **Roll dice** or Space.
 

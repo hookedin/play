@@ -101,7 +101,7 @@ developer bets under **Developer bets** until what each was paid has been collec
 The wallet asks the casino for your settled bets every 4 seconds while its tab is visible. For each, it checks the
 developer's signed `Settlement` against the bet you signed (its hash, its stake and its developer) and signs a credit
 for exactly what the settlement pays you, into your balance; the game that placed the bet hears of it while open, and
-the payout raises its allowance. Stakes with developers and payouts not yet collected are apart from your signed
+the payout joins its allowance once the game has shown the result. Stakes with developers and payouts not yet collected are apart from your signed
 balance: the contract protects neither ([trust model](../overview/trust-model.md#developer-bets-trust-their-developer)).
 
 ## Activity

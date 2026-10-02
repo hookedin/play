@@ -10,11 +10,21 @@ export const METHODS = [
   'game.casinoBet',
   'game.developerBet',
   'game.payment',
+  'game.allowance',
   'game.requestAllowance',
+  'game.end',
 ];
 const methods = new Set(METHODS);
-/** Questions the wallet answers at once. Everything else signs or asks the player, and waits its turn. */
-const IMMEDIATE = new Set(['wallet.hello', 'wallet.info', 'wallet.round', 'game.receipt']);
+/** Questions the wallet answers at once, and the end of a group, which signs nothing. Everything else signs or asks
+ * the player, and waits its turn. */
+const IMMEDIATE = new Set([
+  'wallet.hello',
+  'wallet.info',
+  'wallet.round',
+  'game.receipt',
+  'game.allowance',
+  'game.end',
+]);
 /** Requests a game may have waiting for their turn. */
 const MAX_QUEUE = 32;
 /** The game an operation is for, as a bet or a payment signs it: its key, which stays the same wherever the game
@@ -50,6 +60,7 @@ const object = (value: unknown) =>
   !Array.isArray(value) &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
+const validGroup = (group: unknown) => typeof group === 'string' && group.length > 0 && group.length <= MAX_GROUP;
 /** The stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance. */
 function validateOdds(chance: unknown, prize: unknown) {
   if (gameAmount(prize) >= MAX_BALANCE) throw new Error('A prize is below 2^96.');
@@ -94,9 +105,16 @@ function validate(data: any) {
     if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.id))
       throw new Error('A round is named by its 32-byte hash, as 0x and 64 hex digits.');
   } else if (data.method === 'game.requestAllowance') {
-    // The wallet's modal decides, and every word in it is the wallet's: a game suggests an amount.
-    if (!only(params, ['amount'])) throw new Error('Unexpected game request field.');
+    // The wallet's modal decides, and every word in it is the wallet's: a game suggests an amount, and says whether it
+    // places developer bets.
+    if (!only(params, ['amount', 'developerBets'])) throw new Error('Unexpected game request field.');
     if (params.amount !== undefined) gameAmount(params.amount);
+    if (params.developerBets !== undefined && typeof params.developerBets !== 'boolean')
+      throw new Error('developerBets is true or false.');
+  } else if (data.method === 'game.allowance' || data.method === 'game.end') {
+    if (!only(params, ['group'])) throw new Error('Unexpected game request field.');
+    if (params.group === undefined ? data.method === 'game.end' : !validGroup(params.group))
+      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
   } else {
     const fields = {
       'game.casinoBet': ['id', 'stake', 'chance', 'prize', 'group'],
@@ -107,10 +125,7 @@ function validate(data: any) {
     if (!only(params, fields)) throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);
     for (const field of ['stake', 'amount']) if (fields.includes(field)) gameAmount(params[field]);
-    if (
-      params.group !== undefined &&
-      (typeof params.group !== 'string' || !params.group.length || params.group.length > MAX_GROUP)
-    )
+    if (params.group !== undefined && !validGroup(params.group))
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
     // A casino bet settles now against the bankroll, on the player's own round. A developer bet is its developer's
     // to settle, on its developer's word: its meta is the game's own, which the casino keeps and never reads.

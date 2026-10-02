@@ -1,6 +1,6 @@
 # HookedIn game SDK
 
-What a HookedIn game is built with: the wallet bridge, a helper for multi-step rounds, an exact pricing engine, the developer kit for a game's own server, an allowance strip, synthesized sound, shared styles and the `hookedin-game` build tool.
+What a HookedIn game is built with: the wallet bridge, a helper for multi-step rounds, an exact pricing engine, the developer kit for a game's own server, synthesized sound, shared styles and the `hookedin-game` build tool.
 
 It is documented with the rest of HookedIn, at <https://hookedin.com/docs>:
 

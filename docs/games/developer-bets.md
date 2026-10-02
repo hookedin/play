@@ -53,9 +53,14 @@ const receipt = await HookedIn.developerBet({
   and the game's public record counts the open ones.
 - Only a published game takes developer bets. A game opened by its URL alone is refused with `invalid-request`
   ([publishing](publishing.md#publish-it)).
+- The player allows developer bets apart from casino bets. Ask with
+  `HookedIn.requestAllowance({ amount, developerBets: true })`: the wallet's dialog warns that you take the stakes and
+  decide what they pay, which neither the casino nor the wallet can check. Until the player allows them, a developer
+  bet is refused with `developer-bets-not-allowed`, and `HookedIn.allowance()` says `developerBets: false`.
 - Once you settle a bet, the wallet checks your signed settlement and collects what it pays into the player's balance.
-  While the game is open, it raises the game's allowance by that and pushes the receipt, `settled` with its `payout`, as
-  a `game.receipt` event. The wallet looks every 4 seconds while its tab is visible; a page that hears from your server
+  While the game is open, it adds that to the bet's group, which joins the allowance once the page ends the group with
+  [`HookedIn.end`](../sdk/hookedin.md#end), and pushes the receipt, `settled` with its `payout`, as a `game.receipt`
+  event. The wallet looks every 4 seconds while its tab is visible; a page that hears from your server
   that a bet has settled calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload,
   `HookedIn.receipt(id)` finds the bet.
 - Until the wallet collects it, what a bet is paid is the casino's promise, outside what the contract

@@ -1,7 +1,6 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import type { RoundState } from '@hookedin/play/sdk/round';
-import { mountAllowance } from '@hookedin/play/sdk/allowance';
 import { seededRandom } from '@hookedin/play/sdk/engine';
 import {
   BONUS_SPINS,
@@ -47,7 +46,6 @@ const BIG = [
 const round = new RoundClient(HookedIn, slotGraph);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const allowance = mountAllowance($('allowance'), { round });
 const reels = mountReels($('reels'), reducedMotion);
 const sound = createSound();
 const stakeInput = $<HTMLInputElement>('stake');
@@ -125,7 +123,6 @@ function render() {
   $('auto').textContent = auto ? `Stop · ${auto}` : 'Auto';
   $('auto').setAttribute('aria-pressed', String(auto > 0));
   if ($<HTMLButtonElement>('auto').disabled) autoMenu(false);
-  allowance.setBusy(phase !== 'idle');
 }
 /** The win meter, and the celebration's figures while one shows. */
 function showWin(stakes: number, stake: string) {
@@ -336,13 +333,12 @@ async function spin() {
       session = await round.start({ stake, mode: mode() });
     } else {
       await round.restore();
-      await round.ensureAllowance(BigInt(session.cash), BigInt(session.setup.stake));
+      await round.ensureAllowance(BigInt(session.cash), BigInt(session.setup.stake), session.id);
     }
     const stake = session.setup.stake,
       machine = MACHINES[session.setup.mode === 'bonus' ? 'bonus' : 'base'];
     if (saved.bonus) rolling = true;
-    // The wallet settles while the reels turn; the allowance waits for the reels before it moves.
-    allowance.hold(true);
+    // The wallet settles while the reels turn; the allowance it shows waits until the spin is over and on screen.
     reels.spin(machine, turbo);
     sound.spin();
     moving = true;
@@ -374,7 +370,7 @@ async function spin() {
     await stopping;
     moving = false;
     await present(view, key, stake);
-    allowance.hold(false);
+    if (session.terminal) await HookedIn.end(session.id);
     if (outcomeOf(key).bonus && machine.name === 'base') {
       auto = 0;
       if (await offer(stake, false)) rolling = true;
@@ -396,11 +392,11 @@ async function spin() {
     celebrate(null);
     try {
       session = await round.restore();
+      if (session?.terminal) await HookedIn.end(session.id);
     } catch {}
     message(error.message, true);
   } finally {
     closing = null;
-    allowance.hold(false);
     phase = 'idle';
     render();
   }
@@ -477,7 +473,6 @@ async function recover() {
     try {
       saved = { ...saved, ...JSON.parse(localStorage.getItem(storageKey) ?? '{}') };
     } catch {}
-    allowance.update(startup.allowance);
     // A spin this page cannot finish is let go with a word to the player, who plays on.
     let dropped: string | null = null;
     session = await round.restore().catch((error: Error) => ((dropped = error.message), null));

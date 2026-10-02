@@ -99,9 +99,10 @@ export class ChannelClient extends WalletTransactions {
       free = BigInt(this.channel?.state.balance || 0) - committed;
     return free < 0n ? 0n : free;
   }
-  /** The signed balance minus what this tab's open game may still risk of it; never below zero. */
+  /** The signed balance minus what this tab's open game may still risk of it, and what its groups hold; never below
+   * zero. */
   availableBalance(this: CasinoWallet) {
-    const allowance = this.game ? BigInt(this.game.allowance) : 0n,
+    const allowance = this.game ? BigInt(this.game.allowance) + this.inPlay() : 0n,
       available = BigInt(this.channel?.state.balance || 0) - allowance;
     return available < 0n ? 0n : available;
   }
@@ -198,8 +199,13 @@ export class ChannelClient extends WalletTransactions {
     const allowed = (debit: bigint) => {
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
-        if (debit > BigInt(this.game.allowance))
+        if (debit > BigInt(this.gameAllowance(game.group).allowance))
           throw gameError('insufficient-allowance', "Bet exceeds the game's allowance");
+        if (kind === 'developer-bet' && !this.game.developerBets)
+          throw gameError(
+            'developer-bets-not-allowed',
+            'The player has not let this game place developer bets: ask with requestAllowance({ developerBets: true }).',
+          );
       } else if (
         // Only a bet stakes what the casino lent the balance: money moved into the fund or a bank leaves it.
         debit + (['invest', 'bank'].includes(kind) ? BigInt(this.channel!.state.loan) : 0n) >
@@ -377,8 +383,10 @@ export class ChannelClient extends WalletTransactions {
     // The open game's allowance follows its verified result. A result recovered after a reload, or for a game since
     // closed, changes only the channel balance: the allowance was already released.
     if (game && this.game?.key === game.key) {
-      const allowance = BigInt(this.game.allowance) + BigInt(next.balance) - BigInt(c.state.balance);
-      this.game.allowance = String(allowance < 0n ? 0n : allowance);
+      const change = BigInt(next.balance) - BigInt(c.state.balance),
+        staked = rejected || credit(kind) ? 0n : BigInt(op.amount),
+        won = change + staked;
+      this.gameSettled(won < 0n ? -change : staked, won < 0n ? 0n : won, game.group);
     }
     const casinoBet = Number(op.kind) === KIND.casinoBet;
     c.state = next;
@@ -492,8 +500,8 @@ export class ChannelClient extends WalletTransactions {
     return { payout: BigInt(settlement.player), settlement: plain(settlement) };
   }
   /** Collect what a developer bet this wallet placed was paid, once its developer settled it. The wallet checks the
-   * settlement, then signs a credit for what it pays, which raises the open game's allowance if it is the game that
-   * placed the bet. The bet's receipt then says what it was paid, and goes to the game that placed it. */
+   * settlement, then signs a credit for what it pays, which goes to the open game if it is the game that placed the
+   * bet: into the bet's group, if it has one, until the game ends it. The bet's receipt then says what it was paid, and goes to the game that placed it. */
   async collectDeveloperBet(this: CasinoWallet, hash: string) {
     const tracked = this.developerBets[hash],
       channelId = this.channelId;
@@ -536,7 +544,10 @@ export class ChannelClient extends WalletTransactions {
         'developer-bet-payout',
         { amount: paid.payout, source: hash },
         `developer-bet-payout:${hash}`,
-        game && this.game?.key === game.key ? game : undefined,
+        // What it paid returns to the bet's group, which the game ends once it has shown the result.
+        game && this.game?.key === game.key
+          ? { ...game, ...(receipt.details?.group ? { group: receipt.details.group } : {}) }
+          : undefined,
       );
       if (credited.status !== 'signed') throw new Error('What the bet was paid was not credited');
     }

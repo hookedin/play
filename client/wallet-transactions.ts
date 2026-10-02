@@ -678,9 +678,11 @@ export class WalletTransactions {
       throw new Error(
         `Not that much is in your balance: ${formatEther(withdrawable)} ETH can go, after the fee of ${formatEther(fee)} ETH for sending it${BigInt(c.state.loan) ? ' and what the casino lent you' : ''}.`,
       );
-    // The open game may risk no more than stays in the balance.
-    if (this.game && BigInt(this.game.allowance) > withdrawable - value)
-      this.game.allowance = String(withdrawable - value);
+    // The open game may risk no more than stays in the balance, what its groups hold included.
+    if (this.game && BigInt(this.game.allowance) + this.inPlay() > withdrawable - value) {
+      const left = withdrawable - value - this.inPlay();
+      this.game.allowance = String(left < 0n ? 0n : left);
+    }
     const receipt = await this.perform(
       into ? 'transfer' : 'withdrawal',
       { amount: value, recipient, fee },
@@ -739,8 +741,8 @@ export class WalletTransactions {
       fee = await this.signedWithdrawalFee(),
       amount = this.withdrawable();
     if (!c || Number(c.onchain?.status) !== 1 || c.closing || !amount) throw new Error('No balance to lock in.');
-    // All of it goes out and back in: the open game risks nothing meanwhile.
-    if (this.game) this.game.allowance = '0';
+    // All of it goes out and back in: the open game risks nothing meanwhile, and shows what its groups held.
+    if (this.game) Object.assign(this.game, { allowance: '0', developerBets: false, table: {} });
     const receipt = await this.perform('lock-in', { amount, recipient: this.address, fee }, crypto.randomUUID());
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined locking in.');
     return receipt;

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bridgeTo, gameWallet, memoryStore } from '@hookedin/play/testing/game-wallet.ts';
 import { MemoryStore } from '../../client/storage.ts';
-import { id } from 'ethers';
+import { id, ZeroAddress } from 'ethers';
 import {
   rejectionCheckpoint,
   checkpointEvidence,
@@ -47,6 +47,59 @@ test('the allowance lives in memory: leaving the game releases it, and nothing a
   assert.equal(reloaded.availableBalance(), 1000000n);
 });
 
+test('a group keeps what its bets win out of the allowance until the game ends it, and only its own bets stake it', async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity());
+  await w.setGameAllowance('1000');
+  // Each bet of the group stakes what the group holds first, and what it wins stays with the group.
+  let allowance = 1000n,
+    held = 0n;
+  for (let i = 0; i < 6; i++) {
+    const receipt = await w.gameCasinoBet({ ...terms(`step-${i}`), group: 'round' }),
+      drawn = held < 10n ? held : 10n;
+    allowance -= 10n - drawn;
+    held += BigInt(receipt.payout!) - drawn;
+    assert.equal(w.gameAllowance().allowance, String(allowance));
+    assert.equal(w.inPlay(), held);
+    assert.equal(w.gameAllowance('round').allowance, String(allowance + held));
+  }
+  // Another group stakes only the allowance.
+  await assert.rejects(
+    w.gameCasinoBet({ id: 'other', stake: String(allowance + 1n), ...odds, group: 'other' }),
+    /game's allowance/,
+  );
+  // The player sets the allowance itself; what the group holds stays with it, and is the player's all the same.
+  await w.setGameAllowance('500');
+  assert.deepEqual([w.gameAllowance().allowance, w.inPlay()], ['500', held]);
+  assert.equal(w.availableBalance(), (await w.balance()) - 500n - held);
+  await assert.rejects(w.setGameAllowance(String((await w.balance()) - held + 1n)), /exceeds your balance/);
+  // Once the game has shown how the group ended, what it won joins the allowance.
+  w.gameEnd('round');
+  w.gameEnd('never-placed');
+  assert.deepEqual([w.gameAllowance().allowance, w.inPlay()], [String(500n + held), 0n]);
+});
+
+test('a game places developer bets only once the player allows them, and only a published game can be', async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity());
+  await w.setGameAllowance('1000');
+  const bet = { id: 'match', stake: '10', meta: { pick: 'home' } };
+  await assert.rejects(w.gameDeveloperBet(bet), (error: any) => error.code === 'developer-bets-not-allowed');
+  assert.equal(w.gameAllowance().allowance, '1000');
+  await w.setGameAllowance('1000', true);
+  assert.equal((await w.gameDeveloperBet(bet)).status, 'open');
+  // Changing the allowance keeps the leave; taking all of it back takes the leave with it.
+  await w.setGameAllowance('500');
+  assert.equal(w.gameAllowance().developerBets, true);
+  await w.setGameAllowance('0');
+  assert.equal(w.gameAllowance().developerBets, false);
+  // A game opened by its URL alone has no developer to bet against.
+  w.openGame(f.identity('unpublished', { developer: ZeroAddress }));
+  await assert.rejects(w.setGameAllowance('100', true), /Only a published game/);
+});
+
 test('verified gains and losses move the allowance; exact retries by ID never charge twice', async () => {
   const f = await gameWallet(),
     w = f.wallet;
@@ -86,7 +139,7 @@ test("a developer bet keeps its game's meta, is paid only what its developer sig
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameAllowance('1000');
+  await w.setGameAllowance('1000', true);
   const pushed: GameReceipt[] = [];
   f.bridge.onReceipt(receipt => pushed.push(receipt));
   const request = { id: 'ride', stake: '10', meta: { cashout: '2.5' }, group: 'round-7' };
@@ -119,10 +172,13 @@ test("a developer bet keeps its game's meta, is paid only what its developer sig
     "a developer bet rests on its developer's word",
   );
   assert.deepEqual(pushed, [receipt]);
+  // What it was paid returns to its group, until the game has shown the result and ends the group.
+  assert.deepEqual([w.gameAllowance().allowance, w.gameAllowance('round-7').allowance], ['990', '1015']);
+  w.gameEnd('round-7');
   assert.equal(w.gameAllowance().allowance, '1015');
   // A game published nowhere has no developer to take a developer bet.
   w.openGame(f.identity('plain', { slug: undefined }));
-  await w.setGameAllowance('100');
+  await w.setGameAllowance('100', true);
   await assert.rejects(w.gameDeveloperBet({ ...request, id: 'nobody' }), /published nowhere/);
 });
 
@@ -130,7 +186,7 @@ test("settlements the developer's bank cannot pay are refused whole, and the bet
   const f = await gameWallet({ bank: 5n }),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameAllowance('1000');
+  await w.setGameAllowance('1000', true);
   const won = await w.gameDeveloperBet({ id: 'won', stake: '10', meta: {} }),
     lost = await w.gameDeveloperBet({ id: 'lost', stake: '10', meta: {} });
   assert.equal(f.bank(), 25n, "both stakes went into the developer's bank");
@@ -149,7 +205,7 @@ test('settled developer bets are found through the account feed, zero payouts ar
     w = f.wallet,
     game = f.identity();
   w.openGame(game);
-  await w.setGameAllowance('1000');
+  await w.setGameAllowance('1000', true);
   const place = async (id: string) => (await w.gameDeveloperBet({ id, stake: '10', meta: {} })).bet!;
   const waiting = await place('waiting'),
     returned = await place('return'),
@@ -194,7 +250,7 @@ test('a game learns how its operations ended and never whose they were', async (
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameAllowance('1000');
+  await w.setGameAllowance('1000', true);
   const replies: any[] = [],
     reply = async (value: unknown) => void replies.push(await value);
   f.bridge.onReceipt(receipt => replies.push(receipt));
@@ -373,23 +429,24 @@ test('mines runs its own rules through the wallet bridge and its own storage, in
   let round = new RoundClient(bridge, graph, undefined, { store, name }),
     state = await round.start({ stake });
   const before = await w.balance();
-  // What the allowance strip shows: the allowance without the cash inside the unfinished round.
-  const shown = () => BigInt(w.gameAllowance().allowance) - round.inHand();
-  assert.equal(shown(), BigInt(allowance) - BigInt(stake));
+  // The allowance the wallet shows: starting a round moves nothing, a stake leaves it when it is bet, and what the
+  // round's steps win stays with the round, which its own steps stake, until the game ends it.
+  assert.equal(w.gameAllowance().allowance, allowance);
   for (let i = 0; !state.terminal && i < 64; i++) {
     state = await round.action(state.actions.find(a => ['stand', 'cash-out'].includes(a)) ?? state.actions[0]);
     if (i === 2) round = new RoundClient(bridge, graph, undefined, { store, name });
     state = (await round.restore())!;
-    if (!state.terminal)
-      assert.equal(
-        shown(),
-        BigInt(allowance) - BigInt(state.contributed),
-        'the strip shows the allowance without the cash inside the unfinished round',
-      );
+    assert.equal(w.gameAllowance().allowance, String(BigInt(allowance) - BigInt(state.contributed)));
+    assert.equal(
+      w.gameAllowance(state.id).allowance,
+      String(BigInt(allowance) - BigInt(state.contributed) + BigInt(state.cash)),
+    );
+    assert.equal(w.inPlay(), BigInt(state.cash));
   }
   assert.equal(state.terminal, true);
-  assert.equal(round.inHand(), 0n);
   assert.equal(await w.balance(), before - BigInt(state.contributed) + BigInt(state.cash));
+  await bridge.call('game.end', { group: state.id });
+  assert.equal(w.inPlay(), 0n);
   assert.equal(w.gameAllowance().allowance, String(BigInt(allowance) - BigInt(state.contributed) + BigInt(state.cash)));
   assert.equal(store.map.size, 1, 'the round lives under one key per player');
   assert.equal([...store.map.keys()][0], `hookedin:round:${name}:31337:${w.uname}`);
@@ -495,8 +552,10 @@ test('the round helper asks the wallet for exactly the shortfall and stops when 
 
 test('a stake the casino cannot back fails with a plain capacity message, not a pricing error', async () => {
   const bridge = {
-    call: async () => ({ virtualBankroll: '5000000000000000', chainId: '1' }),
-    allowance: async () => ({ allowance: '100000000000000000', pending: false }),
+    call: async (method: string) =>
+      method === 'game.allowance'
+        ? { allowance: '100000000000000000', pending: false, developerBets: false }
+        : { virtualBankroll: '5000000000000000', chainId: '1' },
   };
   const round = new RoundClient(bridge, coin({ payout: stake => (stake * 19n) / 10n }), undefined, {
     store: memoryStore(),
@@ -510,8 +569,10 @@ test('a supported plan is reused across rounds and recomputed when the bankroll 
   let bankroll = 1000000000n,
     builds = 0;
   const bridge = {
-    call: async () => ({ virtualBankroll: String(bankroll), chainId: '1' }),
-    allowance: async () => ({ allowance: '10000', pending: false }),
+    call: async (method: string) =>
+      method === 'game.allowance'
+        ? { allowance: '10000', pending: false, developerBets: false }
+        : { virtualBankroll: String(bankroll), chainId: '1' },
   };
   const round = new RoundClient(
     bridge,
@@ -734,7 +795,7 @@ test("the stub developer pages a game's bets 100 at a time, as the casino does",
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
-  await w.setGameAllowance('1000');
+  await w.setGameAllowance('1000', true);
   for (let i = 0; i < 101; i++) await w.gameDeveloperBet({ id: `bet-${i}`, stake: '1', meta: {} });
   const first = await f.developer.bets();
   assert.deepEqual([first.bets.length, first.more], [100, true]);

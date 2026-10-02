@@ -19,6 +19,7 @@
       <a class="brand" href="/" data-page="library" aria-label="HookedIn games"
         ><img src="/brand/hookedin-mark.svg" width="22" height="30" alt="" /><span>HookedIn</span></a
       >
+      <span id="game-title" class="game-title hidden"></span>
       <nav class="topnav" aria-label="Main">
         <a class="nav-link" href="/" data-page="library">Games</a>
         <a class="nav-link" href="/bets" data-page="bets">Bets</a>
@@ -26,10 +27,15 @@
       <span class="network" title="The network this wallet plays on"
         ><span class="live-dot"></span><span id="network-name">Sepolia</span></span
       >
-      <button id="wallet-button" class="wallet-button" type="button" aria-haspopup="dialog">
-        <span id="wallet-button-amount" class="wallet-button-amount hidden"></span
-        ><span id="wallet-button-label" class="wallet-button-label">Deposit</span>
-      </button>
+      <div class="money-control">
+        <button id="game-allowance" class="game-allowance hidden" type="button" aria-haspopup="dialog">
+          <small>Allowance</small><span id="game-allowance-amount"></span>
+        </button>
+        <button id="wallet-button" class="wallet-button" type="button" aria-haspopup="dialog">
+          <span id="wallet-button-amount" class="wallet-button-amount hidden"></span
+          ><span id="wallet-button-label" class="wallet-button-label">Deposit</span>
+        </button>
+      </div>
       <button
         id="account-button"
         class="account-button"
@@ -576,6 +582,15 @@
           <button class="close" type="button" data-allowance-cancel aria-label="Close">×</button>
         </div>
         <p id="allowance-who" class="muted"></p>
+        <ul class="permissions">
+          <li>
+            <strong>Casino bets</strong> The casino settles each one at once, and your wallet checks its odds before it
+            signs and its result after.
+          </li>
+          <li id="allowance-developer" class="caution" hidden>
+            <strong>Developer bets</strong> <span id="allowance-developer-text"></span>
+          </li>
+        </ul>
         <div class="label-row">
           <label for="allowance-amount">It may play with up to</label
           ><button id="allowance-take-all" class="text-button" type="button">Take it all back</button>
@@ -605,10 +620,11 @@
           <ul>
             <li>The money stays in your balance. The allowance is the most this game may put at risk.</li>
             <li>It can lose all of it, winnings included, on its bets and payments, and not a wei more.</li>
+            <li>What a round wins joins the allowance once the game has shown how the round ended.</li>
             <li>Leaving the game or closing the tab takes back what is left. Change it any time.</li>
             <li>
-              No game says what it pays back: your wallet works out each bet's odds before it signs, and your bets show
-              what a game really paid.
+              No game says what it pays back: your wallet works out each casino bet's odds before it signs, and your
+              bets show what a game really paid.
             </li>
           </ul>
         </details>

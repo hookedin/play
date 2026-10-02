@@ -374,6 +374,7 @@ label {
   display: flex;
   align-items: center;
   gap: 7px;
+  white-space: nowrap;
   padding: 0 8px;
   color: var(--muted);
   font-size: 12px;
@@ -418,6 +419,71 @@ label {
 .wallet-button:hover .wallet-button-label {
   filter: brightness(1.08);
 }
+/* The open game, by the wallet's name for it, and its allowance beside the wallet. */
+.game-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin-right: 10px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+}
+.game-title .game-icon {
+  flex: none;
+  width: 28px;
+  border-radius: 8px;
+}
+.game-title .game-icon::before {
+  font-size: 13px;
+}
+.game-title strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game-title .handle {
+  white-space: nowrap;
+}
+.game-allowance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: var(--panel);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.game-allowance:hover {
+  background: var(--raised);
+}
+.game-allowance > small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.game-allowance > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+.game-allowance > span small {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.money-control {
+  display: flex;
+}
+.game-allowance:not(.hidden) + .wallet-button {
+  border-radius: 0 10px 10px 0;
+}
 .account-button {
   display: flex;
   align-items: center;
@@ -446,6 +512,7 @@ label {
   font-size: 13px;
 }
 .account-name {
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1156,6 +1223,33 @@ main:has(> #page-play:not(.hidden)) > .banner {
   margin-top: 10px;
   font-size: 12px;
 }
+.permissions {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.permissions li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+}
+.permissions strong {
+  display: block;
+  color: var(--text);
+}
+.permissions .caution {
+  border-color: #6b5327;
+  background: #211b10;
+  color: #f1d9a4;
+}
+.permissions .caution strong {
+  color: var(--caution);
+}
 #allowance-who {
   margin-top: 8px;
   font-size: 12px;
@@ -1707,6 +1801,13 @@ body:has(#page-play:not(.hidden)) .footer {
 }
 
 /* A phone: one row of top bar, the game directly under a one-line strip, everything else stacked. */
+@media (max-width: 1100px) {
+  /* Playing, the game's name and its money come before the brand's word, the publisher and the network. */
+  .topbar:has(.game-title:not(.hidden)) :is(.brand span, .network),
+  .game-title .handle {
+    display: none;
+  }
+}
 @media (max-width: 720px) {
   h1 {
     font-size: 28px;
@@ -1722,8 +1823,18 @@ body:has(#page-play:not(.hidden)) .footer {
   .brand span,
   .topnav,
   .network,
-  .account-name {
+  .account-name,
+  .game-title .handle,
+  .game-allowance > small {
     display: none;
+  }
+  /* Playing, the game's name takes the room the brand leaves. */
+  .brand:has(+ .game-title:not(.hidden)) {
+    margin-right: 0;
+  }
+  .game-title {
+    margin-right: auto;
+    padding-left: 10px;
   }
   .account-button {
     padding: 0 5px;

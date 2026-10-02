@@ -5,17 +5,6 @@ main {
   max-width: 1040px;
   padding: 14px 24px 16px;
 }
-.game-head {
-  margin-bottom: 10px;
-}
-.head-tools {
-  display: flex;
-  gap: 6px;
-}
-.allowance {
-  margin: 0 0 10px;
-  padding: 9px 14px;
-}
 .table {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 290px;
@@ -208,9 +197,6 @@ main {
   }
   .stage.board {
     height: min(58vh, 430px);
-  }
-  .edition {
-    display: none;
   }
   /* Drop and Auto come first under the board, where the thumb is. */
   .panel {

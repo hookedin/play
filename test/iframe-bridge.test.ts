@@ -324,15 +324,30 @@ test('a message relayed by a frame nested inside the game iframe is ignored', as
   bridge.detach();
 });
 
-test('an allowance request carries a suggested amount and nothing else', () => {
+test('an allowance request carries a suggested amount and whether it is for developer bets, and nothing else', () => {
   const ask = (params: any) => validateRequest(request(1, 'game.requestAllowance', params));
   assert.deepEqual(ask({}).params, {});
   assert.equal(ask({ amount: '5' }).params.amount, '5');
+  assert.equal(ask({ amount: '5', developerBets: true }).params.developerBets, true);
   assert.throws(() => ask({ amount: '0' }), /range/);
   assert.throws(() => ask({ amount: 5 }), /wei/);
+  assert.throws(() => ask({ developerBets: 'yes' }), /true or false/);
   // Every word in the wallet's authorization is the wallet's own.
   for (const field of ['reason', 'developer', 'approved', 'autoApprove', 'revision', 'data'])
     assert.throws(() => ask({ [field]: '1' }), /Unexpected game request field/);
+});
+
+test('the allowance is read whole or for a group, and a group ends by its label', () => {
+  const check = (method: string, params: any) => validateRequest(request(1, method, params)).params;
+  assert.deepEqual(check('game.allowance', {}), {});
+  assert.deepEqual(check('game.allowance', { group: 'round-1' }), { group: 'round-1' });
+  assert.deepEqual(check('game.end', { group: 'round-1' }), { group: 'round-1' });
+  assert.throws(() => check('game.end', {}), /group is a label/);
+  for (const method of ['game.allowance', 'game.end']) {
+    assert.throws(() => check(method, { group: '' }), /group is a label/);
+    assert.throws(() => check(method, { group: 'x'.repeat(65) }), /group is a label/);
+    assert.throws(() => check(method, { group: 'a', id: 'b' }), /Unexpected game request field/);
+  }
 });
 
 test('a wallet offers games only the methods it lists', () => {

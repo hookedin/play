@@ -131,13 +131,14 @@ verify is availability and liquidity.
   their fees from the deposit address, where the wallet keeps nothing back
   ([fees and gas](../wallet/closing-and-claims.md#fees-and-gas)). Anyone can send a challenge, a dispute, a
   finalization or a collection for you.
-- **Set each game's allowance.** You choose how much each game may play with, and the wallet holds it to that.
+- **Set each game's allowance.** You choose how much each game may play with, and the wallet holds it to that. A game
+  places developer bets only once you have allowed them too, after a warning that its developer decides what they pay.
 
 ## What a game can and cannot do
 
 A game can:
 
-- ask for casino bets, developer bets and payments, up to the allowance you give it;
+- ask for casino bets and payments up to the allowance you give it, and developer bets once you allow them;
 - lose its whole allowance, winnings included, on bets that pay back little;
 - show you whatever it likes.
 
