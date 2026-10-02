@@ -60,7 +60,7 @@ test('complete stake amounts are readable on phones and tablets, on pages that h
     assert.equal(await frame.locator('h1, #allowance, .game-head').count(), 0, `${game} draws a header of its own`);
     for (const width of [320, 390, 720, 761, 1024]) {
       await page.setViewportSize({ width, height: 900 });
-      for (const value of ['0.000001', '0.123456789012345678', '0.000000000000000001']) {
+      for (const value of ['1', '12345.123456789012', '0.000000000001']) {
         const input = frame.locator('#stake');
         await input.fill(value);
         const fit = await input.evaluate((node: HTMLInputElement) => {
@@ -84,10 +84,10 @@ test('complete stake amounts are readable on phones and tablets, on pages that h
       }
       // Exercise the same controls with long cash-out and win figures, without placing a bet.
       if (game === 'mines')
-        await frame.locator('#play').evaluate(node => (node.textContent = 'Cash out 0.123456789 ETH'));
+        await frame.locator('#play').evaluate(node => (node.textContent = 'Cash out 123,456.789 µETH'));
       if (game === 'samson') {
         await frame.locator('#win-multiple').evaluate(node => (node.textContent = '6912×'));
-        await frame.locator('#win-amount').evaluate(node => (node.textContent = '0.123456789 ETH'));
+        await frame.locator('#win-amount').evaluate(node => (node.textContent = '123,456.789 µETH'));
       }
       for (const selector of game === 'mines' ? ['#play'] : game === 'samson' ? ['.meter-value', '#win-amount'] : []) {
         const visible = await frame

@@ -1,7 +1,7 @@
-import { formatEther } from 'ethers';
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
 import { plain, same } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
+import { formatAmount } from '../sdk/src/wire.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
 interface ActivityEntry {
@@ -51,17 +51,12 @@ export function timeOf(at: string | number, className: string, short = false) {
 }
 /** A share in millionths, as a percentage with four decimals. */
 export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
-/** An exact amount in ETH, a whole one without a trailing `.0`. */
-export const ether = (value: bigint | string | number) => formatEther(value).replace(/\.0$/, '');
-/** An amount in ETH as a list shows it: cut off, never rounded up, at six decimals, without trailing zeros; one too
- * small for that reads `<0.000001`. A bet or an event opened in full has the exact amount. */
-export const shortEth = (value: bigint | string | number) => {
-  const wei = BigInt(value),
-    unit = 10n ** 12n;
-  return wei > 0n && wei < unit ? '<0.000001' : ether(wei - (wei % unit));
-};
-/** A gain or a loss in ETH, with its sign, as a list shows it. */
-export const signedEth = (value: bigint) => `${value < 0n ? '−' : '+'}${shortEth(value < 0n ? -value : value)} ETH`;
+/** Every digit of an amount in µETH, thousands grouped. A list shows `formatAmount`'s, cut off at a gwei; a bet or an
+ * event opened in full has this one. */
+export const exact = (value: bigint | string | number) => formatAmount(value, 12);
+/** A gain or a loss in µETH, with its sign, as a list shows it. */
+export const signedAmount = (value: bigint) =>
+  `${value < 0n ? '−' : '+'}${formatAmount(value < 0n ? -value : value)} µETH`;
 /** JSON as the wallet shows it: a Copy JSON button with its status, above the text. */
 export function jsonBlock(text: string, title: string) {
   const status = h('span', { className: 'activity-copy-status', role: 'status' });
@@ -140,7 +135,7 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
         : bet.collected
           ? 'Payout collected'
           : 'Payout ready',
-    amount: `${shortEth(amount)} ETH`,
+    amount: `${formatAmount(amount)} µETH`,
     amountLabel: !settled
       ? 'Stake with the developer'
       : bet.payout === '0'
@@ -175,7 +170,7 @@ export function receiptSummary(
       )[receipt.kind],
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: 'neutral',
-      amount: `0 ETH`,
+      amount: `0 µETH`,
       amountLabel: 'Balance change',
       description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'transfer', 'lock-in', 'loan'].includes(
         receipt.kind,
@@ -241,7 +236,7 @@ export function receiptSummary(
                   transaction: 'Transaction',
                 } as Record<string, string>
               )[receipt.kind] || receipt.kind;
-  let amount = `${shortEth(settled ? receipt.amount || '0' : '0')} ETH`;
+  let amount = `${formatAmount(settled ? receipt.amount || '0' : '0')} µETH`;
   let amountLabel = !settled
     ? 'No confirmed payment'
     : receipt.kind === 'deposit'
@@ -266,14 +261,14 @@ export function receiptSummary(
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (played) {
-    amount = settled ? signedEth(net) : '—';
+    amount = settled ? signedAmount(net) : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
     if (settled) tone = net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral';
-    description = `Stake ${shortEth(receipt.stake)} ETH · Paid ${shortEth(receipt.payout ?? 0)} ETH${
+    description = `Stake ${formatAmount(receipt.stake)} µETH · Paid ${formatAmount(receipt.payout ?? 0)} µETH${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${shortEth(receipt.maxPayout)} ETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
-    }${receipt.kind === 'casino-bet' ? ` · Balance ${ether(receipt.balance)} ETH` : ''}`;
+        : ` of up to ${formatAmount(receipt.maxPayout)} µETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
+    }${receipt.kind === 'casino-bet' ? ` · Balance ${exact(receipt.balance)} µETH` : ''}`;
   } else if (
     settled &&
     ['withdrawal', 'divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind) &&
@@ -281,30 +276,30 @@ export function receiptSummary(
   )
     tone = 'positive';
   if (receipt.kind === 'collateral' && receipt.collateral)
-    description = `${ether(receipt.collateral)} ETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`;
+    description = `${exact(receipt.collateral)} µETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`;
   if (receipt.kind === 'invest')
-    description = `Bought ${ether(receipt.shares)} shares; you hold ${ether(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${ether(receipt.balance)} ETH`;
+    description = `Bought ${exact(receipt.shares)} shares; you hold ${exact(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'redeem')
-    description = `Sold ${ether(receipt.shares)} shares; you hold ${ether(receipt.holding)}. Your wallet collects the money into your balance.`;
+    description = `Sold ${exact(receipt.shares)} shares; you hold ${exact(receipt.holding)}. Your wallet collects the money into your balance.`;
   if (receipt.kind === 'divest')
-    description = `Paid for redeemed bankroll shares. Balance ${ether(receipt.balance)} ETH`;
+    description = `Paid for redeemed bankroll shares. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'payment')
-    description = `${receipt.details?.group ? "Part of one of this game's rounds, paid into the casino's bankroll: Bets shows the round together." : "A payment this game charged, paid into the casino's bankroll."} Balance ${ether(receipt.balance)} ETH`;
+    description = `${receipt.details?.group ? "Part of one of this game's rounds, paid into the casino's bankroll: Bets shows the round together." : "A payment this game charged, paid into the casino's bankroll."} Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'developer-bet') {
     const open = receipt.payout === undefined;
     status = open ? 'Waiting for the developer' : BigInt(receipt.payout) ? 'Payout collected' : 'Settled · no payout';
-    if (open) description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${ether(receipt.balance)} ETH`;
+    if (open) description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${exact(receipt.balance)} µETH`;
   }
   if (receipt.kind === 'developer-bet-payout')
-    description = `What a developer bet’s developer paid, checked by your wallet and collected into your balance. Balance ${ether(receipt.balance)} ETH`;
+    description = `What a developer bet’s developer paid, checked by your wallet and collected into your balance. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'bank')
-    description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${ether(receipt.balance)} ETH`;
+    description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'withdrawn')
-    description = `Taken from your bank and collected into your balance. Balance ${ether(receipt.balance)} ETH`;
+    description = `Taken from your bank and collected into your balance. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'earnings')
-    description = `Commission your games earned, collected into your balance. Balance ${ether(receipt.balance)} ETH`;
+    description = `Commission your games earned, collected into your balance. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'loan')
-    description = `The network fee your deposit ${receipt.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${ether(receipt.balance)} ETH`;
+    description = `The network fee your deposit ${receipt.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
   // The contract makes a withdrawal, a transfer or a lock-in a claim under its ID once the casino, or anyone, sends it,
   // and pays what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into
   // the account's own channel, and a transfer into the channel of the account it names.
@@ -314,8 +309,8 @@ export function receiptSummary(
       repaid = BigInt(receipt.proof?.base?.loan ?? 0),
       fee = BigInt(receipt.fee ?? 0),
       charges = [
-        fee ? `the casino ${ether(fee)} ETH for sending it` : '',
-        repaid ? `back the ${ether(repaid)} ETH network fee the casino lent it` : '',
+        fee ? `the casino ${exact(fee)} µETH for sending it` : '',
+        repaid ? `back the ${exact(repaid)} µETH network fee the casino lent it` : '',
       ].filter(Boolean);
     status = receipt.paid
       ? into || transfer
@@ -354,9 +349,9 @@ export function receiptSummary(
         : receipt.returned
           ? 'It never became a claim, so the close returned it: it is part of what your closed balance is owed, under Waiting to be paid.'
           : receipt.recorded
-            ? `The contract still owes ${ether(receipt.owed)} ETH of it, paid as the bankroll has the cash${transfer ? ', into that balance' : ': collect it under Waiting to be paid'}.`
+            ? `The contract still owes ${exact(receipt.owed)} µETH of it, paid as the bankroll has the cash${transfer ? ', into that balance' : ': collect it under Waiting to be paid'}.`
             : 'The contract makes it a claim under its ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.',
-      `Balance ${ether(receipt.balance)} ETH`,
+      `Balance ${exact(receipt.balance)} µETH`,
     ]
       .filter(Boolean)
       .join(' ');

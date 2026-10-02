@@ -116,7 +116,7 @@ function render() {
   $('auto').setAttribute('aria-pressed', String(auto > 0));
   $('stat-drops').textContent = String(stats.balls);
   $('stat-best').textContent = stats.best ? times(stats.best) : '—';
-  $('stat-net').textContent = `${stats.net > 0n ? '+' : ''}${HookedIn.formatAmount(stats.net, 9)}`;
+  $('stat-net').textContent = `${stats.net > 0n ? '+' : ''}${HookedIn.formatAmount(stats.net)}`;
   $('stat-net').dataset.sign = stats.net > 0n ? 'up' : stats.net < 0n ? 'down' : '';
 }
 
@@ -152,7 +152,7 @@ function fly(landed: Landed) {
     $('ticker').prepend(chip);
     while ($('ticker').children.length > 9) $('ticker').lastElementChild!.remove();
     message(
-      `${times(hundredths)}: ${HookedIn.formatAmount(payout, 9)} ETH back from a ${HookedIn.formatAmount(landed.stake, 9)} ETH ball.`,
+      `${times(hundredths)}: ${HookedIn.formatAmount(payout)} µETH back from a ${HookedIn.formatAmount(landed.stake)} µETH ball.`,
     );
     render();
   });

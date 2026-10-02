@@ -20,7 +20,7 @@ const round = new RoundClient(HookedIn, setup =>
   createMines({ tiles: 5, mines: 1, cashouts: [120n, 156n, 228n].map(n => (BigInt(setup.stake) * n) / 100n) }),
 );
 await round.restore();
-let state = await round.start({ stake: HookedIn.parseAmount('0.000001') });
+let state = await round.start({ stake: HookedIn.parseAmount('1') });
 state = await round.action('reveal'); // state.actions lists what is legal next
 if (state.actions.includes('cash-out')) state = await round.action('cash-out');
 ```

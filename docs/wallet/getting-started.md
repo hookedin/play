@@ -17,8 +17,12 @@ deposit you [save your key](keys-and-recovery.md#your-key).
 contract still owes you, and three tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw` and **Activity**
 at `/wallet/activity`. **Settings**, in the account menu, opens the same way at `/settings`, with a tab for each thing
 it is for: **Profile** at `/settings` for your name, **Keys** at `/settings/keys`, **Deposits** at
-`/settings/deposits`, **Protection** at `/settings/protection` and **Recovery** at `/settings/recovery`. Each address
+`/settings/deposits`, **Transfer** at `/settings/transfer`, **Protection** at `/settings/protection` and **Recovery** at
+`/settings/recovery`. Each address
 opens its tab, over the library when it is a link. Closing it, or Back, brings the page under it back.
+
+The wallet, its games and hookedin.com count money in **µETH**, millionths of an ETH: 0.01 ETH is 10,000 µETH, and an
+amount is shown cut off at a thousandth of a µETH, a gwei, never rounded, with every digit on hover or in full.
 
 This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
 offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet
@@ -102,7 +106,8 @@ The wallet does not refuse a bet for paying back little: a game can spend its wh
 
 ## Withdraw
 
-On the wallet's **Withdraw** tab, enter an amount or choose **Max**, and the address to pay. The address must be
+On the wallet's **Withdraw** tab, enter an amount in µETH, or in ETH by switching its unit, or choose **Max**, and the
+address to pay; the tab says what the address receives in both units. The address must be
 a valid one other than the zero address, your own deposit address and the casino's contract. Your account signs a
 withdrawal of that amount to that address and the casino signs your balance after it at once: your balance pays it now,
 and you play on with the rest. The contract then pays the address, out of your deposits first, then your
@@ -110,14 +115,17 @@ and you play on with the rest. The contract then pays the address, out of your d
 ([withdraw](closing-and-claims.md#withdraw)). Your balance also pays the casino a fee for sending the withdrawal to the
 contract, which the tab shows, and pays back what the casino lent it: **Max** is your balance less both.
 
-**Put it into that account's HookedIn balance** makes it a transfer instead: the contract puts it into the balance of
-the account at that address, as deposits. That is how you give a friend ETH to play with. The casino declines a
-transfer to an address with no HookedIn balance.
-
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
 much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight
 ([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)); without the casino,
 [close without the casino](closing-and-claims.md#close-without-the-casino).
+
+## Transfer
+
+**Transfer**, in Settings, moves part of your balance into another HookedIn account's balance: enter an amount in µETH or
+choose **Max**, and that account's deposit address. It is a withdrawal the contract puts into the balance of the account
+at that address, as deposits, instead of paying the address, with the same fee and checks; it is how you give a friend
+ETH to play with. The casino declines a transfer to an address with no HookedIn balance.
 
 **Send ETH out of my deposit address**, under **Deposits** in Settings, sends everything held at your deposit address to
 the address you name, less the network fee, and leaves your balance as it is. It is for ETH that stays at the address:

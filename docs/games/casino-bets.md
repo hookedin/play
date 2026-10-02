@@ -65,7 +65,7 @@ async function flip(stake: bigint) {
   return receipt;
 }
 
-const receipt = await flip(BigInt(HookedIn.parseAmount('0.0001')));
+const receipt = await flip(BigInt(HookedIn.parseAmount('100')));
 if (receipt.status === 'settled') show(BigInt(receipt.outcome!) < HEADS ? 'Heads' : 'Tails', receipt.payout);
 else show(`Declined: ${receipt.reason}`); // the balance is unchanged
 await HookedIn.end(receipt.id); // the flip is on the page
@@ -92,7 +92,7 @@ import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { admits } from '@hookedin/play/sdk/admits';
 import { flipBet } from './flip.ts';
 
-const stake = BigInt(HookedIn.parseAmount('0.0001'));
+const stake = BigInt(HookedIn.parseAmount('100'));
 const { virtualBankroll } = await HookedIn.info();
 // Half the virtual bankroll, as the house games use, so that the quote a later reply brings still covers the bet.
 if (!admits(BigInt(virtualBankroll) / 2n, flipBet(stake))) show('The casino cannot back this stake. Lower it.');

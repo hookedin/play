@@ -88,7 +88,7 @@ const info = await HookedIn.info(); // the player's names, the virtual bankroll,
 const { allowance, pending } = await HookedIn.allowance(); // what the game may stake, and whether a bet awaits recovery
 ```
 
-Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('0.001')` is `'1000000000000000'`, and
+Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('1000')`, 1,000 µETH, is `'1000000000000000'`, and
 `formatAmount` reads one back. [`wallet.info`](../reference/bridge.md#walletinfo) is all a game learns of the player:
 their uname, theirs for good, the alias they go by today, the virtual bankroll of the casino's latest quote and a
 recommended stake. The player's address, channel and balances never cross the bridge.

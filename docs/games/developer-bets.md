@@ -37,7 +37,7 @@ HookedIn.onReceipt(receipt => {
 });
 const receipt = await HookedIn.developerBet({
   id,
-  stake: HookedIn.parseAmount('0.001'),
+  stake: HookedIn.parseAmount('1000'),
   group: 'match-812',
   meta: { pick: 'home', odds: 210 },
 });

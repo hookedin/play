@@ -163,7 +163,10 @@ test('every transaction the account sends, a close too, needs its fee at the add
   wallet.channels.channel = {} as any;
   const close = [{ base: { channelId: 'channel' } }];
   state.balance = 60000n * state.maxFee - 1n;
-  await assert.rejects(wallet.sendTransaction('startClose', close), /its fee can be up to .* ETH\. Send that much ETH/);
+  await assert.rejects(
+    wallet.sendTransaction('startClose', close),
+    /its fee can be up to .* µETH\. Send that much ETH/,
+  );
   state.balance += 1n;
   await wallet.sendTransaction('startClose', close);
   assert.deepEqual([state.signed[0].method, wallet.channels.channel.closing], ['startClose', true]);

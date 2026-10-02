@@ -1,11 +1,33 @@
-import { getAddress, parseEther, ZeroAddress } from 'ethers';
-import { ether } from './activity.ts';
+import { formatEther, getAddress, parseUnits, ZeroAddress } from 'ethers';
+import { exactAmount } from '../sdk/src/wire.ts';
+import { exact } from './activity.ts';
+
+/** What an amount being withdrawn is typed in: µETH, as the wallet counts, or ETH, as the wallet it goes to may. */
+export type Unit = 'µETH' | 'ETH';
+const DECIMALS: Record<Unit, number> = { µETH: 12, ETH: 18 };
+/** Wei in `unit`, every digit: grouped for a sentence, or with `typed` as the amount field holds it. */
+export const inUnit = (wei: bigint, unit: Unit, typed = false) =>
+  unit === 'ETH' ? formatEther(wei).replace(/\.0$/, '') : typed ? exactAmount(wei) : exact(wei);
+/** What the player typed in `unit`, as wei: null for anything that is not an amount above zero. */
+export function typedIn(text: string, unit: Unit) {
+  const typed = text.trim(),
+    decimals = DECIMALS[unit];
+  if (!new RegExp(`^(?:\\d+(?:\\.\\d{0,${decimals}})?|\\.\\d{1,${decimals}})$`).test(typed)) return null;
+  try {
+    const wei = parseUnits(typed, decimals);
+    return wei > 0n ? wei : null;
+  } catch {
+    // Numeric overflow is invalid input, just like excess precision.
+    return null;
+  }
+}
 
 export interface WithdrawalInput {
   destination: string;
   ownAddress: string;
   contractAddress?: string;
   amount: string;
+  unit?: Unit;
   maximum: bigint;
   channel: boolean;
 }
@@ -16,8 +38,8 @@ export interface WithdrawalValidation {
   error: string | null;
 }
 
-/** One interpretation of the form for both its preview and its submit handler. */
-export function validateWithdrawal(input: WithdrawalInput): WithdrawalValidation {
+/** One interpretation of a form that sends money for both its preview and its submit handler. */
+export function validateWithdrawal({ unit = 'µETH', ...input }: WithdrawalInput): WithdrawalValidation {
   let to: string | null = null,
     amount: bigint | null = null,
     error: string | null = null;
@@ -35,20 +57,12 @@ export function validateWithdrawal(input: WithdrawalInput): WithdrawalValidation
       : 'Enter the address that should receive your ETH.';
   }
   if (input.channel) {
-    const typed = input.amount.trim();
-    if (/^(?:\d+(?:\.\d{0,18})?|\.\d{1,18})$/.test(typed)) {
-      try {
-        const parsed = parseEther(typed);
-        if (parsed > 0n) amount = parsed;
-      } catch {
-        // Numeric overflow is invalid input, just like excess precision.
-      }
-    }
+    amount = typedIn(input.amount, unit);
     if (amount === null)
-      error ??= typed
-        ? 'Enter an ETH amount above zero, with at most 18 decimal places.'
+      error ??= input.amount.trim()
+        ? `Enter an amount in ${unit} above zero, with at most ${DECIMALS[unit]} decimal places.`
         : 'Enter an amount or choose Max.';
-    else if (amount > input.maximum) error ??= `At most ${ether(input.maximum)} ETH can be withdrawn.`;
+    else if (amount > input.maximum) error ??= `At most ${inUnit(input.maximum, unit)} ${unit} can be withdrawn.`;
   }
   if (input.maximum <= 0n)
     error ??= input.channel

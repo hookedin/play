@@ -13,7 +13,7 @@ what the wallet checks and answers.
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
-const stake = HookedIn.parseAmount('0.000001'); // '1000000000000' wei
+const stake = HookedIn.parseAmount('1'); // 1 µETH, '1000000000000' wei
 const answer = await HookedIn.requestAllowance({ amount: stake });
 if (answer.allowed) {
   const id = crypto.randomUUID(); // save it before sending: a lost reply is recovered by this id
@@ -116,24 +116,26 @@ HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:3byt9
 
 #### `parseAmount`
 
-What the player typed, in ETH, as whole wei in a decimal string: digits with at most 18 places after the point, spaces
-trimmed. It throws an `Error` whose message is for the player, `Enter a positive stake with up to 18 decimal places.`
-or, for zero, `Your stake must be greater than zero.`
+What the player typed, in µETH, a millionth of an ETH, as whole wei in a decimal string: digits with at most 12 places
+after the point, spaces trimmed. It throws an `Error` whose message is for the player,
+`Enter an amount in µETH, with up to 12 decimal places.` or, for zero, `Enter an amount greater than zero.`
 
 #### `formatAmount`
 
-Wei in ETH as the player reads them, truncated (never rounded) to `places` decimal places, 6 by default, with trailing
-zeros dropped. A positive amount that truncates to nothing reads `<0.000001`, a negative one keeps its sign, and a
-value `BigInt` cannot read returns `—`.
+Wei in µETH as the player reads them, as the wallet shows every amount: thousands grouped, truncated (never rounded) to
+`places` decimal places, 3 by default, a gwei, with trailing zeros dropped. A positive amount that truncates to nothing
+reads `<0.001`, a negative one keeps its sign, and a value `BigInt` cannot read returns `—`. Write the unit after it,
+`µETH`.
 
 ```ts
-HookedIn.formatAmount('1500000000000000000'); // '1.5'
-HookedIn.formatAmount('1', 2); // '<0.01'
+HookedIn.formatAmount('1234567891999999999999'); // '1,234,567,891.999'
+HookedIn.formatAmount('1'); // '<0.001'
 ```
 
 #### `exactAmount`
 
-Every digit of an amount, `formatAmount` to 18 places: what belongs in a field the player edits.
+Every digit of an amount in µETH, `formatAmount` to 12 places without grouping: what belongs in a field the player
+edits.
 
 #### `initializeGame`
 

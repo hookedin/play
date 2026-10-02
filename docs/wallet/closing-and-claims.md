@@ -92,7 +92,7 @@ not sent yet offers **Send it now** in Activity once every withdrawal you made b
 withdrawal can be sent until its channel's close is finished; one nobody sent by then comes back to you with the close,
 not to its address: what your deposits and collateral cover as its protected amount, and the rest as winnings.
 
-A [transfer](getting-started.md#withdraw) is a withdrawal into another account's balance, its `recipient` being that
+A [transfer](getting-started.md#transfer) is a withdrawal into another account's balance, its `recipient` being that
 account: the contract records it the same way and pays it into that account's current channel as deposits, and what
 stays owed of it is that account's claim. The casino declines a transfer to an address it knows no balance for: _That
 address has no HookedIn balance to transfer into_.
@@ -202,7 +202,7 @@ address.
 ## Fees and gas
 
 Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account.
-The wallet caps each at 2,000,000 gas, 200 gwei per gas and 0.05 ETH in total fees, and stops before signing when the
+The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 µETH in total fees, and stops before signing when the
 network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals, transfers and lock-ins
 to the contract and pays their gas, and each pays the casino a fee for it out of your balance: 150,000 gas, about what
 sending one costs, at the network's gas price

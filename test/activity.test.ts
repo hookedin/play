@@ -38,7 +38,7 @@ test('a developer bet shows its result apart from its collection, and a zero pay
   assert.deepEqual([won.status, won.title], ['Payout collected', 'Developer bet won']);
 });
 
-test('bet summaries show the payout against the stake, cut to six decimals, never rounded up', () => {
+test('bet summaries show the payout against the stake in µETH, cut at a gwei, never rounded up', () => {
   const receipt = {
     kind: 'casino-bet',
     status: 'signed',
@@ -49,26 +49,26 @@ test('bet summaries show the payout against the stake, cut to six decimals, neve
     balance: '999999999999999999',
   };
   const win = receiptSummary(receipt, contract);
-  assert.equal(win.amount, '+0.001234 ETH');
+  assert.equal(win.amount, '+1,234.567 µETH');
   assert.equal(win.status, 'Signed off-chain');
-  assert.match(win.description!, /Balance 0.999999999999999999 ETH/);
+  assert.match(win.description!, /Balance 999,999\.999999999999 µETH/);
   assert.equal(win.amountLabel, 'Net game result');
   assert.equal(win.title, 'Casino bet won');
-  assert.match(win.description!, /Paid 0.002234 ETH of up to 0.005 ETH · RTP 97.0000%/);
+  assert.match(win.description!, /Paid 2,234\.567 µETH of up to 5,000 µETH · RTP 97.0000%/);
   const loss = receiptSummary({ ...receipt, payout: '0', stake: '1' }, contract);
-  assert.equal(loss.amount, '−<0.000001 ETH');
+  assert.equal(loss.amount, '−<0.001 µETH');
   assert.equal(loss.tone, 'negative');
   // A prize below the stake is a partial loss, and a prize equal to it moves nothing.
   const partial = receiptSummary({ ...receipt, payout: '400000000000000' }, contract);
-  assert.deepEqual([partial.title, partial.amount, partial.tone], ['Casino bet lost', '−0.0006 ETH', 'negative']);
+  assert.deepEqual([partial.title, partial.amount, partial.tone], ['Casino bet lost', '−600 µETH', 'negative']);
   const even = receiptSummary({ ...receipt, payout: receipt.stake }, contract);
-  assert.deepEqual([even.title, even.amount, even.tone], ['Casino bet broke even', '+0 ETH', 'neutral']);
+  assert.deepEqual([even.title, even.amount, even.tone], ['Casino bet broke even', '+0 µETH', 'neutral']);
 });
 
 test('reorged, reverted, replaced and unknown receipts never advertise a confirmed payment', () => {
   for (const status of ['orphaned', 'reverted', 'replaced', 'pending', undefined]) {
     const summary = receiptSummary({ kind: 'withdrawal', amount: '1000000000000000000', status }, contract);
-    assert.equal(summary.amount, '0 ETH');
+    assert.equal(summary.amount, '0 µETH');
     assert.equal(summary.amountLabel, 'No confirmed payment');
     assert.notEqual(summary.tone, 'positive');
     if (status === 'orphaned') assert.match(summary.notice!, /no longer confirmed/);
@@ -77,12 +77,12 @@ test('reorged, reverted, replaced and unknown receipts never advertise a confirm
     { status: 'rejected', kind: 'casino-bet', amount: '100', reason: 'Capacity too low' },
     contract,
   );
-  assert.deepEqual([rejected.status, rejected.amount, rejected.notice], ['Nothing paid', '0 ETH', 'Capacity too low']);
+  assert.deepEqual([rejected.status, rejected.amount, rejected.notice], ['Nothing paid', '0 µETH', 'Capacity too low']);
 });
 
 test('closures and actual collections remain distinct from off-chain payments', () => {
   const closure = receiptSummary({ kind: 'closure', amount: '0', status: 'confirmed' }, contract);
-  assert.equal(closure.amount, '0 ETH');
+  assert.equal(closure.amount, '0 µETH');
   assert.match(closure.notice!, /Collect it under Wallet → Waiting to be paid/);
   assert.equal(
     receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }, contract).amountLabel,
@@ -96,7 +96,7 @@ test('closures and actual collections remain distinct from off-chain payments', 
   assert.equal(payment.status, 'Signed off-chain');
   assert.match(
     payment.description!,
-    /A payment this game charged, paid into the casino's bankroll\. Balance 0\.000000000000000456 ETH/,
+    /A payment this game charged, paid into the casino's bankroll\. Balance 0\.000000000456 µETH/,
   );
 });
 
@@ -118,7 +118,7 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   };
   const paid = receiptSummary({ ...sent, recorded: true, paid: true, owed: '0' }, contract);
   assert.deepEqual([paid.title, paid.status, paid.amountLabel], ['Withdrawn', 'Paid on-chain', 'Paid out']);
-  assert.match(paid.description!, /^From your balance to 0x3333.*\. The contract has paid it\. Balance 0 ETH$/);
+  assert.match(paid.description!, /^From your balance to 0x3333.*\. The contract has paid it\. Balance 0 µETH$/);
   const lockIn = { ...sent, kind: 'lock-in', to: contract },
     waiting = receiptSummary(lockIn, contract),
     locked = receiptSummary({ ...lockIn, recorded: true, paid: true, owed: '0' }, contract);
@@ -142,7 +142,7 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   const repaying = receiptSummary({ ...sent, fee: '2', proof: { base: { loan: '5' } } }, contract);
   assert.match(
     repaying.description!,
-    /Your balance paid the casino .* ETH for sending it and paid back the .* ETH network fee the casino lent it\./,
+    /Your balance paid the casino .* µETH for sending it and paid back the .* µETH network fee the casino lent it\./,
   );
 });
 

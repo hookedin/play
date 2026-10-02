@@ -74,7 +74,7 @@ let state = await round.restore().catch(error => {
 render(state);
 
 async function play(action: string) {
-  if (!state || state.terminal) state = await round.start({ stake: HookedIn.parseAmount('0.0001') });
+  if (!state || state.terminal) state = await round.start({ stake: HookedIn.parseAmount('100') });
   state = await round.action(action); // 'flip' or 'take'
   render(state); // state.nodeId, state.cash, state.actions, state.events
   if (state.terminal) await HookedIn.end(state.id); // the round is over on the page

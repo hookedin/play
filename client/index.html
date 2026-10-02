@@ -200,9 +200,9 @@
                 type="text"
                 inputmode="decimal"
                 autocomplete="off"
-                placeholder="0.01"
+                placeholder="10000"
                 aria-label="Amount"
-              /><span>ETH</span>
+              /><span>µETH</span>
             </div>
             <button id="bank-deposit" class="button" type="button">Put in</button
             ><button id="bank-withdraw" class="button" type="button">Take out</button>
@@ -223,7 +223,7 @@
         <dl class="figures">
           <div>
             <dt>Your shares are worth</dt>
-            <dd><span id="fund-value">—</span> ETH</dd>
+            <dd><span id="fund-value">—</span> µETH</dd>
           </div>
           <div>
             <dt>Share price</dt>
@@ -231,7 +231,7 @@
           </div>
           <div>
             <dt>Bankroll</dt>
-            <dd><span id="fund-equity">—</span> ETH</dd>
+            <dd><span id="fund-equity">—</span> µETH</dd>
           </div>
           <div>
             <dt>The house's own part</dt>
@@ -243,7 +243,7 @@
           <section class="card">
             <label for="invest-amount">Buy shares with</label>
             <div class="amount-input">
-              <input id="invest-amount" type="text" inputmode="decimal" value="0.01" /><span>ETH</span>
+              <input id="invest-amount" type="text" inputmode="decimal" value="10000" /><span>µETH</span>
             </div>
             <button id="invest" class="button full" type="button" disabled>Buy shares</button>
           </section>
@@ -252,7 +252,9 @@
               <label for="divest-amount">Sell shares worth</label
               ><button id="divest-all" class="text-button" type="button" disabled>All</button>
             </div>
-            <div class="amount-input"><input id="divest-amount" type="text" inputmode="decimal" /><span>ETH</span></div>
+            <div class="amount-input">
+              <input id="divest-amount" type="text" inputmode="decimal" /><span>µETH</span>
+            </div>
             <button id="divest" class="button full" type="button" disabled>Sell shares</button>
           </section>
         </div>
@@ -313,7 +315,8 @@
         <button class="close" type="button" data-close aria-label="Close">×</button>
       </div>
       <div class="money-card balance sheet-balance" data-section="wallet">
-        <span class="label">Balance</span><strong><span id="balance-amount">—</span> <small>ETH</small></strong>
+        <span class="label">Balance</span
+        ><strong><span id="balance-amount">—</span> <small title="A millionth of an ETH">µETH</small></strong>
         <span id="balance-note" class="muted">What games play with.</span>
         <span id="developer-earnings" class="muted hidden"></span>
       </div>
@@ -335,6 +338,7 @@
         <button role="tab" type="button" data-tab="profile" aria-selected="false">Profile</button
         ><button role="tab" type="button" data-tab="keys" aria-selected="false">Keys</button
         ><button role="tab" type="button" data-tab="deposits" aria-selected="false">Deposits</button
+        ><button role="tab" type="button" data-tab="transfer" aria-selected="false">Transfer</button
         ><button role="tab" type="button" data-tab="protection" aria-selected="false">Protection</button
         ><button role="tab" type="button" data-tab="recovery" aria-selected="false">Recovery</button>
       </div>
@@ -374,9 +378,10 @@
           <button id="estimate-deposit-fee" class="text-button" type="button">Estimate network fee</button>
         </div>
         <p class="help">
-          Only send test ETH on the named network. Other assets or networks are not supported. Deposits require network
-          confirmations and a second transaction to add ETH to your balance, whose fee the casino lends you when it adds
-          everything at your address.
+          Only send test ETH on the named network. Other assets or networks are not supported. Your balance counts it in
+          µETH, millionths of an ETH: 0.01 ETH is 10,000 µETH. Deposits require network confirmations and a second
+          transaction to add ETH to your balance, whose fee the casino lends you when it adds everything at your
+          address.
         </p>
         <p class="help">
           Need help with a deposit or withdrawal? <a href="mailto:support@hookedin.com">Contact support</a>. Never send
@@ -384,22 +389,24 @@
         </p>
       </section>
       <section class="tab-panel" data-panel="withdraw" hidden>
-        <div id="withdraw-form">
-          <label for="withdraw-amount">Amount (ETH)</label>
-          <input
-            id="withdraw-amount"
-            type="text"
-            inputmode="decimal"
-            autocomplete="off"
-            placeholder="Enter an amount"
-            spellcheck="false"
-          />
+        <div id="withdraw-form" class="send-form">
+          <label for="withdraw-amount">Amount</label>
+          <div class="amount-input">
+            <input
+              id="withdraw-amount"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="Enter an amount"
+              spellcheck="false"
+            /><select id="withdraw-unit" aria-label="Unit">
+              <option>µETH</option>
+              <option>ETH</option>
+            </select>
+          </div>
           <button id="withdraw-max" class="text-button" type="button">Max</button>
           <label for="withdraw-to">To</label>
           <input id="withdraw-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
-          <label class="check"
-            ><input id="withdraw-into" type="checkbox" /> Put it into that account's HookedIn balance</label
-          >
           <button id="withdraw" class="button primary full" type="button">Withdraw</button>
         </div>
         <p id="withdraw-help" class="help"></p>
@@ -527,6 +534,32 @@
           </details>
         </section>
       </section>
+      <section class="tab-panel" data-panel="transfer" hidden>
+        <section class="setting">
+          <p class="muted">
+            Move part of your balance into another HookedIn account's balance, which the contract puts it into as that
+            account's deposits. It is theirs from then on. To send ETH to an address of your own, use Withdraw.
+          </p>
+          <div id="transfer-form" class="send-form">
+            <label for="transfer-amount">Amount</label>
+            <div class="amount-input">
+              <input
+                id="transfer-amount"
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="Enter an amount"
+                spellcheck="false"
+              /><span>µETH</span>
+            </div>
+            <button id="transfer-max" class="text-button" type="button">Max</button>
+            <label for="transfer-to">The account's deposit address</label>
+            <input id="transfer-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
+            <button id="transfer" class="button primary full" type="button">Transfer</button>
+          </div>
+          <p id="transfer-help" class="help"></p>
+        </section>
+      </section>
       <section class="tab-panel" data-panel="protection" hidden>
         <section id="collateral" class="setting">
           <p class="muted">
@@ -537,15 +570,15 @@
           <dl class="figures">
             <div>
               <dt>Your deposits</dt>
-              <dd><span id="held-deposits">—</span> ETH</dd>
+              <dd><span id="held-deposits">—</span> µETH</dd>
             </div>
             <div>
               <dt>Collateral</dt>
-              <dd><span id="collateral-amount">—</span> ETH</dd>
+              <dd><span id="collateral-amount">—</span> µETH</dd>
             </div>
             <div>
               <dt>Protected</dt>
-              <dd><span id="protected-amount">—</span> ETH</dd>
+              <dd><span id="protected-amount">—</span> µETH</dd>
             </div>
             <div>
               <dt>Collateral costs</dt>
@@ -560,9 +593,9 @@
                 type="text"
                 inputmode="decimal"
                 autocomplete="off"
-                placeholder="0.01"
+                placeholder="10000"
                 aria-label="Collateral to buy"
-              /><span>ETH</span>
+              /><span>µETH</span>
             </div>
             <button id="buy-collateral" class="button" type="button">Buy collateral</button>
           </div>
@@ -619,7 +652,7 @@
         </div>
         <div class="amount-input">
           <input id="allowance-amount" inputmode="decimal" autocomplete="off" aria-describedby="allowance-help" /><span
-            >ETH</span
+            >µETH</span
           >
         </div>
         <input

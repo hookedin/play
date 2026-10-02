@@ -297,6 +297,20 @@ label {
   font-size: 12px;
   font-weight: 600;
 }
+/* A unit the player chooses, in place of the one an amount is always in. */
+.amount-input select {
+  flex: none;
+  width: 6.5em;
+  padding-right: 28px;
+  padding-left: 10px;
+  border: 0;
+  background-color: transparent;
+  background-position: right 12px center;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
 .help {
   min-height: 20px;
   margin: 10px 0 14px;
@@ -1207,7 +1221,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
   font-size: 12px;
   line-height: 1.5;
 }
-#withdraw-form {
+.send-form {
   display: contents;
 }
 .claims {

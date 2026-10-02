@@ -216,6 +216,6 @@ A page of one game's developer bets, open or settled, as its developer reads the
 
 ### `POST /api/faucet`
 
-Sends 2 ETH on a local Anvil chain to `address`, one payment at a time, for the wallet's demo setup, and answers
+Sends 2,000,000 µETH on a local Anvil chain to `address`, one payment at a time, for the wallet's demo setup, and answers
 `{txHash, amount}`. The route exists only where `GET /api/config` reports `isLocalDevelopment`; elsewhere it answers
 `404` `not-found`. A request while another is being paid is `refused`.

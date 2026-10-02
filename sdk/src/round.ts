@@ -231,7 +231,7 @@ export class RoundClient {
     // Pricing fails when the casino cannot cover the round's payouts; say so in the player's terms.
     const capacity = () =>
       new Error(
-        `The casino can only back about ${formatAmount(bankrollFloor)} ETH of payouts right now. Lower your stake and try again.`,
+        `The casino can only back about ${formatAmount(bankrollFloor)} µETH of payouts right now. Lower your stake and try again.`,
       );
     if (!reusable)
       try {

@@ -69,7 +69,7 @@ let saved: Saved = { applied: null, shown: null, bonus: null },
 
 const persist = () => localStorage.setItem(storageKey, JSON.stringify(saved));
 const mode = (): Mode => (saved.bonus ? 'bonus' : 'base');
-const money = (stakes: number, stake: string) => `${HookedIn.formatAmount(BigInt(stake) * BigInt(stakes), 9)} ETH`;
+const money = (stakes: number, stake: string) => `${HookedIn.formatAmount(BigInt(stake) * BigInt(stakes))} µETH`;
 function message(value: string, error = false) {
   $('status').textContent = value;
   $('status').dataset.error = String(error);

@@ -46,7 +46,7 @@ function odds() {
   slider.setAttribute('aria-valuetext', `${percent(bps)}%`);
   // Truncated, never rounded up: the profit below is the exact figure.
   $('multiplier').textContent = (Math.floor(99000000 / bps) / 10000).toFixed(4);
-  $('profit').textContent = amount === null ? '–' : HookedIn.formatAmount(winPayout(amount, bps) - amount, 9);
+  $('profit').textContent = amount === null ? '–' : HookedIn.formatAmount(winPayout(amount, bps) - amount);
   if (!shown) $('result-note').textContent = `Roll under ${percent(bps)} to win`;
 }
 function render() {
@@ -78,7 +78,7 @@ function show(state: RoundState) {
     net = BigInt(state.cash) - BigInt(state.contributed);
   $('roll').textContent = value.toFixed(2);
   $('roll').dataset.won = String(won);
-  $('result-note').textContent = `${won ? '+' : '−'}${HookedIn.formatAmount(won ? net : -net, 9)} ETH`;
+  $('result-note').textContent = `${won ? '+' : '−'}${HookedIn.formatAmount(won ? net : -net)} µETH`;
   $('die').classList.toggle('lost', !won);
   const pin = $('pin');
   pin.hidden = false;

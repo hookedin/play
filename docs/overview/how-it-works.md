@@ -113,13 +113,13 @@ A coin flip that pays 1.96 times the stake:
 
 | Term            | Value                                              |
 | --------------- | -------------------------------------------------- |
-| Stake           | 0.001 ETH (`1000000000000000` wei)                 |
+| Stake           | 1,000 µETH (`1000000000000000` wei)                |
 | Chance          | 2^63 (`9223372036854775808`) of 2^64 outcomes: 50% |
-| Prize           | 0.00196 ETH (`1960000000000000` wei)               |
-| Expected payout | 0.00098 ETH                                        |
+| Prize           | 1,960 µETH (`1960000000000000` wei)                |
+| Expected payout | 980 µETH                                           |
 | Return          | 98.0000% of the stake                              |
 
-If the outcome is below 2^63 the balance moves by −0.001 + 0.00196 = +0.00096 ETH; otherwise by −0.001 ETH. The wallet
+If the outcome is below 2^63 the balance moves by −1,000 + 1,960 = +960 µETH; otherwise by −1,000 µETH. The wallet
 works out the return of every casino bet from its chance and prize before signing it, and keeps it on the receipt
 ([measured return](../wallet/bets-and-receipts.md#measured-return)).
 

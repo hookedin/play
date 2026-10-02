@@ -14,11 +14,14 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
-    // Amounts are ETH, counted in wei.
-    assert.equal(HookedIn.parseAmount('1.5'), '1500000000000000000');
-    assert.equal(HookedIn.formatAmount('1500000000000000000'), '1.5');
-    assert.equal(HookedIn.formatAmount('1', 2), '<0.01');
-    assert.throws(() => HookedIn.parseAmount('0.0000000000000000001'), /18 decimal places/);
+    // Amounts are µETH, counted in wei: shown grouped and cut off at a gwei, typed with every digit.
+    assert.equal(HookedIn.parseAmount('1.5'), '1500000000000');
+    assert.equal(HookedIn.formatAmount('1234567891999999999999'), '1,234,567,891.999');
+    assert.equal(HookedIn.formatAmount('-1500000000000'), '-1.5');
+    assert.equal(HookedIn.formatAmount('1'), '<0.001');
+    assert.equal(HookedIn.exactAmount('1234567891999999999999'), '1234567891.999999999999');
+    assert.throws(() => HookedIn.parseAmount('0.0000000000001'), /12 decimal places/);
+    assert.throws(() => HookedIn.parseAmount('0'), /greater than zero/);
     // A refusal carries a code the game can act on.
     const refused = HookedIn.call('game.casinoBet');
     deliver(parent, {

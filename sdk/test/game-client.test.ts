@@ -587,7 +587,7 @@ test('a stake the casino cannot back fails with a plain capacity message, not a 
   const round = new RoundClient(bridge, coin({ payout: stake => (stake * 19n) / 10n }), undefined, {
     store: memoryStore(),
   });
-  await assert.rejects(round.start({ stake: '5000000000000000' }), /back about 0\.0025 ETH of payouts/);
+  await assert.rejects(round.start({ stake: '5000000000000000' }), /back about 2,500 µETH of payouts/);
   await assert.rejects(round.start({ stake: '5000000000000000' }), error => !/initialCash/.test(String(error)));
   assert.equal((await round.start({ stake: '1000000000000' })).terminal, false);
 });
