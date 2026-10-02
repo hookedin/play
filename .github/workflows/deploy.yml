@@ -1,20 +1,25 @@
 # Every push tests everything: the contract, the wallet, the SDK and every game. A push to main is the release: it
-# publishes dist/ as the Worker named in wrangler.jsonc, and each games/<id> as the Worker named in its own.
+# publishes dist/ as the Worker named in wrangler.jsonc, and each games/<id> as the Worker named in its own, then
+# releases everything built on play, each on play's newest main: the casino, the site and the four game repositories.
 # Settings (repository → Settings → Secrets and variables → Actions):
 #   secret   CLOUDFLARE_API_TOKEN    a Cloudflare API token made from the "Edit Cloudflare Workers" template
 #   variable CLOUDFLARE_ACCOUNT_ID   the Cloudflare account ID
+#   secret   RELEASE_TOKEN           a fine-grained token with Actions read and write on those six repositories
 # Only main publishes: every other branch stops after the tests.
-# Without the token even main stops there; it just does not publish.
+# Without CLOUDFLARE_API_TOKEN main does not publish, and without RELEASE_TOKEN it does not release the rest.
 name: Deploy
 on: [push, workflow_dispatch]
+# One release at a time: a later push waits for the one before it, so they publish in order.
+concurrency: deploy-${{ github.ref }}
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      # Whether the token is set, not the token: only the step that publishes is given that.
+      # Whether the tokens are set, not the tokens: only the step that uses one is given it.
       PUBLISH: ${{ github.ref == 'refs/heads/main' && secrets.CLOUDFLARE_API_TOKEN != '' }}
+      RELEASE: ${{ github.ref == 'refs/heads/main' && secrets.RELEASE_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -37,3 +42,12 @@ jobs:
         run: |
           npx wrangler deploy
           for game in games/*/; do (cd "$game" && npx wrangler deploy); done
+      - name: Release everything built on play
+        if: env.RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          for workflow in caserver/release.yml website/deploy.yml game-roulette/deploy.yml game-crash/deploy.yml \
+            game-blackjack/deploy.yml game-template/deploy.yml; do
+            gh workflow run "${workflow#*/}" --repo "hookedin/${workflow%%/*}" --ref main
+          done

@@ -19,9 +19,9 @@ A game depends on play's `main` branch:
 }
 ```
 
-`package-lock.json` records the exact commit, so an install is reproducible, and `npm update @hookedin/play` moves the
-game to the latest one; commit the lockfile, and the push deploys it. There are no versions and no tags: a push to
-play's `main` is the release.
+The [template](https://github.com/hookedin/game-template)'s workflow runs `npm update @hookedin/play` before it tests
+and builds, so every deploy takes play's newest commit, and the lockfile is only where a local install starts. There are
+no versions and no tags: a push to play's `main` is the release.
 
 - Node 24.4 or later.
 - The package ships raw `.ts` files, with no compiled JavaScript and no declaration files.
