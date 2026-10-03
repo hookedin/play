@@ -381,7 +381,7 @@ without that address's signature: the casino derives unames with a key it keeps 
 
 Takes an alias for the channel's player, `{alias}`, or with `null` gives it up; the player is then shown by their uname
 again. Taking one needs an open channel. [Your name](../wallet/getting-started.md#your-name) gives the rules.
-`invalid` and `reserved` answer an alias those rules do not allow, `not-funded` a channel that is not open, and `taken`
+`invalid` and `reserved` answer an alias those rules do not allow, `channel-closed` a channel that is closing or closed, and `taken`
 an alias another player holds.
 
 ### `POST /api/channels/:id/games`
@@ -391,5 +391,5 @@ it earns the game's commission and settles its developer bets, and the game's ke
 [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with another URL moves the
 game and keeps its key. Publishing needs an open channel; taking a game down, with a `null` `url`, works from any
 channel. [The game's URL](../games/publishing.md#the-games-url) gives the rules for `name` and `url`.
-`invalid` answers a name or URL those rules do not allow, `not-funded` a channel that is not open, and `too-many` a
+`invalid` answers a name or URL those rules do not allow, `channel-closed` a channel that is closing or closed, and `too-many` a
 profile that already publishes 100 games.

@@ -122,7 +122,7 @@ export class GameSessions extends ChannelClient {
    * asked for once the account plays. Their address, their channel and their balances are none of a game's business. */
   async gameInfo(this: CasinoWallet) {
     this.requireGame();
-    const quote = this.funded ? await this.ownQuote().catch(() => null) : null;
+    const quote = this.playable ? await this.ownQuote().catch(() => null) : null;
     return {
       uname: this.uname,
       alias: this.alias,

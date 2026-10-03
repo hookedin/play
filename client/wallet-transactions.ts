@@ -211,7 +211,7 @@ export class WalletTransactions {
    * it adds anything to the balance. Says whether it is bought. */
   async buyCollateral(this: CasinoWallet, amount: bigint) {
     const c = this.channel;
-    if (!this.funded || !c) throw new Error('Open a balance before buying collateral.');
+    if (!this.playable || !c) throw new Error('Open a balance before buying collateral.');
     if (this.recoveryOnly || this.config.collateralRate == null)
       throw new Error('The casino offers no collateral now.');
     const { offer } = await this.api(`/api/channels/${c.state.channelId}/collateral`, { amount: String(amount) });
@@ -235,7 +235,7 @@ export class WalletTransactions {
         const offer = this.buying;
         if (!offer) return false;
         if (
-          !this.funded ||
+          !this.playable ||
           offer.message.channelId !== this.channel!.state.channelId ||
           // Sent this late, it could expire before a block takes it.
           BigInt(offer.message.expiresAt) < BigInt(Math.floor(Date.now() / 1000) + 120)
@@ -314,7 +314,7 @@ export class WalletTransactions {
       return inbound(pending.kind)
         ? this.borrow(pending.kind, pending.request.amount, pending.details.id, pending.operationId)
         : null;
-    if (!this.funded || !c || !c.registered) return null;
+    if (!this.playable || !c || !c.registered) return null;
     const waiting = BigInt(c.onchain.deposited) - BigInt(c.state.deposited);
     // Named for the state it follows, so each take-in has an ID of its own.
     if (waiting > 0n)

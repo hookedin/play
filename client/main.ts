@@ -346,7 +346,7 @@ async function refreshFund() {
 }
 function renderFund() {
   const f = fundStatus,
-    open = wallet.funded && !wallet.recoveryOnly,
+    open = wallet.playable && !wallet.recoveryOnly,
     shares = BigInt(wallet.fund?.shares || 0);
   $('fund-value').textContent = f ? formatAmount(f.value, 0) : '—';
   $('fund-equity').textContent = f ? formatAmount(f.equity, 0) : '—';
@@ -446,12 +446,12 @@ const openGame = (target: GameRoute, push = false) =>
 /** The top bar: the open game, by the wallet's name for it, and its allowance, which takes the balance's place once
  * it is set, so the bar shows one amount. What the game's groups have won and it has not shown yet is in neither. */
 function renderGameAccount() {
-  const funded = wallet.funded,
+  const playable = wallet.playable,
     game = active ? wallet.game : null,
     allowance = BigInt(game?.allowance ?? 0),
     balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay();
   $('game-title').classList.toggle('hidden', !game);
-  $('game-allowance').classList.toggle('hidden', !game || !funded);
+  $('game-allowance').classList.toggle('hidden', !game || !playable);
   // Balances read in whole µETH, cut off, with every digit on hover.
   $('game-allowance-amount').replaceChildren(
     ...(allowance ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'µETH')] : ['Set']),
@@ -462,9 +462,9 @@ function renderGameAccount() {
     h('small', { title: 'A millionth of an ETH' }, 'µETH'),
   );
   $('wallet-button-amount').title = `${exact(balance)} µETH`;
-  $('wallet-button-amount').classList.toggle('hidden', !funded || allowance > 0n);
-  $('wallet-button-label').textContent = funded && balance > 0n ? 'Wallet' : 'Deposit';
-  $('hero-deposit').classList.toggle('hidden', funded || !wallet.address);
+  $('wallet-button-amount').classList.toggle('hidden', !playable || allowance > 0n);
+  $('wallet-button-label').textContent = playable && balance > 0n ? 'Wallet' : 'Deposit';
+  $('hero-deposit').classList.toggle('hidden', playable || !wallet.address);
   if (!active || !game) return;
   // A game opened before a channel adopts the first one; a game bound to a channel closes with it.
   if (active.channelId === null && wallet.channelId) active.channelId = wallet.channelId;
@@ -844,12 +844,12 @@ function renderCollateral() {
     .filter(Boolean)
     .join(' ');
   const button = $<HTMLButtonElement>('buy-collateral');
-  button.disabled = uiBusy || wallet.busy || !wallet.funded || rate === null || !amount || Boolean(buying);
+  button.disabled = uiBusy || wallet.busy || !wallet.playable || rate === null || !amount || Boolean(buying);
   button.textContent =
     amount && rate !== null ? `Buy for ${formatAmount(collateralPrice(amount, rate))} µETH` : 'Buy collateral';
   $('collateral-help').textContent = buying
     ? `Send ${formatAmount(BigInt(buying.price) + 2n * wallet.depositFee)} µETH or more to your deposit address by ${new Date(Number(buying.expiresAt) * 1000).toLocaleTimeString()}, the price and its network fee: the wallet buys ${formatAmount(buying.amount)} µETH of collateral with it before it adds anything to your balance.`
-    : !wallet.funded
+    : !wallet.playable
       ? 'Deposit to open a balance, then buy collateral for it.'
       : rate === null
         ? 'The casino offers no collateral right now.'
@@ -1389,7 +1389,7 @@ let shownAccount: string | null = null;
 /** The account's own names, in the top bar, its menu and Settings, and the games it publishes. */
 function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
-    open = wallet.funded && !wallet.recoveryOnly,
+    open = wallet.playable && !wallet.recoveryOnly,
     // A name is the account's from the start; its public page is there once the casino has met it, at its first deposit.
     page = name && wallet.profile ? `/${name}` : null;
   $('account-name').textContent = name ?? 'Account';
@@ -1407,7 +1407,7 @@ function renderProfile() {
   else $('wallet-name-link').removeAttribute('href');
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
-    $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.funded || Boolean(wallet.pending);
+    $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
   $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !open;
   $('clear-alias').classList.toggle('hidden', !wallet.alias);
   $('alias-note').textContent = !open

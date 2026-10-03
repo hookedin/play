@@ -460,7 +460,7 @@ export class CasinoWallet extends GameSessions {
     }
   }
   /** Whether this account can play with ETH: its channel is registered, open and not closing. */
-  get funded() {
+  get playable() {
     const c = this.channel;
     return Boolean(c?.registered) && Number(c!.onchain?.status) === 1 && !c!.closing;
   }
@@ -578,11 +578,10 @@ export class CasinoWallet extends GameSessions {
     }
     return this.profile;
   }
-  /** Take the alias this account is shown by, or give it up. Only from a funded channel. */
+  /** Take the alias this account is shown by, or give it up. Only from an open channel. */
   async pickAlias(this: CasinoWallet, alias: string | null) {
     const c = this.channel;
-    if (!c?.registered || Number(c.onchain?.status) !== 1)
-      throw new Error('Open a funded channel before taking an alias');
+    if (!c?.registered || Number(c.onchain?.status) !== 1) throw new Error('Open a balance before taking an alias');
     this.profile = await this.api(`/api/channels/${c.state.channelId}/alias`, { alias: alias?.trim() ?? null });
     this.uname = this.profile!.uname;
     this.alias = this.profile!.alias;
@@ -591,7 +590,7 @@ export class CasinoWallet extends GameSessions {
   }
   /**
    * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing
-   * claims a public name and asks for a funded channel; taking your own game down only has to be you, so a
+   * claims a public name and asks for an open channel; taking your own game down only has to be you, so a
    * developer who has closed their channel can still withdraw a game that turned out to be broken.
    */
   async publishGame(this: CasinoWallet, name: string, url: string | null) {
@@ -600,7 +599,7 @@ export class CasinoWallet extends GameSessions {
     // money at stake.
     const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.registered));
     if (!c?.registered) throw new Error('This account has no channel to publish from');
-    if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded channel to publish games');
+    if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a balance to publish games');
     this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url });
     this.render();
     return this.profile;
@@ -934,7 +933,7 @@ export class CasinoWallet extends GameSessions {
     this.requireDurableState();
     this.requireService();
     if (!this.lastChainCheck || Date.now() - this.lastChainCheck > CHECK_EVERY) await this.refreshLocked();
-    if (!this.funded) throw new Error('Open or recover a channel before playing');
+    if (!this.playable) throw new Error('Open or recover a channel before playing');
   }
   /** A request to the casino. One under `/api/channels/:id` carries that channel's access token. */
   async api(path: string, body: unknown = undefined) {

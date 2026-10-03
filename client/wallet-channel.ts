@@ -914,7 +914,7 @@ export class ChannelClient extends WalletTransactions {
   async collectPayouts(this: CasinoWallet) {
     // Money deposited into the channel goes into the balance first: a waiting casino is asked again next time.
     if (!this.busy) await this.takeDeposits().catch(() => {});
-    if (this.busy || this.pending || !this.funded) return [];
+    if (this.busy || this.pending || !this.playable) return [];
     const channelId = this.channelId,
       collected: any[] = [];
     const due = await this.api(`/api/channels/${channelId}/payouts`);
