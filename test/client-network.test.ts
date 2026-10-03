@@ -172,14 +172,14 @@ test('every transaction the account sends, a close too, needs its fee at the add
   assert.deepEqual([state.signed[0].method, wallet.channels.channel.closing], ['startClose', true]);
 });
 
-test('only a local casino that says so offers its faucet', async () => {
+test('only a local casino that says so offers demo ETH', async () => {
   const { wallet } = fixture({ network: 'local' });
   assert.equal(wallet.isLocalDevelopment, false, 'the casino has not said so');
   wallet.config.isLocalDevelopment = true;
   assert.equal(wallet.isLocalDevelopment, true);
   const sepolia = fixture().wallet;
   sepolia.config.isLocalDevelopment = true;
-  assert.equal(sepolia.isLocalDevelopment, false, 'a Sepolia wallet never uses a faucet, whatever the casino says');
+  assert.equal(sepolia.isLocalDevelopment, false, 'a Sepolia wallet never asks for demo ETH, whatever the casino says');
   await assert.rejects(sepolia.setupDemo(), /local only/);
 });
 

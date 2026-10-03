@@ -41,8 +41,8 @@ a passkey** to open the account of one you made before, or **Save a key file ins
 ([your key](keys-and-recovery.md#your-key)). A passkey's account takes over from the one this browser made, and a game
 you have open opens again under it.
 
-Then send Sepolia ETH to the address: free test ETH from the faucet the tab links to, or a withdrawal from another
-player's balance. While the Deposit tab is open and the page visible, the wallet checks the address every 20 seconds and
+Then send Sepolia ETH to the address: free test ETH from the Sepolia faucet the tab links to, or a withdrawal from
+another player's balance. While the Deposit tab is open and the page visible, the wallet checks the address every 20 seconds and
 adds what arrives to your balance; otherwise it checks every 10 minutes, or at once when you press ↻ beside the
 wallet's title. ETH too small to cover its fee waits for more.
 
@@ -59,6 +59,18 @@ deposit's: 20% over an estimate of the gas the deposit used, which a node makes 
 base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
 leaves it in the balance, and your next withdrawal, transfer or close pays it back first.
 
+### Free µETH
+
+Signed in with an X Premium account ([your name](#your-name)), you can borrow 10 µETH to play with from the casino's
+faucet: **Get 10 µETH** on the Deposit tab, while your balance holds less than that, once a day for your X account,
+whichever HookedIn account signs in with it. The faucet takes your X Premium from a sign-in of the last 30 days. An
+account with no balance has one opened for it, with a deposit of a wei the casino sends; it needs no ETH of its own,
+nor a saved wallet, though what you win there is lost with an unsaved wallet. What the faucet lends is a loan, like a
+deposit's network fee: bets stake it, and your next withdrawal, transfer or close pays it back first, so what you win
+above it is yours to take out ([the faucet](../casino-api/channels.md#post-apichannelsidfaucet)).
+
+### When ETH waits at the address
+
 ETH stays at the deposit address instead, for fees or to withdraw elsewhere, while **Add ETH that arrives at my deposit
 address to my balance** is off under **Deposits** in Settings, while the casino is unavailable, and from the start of a close until your
 next balance opens ([closing and claims](closing-and-claims.md)). **Add to balance**, on the Deposit tab, adds it when
@@ -66,7 +78,7 @@ you choose.
 
 ## Games and their allowances
 
-The library at `/` lists the games `@hookedin` publishes and the games your own account publishes, each by its
+The library at `/` lists the games `@playhookedin` publishes and the games your own account publishes, each by its
 [icon](../games/publishing.md#the-icon); **Open a game by its URL** opens any other.
 
 | URL                       | Opens                                               |
@@ -142,15 +154,20 @@ uname does not reveal the address; it is the same for every channel of your acco
 the casino for it as soon as it loads your account, with a request only your key can sign, so you have it before your
 first deposit. It is what games, developers and other players learn about you.
 
-An **alias** is a shorter name you are shown by instead, written with an at sign, such as `@Bob`. Take one, or give it
-up, under **Profile** in Settings; either needs an open balance, and the rules are those of
-[`POST /api/channels/:id/alias`](../casino-api/channels.md#post-apichannelsidalias). Your uname stays yours either way,
-and both names find you.
+An **alias** is the name you go by instead: the username of your X account, written with an at sign, such as `@Bob`.
+**Sign in with X**, under **Profile** in Settings, is the only way to one, and needs no balance. X tells the casino your
+username and whether you have X Premium, X's blue check, when you sign in, and at no other time: sign in again after you
+rename your X account or change your subscription. Your profile shows whether your X account had X Premium, and when you
+last signed in. An X account is one HookedIn account's: signing in with it on another signs the first out of it. A
+username that reads like another player's alias, with `l` and `1` read as `i` and `0` as `o`, is refused, and so are
+the casino's own names, such as `@playhookedin`, the house's account on X; the same username as another player's, whose
+X account it no longer is, passes to you. **Sign out of X** goes back to your uname. Your uname stays yours either way,
+and both names find you ([signing in with X](../casino-api/channels.md#signing-in-with-x)).
 
 `/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they have
 played with what they staked and won, and the games they publish ([publishing](../games/publishing.md#publish-it)).
-Your page starts with your first deposit, when the casino first registers your account: until then the wallet shows
-your uname and links to no page. **Your profile**, in the account menu, is your own page as others see it, with the
+Your page starts with your first deposit, when the casino first registers your account, or when you first sign in with
+X: until then the wallet shows your uname and links to no page. **Your profile**, in the account menu, is your own page as others see it, with the
 way to your name in Settings and to your bets, which are yours alone.
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the

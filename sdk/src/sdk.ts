@@ -18,7 +18,8 @@ export interface WalletInfo {
   /** Their uname, written `~uname`: theirs for good, whatever they are called today. Key anything of
    * your own by this. Every account has one from the start; null only while the wallet cannot reach the casino. */
   uname: string | null;
-  /** The alias they are shown by, written `@alias`; null unless they took one. */
+  /** The alias they are shown by, written `@alias`: the username of the X account they signed in with; null unless they
+   * did. */
   alias: string | null;
   chainId: string;
   /** The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino

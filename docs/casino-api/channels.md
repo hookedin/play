@@ -1,6 +1,6 @@
 ---
 title: Channel endpoints
-description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank and the profile.
+description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank, the profile, signing in with X and the faucet.
 sidebar:
   order: 2
 ---
@@ -84,7 +84,8 @@ What the casino checks and answers, by operation:
 | Deposit, kind 4             | `{id}`                                                   | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposits cover the state's `deposited` plus the amount; reads the chain again when it has not seen that, and refuses with `unconfirmed` if it still has not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | –                                                                                       |
 | Withdrawal, kind 5          | `{id}`                                                   | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee) ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with 100,000 gas ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | –                                                                                       |
 | Transfer, kind 6            | `{id}`                                                   | Has the contract put the amount into the current channel of the account the operation's `recipient` names, as deposits: a lock-in when that is the channel's own account; declines one larger than it can pay now or with too small a fee, as for a withdrawal, and one to an account with no channel it knows ("That address has no HookedIn balance to transfer into")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | –                                                                                       |
-| Loan, kind 7                | `{id}`: the hash of a deposit's transaction              | Lends the network fee of a deposit the channel's account sent straight to the contract, into this channel, once the balance has taken it in (`unconfirmed` before, and before the casino sees the transaction): the transaction's gas limit at its fee cap, but no more than 20% over the gas it used and the 1.5% a node's estimate of it may run high, at twice the base fee of the block before its own plus its tip, when that is at most `loanLimit` millionths of the deposit ([`GET /api/config`](public.md#get-apiconfig)). The ID lends each deposit once. Declines another transaction ("That is not a deposit this account sent into this balance"), a balance that, less its loan, holds less than the deposit ("The balance no longer holds that deposit"), another amount ("The casino lends that deposit … ETH of its network fee") and a larger fee ("The casino lends a network fee only up to 1% of its deposit") | –                                                                                       |
+| Fee loan, kind 7            | `{id}`: the hash of a deposit's transaction              | Lends the network fee of a deposit the channel's account sent straight to the contract, into this channel, once the balance has taken it in (`unconfirmed` before, and before the casino sees the transaction): the transaction's gas limit at its fee cap, but no more than 20% over the gas it used and the 1.5% a node's estimate of it may run high, at twice the base fee of the block before its own plus its tip, when that is at most `loanLimit` millionths of the deposit ([`GET /api/config`](public.md#get-apiconfig)). The ID lends each deposit once. Declines another transaction ("That is not a deposit this account sent into this balance"), a balance that, less its loan, holds less than the deposit ("The balance no longer holds that deposit"), another amount ("The casino lends that deposit … ETH of its network fee") and a larger fee ("The casino lends a network fee only up to 1% of its deposit") | –                                                                                       |
+| Faucet loan, kind 7         | `{id, counterparty: FAUCET_ID}`                          | Lends what [the faucet](#post-apichannelsidfaucet) lends, `faucet` in [`GET /api/config`](public.md#get-apiconfig), to a balance of less, while the channel's account is signed in with an X account the faucet lends to; once every 24 hours for that X account, whichever account signs in with it. Declines any other, with why ("The faucet lends 10 µETH, no more and no less", "The faucet lends only to a balance of less than 10 µETH", and the faucet's own refusals)                                                                                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
 
 A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already carried
 out on another channel is declined with `used: true`; a casino bet its quote covers only when that operation was
@@ -356,7 +357,8 @@ the latest statement, and an amount of zero or above the balance.
 ## The profile
 
 A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is the reply of
-the alias and games routes. The casino has one for every account it has registered a channel of.
+the X and games routes. The casino has one for every account it has registered a channel of, and every account that
+signed in with X.
 
 ### `POST /api/channels/:id/uname`
 
@@ -370,19 +372,12 @@ without that address's signature: the casino derives unames with a key it keeps 
 | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids) of any of the account's channels; `channelId` is `:id` |
 
-| Response field | Type           | Meaning                                                                                    |
-| -------------- | -------------- | ------------------------------------------------------------------------------------------ |
-| `uname`        | string         | The account's uname                                                                        |
-| `profile`      | object or null | Its public profile, once the casino has registered a channel of the account; `null` before |
+| Response field | Type           | Meaning                                                                |
+| -------------- | -------------- | ---------------------------------------------------------------------- |
+| `uname`        | string         | The account's uname                                                    |
+| `profile`      | object or null | Its public profile, once the casino has met the account; `null` before |
 
 `refused` answers an opening whose `channelId` is not `:id` or does not fit its fields.
-
-### `POST /api/channels/:id/alias`
-
-Takes an alias for the channel's player, `{alias}`, or with `null` gives it up; the player is then shown by their uname
-again. Taking one needs an open channel. [Your name](../wallet/getting-started.md#your-name) gives the rules.
-`invalid` and `reserved` answer an alias those rules do not allow, `channel-closed` a channel that is closing or closed, and `taken`
-an alias another player holds.
 
 ### `POST /api/channels/:id/games`
 
@@ -393,3 +388,57 @@ game and keeps its key. Publishing needs an open channel; taking a game down, wi
 channel. [The game's URL](../games/publishing.md#the-games-url) gives the rules for `name` and `url`.
 `invalid` answers a name or URL those rules do not allow, `channel-closed` a channel that is closing or closed, and `too-many` a
 profile that already publishes 100 games.
+
+## Signing in with X
+
+Signing in with X is the one way to an alias: an account signed in with an X account goes by its username
+([your name](../wallet/getting-started.md#your-name)). The casino asks X about an X account only as its player signs
+in, and keeps no token. These routes take `{opening}`, as [the uname](#post-apichannelsiduname) does, from an account
+with a channel or without one, and count against the [budget](index.md#budgets-and-queues) of registering a channel.
+`not-found` answers where the casino offers no signing in with X: `x` in [`GET /api/config`](public.md#get-apiconfig)
+is `false`.
+
+### `POST /api/channels/:id/x/start`
+
+Starts signing in with X for the account, and answers `{url}`: X's sign-in page, which the wallet sends the browser to.
+X sends it back to the wallet's `/x` page with `state` and `code`, or with `error` when the player cancels. A sign-in
+waits 10 minutes, and an account has one waiting at most: starting another ends the one before.
+
+### `POST /api/channels/:id/x/finish`
+
+Finishes the account's sign-in with X: `{opening, state, code}`, what X sent the browser back with. The casino trades
+the code for a token and reads the X account once with it, with the X API's `GET /2/users/me`: its ID, its username and
+whether it has X Premium, X's blue check (`verified_type` `blue`). From then on the account's alias is the username, and
+its profile's `x` says whether the X account had X Premium then, and when. An X account is one account's: signing in
+with it on another account signs the first out of it. Answers the account's profile.
+
+`x-refused` answers a sign-in another account started, one finished already or older than 10 minutes, and a code X
+does not accept: sign in again. `x-unavailable` answers when X does not answer, or does not answer the casino's app.
+`reserved` answers a username the casino keeps for itself, and `taken` one that reads like another player's alias. The
+same username as another player's alias, whatever its case, is one X has moved to this X account: the player who had it
+is signed out of X.
+
+### `POST /api/channels/:id/x/sign-out`
+
+Signs the account out of X, `{opening}`: it goes by its uname again, its profile's `x` is `null`, and the faucet lends to
+it no more. Answers the profile; `not-found` answers an account not signed in with X.
+
+## The faucet
+
+### `POST /api/channels/:id/faucet`
+
+Asks the faucet for free µETH, `{opening}`. The faucet lends `faucet` wei, 10 µETH ([`GET /api/config`](public.md#get-apiconfig)),
+to an account signed in with an X account that had X Premium when it last signed in with it, at most 30 days ago, while
+the account's balance holds less: once every 24 hours for each X account, whichever account signs in with it. It is a
+[faucet loan](#post-apichannelsidoperations): bets stake it, and a withdrawal, a transfer or a close pays it back first.
+
+| Response field | Type    | Meaning                                                                                                       |
+| -------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `amount`       | string  | What the faucet lends                                                                                         |
+| `opening`      | boolean | Whether the account has no open channel, which the casino opens for it with a deposit of 1 wei, as anyone may |
+
+The account borrows with a faucet loan once its channel is open and registered. The casino opens a channel once every 24
+hours for each X account, and answers `opening: true` again while that deposit is on its way. `not-premium` answers an
+account not signed in with X, signed in with an X account that had no X Premium, or signed in more than 30 days ago:
+sign in with X again. `refused` answers an X account the faucet lent to, or opened a channel for, in the last 24 hours,
+saying when it does again, and a balance that holds what the faucet lends.

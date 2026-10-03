@@ -102,8 +102,8 @@ let active: ActiveGame | null = null,
 let historyBusy = false,
   historyError: any = null;
 const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
-/** The casino's own profile: the games it ships with are published there. */
-const HOUSE = 'hookedin';
+/** The casino's own profile, its account on X: the games it ships with are published there. */
+const HOUSE = 'playhookedin';
 /** How many games one profile holds. */
 const MAX_GAMES = 100;
 const storage = new BrowserStore();
@@ -316,6 +316,9 @@ const gamePath = (route: GameRoute) =>
 /** How a player is written: an alias wears `@`, a uname wears `~`. */
 const showName = (names: { uname?: string | null; alias?: string | null } | null) =>
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
+/** Whether an alias's X account had X Premium, as X said when its player last signed in with it. */
+const xPremium = (x: { premium: boolean; checked: number }) =>
+  `${x.premium ? 'X Premium' : 'no X Premium'} as of ${new Date(x.checked).toLocaleDateString()}`;
 /** Show a section; the URL is the caller's responsibility. */
 function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -391,11 +394,18 @@ function navigate(page: string, push = true, path = PAGES[page]!.path) {
 }
 /** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<alias>` or `/~<uname>` for a player, the same and
  * `/<game>` for a game they publish, `/games/<key>` for a game's public record, `/games/custom?url=<url>`, and
- * `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page, `/wallet[/<tab>]` and
- * `/settings[/<tab>]`. */
+ * `/bets?game=<key>` for the bets of one game; the wallet or Settings over a page, `/wallet[/<tab>]` and
+ * `/settings[/<tab>]`; and `/x`, where X sends the browser back to after signing in. */
 function parseRoute(
   url: URL,
-): string | GameRoute | { profile: string } | { record: string } | { wallet: WalletTab } | { unknown: string } {
+):
+  | string
+  | GameRoute
+  | { profile: string }
+  | { record: string }
+  | { wallet: WalletTab }
+  | { x: URLSearchParams }
+  | { unknown: string } {
   // A player's sigil survives a link that encodes it: `encodeURIComponent` writes `@` as `%40`, and the
   // static host decodes the path the same way before it serves this page.
   let pathname = url.pathname;
@@ -404,7 +414,8 @@ function parseRoute(
   } catch {}
   const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === pathname);
   if (tab) return { wallet: tab };
-  const named = /^\/([~@][A-Za-z0-9_]{3,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
+  if (pathname === '/x') return { x: url.searchParams };
+  const named = /^\/([~@][A-Za-z0-9_]{1,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
   const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
@@ -414,6 +425,7 @@ function parseRoute(
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
   if (typeof target === 'object' && 'wallet' in target) return showWallet(target.wallet);
+  if (typeof target === 'object' && 'x' in target) return finishSignInWithX(target.x);
   // Anywhere else, the wallet is closed.
   $<HTMLDialogElement>('wallet-dialog').close();
   if (typeof target === 'string')
@@ -430,6 +442,33 @@ async function route(push = false) {
     showPage('library');
     history.replaceState(null, '', '/');
   }
+}
+/** Where the page was when signing in with X started, to go back to once X sends the browser back. */
+const X_RETURN = 'hookedin:x-return';
+/** Sign in with X: the browser goes to X, which sends it back to `/x`. */
+const signInWithX = () =>
+  task(async () => {
+    const url = await wallet.signInWithX();
+    try {
+      sessionStorage.setItem(X_RETURN, location.pathname);
+    } catch {}
+    location.assign(url);
+  });
+/** X sent the browser back: the sign-in is finished, on the wallet or Settings tab it was started from. */
+function finishSignInWithX(query: URLSearchParams) {
+  let started: string | null = null;
+  try {
+    started = sessionStorage.getItem(X_RETURN);
+    sessionStorage.removeItem(X_RETURN);
+  } catch {}
+  showWallet((Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === started) ?? 'profile');
+  void task(async () => {
+    const error = query.get('error');
+    if (error)
+      throw new Error(error === 'access_denied' ? 'You cancelled signing in with X.' : 'X did not sign you in.');
+    await wallet.finishSignInWithX(query.get('state') ?? '', query.get('code') ?? '');
+    toast(`You go by @${wallet.alias} now.`);
+  });
 }
 /** Open the game a route names: true once it is open. */
 const openGame = (target: GameRoute, push = false) =>
@@ -627,7 +666,7 @@ function renderSend(
     // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
     charges = [
       wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it` : '',
-      loan ? `back the ${formatAmount(loan)} µETH network fee the casino lent you` : '',
+      loan ? `back the ${formatAmount(loan)} µETH the casino lent you` : '',
     ].filter(Boolean);
   $(`${send}-form`).classList.toggle('hidden', !open);
   // Money goes out signing the casino's fee only once it is shown.
@@ -710,7 +749,7 @@ function renderWallet() {
       : state.closingChannelId && !state.channelId
         ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
         : loan
-          ? `What games play with. The casino lent you the ${formatAmount(loan)} µETH network fee of your deposits: your next withdrawal pays it back.`
+          ? `What games play with. The casino lent you ${formatAmount(loan)} µETH of it: your next withdrawal or transfer pays it back first.`
           : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
@@ -750,6 +789,19 @@ function renderWallet() {
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
+  // The faucet: free µETH, for an account signed in with X Premium whose balance holds less than it lends.
+  const faucet = BigInt(wallet.config?.faucet ?? 0),
+    x = wallet.profile?.x ?? null,
+    lends = `${formatAmount(faucet)} µETH`,
+    terms = 'Bets stake it, and a withdrawal pays it back first: what you win above it is yours.';
+  $('faucet').hidden = !wallet.config?.x || !faucet || balance >= faucet || wallet.recoveryOnly || closing;
+  $('faucet-text').textContent = !x
+    ? `Sign in with an X Premium account and the casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
+    : !x.premium
+      ? `@${wallet.alias} had no X Premium when you signed in with X. The faucet lends to X Premium accounts: sign in again once yours has it.`
+      : `The casino lends you ${lends} to play with, once a day for @${wallet.alias} while your balance holds less. ${terms}`;
+  $('faucet-borrow').textContent = x?.premium ? `Get ${lends}` : x ? 'Sign in with X again' : 'Sign in with X';
+  $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
 
   const open = status === 1 && !closing;
   for (const send of ['withdraw', 'transfer'] as const) renderSend(send, { open, busy, ready, closing, loan });
@@ -1321,7 +1373,7 @@ function gameCard(route: { owner: string; name: string }, game: Published & { na
 /** Every game a profile publishes, as cards. */
 const profileCards = (owner: string, games: (Published & { name: string; url: string })[]) =>
   games.map(game => gameCard({ owner, name: game.name }, game));
-/** The lobby is what `@hookedin` publishes, and whatever this account publishes itself. It needs nothing of the
+/** The lobby is what `@playhookedin` publishes, and whatever this account publishes itself. It needs nothing of the
  * wallet but the casino's address, so it shows before the wallet has started. */
 async function loadLibrary() {
   const list = $('game-library');
@@ -1338,6 +1390,7 @@ async function loadLibrary() {
 async function openProfile(name: string, push = true) {
   $('profile-name').textContent = name;
   $('profile-uname').textContent = '';
+  $('profile-x').replaceChildren();
   $('profile-since').textContent = '';
   $('profile-own').classList.add('hidden');
   $('profile-stats').replaceChildren();
@@ -1350,6 +1403,16 @@ async function openProfile(name: string, push = true) {
     $('profile-name').textContent = showName(profile);
     // An alias is what they are called; the uname is who they are, and is shown beside it.
     $('profile-uname').textContent = profile.alias ? '~' + profile.uname : '';
+    // An alias is an X username: the X account it is, and whether it had X Premium when they last signed in with it.
+    if (profile.alias)
+      $('profile-x').replaceChildren(
+        h(
+          'a',
+          { href: `https://x.com/${profile.alias}`, target: '_blank', rel: 'noopener noreferrer' },
+          `@${profile.alias} on X ↗`,
+        ),
+        profile.x ? ` · ${xPremium(profile.x)}` : '',
+      );
     document.title = `${showName(profile)} · HookedIn`;
     $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
     // Your own page is what others see of you; your name is set in Settings, and your bets are yours alone.
@@ -1405,16 +1468,19 @@ function renderProfile() {
   $('wallet-name').textContent = name ?? '—';
   if (page) $<HTMLAnchorElement>('wallet-name-link').href = page;
   else $('wallet-name-link').removeAttribute('href');
-  for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !open;
+  $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
-  $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !open;
-  $('clear-alias').classList.toggle('hidden', !wallet.alias);
-  $('alias-note').textContent = !open
-    ? wallet.profile
-      ? 'Deposit into your balance to take an alias or publish games.'
-      : 'Your first deposit gives you a public profile, and lets you take an alias and publish games.'
-    : 'An alias is unique, and two that read alike are the same alias. Your uname stays yours either way.';
+  // Signing in with X is the one way to an alias, and asks X again whether the account has X Premium.
+  const x = wallet.profile?.x ?? null;
+  $('x-status').textContent = x ? `Signed in with X as @${wallet.alias}: ${xPremium(x)}.` : '';
+  $('sign-in-x').textContent = x ? 'Sign in with X again' : 'Sign in with X';
+  $<HTMLButtonElement>('sign-in-x').disabled = uiBusy || !wallet.uname || !wallet.config?.x;
+  $('sign-out-x').classList.toggle('hidden', !x);
+  $<HTMLButtonElement>('sign-out-x').disabled = uiBusy;
+  $('x-note').textContent = !wallet.config?.x
+    ? 'Signing in with X is not offered here.'
+    : 'X tells the casino your username and whether you have X Premium when you sign in, and at no other time: sign in again to bring them up to date. Your profile shows both.';
   const games = wallet.profile?.games ?? [];
   $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
   const key = json([name, games]);
@@ -2092,22 +2158,24 @@ act('start-over', async () => {
   location.replace('/');
 });
 // A field with a button beside it does what the button does on Enter.
-for (const [field, button] of [
-  ['alias-input', 'pick-alias'],
-  ['import-key', 'import-wallet'],
-])
-  $(field).addEventListener('keydown', event => {
-    if (event.key === 'Enter') $(button).click();
-  });
+$('import-key').addEventListener('keydown', event => {
+  if (event.key === 'Enter') $('import-wallet').click();
+});
+$('sign-in-x').addEventListener('click', signInWithX);
 act(
-  'pick-alias',
-  async () => {
-    const input = $<HTMLInputElement>('alias-input');
-    await wallet.pickAlias(input.value);
-    input.value = '';
-  },
-  () => `You are @${wallet.alias}.`,
+  'sign-out-x',
+  () => wallet.signOutOfX(),
+  () => `You go by ~${wallet.uname} again.`,
 );
+// The faucet lends to an account signed in with X Premium; any other signs in with X first.
+$('faucet-borrow').addEventListener('click', () => {
+  if (!wallet.profile?.x?.premium) return void signInWithX();
+  void task(async () => {
+    const receipt = await wallet.borrowFromFaucet();
+    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The faucet declined.');
+    toast(`The faucet lent you ${formatAmount(BigInt(wallet.config.faucet))} µETH.`);
+  });
+});
 act('publish-game', async () => {
   const name = $<HTMLInputElement>('game-name-input'),
     url = $<HTMLInputElement>('game-url-input');
@@ -2135,11 +2203,6 @@ act('bank-withdraw', async () => {
   await wallet.collectPayouts();
   await refreshBank();
 });
-act(
-  'clear-alias',
-  () => wallet.pickAlias(null),
-  () => `You are ~${wallet.uname}.`,
-);
 for (const id of ['wallet-name-link', 'menu-profile', 'settings-profile'])
   $(id).addEventListener('click', event => {
     event.preventDefault();

@@ -31,7 +31,9 @@ holds every deposit as it arrives, the first and every later one, as the channel
 withdraw. The balance takes it in with a **deposit** operation, which the casino signs once it has seen the money
 confirmed on-chain. Until then a close adds it to what the channel is owed, so the money is the player's either way. The
 casino lends the balance the network fee of a deposit of everything the deposit address held, when it is small next to
-the deposit, with a **loan** operation, which a withdrawal, a transfer or a close pays back first.
+the deposit, with a **loan** operation, which a withdrawal, a transfer or a close pays back first. Its faucet lends a
+player signed in with X Premium a few µETH to play with the same way, opening their channel first with a wei when they
+have none ([free µETH](../wallet/getting-started.md#free-µeth)).
 
 **Sign.** Every change to the balance is an **operation** that the account signs, answered by a **checkpoint** that the
 casino signs: the channel's sequence number, the hash of the state before it, a hash of the operation that led to it,
@@ -48,7 +50,7 @@ the contract knows no others:
 | 4 deposit    | + amount                    | Taking in money deposited into the open channel                                                      |
 | 5 withdrawal | − amount − loan − fee       | Withdrawals, which the contract pays to the address the operation names                              |
 | 6 transfer   | − amount − loan − fee       | Transfers, which the contract pays into the balance of the account the operation names, and lock-ins |
-| 7 loan       | + amount                    | The network fee of a deposit, which the casino lends                                                 |
+| 7 loan       | + amount                    | The network fee of a deposit, or free µETH from the faucet, which the casino lends                   |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in
 its **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino

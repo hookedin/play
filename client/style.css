@@ -1270,12 +1270,15 @@ main:has(> #page-play:not(.hidden)) > .banner {
   border: 8px solid white;
   border-radius: 8px;
 }
-.safety-note {
+.boxed {
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.safety-note p {
+.boxed + .boxed {
+  margin-top: 12px;
+}
+.boxed p {
   margin: 10px 0;
   font-size: 13px;
   line-height: 1.5;

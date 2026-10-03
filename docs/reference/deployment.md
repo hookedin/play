@@ -70,8 +70,8 @@ build without one takes the casino's word for its contract. The checks are in
   pins, and the casino's URL. The casino service runs the deployment this file names and refuses a signing key that is
   not its operator, so the casino and the wallet release that pins it cannot disagree.
 - [catalog.json](../../catalog.json): the house developer, `developer`, the account that publishes the house games as
-  `@hookedin`, and `games`, each game's name and [URL](../games/publishing.md#the-games-url). The casino publishes these
-  in `@hookedin`'s profile as it starts.
+  `@playhookedin`, and `games`, each game's name and [URL](../games/publishing.md#the-games-url). The casino publishes
+  these in `@playhookedin`'s profile as it starts.
 - The casino itself: `contractAddress`, `operator`, `chainId`, `protocol` and `developerProtocol` in
   [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the commit it runs in
   [`GET /api/status`](../casino-api/public.md#get-apistatus).

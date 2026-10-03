@@ -166,13 +166,14 @@ export function receiptSummary(
           transfer: 'Transfer declined',
           'lock-in': 'Lock-in declined',
           loan: 'Loan declined',
+          faucet: 'Faucet loan declined',
         } as Record<string, string>
       )[receipt.kind],
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: 'neutral',
       amount: `0 µETH`,
       amountLabel: 'Balance change',
-      description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'transfer', 'lock-in', 'loan'].includes(
+      description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'transfer', 'lock-in', 'loan', 'faucet'].includes(
         receipt.kind,
       )
         ? 'Your balance is unchanged.'
@@ -216,6 +217,7 @@ export function receiptSummary(
                 {
                   deposit: 'Deposited',
                   loan: 'Network fee lent',
+                  faucet: 'Free µETH lent',
                   collateral: 'Collateral bought',
                   withdrawal: 'Withdrawn',
                   transfer: 'Transferred',
@@ -243,7 +245,7 @@ export function receiptSummary(
       ? 'Deposited'
       : receipt.kind === 'withdrawal'
         ? 'Paid out'
-        : receipt.kind === 'loan'
+        : receipt.kind === 'loan' || receipt.kind === 'faucet'
           ? 'Lent to you'
           : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
             ? 'Received'
@@ -300,6 +302,8 @@ export function receiptSummary(
     description = `Commission your games earned, collected into your balance. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'loan')
     description = `The network fee your deposit ${receipt.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
+  if (receipt.kind === 'faucet')
+    description = `Free µETH the casino's faucet lent your balance, for your X Premium account: bets stake it, your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
   // The contract makes a withdrawal, a transfer or a lock-in a claim under its ID once the casino, or anyone, sends it,
   // and pays what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into
   // the account's own channel, and a transfer into the channel of the account it names.
@@ -310,7 +314,7 @@ export function receiptSummary(
       fee = BigInt(receipt.fee ?? 0),
       charges = [
         fee ? `the casino ${exact(fee)} µETH for sending it` : '',
-        repaid ? `back the ${exact(repaid)} µETH network fee the casino lent it` : '',
+        repaid ? `back the ${exact(repaid)} µETH the casino lent it` : '',
       ].filter(Boolean);
     status = receipt.paid
       ? into || transfer

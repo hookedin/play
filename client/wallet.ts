@@ -201,15 +201,18 @@ export class CasinoWallet extends GameSessions {
   declare detailsObservedAt: number;
   /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
   declare uname: string | null;
-  /** The alias it is shown by instead, written `@alias`; null until it takes one. */
+  /** The alias it is shown by instead, written `@alias`: the username of the X account it signed in with; null while it
+   * is signed in with none. */
   declare alias: string | null;
-  /** The public profile those names carry: when the casino first knew it, what it has played, and
-   * the games it publishes. Read from the public route, like anybody else's. */
+  /** The public profile those names carry: when the casino first knew it, what it has played, whether its X account
+   * had X Premium when it last signed in with X, and the games it publishes. Read from the public route, like anybody
+   * else's. */
   declare profile: {
     uname: string;
     alias: string | null;
     since: number;
     stats: any;
+    x: { premium: boolean; checked: number } | null;
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
   /** Whether ETH at this account's address goes into its balance. Off, it stays available for withdrawal and
@@ -262,7 +265,7 @@ export class CasinoWallet extends GameSessions {
     });
     this.hydrate(undefined);
   }
-  /** A local Anvil casino, whose faucet funds a wallet: the casino says so, and it is refused anywhere else. */
+  /** A local Anvil casino, which sends a wallet demo ETH: the casino says so, and it is refused anywhere else. */
   get isLocalDevelopment() {
     return this.network === 'local' && this.config?.isLocalDevelopment === true;
   }
@@ -545,14 +548,18 @@ export class CasinoWallet extends GameSessions {
     }
     this.render();
   }
-  /** Ask the casino for this account's uname, signed for its first channel, which every account has whether or not it
-   * was ever opened: a uname is the account's before its first deposit. Its profile comes with it once it has one. A
-   * profile already here came from a later reply, and stays. */
+  /** Ask the casino something for this account itself, signed for its first channel, which every account has whether
+   * or not it was ever opened: its uname, signing in with X, and the faucet. */
+  accountRequest(this: CasinoWallet, action: string, body: Record<string, unknown> = {}) {
+    const opening = { channelId: channelId(this.address, 0), player: this.address, index: '0' };
+    return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
+  }
+  /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
+   * with it once it has one. A profile already here came from a later reply, and stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
-    const address = this.address,
-      opening = { channelId: channelId(address, 0), player: address, index: '0' };
-    const { uname, profile } = await this.api(`/api/channels/${opening.channelId}/uname`, { opening });
+    const address = this.address;
+    const { uname, profile } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string' || this.profile) return;
     Object.assign(this, { uname, alias: profile?.alias ?? null, profile });
     this.render();
@@ -578,15 +585,39 @@ export class CasinoWallet extends GameSessions {
     }
     return this.profile;
   }
-  /** Take the alias this account is shown by, or give it up. Only from an open channel. */
-  async pickAlias(this: CasinoWallet, alias: string | null) {
-    const c = this.channel;
-    if (!c?.registered || Number(c.onchain?.status) !== 1) throw new Error('Open a balance before taking an alias');
-    this.profile = await this.api(`/api/channels/${c.state.channelId}/alias`, { alias: alias?.trim() ?? null });
-    this.uname = this.profile!.uname;
-    this.alias = this.profile!.alias;
+  /** Start signing in with X: the page of X's to send the browser to. X sends it back to the wallet's `/x` page. */
+  async signInWithX(this: CasinoWallet): Promise<string> {
+    return (await this.accountRequest('x/start')).url;
+  }
+  /** Finish signing in with X, with what X sent the browser back with: this account is shown by the X account's
+   * username from then on, and its profile says whether that account has X Premium. */
+  async finishSignInWithX(this: CasinoWallet, state: string, code: string) {
+    return this.takeProfile(await this.accountRequest('x/finish', { state, code }));
+  }
+  /** Sign out of X: this account is shown by its uname again, and the faucet lends to it no more. */
+  async signOutOfX(this: CasinoWallet) {
+    return this.takeProfile(await this.accountRequest('x/sign-out'));
+  }
+  takeProfile(this: CasinoWallet, profile: any) {
+    Object.assign(this, { profile, uname: profile.uname, alias: profile.alias });
     this.render();
-    return this.profile;
+    return profile;
+  }
+  /** Borrow free µETH from the casino's faucet, which lends to an account signed in with X Premium whose balance holds
+   * less than it lends. A loan that names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it
+   * back first. The faucet opens the account's channel first, if it is not open, and this waits until the wallet has
+   * registered it, and taken in the wei that opened it. */
+  async borrowFromFaucet(this: CasinoWallet) {
+    const { amount, opening } = await this.accountRequest('faucet');
+    if (!this.playable) {
+      if (opening) this.onProgress('Opening your balance…');
+      for (const until = Date.now() + 180_000; !this.playable; await this.refresh()) {
+        if (Date.now() > until) throw new Error('Your balance has not opened yet. Try again in a minute.');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      await this.takeDeposits();
+    }
+    return this.perform('faucet', { amount }, crypto.randomUUID());
   }
   /**
    * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing

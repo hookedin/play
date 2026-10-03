@@ -288,6 +288,7 @@
       <section id="page-profile" class="page hidden">
         <h1 id="profile-name"></h1>
         <p id="profile-uname" class="handle"></p>
+        <p id="profile-x" class="muted"></p>
         <p id="profile-since" class="muted"></p>
         <div id="profile-own" class="actions hidden">
           <a class="button small" href="/settings" data-wallet-tab="profile">Edit your name</a
@@ -344,7 +345,12 @@
         ><button role="tab" type="button" data-tab="recovery" aria-selected="false">Recovery</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
-        <div id="deposit-save" class="safety-note">
+        <div id="faucet" class="boxed" hidden>
+          <strong>Free µETH</strong>
+          <p id="faucet-text"></p>
+          <button id="faucet-borrow" class="button full" type="button">Get free µETH</button>
+        </div>
+        <div id="deposit-save" class="boxed">
           <strong>Save your wallet</strong>
           <p>
             Your wallet is a key in this browser. Save it with a passkey to open it on any of your devices, even if this
@@ -437,26 +443,17 @@
           <h3 id="name-title">Your name</h3>
           <p class="muted">
             All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
-            yours for good; an alias, <code>@like-this</code>, is a shorter name you go by instead.
+            yours for good. Sign in with X and you go by your X username instead, <code>@like-this</code>: your alias.
           </p>
           <p class="name-line">
             <a id="wallet-name-link"><strong id="wallet-name">—</strong></a>
             <span id="wallet-uname" class="handle"></span>
           </p>
+          <p id="x-status" class="muted"></p>
           <a id="settings-profile" class="text-button hidden" href="/">See your profile as others do</a>
-          <div class="field-row">
-            <input
-              id="alias-input"
-              type="text"
-              maxlength="20"
-              pattern="[A-Za-z][A-Za-z0-9_]{2,19}"
-              autocomplete="off"
-              placeholder="Choose an alias"
-              aria-label="Alias"
-            /><button id="pick-alias" class="button" type="button">Save alias</button>
-          </div>
-          <p id="alias-note" class="muted"></p>
-          <button id="clear-alias" class="text-button hidden" type="button">Give up my alias</button>
+          <button id="sign-in-x" class="button full" type="button">Sign in with X</button>
+          <p id="x-note" class="muted"></p>
+          <button id="sign-out-x" class="text-button hidden" type="button">Sign out of X</button>
         </section>
       </section>
       <section class="tab-panel" data-panel="keys" hidden>

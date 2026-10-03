@@ -1,6 +1,6 @@
 ---
 title: Public endpoints
-description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the bankroll fund, players, games' records, rounds, developer bets and the local faucet.
+description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the bankroll fund, players, games' records, rounds, developer bets and demo ETH on a local stack.
 sidebar:
   order: 1
 ---
@@ -27,11 +27,13 @@ nothing else here on trust ([how it pins its deployment](../reference/deployment
 | `developerProtocol`  | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                     |
 | `operator`           | address        | The contract's owner: the casino's signing address                                                                                      |
 | `networkName`        | string         | `"Sepolia"` or `"Anvil test chain"`                                                                                                     |
-| `isLocalDevelopment` | boolean        | `true` only on a local stack that offers [the faucet](#post-apifaucet)                                                                  |
+| `isLocalDevelopment` | boolean        | `true` only on a local stack that offers [demo ETH](#post-apidemo-eth)                                                                  |
 | `explorerUrl`        | string or null | `"https://sepolia.etherscan.io"` on Sepolia, `null` otherwise                                                                           |
 | `bounds`             | object         | `{outcomeSpace, meta, group}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to          |
 | `collateralRate`     | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                           |
 | `loanLimit`          | string         | The most network fee the casino [lends](channels.md#post-apichannelsidoperations) a deposit, in millionths of the deposit               |
+| `x`                  | boolean        | Whether players can [sign in with X](channels.md#signing-in-with-x) here                                                                |
+| `faucet`             | string         | What [the faucet](channels.md#post-apichannelsidfaucet) lends an account signed in with X Premium, in wei                               |
 
 ### `GET /api/status`
 
@@ -121,7 +123,8 @@ One player's profile; `:name` is `~` and a uname or `@` and an alias.
 | Response field | Type           | Meaning                                                                                                                                                                                                                                     |
 | -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `uname`        | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                                    |
-| `alias`        | string or null | The alias they took                                                                                                                                                                                                                         |
+| `alias`        | string or null | The username of the X account they are signed in with; `null` when they are not. The house's, `playhookedin`, is the casino's to give                                                                                                       |
+| `x`            | object or null | `{premium, checked}` while they are signed in with X: whether the X account had X Premium, X's blue check, when they last signed in with it, and when that was. `null` when they are not, and for the house                                 |
 | `since`        | number         | When the casino first knew them                                                                                                                                                                                                             |
 | `stats`        | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |
 | `games`        | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
@@ -222,7 +225,7 @@ not reach. `unauthorized` answers a wait without the access of the game's develo
 
 ## Local development
 
-### `POST /api/faucet`
+### `POST /api/demo-eth`
 
 Sends 2,000,000 µETH on a local Anvil chain to `address`, one payment at a time, for the wallet's demo setup, and answers
 `{txHash, amount}`. The route exists only where `GET /api/config` reports `isLocalDevelopment`; elsewhere it answers

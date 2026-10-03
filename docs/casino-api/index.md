@@ -106,13 +106,13 @@ misses none: save it and resume from it, even after an empty page. `GET /api/pla
 The casino counts requests in fixed 60-second windows, each starting with a key's first request. A budget tracks at
 most 1,024 keys and drops the oldest to make room. A spent budget answers `429` `rate-limited`.
 
-| Budget                                                             | Per       | Requests a minute |
-| ------------------------------------------------------------------ | --------- | ----------------- |
-| Every request but `OPTIONS`                                        | Client IP | 6,000             |
-| Registering a channel the casino does not know, and asking a uname | Client IP | 60                |
-| Channel requests, after authentication                             | Channel   | 6,000             |
-| Developer requests, after authentication                           | Developer | 6,000             |
-| Alias and game changes                                             | Channel   | 200               |
+| Budget                                                                                           | Per       | Requests a minute |
+| ------------------------------------------------------------------------------------------------ | --------- | ----------------- |
+| Every request but `OPTIONS`                                                                      | Client IP | 6,000             |
+| Registering a channel the casino does not know, asking a uname, signing in with X and the faucet | Client IP | 60                |
+| Channel requests, after authentication                                                           | Channel   | 6,000             |
+| Developer requests, after authentication                                                         | Developer | 6,000             |
+| Publishing games                                                                                 | Channel   | 200               |
 
 The client IP is the connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
 
@@ -126,7 +126,7 @@ the bets of at most 4 games at once, and the casino holds at most 128 waits; one
 
 The casino stops signing while its chain observation fails or is more than 60 seconds old;
 [`GET /api/status`](public.md#get-apistatus) shows why, in `status`, `stale` and `observationError`. Meanwhile every
-`POST` answers `503` `paused`, except the local faucet, the activation of a channel the casino knows and an exact retry
+`POST` answers `503` `paused`, except demo ETH, a uname, the activation of a channel the casino knows and an exact retry
 of a recorded operation; so do `GET /api/fund`, `GET /api/developer-bets`, `GET /api/channels/:id/payouts` and
 `GET /api/channels/:id/developer-bets`. Every other read goes on.
 
@@ -143,9 +143,9 @@ that waits its turn, `busy`.
 | Code                 | Status | Meaning                                                                                                                                                                                                                                                                                                                |
 | -------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code                                                                         |
-| `reserved`           | 400    | The alias is one the casino keeps for itself                                                                                                                                                                                                                                                                           |
+| `reserved`           | 400    | The X username is one the casino keeps for itself                                                                                                                                                                                                                                                                      |
 | `unauthorized`       | 401    | The token is missing, expired, too far ahead or wrongly signed, the channel is unknown, or a developer key that publishes no game opens a round                                                                                                                                                                        |
-| `not-found`          | 404    | No such path, name, game, round or developer bet, or the faucet is not offered                                                                                                                                                                                                                                         |
+| `not-found`          | 404    | No such path, name, game, round or developer bet, an account not signed in with X, or no demo ETH or signing in with X here                                                                                                                                                                                            |
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                                                                                     |
 | `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                                                                                        |
 | `channel-closed`     | 409    | The channel is closing or closed                                                                                                                                                                                                                                                                                       |
@@ -154,13 +154,16 @@ that waits its turn, `busy`.
 | `unconfirmed`        | 409    | A deposit operation for money the casino has not seen confirmed on-chain yet, or a loan of a deposit's network fee before the casino sees its transaction; the same request can go again later. A loan before the balance has taken its deposit in is refused the same way, and can go only once the take-in is signed |
 | `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                                                                                              |
 | `bank-short`         | 409    | The developer's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                                                                                           |
-| `taken`              | 409    | Another player holds the alias, or one that reads the same                                                                                                                                                                                                                                                             |
+| `taken`              | 409    | Another player goes by an alias that reads like the X username                                                                                                                                                                                                                                                         |
+| `x-refused`          | 409    | A sign-in with X another account started, finished already, over 10 minutes old, or with a code X does not accept: sign in again                                                                                                                                                                                       |
+| `not-premium`        | 409    | The faucet lends to an account signed in with X Premium in the last 30 days: sign in with X                                                                                                                                                                                                                            |
 | `too-many`           | 409    | The profile already publishes 100 games                                                                                                                                                                                                                                                                                |
 | `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                                                                                               |
 | `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                                                                                                       |
 | `rate-limited`       | 429    | A request budget is spent; retry in the next window                                                                                                                                                                                                                                                                    |
 | `busy`               | 429    | A queue is full, four channel registrations are in progress, or a wait for developer bets is one too many                                                                                                                                                                                                              |
 | `paused`             | 503    | The casino has stopped signing                                                                                                                                                                                                                                                                                         |
+| `x-unavailable`      | 503    | X does not answer, or does not answer the casino's app: sign in with X later                                                                                                                                                                                                                                           |
 
 A declined operation is not an error. It is a `200` reply with `status: "rejected"`, a rejection checkpoint and a
 `reason`; `used: true` marks a game's operation its player already carried out on another channel. The proposal has

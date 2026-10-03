@@ -453,10 +453,10 @@ export class WalletTransactions {
     this.missingChannel = null;
     await this.save();
   }
-  /** The local chain's faucet fills this account's address, and the sweep puts it into the balance. */
+  /** A local casino sends this account's address demo ETH, and the sweep puts it into the balance. */
   async setupDemo(this: CasinoWallet) {
     if (!this.isLocalDevelopment) throw new Error('Automatic funding is local only');
-    await this.api('/api/faucet', { address: this.address });
+    await this.api('/api/demo-eth', { address: this.address });
     await this.refresh();
     await this.sweep();
   }

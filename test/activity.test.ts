@@ -142,7 +142,7 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   const repaying = receiptSummary({ ...sent, fee: '2', proof: { base: { loan: '5' } } }, contract);
   assert.match(
     repaying.description!,
-    /Your balance paid the casino .* µETH for sending it and paid back the .* µETH network fee the casino lent it\./,
+    /Your balance paid the casino .* µETH for sending it and paid back the .* µETH the casino lent it\./,
   );
 });
 
@@ -153,4 +153,15 @@ test('a loan reads as the network fee the casino lent the balance', () => {
   );
   assert.deepEqual([lent.title, lent.amountLabel], ['Network fee lent', 'Lent to you']);
   assert.match(lent.description!, /your next withdrawal or transfer pays it back first/);
+});
+
+test('a loan from the faucet reads as free µETH lent for an X Premium account', () => {
+  const lent = receiptSummary({ kind: 'faucet', status: 'signed', amount: '10', balance: '10' }, contract);
+  assert.deepEqual([lent.title, lent.amountLabel], ['Free µETH lent', 'Lent to you']);
+  assert.match(lent.description!, /faucet lent your balance, for your X Premium account: bets stake it/);
+  const declined = receiptSummary({ kind: 'faucet', status: 'rejected', reason: 'Not today' }, contract);
+  assert.deepEqual(
+    [declined.title, declined.description, declined.notice],
+    ['Faucet loan declined', 'Your balance is unchanged.', 'Not today'],
+  );
 });
