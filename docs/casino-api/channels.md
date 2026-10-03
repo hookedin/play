@@ -289,11 +289,11 @@ The account's developer bets, across all its channels: `{bets, cursor, more}` ([
 and `settledAt`. `collected` is `true` once a positive payout has been credited to a channel; a payout of `"0"` needs no
 collecting and stays `false`.
 
-| Query    | Type   | Meaning                                                                                                    |
-| -------- | ------ | ---------------------------------------------------------------------------------------------------------- |
-| `status` | string | `open` or `settled`; required                                                                              |
-| `after`  | string | The `cursor` of the previous page: a lowercase bet hash for open bets, a decimal position for settled ones |
-| `limit`  | number | How many, a whole number from 1 to 100; default 50                                                         |
+| Query    | Type   | Meaning                                                                                         |
+| -------- | ------ | ----------------------------------------------------------------------------------------------- |
+| `status` | string | `open` or `settled`; required                                                                   |
+| `after`  | string | The `cursor` of the previous page: a decimal position in the order bets were placed, or settled |
+| `limit`  | number | How many, a whole number from 1 to 100; default 50                                              |
 
 `invalid` answers a missing status, or a malformed cursor or limit.
 

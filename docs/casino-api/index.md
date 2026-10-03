@@ -16,7 +16,7 @@ The routes are on three pages: [public](public.md), which need no authentication
 
 `https://casino.hookedin.com`. A wallet built without a configuration expects a local casino at
 `http://127.0.0.1:4183` ([deployment](../reference/deployment.md)). Every route is under `/api/`. There is no WebSocket
-or event stream: clients poll.
+or event stream: clients poll, and a developer's server [waits](public.md#get-apideveloper-bets) for its game's bets.
 
 ## Requests and replies
 
@@ -61,10 +61,10 @@ casino holds at most 512 connections at once.
 Two kinds of token travel in the `Authorization` header as `HookedIn <token>`, a signed message encoded as on
 [Signed messages](../reference/signed-messages.md#access-tokens):
 
-| Token            | Message                                  | Signed by                                        | Routes                                                                                      |
-| ---------------- | ---------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Channel access   | `Access {channelId, expiresAt}`          | The channel's account                            | Every `/api/channels/:id/…` route                                                           |
-| Developer access | `DeveloperAccess {developer, expiresAt}` | The developer: the account that publishes a game | `POST /api/rounds`, `POST /api/rounds/:round/casino-bet`, `POST /api/developer-bets/settle` |
+| Token            | Message                                  | Signed by                                        | Routes                                                                                                                             |
+| ---------------- | ---------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Channel access   | `Access {channelId, expiresAt}`          | The channel's account                            | Every `/api/channels/:id/…` route                                                                                                  |
+| Developer access | `DeveloperAccess {developer, expiresAt}` | The developer: the account that publishes a game | `POST /api/rounds`, `POST /api/rounds/:round/casino-bet`, `POST /api/developer-bets/settle`, `GET /api/developer-bets` with `wait` |
 
 The casino accepts a token whose `expiresAt` is not in the past and at most 120 seconds ahead. A token is not bound to
 one request and serves until it expires: the wallet signs one for 60 seconds and reuses it while at least 20 seconds
@@ -94,10 +94,12 @@ the meantime.
 ## Pages
 
 The developer bet lists return `{bets, cursor, more}`. Pass `cursor` back as `after` while `more` is `true`. Open bets
-come in hash order and their cursor is the last hash: the set changes as bets settle, so start from the beginning on
-each refresh. Settled bets come in the order they settled and their cursor is a decimal position in that order, which
-survives restarts: save it and resume from it, even after an empty page. `GET /api/players` and `GET /api/games/:key`
-take a `limit` and have no cursor.
+come in the order they were placed and settled bets in the order they settled; each cursor is a decimal position in its
+order, which survives restarts. An open cursor goes on to the bets placed since, leaving out those settled meanwhile, so
+a server that follows it sees each bet once; start from the beginning to read every bet open now, and after `invalid`,
+which answers an open cursor the casino's records do not reach, as after a restore of its database. A settled cursor
+misses none: save it and resume from it, even after an empty page. `GET /api/players` and `GET /api/games/:key` take a
+`limit` and have no cursor.
 
 ## Budgets and queues
 
@@ -117,7 +119,8 @@ The client IP is the connection's address; behind the production proxy it is the
 The casino does one thing at a time for each channel and for each shared thing a request touches: the bankroll fund, a
 round, a profile, the counterparty of a credit, a developer's bank, the house cash withdrawals are paid from. Each of
 these queues holds 8 waiting requests, a developer's bank 1,024, and at most 4,096 queues exist at once. At most four
-channel registrations run at once. A full queue or a fifth registration answers `429` `busy`.
+channel registrations run at once. A full queue or a fifth registration answers `429` `busy`. A developer waits for
+the bets of at most 4 games at once, and the casino holds at most 128 waits; one more answers `busy` too.
 
 ## Pauses
 
@@ -157,7 +160,7 @@ that waits its turn, `busy`.
 | `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                                                                                               |
 | `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                                                                                                       |
 | `rate-limited`       | 429    | A request budget is spent; retry in the next window                                                                                                                                                                                                                                                                    |
-| `busy`               | 429    | A queue is full, or four channel registrations are in progress                                                                                                                                                                                                                                                         |
+| `busy`               | 429    | A queue is full, four channel registrations are in progress, or a wait for developer bets is one too many                                                                                                                                                                                                              |
 | `paused`             | 503    | The casino has stopped signing                                                                                                                                                                                                                                                                                         |
 
 A declined operation is not an error. It is a `200` reply with `status: "rejected"`, a rejection checkpoint and a

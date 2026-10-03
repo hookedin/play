@@ -84,8 +84,10 @@ What the stub holds a game to:
 - Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`.
 - The developer's casino bet names a group, is admitted against the virtual bankroll and reveals its round, once: the same bet again
   gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
-- `developer.bets()` pages as the casino does, 100 bets at a time: page with `after` and `more`, and the size never
-  matters.
+- `developer.bets()` pages as the casino does, 100 bets at a time, open ones in the order they were placed: page with
+  `after` and `more`, and the size never matters. With `wait`, a page with no open bets is held until the next bet is
+  placed or the time is up, and the stub refuses what the casino refuses: a wait outside 1 to 25 seconds or on settled
+  bets, and a cursor that is not a decimal position.
 
 ### `bridgeTo`
 

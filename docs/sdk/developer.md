@@ -38,7 +38,8 @@ developer signs ([signed messages](../reference/signed-messages.md)).
 
 Every member that calls the casino rejects with an `Error` when the casino refuses: its message is the casino's `error`,
 and it carries `status`, the HTTP status, and `code`, the casino's [error code](../casino-api/index.md#errors). A
-request only the developer may make carries a `DeveloperAccess` token signed with the key and valid for 60 seconds.
+request only the developer may make carries a `DeveloperAccess` token signed with the key and valid for 60 seconds. A
+request the casino has not answered in a minute is abandoned, and rejects with a `TimeoutError`.
 
 ### `Developer`
 
@@ -92,8 +93,11 @@ settled. A bet settled before answers with what settled it. It resolves with the
 
 A page of the game's developer bets, `{ bets, cursor, more }`
 ([`GET /api/developer-bets`](../casino-api/public.md#get-apideveloper-bets)), `open` ones by default: pass each page's
-`cursor` as `after` while `more` is `true`. Open bets come as they stand, so read them from the start each time;
-settled ones come in the order they settled, so a saved `cursor` never misses one.
+`cursor` as `after` while `more` is `true`. Open bets come in the order they were placed, so a `cursor` goes on to the
+bets placed since; settled ones come in the order they settled, so a saved `cursor` never misses one. With `wait`, 1 to
+25 seconds, a page of open bets with none is held until a bet on the game is placed: the kit signs the request with the
+key, since only the game's developer waits, one wait per game at a time
+([following bets](../games/developer-bets.md#your-server)).
 
 ## The protocol
 

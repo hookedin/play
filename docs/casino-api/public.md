@@ -202,15 +202,23 @@ One developer bet, by its hash: the hash of the operation that placed it.
 A page of one game's developer bets, open or settled, as its developer reads them to settle: `{bets, cursor, more}`
 ([pages](index.md#pages)), each bet as [`GET /api/developer-bets/:bet`](#get-apideveloper-betsbet) shows it.
 
-| Query    | Type    | Meaning                                                                                                    |
-| -------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `game`   | bytes32 | The game's key; required                                                                                   |
-| `status` | string  | `open` (the default) or `settled`                                                                          |
-| `group`  | string  | Only the bets of this group, matched exactly                                                               |
-| `after`  | string  | The `cursor` of the previous page: a lowercase bet hash for open bets, a decimal position for settled ones |
-| `limit`  | number  | How many, a whole number from 1 to 256; default 100                                                        |
+The game's developer can `wait` for open bets, with [developer access](index.md#authentication): a page with none is
+held until a bet on the game is placed, the time is up, or another wait on the same game begins, and then read again.
+A game has one wait at a time, a developer at most 4, and the casino 128 ([budgets](index.md#budgets-and-queues)). Only a
+published game is waited for: a server whose game is taken down reads its bets without waiting. A server follows its
+game's bets by waiting again with each page's `cursor`.
 
-`invalid` answers a missing or malformed key, status, cursor or limit.
+| Query    | Type    | Meaning                                                                                         |
+| -------- | ------- | ----------------------------------------------------------------------------------------------- |
+| `game`   | bytes32 | The game's key; required                                                                        |
+| `status` | string  | `open` (the default) or `settled`                                                               |
+| `group`  | string  | Only the bets of this group, matched exactly                                                    |
+| `after`  | string  | The `cursor` of the previous page: a decimal position in the order bets were placed, or settled |
+| `limit`  | number  | How many, a whole number from 1 to 256; default 100                                             |
+| `wait`   | number  | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25          |
+
+`invalid` answers a missing or malformed key, status, cursor, limit or wait, and an open cursor the casino's records do
+not reach. `unauthorized` answers a wait without the access of the game's developer, and `busy` one too many.
 
 ## Local development
 

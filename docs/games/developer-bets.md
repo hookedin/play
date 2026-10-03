@@ -93,7 +93,7 @@ const developer = await createDeveloper({
   name: 'my-game',
 });
 
-/** Every open bet of the game, a page at a time: open ones are read from the start each time. */
+/** Every open bet of the game, a page at a time, in the order they were placed. */
 async function openBets() {
   const bets: PublicDeveloperBet[] = [];
   for (let after = ''; ;) {
@@ -103,7 +103,30 @@ async function openBets() {
     after = page.cursor;
   }
 }
+
+/** Every open bet now, then each new one as it is placed, while `running()` says so. */
+async function follow(take: (bets: PublicDeveloperBet[]) => Promise<void>, running: () => boolean) {
+  for (let after = ''; running();)
+    try {
+      // Held up to 25 seconds until a bet comes.
+      const page = await developer.bets({ after, wait: 25 });
+      await take(page.bets);
+      after = page.cursor;
+    } catch {
+      // Again shortly, from the oldest open bet: the casino may be away, or its records restored.
+      after = '';
+      await new Promise(resolve => setTimeout(resolve, 1_000));
+    }
+}
 ```
+
+- A server that runs a table follows its bets: the casino holds each request until a bet on the game is placed, so
+  your server hears of it at once, and asks again with the page's cursor. Take each page before moving the cursor on,
+  so a bet your server failed to take comes again.
+- Only your key waits, for a published game, one wait per game at a time: a newer wait answers the one before. Run one
+  server per game, as one Durable Object does. A key waits for at most 4 games at once.
+- Start from the beginning after a restart or a failed read: the bets open then are the ones still to settle, and your
+  server finds those it already took by their hash.
 
 ## Settling
 
@@ -297,6 +320,8 @@ a secret revealed after the crash, and each escape is paid from the developer's 
 
 A game with a server ships page and server as one Cloudflare Worker: `dist/` as static assets, and a Worker answering
 `/api/` with a Durable Object holding its state, on the page's own origin, so the build's `connect-src 'self'` holds.
+Roulette's Durable Object follows the game's bets while a page watches, and sends every page the table as it changes,
+as server-sent events.
 [Roulette's repository](https://github.com/hookedin/game-roulette) is a GitHub template with all of this in place: its
 `wrangler.jsonc` names the casino and the game, and its README sets `DEVELOPER_KEY`, the key of the account you publish
 from, as a secret. Developer bets need the game published under that name from that account

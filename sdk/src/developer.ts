@@ -82,11 +82,14 @@ export interface Developer {
    * `MAX_DEVELOPER_BETS` at a time, and it takes each batch whole or, if the bank cannot pay it, not at all. A bet
    * settled before answers with what settled it. */
   settle(settlements: Settlement[]): Promise<PublicDeveloperBet[]>;
-  /** This game's developer bets, open or settled, a page at a time, with the cursor for the next: open ones as they
-   * stand, read from the start; settled ones in the order they settled, so a saved cursor never misses one. */
+  /** This game's developer bets, open or settled, a page at a time, with the cursor for the next: open ones in the
+   * order they were placed, so a cursor goes on to the bets placed since; settled ones in the order they settled, so a
+   * saved cursor never misses one. With `wait`, a page of open bets with none is held up to that many seconds, 1 to 25,
+   * until a bet on the game is placed: how a server follows its game's bets as they come. */
   bets(query?: {
     status?: 'open' | 'settled';
     after?: string;
+    wait?: number;
   }): Promise<{ bets: PublicDeveloperBet[]; cursor: string; more: boolean }>;
 }
 
@@ -104,10 +107,12 @@ export async function createDeveloper({
   const signer = new Wallet(key),
     game = gameKey({ developer: signer.address, name }).toLowerCase(),
     api = async (path: string, body?: unknown, headers: Record<string, string> = {}) => {
-      const response = await fetch(
-        casinoURL + path,
-        body === undefined ? {} : { method: 'POST', body: JSON.stringify(body), headers },
-      );
+      // A request the casino never answers gives up after a minute, so a server that follows its bets asks again.
+      const signal = AbortSignal.timeout(60_000),
+        response = await fetch(
+          casinoURL + path,
+          body === undefined ? { headers, signal } : { method: 'POST', body: JSON.stringify(body), headers, signal },
+        );
       const value: any = await response.json();
       if (!response.ok)
         throw Object.assign(new Error(value.error || 'Casino unavailable'), {
@@ -120,7 +125,7 @@ export async function createDeveloper({
   assertProtocol(config, true);
   const d = domain(config.chainId, config.contractAddress);
   /** A request only the developer may make: signed with its key, good for a minute. */
-  const asDeveloper = async (path: string, body: unknown) => {
+  const asDeveloper = async (path: string, body?: unknown) => {
     const message = { developer: signer.address, expiresAt: Math.floor(Date.now() / 1000) + 60 };
     return api(path, body, {
       authorization: authorization(message, await signer.signTypedData(d, DEVELOPER_ACCESS_TYPES, message)),
@@ -186,10 +191,12 @@ export async function createDeveloper({
       }
       return settled;
     },
-    bets: ({ status = 'open', after } = {}) =>
-      api(
+    bets: ({ status = 'open', after, wait } = {}) => {
+      const path =
         `/api/developer-bets?game=${game}&status=${status}` +
-          (after === undefined ? '' : `&after=${encodeURIComponent(after)}`),
-      ),
+        (after === undefined ? '' : `&after=${encodeURIComponent(after)}`);
+      // Only the game's developer may wait for its bets.
+      return wait ? asDeveloper(`${path}&wait=${wait}`) : api(path);
+    },
   };
 }

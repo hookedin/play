@@ -818,14 +818,31 @@ test('a button pressed twice plays one step, and the second press bets nothing',
   assert.deepEqual([(first as PromiseFulfilledResult<any>).value.terminal, f.settlements()], [true, 1]);
 });
 
-test("the stub developer pages a game's bets 100 at a time, as the casino does", async () => {
+test("the stub developer pages a game's bets 100 at a time in the order they were placed, and waits for the next, as the casino does", async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameAllowance('1000', true);
-  for (let i = 0; i < 101; i++) await w.gameDeveloperBet({ id: `bet-${i}`, stake: '1', meta: {} });
+  const placed: string[] = [];
+  for (let i = 0; i < 101; i++) placed.push((await w.gameDeveloperBet({ id: `bet-${i}`, stake: '1', meta: {} })).bet!);
   const first = await f.developer.bets();
   assert.deepEqual([first.bets.length, first.more], [100, true]);
   const rest = await f.developer.bets({ after: first.cursor });
   assert.deepEqual([rest.bets.length, rest.more], [1, false]);
+  assert.deepEqual(
+    [...first.bets, ...rest.bets].map(bet => bet.bet),
+    placed,
+  );
+  const waiting = f.developer.bets({ after: rest.cursor, wait: 25 }),
+    next = (await w.gameDeveloperBet({ id: 'next', stake: '1', meta: {} })).bet;
+  assert.deepEqual(
+    (await waiting).bets.map(bet => bet.bet),
+    [next],
+  );
+  // A newer wait answers the one before, and the stub refuses what the casino refuses.
+  const older = f.developer.bets({ after: String(placed.length + 1), wait: 25 });
+  await f.developer.bets({ after: String(placed.length + 1), wait: 1 });
+  assert.deepEqual((await older).bets, []);
+  for (const query of [{ wait: 26 }, { wait: 0.5 }, { status: 'settled' as const, wait: 1 }, { after: next! }])
+    await assert.rejects(f.developer.bets(query), /Wait 1 to 25 seconds|cursor/);
 });

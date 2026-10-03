@@ -8,9 +8,10 @@ sidebar:
 A game's developer is the account that publishes it. Its server proves itself with
 [developer access](index.md#authentication), signed by that account's key, and uses these three routes; it reads its
 rounds and its games' developer bets through the public [`GET /api/rounds/:round`](public.md#get-apiroundsround) and
-[`GET /api/developer-bets`](public.md#get-apideveloper-bets). The key is the publishing account's own, so a server that
-holds it holds everything that account holds. [`createDeveloper`](../sdk/developer.md#createdeveloper) wraps all of it,
-and [developer bets](../games/developer-bets.md) walks through the order of requests. The signed structures are on
+[`GET /api/developer-bets`](public.md#get-apideveloper-bets), where it alone may wait for new bets. The key is the
+publishing account's own, so a server that holds it holds everything that account holds.
+[`createDeveloper`](../sdk/developer.md#createdeveloper) wraps all of it, and [developer bets](../games/developer-bets.md)
+walks through the order of requests. The signed structures are on
 [Signed messages](../reference/signed-messages.md#developer-messages).
 
 ## Rounds and casino bets

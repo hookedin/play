@@ -191,10 +191,13 @@ export async function gameWallet({
     return { message, signature: await owner.signTypedData(d, QUOTE_TYPES, message) };
   };
   const rounds = new Map<string, { id: string; seed?: string; casinoBet?: DeveloperCasinoBet }>();
-  // Developer bets, what each settled bet owes this player until the wallet collects it, and the order bets settled in.
+  // Developer bets, what each settled bet owes this player until the wallet collects it, the order bets were placed and
+  // settled in, and the developer's wait for the next bet.
   const developerBets = new Map<string, PublicDeveloperBet>(),
     owed = new Map<string, bigint>(),
+    placed = new Map<string, number>(),
     order = new Map<string, number>();
+  let waiting: () => void = () => {};
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
   const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
@@ -220,22 +223,18 @@ export async function gameWallet({
     });
   };
   const publicDeveloperBet = (hash: string) => plain(developerBets.get(hash)!);
-  /** A page of developer bets, as the casino's feeds give them: open ones by hash, settled ones in the order they
-   * settled. */
+  /** A page of developer bets, as the casino's feeds give them: open ones in the order they were placed, settled ones
+   * in the order they settled. */
   const page = (bets: PublicDeveloperBet[], settled: boolean, after: string, limit: number) => {
+    if (!/^(0|[1-9][0-9]*)?$/.test(after)) throw refused(400, 'invalid', 'Invalid developer bet cursor or limit');
+    const at = settled ? order : placed;
     const all = bets
-      .filter(bet =>
-        settled
-          ? bet.status === 'settled' && order.get(bet.bet)! > Number(after || '0')
-          : bet.status === 'open' && bet.bet > after,
-      )
-      .sort((a, b) => (settled ? order.get(a.bet)! - order.get(b.bet)! : a.bet.localeCompare(b.bet)));
+      .filter(bet => bet.status === (settled ? 'settled' : 'open') && at.get(bet.bet)! > Number(after || '0'))
+      .sort((a, b) => at.get(a.bet)! - at.get(b.bet)!);
     const bets$ = all.slice(0, limit);
     return {
       bets: bets$,
-      cursor: bets$.length
-        ? String(settled ? order.get(bets$.at(-1)!.bet) : bets$.at(-1)!.bet)
-        : after || (settled ? '0' : ''),
+      cursor: String(bets$.length ? at.get(bets$.at(-1)!.bet) : after || '0'),
       more: all.length > limit,
     };
   };
@@ -421,6 +420,8 @@ export async function gameWallet({
         status: 'open',
         meta: details.meta,
       });
+      placed.set(hash, placed.size + 1);
+      waiting();
       return settle(request, details, signature, ZeroHash, ZeroHash, 0n);
     };
     return wallet;
@@ -525,14 +526,31 @@ export async function gameWallet({
         settled.push(...(await settleBatch(settlements.slice(i, i + MAX_DEVELOPER_BETS))));
       return settled;
     },
-    bets: async ({ status = 'open', after = '' } = {}) => {
-      const { bets, cursor, more } = page(
-        [...developerBets.values()].filter(bet => bet.game === game.key),
-        status === 'settled',
-        after,
-        100,
-      );
-      return { bets: bets.map(bet => publicDeveloperBet(bet.bet)), cursor, more };
+    // An open page with no bets waits as the casino holds it: until a bet is placed, the time is up or another wait
+    // begins.
+    async bets({ status = 'open', after = '', wait = 0 } = {}) {
+      if (wait && (status !== 'open' || !Number.isInteger(wait) || wait < 1 || wait > 25))
+        throw refused(400, 'invalid', 'Wait 1 to 25 seconds for open developer bets');
+      if (wait) waiting();
+      const read = () => {
+        const { bets, cursor, more } = page(
+          [...developerBets.values()].filter(bet => bet.game === game.key),
+          status === 'settled',
+          after,
+          100,
+        );
+        return { bets: bets.map(bet => publicDeveloperBet(bet.bet)), cursor, more };
+      };
+      const first = read();
+      if (!wait || first.bets.length) return first;
+      await new Promise<void>(resolve => {
+        const timer = setTimeout(resolve, wait * 1000);
+        waiting = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      return read();
     },
   };
   const wallet = make();
