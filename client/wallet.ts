@@ -30,6 +30,7 @@ import {
   verifyStep,
   hashOperation,
   KIND,
+  FAUCET_ID,
   assertProtocol,
   owed,
   protection,
@@ -598,6 +599,7 @@ export class CasinoWallet extends GameSessions {
   async signOutOfX(this: CasinoWallet) {
     return this.takeProfile(await this.accountRequest('x/sign-out'));
   }
+  /** This account's profile as the casino answers with it, and the names it shows. */
   takeProfile(this: CasinoWallet, profile: any) {
     Object.assign(this, { profile, uname: profile.uname, alias: profile.alias });
     this.render();
@@ -617,7 +619,7 @@ export class CasinoWallet extends GameSessions {
       }
       await this.takeDeposits();
     }
-    return this.perform('faucet', { amount }, crypto.randomUUID());
+    return this.perform('faucet', { amount, source: FAUCET_ID }, crypto.randomUUID());
   }
   /**
    * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing
@@ -631,9 +633,7 @@ export class CasinoWallet extends GameSessions {
     const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.registered));
     if (!c?.registered) throw new Error('This account has no channel to publish from');
     if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a balance to publish games');
-    this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url });
-    this.render();
-    return this.profile;
+    return this.takeProfile(await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }));
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
    * checkpoint took in: those this browser made, from their proofs, and any made on another device, whose proof is not

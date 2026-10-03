@@ -29,7 +29,6 @@ import {
   valueOf,
   hashRedeem,
   FUND_ID,
-  FAUCET_ID,
   DEVELOPER_ID,
   FUND_TYPES,
   SHARE_TYPES,
@@ -185,7 +184,6 @@ export class ChannelClient extends WalletTransactions {
       ...(known.game ? { game: gameRef(this.requireGame().identity) } : {}),
       ...(input.group ? { group: input.group } : {}),
       ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
-      ...(kind === 'faucet' ? { counterparty: FAUCET_ID } : {}),
       ...(kind === 'developer-bet' ? { meta: input.meta } : {}),
     });
     const matches = (operation: Operation, signed: Details) => {
