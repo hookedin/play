@@ -303,7 +303,7 @@ export function receiptSummary(
   if (receipt.kind === 'loan')
     description = `The network fee your deposit ${receipt.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'faucet')
-    description = `Free µETH the casino's faucet lent your balance, for your X Premium account: bets stake it, your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
+    description = `Free µETH the casino's faucet lent your balance: bets stake it, your next withdrawal or transfer pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
   // The contract makes a withdrawal, a transfer or a lock-in a claim under its ID once the casino, or anyone, sends it,
   // and pays what it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into
   // the account's own channel, and a transfer into the channel of the account it names.

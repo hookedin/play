@@ -789,18 +789,21 @@ function renderWallet() {
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
-  // The faucet: free µETH, for an account signed in with X Premium whose balance holds less than it lends.
+  // The faucet: free µETH, for an account it lends to whose balance holds less than it lends. Signing in with X Premium
+  // lets an account borrow; one the casino stopped, it is not offered to.
   const faucet = BigInt(wallet.config?.faucet ?? 0),
+    allowed = wallet.faucet,
     x = wallet.profile?.x ?? null,
     lends = `${formatAmount(faucet)} µETH`,
     terms = 'Bets stake it, and a withdrawal pays it back first: what you win above it is yours.';
-  $('faucet').hidden = !wallet.config?.x || !faucet || balance >= faucet || wallet.recoveryOnly || closing;
-  $('faucet-text').textContent = !x
-    ? `Sign in with an X Premium account and the casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
-    : !x.premium
-      ? `@${wallet.alias} had no X Premium when you signed in with X. The faucet lends to X Premium accounts: sign in again once yours has it.`
-      : `The casino lends you ${lends} to play with, once a day for @${wallet.alias} while your balance holds less. ${terms}`;
-  $('faucet-borrow').textContent = x?.premium ? `Get ${lends}` : x ? 'Sign in with X again' : 'Sign in with X';
+  $('faucet').hidden =
+    !faucet || balance >= faucet || wallet.recoveryOnly || closing || (!allowed && (!wallet.config?.x || !!x?.premium));
+  $('faucet-text').textContent = allowed
+    ? `The casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
+    : !x
+      ? `Sign in with an X Premium account and the casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
+      : `@${wallet.alias} had no X Premium when you signed in with X. The faucet lends to X Premium accounts: sign in again once yours has it.`;
+  $('faucet-borrow').textContent = allowed ? `Get ${lends}` : x ? 'Sign in with X again' : 'Sign in with X';
   $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
 
   const open = status === 1 && !closing;
@@ -2167,9 +2170,9 @@ act(
   () => wallet.signOutOfX(),
   () => `You go by ~${wallet.uname} again.`,
 );
-// The faucet lends to an account signed in with X Premium; any other signs in with X first.
+// The faucet lends to an account it lends to; any other signs in with X Premium first.
 $('faucet-borrow').addEventListener('click', () => {
-  if (!wallet.profile?.x?.premium) return void signInWithX();
+  if (!wallet.faucet) return void signInWithX();
   void task(async () => {
     const receipt = await wallet.borrowFromFaucet();
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The faucet declined.');

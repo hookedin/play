@@ -85,7 +85,7 @@ What the casino checks and answers, by operation:
 | Withdrawal, kind 5          | `{id}`                                                   | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee) ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with 100,000 gas ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | –                                                                                       |
 | Transfer, kind 6            | `{id}`                                                   | Has the contract put the amount into the current channel of the account the operation's `recipient` names, as deposits: a lock-in when that is the channel's own account; declines one larger than it can pay now or with too small a fee, as for a withdrawal, and one to an account with no channel it knows ("That address has no HookedIn balance to transfer into")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | –                                                                                       |
 | Fee loan, kind 7            | `{id}`: the hash of a deposit's transaction              | Lends the network fee of a deposit the channel's account sent straight to the contract, into this channel, once the balance has taken it in (`unconfirmed` before, and before the casino sees the transaction): the transaction's gas limit at its fee cap, but no more than 20% over the gas it used and the 1.5% a node's estimate of it may run high, at twice the base fee of the block before its own plus its tip, when that is at most `loanLimit` millionths of the deposit ([`GET /api/config`](public.md#get-apiconfig)). The ID lends each deposit once. Declines another transaction ("That is not a deposit this account sent into this balance"), a balance that, less its loan, holds less than the deposit ("The balance no longer holds that deposit"), another amount ("The casino lends that deposit … ETH of its network fee") and a larger fee ("The casino lends a network fee only up to 1% of its deposit") | –                                                                                       |
-| Faucet loan, kind 7         | `{id, counterparty: FAUCET_ID}`                          | Lends what [the faucet](#post-apichannelsidfaucet) lends, `faucet` in [`GET /api/config`](public.md#get-apiconfig), to a balance of less, while the channel's account is signed in with an X account the faucet lends to; once every 24 hours for that X account, whichever account signs in with it. Declines any other, with why ("The faucet lends 10 µETH, no more and no less", "The faucet lends only to a balance of less than 10 µETH", and the faucet's own refusals)                                                                                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
+| Faucet loan, kind 7         | `{id, counterparty: FAUCET_ID}`                          | Lends what [the faucet](#post-apichannelsidfaucet) lends, `faucet` in [`GET /api/config`](public.md#get-apiconfig), to a balance of less, of an account the faucet lends to, while its budget for loans has it; once every 24 hours for each account. Declines any other, with why ("The faucet lends 10 µETH, no more and no less", "The faucet lends only to a balance of less than 10 µETH", and the faucet's own refusals)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
 
 A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already carried
 out on another channel is declined with `used: true`; a casino bet its quote covers only when that operation was
@@ -372,10 +372,14 @@ without that address's signature: the casino derives unames with a key it keeps 
 | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids) of any of the account's channels; `channelId` is `:id` |
 
-| Response field | Type           | Meaning                                                                |
-| -------------- | -------------- | ---------------------------------------------------------------------- |
-| `uname`        | string         | The account's uname                                                    |
-| `profile`      | object or null | Its public profile, once the casino has met the account; `null` before |
+| Response field | Type           | Meaning                                                             |
+| -------------- | -------------- | ------------------------------------------------------------------- |
+| `uname`        | string         | The account's uname                                                 |
+| `profile`      | object or null | Its own profile, once the casino has met the account; `null` before |
+
+An account's own profile is its [public profile](public.md#get-apiplayersname) and `faucet`, whether
+[the faucet](#post-apichannelsidfaucet) lends to it, which no public route says. Signing in and out of X and publishing a
+game answer with it too.
 
 `refused` answers an opening whose `channelId` is not `:id` or does not fit its fields.
 
@@ -409,8 +413,9 @@ waits 10 minutes, and an account has one waiting at most: starting another ends 
 Finishes the account's sign-in with X: `{opening, state, code}`, what X sent the browser back with. The casino trades
 the code for a token and reads the X account once with it, with the X API's `GET /2/users/me`: its ID, its username and
 whether it has X Premium, X's blue check (`verified_type` `blue`). From then on the account's alias is the username, and
-its profile's `x` says whether the X account had X Premium then, and when. An X account is one account's: signing in
-with it on another account signs the first out of it. Answers the account's profile.
+its profile's `x` says whether the X account had X Premium then, and when. X Premium lets the account borrow from
+[the faucet](#post-apichannelsidfaucet). An X account is one account's: signing in with it on another account signs the
+first out of it. Answers the account's [own profile](#post-apichannelsiduname).
 
 `x-refused` answers a sign-in another account started, one finished already or older than 10 minutes, and a code X
 does not accept: sign in again. `x-unavailable` answers when X does not answer, or does not answer the casino's app.
@@ -420,17 +425,20 @@ is signed out of X.
 
 ### `POST /api/channels/:id/x/sign-out`
 
-Signs the account out of X, `{opening}`: it goes by its uname again, its profile's `x` is `null`, and the faucet lends to
-it no more. Answers the profile; `not-found` answers an account not signed in with X.
+Signs the account out of X, `{opening}`: it goes by its uname again, its profile's `x` is `null`, and the faucet lends
+to it no more. Answers its own profile; `not-found` answers an account not signed in with X.
 
 ## The faucet
 
 ### `POST /api/channels/:id/faucet`
 
 Asks the faucet for free µETH, `{opening}`. The faucet lends `faucet` wei, 10 µETH ([`GET /api/config`](public.md#get-apiconfig)),
-to an account signed in with an X account that had X Premium when it last signed in with it, at most 30 days ago, while
-the account's balance holds less: once every 24 hours for each X account, whichever account signs in with it. It is a
-[faucet loan](#post-apichannelsidoperations): bets stake it, and a withdrawal, a transfer or a close pays it back first.
+to an account whose [own profile](#post-apichannelsiduname) says `faucet: true`, while the account's balance holds
+less: once every 24 hours for each account. Signing in with an X account that has X Premium switches `faucet` on, and
+the casino switches it on or off for any account. An account that loses its X account, signing out of it, to another
+account or for another X account, loses `faucet` with it, whoever switched it on. It is a [faucet loan](#post-apichannelsidoperations): bets stake it, and a
+withdrawal, a transfer or a close pays it back first. What the faucet lends, and the deposits and gas that open
+channels for it, each come out of a budget the casino sets.
 
 | Response field | Type    | Meaning                                                                                                       |
 | -------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
@@ -438,7 +446,7 @@ the account's balance holds less: once every 24 hours for each X account, whiche
 | `opening`      | boolean | Whether the account has no open channel, which the casino opens for it with a deposit of 1 wei, as anyone may |
 
 The account borrows with a faucet loan once its channel is open and registered. The casino opens a channel once every 24
-hours for each X account, and answers `opening: true` again while that deposit is on its way. `not-premium` answers an
-account not signed in with X, signed in with an X account that had no X Premium, or signed in more than 30 days ago:
-sign in with X again. `refused` answers an X account the faucet lent to, or opened a channel for, in the last 24 hours,
-saying when it does again, and a balance that holds what the faucet lends.
+hours for each account, and answers `opening: true` again while that deposit is on its way. `not-eligible` answers an
+account the faucet does not lend to: sign in with X Premium. `faucet-empty` answers when the budget for loans, or for
+opening the account's channel, is spent. `refused` answers an account the faucet lent to, or opened a channel for, in
+the last 24 hours, saying when it does again, and a balance that holds what the faucet lends.

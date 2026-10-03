@@ -33,7 +33,7 @@ nothing else here on trust ([how it pins its deployment](../reference/deployment
 | `collateralRate`     | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                           |
 | `loanLimit`          | string         | The most network fee the casino [lends](channels.md#post-apichannelsidoperations) a deposit, in millionths of the deposit               |
 | `x`                  | boolean        | Whether players can [sign in with X](channels.md#signing-in-with-x) here                                                                |
-| `faucet`             | string         | What [the faucet](channels.md#post-apichannelsidfaucet) lends an account signed in with X Premium, in wei                               |
+| `faucet`             | string         | What [the faucet](channels.md#post-apichannelsidfaucet) lends, in wei                                                                   |
 
 ### `GET /api/status`
 

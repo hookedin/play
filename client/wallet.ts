@@ -216,6 +216,9 @@ export class CasinoWallet extends GameSessions {
     x: { premium: boolean; checked: number } | null;
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
+  /** Whether the casino's faucet lends to this account, as the casino last told the account itself: no public profile
+   * says it. */
+  declare faucet: boolean;
   /** Whether ETH at this account's address goes into its balance. Off, it stays available for withdrawal and
    * transaction fees. */
   declare autoDeposit: boolean;
@@ -260,6 +263,7 @@ export class CasinoWallet extends GameSessions {
       uname: null,
       alias: null,
       profile: null,
+      faucet: false,
       developerEarnings: null,
       busy: false,
       depositShown: false,
@@ -405,6 +409,7 @@ export class CasinoWallet extends GameSessions {
           uname: null,
           alias: null,
           profile: null,
+          faucet: false,
         });
         this.hydrate(await this.storage.get(storageKey));
       };
@@ -556,13 +561,15 @@ export class CasinoWallet extends GameSessions {
     return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
   }
   /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
-   * with it once it has one. A profile already here came from a later reply, and stays. */
+   * with it once it has one, and whether the faucet lends to it. A profile already here came from a later reply, and
+   * stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
     const address = this.address;
     const { uname, profile } = await this.accountRequest('uname');
-    if (this.address !== address || typeof uname !== 'string' || this.profile) return;
-    Object.assign(this, { uname, alias: profile?.alias ?? null, profile });
+    if (this.address !== address || typeof uname !== 'string') return;
+    this.faucet = Boolean(profile?.faucet);
+    if (!this.profile) Object.assign(this, { uname, alias: profile?.alias ?? null, profile });
     this.render();
   }
   /** Every channel reply carries both names its player answers to, and a registered channel means the casino has met
@@ -599,14 +606,15 @@ export class CasinoWallet extends GameSessions {
   async signOutOfX(this: CasinoWallet) {
     return this.takeProfile(await this.accountRequest('x/sign-out'));
   }
-  /** This account's profile as the casino answers with it, and the names it shows. */
+  /** This account's profile as the casino answers the account itself with it, the names it shows and whether the faucet
+   * lends to it. */
   takeProfile(this: CasinoWallet, profile: any) {
-    Object.assign(this, { profile, uname: profile.uname, alias: profile.alias });
+    Object.assign(this, { profile, uname: profile.uname, alias: profile.alias, faucet: Boolean(profile.faucet) });
     this.render();
     return profile;
   }
-  /** Borrow free µETH from the casino's faucet, which lends to an account signed in with X Premium whose balance holds
-   * less than it lends. A loan that names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it
+  /** Borrow free µETH from the casino's faucet, which lends to an account it tells it lends to (`faucet`), whose balance
+   * holds less than it lends: signing in with X Premium lets an account borrow, and the casino lets any, or stops it. A loan that names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it
    * back first. The faucet opens the account's channel first, if it is not open, and this waits until the wallet has
    * registered it, and taken in the wei that opened it. */
   async borrowFromFaucet(this: CasinoWallet) {

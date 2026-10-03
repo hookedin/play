@@ -155,10 +155,10 @@ test('a loan reads as the network fee the casino lent the balance', () => {
   assert.match(lent.description!, /your next withdrawal or transfer pays it back first/);
 });
 
-test('a loan from the faucet reads as free µETH lent for an X Premium account', () => {
+test('a loan from the faucet reads as free µETH lent', () => {
   const lent = receiptSummary({ kind: 'faucet', status: 'signed', amount: '10', balance: '10' }, contract);
   assert.deepEqual([lent.title, lent.amountLabel], ['Free µETH lent', 'Lent to you']);
-  assert.match(lent.description!, /faucet lent your balance, for your X Premium account: bets stake it/);
+  assert.match(lent.description!, /faucet lent your balance: bets stake it/);
   const declined = receiptSummary({ kind: 'faucet', status: 'rejected', reason: 'Not today' }, contract);
   assert.deepEqual(
     [declined.title, declined.description, declined.notice],
