@@ -138,9 +138,9 @@ it works with **Add ETH that arrives at my deposit address to my balance** off a
 
 Every account has a **uname**: 24 characters of `23456789abcdefghijkmnopqrstvwxyz`, written with a tilde, such as
 `~3byt9ocwnnzaxanmiz3stocj`. The casino derives it from your address with a keyed hash whose key it keeps secret, so the
-uname does not reveal the address; it is the same for every channel of your account and never changes. The casino first
-knows it at your first deposit, and a game you have open then loads again, to save its state under it. It is what
-games, developers and other players learn about you.
+uname does not reveal the address; it is the same for every channel of your account and never changes. The wallet asks
+the casino for it as soon as it loads your account, with a request only your key can sign, so you have it before your
+first deposit. It is what games, developers and other players learn about you.
 
 An **alias** is a shorter name you are shown by instead, written with an at sign, such as `@Bob`. Take one, or give it
 up, under **Profile** in Settings; either needs an open balance, and the rules are those of
@@ -149,8 +149,9 @@ and both names find you.
 
 `/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they have
 played with what they staked and won, and the games they publish ([publishing](../games/publishing.md#publish-it)).
-**Your profile**, in the account menu, is your own page as others see it, with the way to your name in Settings and to
-your bets, which are yours alone.
+Your page starts with your first deposit, when the casino first registers your account: until then the wallet shows
+your uname and links to no page. **Your profile**, in the account menu, is your own page as others see it, with the
+way to your name in Settings and to your bets, which are yours alone.
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.

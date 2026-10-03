@@ -16,7 +16,7 @@ export interface WalletBounds {
 /** Everything a game learns about the player: two names for one person, and nothing else of them. */
 export interface WalletInfo {
   /** Their uname, written `~uname`: theirs for good, whatever they are called today. Key anything of
-   * your own by this. Null until the casino knows the player, which it does once they fund a channel. */
+   * your own by this. Every account has one from the start; null only while the wallet cannot reach the casino. */
   uname: string | null;
   /** The alias they are shown by, written `@alias`; null unless they took one. */
   alias: string | null;

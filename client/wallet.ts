@@ -348,6 +348,9 @@ export class CasinoWallet extends GameSessions {
   /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
   async check() {
     await this.refresh();
+    // Asked again if the casino did not answer, or had no profile to give before it registered the account's channel.
+    if (!this.uname || (this.channel?.registered && !this.profile))
+      await this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.sweep().catch(error => console.error('Adding ETH to your balance failed', error));
     await this.collectPayouts();
   }
@@ -395,6 +398,9 @@ export class CasinoWallet extends GameSessions {
           domain: domain(this.expectedChainId, this.config.contractAddress),
           lastChainCheck: 0,
           buying: null,
+          uname: null,
+          alias: null,
+          profile: null,
         });
         this.hydrate(await this.storage.get(storageKey));
       };
@@ -407,13 +413,15 @@ export class CasinoWallet extends GameSessions {
     this.synced.catch(() => {});
   }
   /** The account's first look at the chain and its channel's at the casino, once the deployment check has passed.
-   * Nothing else with ETH runs meanwhile: every such path waits for it. */
+   * Nothing else with ETH runs meanwhile: every such path waits for it. Its names come at once, before that check. */
   async sync() {
+    const named = this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.verified;
     await this.withChannelLock(true, async () => {
       await this.refreshLocked();
       if (this.channel?.registered) await this.activate().catch(() => {});
     });
+    await named;
     this.render();
   }
   hydrate(saved: any) {
@@ -537,14 +545,26 @@ export class CasinoWallet extends GameSessions {
     }
     this.render();
   }
-  /** Every channel reply carries both names its player answers to. */
+  /** Ask the casino for this account's uname, signed for its first channel, which every account has whether or not it
+   * was ever opened: a uname is the account's before its first deposit. Its profile comes with it once it has one. A
+   * profile already here came from a later reply, and stays. */
+  async lookUpNames(this: CasinoWallet) {
+    if (this.recoveryOnly) return;
+    const address = this.address,
+      opening = { channelId: channelId(address, 0), player: address, index: '0' };
+    const { uname, profile } = await this.api(`/api/channels/${opening.channelId}/uname`, { opening });
+    if (this.address !== address || typeof uname !== 'string' || this.profile) return;
+    Object.assign(this, { uname, alias: profile?.alias ?? null, profile });
+    this.render();
+  }
+  /** Every channel reply carries both names its player answers to, and a registered channel means the casino has met
+   * the account, so its public profile exists. */
   noteNames(this: CasinoWallet, reply: { uname?: unknown; alias?: unknown }) {
     if (typeof reply?.uname !== 'string') return;
     const alias = typeof reply.alias === 'string' ? reply.alias : null;
-    if (reply.uname === this.uname && alias === this.alias) return;
-    this.uname = reply.uname;
-    this.alias = alias;
-    this.profile = null;
+    if (reply.uname === this.uname && alias === this.alias && this.profile) return;
+    Object.assign(this, { uname: reply.uname, alias, profile: null });
+    this.render();
     void this.refreshProfile().catch(() => {});
   }
   /** This account's public record, read from the route everyone reads it from. */
@@ -563,7 +583,7 @@ export class CasinoWallet extends GameSessions {
     const c = this.channel;
     if (!c?.registered || Number(c.onchain?.status) !== 1)
       throw new Error('Open a funded channel before taking an alias');
-    this.profile = await this.api(`/api/channels/${c.state.channelId}/alias`, { alias: alias?.trim() ?? null }, c);
+    this.profile = await this.api(`/api/channels/${c.state.channelId}/alias`, { alias: alias?.trim() ?? null });
     this.uname = this.profile!.uname;
     this.alias = this.profile!.alias;
     this.render();
@@ -581,7 +601,7 @@ export class CasinoWallet extends GameSessions {
     const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.registered));
     if (!c?.registered) throw new Error('This account has no channel to publish from');
     if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a funded channel to publish games');
-    this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }, c);
+    this.profile = await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url });
     this.render();
     return this.profile;
   }
@@ -916,21 +936,23 @@ export class CasinoWallet extends GameSessions {
     if (!this.lastChainCheck || Date.now() - this.lastChainCheck > CHECK_EVERY) await this.refreshLocked();
     if (!this.funded) throw new Error('Open or recover a channel before playing');
   }
-  async api(path: string, body: unknown = undefined, channel: WalletChannel | null = this.channel) {
+  /** A request to the casino. One under `/api/channels/:id` carries that channel's access token. */
+  async api(path: string, body: unknown = undefined) {
     if (body !== undefined) this.requireDurableState();
     if (path !== '/api/config') this.requireService();
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    if (path.startsWith('/api/channels/') && channel) {
+    const channel = /^\/api\/channels\/(0x[0-9a-fA-F]{64})/.exec(path)?.[1];
+    if (channel) {
       const now = Math.floor(Date.now() / 1000);
-      let token = this.tokens.get(channel.state.channelId);
+      let token = this.tokens.get(channel);
       // A token is signed for a minute and used while it has twenty seconds left, room for a slow request.
       if (!token || token.expiresAt - now < 20) {
-        const message = { channelId: channel.state.channelId, expiresAt: now + 60 };
+        const message = { channelId: channel, expiresAt: now + 60 };
         token = {
           expiresAt: message.expiresAt,
           header: authorization(message, await this.signer.signTypedData(this.domain, ACCESS_TYPES, message)),
         };
-        this.tokens.set(channel.state.channelId, token);
+        this.tokens.set(channel, token);
       }
       headers.authorization = token.header;
     }

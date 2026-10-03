@@ -39,7 +39,7 @@ interface ActiveGame {
   /** The channel this game is bound to; null until a channel is open. */
   channelId: string | null;
   /** The uname the page was told, once it asked: a game keys what it saves by it, so it restarts when that changes, as
-   * it does with a first deposit. */
+   * it does with the account. */
   uname?: string | null;
   identity: GameIdentity;
   /** Who publishes it, written as they are written (`@alias` or `~uname`); none for a game opened by its URL. */
@@ -1389,7 +1389,9 @@ let shownAccount: string | null = null;
 /** The account's own names, in the top bar, its menu and Settings, and the games it publishes. */
 function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
-    open = wallet.funded && !wallet.recoveryOnly;
+    open = wallet.funded && !wallet.recoveryOnly,
+    // A name is the account's from the start; its public page is there once the casino has met it, at its first deposit.
+    page = name && wallet.profile ? `/${name}` : null;
   $('account-name').textContent = name ?? 'Account';
   $('menu-name').textContent = name ?? 'Your account';
   // The uname is always there; when an alias covers it up, it is shown underneath.
@@ -1397,18 +1399,21 @@ function renderProfile() {
   $('menu-uname').textContent = uname;
   $('wallet-uname').textContent = uname;
   for (const id of ['menu-profile', 'settings-profile']) {
-    $<HTMLAnchorElement>(id).href = name ? `/${name}` : '/';
-    $(id).classList.toggle('hidden', !name);
+    $<HTMLAnchorElement>(id).href = page ?? '/';
+    $(id).classList.toggle('hidden', !page);
   }
-  $('wallet-name').textContent = name ?? 'No name yet: your first deposit gives you one.';
-  $<HTMLAnchorElement>('wallet-name-link').href = name ? `/${name}` : '/';
+  $('wallet-name').textContent = name ?? '—';
+  if (page) $<HTMLAnchorElement>('wallet-name-link').href = page;
+  else $('wallet-name-link').removeAttribute('href');
   for (const id of ['pick-alias', 'publish-game']) $<HTMLButtonElement>(id).disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.funded || Boolean(wallet.pending);
   $<HTMLButtonElement>('clear-alias').disabled = uiBusy || !open;
   $('clear-alias').classList.toggle('hidden', !wallet.alias);
   $('alias-note').textContent = !open
-    ? 'Deposit into your balance to take an alias or publish games.'
+    ? wallet.profile
+      ? 'Deposit into your balance to take an alias or publish games.'
+      : 'Your first deposit gives you a public profile, and lets you take an alias and publish games.'
     : 'An alias is unique, and two that read alike are the same alias. Your uname stays yours either way.';
   const games = wallet.profile?.games ?? [];
   $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
@@ -2139,7 +2144,7 @@ for (const id of ['wallet-name-link', 'menu-profile', 'settings-profile'])
   $(id).addEventListener('click', event => {
     event.preventDefault();
     $('account-menu').hidePopover?.();
-    if (wallet.uname) void openProfile(showName(wallet));
+    if (wallet.profile) void openProfile(showName(wallet));
   });
 $('network-name').textContent = wallet.networkName;
 // The account is saved with a passkey, whose secret is its key, or as the key itself in a file.

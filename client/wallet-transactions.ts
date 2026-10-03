@@ -214,7 +214,7 @@ export class WalletTransactions {
     if (!this.funded || !c) throw new Error('Open a balance before buying collateral.');
     if (this.recoveryOnly || this.config.collateralRate == null)
       throw new Error('The casino offers no collateral now.');
-    const { offer } = await this.api(`/api/channels/${c.state.channelId}/collateral`, { amount: String(amount) }, c);
+    const { offer } = await this.api(`/api/channels/${c.state.channelId}/collateral`, { amount: String(amount) });
     this.buying = verifyOffer(
       this.domain,
       offer,
@@ -398,7 +398,7 @@ export class WalletTransactions {
   async activate(this: CasinoWallet) {
     const c = this.channel!;
     if (this.recoveryOnly) return;
-    const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening: c.opening }, c);
+    const reply = await this.api(`/api/channels/${c.state.channelId}/activate`, { opening: c.opening });
     this.noteNames(reply);
     if (same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
       if (c.registered) return;

@@ -356,7 +356,26 @@ the latest statement, and an amount of zero or above the balance.
 ## The profile
 
 A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is the reply of
-these two routes.
+the alias and games routes. The casino has one for every account it has registered a channel of.
+
+### `POST /api/channels/:id/uname`
+
+The account's uname, told to the account alone: the token proves it holds the account's key, for any of its channels,
+opened or not, so an account has its uname before its first deposit. The wallet asks with its first channel, `index`
+`0`, as soon as it loads an account. Asking records nothing, and this route tells nobody the uname of an address
+without that address's signature: the casino derives unames with a key it keeps secret. It counts against the
+[budget](index.md#budgets-and-queues) of registering a channel.
+
+| Body field | Type   | Meaning                                                                                                                                         |
+| ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids) of any of the account's channels; `channelId` is `:id` |
+
+| Response field | Type           | Meaning                                                                                    |
+| -------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `uname`        | string         | The account's uname                                                                        |
+| `profile`      | object or null | Its public profile, once the casino has registered a channel of the account; `null` before |
+
+`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields.
 
 ### `POST /api/channels/:id/alias`
 

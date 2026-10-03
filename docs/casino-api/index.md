@@ -71,10 +71,10 @@ one request and serves until it expires: the wallet signs one for 60 seconds and
 remain, and the [developer kit](../sdk/developer.md) signs one for each request.
 
 A channel route answers `401` `unauthorized` to a missing, expired or wrongly signed token and to a channel it does not
-know, before anything else: an unknown channel never answers `404`. The one route that takes an unknown channel is
-[activation](channels.md#post-apichannelsidactivate), which checks the token against the opening in its body. Opening a
-round needs a key whose account publishes a game; settling needs only the key of the bets' developer, so a developer
-who takes their last game down still pays the bets placed on it.
+know, before anything else: an unknown channel never answers `404`. The two routes that take an unknown channel are
+[activation](channels.md#post-apichannelsidactivate) and the [uname](channels.md#post-apichannelsiduname), which check
+the opening in their body and then the token against it. Opening a round needs a key whose account publishes a game; settling needs
+only the key of the bets' developer, so a developer who takes their last game down still pays the bets placed on it.
 
 The token only says who is asking. What a request commits to is signed in its body: an operation, a `Redeem`, a
 `BankWithdraw`, a `Settlement` or a `BankCasinoBet`.
@@ -106,13 +106,13 @@ misses none: save it and resume from it, even after an empty page. `GET /api/pla
 The casino counts requests in fixed 60-second windows, each starting with a key's first request. A budget tracks at
 most 1,024 keys and drops the oldest to make room. A spent budget answers `429` `rate-limited`.
 
-| Budget                                         | Per       | Requests a minute |
-| ---------------------------------------------- | --------- | ----------------- |
-| Every request but `OPTIONS`                    | Client IP | 6,000             |
-| Registering a channel the casino does not know | Client IP | 60                |
-| Channel requests, after authentication         | Channel   | 6,000             |
-| Developer requests, after authentication       | Developer | 6,000             |
-| Alias and game changes                         | Channel   | 200               |
+| Budget                                                             | Per       | Requests a minute |
+| ------------------------------------------------------------------ | --------- | ----------------- |
+| Every request but `OPTIONS`                                        | Client IP | 6,000             |
+| Registering a channel the casino does not know, and asking a uname | Client IP | 60                |
+| Channel requests, after authentication                             | Channel   | 6,000             |
+| Developer requests, after authentication                           | Developer | 6,000             |
+| Alias and game changes                                             | Channel   | 200               |
 
 The client IP is the connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
 

@@ -116,16 +116,16 @@ a bet to ([bounds](#bounds)).
 ### `wallet.info`
 
 Everything a game learns about the player, and what to price bets against. It takes no parameters, and is answered
-once the wallet has first heard from the casino. A page that asked is loaded again when the player is first named, at
-their first deposit, so that it keys what it saves by that name.
+once the wallet has first heard from the casino. A page that asked is loaded again when the uname changes, as it does
+when the player switches accounts, so that it keys what it saves by that name.
 
-| Result field       | Type               | Meaning                                                                                                                                                                        |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. `null` until the casino knows the player, which it does from their first deposit. A game keys anything of its own by it |
-| `alias`            | `string` or `null` | The name the player is shown by, written `@alias`; `null` unless they took one                                                                                                 |
-| `chainId`          | `string`           | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil                                                                               |
-| `virtualBankroll`  | decimal string     | The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino bets against. The casino settles every casino bet it admits |
-| `recommendedStake` | decimal string     | A stake to start the stake field at: 10^12 wei on Sepolia and 10^15 on a local Anvil                                                                                           |
+| Result field       | Type               | Meaning                                                                                                                                                                                                            |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. Every account has one from the start, before its first deposit; `null` only while the wallet cannot reach the casino. A game keys anything of its own by it |
+| `alias`            | `string` or `null` | The name the player is shown by, written `@alias`; `null` unless they took one                                                                                                                                     |
+| `chainId`          | `string`           | The chain the wallet is pinned to, in decimal: `11155111` for Sepolia, `31337` for a local Anvil                                                                                                                   |
+| `virtualBankroll`  | decimal string     | The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino bets against. The casino settles every casino bet it admits                                     |
+| `recommendedStake` | decimal string     | A stake to start the stake field at: 10^12 wei on Sepolia and 10^15 on a local Anvil                                                                                                                               |
 
 ### `wallet.round`
 

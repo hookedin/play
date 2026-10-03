@@ -167,9 +167,10 @@ host and accounts sharing a browser never read each other's state. `HookedIn.sto
 hookedin:<page path>:<chainId>:<uname>
 ```
 
-It keys on the uname, which is the player's for good; never key by the alias, which the player can change. A player has
-no uname until their first deposit, and the wallet then loads the page again. `RoundClient` saves its round under
-`hookedin:round:<name>:<chainId>:<uname>`, where `name` is the page's path unless you pass one.
+It keys on the uname, which is the player's for good; never key by the alias, which the player can change. Every
+account has its uname as soon as the wallet loads it, before any deposit, and the wallet loads the page again when the
+player switches accounts. `RoundClient` saves its round under `hookedin:round:<name>:<chainId>:<uname>`, where `name`
+is the page's path unless you pass one.
 
 ## Reloads and tabs
 
