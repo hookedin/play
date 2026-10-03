@@ -247,10 +247,11 @@ contract HookedInCasino {
         return keccak256(abi.encode(player, channelIndex[player]));
     }
 
-    // Anyone may deposit into any account's channel, and an account's first deposit opens it. The balance takes the
-    // money in with a deposit operation the casino signs; until then a close adds it to what the channel is owed.
+    // Anyone may deposit into any account's channel, and an account's first deposit opens it, even a deposit of nothing.
+    // The balance takes the money in with a deposit operation the casino signs; until then a close adds it to what the
+    // channel is owed.
     function deposit(address player) external payable nonReentrant {
-        if (player == address(0) || player == address(this) || msg.value == 0) revert InvalidTerms();
+        if (player == address(0) || player == address(this)) revert InvalidTerms();
         _deposit(player, msg.value);
     }
 

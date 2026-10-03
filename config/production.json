@@ -3,7 +3,7 @@
   "casino": "https://casino.hookedin.com",
   "deployment": {
     "chainId": "11155111",
-    "contractAddress": "0x544CCB6590c7ED42bF1416a7C3dDee50d3b41335",
+    "contractAddress": "0x50Da0fcCC0d3aF02D90b3321a9cfE1CBbb43eF30",
     "operator": "0x92e3dd06E0f87756B02a7c178C46a8f8498fd9A3",
     "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
     "witnessRpcUrl": "https://sepolia.gateway.tenderly.co"

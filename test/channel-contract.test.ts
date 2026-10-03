@@ -45,7 +45,7 @@ import {
 } from '../protocol/protocol.ts';
 import { admits, MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
 
-test('a channel is its account: anyone deposits into it, the first deposit opens it, and a close ends it', async t => {
+test('a channel is its account: anyone deposits into it, the first deposit opens it, even of nothing, and a close ends it', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
@@ -58,12 +58,16 @@ test('a channel is its account: anyone deposits into it, the first deposit opens
   const onchain = await f.contract.channels(ch.opening.channelId);
   assert.deepEqual([onchain.player, onchain.status, onchain.deposited, onchain.principal], [a.address, 1n, 800n, 800n]);
   assert.equal(await f.contract.protectedFunds(), 800n);
-  for (const [to, value] of [
-    [a.address, 0n],
-    [ZeroAddress, 1n],
-    [await f.contract.getAddress(), 1n],
-  ] as const)
-    await assert.rejects(f.contract.connect(b).deposit.staticCall(to, { value }));
+  // A deposit of nothing opens an account's channel, and adds nothing to it or to an open one.
+  const d = env.wallets[4];
+  await (await f.contract.connect(b).deposit(d.address)).wait();
+  await (await f.contract.connect(b).deposit(a.address)).wait();
+  const opened = await f.contract.channels(channelId(d.address, 0));
+  assert.deepEqual([opened.player, opened.status, opened.deposited, opened.principal], [d.address, 1n, 0n, 0n]);
+  assert.equal((await f.contract.channels(ch.opening.channelId)).deposited, 800n);
+  assert.equal(await f.contract.protectedFunds(), 800n);
+  for (const to of [ZeroAddress, await f.contract.getAddress()])
+    await assert.rejects(f.contract.connect(b).deposit.staticCall(to, { value: 1n }), reverts('InvalidTerms'));
   // The base needs no signature, and is owed every deposit it has not taken in; any other checkpoint needs both.
   assert.equal((await f.contract.supported(ch.base)).balance, 0n);
   await assert.rejects(f.contract.supported(checkpointEvidence({ ...ch.state, balance: '1' })));
