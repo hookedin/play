@@ -91,7 +91,7 @@ export function createStaticServer(dir, config, build) {
           data = `export default ${JSON.stringify(config)};`;
           type = types['.js'];
         } else {
-          // A path without an extension, such as the wallet's /wallet or /@hookedin/dice, is a route of the page's own.
+          // A path without an extension, such as the wallet's /wallet or /@playhookedin/dice, is a route of the page's own.
           const file = path.join(dir, path.extname(pathname) ? pathname : 'index.html');
           data = await fs.promises.readFile(file);
           type = types[path.extname(file)] ?? 'application/octet-stream';
