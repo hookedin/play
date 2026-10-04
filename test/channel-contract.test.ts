@@ -261,37 +261,26 @@ test('a lock-in records after the withdrawals signed before it, so it locks in a
   await assert.rejects(f.contract.withdraw.staticCall(out.evidence), reverts('InvalidState'));
 });
 
-test("a loan is the casino's money in the balance: a withdrawal or a lock-in pays it back with its fee, a close is owed the balance less it, and what a balance cannot repay is forgiven", async t => {
+test("a withdrawal pays the casino its fee out of the balance, and a deposit's fee the casino paid into it comes out of house cash", async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
-    [, a, b, c] = env.wallets,
+    [, a] = env.wallets,
     recipient = Wallet.createRandom().address;
   await (await f.contract.fundBankroll({ value: 1000n })).wait();
-  const lend = async (ch: any, amount: bigint) => {
-    const lent = await step(f, ch, 7, amount);
-    return { ...ch, state: lent.state, evidence: await countersigned(f, ch, lent) };
-  };
-  // 1000 deposited and 10 lent: the balance holds 1010, and a withdrawal of 600 with a fee of 5 takes 615 of it. The
-  // recipient is paid the 600; the loan and the fee stay with the house.
-  const ch = await lend(await open(f, a, 1000n), 10n),
+  // 1000 deposited and its network fee of 10 paid by the casino, a credit: the balance holds 1010, and a withdrawal of
+  // 600 with a fee of 5 takes 605 of it. The recipient is paid the 600, and the close is owed the 405 left.
+  const deposited = await open(f, a, 1000n),
+    paid = await step(f, deposited, 3, 10n),
+    ch = { ...deposited, state: paid.state, evidence: await countersigned(f, deposited, paid) },
     out = await step(f, ch, 5, 600n, { recipient, fee: 5n });
-  assert.deepEqual([out.state.balance, out.state.withdrawn, out.state.loan], ['395', '600', '0']);
+  assert.deepEqual([out.state.balance, out.state.withdrawn], ['405', '600']);
   await (await f.contract.withdraw(out.evidence)).wait();
   assert.equal(await env.provider.getBalance(recipient), 600n);
   await forceClose(f, env, ch, await countersigned(f, ch, out), a);
-  assert.equal((await claimOf(f, ch.opening)).amount, 395n);
-  // A close pays the loan back first: 300 won on 1000 with 10 lent is owed 1300.
-  const other = await lend(await open(f, b, 1000n), 10n);
-  await forceClose(f, env, { ...other, ...(await signedIncrease(f, other, 300n)) }, undefined, b);
-  assert.equal((await claimOf(f, other.opening)).amount, 1300n);
-  // All of it lost, the loan with it: the close is owed nothing. House cash is what it was funded with, the 1000 lost
-  // and the 5 of the first close's fee, less the 300 won: the loans cost it nothing.
-  const busted = await lend(await open(f, c, 1000n), 10n),
-    lost = await step(f, busted, 2, 1010n);
-  await forceClose(f, env, busted, await countersigned(f, busted, lost), c);
-  assert.equal((await claimOf(f, busted.opening)).amount, 0n);
-  assert.equal(await f.contract.withdrawableHouse(), 1705n);
+  assert.equal((await claimOf(f, ch.opening)).amount, 405n);
+  // House cash pays what the deposits do not: the 10 the casino paid, less the 5 fee it kept.
+  assert.equal(await f.contract.withdrawableHouse(), 995n);
 });
 
 test('a withdrawal draws only on the deposits its checkpoint took in, so a deposit that lands before it is recorded stays protected', async t => {

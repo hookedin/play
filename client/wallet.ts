@@ -662,9 +662,7 @@ export class CasinoWallet extends GameSessions {
       nativeBalance: this.nativeBalance || '0',
       channelId: c?.opening.channelId || null,
       channelStatus: c?.onchain?.status || '0',
-      // What the casino lent the balance, which a withdrawal, a lock-in or a close pays back first, and what a
-      // withdrawal can take.
-      loan: open ? c.state.loan : '0',
+      // What a withdrawal can take.
       withdrawable: String(this.withdrawable()),
       // The deposits the contract still holds for this balance, and the collateral locked into it.
       principal: open ? c.onchain.principal : '0',

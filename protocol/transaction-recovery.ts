@@ -33,11 +33,11 @@ async function nonceAt(context: RecoveryContext, address: string, block: ChainBl
  * block.timestamp alone can make the same call cost more, as rewriting a close's deadline does. */
 export const gasLimitFor = (estimate: bigint) => (estimate * 120n + 99n) / 100n;
 
-/** What the casino lends a deposit for its network fee: what its transaction kept back, its gas limit at its fee cap, but
- * no more than the rule a wallet prices its transactions by allows: the gas limit for an estimate of the gas it used,
- * which a node makes up to 1.5% high, at twice the base fee of the block before its own plus its tip. A deposit priced
- * on that block keeps back no more than this. */
-export function depositLoan(
+/** What the casino pays of a deposit's network fee: what its transaction kept back, its gas limit at its fee cap, but no
+ * more than the rule a wallet prices its transactions by allows: the gas limit for an estimate of the gas it used, which
+ * a node makes up to 1.5% high, at twice the base fee of the block before its own plus its tip. A deposit priced on that
+ * block keeps back no more than this. */
+export function depositFee(
   tx: { gasLimit: bigint; maxFeePerGas: bigint; maxPriorityFeePerGas: bigint },
   gasUsed: bigint,
   baseFee: bigint,

@@ -52,7 +52,7 @@ way, and the deadline; and when the wallet last read the chain. Its actions are 
 
 What your balance holds above your deposits and collateral is winnings, a claim on the shared bankroll. **Lock in my
 balance**, under Recovery, makes your balance deposits: your account signs a lock-in, a [withdrawal](#withdraw) into
-your own channel, of all of it but its loan and the fee for sending it, which it pays as well. The casino signs it at
+your own channel, of all of it but the fee for sending it, which it pays as well. The casino signs it at
 once and sends it to the contract, which pays it like any withdrawal, but into your channel, as deposits the contract
 holds.
 
@@ -65,8 +65,8 @@ of deposits, and withdrawing it needs no house cash, until you win more.
 ## Withdraw
 
 A [withdrawal](getting-started.md#withdraw) is an operation your account signs that names the address it pays as its
-`recipient`. Your balance pays it, pays back what the casino lent it ([deposit](getting-started.md#deposit)) and pays
-the casino's fee for sending it to the contract ([fees and gas](#fees-and-gas)). The casino signs the checkpoint after
+`recipient`. Your balance pays it and the casino's fee for sending it to the contract
+([fees and gas](#fees-and-gas)). The casino signs the checkpoint after
 it at once, so your balance is lower from then on, and sends the operation with that signature, the evidence your
 receipt holds, to the contract's `withdraw`
 ([functions that change state](../reference/contract.md#functions-that-change-state)); anyone may send it. The contract
@@ -107,8 +107,7 @@ deposits and collateral cover as its protected amount, and the rest as winnings.
 
 The evidence is your latest countersigned checkpoint, or the channel's base while nothing has been signed since it
 began, either alone or followed by the last operation the casino signed;
-[finalization](../reference/contract.md#finalization) says what it is owed, what the casino lent your balance coming off
-it first. A close moves your account to its next channel at once, whoever started it: your next balance plays there
+[finalization](../reference/contract.md#finalization) says what it is owed. A close moves your account to its next channel at once, whoever started it: your next balance plays there
 while the old channel closes. The close pays your account, at your deposit address, and until your next balance has a
 deposit the wallet puts nothing there into a balance by itself ([when ETH waits at the
 address](getting-started.md#when-eth-waits-at-the-address)).
@@ -202,7 +201,7 @@ network's estimate is higher; the casino cannot raise these caps. The casino sen
 contract and pays their gas, and each pays the casino a fee for it out of your balance, set from the network's gas price
 ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
 tab opens and again before signing, and signs none above 300,000 gas at the gas price it reads itself, or above the fee
-it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it is small
+it showed you. A deposit's fee comes out of what it deposits, and the casino pays it into your balance when it is small
 ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where the wallet
 keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes into your
 balance while the channel is active. Starting **Close without the casino** turns that off, so ETH sent for its fee stays

@@ -131,12 +131,9 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   // A withdrawal whose claim its account collects into the contract names that, not the address it first paid.
   const redirected = receiptSummary({ ...sent, to: contract, recorded: true, owed: '500' }, contract);
   assert.match(redirected.description!, /^From your balance into your own channel, as deposits the contract holds\./);
-  // One that paid the casino its fee for sending it, and back a loan, says so.
-  const repaying = receiptSummary({ ...sent, fee: '2', proof: { base: { loan: '5' } } }, contract);
-  assert.match(
-    repaying.description!,
-    /Your balance paid the casino .* METH for sending it and paid back the .* METH the casino lent it\./,
-  );
+  // One that paid the casino its fee for sending it says so.
+  const paying = receiptSummary({ ...sent, fee: '2' }, contract);
+  assert.match(paying.description!, /Your balance paid the casino .* METH for sending it\./);
 });
 
 test('a transfer reads as sent to the player it named, and one collected as received from the player who sent it', () => {
@@ -181,13 +178,13 @@ test('a transfer reads as sent to the player it named, and one collected as rece
   assert.match(received.description!, /^From @alice, collected into your balance\./);
 });
 
-test('a loan reads as the network fee the casino lent the balance', () => {
-  const lent = receiptSummary(
-    { kind: 'loan', status: 'signed', amount: '5', details: { id: '0x' + 'b'.repeat(64) }, balance: '15' },
+test("a deposit's network fee reads as paid into the balance by the casino", () => {
+  const paid = receiptSummary(
+    { kind: 'deposit-fee', status: 'signed', amount: '5', details: { id: '0x' + 'b'.repeat(64) }, balance: '15' },
     contract,
   );
-  assert.deepEqual([lent.title, lent.amountLabel], ['Network fee lent', 'Lent to you']);
-  assert.match(lent.description!, /your next withdrawal or lock-in pays it back first/);
+  assert.deepEqual([paid.title, paid.amountLabel, paid.tone], ['Network fee paid', 'Received', 'positive']);
+  assert.match(paid.description!, /which the casino paid into your balance/);
 });
 
 test('ETH arriving at the address and what a deposit adds each read as their own step', () => {

@@ -199,12 +199,12 @@ const KINDS: Record<
       `To ${r.name ?? r.details?.counterparty}, off-chain: their wallet collects it into their balance, and nothing about it goes on-chain. ${balanceOf(r)}`,
   },
   'lock-in': { title: 'Balance locked in', declined: 'Lock-in declined' },
-  loan: {
-    title: 'Network fee lent',
-    label: 'Lent to you',
-    declined: 'Loan declined',
+  'deposit-fee': {
+    title: 'Network fee paid',
+    label: 'Received',
+    incoming: true,
     describe: r =>
-      `The network fee your deposit ${r.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or lock-in pays it back first, and a close is owed your balance less it. ${balanceOf(r)}`,
+      `The network fee your deposit ${r.details?.id ?? ''} kept back, which the casino paid into your balance. ${balanceOf(r)}`,
   },
   received: {
     title: 'Received at your address',
@@ -363,12 +363,7 @@ export function receiptSummary(
   // own channel.
   if (receipt.withdrawal) {
     const into = same(receipt.to, contract),
-      repaid = BigInt(receipt.proof?.base?.loan ?? 0),
-      fee = BigInt(receipt.fee ?? 0),
-      charges = [
-        fee ? `the casino ${exact(fee)} METH for sending it` : '',
-        repaid ? `back the ${exact(repaid)} METH the casino lent it` : '',
-      ].filter(Boolean);
+      fee = BigInt(receipt.fee ?? 0);
     status = receipt.paid
       ? into
         ? 'In as deposits'
@@ -384,7 +379,7 @@ export function receiptSummary(
       `${receipt.kind === 'lock-in' ? 'All of your balance' : 'From your balance'} ${
         into ? 'into your own channel, as deposits the contract holds' : `to ${receipt.to}`
       }.`,
-      charges.length ? `Your balance paid ${charges.join(' and paid ')}.` : '',
+      fee ? `Your balance paid the casino ${exact(fee)} METH for sending it.` : '',
       receipt.paid
         ? into
           ? 'The contract has put it in, and your balance takes it in as a deposit.'

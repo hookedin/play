@@ -32,8 +32,6 @@ export interface Checkpoint {
   deposited: Integer;
   /** How much the balance has paid out in withdrawals and lock-ins. A close adds what did not become a claim. */
   withdrawn: Integer;
-  /** How much of the balance the casino lent it. A withdrawal, a lock-in or a close pays it back first. */
-  loan: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
  * under; or, for a game opened by its URL alone, the zero address and that URL. */
@@ -51,9 +49,9 @@ export interface Details {
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
   /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a settled developer bet,
-   * a developer's earnings, or another player, written `~uname`: a debit that pays a player names them, and the credit
-   * that collects it the player it came from. A game's payment pays the bankroll and names nothing, as a loan of a
-   * deposit's network fee does. */
+   * a developer's earnings, a deposit's network fee, or another player, written `~uname`: a debit that pays a player
+   * names them, and the credit that collects it the player it came from. A game's payment pays the bankroll and names
+   * nothing. */
   counterparty?: string;
   /** A developer bet's meta: the game's own JSON, saying what the bet is, which the casino keeps and never reads. A
    * debit that names its game and carries meta is a developer bet: a bet against the game's developer, whose bank

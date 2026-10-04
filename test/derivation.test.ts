@@ -54,8 +54,8 @@ test('the contract and deriveState agree on every operation kind and invalid enc
     );
     await assert.rejects(f.contract.supported(evidence));
   };
-  // Valid transitions: a bet, a debit, a credit, a deposit, a withdrawal, a lock-in and a loan. The memo means nothing
-  // to either verifier.
+  // Valid transitions: a bet, a debit, a credit, a deposit, a withdrawal and a lock-in. The memo means nothing to either
+  // verifier.
   const bet = await step(f, a, 1, 100n, { ...below(1n << 62n, 150n), seed: id('seed') });
   await agree(a, bet.evidence);
   const debit = await step(f, a, 2, 10n);
@@ -67,24 +67,20 @@ test('the contract and deriveState agree on every operation kind and invalid enc
   await agree(b, deposit.evidence);
   assert.deepEqual([b.state.balance, b.state.deposited], ['1050', '1030']);
   // A withdrawal takes its amount out, and names whom it goes to; a lock-in goes into the account's own channel and
-  // names nobody. A loan adds to the balance and to what it owes, which the next withdrawal or lock-in pays back, with
-  // the fee it names. There is no other kind.
+  // names nobody, and each pays the fee it names. There is no other kind.
   const recipient = '0x5555555555555555555555555555555555555555';
   await agree(b, (await step(f, b, 5, 40n, { recipient })).evidence);
   assert.equal(b.state.balance, '1010');
-  await agree(b, (await step(f, b, 7, 5n)).evidence);
-  assert.deepEqual([b.state.balance, b.state.loan], ['1015', '5']);
   await disagreeNever(await craft(b, { kind: 5, amount: 1011n, recipient }), /Insufficient balance/);
   await disagreeNever(await craft(b, { kind: 5, amount: 1000n, recipient, fee: 11n }), /Insufficient balance/);
   await agree(b, (await step(f, b, 6, 10n, { fee: 3n })).evidence);
-  assert.deepEqual([b.state.balance, b.state.withdrawn, b.state.loan], ['997', '50', '0']);
-  await disagreeNever(await craft(b, { kind: 8, amount: 10n, recipient }), /Unknown operation/);
+  assert.deepEqual([b.state.balance, b.state.withdrawn], ['997', '50']);
+  await disagreeNever(await craft(b, { kind: 7, amount: 10n, recipient }), /Unknown operation/);
   // Every field a kind does not use must be zero; both sides reject the same encodings.
   for (const [kind, reason] of [
     [2, /Invalid debit/],
     [3, /Invalid credit/],
     [4, /Invalid deposit/],
-    [7, /Invalid loan/],
   ] as const)
     await disagreeNever(await craft(a, { kind, amount: 10n, recipient }), reason);
   // A withdrawal names neither nobody nor the contract itself, a lock-in no one at all, and only they pay a fee.
@@ -97,7 +93,6 @@ test('the contract and deriveState agree on every operation kind and invalid enc
     [2, /Invalid debit/],
     [3, /Invalid credit/],
     [4, /Invalid deposit/],
-    [7, /Invalid loan/],
   ] as const)
     await disagreeNever(await craft(a, { kind, amount: 10n, fee: 1n }), reason);
   for (const [kind, reason] of [
@@ -106,7 +101,6 @@ test('the contract and deriveState agree on every operation kind and invalid enc
     [4, /Invalid deposit/],
     [5, /Invalid withdrawal/],
     [6, /Invalid lock-in/],
-    [7, /Invalid loan/],
   ] as const) {
     const named = kind === 5 ? { recipient } : {};
     const kindOf = (values: Record<string, unknown>) => ({ kind, ...named, ...values });

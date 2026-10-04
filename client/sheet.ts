@@ -187,10 +187,10 @@ function renderSafety() {
   const held = BigInt(wallet.publicState.nativeBalance || 0),
     fee = wallet.depositFee;
   const whole = fee > 0n && held > fee ? held - fee : 0n,
-    lent = wallet.feeLoan(whole, fee);
+    paid = wallet.depositFeePaid(whole, fee);
   $('deposit-fee').textContent =
     fee > 0n
-      ? `Address balance ${exact(held)} METH. Estimated maximum network fee ${exact(fee)} METH. Up to ${exact(whole + lent)} METH can be added now${lent ? ': the casino lends you the network fee, and your next withdrawal pays it back' : ''}. The final fee is recorded in Activity.`
+      ? `Address balance ${exact(held)} METH. Estimated maximum network fee ${exact(fee)} METH. Up to ${exact(whole + paid)} METH can be added now${paid ? ': the casino pays the network fee' : ''}. The final fee is recorded in Activity.`
       : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
 }
 
@@ -265,7 +265,6 @@ interface SendState {
   busy: boolean;
   ready: boolean;
   closing: boolean;
-  loan: bigint;
 }
 /** Why a form that takes money out of the balance cannot now, when the balance itself is the reason. */
 const sendBlocked = ({ open, ready, closing }: SendState, verb: string) =>
@@ -284,15 +283,10 @@ const sendBlocked = ({ open, ready, closing }: SendState, verb: string) =>
               : null;
 /** Withdraw: part of the signed balance, or all of it with Max, which the casino then pays to the address entered. */
 function renderWithdraw(state: SendState) {
-  const { open, busy, loan } = state,
+  const { open, busy } = state,
     request = withdrawRequest(),
     amount = request.amount,
     unit = withdrawUnit(),
-    // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
-    charges = [
-      wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} METH for sending it` : '',
-      loan ? `back the ${formatAmount(loan)} METH the casino lent you` : '',
-    ].filter(Boolean),
     blocked = sendBlocked(state, 'Withdraw');
   $('withdraw-form').classList.toggle('hidden', !open);
   // Money goes out signing the casino's fee only once it is shown.
@@ -313,7 +307,7 @@ function renderWithdraw(state: SendState) {
     (!touched && request.error
       ? 'Enter an amount, or Max, and the address that should receive it.'
       : request.error ||
-        `${receives}${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`);
+        `${receives}${wallet.withdrawalFee ? ` Your balance also pays the casino ${formatAmount(wallet.withdrawalFee)} METH for sending it.` : ''} Check the full address before confirming.`);
   $('withdraw-help').classList.toggle('check-failed', !blocked && touched && Boolean(request.error));
 }
 /** A transfer as Settings → Transfer has it: the amount, the player the name typed belongs to, and what is wrong with
@@ -321,18 +315,18 @@ function renderWithdraw(state: SendState) {
 function transferRequest() {
   const typed = $<HTMLInputElement>('transfer-amount').value.trim(),
     amount = typedIn(typed, 'METH'),
-    most = wallet.transferable(),
+    most = BigInt(wallet.channel?.state.balance ?? 0),
     profile = payee?.profile ?? null;
   const wrong =
       payee?.error ||
       (profile?.uname === wallet.uname
         ? 'That is you: transfer to another player.'
         : most <= 0n
-          ? 'Nothing to transfer: what the casino lent you stays in your balance.'
+          ? 'Nothing to transfer: your balance is empty.'
           : typed && amount === null
             ? 'Enter an amount in METH above zero, with at most 12 decimal places.'
             : amount !== null && amount > most
-              ? `At most ${exact(most)} METH can go${BigInt(wallet.channel?.state.loan ?? 0) ? ': what the casino lent you stays in your balance' : ''}.`
+              ? `At most ${exact(most)} METH can go.`
               : null),
     missing = !payee
       ? 'Enter the Discord username or uname of the player it goes to.'
@@ -376,7 +370,6 @@ export function renderWallet() {
   const observed = Boolean(state.observedAt);
   const balance = BigInt(state.balance || 0),
     arriving = BigInt(state.arriving || 0),
-    loan = BigInt(state.loan || 0),
     // What the deposit address holds, read from the chain: until it has been, there is nothing to show.
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
     closing = Number(state.channelStatus) === STATUS.closing || Boolean(wallet.channel?.closing);
@@ -395,9 +388,7 @@ export function renderWallet() {
           ? `${formatAmount(arriving)} METH of it is on its way into your balance.`
           : state.closingChannelId && !state.channelId
             ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
-            : loan
-              ? `What games play with. The casino lent you ${formatAmount(loan)} METH of it: your next withdrawal or lock-in pays it back first.`
-              : 'What games play with.';
+            : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
   $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
@@ -427,7 +418,7 @@ export function renderWallet() {
                   ? `Your balance is closing: ETH sent here waits until you choose what to do with it.${held}`
                   : !wallet.autoDeposit
                     ? `ETH sent here stays at this address: adding it to your balance by itself is off in Settings.${held}`
-                    : `Waiting for ETH. Deposits are added after network confirmation.${wallet.config.loanLimit == null ? ' The network fee of adding them comes out of them.' : ' The casino lends you the network fee of adding them, and your next withdrawal pays it back.'}`;
+                    : `Waiting for ETH. Deposits are added after network confirmation.${wallet.config.depositFeeLimit == null ? ' The network fee of adding them comes out of them.' : ' The casino pays the network fee of adding them, as far as its daily budget goes.'}`;
   if ($('deposit-status').textContent !== depositStatus) $('deposit-status').textContent = depositStatus;
   const addable = (wallet.forceClosed || !wallet.autoDeposit) && !wallet.recoveryOnly && !closing && atAddress > 0n;
   $('add-to-balance').classList.toggle('hidden', !addable);
@@ -437,8 +428,8 @@ export function renderWallet() {
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
 
   const open = wallet.playable;
-  renderWithdraw({ open, busy, ready, closing, loan });
-  renderTransfer({ open, busy, ready, closing, loan });
+  renderWithdraw({ open, busy, ready, closing });
+  renderTransfer({ open, busy, ready, closing });
 
   // Settings → Deposits: everything at the deposit address, out to another address.
   const send = addressSendRequest(),
@@ -945,14 +936,14 @@ act('withdraw', async () => {
   );
 });
 $<HTMLButtonElement>('transfer-max').addEventListener('click', () => {
-  $<HTMLInputElement>('transfer-amount').value = inUnit(wallet.transferable(), 'METH', true);
+  $<HTMLInputElement>('transfer-amount').value = inUnit(BigInt(wallet.channel?.state.balance ?? 0), 'METH', true);
   renderWallet();
 });
 act('transfer', async () => {
   const { profile, amount, error } = transferRequest();
   if (error || !profile || amount === null) throw new Error(error || 'Enter an amount and the player it goes to.');
   // Money partly out leaves the open game its allowance; all of it takes back what the game holds.
-  if (amount >= wallet.transferable()) abandonGame();
+  if (amount >= BigInt(wallet.channel?.state.balance ?? 0)) abandonGame();
   const receipt = await wallet.transfer(profile, amount);
   $<HTMLInputElement>('transfer-to').value = '';
   $<HTMLInputElement>('transfer-amount').value = '';
@@ -1002,7 +993,7 @@ act(
     closeGame();
     await wallet.lockIn();
   },
-  'Locking in: your balance, less the fee for sending it and what the casino lent you, goes into deposits the contract holds, in one transaction the casino sends.',
+  'Locking in: your balance, less the fee for sending it, goes into deposits the contract holds, in one transaction the casino sends.',
 );
 for (const id of ['channel-challenge', 'challenge-now'])
   act(id, () => wallet.challengeClose(), 'Your latest saved balance is submitted.');

@@ -26,7 +26,7 @@ through `deposit`, `fundBankroll` and `buyCollateral`, and any ETH forced in cou
 | Getter               | Type      | Value                                                                                                                         |
 | -------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `CHALLENGE_PERIOD()` | `uint256` | 604,800: the challenge window, which is also the time the casino has to settle a [disputed](#disputes) casino bet, in seconds |
-| `MAX_BALANCE()`      | `uint256` | 2^96: every deposit, amount, fee, prize, balance, `deposited`, `withdrawn`, `loan` and quoted virtual bankroll is below it    |
+| `MAX_BALANCE()`      | `uint256` | 2^96: every deposit, amount, fee, prize, balance, `deposited`, `withdrawn` and quoted virtual bankroll is below it            |
 | `OUTCOME_DOMAIN()`   | `bytes32` | `keccak256("HOOKEDIN/OUTCOME")`, `0xede2fdd26760847d3c92bb2ebf4da0fdbdf441ed687b86dc1257f1962e3857ff`                         |
 
 ## Storage
@@ -93,10 +93,9 @@ the close is owed something; a withdrawal's or a lock-in's is under its ID, the 
 Returns the checkpoint that `evidence` proves: with the [empty step](signed-messages.md#evidence), its `base`, and
 otherwise the checkpoint its step produces from `base`. A casino bet takes `amount` from the balance and adds `prize`
 when the step's [outcome](signed-messages.md#the-outcome) is below `chance`; a debit takes `amount`; a withdrawal or a
-lock-in takes it, the `loan` and its `fee`, adds it to `withdrawn` and sets `loan` to 0; a credit adds it; a deposit
-adds it to both `balance` and `deposited`; and a loan adds it to both `balance` and `loan`. Whether the channel holds
-what a checkpoint has `deposited` is for a close to check. A channel's zero checkpoint,
-`(player, index, 0, 0x0, 0x0, 0, 0, 0, 0)`, is its [base](signed-messages.md#the-base) and carries no signature. It
+lock-in takes it and its `fee` and adds it to `withdrawn`; a credit adds it; and a deposit adds it to both `balance`
+and `deposited`. Whether the channel holds what a checkpoint has `deposited` is for a close to check. A channel's zero
+checkpoint, `(player, index, 0, 0x0, 0x0, 0, 0, 0)`, is its [base](signed-messages.md#the-base) and carries no signature. It
 reverts:
 
 - `InvalidTerms` when `base` names the zero address as its account.
@@ -108,10 +107,10 @@ reverts:
 - `Unauthorized` when `authorization` is not the signature of the account `base` names. A signature that is not 65
   bytes, has a high `s` or a `v` other than 27 or 28 is refused the same way.
 - `InvalidTerms` when the operation breaks [the transition rules](signed-messages.md#transitions), or its kind is not
-  1 to 7. A `chance` is a `uint64`, so its type keeps it below 2^64.
+  1 to 6. A `chance` is a `uint64`, so its type keeps it below 2^64.
 - `InvalidState` when `casinoSignature` is not the owner's signature of the next checkpoint (`Unauthorized` when it is
   malformed).
-- `InvalidState` when the result's `balance`, `deposited`, `withdrawn` or `loan` is at least 2^96.
+- `InvalidState` when the result's `balance`, `deposited` or `withdrawn` is at least 2^96.
 
 ## Functions that change state
 
@@ -171,8 +170,8 @@ never reverts for want of it, and an owner that withdraws house cash first leave
 ### Withdrawals
 
 A withdrawal (kind 5) is an operation the account signs that takes `amount` from the balance and names a `recipient`;
-the balance pays it at once, in the checkpoint the casino signs after it, with its `loan` back and its `fee`, what it
-pays the casino for sending it to the contract: the fee leaves the balance and nothing pays it out, so it stays in the
+the balance pays it at once, in the checkpoint the casino signs after it, with its `fee`, what it pays the casino for
+sending it to the contract: the fee leaves the balance and nothing pays it out, so it stays in the
 channel's `principal` until the close, which is not owed it, and then becomes house cash. A lock-in (kind 6) is a
 withdrawal that names no `recipient`, and differs only in where it pays, below.
 `withdraw` records one on evidence whose step is that operation, with the casino's signature of that checkpoint, and
@@ -206,10 +205,9 @@ its balance has `withdrawn`, and a close is owed what of it did not become a cla
 ### Finalization
 
 A checkpoint `s` is owed its balance, the deposits it has not taken in and what it withdrew that is not yet a claim,
-less its loan, what the channel's claims took that it did not withdraw and what it took in that the chain does not
-hold: `owed = max(0, s.balance + deposited − s.deposited + s.withdrawn − claimed − s.loan)`, with the channel's
-`deposited` and `claimed`. So a close repays the loan first, and what it cannot repay is forgiven; a close on a
-checkpoint older than a recorded withdrawal is owed that much less, and so is one that took in more than the channel's
+less what the channel's claims took that it did not withdraw and what it took in that the chain does not hold:
+`owed = max(0, s.balance + deposited − s.deposited + s.withdrawn − claimed)`, with the channel's `deposited` and
+`claimed`. So a close on a checkpoint older than a recorded withdrawal is owed that much less, and so is one that took in more than the channel's
 `deposited`: every signed checkpoint can close. A close records what its checkpoint is owed as `closingBalance`.
 
 `finalizeClose` finalizes the channel. Its claim's protected amount is `min(owed, principal + collateral)`, with the

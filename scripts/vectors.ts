@@ -20,6 +20,7 @@ import {
   KIND,
   PROTOCOL,
   DEVELOPER_PROTOCOL,
+  DEPOSIT_FEE_ID,
   QUOTE_TYPES,
   OFFER_TYPES,
   collateralPrice,
@@ -125,12 +126,16 @@ export function buildVectors() {
   );
   // Another deposit, taking in money deposited into the channel later.
   const deposited = apply(payout.next, { kind: KIND.deposit, amount: 500_000_000n }, { id: `0x${'85'.repeat(32)}` });
-  // A loan: the casino lends the balance what that deposit's network fee took, its ID the deposit transaction's hash.
-  const loan = apply(deposited.next, { kind: KIND.loan, amount: 5_000_000n }, { id: `0x${'87'.repeat(32)}` });
-  // A withdrawal paying the recipient, the loan back and the casino its fee for sending it: the contract makes it a
-  // claim once, under the operation's hash.
+  // A credit of what that deposit's network fee took, which the casino pays, its ID the deposit transaction's hash.
+  const depositFee = apply(
+    deposited.next,
+    { kind: KIND.credit, amount: 5_000_000n },
+    { id: `0x${'87'.repeat(32)}`, counterparty: DEPOSIT_FEE_ID },
+  );
+  // A withdrawal paying the recipient and the casino its fee for sending it: the contract makes it a claim once, under
+  // the operation's hash.
   const withdrawal = apply(
-    loan.next,
+    depositFee.next,
     { kind: KIND.withdrawal, amount: 700_000_000n, recipient: identity.recipient, fee: 1_000_000n },
     { id: `0x${'86'.repeat(32)}` },
   );
@@ -171,7 +176,7 @@ export function buildVectors() {
     channel,
     base,
     baseHash: hashState(d, base),
-    operations: [opened, bet, developerBet, payout, deposited, loan, withdrawal, lockIn, transfer],
+    operations: [opened, bet, developerBet, payout, deposited, depositFee, withdrawal, lockIn, transfer],
     outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),

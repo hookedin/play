@@ -8,7 +8,7 @@
     "recipient": "0x5555555555555555555555555555555555555555",
     "friend": "3byt9ocwnnzaxanmiz3stocj"
   },
-  "protocol": "0xab3445e3f00e6551169615463c8ff2b516c9eaed2503279f09e39db4d3a7261c",
+  "protocol": "0x44b848020877a28bf5dc22ad54838e72f3bcdf99dfdc844a0b0493c7570d9cba",
   "developerProtocol": "0x10a4da880c4d5b8492f58ba80d25e6a73b4c17ea6a6b33618f2961e8d899a376",
   "channel": {
     "channelId": "0x56136bdb02b44e818120154143c922d9485e19e5b7288e7176da184391d4457c",
@@ -23,10 +23,9 @@
     "transitionHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
     "balance": "0",
     "deposited": "0",
-    "withdrawn": "0",
-    "loan": "0"
+    "withdrawn": "0"
   },
-  "baseHash": "0x9b329880e69a407490d9afdcd49222aa90f5633f4a009d789c4d33db0d4a1fae",
+  "baseHash": "0x7b666e61951fe783559cb707caa212bafe2fb6748f58b0b10744a17ec61fab47",
   "operations": [
     {
       "details": {
@@ -34,7 +33,7 @@
       },
       "canonical": "{\"id\":\"0x8181818181818181818181818181818181818181818181818181818181818181\"}",
       "operation": {
-        "previousStateHash": "0x9b329880e69a407490d9afdcd49222aa90f5633f4a009d789c4d33db0d4a1fae",
+        "previousStateHash": "0x7b666e61951fe783559cb707caa212bafe2fb6748f58b0b10744a17ec61fab47",
         "kind": 4,
         "amount": "1000000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -45,21 +44,20 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x48ffc96b8ba053344b261ad1527c3b15a76069a84e2c9061fd1c635d53353a02"
       },
-      "hash": "0xdc37f71e5c8c7ec336bc36d5cd8762deccf495f63ccbc35a93f8995b00825e0b",
+      "hash": "0xec30462162b0f07d1e98f43ac18487cc0f37a88a83f78b31cd8ab70e5f562d95",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "1",
-        "previousStateHash": "0x9b329880e69a407490d9afdcd49222aa90f5633f4a009d789c4d33db0d4a1fae",
-        "transitionHash": "0xa12c09f649c740bd05e7b6ead00b08c365b5d8756390c69a51d6ffce928ada1b",
+        "previousStateHash": "0x7b666e61951fe783559cb707caa212bafe2fb6748f58b0b10744a17ec61fab47",
+        "transitionHash": "0xaf9a3e40e92704f1f3491ff2145533231d541a6f08bb74374d95888390bf822b",
         "balance": "1000000000",
         "deposited": "1000000000",
-        "withdrawn": "0",
-        "loan": "0"
+        "withdrawn": "0"
       },
-      "nextHash": "0xcfa0ac9bed129640b29070e170ba40417f9e251d4ab49a462a86d7f25a17e227"
+      "nextHash": "0x4ad7ed3bea6f91ab3cb98c0303acdae1185c9bb606202edf1c3df39d657eb736"
     },
     {
       "details": {
@@ -68,7 +66,7 @@
       },
       "canonical": "{\"game\":\"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d\",\"id\":\"0x8282828282828282828282828282828282828282828282828282828282828282\"}",
       "operation": {
-        "previousStateHash": "0xcfa0ac9bed129640b29070e170ba40417f9e251d4ab49a462a86d7f25a17e227",
+        "previousStateHash": "0x4ad7ed3bea6f91ab3cb98c0303acdae1185c9bb606202edf1c3df39d657eb736",
         "kind": 1,
         "amount": "100000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -79,21 +77,20 @@
         "seedHash": "0x93eebcc6bf46d8794e5dceae4f639f506d51617f75530350bae4a57914135fb3",
         "memo": "0x3b9bec2484aa9c100236c93793cbe6b414ff93c5734aee5f66316d4e68bee492"
       },
-      "hash": "0x01312fc52903e8d929e57ceb3ec2c7b4467f559feaf8fe2d36d89ccc572091c7",
+      "hash": "0xbcad9aea189e792b602d5a30e37d3caae0fad36490d8762290c164bb38e5c2a3",
       "seed": "0x7272727272727272727272727272727272727272727272727272727272727272",
       "secret": "0xb4601af5d75712b9c5a4903508c1dc68220290927397da8657d119178cf34cc6",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "2",
-        "previousStateHash": "0xcfa0ac9bed129640b29070e170ba40417f9e251d4ab49a462a86d7f25a17e227",
-        "transitionHash": "0x1f9345050e78a374bec05c34b077242c3e449ba634841ff13afca0618eacdbf7",
+        "previousStateHash": "0x4ad7ed3bea6f91ab3cb98c0303acdae1185c9bb606202edf1c3df39d657eb736",
+        "transitionHash": "0x4ab0f55eee35e44232d5048780ea97d022e25da34b425f7e3b0b5298f5b04f29",
         "balance": "1100000000",
         "deposited": "1000000000",
-        "withdrawn": "0",
-        "loan": "0"
+        "withdrawn": "0"
       },
-      "nextHash": "0xed7f1b02ccfb2f5018fdaa8b61eec9931ee2ad80af68d3b40d3c9c7ba3d4abd7"
+      "nextHash": "0x4de6d91c775093a2b1eb3cc8104b932e32b6346cb7ac9560124e01c155ff1eba"
     },
     {
       "details": {
@@ -110,7 +107,7 @@
       },
       "canonical": "{\"game\":\"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d\",\"group\":\"spin-1\",\"id\":\"0x8383838383838383838383838383838383838383838383838383838383838383\",\"meta\":{\"chips\":{\"17\":\"20000000\",\"9\":\"10000000\",\"red\":\"30000000\"}}}",
       "operation": {
-        "previousStateHash": "0xed7f1b02ccfb2f5018fdaa8b61eec9931ee2ad80af68d3b40d3c9c7ba3d4abd7",
+        "previousStateHash": "0x4de6d91c775093a2b1eb3cc8104b932e32b6346cb7ac9560124e01c155ff1eba",
         "kind": 2,
         "amount": "60000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -121,30 +118,29 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x88456920b0dce4c103868f21a4ecdcad753a3d3bfa56f2cdfb16a7a2c9d0b370"
       },
-      "hash": "0x5cc0cb3685e2cbe66b9a9742d39446cc0145c2cc3c6ec70b58bcf57ec6c01918",
+      "hash": "0xc3dcfbd79a4cb8eb7c505e1d490de5812634dcdd4109efd81368c53fae1a922b",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "3",
-        "previousStateHash": "0xed7f1b02ccfb2f5018fdaa8b61eec9931ee2ad80af68d3b40d3c9c7ba3d4abd7",
-        "transitionHash": "0x0e6305b7283a52495d8092740e15e0c341b16f33a7c1af917784b4e3155e21b7",
+        "previousStateHash": "0x4de6d91c775093a2b1eb3cc8104b932e32b6346cb7ac9560124e01c155ff1eba",
+        "transitionHash": "0x9df3c9c828efe4469964a6845c709bd83dbbf8902877a1b30bdf03bdbc7406eb",
         "balance": "1040000000",
         "deposited": "1000000000",
-        "withdrawn": "0",
-        "loan": "0"
+        "withdrawn": "0"
       },
-      "nextHash": "0x3f0e8e01d7de56d3401aa20bd97b910f48612143041d25d27a41caa5be6714c0"
+      "nextHash": "0x30cabc6d34a0eb2a53ce7e4cf9ed5eb23a76363f4a6d1368831478e5e1717e8b"
     },
     {
       "details": {
         "id": "0x8484848484848484848484848484848484848484848484848484848484848484",
-        "counterparty": "0x5cc0cb3685e2cbe66b9a9742d39446cc0145c2cc3c6ec70b58bcf57ec6c01918"
+        "counterparty": "0xc3dcfbd79a4cb8eb7c505e1d490de5812634dcdd4109efd81368c53fae1a922b"
       },
-      "canonical": "{\"counterparty\":\"0x5cc0cb3685e2cbe66b9a9742d39446cc0145c2cc3c6ec70b58bcf57ec6c01918\",\"id\":\"0x8484848484848484848484848484848484848484848484848484848484848484\"}",
+      "canonical": "{\"counterparty\":\"0xc3dcfbd79a4cb8eb7c505e1d490de5812634dcdd4109efd81368c53fae1a922b\",\"id\":\"0x8484848484848484848484848484848484848484848484848484848484848484\"}",
       "operation": {
-        "previousStateHash": "0x3f0e8e01d7de56d3401aa20bd97b910f48612143041d25d27a41caa5be6714c0",
+        "previousStateHash": "0x30cabc6d34a0eb2a53ce7e4cf9ed5eb23a76363f4a6d1368831478e5e1717e8b",
         "kind": 3,
         "amount": "120000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -153,23 +149,22 @@
         "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "memo": "0x74f65dec6d057177c7e8d68d9bc8a763d934f4a411056aecaeb59cee2fedcc8d"
+        "memo": "0xb0a37ef107b0b64f5687735e54804b9885facbdd070bccec56142cf7f5b25058"
       },
-      "hash": "0x543da24d265a4dba09fc05e15f4a85be9e2aa63e4dc4ac5321c178ca70ff3bc9",
+      "hash": "0xc77b16e1e9ec01cc6a85a9d08fdb5c05fbd16eeedc0a2e3cab58ee8df7f76286",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "4",
-        "previousStateHash": "0x3f0e8e01d7de56d3401aa20bd97b910f48612143041d25d27a41caa5be6714c0",
-        "transitionHash": "0x76ba4edbcfc15a66f6376293f4809001edf1b9e70d5cdec49a7fefee93f9a78b",
+        "previousStateHash": "0x30cabc6d34a0eb2a53ce7e4cf9ed5eb23a76363f4a6d1368831478e5e1717e8b",
+        "transitionHash": "0xbb11ecc1651b3399d1cc214adf3b22d331519fc97c3b24afc89b32df94113c2b",
         "balance": "1160000000",
         "deposited": "1000000000",
-        "withdrawn": "0",
-        "loan": "0"
+        "withdrawn": "0"
       },
-      "nextHash": "0xdf0f943220c40b74e913abaa047d8f5e68a77874ab253f03aba560bfd87ce492"
+      "nextHash": "0xb0413b99afb9c11d8f396122e72def779495e44a7866100d3f8307b7b3e4fb2b"
     },
     {
       "details": {
@@ -177,7 +172,7 @@
       },
       "canonical": "{\"id\":\"0x8585858585858585858585858585858585858585858585858585858585858585\"}",
       "operation": {
-        "previousStateHash": "0xdf0f943220c40b74e913abaa047d8f5e68a77874ab253f03aba560bfd87ce492",
+        "previousStateHash": "0xb0413b99afb9c11d8f396122e72def779495e44a7866100d3f8307b7b3e4fb2b",
         "kind": 4,
         "amount": "500000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -188,30 +183,30 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0xea3244c5bd73984406a3f0e89003997b18a2c1e67c029db54a471417b7dcac83"
       },
-      "hash": "0xdcd1db33c520f010217bf20af6b4f77752d10d262ea29b6af3649d86ca530db5",
+      "hash": "0xb7573e9a8f7ac9732a752801cf6d9907e64ddb4347bc272417289e2a16a20d04",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "5",
-        "previousStateHash": "0xdf0f943220c40b74e913abaa047d8f5e68a77874ab253f03aba560bfd87ce492",
-        "transitionHash": "0x50561738863a97412f14c2f66898c7a70c43a948f41edca95bec90117f2a9c6a",
+        "previousStateHash": "0xb0413b99afb9c11d8f396122e72def779495e44a7866100d3f8307b7b3e4fb2b",
+        "transitionHash": "0xc965971974acd565c9b5e693ce3008e57b7df43f397b0b8ee15c9520b9b249e9",
         "balance": "1660000000",
         "deposited": "1500000000",
-        "withdrawn": "0",
-        "loan": "0"
+        "withdrawn": "0"
       },
-      "nextHash": "0xa1a211e18f562bc39f405d05894a3af3c90d9e3ebdfefa1240de330ad7ecaaa6"
+      "nextHash": "0x635e07d6561372111e5e459f3a1a44ea1d5be38e7d0cc3ba245c61c830960b3a"
     },
     {
       "details": {
-        "id": "0x8787878787878787878787878787878787878787878787878787878787878787"
+        "id": "0x8787878787878787878787878787878787878787878787878787878787878787",
+        "counterparty": "0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf"
       },
-      "canonical": "{\"id\":\"0x8787878787878787878787878787878787878787878787878787878787878787\"}",
+      "canonical": "{\"counterparty\":\"0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf\",\"id\":\"0x8787878787878787878787878787878787878787878787878787878787878787\"}",
       "operation": {
-        "previousStateHash": "0xa1a211e18f562bc39f405d05894a3af3c90d9e3ebdfefa1240de330ad7ecaaa6",
-        "kind": 7,
+        "previousStateHash": "0x635e07d6561372111e5e459f3a1a44ea1d5be38e7d0cc3ba245c61c830960b3a",
+        "kind": 3,
         "amount": "5000000",
         "recipient": "0x0000000000000000000000000000000000000000",
         "fee": 0,
@@ -219,23 +214,22 @@
         "prize": "0",
         "round": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "memo": "0xdcfc69e324d8e28868be8d101d350d05823ef3459aad19b395c74d5554fd842d"
+        "memo": "0x613c77239f7541cda4c9e29daa211f3ac38401a23c4117f9f2b9427c898528e9"
       },
-      "hash": "0x619326d8922ae3554b81ba9faf91165dedc13c8952070f0036e35184f3301c33",
+      "hash": "0xcf0eb7d1fae8bca09fb857dad4bc958abf0ea4696cc622c83719b62a2a0f638c",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "6",
-        "previousStateHash": "0xa1a211e18f562bc39f405d05894a3af3c90d9e3ebdfefa1240de330ad7ecaaa6",
-        "transitionHash": "0x18f8339152deade9ea0b76429334236b086242e1f1a905966bbe96eb0f23ab26",
+        "previousStateHash": "0x635e07d6561372111e5e459f3a1a44ea1d5be38e7d0cc3ba245c61c830960b3a",
+        "transitionHash": "0xff96461ce5f07e3b6005022d906d60ed32908225b35f8c912da238c6de283b55",
         "balance": "1665000000",
         "deposited": "1500000000",
-        "withdrawn": "0",
-        "loan": "5000000"
+        "withdrawn": "0"
       },
-      "nextHash": "0x9af1e1e0e6d15d0008c896370ccc4d1d10c4f3026660652e55f7dc0976aa41ca"
+      "nextHash": "0x44668e9d1bb972aaeab8c5f877717e6ec2990ec755ddc6d39e2cd42ecb2ca8d2"
     },
     {
       "details": {
@@ -243,7 +237,7 @@
       },
       "canonical": "{\"id\":\"0x8686868686868686868686868686868686868686868686868686868686868686\"}",
       "operation": {
-        "previousStateHash": "0x9af1e1e0e6d15d0008c896370ccc4d1d10c4f3026660652e55f7dc0976aa41ca",
+        "previousStateHash": "0x44668e9d1bb972aaeab8c5f877717e6ec2990ec755ddc6d39e2cd42ecb2ca8d2",
         "kind": 5,
         "amount": "700000000",
         "recipient": "0x5555555555555555555555555555555555555555",
@@ -254,21 +248,20 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x91b7d51bf83db3dcd1b2c4888356ae771c7484ee1fdd31d1ce857fd06bf59808"
       },
-      "hash": "0x8514de90b165d4b855db6b2da3c379c2da39d5ea6ea3bcc7cf551b3e88f7ccb3",
+      "hash": "0x317a88b5cd2ab472391b330ec3eede467b7a9c56ac6e0ffdd6f0b7602ecf7371",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "7",
-        "previousStateHash": "0x9af1e1e0e6d15d0008c896370ccc4d1d10c4f3026660652e55f7dc0976aa41ca",
-        "transitionHash": "0xf6941713ae15d30f4453d7a74c4745a26ecb2bd100d3b8986146745533a56789",
-        "balance": "959000000",
+        "previousStateHash": "0x44668e9d1bb972aaeab8c5f877717e6ec2990ec755ddc6d39e2cd42ecb2ca8d2",
+        "transitionHash": "0x9ba8eb5f55559db203efe09351fe640c1f86e29901617984e840ff87c377425e",
+        "balance": "964000000",
         "deposited": "1500000000",
-        "withdrawn": "700000000",
-        "loan": "0"
+        "withdrawn": "700000000"
       },
-      "nextHash": "0x9bcaaa731c248e365f85f83f89d69bf972ee775246ac12f8ff4e429473fca372"
+      "nextHash": "0x8a5195c3fdd2254c49dc4ac37638413f069cbd9d873cc92935faff6dde24aa1c"
     },
     {
       "details": {
@@ -276,7 +269,7 @@
       },
       "canonical": "{\"id\":\"0x8888888888888888888888888888888888888888888888888888888888888888\"}",
       "operation": {
-        "previousStateHash": "0x9bcaaa731c248e365f85f83f89d69bf972ee775246ac12f8ff4e429473fca372",
+        "previousStateHash": "0x8a5195c3fdd2254c49dc4ac37638413f069cbd9d873cc92935faff6dde24aa1c",
         "kind": 6,
         "amount": "100000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -287,21 +280,20 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x9a60f593bd4e413581a99c3217f4f465321032494cfb02a0415b2f6d5d3c8b99"
       },
-      "hash": "0x4d92e33e98c2c7060f1c3cb8e25e6d66959f99264c90b9435d6345c99816ddfc",
+      "hash": "0x129d6a9b28a5ee94041ffb1569e9d76ef990bbff03ab27374046e1411c4d92f0",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "8",
-        "previousStateHash": "0x9bcaaa731c248e365f85f83f89d69bf972ee775246ac12f8ff4e429473fca372",
-        "transitionHash": "0xa8af54301b390042631f9d8de14e00f2e771111436155a039694f99514f3e646",
-        "balance": "858000000",
+        "previousStateHash": "0x8a5195c3fdd2254c49dc4ac37638413f069cbd9d873cc92935faff6dde24aa1c",
+        "transitionHash": "0x259b66a977e2cb18246d1c4657f1dbcc6e143afdb823460a3adf01d3ace42182",
+        "balance": "863000000",
         "deposited": "1500000000",
-        "withdrawn": "800000000",
-        "loan": "0"
+        "withdrawn": "800000000"
       },
-      "nextHash": "0x7d37f249caad36017c2e5ec6fedcf1617c405357d7aed0305cdc41de3e79d905"
+      "nextHash": "0xdb8406e2531af0860bd4480fd4f9ccc1fbf33ea99baf77bedd34353e5e632e36"
     },
     {
       "details": {
@@ -310,7 +302,7 @@
       },
       "canonical": "{\"counterparty\":\"~3byt9ocwnnzaxanmiz3stocj\",\"id\":\"0x8989898989898989898989898989898989898989898989898989898989898989\"}",
       "operation": {
-        "previousStateHash": "0x7d37f249caad36017c2e5ec6fedcf1617c405357d7aed0305cdc41de3e79d905",
+        "previousStateHash": "0xdb8406e2531af0860bd4480fd4f9ccc1fbf33ea99baf77bedd34353e5e632e36",
         "kind": 2,
         "amount": "50000000",
         "recipient": "0x0000000000000000000000000000000000000000",
@@ -321,21 +313,20 @@
         "seedHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
         "memo": "0x73e6f1423c940d6f2adc3957e460197b68123356f6703b5230f111603f51b389"
       },
-      "hash": "0xb0c01e5372dc6b77dfc498b644d46a15c83d9e16b632e11d9a5ef59ab7bcf703",
+      "hash": "0x72911dcd44dcbadfcdcb69823771efcb101e6369751fb09b11cb7dc0417fbfb3",
       "seed": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "secret": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "next": {
         "player": "0x2222222222222222222222222222222222222222",
         "index": "0",
         "sequence": "9",
-        "previousStateHash": "0x7d37f249caad36017c2e5ec6fedcf1617c405357d7aed0305cdc41de3e79d905",
-        "transitionHash": "0x7bfa2fd3b02a0abc223a815df9c24a2481b7104aa9beb99014b3a1f1886ab474",
-        "balance": "808000000",
+        "previousStateHash": "0xdb8406e2531af0860bd4480fd4f9ccc1fbf33ea99baf77bedd34353e5e632e36",
+        "transitionHash": "0xbd6626d7875a8c257a305280a035ac4766a25af593b99a67ebf3aae2149a06ba",
+        "balance": "813000000",
         "deposited": "1500000000",
-        "withdrawn": "800000000",
-        "loan": "0"
+        "withdrawn": "800000000"
       },
-      "nextHash": "0x3e038dcb0d7c17340466dc3506b6070afccf3c9e05f17f2cd80928ac12b975e2"
+      "nextHash": "0x68d8b7e3f5f503dcda3cce6f5cf33a557e932735587e69ebd93a1428d2371221"
     }
   ],
   "outcome": {
@@ -347,22 +338,21 @@
     "player": "0x2222222222222222222222222222222222222222",
     "index": "0",
     "sequence": "3",
-    "previousStateHash": "0xcfa0ac9bed129640b29070e170ba40417f9e251d4ab49a462a86d7f25a17e227",
-    "transitionHash": "0x01312fc52903e8d929e57ceb3ec2c7b4467f559feaf8fe2d36d89ccc572091c7",
+    "previousStateHash": "0x4ad7ed3bea6f91ab3cb98c0303acdae1185c9bb606202edf1c3df39d657eb736",
+    "transitionHash": "0xbcad9aea189e792b602d5a30e37d3caae0fad36490d8762290c164bb38e5c2a3",
     "balance": "1000000000",
     "deposited": "1000000000",
-    "withdrawn": "0",
-    "loan": "0"
+    "withdrawn": "0"
   },
-  "rejectionHash": "0xc727d2f6094ff3cdc79f202218c0100aa961b0484651725d716609f0918e5e48",
+  "rejectionHash": "0x6fbd9afefb33ef30520db52b8d49d6bb60fbe68d739bdd4edd984bc73a3adf71",
   "quote": {
     "message": {
-      "previousStateHash": "0xcfa0ac9bed129640b29070e170ba40417f9e251d4ab49a462a86d7f25a17e227",
+      "previousStateHash": "0x4ad7ed3bea6f91ab3cb98c0303acdae1185c9bb606202edf1c3df39d657eb736",
       "round": "0xb3fa07cb7a86b16de4cb4c7161c65a7ed9988fc7fbc49598623d49d0bd6cbc11",
       "virtualBankroll": "5000000000",
       "expiresAt": "1800000000"
     },
-    "hash": "0x01286a8253d969f3a4e6e1c7441673525cf9a1564194050b8f19f83dc89203ce",
+    "hash": "0xc2a46736bf8f4cd4206b7ae00320adf43c20cc007a5276685135f6b6c9f56e6c",
     "admitted": true
   },
   "offer": {

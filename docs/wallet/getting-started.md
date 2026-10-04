@@ -52,11 +52,11 @@ From then on bets need no transactions. Anyone can deposit into your channel thr
 address, and the wallet takes it in the same way.
 
 A deposit of everything at the address keeps back the most its transaction can cost, its gas limit at its fee cap. Once
-your balance has taken the deposit in, the wallet asks the casino to lend it that, so your balance holds all the address
-had. The casino lends it when it is small next to the deposit, as far as [its loan
-rule](../casino-api/channels.md#post-apichannelsidoperations) allows: a little less for a deposit that waited for a
-later block while the base fee fell. The wallet shows the loan under your balance. Bets can stake it, but an investment
-or a bank deposit or a transfer leaves it in the balance, and your next withdrawal, lock-in or close pays it back first.
+your balance has taken the deposit in, the wallet asks the casino to pay that into it, so your balance holds all the
+address had. The casino pays it when it is small next to the deposit, as far as [its fee
+rule](../casino-api/channels.md#post-apichannelsidoperations) allows (a little less for a deposit that waited for a later
+block while the base fee fell) and its daily budget and the bankroll go; otherwise the fee comes out of the deposit. What it pays is
+yours like the rest of your balance.
 
 ### When ETH waits at the address
 
@@ -118,7 +118,7 @@ zero address, your own deposit address and the casino's contract. Your account s
 address and the casino signs your balance after it at once: your balance pays it now, and you play on with the rest. The
 contract then pays the address ([how a withdrawal is paid](closing-and-claims.md#withdraw)). Your balance also pays the
 casino a fee for sending the withdrawal to the contract, which the tab shows ([fees and
-gas](closing-and-claims.md#fees-and-gas)), and pays back what the casino lent it: **Max** is your balance less both.
+gas](closing-and-claims.md#fees-and-gas)): **Max** is your balance less it.
 
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
 much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight
@@ -137,8 +137,8 @@ addresses anywhere, on-chain or to each other. The casino owes it to them until 
 balance with a credit naming your uname, by itself. A player with no ETH and no balance needs none: their wallet's next
 check registers their channel with the casino, which the contract holds nothing for yet, collects the transfer into it,
 and they play with it. From then on it is part of their balance like any other: beyond their own deposits it is winnings, paid out of the bankroll, until they [lock
-their balance in](closing-and-claims.md#lock-in-your-balance). What the casino lent your balance stays in it, so **Max**
-is your balance less that loan. The casino declines a transfer to a name nobody goes by, or to yourself.
+their balance in](closing-and-claims.md#lock-in-your-balance). The casino declines a transfer to a name nobody goes by,
+or to yourself.
 
 **Send ETH out of my deposit address**, under **Deposits** in Settings, sends everything held at your deposit address to
 the address you name, less the network fee, and leaves your balance as it is. It is for ETH that stays at the address:

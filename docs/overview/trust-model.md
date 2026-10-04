@@ -26,8 +26,7 @@ below.
   channel's close is final; the contract pays at once what is covered and owes the rest
   ([withdrawals](../reference/contract.md#withdrawals)). One never recorded comes back to you with the close. A lock-in
   is a withdrawal into your own channel, paid into it as deposits.
-- **Losses are real.** A close is owed your final balance, less what the casino lent it, and the deposits above that
-  return to house cash. Nothing refunds what you lost.
+- **Losses are real.** A close is owed your final balance, and the deposits above that return to house cash. Nothing refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no
   signature, either alone or followed by one operation your account authorized and the casino signed, settled by the
   secret and seed that hash to what the bet named, or by a casino bet the casino's quote covers, disputed.

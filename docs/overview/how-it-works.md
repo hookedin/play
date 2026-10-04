@@ -32,25 +32,23 @@ another player.
 holds every deposit as it arrives, the first and every later one, as the channel's **principal**, which the owner cannot
 withdraw. The balance takes it in with a **deposit** operation, which the casino signs once it has seen the money
 confirmed on-chain. Until then a close adds it to what the channel is owed, so the money is the player's either way. The
-casino lends the balance the network fee of a deposit of everything the deposit address held, when it is small next to
-the deposit, with a **loan** operation, which a withdrawal, a lock-in or a close pays back first.
+casino pays the network fee of a deposit of everything the deposit address held into the balance, when it is small next
+to the deposit and as far as its daily budget goes, with a **credit**.
 
 **Sign.** Every change to the balance is an **operation** that the account signs, answered by a **checkpoint** that the
 casino signs: the account and index of its channel, its sequence number, the hash of the state before it, a hash of the operation that led to it,
-the balance after it, how much of the channel's deposits the balance has taken in, how much it has paid out in
-withdrawals and lock-ins, and how much of the balance the casino lent. The wallet re-derives the checkpoint, checks the
-casino's signature, countersigns it and saves it before the game hears anything. There are seven kinds of operation, and
-the contract knows no others:
+the balance after it, how much of the channel's deposits the balance has taken in, and how much it has paid out in
+withdrawals and lock-ins. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and saves
+it before the game hears anything. There are six kinds of operation, and the contract knows no others:
 
-| Kind         | Effect on the balance       | Used for                                                                                                     |
-| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                  |
-| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank, transfers        |
-| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, transfers |
-| 4 deposit    | + amount                    | Taking in money deposited into the channel                                                                   |
-| 5 withdrawal | − amount − loan − fee       | Withdrawals, which the contract pays to the address the operation names                                      |
-| 6 lock-in    | − amount − loan − fee       | Lock-ins, which the contract pays into the account's own channel as deposits                                 |
-| 7 loan       | + amount                    | The network fee of a deposit, which the casino lends                                                         |
+| Kind         | Effect on the balance       | Used for                                                                                                                              |
+| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                                           |
+| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank, transfers                                 |
+| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, transfers, a deposit's network fee |
+| 4 deposit    | + amount                    | Taking in money deposited into the channel                                                                                            |
+| 5 withdrawal | − amount − fee              | Withdrawals, which the contract pays to the address the operation names                                                               |
+| 6 lock-in    | − amount − fee              | Lock-ins, which the contract pays into the account's own channel as deposits                                                          |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in
 its **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino
@@ -171,8 +169,8 @@ Anyone with a balance can move money from it into the bankroll and hold shares o
 A withdrawal takes part or all of the balance out, and the channel stays active. It is an operation that names the address
 to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play goes on
 from the lower balance. With that evidence, which your receipt keeps, anyone can have the contract record and pay the
-withdrawal with `withdraw`, and the casino does straight away. A withdrawal pays back first what the casino lent the
-balance, and pays the casino a fee for sending it to the contract. To fund a friend's balance,
+withdrawal with `withdraw`, and the casino does straight away. A withdrawal pays the casino a fee for sending it to the
+contract. To fund a friend's balance,
 [transfer](../wallet/getting-started.md#transfer) to them instead, off-chain and with no fee.
 
 The contract pays a withdrawal out of the channel's principal first, then its collateral, and its winnings from house

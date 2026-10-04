@@ -17,22 +17,22 @@ The deployment the casino runs, the protocol revision it speaks and the bounds i
 `protocol`, and a developer's server `developerProtocol`, against its own before it signs anything; the wallet takes
 nothing else here on trust ([how it pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
-| Response field       | Type           | Meaning                                                                                                                                                |
-| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `chainId`            | string         | `"11155111"` (Sepolia) or `"31337"` (Anvil)                                                                                                            |
-| `rpcUrl`             | string         | The casino's primary RPC                                                                                                                               |
-| `witnessRpcUrl`      | string         | Its witness RPC, on another host; absent when it has none                                                                                              |
-| `contractAddress`    | address        | The HookedInCasino contract                                                                                                                            |
-| `protocol`           | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#bounds-and-the-protocol-revision), the hash of everything a wallet and the casino agree on                |
-| `developerProtocol`  | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                                    |
-| `operator`           | address        | The contract's owner: the casino's signing address                                                                                                     |
-| `networkName`        | string         | `"Sepolia"` or `"Anvil test chain"`                                                                                                                    |
-| `isLocalDevelopment` | boolean        | `true` only on a local stack that offers [demo ETH](#post-apidemo-eth)                                                                                 |
-| `explorerUrl`        | string or null | `"https://sepolia.etherscan.io"` on Sepolia, `null` otherwise                                                                                          |
-| `bounds`             | object         | `{outcomeSpace, meta, group}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to                         |
-| `collateralRate`     | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                                          |
-| `loanLimit`          | string         | The most network fee the casino [lends](channels.md#post-apichannelsidoperations) a deposit, in millionths of the deposit                              |
-| `discord`            | string or null | The invite to the HookedIn Discord, where players [verify their Discord accounts](channels.md#verifying-a-discord-account); `null` where there is none |
+| Response field       | Type           | Meaning                                                                                                                                                      |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `chainId`            | string         | `"11155111"` (Sepolia) or `"31337"` (Anvil)                                                                                                                  |
+| `rpcUrl`             | string         | The casino's primary RPC                                                                                                                                     |
+| `witnessRpcUrl`      | string         | Its witness RPC, on another host; absent when it has none                                                                                                    |
+| `contractAddress`    | address        | The HookedInCasino contract                                                                                                                                  |
+| `protocol`           | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#bounds-and-the-protocol-revision), the hash of everything a wallet and the casino agree on                      |
+| `developerProtocol`  | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                                          |
+| `operator`           | address        | The contract's owner: the casino's signing address                                                                                                           |
+| `networkName`        | string         | `"Sepolia"` or `"Anvil test chain"`                                                                                                                          |
+| `isLocalDevelopment` | boolean        | `true` only on a local stack that offers [demo ETH](#post-apidemo-eth)                                                                                       |
+| `explorerUrl`        | string or null | `"https://sepolia.etherscan.io"` on Sepolia, `null` otherwise                                                                                                |
+| `bounds`             | object         | `{outcomeSpace, meta, group}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to                               |
+| `collateralRate`     | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                                                |
+| `depositFeeLimit`    | string         | The most network fee the casino [pays](channels.md#post-apichannelsidoperations) of a deposit, in millionths of the deposit, as far as its daily budget goes |
+| `discord`            | string or null | The invite to the HookedIn Discord, where players [verify their Discord accounts](channels.md#verifying-a-discord-account); `null` where there is none       |
 
 ### `GET /api/status`
 
@@ -62,7 +62,7 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cash`                             | Pool cash: the contract's balance                                                                                                             |
 | `protectedFunds`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                     |
-| `activeLiabilities`                | What active and closing channels are owed: their signed balances less their loans, and the deposits they have not taken in                    |
+| `activeLiabilities`                | What active and closing channels are owed: their signed balances and the deposits they have not taken in                                      |
 | `openWinnings`                     | What active and closing channels are owed above the deposits and collateral the contract holds for them: winnings, which only house cash pays |
 | `collateral`                       | The [collateral](../reference/contract.md#collateral) active and closing channels hold, which pays their winnings before house cash           |
 | `collateralSales`                  | What collateral has sold for, the contract's `collateralSales`: the bankroll's, as commission is                                              |

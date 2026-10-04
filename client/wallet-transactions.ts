@@ -18,18 +18,19 @@ import {
   offerTerms,
   verifyOffer,
   STATE_TYPES,
+  DEPOSIT_FEE_ID,
 } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import {
   confirmedReceipt,
-  depositLoan,
+  depositFee,
   findNonceTransaction,
   gasLimitFor,
   sameTransactionIntent,
 } from '../protocol/transaction-recovery.ts';
-/** What the wallet signs by itself as money comes into the balance: a deposit taken in, and the loan of its network
- * fee. It goes before anything else the player signs. */
-export const inbound = (kind?: string) => kind === 'taken-in' || kind === 'loan';
+/** What the wallet signs by itself as money comes into the balance: a deposit taken in, and its network fee the casino
+ * pays. It goes before anything else the player signs. */
+export const inbound = (kind?: string) => kind === 'taken-in' || kind === 'deposit-fee';
 /** ETH that arrived at the account's address, as Activity lists it. */
 export const addressReceipt = (amount: bigint, createdAt: string) => ({
   kind: 'received',
@@ -47,7 +48,7 @@ const MOST_WITHDRAWAL_GAS = 300_000n;
  * extends this, so each method declares `this: CasinoWallet`. */
 export class WalletTransactions {
   /** Sign, save and broadcast one transaction from this account's address, under the wallet's lock. `whole` marks a
-   * deposit of everything the address held, which kept back the most its transaction can cost, which the casino lends. */
+   * deposit of everything the address held, which kept back the most its transaction can cost, which the casino pays. */
   async sendTransaction(
     this: CasinoWallet,
     method: string,
@@ -274,7 +275,7 @@ export class WalletTransactions {
     return bought;
   }
   /** A deposit into this account's channel, under the wallet's lock. While it runs, `depositing` says what it adds: a
-   * deposit of everything the address holds (`whole`), priced in `fees`, with the loan of its network fee. */
+   * deposit of everything the address holds (`whole`), priced in `fees`, with its network fee the casino pays. */
   async depositLocked(this: CasinoWallet, amount: Integer, fees: Record<string, any> = {}, whole = false) {
     if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
       throw new Error('Deposit must be a positive uint256 amount');
@@ -288,7 +289,8 @@ export class WalletTransactions {
     // Once the close is on-chain, a deposit goes into the account's next channel.
     if (this.channel?.closing) throw new Error('Your balance is closing. Deposit once the close is on-chain.');
     this.depositing =
-      BigInt(amount) + (whole ? this.feeLoan(BigInt(amount), BigInt(fees.gasLimit) * BigInt(fees.maxFeePerGas)) : 0n);
+      BigInt(amount) +
+      (whole ? this.depositFeePaid(BigInt(amount), BigInt(fees.gasLimit) * BigInt(fees.maxFeePerGas)) : 0n);
     this.render();
     try {
       this.onProgress('Adding ETH to your balance…');
@@ -299,45 +301,45 @@ export class WalletTransactions {
       this.depositing = 0n;
     }
   }
-  /** What the casino lends a deposit of `amount` that kept back `fee` for its network fee: all of it, when it is at most
-   * the casino's `loanLimit` in millionths of the deposit, and otherwise nothing. */
-  feeLoan(this: CasinoWallet, amount: bigint, fee: bigint) {
-    const limit = this.config.loanLimit;
+  /** What the casino pays of the network fee of a deposit of `amount` that kept back `fee` for it: all of it, when it is
+   * at most the casino's `depositFeeLimit` in millionths of the deposit and its daily budget has room, and otherwise
+   * nothing. */
+  depositFeePaid(this: CasinoWallet, amount: bigint, fee: bigint) {
+    const limit = this.config.depositFeeLimit;
     return limit != null && fee * 1_000_000n <= amount * BigInt(limit) ? fee : 0n;
   }
   /** Take into the balance what was deposited into its channel and not taken in yet: a deposit operation, which
-   * the casino signs once it has seen the money confirmed. Then borrow the network fee of each deposit of everything
-   * the address held: what its transaction kept back, so the balance holds all the address had, up to what the rule
-   * the wallet prices its transactions by allows (`depositLoan`). The casino lends it when it is at most its
-   * `loanLimit`, in millionths of the deposit, and a withdrawal, a lock-in or a close pays it back first. One that is
-   * waiting for the casino is asked again. */
+   * the casino signs once it has seen the money confirmed. Then collect the network fee of each deposit of everything
+   * the address held, which the casino pays: what its transaction kept back, so the balance holds all the address had,
+   * up to what the rule the wallet prices its transactions by allows (`depositFee`). One that is waiting for the casino
+   * is asked again. */
   async takeDeposits(this: CasinoWallet) {
     const c = this.channel,
       pending = this.pending;
     if (pending)
       return inbound(pending.kind)
-        ? this.borrow(pending.kind, pending.request.amount, pending.details.id, pending.operationId)
+        ? this.takeIn(pending.kind, pending.request.amount, pending.details.id, pending.operationId)
         : null;
     if (!this.playable || !c || !c.registered) return null;
     const waiting = BigInt(c.onchain.deposited) - BigInt(c.state.deposited);
     // Named for the state it follows, so each take-in has an ID of its own.
     if (waiting > 0n)
       await this.perform('taken-in', { amount: waiting }, `taken-in:${c.opening.channelId}:${c.state.sequence}`);
-    const lent = new Set(this.history.filter(entry => entry.kind === 'loan').map(entry => entry.operationId));
+    const paid = new Set(this.history.filter(entry => entry.kind === 'deposit-fee').map(entry => entry.operationId));
     const deposit = this.history.find(
       entry =>
-        entry.lend &&
+        entry.kept &&
         entry.status === 'confirmed' &&
         same(entry.channelId, c.opening.channelId) &&
-        !lent.has(`loan:${entry.txHash}`) &&
-        this.feeLoan(BigInt(entry.amount), BigInt(entry.lend)),
+        !paid.has(`deposit-fee:${entry.txHash}`) &&
+        this.depositFeePaid(BigInt(entry.amount), BigInt(entry.kept)),
     );
     if (!deposit) return null;
     const receipt = await this.provider.getTransactionReceipt(deposit.txHash),
       before = receipt && (await this.provider.getBlock(receipt.blockNumber - 1));
     if (!receipt || before?.baseFeePerGas == null) return null;
     const { fees } = deposit.intent,
-      amount = depositLoan(
+      amount = depositFee(
         {
           gasLimit: BigInt(fees.gasLimit),
           maxFeePerGas: BigInt(fees.maxFeePerGas),
@@ -346,23 +348,26 @@ export class WalletTransactions {
         receipt.gasUsed,
         before.baseFeePerGas,
       );
-    return this.borrow('loan', amount, deposit.txHash, `loan:${deposit.txHash}`);
+    return this.takeIn('deposit-fee', amount, deposit.txHash, `deposit-fee:${deposit.txHash}`);
   }
-  /** Sign and send money coming into the balance. A loan the casino answered at a state this wallet has since taken up
-   * from another device is refused when asked again, for good: its deposit asks no more. */
-  async borrow(this: CasinoWallet, kind: string, amount: Integer, transaction: string, operationId: string) {
+  /** Sign and send money coming into the balance. A deposit's fee the casino does not pay, because it pays no more today
+   * or answered it at a state this wallet has since taken up from another device, is refused when asked again, for
+   * good: its deposit asks no more. */
+  async takeIn(this: CasinoWallet, kind: string, amount: Integer, transaction: string, operationId: string) {
     try {
-      return await this.perform(kind, { amount, transaction }, operationId);
+      const fee = kind === 'deposit-fee' ? { transaction, source: DEPOSIT_FEE_ID } : {};
+      return await this.perform(kind, { amount, ...fee }, operationId);
     } catch (error: any) {
-      if (kind !== 'loan' || error.code !== 'id-conflict' || error.status !== 409) throw error;
+      if (kind !== 'deposit-fee' || !['id-conflict', 'not-due'].includes(error.code) || error.status !== 409)
+        throw error;
       await this.exclusive(
         async () => {
           if (this.pending?.operationId !== operationId) return;
-          const deposit = this.history.find(entry => entry.lend && same(entry.txHash ?? '', transaction));
+          const deposit = this.history.find(entry => entry.kept && same(entry.txHash ?? '', transaction));
           this.pending = null;
           this.pendingError = null;
           if (!deposit) return this.save();
-          const { lend, ...answered } = deposit;
+          const { kept, ...answered } = deposit;
           await this.save(answered);
         },
         { wait: true },
@@ -502,9 +507,9 @@ export class WalletTransactions {
         if (event?.name === 'ChannelDeposit') deposited = channelId(event.args.player, event.args.index);
       } catch {}
     }
-    // What a deposit of everything the address held kept back for its fee, which the casino lends: the transaction
-    // that mined must be the one those fees priced.
-    const lend =
+    // What a deposit of everything the address held kept back for its fee, which the casino pays: the transaction that
+    // mined must be the one those fees priced.
+    const kept =
       intent?.whole && deposited && same(receipt.hash, intent.hash)
         ? String(BigInt(intent.fees.gasLimit) * BigInt(intent.fees.maxFeePerGas))
         : undefined;
@@ -531,7 +536,7 @@ export class WalletTransactions {
       amount,
       ...(to && !same(to, this.address) ? { to } : {}),
       ...(collateral ? { collateral } : {}),
-      ...(lend ? { lend, channelId: deposited } : {}),
+      ...(kept ? { kept, channelId: deposited } : {}),
       txHash: receipt.hash,
       ...(receipt.fee === undefined ? {} : { fee: String(receipt.fee) }),
       blockNumber: receipt.blockNumber,
@@ -676,11 +681,11 @@ export class WalletTransactions {
     await this.refresh();
     return hash;
   }
-  /** Withdraw `amount` of the balance, or all it can, to an address. In one operation the balance pays it, pays its
-   * loan back and pays the casino its fee for sending it, all at once, and the contract makes it a claim once anyone
-   * sends the operation and the casino's signature after it, which the casino does straight away: it pays the address
-   * what the deposits the balance has taken in and house cash cover, and the rest as house cash arrives. One the casino
-   * cannot pay now is declined, with why. */
+  /** Withdraw `amount` of the balance, or all it can, to an address. In one operation the balance pays it and pays the
+   * casino its fee for sending it, and the contract makes it a claim once anyone sends the operation and the casino's
+   * signature after it, which the casino does straight away: it pays the address what the deposits the balance has
+   * taken in and house cash cover, and the rest as house cash arrives. One the casino cannot pay now is declined, with
+   * why. */
   async withdraw(this: CasinoWallet, to: string, amount?: Integer) {
     const recipient = this.recipient(to),
       c = this.channel;
@@ -690,7 +695,7 @@ export class WalletTransactions {
       value = amount === undefined ? withdrawable : BigInt(amount);
     if (value <= 0n || value > withdrawable)
       throw new Error(
-        `Not that much is in your balance: ${exact(withdrawable)} METH can go, after the fee of ${exact(fee)} METH for sending it${BigInt(c.state.loan) ? ' and what the casino lent you' : ''}.`,
+        `Not that much is in your balance: ${exact(withdrawable)} METH can go, after the fee of ${exact(fee)} METH for sending it.`,
       );
     // The open game may risk no more than stays in the balance, what its groups hold included.
     if (this.game && BigInt(this.game.allowance) + this.inPlay() > withdrawable - value) {
@@ -707,16 +712,14 @@ export class WalletTransactions {
   async transfer(this: CasinoWallet, to: { uname: string; discordUsername: string | null }, amount: Integer) {
     const c = this.channel,
       value = BigInt(amount),
-      transferable = this.transferable();
+      balance = BigInt(c?.state.balance || 0);
     if (!c || !this.playable) throw new Error('No balance is open to transfer from.');
     if (to.uname === this.uname) throw new Error('A transfer goes to another player.');
-    if (value <= 0n || value > transferable)
-      throw new Error(
-        `Not that much is in your balance: ${exact(transferable)} METH can go${BigInt(c.state.loan) ? ', less what the casino lent you' : ''}.`,
-      );
+    if (value <= 0n || value > balance)
+      throw new Error(`Not that much is in your balance: ${exact(balance)} METH can go.`);
     // The open game may risk no more than stays in the balance, what its groups hold included.
-    if (this.game && BigInt(this.game.allowance) + this.inPlay() > transferable - value) {
-      const left = transferable - value - this.inPlay();
+    if (this.game && BigInt(this.game.allowance) + this.inPlay() > balance - value) {
+      const left = balance - value - this.inPlay();
       this.game.allowance = String(left < 0n ? 0n : left);
     }
     const receipt = await this.perform(
@@ -726,12 +729,6 @@ export class WalletTransactions {
     );
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this transfer.');
     return receipt;
-  }
-  /** What a transfer can take of the open balance: all of it but its loan, which stays in it. */
-  transferable(this: CasinoWallet) {
-    const c = this.channel,
-      left = BigInt(c?.state.balance || 0) - BigInt(c?.state.loan || 0);
-    return left > 0n ? left : 0n;
   }
   /** Send everything at this account's address to another address, less the network fee: the way out for ETH that
    * stays at the address, which never touches the balance. */
@@ -748,11 +745,11 @@ export class WalletTransactions {
       throw new Error('A withdrawal cannot pay that address: name another.');
     return recipient;
   }
-  /** What a withdrawal or a lock-in can take of the open balance: all of it but its loan, which it pays back, and the
-   * casino's fee for sending it, as last asked for. */
+  /** What a withdrawal or a lock-in can take of the open balance: all of it but the casino's fee for sending it, as last
+   * asked for. */
   withdrawable(this: CasinoWallet) {
     const c = this.channel,
-      left = BigInt(c?.state.balance || 0) - BigInt(c?.state.loan || 0) - this.withdrawalFee;
+      left = BigInt(c?.state.balance || 0) - this.withdrawalFee;
     return left > 0n ? left : 0n;
   }
   /** Ask the casino what sending a withdrawal or a lock-in to the contract costs now: the fee it pays out of the
@@ -775,7 +772,7 @@ export class WalletTransactions {
       throw new Error(`Sending it costs a fee of ${exact(fee)} METH now, more than shown: check and try again.`);
     return fee;
   }
-  /** Lock in the balance: all of it but its loan and the fee for sending it goes into this account's current channel as
+  /** Lock in the balance: all of it but the fee for sending it goes into this account's current channel as
    * deposits the contract holds, for the balance to take in. The deposits the balance has taken in pay back what they
    * cover, and house cash pays the rest, the winnings. The casino sends it at once. */
   async lockIn(this: CasinoWallet) {

@@ -66,7 +66,7 @@ export function validateWithdrawal({ unit = 'METH', ...input }: WithdrawalInput)
   }
   if (input.maximum <= 0n)
     error ??= input.channel
-      ? 'Nothing to withdraw: your balance holds no more than the fee for sending it and what the casino lent you.'
+      ? 'Nothing to withdraw: your balance holds no more than the fee for sending it.'
       : 'Nothing to withdraw: your deposit address is empty.';
   return { to, amount, error };
 }

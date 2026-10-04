@@ -36,21 +36,21 @@ withdrawal's or a lock-in's ID, a rejection's `transitionHash`, a statement's `c
 
 ## Structures
 
-| Structure         | Fields, in order                                                                                                                                                                          | Signed by                                        | Checked by               |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------ |
-| `Checkpoint`      | `address player`, `uint256 index`, `uint256 sequence`, `bytes32 previousStateHash`, `bytes32 transitionHash`, `uint256 balance`, `uint256 deposited`, `uint256 withdrawn`, `uint256 loan` | The casino, and the account when it countersigns | Contract, wallet, casino |
-| `Operation`       | `bytes32 previousStateHash`, `uint256 kind`, `uint256 amount`, `address recipient`, `uint256 fee`, `uint64 chance`, `uint256 prize`, `bytes32 round`, `bytes32 seedHash`, `bytes32 memo`  | The account                                      | Contract, casino, wallet |
-| `Quote`           | `bytes32 previousStateHash`, `bytes32 round`, `uint256 virtualBankroll`, `uint256 expiresAt`                                                                                              | The casino                                       | Wallet, casino, contract |
-| `CollateralOffer` | `address player`, `uint256 index`, `uint256 amount`, `uint256 price`, `uint256 expiresAt`                                                                                                 | The casino                                       | Wallet, contract         |
-| `Access`          | `address player`, `uint256 expiresAt`                                                                                                                                                     | The account                                      | Casino                   |
-| `DeveloperAccess` | `address developer`, `uint256 expiresAt`                                                                                                                                                  | The developer                                    | Casino                   |
-| `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                         | The developer                                    | Casino, wallet           |
-| `BankCasinoBet`   | `bytes32 round`, `bytes32 game`, `uint256 stake`, `uint64 chance`, `uint256 prize`, `string group`, `bytes32 seedHash`, `bytes32 meta`                                                    | The developer                                    | Casino                   |
-| `ShareStatement`  | `address holder`, `uint256 sequence`, `uint256 shares`, `uint256 amount`, `uint256 equity`, `uint256 totalShares`, `bytes32 cause`                                                        | The casino                                       | Wallet                   |
-| `Fund`            | `uint256 sequence`, `uint256 totalShares`, `uint256 houseShares`, `uint256 equity`, `uint256 overdrawn`, `uint256 at`                                                                     | The casino                                       | Wallet                   |
-| `Redeem`          | `address holder`, `uint256 shares`, `uint256 sequence`                                                                                                                                    | The holder                                       | Casino                   |
-| `BankStatement`   | `address developer`, `uint256 sequence`, `uint256 balance`, `bytes32 cause`                                                                                                               | The casino                                       | Wallet                   |
-| `BankWithdraw`    | `address developer`, `uint256 amount`, `uint256 sequence`                                                                                                                                 | The developer                                    | Casino                   |
+| Structure         | Fields, in order                                                                                                                                                                         | Signed by                                        | Checked by               |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------ |
+| `Checkpoint`      | `address player`, `uint256 index`, `uint256 sequence`, `bytes32 previousStateHash`, `bytes32 transitionHash`, `uint256 balance`, `uint256 deposited`, `uint256 withdrawn`                | The casino, and the account when it countersigns | Contract, wallet, casino |
+| `Operation`       | `bytes32 previousStateHash`, `uint256 kind`, `uint256 amount`, `address recipient`, `uint256 fee`, `uint64 chance`, `uint256 prize`, `bytes32 round`, `bytes32 seedHash`, `bytes32 memo` | The account                                      | Contract, casino, wallet |
+| `Quote`           | `bytes32 previousStateHash`, `bytes32 round`, `uint256 virtualBankroll`, `uint256 expiresAt`                                                                                             | The casino                                       | Wallet, casino, contract |
+| `CollateralOffer` | `address player`, `uint256 index`, `uint256 amount`, `uint256 price`, `uint256 expiresAt`                                                                                                | The casino                                       | Wallet, contract         |
+| `Access`          | `address player`, `uint256 expiresAt`                                                                                                                                                    | The account                                      | Casino                   |
+| `DeveloperAccess` | `address developer`, `uint256 expiresAt`                                                                                                                                                 | The developer                                    | Casino                   |
+| `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                        | The developer                                    | Casino, wallet           |
+| `BankCasinoBet`   | `bytes32 round`, `bytes32 game`, `uint256 stake`, `uint64 chance`, `uint256 prize`, `string group`, `bytes32 seedHash`, `bytes32 meta`                                                   | The developer                                    | Casino                   |
+| `ShareStatement`  | `address holder`, `uint256 sequence`, `uint256 shares`, `uint256 amount`, `uint256 equity`, `uint256 totalShares`, `bytes32 cause`                                                       | The casino                                       | Wallet                   |
+| `Fund`            | `uint256 sequence`, `uint256 totalShares`, `uint256 houseShares`, `uint256 equity`, `uint256 overdrawn`, `uint256 at`                                                                    | The casino                                       | Wallet                   |
+| `Redeem`          | `address holder`, `uint256 shares`, `uint256 sequence`                                                                                                                                   | The holder                                       | Casino                   |
+| `BankStatement`   | `address developer`, `uint256 sequence`, `uint256 balance`, `bytes32 cause`                                                                                                              | The casino                                       | Wallet                   |
+| `BankWithdraw`    | `address developer`, `uint256 amount`, `uint256 sequence`                                                                                                                                | The developer                                    | Casino                   |
 
 The _account_ is the `player` a channel's checkpoints name, which signs everything on it. The _casino_ is the contract's `owner`, which
 [`GET /api/config`](../casino-api/public.md#get-apiconfig) reports as `operator`. The _developer_ is the account that
@@ -80,8 +80,8 @@ A channel starts from its base, its zero checkpoint `(player, index, 0, 0x0, 0x0
 account and index, so the balance is 0 until a deposit operation, or a credit, adds to it. It needs no signature: a channel can
 close on it without the casino ever answering. Any other checkpoint the contract settles on is signed by both sides.
 
-`deposited` is how much of the channel's deposits the balance has taken in, `withdrawn` how much it has paid out in
-withdrawals and lock-ins, and `loan` how much of the balance the casino lent. The balance takes deposits in with a
+`deposited` is how much of the channel's deposits the balance has taken in, and `withdrawn` how much it has paid out in
+withdrawals and lock-ins. The balance takes deposits in with a
 [deposit operation](#transitions); [finalization](contract.md#finalization) says what a close on a checkpoint is owed.
 
 ### Transitions
@@ -98,7 +98,6 @@ its place. Applied, it produces the next checkpoint:
 | `balance`           | By kind, below                                                                                                              |
 | `deposited`         | The base's, plus `amount` for a deposit                                                                                     |
 | `withdrawn`         | The base's, plus `amount` for a withdrawal or a lock-in                                                                     |
-| `loan`              | The base's, plus `amount` for a loan; 0 after a withdrawal or a lock-in                                                     |
 
 | Kind       | `kind` | Balance                                                                       | `recipient`                                      | `fee`                                           | `chance`, `prize`, `round`, `seedHash`                                                |
 | ---------- | ------ | ----------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -106,21 +105,20 @@ its place. Applied, it produces the next checkpoint:
 | Debit      | 2      | Base − `amount`                                                               | Zero                                             | Zero                                            | All zero                                                                              |
 | Credit     | 3      | Base + `amount`                                                               | Zero                                             | Zero                                            | All zero                                                                              |
 | Deposit    | 4      | Base + `amount`                                                               | Zero                                             | Zero                                            | All zero                                                                              |
-| Withdrawal | 5      | Base − `amount` − `loan` − `fee`                                              | The address the contract pays                    | What the balance pays the casino for sending it | All zero                                                                              |
-| Lock-in    | 6      | Base − `amount` − `loan` − `fee`                                              | Zero: it goes into the account's current channel | What the balance pays the casino for sending it | All zero                                                                              |
-| Loan       | 7      | Base + `amount`                                                               | Zero                                             | Zero                                            | All zero                                                                              |
+| Withdrawal | 5      | Base − `amount` − `fee`                                                       | The address the contract pays                    | What the balance pays the casino for sending it | All zero                                                                              |
+| Lock-in    | 6      | Base − `amount` − `fee`                                                       | Zero: it goes into the account's current channel | What the balance pays the casino for sending it | All zero                                                                              |
 | None       | 0      | –                                                                             | –                                                | –                                               | Only in the [empty step](#evidence)                                                   |
 
 Every transition holds to these rules, which the contract, the wallet and the casino apply alike:
 
 - `amount` is 1 to 2^96 − 1. A casino bet's (its stake) or a debit's is at most the base balance, and a withdrawal's
-  or a lock-in's at most the base balance less its `loan`, which it pays back first, and its `fee`.
+  or a lock-in's at most the base balance less its `fee`.
 - A casino bet's `chance` is 1 to 2^64 − 1, the winning outcomes out of 2^64, and its `prize` is 1 to 2^96 − 1: a sure
   loss or a sure win is no bet.
 - A withdrawal's `recipient` is any address but zero and the contract; every other kind's, a lock-in's among them, is
   the zero address. A withdrawal's or a lock-in's `fee`, below 2^96, is what it pays the casino for sending it to the
   contract: it leaves the balance, and nothing pays it out. Every other kind's `fee` is 0.
-- The next `balance`, `deposited`, `withdrawn` and `loan` are below 2^96.
+- The next `balance`, `deposited` and `withdrawn` are below 2^96.
 - Every field a kind does not use is zero, and every kind but a casino bet carries a zero seed and secret: one meaning,
   one encoding.
 
@@ -135,7 +133,7 @@ lock-in's step, with its base, is also what the contract records and pays it on
 
 ### Rejection checkpoints
 
-The casino declines a signed casino bet, debit, withdrawal, lock-in or loan by proposing a checkpoint two above its
+The casino declines a signed casino bet, debit, withdrawal or lock-in by proposing a checkpoint two above its
 base, with the balance unchanged. The player signs it first, and the casino completes the rejection with its signature:
 
 | Field               | Rejection checkpoint              |
@@ -146,7 +144,6 @@ base, with the balance unchanged. The player signs it first, and the casino comp
 | `balance`           | The base's                        |
 | `deposited`         | The base's                        |
 | `withdrawn`         | The base's                        |
-| `loan`              | The base's                        |
 
 The proposal has `casinoSignature: "0x"` and does not advance the channel. The player verifies it, saves its signature,
 and repeats the operation with `rejectionSignature`. The casino signs and records the joint checkpoint, whose evidence
@@ -227,27 +224,26 @@ recipient is in the operation, not in its details. By kind:
 | 4, deposit    | Neither `game` nor `counterparty`        |
 | 5, withdrawal | Neither `game` nor `counterparty`        |
 | 6, lock-in    | Neither `game` nor `counterparty`        |
-| 7, loan       | Neither `game` nor `counterparty`        |
 
 Each operation the wallet signs, and what its details hold:
 
-| Operation                                 | Kind | Details                                                              |
-| ----------------------------------------- | ---- | -------------------------------------------------------------------- |
-| Casino bet                                | 1    | `{id, game, group?}`                                                 |
-| Payment to the bankroll                   | 2    | `{id, game, group?}`                                                 |
-| Developer bet                             | 2    | `{id, game, group?, meta}`; the bet is known by the operation's hash |
-| Investment in the bankroll fund           | 2    | `{id, counterparty: FUND_ID}`                                        |
-| Deposit into the account's developer bank | 2    | `{id, counterparty: BANK_ID}`                                        |
-| Transfer to another player                | 2    | `{id, counterparty: "~" + their uname}`                              |
-| Collecting redeemed shares                | 3    | `{id, counterparty: FUND_ID}`                                        |
-| Collecting a bank withdrawal              | 3    | `{id, counterparty: BANK_ID}`                                        |
-| Collecting developer earnings             | 3    | `{id, counterparty: DEVELOPER_ID}`                                   |
-| Collecting a developer bet's payout       | 3    | `{id, counterparty: <the bet's hash>}`                               |
-| Collecting a transfer                     | 3    | `{id, counterparty: "~" + the sender's uname}`                       |
-| Taking in a deposit                       | 4    | `{id}`                                                               |
-| Withdrawal                                | 5    | `{id}`; the operation names the address it pays as `recipient`       |
-| Locking in the balance                    | 6    | `{id}`; the operation names no `recipient`                           |
-| Loan of a deposit's network fee           | 7    | `{id}`, the hash of the deposit's transaction                        |
+| Operation                                 | Kind | Details                                                                          |
+| ----------------------------------------- | ---- | -------------------------------------------------------------------------------- |
+| Casino bet                                | 1    | `{id, game, group?}`                                                             |
+| Payment to the bankroll                   | 2    | `{id, game, group?}`                                                             |
+| Developer bet                             | 2    | `{id, game, group?, meta}`; the bet is known by the operation's hash             |
+| Investment in the bankroll fund           | 2    | `{id, counterparty: FUND_ID}`                                                    |
+| Deposit into the account's developer bank | 2    | `{id, counterparty: BANK_ID}`                                                    |
+| Transfer to another player                | 2    | `{id, counterparty: "~" + their uname}`                                          |
+| Collecting redeemed shares                | 3    | `{id, counterparty: FUND_ID}`                                                    |
+| Collecting a bank withdrawal              | 3    | `{id, counterparty: BANK_ID}`                                                    |
+| Collecting developer earnings             | 3    | `{id, counterparty: DEVELOPER_ID}`                                               |
+| Collecting a developer bet's payout       | 3    | `{id, counterparty: <the bet's hash>}`                                           |
+| Collecting a transfer                     | 3    | `{id, counterparty: "~" + the sender's uname}`                                   |
+| Collecting a deposit's network fee        | 3    | `{id, counterparty: DEPOSIT_FEE_ID}`, `id` the hash of the deposit's transaction |
+| Taking in a deposit                       | 4    | `{id}`                                                                           |
+| Withdrawal                                | 5    | `{id}`; the operation names the address it pays as `recipient`                   |
+| Locking in the balance                    | 6    | `{id}`; the operation names no `recipient`                                       |
 
 What the casino checks for each, and what it answers, is under
 [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations).
@@ -275,8 +271,8 @@ strings, so `"17"` comes before `"9"`.
 
 ### Operation IDs
 
-`details.id` is the keccak-256 of the UTF-8 bytes of the operation's name, its _operation ID_; a loan of a deposit's
-network fee has the hash of the deposit's transaction, so each deposit is lent once. The casino keeps each reply under the
+`details.id` is the keccak-256 of the UTF-8 bytes of the operation's name, its _operation ID_; a deposit's network fee
+has the hash of the deposit's transaction, so the casino pays each deposit's once. The casino keeps each reply under the
 channel and this hash: the same ID with the same signed operation is a retry and gets the recorded reply, and the same
 ID with another operation is refused with `id-conflict`. The reply's `operationId` is this hash.
 
@@ -288,11 +284,12 @@ operations itself.
 
 ### Counterparties
 
-| Name           | Preimage             | Value                                                                | Debit          | Credit             |
-| -------------- | -------------------- | -------------------------------------------------------------------- | -------------- | ------------------ |
-| `FUND_ID`      | `HOOKEDIN/BANKROLL`  | `0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530` | An investment  | Redeemed shares    |
-| `BANK_ID`      | `HOOKEDIN/BANK`      | `0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263` | A bank deposit | A bank withdrawal  |
-| `DEVELOPER_ID` | `HOOKEDIN/DEVELOPER` | `0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc` | –              | Developer earnings |
+| Name             | Preimage               | Value                                                                | Debit          | Credit                                         |
+| ---------------- | ---------------------- | -------------------------------------------------------------------- | -------------- | ---------------------------------------------- |
+| `FUND_ID`        | `HOOKEDIN/BANKROLL`    | `0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530` | An investment  | Redeemed shares                                |
+| `BANK_ID`        | `HOOKEDIN/BANK`        | `0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263` | A bank deposit | A bank withdrawal                              |
+| `DEVELOPER_ID`   | `HOOKEDIN/DEVELOPER`   | `0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc` | –              | Developer earnings                             |
+| `DEPOSIT_FEE_ID` | `HOOKEDIN/DEPOSIT_FEE` | `0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf` | –              | A deposit's network fee, which the casino pays |
 
 Each value is `keccak256` of its preimage. A credit that collects a developer bet's payout names the bet's hash instead,
 and a transfer names a player: its debit the player it pays, and the credit that collects it the player it came from,
@@ -440,15 +437,15 @@ active channel, and `sequence` is the number of the statement it will produce, s
 
 ## Bounds and the protocol revision
 
-| Bound                                                                                                   | Value                                          |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Outcome space, which a chance counts in                                                                 | 2^64, `18446744073709551616` (`OUTCOME_SPACE`) |
-| A bet's meta                                                                                            | 4,096 bytes of canonical JSON                  |
-| A group label                                                                                           | 64 UTF-16 code units                           |
-| Amounts, fees, deposits, prizes, balances, `deposited`, `withdrawn`, `loan`, a quote's virtual bankroll | Below 2^96 (`MAX_BALANCE`)                     |
-| Canonical JSON and API request bodies                                                                   | 1,000,000 bytes                                |
-| Settlements in one request, developer bets in one public page                                           | 256                                            |
-| Payouts listed in one reply                                                                             | 256                                            |
+| Bound                                                                                           | Value                                          |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Outcome space, which a chance counts in                                                         | 2^64, `18446744073709551616` (`OUTCOME_SPACE`) |
+| A bet's meta                                                                                    | 4,096 bytes of canonical JSON                  |
+| A group label                                                                                   | 64 UTF-16 code units                           |
+| Amounts, fees, deposits, prizes, balances, `deposited`, `withdrawn`, a quote's virtual bankroll | Below 2^96 (`MAX_BALANCE`)                     |
+| Canonical JSON and API request bodies                                                           | 1,000,000 bytes                                |
+| Settlements in one request, developer bets in one public page                                   | 256                                            |
+| Payouts listed in one reply                                                                     | 256                                            |
 
 The first three are `BOUNDS`, which `GET /api/config` reports as `bounds`:
 `{"outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64}`.
@@ -459,7 +456,7 @@ canonical JSON of the rules they apply alike. An `encodeType` string is a struct
 `Access(address player,uint256 expiresAt)`. The rules:
 
 ```text
-{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530","player":"^~[23456789abcdefghijkmnopqrstvwxyz]{24}$"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"loan":7,"lockIn":6,"none":0,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
+{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","depositFee":"0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530","player":"^~[23456789abcdefghijkmnopqrstvwxyz]{24}$"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"lockIn":6,"none":0,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
 `DEVELOPER_PROTOCOL` fixes only what a developer's server shares with the casino: the `encodeType` strings of
@@ -497,11 +494,11 @@ The operations are a deposit of `1000000000` that takes in money deposited into 
 the developer's game `roulette`, a stake of `100000000` that pays `200000000` on 18 of 37 pockets (a chance of
 `18 × floor(2^64 / 37)`, the seed `0x7272…72`, and as its secret the first `keccak256("HOOKEDIN/VECTOR/SECRET/<n>")`
 whose outcome wins); a developer bet in the same game, with a group and a layout of chips as its meta; the credit that
-collects what the developer paid for it, naming its `hash` as the counterparty; a deposit of `500000000`; a loan of
-`5000000`, that deposit's network fee, whose `id` stands for the deposit transaction's hash; a withdrawal of `700000000`
-to `identity.recipient` with a fee of `1000000`, which pays the loan back first; a lock-in of `100000000` with the same
-fee; and a transfer of `50000000` to `identity.friend`, a debit naming `~` and the friend's uname, leaving a balance of
-`808000000`, `withdrawn` at `800000000` and `loan` at `0`.
+collects what the developer paid for it, naming its `hash` as the counterparty; a deposit of `500000000`; a credit of
+`5000000`, that deposit's network fee, which the casino pays, naming `DEPOSIT_FEE_ID`, whose `id` stands for the deposit
+transaction's hash; a withdrawal of `700000000` to `identity.recipient` with a fee of `1000000`; a lock-in of
+`100000000` with the same fee; and a transfer of `50000000` to `identity.friend`, a debit naming `~` and the friend's
+uname, leaving a balance of `813000000` and `withdrawn` at `800000000`.
 
 An implementation built from this page reproduces the file with the domain of `identity`: both protocol hashes; the
 channel's [ID](#channel-ids), the [base](#the-base) and `baseHash`; each operation's `canonical` details, their

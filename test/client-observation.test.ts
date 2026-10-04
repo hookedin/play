@@ -131,7 +131,6 @@ function observingWallet(storage = new MemoryStore()) {
       balance: '10',
       deposited: '10',
       withdrawn: '0',
-      loan: '0',
       sequence: '1',
       index: '0',
       length: '1',
@@ -376,7 +375,4 @@ test("the balance's protection follows the contract's rule for the withdrawals i
   // A deposit the balance took in that a reorganisation took off the chain is shown apart, never as protected.
   onchain = { deposited: '1', principal: '1', collateral: '0', claimed: '0' };
   assert.deepEqual(protection({ balance: '101', deposited: '101', withdrawn: '0' }, onchain), [1, 0, 100, 0]);
-  // What the casino lent the balance is not the account's: a close is owed the balance less it.
-  onchain = { deposited: '100', principal: '100', collateral: '0', claimed: '0' };
-  assert.deepEqual(protection({ balance: '110', deposited: '100', loan: '10' }, onchain), [100, 0, 0, 0]);
 });

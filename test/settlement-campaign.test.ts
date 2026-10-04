@@ -209,12 +209,11 @@ for (let initialSeed = 1; initialSeed <= 16; initialSeed++)
             assert.equal((await channelAt(f, ch.opening)).disputedPrize, q.prize);
           } else await (await f.contract.connect(player).startClose(ch.base)).wait();
         } else if (choice === 9 && balance > 0n) {
-          // At times the casino lends the balance something first, which the withdrawal pays back, or a close if none
-          // does.
-          if (!random(4)) await transition(f, ch, 7, BigInt(1 + random(50)) * ch.unit);
-          // It pays the loan back, and at times the casino a fee for sending it.
+          // At times the casino pays the balance something first, as it does a deposit's network fee.
+          if (!random(4)) await transition(f, ch, 3, BigInt(1 + random(50)) * ch.unit);
+          // At times it pays the casino a fee for sending it.
           const fee = BigInt(random(3)),
-            free = BigInt(ch.state.balance) - BigInt(ch.state.loan) - fee;
+            free = BigInt(ch.state.balance) - fee;
           if (free <= 0n) continue;
           // A withdrawal, to the account's address or another, or a lock-in into the account's own channel, which
           // anyone has made a claim: paid at once out of the channel's deposits and as far as house cash goes, the rest

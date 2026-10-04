@@ -51,8 +51,8 @@ const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
  * developer bet, a payment, an investment, a bank deposit and a transfer to another player are debits, a withdrawal
  * names the address it pays, a lock-in goes into this account's own current channel, a payout or a transfer collected
- * is a credit, money deposited into the channel is taken in with a deposit, and the network fee of a deposit is a loan
- * the casino makes. */
+ * is a credit, as is the network fee of a deposit the casino pays, and money deposited into the channel is taken in with
+ * a deposit. */
 export const OPERATIONS: Record<string, { kind: number; name: string; game?: boolean }> = {
   'casino-bet': { kind: KIND.casinoBet, name: 'casino bet', game: true },
   payment: { kind: KIND.debit, name: 'game payment', game: true },
@@ -67,11 +67,11 @@ export const OPERATIONS: Record<string, { kind: number; name: string; game?: boo
   'developer-bet-payout': { kind: KIND.credit, name: 'developer bet payout' },
   withdrawn: { kind: KIND.credit, name: 'bank withdrawal' },
   'transfer-in': { kind: KIND.credit, name: 'transfer received' },
+  'deposit-fee': { kind: KIND.credit, name: 'network fee' },
   'taken-in': { kind: KIND.deposit, name: 'deposit' },
-  loan: { kind: KIND.loan, name: 'network fee loan' },
 };
-/** A payout collected, a deposit taken in or a loan adds to the balance, and commits none of it. */
-const credit = (kind: string) => [KIND.credit, KIND.deposit, KIND.loan].includes(OPERATIONS[kind]!.kind as 3);
+/** A payout collected or a deposit taken in adds to the balance, and commits none of it. */
+const credit = (kind: string) => [KIND.credit, KIND.deposit].includes(OPERATIONS[kind]!.kind as 3);
 /** A casino bet: the stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance,
  * counted in outcomes out of 2^64. */
 export interface CasinoBetInput {
@@ -183,8 +183,8 @@ export class ChannelClient extends WalletTransactions {
     // game's, so which game that is has one source of truth: the session this wallet has open; the game may give
     // them a group. An investment, a bank deposit, a transfer and a payout name what they pay into or collect from.
     const details: Details = plain({
-      // A loan is known by the hash of the deposit transaction whose network fee it lends: one loan for each.
-      id: kind === 'loan' ? input.transaction : id(operationId),
+      // A deposit's fee is known by the hash of the deposit's transaction: the casino pays each once.
+      id: kind === 'deposit-fee' ? input.transaction : id(operationId),
       ...(known.game ? { game: gameRef(this.requireGame().identity) } : {}),
       ...(input.group ? { group: input.group } : {}),
       ...(input.source ? { counterparty: input.source.toLowerCase() } : {}),
@@ -212,13 +212,8 @@ export class ChannelClient extends WalletTransactions {
             'developer-bets-not-allowed',
             'The player has not let this game place developer bets: ask with requestAllowance({ developerBets: true }).',
           );
-      } else if (
-        // Only a bet stakes what the casino lent the balance: money moved into the fund, a bank or another player's
-        // balance leaves it.
-        debit + (['invest', 'bank', 'transfer'].includes(kind) ? BigInt(this.channel!.state.loan) : 0n) >
-        this.availableBalance()
-      )
-        throw new Error("Debit exceeds your balance less the game's allowance and what the casino lent it");
+      } else if (debit > this.availableBalance())
+        throw new Error("Debit exceeds your balance less the game's allowance");
       if (kind === 'casino-bet')
         try {
           describeBet(betTerms(intent.amount, intent.chance, intent.prize));
