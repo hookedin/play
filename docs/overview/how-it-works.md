@@ -23,11 +23,11 @@ and can close a channel too.
 contract derives the channel ID as `keccak256(abi.encode(player, index))`, where `player` is the account's address and
 `index` is how many of its channels have started closing, so an account plays on one channel at a time. The account
 signs everything on its channel. Every channel starts from its **base**, a checkpoint that is all zero but for the
-channel's ID, which the contract takes with no signature. Once the first deposit has two confirmations on Sepolia, the
-wallet registers the channel with the casino. A channel's ID is known before it is opened, so the casino also registers
-an account's current channel before it is on-chain while it owes the account something, such as a transfer from
-another player: that balance plays off-chain, and the contract settles its signed states once a deposit opens the
-channel, a deposit of nothing included ([a balance not on-chain yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet)).
+channel's ID, which the contract takes with no signature. Once the first deposit is
+[confirmed](../reference/deployment.md#chains), the wallet registers the channel with the casino. A channel's ID is
+known before it is opened, so a balance can also play off-chain [before its channel is
+on-chain](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet), while the casino owes the account something, such
+as a transfer from another player.
 
 **Deposit.** `deposit(player)` adds money to the account's channel, and anyone can send it for any account. The contract
 holds every deposit as it arrives, the first and every later one, as the channel's **principal**, which the owner cannot
@@ -95,10 +95,10 @@ it holds, and whose terms its virtual bankroll admits by the casino's
 The casino settles every casino bet a quote covers. The wallet sends the seed with a covered bet only, so the casino
 declines any other without learning what it would have paid. A covered bet the casino declines or leaves unanswered
 stays saved in the wallet, which **disputes** it by closing the channel with it before the quote expires, as a
-watchtower holding its recovery bundle does: the contract counts it as won, locks what it would win into the channel as
-collateral, as far as house cash is free, and gives the casino 7 days to settle it with the round's secret
-([closing and claims](../wallet/closing-and-claims.md#dispute-a-casino-bet)). The casino declines a covered bet only as
-a game's operation its player carried out on another channel, with the operation the account signed there as proof.
+watchtower holding its recovery bundle does: the contract counts it as won until the casino settles it with the round's
+secret ([dispute a casino bet](../wallet/closing-and-claims.md#dispute-a-casino-bet)). The casino declines a covered bet
+only as a game's operation its player carried out on another channel, with the operation the account signed there as
+proof.
 
 A quote binds the casino for its day whatever the bankroll does meanwhile, and the quotes out at once are not divided
 between them: the bankroll overcommits ([limitations](architecture.md#limitations)).
@@ -173,9 +173,8 @@ A withdrawal takes part or all of the balance out, and the channel stays open. I
 to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play goes on
 from the lower balance. With that evidence, which your receipt keeps, anyone can have the contract record and pay the
 withdrawal with `withdraw`, and the casino does straight away. A withdrawal pays back first what the casino lent the
-balance, and pays the casino a fee for sending it to the contract. To fund a friend's balance, a
-[transfer](../wallet/getting-started.md#transfer) gives them part of yours off-chain: a debit naming their uname, which
-their wallet collects with a credit, with no fee and nothing on-chain.
+balance, and pays the casino a fee for sending it to the contract. To fund a friend's balance,
+[transfer](../wallet/getting-started.md#transfer) to them instead, off-chain and with no fee.
 
 The contract pays a withdrawal out of the channel's principal first, then its collateral, and its winnings from house
 cash, in the order
@@ -185,15 +184,12 @@ all of it can be paid now, and otherwise declines it, leaving the balance unchan
 
 ## Closing and claims
 
-Only a close ends a channel, and either side can start one alone with its latest evidence: the latest balance both
-sides signed, or the channel's base, either alone or followed by one operation the account authorized and the casino
-signed. That starts a 7-day window, and the account's next deposit opens its next channel at once. Anyone with
-strictly newer evidence can replace the close's state before the deadline, and the deadline moves only for a dispute:
-a covered casino bet the account closes with, or challenges with, gives the casino 7 days from then to replace it with
-its result. After it,
-anyone can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
-**claim**: up to the channel's principal and collateral it is protected, `min(owed, principal + collateral)`, and the
-rest is winnings, paid first
-in, first out as cash arrives. Collecting is a separate transaction. The casino closes a channel nobody plays on
-([idle channels](../wallet/closing-and-claims.md#idle-channels)), and
-[closing and claims](../wallet/closing-and-claims.md) walks through each step.
+Only a close ends a channel, and either side can start one alone with its latest
+[evidence](../reference/signed-messages.md#evidence). That starts a 7-day window, which only a
+[dispute](../wallet/closing-and-claims.md#dispute-a-casino-bet) moves, and the account's next deposit opens its next
+channel at once. Anyone with strictly newer evidence can replace the close's state before the deadline. After it, anyone
+can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
+**claim**: protected up to the channel's principal and collateral, and the rest winnings, paid first in, first out as
+cash arrives. Collecting is a separate transaction. The casino closes a channel nobody plays on ([idle
+channels](../wallet/closing-and-claims.md#idle-channels)), and [closing and claims](../wallet/closing-and-claims.md)
+walks through each step.

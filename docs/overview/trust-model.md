@@ -8,30 +8,24 @@ sidebar:
 The contract protects what it owes: your deposits, the collateral locked into your channel and your recorded winnings,
 from everyone, the owner included. Everything else depends on the casino: house cash and winnings not yet recorded. You
 protect a win by recording it, with a withdrawal or a lock-in, or before you win it by buying collateral, keep your
-evidence and watch your channel. Disputing a bet locks what it would win into your channel as collateral, as far as
-house cash is free.
-A game, its developer and a bankroll fund share each carry trust of their own, set out below.
+evidence and watch your channel. A game, its developer and a bankroll fund share each carry trust of their own, set out
+below.
 
 ## What the contract enforces
 
 - **Your deposits are protected up to your final balance.** The contract holds every deposit as it arrives, as your
-  channel's principal, and the owner cannot withdraw it. A withdrawal is paid out of it first, but only out of the
-  deposits its balance had taken in, so one that arrives later stays protected however late the withdrawal is recorded.
-  A close pays `min(owed, principal + collateral)` out of it and your collateral in full. Only winnings above your
-  deposits and collateral depend on the shared bankroll.
-- **Collateral protects winnings before they are won.** The casino offers
-  [collateral](../reference/contract.md#collateral) for your channel at its rate, signed, and anyone buys the offer
-  on-chain at the price it names: in that one transaction the contract moves that much house cash into your channel,
-  where the owner cannot withdraw it, or the purchase reverts and costs nothing but its fee. A withdrawal draws on it
-  after your deposits, and a close is paid out of it what your deposits do not cover. It adds nothing to what you are
-  owed: what your close is not owed returns to house cash. Withdrawals use it up, and it has no minimum term: the
-  casino's owner can start a close at any time, and the price is never refunded.
-- **Withdrawals are paid by the contract.** A withdrawal is an operation your account signs. With the casino's signature
-  of the balance after it, which your receipt keeps, anyone can have the contract record it as a claim, once, until the
-  channel's close is final, and only after every withdrawal you made before it, so nobody can make a lock-in take less
-  of your deposits than it should. The contract pays at once what your deposits and house cash cover and owes the rest;
-  a recipient that refuses the payment leaves all of it owed. One never recorded comes back to you with the close. A
-  lock-in, a withdrawal into your own channel, is recorded the same way and paid into it as deposits.
+  channel's principal, and the owner cannot withdraw it. Withdrawals and a close are paid out of it first, a withdrawal
+  only out of the deposits its balance had taken in ([withdrawals](../reference/contract.md#withdrawals),
+  [finalization](../reference/contract.md#finalization)). Only winnings above your deposits and collateral depend on the
+  shared bankroll.
+- **Collateral protects winnings before they are won.** [Collateral](../wallet/closing-and-claims.md#collateral) bought
+  for your channel is house cash the contract holds for it, where the owner cannot withdraw it, until withdrawals use it
+  up or the channel closes.
+- **Withdrawals are paid by the contract.** With the casino's signature of the balance after a withdrawal, which your
+  receipt keeps, anyone can have the contract record it as a claim, once and in the order you made them, until the
+  channel's close is final; the contract pays at once what is covered and owes the rest
+  ([withdrawals](../reference/contract.md#withdrawals)). One never recorded comes back to you with the close. A lock-in
+  is a withdrawal into your own channel, paid into it as deposits.
 - **Losses are real.** A close is owed your final balance, less what the casino lent it, and the deposits above that
   return to house cash. Nothing refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no
@@ -39,23 +33,20 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   secret and seed that hash to what the bet named, or by a casino bet the casino's quote covers, disputed.
   [Finalization](../reference/contract.md#finalization) says what such a state is owed. Every signature is bound to the
   chain and to this contract.
-- **A casino bet its quote covers is settled.** Every reply brings the casino's signed quote for your next casino bet:
-  its round, the virtual bankroll it is admitted against and an expiry a day away. The casino must settle a bet the
-  quote's virtual bankroll admits by the casino's Kelly rule. One it leaves unsettled, anyone with your evidence disputes
-  before the quote expires, which closes your channel with it: it counts as won until the casino settles it on-chain
-  with the round's secret, which it has 7 days from the dispute to do. The dispute moves what winning the bet adds
-  above your deposits and collateral from house cash into your collateral, as far as house cash is free when it is
-  mined, so the owner cannot take it meanwhile. Settled, the bet keeps of it what your close is then owed above your
-  deposits and other collateral, until the close is final. A bet still disputed then is won, and its winnings are
-  recorded with the close.
-- **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
-  claim, with no casino server involved. A balance [not on-chain yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet)
-  is opened first with a deposit of nothing, which anyone may send: the contract checks every signature against the
-  channel's account, which it records when the channel opens. The challenge window is 7 days; only a dispute moves it, to 7 days from the
-  dispute, which is the time the casino has to settle the disputed bet.
+- **A casino bet its quote covers is settled.** Every reply brings the casino's signed
+  [quote](../reference/signed-messages.md#quotes) for your next casino bet, and the casino must settle every bet it
+  covers. One it leaves unsettled, anyone with your evidence disputes before the quote expires, which closes your
+  channel with it: it counts as won unless the casino settles it on-chain with the round's secret before the close ends,
+  and what it would win is held out of house cash meanwhile, as far as it is free
+  ([disputes](../reference/contract.md#disputes)).
+- **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it after its 7-day
+  window and collect the claim, with no casino server involved ([close without the
+  casino](../wallet/closing-and-claims.md#close-without-the-casino)). A balance [not on-chain
+  yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet) is opened first with a deposit of nothing, which
+  anyone may send.
 - **Recorded winnings come before the owner.** Finalizing a close, or recording a withdrawal, records its unpaid
-  winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
-  of an earlier one, and the owner cannot withdraw the cash they are owed. Winnings not yet recorded have none of this.
+  winnings permanently in [the winnings queue](../reference/contract.md#the-winnings-queue): no later claim can take
+  cash ahead of them, and the owner cannot withdraw the cash they are owed. Winnings not yet recorded have none of this.
 - **The contract is fixed.** It cannot be upgraded or paused, and its owner is set once, by deploying it.
 
 [The contract reference](../reference/contract.md) has every function and the conditions it checks.
@@ -71,24 +62,20 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   is a deliberate choice of capital efficiency. Until a win is recorded, the cash that would pay it is house cash, which
   the owner can withdraw. A dispute locks a disputed bet's win only out of house cash that is free when it is mined: an
   owner that withdraws first, or keeps no house cash, leaves the win to the queue.
-- **The bankroll overcommits.** This is a limitation. The quotes out at once are not divided between them: each admits
-  bets against the whole virtual bankroll as it was when quoted, and holds for a day. The bets on many quotes can
-  together stake more than the Kelly rule lets the bankroll take at once, and win more than it holds; what it cannot
-  pay waits in the winnings queue. The virtual bankroll is half the bankroll, a half-Kelly margin against this, not a
-  bound on it.
+- **The bankroll overcommits.** Each quote admits bets against the whole virtual bankroll for a day, so the bets on many
+  quotes can together win more than the bankroll holds; what it cannot pay waits in the winnings queue
+  ([limitations](architecture.md#limitations)).
 - **Sending withdrawals.** The casino takes on a withdrawal only when your deposits, your collateral and the house cash
-  it can count on cover all of it, and declines it otherwise, so a withdrawal is normally paid in full the moment it is sent. It sends
-  each it takes on to the contract once, oldest first and one transaction at a time, and owes it until a confirmed block
-  shows it recorded, whoever sent it, or its channel's close final without it. One it cannot send yet waits while the
-  next is sent, and its public status says why. Play never waits for a withdrawal. It pays the gas, and charges a fee
-  for it that it sets from the network's gas price.
-- **Transfers between players.** A [transfer](../wallet/getting-started.md#transfer) is off-chain, so the contract
-  never sees it: it leaves your balance with a debit your account signs, naming the recipient's uname, and the casino
-  owes it to them until their wallet collects it. The casino alone knows which account a name belongs to, so you trust
-  it to pay the player you named, and that player trusts it to pay what waits for them; nothing signed says who goes by
-  a uname. Once collected it is part of their balance, and beyond their own deposits and collateral it is winnings, paid
-  out of the bankroll, until they lock it in. A player with no balance plays it before their channel is on-chain, where
-  all of their balance is winnings until a deposit, a withdrawal, a lock-in or a close opens it.
+  it can count on cover all of it, and declines it otherwise, so a withdrawal is normally paid in full the moment it is
+  sent. It sends each it takes on to the contract once, oldest first and one transaction at a time, and owes it until a
+  confirmed block shows it recorded, whoever sent it, or its channel's close final without it. One it cannot send yet
+  waits while the next is sent, and its public status says why. Play never waits for a withdrawal. It pays the gas, and
+  charges a [fee](../casino-api/public.md#get-apiwithdrawal-fee) for it.
+- **Transfers between players.** A [transfer](../wallet/getting-started.md#transfer) is off-chain, so the contract never
+  sees it: the casino owes it to the player you named until their wallet collects it. The casino alone knows which
+  account a name belongs to, so you trust it to pay the player you named, and that player trusts it to pay what waits
+  for them; nothing signed says who goes by a uname. Once collected, it is winnings like any balance above their own
+  deposits and collateral.
 - **Admitting bets.** The casino admits each casino bet against its quote's virtual bankroll with a Kelly rule, and
   sets its commission against the same figure. It names the virtual bankroll it quotes: half its bankroll, by its own
   books.
@@ -126,8 +113,8 @@ verify is availability and liquidity.
 - **Dispute a covered bet the casino leaves unsettled.** A casino bet its quote covers that the casino declines or does
   not answer stays saved in the wallet, which disputes it when you press **Close without the casino**, or **Challenge
   the close** when the casino closes short of it. Its recovery bundle carries it, so a
-  [watchtower](../wallet/keys-and-recovery.md#the-watchtower) disputes it for you an hour before the quote expires.
-  The dispute must be mined before the quote expires, a day after the casino signed it.
+  [watchtower](../wallet/keys-and-recovery.md#the-watchtower) disputes it for you. The dispute must be mined before the
+  quote expires.
 - **Keep your key, and your evidence.** Your key is your account: save it with a passkey or a key file. Your latest
   signed state is your proof. The wallet keeps it, and on another device takes up the casino's copy, which is the
   casino's word; export recovery bundles to settle without trusting it
@@ -202,7 +189,8 @@ The wallet checks:
 - whether the contract has recorded each withdrawal, by its ID, and what it still owes of it;
 - game URLs and every bridge request.
 
-It takes on the casino's word: commission, the virtual bankroll a quote names, the withdrawal fee up to 300,000 gas at
-the gas price the wallet reads itself, the fund's equity and total shares, the developer earnings tally, a developer bank's balance, and, on a device without your evidence, that the
-state it holds of your balance is the latest. It takes on the developer's word what a developer bet pays and which bet a
-collapsed step draws, and on the game's word everything a game shows.
+It takes on the casino's word: commission, the virtual bankroll a quote names, the withdrawal fee up to [the wallet's
+cap](../wallet/closing-and-claims.md#fees-and-gas), the fund's equity and total shares, the developer earnings tally, a
+developer bank's balance, and, on a device without your evidence, that the state it holds of your balance is the latest.
+It takes on the developer's word what a developer bet pays and which bet a collapsed step draws, and on the game's word
+everything a game shows.

@@ -53,10 +53,10 @@ address, and the wallet takes it in the same way.
 
 A deposit of everything at the address keeps back the most its transaction can cost, its gas limit at its fee cap. Once
 your balance has taken the deposit in, the wallet asks the casino to lend it that, so your balance holds all the address
-had. The casino lends no more than the rule the wallet prices transactions by allows for the block before the
-deposit's: 20% over an estimate of the gas the deposit used, which a node makes up to 1.5% high, at twice that block's
-base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
-or a transfer leaves it in the balance, and your next withdrawal, lock-in or close pays it back first.
+had. The casino lends it when it is small next to the deposit, as far as [its loan
+rule](../casino-api/channels.md#post-apichannelsidoperations) allows: a little less for a deposit that waited for a
+later block while the base fee fell. The wallet shows the loan under your balance. Bets can stake it, but an investment
+or a bank deposit or a transfer leaves it in the balance, and your next withdrawal, lock-in or close pays it back first.
 
 ### When ETH waits at the address
 
@@ -111,14 +111,12 @@ The wallet does not refuse a bet for paying back little: a game can spend its wh
 ## Withdraw
 
 On the wallet's **Withdraw** tab, enter an amount in µETH, or in ETH by switching its unit, or choose **Max**, and the
-address to pay; the tab says what the address receives in both units. The address must be
-a valid one other than the zero address, your own deposit address and the casino's contract. Your account signs a
-withdrawal of that amount to that address and the casino signs your balance after it at once: your balance pays it now,
-and you play on with the rest. The contract then pays the address, out of your deposits first, then your
-[collateral](closing-and-claims.md#collateral), and the bankroll for the rest
-([withdraw](closing-and-claims.md#withdraw)). Your balance also pays the casino a fee for sending the withdrawal to the
-contract, which the tab shows, and pays back what the casino lent it: **Max** is your balance less both. While your
-balance is not on-chain yet, the fee also pays for the deposit of nothing that opens it, which the casino sends first.
+address to pay; the tab says what the address receives in both units. The address must be a valid one other than the
+zero address, your own deposit address and the casino's contract. Your account signs a withdrawal of that amount to that
+address and the casino signs your balance after it at once: your balance pays it now, and you play on with the rest. The
+contract then pays the address ([how a withdrawal is paid](closing-and-claims.md#withdraw)). Your balance also pays the
+casino a fee for sending the withdrawal to the contract, which the tab shows ([fees and
+gas](closing-and-claims.md#fees-and-gas)), and pays back what the casino lent it: **Max** is your balance less both.
 
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
 much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight
@@ -137,10 +135,9 @@ addresses anywhere, on-chain or to each other. The casino owes it to them until 
 balance with a credit naming your uname, by itself. A player with no ETH and no balance needs none: their wallet's next
 check registers their balance with the casino before it is on-chain, collects the transfer into it, and they play with
 it off-chain ([a balance not on-chain yet](closing-and-claims.md#a-balance-not-on-chain-yet)). From then on it is part
-of their balance like any other, and beyond their own deposits a balance is paid out of the bankroll, as winnings are
-([trust model](../overview/trust-model.md)): to make it deposits the contract holds, they lock their balance in. What the
-casino lent your balance stays in it, so **Max** is your balance less that loan. The casino declines a transfer to a name
-nobody goes by, or to yourself.
+of their balance like any other: beyond their own deposits it is winnings, paid out of the bankroll, until they [lock
+their balance in](closing-and-claims.md#lock-in-your-balance). What the casino lent your balance stays in it, so **Max**
+is your balance less that loan. The casino declines a transfer to a name nobody goes by, or to yourself.
 
 **Send ETH out of my deposit address**, under **Deposits** in Settings, sends everything held at your deposit address to
 the address you name, less the network fee, and leaves your balance as it is. It is for ETH that stays at the address:
@@ -148,20 +145,22 @@ it works with **Add ETH that arrives at my deposit address to my balance** off a
 
 ## Your name
 
-Every account has a **uname**: 24 characters of `23456789abcdefghijkmnopqrstvwxyz`, written with a tilde, such as
-`~3byt9ocwnnzaxanmiz3stocj`. The casino derives it from your address with a keyed hash whose key it keeps secret, so the
-uname does not reveal the address; it is the same for every channel of your account and never changes. The wallet asks
-the casino for it as soon as it loads your account, with a request only your key can sign, so you have it before your
-first deposit. It is what games, developers and other players learn about you.
+Every account has a **uname**: 24 characters, written with a tilde, such as `~3byt9ocwnnzaxanmiz3stocj` ([its
+alphabet](../reference/signed-messages.md#counterparties)). The casino derives it from your address with a keyed hash
+whose key it keeps secret, so the uname does not reveal the address; it is the same for every channel of your account
+and never changes. The wallet asks the casino for it as soon as it loads your account, with a request only your key can
+sign, so you have it before your first deposit. It is what games, developers and other players learn about you.
 
 Verify your Discord account and you go by its **Discord username** instead, written with an at sign, such as `@bob`.
 Verifying needs no balance. Your own page shows how: join the HookedIn Discord, which it links to, press **Verify with
-Discord** there for a code, and type `/verify` with it in any channel of the HookedIn Discord within 10 minutes. Discord tells the casino your username as you run it, and
-at no other time: verify again after you change it. Your page shows when you last verified. A Discord account is one
-HookedIn account's: verifying it on another takes it from the first. A username that reads like another player's name
-is refused, with `l` and `1` read as `i` and `0` as `o`, and so are the casino's own names, such as `@hookedin`, the
-house's; the same username as another player's, whose Discord account it no longer is, passes to you. **Unlink Discord** goes back to your uname. Your uname stays yours
-either way, and both names find you ([verifying a Discord account](../casino-api/channels.md#verifying-a-discord-account)).
+Discord** there for a code, and type `/verify` with it in any channel of the HookedIn Discord within 10 minutes. Discord
+tells the casino your username as you run it, and at no other time: verify again after you change it. Your page shows
+when you last verified. A Discord account is one HookedIn account's: verifying it on another takes it from the first. A
+username that reads like a uname or like another player's name is refused, with case ignored, `l` and `1` read as `i`
+and `0` as `o`, and so are the casino's own names, such as `@hookedin`, the house's; the same username as another
+player's, which Discord has moved to you, passes to you, and they go by their uname again. **Unlink Discord** goes back
+to your uname. Your uname stays yours either way, and both names find you ([verifying a Discord
+account](../casino-api/channels.md#verifying-a-discord-account)).
 
 `/@username` or `/~uname` is a player's public page: their names, how many bets they have played with what they won or
 lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).

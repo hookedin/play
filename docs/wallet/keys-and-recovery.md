@@ -87,7 +87,7 @@ casino again at its next check.
 
 The same banner covers an on-chain transaction that has not confirmed. **Retry** looks for its outcome, including a
 replacement your account sent at the same nonce, and sends the exact saved transaction again when the network has none.
-**Speed up** sends it again with a higher fee, at most 200 gwei per gas.
+**Speed up** sends it again with a higher fee, within the wallet's [caps](closing-and-claims.md#fees-and-gas).
 
 ## Recovery mode
 

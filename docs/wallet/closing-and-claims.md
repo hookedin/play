@@ -21,8 +21,8 @@ here all of it is. Every state both sides signed is evidence the contract settle
 that settles opens it first, with a deposit of nothing into it, which anyone may send:
 
 - your first deposit opens it, and your balance takes the deposit in;
-- your first withdrawal or lock-in has the casino send that deposit of nothing first, which the fee pays for
-  ([fees and gas](#fees-and-gas));
+- your first withdrawal or lock-in has the casino send that deposit of nothing first, which [its
+  fee](../casino-api/public.md#get-apiwithdrawal-fee) pays for;
 - **Close without the casino** sends it from your address before the close, one more transaction to pay for; and so
   does **Send it now**.
 
@@ -68,11 +68,9 @@ the wallet last read the chain. Its actions are the rest of this page and
 
 What your balance holds above your deposits and collateral is winnings, a claim on the shared bankroll. **Lock in my
 balance**, under Recovery, makes your balance deposits: your account signs the contract's transfer, a
-[withdrawal](#withdraw) into an account's channel, to your own account of all of it but its loan and the fee for
-sending it, which it pays as well. The casino signs no such transfer into anyone else's channel: a
-[transfer](getting-started.md#transfer) to another player is off-chain. The casino signs it at once and
-sends it to the contract. Your deposits pay back what they cover, your collateral the next part and house cash the rest,
-and all of it goes into your channel as deposits the contract holds.
+[withdrawal](#withdraw) into an account's channel, to your own account of all of it but its loan and the fee for sending
+it, which it pays as well. The casino signs it at once and sends it to the contract, which pays it like any withdrawal,
+but into your channel, as deposits the contract holds.
 
 Locking in closes the open game first, and your balance is empty until it has taken those deposits in:
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
@@ -92,24 +90,24 @@ records each withdrawal once, under its ID, the hash of its operation, and in th
 
 The contract pays it first out of the deposits your balance had taken in when you made it, so what you have at risk
 stays as it was; a deposit that arrives later stays in your channel. Your [collateral](#collateral) pays the next part.
-The rest, the winnings, joins the queue of every
-claim's winnings: what house cash reaches is paid at once, and the rest stays owed under **Waiting to be paid**
-([claims and collection](#claims-and-collection)). A recipient that refuses the payment leaves all of it owed. Anyone
-can check the chain: `claims(id)` says what the contract still owes of a withdrawal, and the `Withdrawal` event to whom,
-how much and in which transaction it was recorded.
+The rest, the winnings, joins the queue of every claim's winnings: what house cash reaches is paid at once, and the rest
+stays owed under **Waiting to be paid** ([claims and collection](#claims-and-collection)). A recipient that refuses the
+payment leaves all of it owed. Anyone can check the chain: `claims(id)` says what the contract still owes of a
+withdrawal, and its `Withdrawal` [event](../reference/contract.md#events) to whom, how much and in which transaction it
+was recorded.
 
 The casino takes a withdrawal on only when the contract can pay all of it now: out of the deposits your balance has
 taken in and the collateral that the withdrawals it owes from it leave, and house cash that no claim counts on, less
-what the withdrawals it owes will take from it. A withdrawal your deposits and collateral cover needs no house cash. It declines the rest like any declined
-debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It also declines a withdrawal to an
-address that would refuse a payment from the contract, which it tries first with the contract's 100,000 gas: _That
-address does not accept a payment from the contract_. Withdrawing everything leaves the channel open with an empty
-balance.
+what the withdrawals it owes will take from it. A withdrawal your deposits and collateral cover needs no house cash. It
+declines the rest like any declined debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It
+also declines a withdrawal to an address that would refuse a payment from the contract, which it tries first with the
+gas the contract sends: _That address does not accept a payment from the contract_. Withdrawing everything leaves the
+channel open with an empty balance.
 
 The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent. One
-not sent yet offers **Send it now** in Activity once every withdrawal you made before it from that balance is sent. A
-withdrawal can be sent until its channel's close is finished; one nobody sent by then comes back to you with the close,
-not to its address: what your deposits and collateral cover as its protected amount, and the rest as winnings.
+not sent yet offers **Send it now** in [Activity](bets-and-receipts.md#activity). A withdrawal can be sent until its
+channel's close is finished; one nobody sent by then comes back to you with the close, not to its address: what your
+deposits and collateral cover as its protected amount, and the rest as winnings.
 
 ## Close without the casino
 
@@ -118,8 +116,8 @@ not to its address: what your deposits and collateral cover as its protected amo
    evidence, paying its network fee from the deposit address
    ([fees and gas](#fees-and-gas)); with a pending casino bet its quote covers, it sends `dispute` instead
    ([dispute a casino bet](#dispute-a-casino-bet)). Only your account, or the casino's owner, can start a close.
-2. The contract sets the deadline 7 days after the block that started the close (`CHALLENGE_PERIOD`, 604,800 seconds).
-   Recovery shows it.
+2. The contract sets the deadline 7 days after the block that started the close
+   ([`CHALLENGE_PERIOD`](../reference/contract.md#constants)). Recovery shows it.
 3. Once the deadline has passed, press **Finish the close**. Anyone can send `finalizeClose`, and the claim is recorded
    at the state the close ended with.
 4. [Collect the claim](#claims-and-collection).
@@ -129,7 +127,8 @@ began, either alone or followed by the last operation the casino signed;
 [finalization](../reference/contract.md#finalization) says what it is owed, what the casino lent your balance coming off
 it first. A close moves your account to its next channel at once, whoever started it: your next deposit opens a new
 balance while the old channel closes. The close pays your account, at your deposit address, and until your next balance
-opens the wallet puts nothing there into a balance by itself ([deposit](getting-started.md#deposit)).
+opens the wallet puts nothing there into a balance by itself ([when ETH waits at the
+address](getting-started.md#when-eth-waits-at-the-address)).
 
 ## Dispute a casino bet
 
@@ -138,18 +137,17 @@ leaves unanswered, stays saved in the wallet: the wallet countersigns no rejecti
 game's operation your account carried out on another channel. Its banner says until when the quote covers it.
 
 **Close without the casino** then sends `dispute` with your latest evidence, the bet your account signed, its seed and
-the casino's quote, which the contract checks: the casino signed the quote for that checkpoint and round, the quote has
-not expired, and its virtual bankroll admits the bet by the casino's Kelly rule. The close counts the bet as won. The
-deadline is 7 days after the dispute, which is the time the casino has to replace it with its result: the bet settled
-on the round's secret, the outcome it would have had. Should it not, the close finishes with the bet won, and its
-winnings are recorded with the close's claim. Meanwhile the dispute locks what winning the bet adds above your deposits
-and collateral into your [collateral](#collateral), out of the house cash that is free when it is mined, so the owner
-cannot take it: it pays the close if the bet stays won, and returns to house cash once the casino settles it lost.
+the casino's quote, which the contract checks ([disputes](../reference/contract.md#disputes)). The close counts the bet
+as won. The deadline is 7 days after the dispute, which is the time the casino has to replace it with its result: the
+bet settled on the round's secret, the outcome it would have had. Should it not, the close finishes with the bet won,
+and its winnings are recorded with the close's claim. Meanwhile the dispute locks what winning the bet adds above your
+deposits and collateral into your [collateral](#collateral), out of the house cash that is free when it is mined, so the
+owner cannot take it: it pays the close if the bet stays won, and returns to house cash once the casino settles it lost.
 Recovery says which the close holds, and the house cash held for it.
 
-Anyone can send the dispute: the bet and its quote are in the channel's
-[recovery bundle](keys-and-recovery.md#recovery-bundles), from which a
-[watchtower](keys-and-recovery.md#the-watchtower) disputes it an hour before the quote expires.
+Anyone can send the dispute: the bet and its quote are in the channel's [recovery
+bundle](keys-and-recovery.md#recovery-bundles), from which a [watchtower](keys-and-recovery.md#the-watchtower) disputes
+it before the quote expires.
 
 A dispute must be mined before the quote expires. The wallet sends a bet with its seed only on a quote with at least
 half its day left, so a bet the casino leaves unanswered has at least 12 hours to be disputed. After the quote expires
@@ -176,20 +174,22 @@ contract holds a close at a lower sequence than the evidence the wallet saved, t
 - Anyone holding the evidence can send it: you, your [watchtower](keys-and-recovery.md#the-watchtower), or the
   casino's own watcher.
 
-A close that stops short of a pending casino bet its quote covers, such as one the casino starts on the checkpoint before
-it, is challenged by disputing the bet: **Challenge the close** sends `dispute`, and the casino has 7 days from then
-to settle the bet ([dispute a casino bet](#dispute-a-casino-bet)).
+A close that stops short of a pending casino bet its quote covers, such as one the casino starts on the checkpoint
+before it, is challenged by disputing the bet: **Challenge the close** sends `dispute`, and the casino settles the bet
+as any [disputed one](#dispute-a-casino-bet).
 
 The wallet sends a challenge only when you press the button. Once the deadline has passed, the proposed state is final
 and the wallet says so.
 
 ## Claims and collection
 
-Finalizing records a claim for what the close is owed, in two parts:
+Finalizing records a claim for what the close is owed ([finalization](../reference/contract.md#finalization)), in two
+parts:
 
-- **Protected amount**, `min(owed, principal + collateral)`, where `principal` is the deposits the contract holds
-  for the channel and `collateral` its collateral: paid in full whenever the claim is collected.
-- **Winnings**, whatever is above it: they join the queue of every claim's winnings, first in, first out.
+- **Protected amount**, what the deposits and collateral the contract holds for the channel cover of it: paid in full
+  whenever the claim is collected.
+- **Winnings**, the rest: they join [the winnings queue](../reference/contract.md#the-winnings-queue), first in, first
+  out.
 
 A withdrawal or a lock-in is a claim too, under its ID, with its protected amount and winnings worked out the same way
 when it is recorded.
@@ -206,29 +206,26 @@ what can be collected now:
   contract's own address puts what it pays into your balance's channel as deposits.
 - **Export evidence**, beside a closed balance's claim, saves the recovery bundle of its channel.
 
-Winnings are paid as the contract has cash for them, oldest first
-([the winnings queue](../reference/contract.md#the-winnings-queue)): a claim collects what of its winnings house cash
-covers in one call, however far back it waits, and can be collected again as more cash arrives. The owner can never
-withdraw a protected amount or unpaid winnings. A payment to an address is sent with 100,000 gas; a recipient that
-rejects it, or needs more gas to accept it, makes the collection revert and leaves the claim whole: collect to another
-address.
+A claim collects what of its winnings house cash covers, however far back it waits, and can be collected again as more
+cash arrives; the owner can never withdraw a protected amount or unpaid winnings. A recipient that rejects the payment,
+or needs more gas to accept it than [the contract sends](../reference/contract.md#functions-that-change-state), makes
+the collection revert and leaves the claim whole: collect to another address.
 
 ## Fees and gas
 
 Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account.
 The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 µETH in total fees, and stops before signing when the
-network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins
-to the contract and pays their gas, and each pays the casino a fee for it out of your balance: 150,000 gas, about what
-sending one costs, and for the first from a balance not on-chain yet 60,000 more for the deposit of nothing that opens
-it, at the network's gas price ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
+network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins to the
+contract and pays their gas, and each pays the casino a fee for it out of your balance, set from the network's gas price
+([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
 tab opens and again before signing, and signs none above 300,000 gas at the gas price it reads itself, or above the fee
-it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it
-is small ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where
-the wallet keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes
-into your balance while the channel is open. Starting **Close without the casino** turns that
-off, so ETH sent for its fee stays at the address even if starting the close fails. A failure before signing leaves the
-balance open, and the close can be tried again; a signed close keeps its saved transaction to retry. Recovery shows the
-ETH the address holds for fees. You can also turn it off under **Deposits** in Settings and send ETH to the address, or
-have somebody relay the transaction: anyone can send `withdraw`, `challengeClose`, `finalizeClose` and `claim`, and only
-your account or the casino can send `startClose`. A pending transaction shows **Retry** and **Speed up**
-([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)).
+it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it is small
+([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where the wallet
+keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes into your
+balance while the channel is open. Starting **Close without the casino** turns that off, so ETH sent for its fee stays
+at the address even if starting the close fails. A failure before signing leaves the balance open, and the close can be
+tried again; a signed close keeps its saved transaction to retry. Recovery shows the ETH the address holds for fees. You
+can also turn it off under **Deposits** in Settings and send ETH to the address, or have somebody relay the transaction:
+anyone can send all of them but `startClose` and `claimTo`
+([callers](../reference/contract.md#functions-that-change-state)). A pending transaction shows **Retry** and **Speed
+up** ([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)).

@@ -15,14 +15,13 @@ specified on [Signed messages](../reference/signed-messages.md).
 
 Registers a channel with the casino, or returns it as the casino holds it. A channel opens on-chain with the first
 [deposit](../reference/contract.md#functions-that-change-state) into it, whoever sends it. The casino requires that
-deposit confirmed (2 blocks on Sepolia, 1 on Anvil) and the channel open for the account the opening names, and
+deposit [confirmed](../reference/deployment.md#chains) and the channel open for the account the opening names, and
 registers it at its [base](../reference/signed-messages.md#the-base), all zero: the balance takes the deposit in with a
 [deposit operation](#post-apichannelsidoperations). It also registers the account's current channel, the one its next
 deposit opens, before it is on-chain, while it owes the account something, such as a
-[transfer](#post-apichannelsidoperations): that balance plays off-chain, and its channel opens on-chain with a deposit,
-or with the deposit of nothing the casino sends before its first withdrawal or lock-in, or the account sends before a
-close. A channel the casino knows is returned with no chain read. Registering a channel counts against
-[budgets](index.md#budgets-and-queues) of its own.
+[transfer](#post-apichannelsidoperations): that balance plays off-chain until its channel opens ([a balance not on-chain
+yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet)). A channel the casino knows is returned with no chain
+read. Registering a channel counts against [budgets](index.md#budgets-and-queues) of its own.
 
 | Body field | Type   | Meaning                                                                                                                                                                            |
 | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -88,7 +87,7 @@ What the casino checks and answers, by operation:
 | Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                                                 | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | –                                                                                       |
 | Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID, the bet's hash or "~" + the sender's uname}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
 | Deposit, kind 4             | `{id}`                                                                             | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposits cover the state's `deposited` plus the amount; reads the chain again when it has not seen that, and refuses with `unconfirmed` if it still has not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | –                                                                                       |
-| Withdrawal, kind 5          | `{id}`                                                                             | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee), with its `opening` added for a channel not on-chain yet ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with 100,000 gas ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                                                                     | –                                                                                       |
+| Withdrawal, kind 5          | `{id}`                                                                             | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee), with its `opening` added for a channel not on-chain yet ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with [the contract's gas](../reference/contract.md#withdrawals) ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
 | Lock-in, kind 6             | `{id}`                                                                             | Has the contract put the amount into the channel's own account's current channel, as deposits; declines one larger than it can pay now or with too small a fee, as for a withdrawal, and one whose `recipient` is any other account ("Locking in goes into your own balance: transfer to another player by their name")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | –                                                                                       |
 | Fee loan, kind 7            | `{id}`: the hash of a deposit's transaction                                        | Lends the network fee of a deposit the channel's account sent straight to the contract, into this channel, once the balance has taken it in (`unconfirmed` before, and before the casino sees the transaction): the transaction's gas limit at its fee cap, but no more than 20% over the gas it used and the 1.5% a node's estimate of it may run high, at twice the base fee of the block before its own plus its tip, when that is at most `loanLimit` millionths of the deposit ([`GET /api/config`](public.md#get-apiconfig)). The ID lends each deposit once. Declines another transaction ("That is not a deposit this account sent into this balance"), a balance that, less its loan, holds less than the deposit ("The balance no longer holds that deposit"), another amount ("The casino lends that deposit … ETH of its network fee") and a larger fee ("The casino lends a network fee only up to 1% of its deposit") | –                                                                                       |
 
@@ -100,11 +99,10 @@ takes.
 
 So is a withdrawal or a lock-in: the reply's `evidence` is what the contract makes a claim of
 ([withdrawals](../reference/contract.md#withdrawals)), and it has recorded one once its channel's `claimed` has passed
-the `withdrawn` of the checkpoint the withdrawal follows. The casino takes on a withdrawal only when it can pay all of it
-now ([what the casino promises](../overview/trust-model.md#what-you-trust-the-casino-for)), sends it at once, oldest
-first, the first from a channel not on-chain yet once the deposit of nothing it sends before it has opened the channel,
-and owes it until the chain shows it recorded, or its channel's close final without it, which returns it to the
-account; while one cannot be sent, `/api/status` raises `withdrawal-unsent`.
+the `withdrawn` of the checkpoint the withdrawal follows. The casino takes it on and sends it as it
+[promises](../overview/trust-model.md#what-you-trust-the-casino-for), the first from a channel not on-chain yet once the
+deposit of nothing it sends before it has opened the channel; while one cannot be sent, `/api/status` raises
+`withdrawal-unsent`.
 
 | Response field    | Type       | Meaning                                                                                                                               |
 | ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -263,14 +261,14 @@ lock-in), a nonzero `fee` on any other operation, and a casino bet whose chance 
 ### `POST /api/channels/:id/collateral`
 
 Signs the casino's [offer](../reference/signed-messages.md#collateral-offers) of collateral for the channel, `{offer}`,
-as `{message, signature}`: `amount` of house cash locked into the channel for `price`, at the casino's
-`collateralRate` ([`GET /api/config`](public.md#get-apiconfig)), which anyone buys on-chain with
-[`buyCollateral`](../reference/contract.md#collateral) within the hour. The body is `{amount}`, the collateral in wei as
-a decimal string, below 2^96 (`400` `invalid` otherwise). The casino offers no more than the house cash no claim or
-withdrawal it owes counts on, and refuses more ("At most … ETH of collateral is on offer now"). An
-offer reserves nothing: what is bought first is locked, and one bought once that cash has gone reverts. `channel-closed`
-answers a channel that is not open, and one not on-chain yet, which the contract sells no collateral for ("Collateral
-protects a balance on-chain: deposit to open it").
+as `{message, signature}`: `amount` of house cash locked into the channel for `price`, at the casino's `collateralRate`
+([`GET /api/config`](public.md#get-apiconfig)), which anyone buys on-chain with
+[`buyCollateral`](../reference/contract.md#collateral) within the hour. The body is `{amount}`, the collateral in wei
+as a decimal string, below 2^96 (`400` `invalid` otherwise). The casino offers no more than the house cash no claim or
+withdrawal it owes counts on, and refuses more ("At most … ETH of collateral is on offer now"). An offer reserves
+nothing: what is bought first is locked, and one bought once that cash has gone reverts. `channel-closed` answers a
+channel that is not open, and one not on-chain yet, which the contract sells no collateral for ("Collateral protects a
+balance on-chain: deposit to open it").
 
 ## Payouts and developer bets
 
@@ -429,9 +427,6 @@ app in the `X-Signature-Ed25519` and `X-Signature-Timestamp` headers. `unauthori
 answers a successful `/verify` with a message everyone in the channel sees, and anything else with one only the member
 who ran it sees; one run in any other server is told only that it answers in the HookedIn server.
 
-- `/verify code`: the account the code was given to goes by the member's Discord username from then on. The code is
-  spent, and one over 10 minutes old does nothing. A Discord account is one account's: verifying it on another takes it
-  from the first. A username the casino keeps for itself, one that reads like a uname, and one that reads like another
-  player's Discord username are refused. The same username as another player's is one Discord has moved to this
-  member: the player who had it goes by their uname again. Run again, it brings a changed username up to date, and the
-  time it was last verified.
+- `/verify code`: the account the code was given to goes by the member's Discord username from then on, under [the rules
+  for names](../wallet/getting-started.md#your-name), and its profile says when it last verified. The code is spent, and
+  an expired one does nothing.

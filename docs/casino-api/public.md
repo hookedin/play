@@ -109,8 +109,8 @@ The bankroll fund's state, signed by the casino: a quote it can be held to. The 
 
 ## Players and games
 
-A player is public by their names alone, a `~uname` and a Discord username, `@username` ([your name](../wallet/getting-started.md#your-name)).
-A name is compared case-insensitively, with `l` and `1` read as `i` and `0` as `o`.
+A player is public by their names alone, a `~uname` and a Discord username, `@username`, compared as names are told
+apart ([your name](../wallet/getting-started.md#your-name)): two that read alike are one name.
 
 ### `GET /api/players`
 
@@ -123,7 +123,7 @@ One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
 
 | Response field    | Type           | Meaning                                                                                                                                                                                                                                     |
 | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`           | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                                    |
+| `uname`           | string         | The player's [uname](../reference/signed-messages.md#counterparties), derived from their address                                                                                                                                            |
 | `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                              |
 | `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                      |
 | `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |

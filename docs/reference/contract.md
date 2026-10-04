@@ -196,9 +196,9 @@ anyone may send it:
   recipient, so nobody sends a withdrawal twice.
 - A transfer pays into the current channel of the account it names instead, as deposits, adding to its `deposited` and
   `principal`, and no ETH leaves the contract. What stays owed is a claim whose beneficiary is that account and whose
-  recipient is the contract. A transfer to the account itself locks the balance in, and is the only one the casino
-  signs: a transfer to another player goes off-chain, as a debit and a credit
-  ([transfers](../wallet/getting-started.md#transfer)), so the chain never names the two accounts together.
+  recipient is the contract. A transfer to the account itself locks the balance in, and is the only one the casino signs
+  ([lock-ins](../casino-api/channels.md#post-apichannelsidoperations)); a [transfer to another
+  player](../wallet/getting-started.md#transfer) is off-chain.
 
 A withdrawal never recorded comes back with the close, to the account and not its recipient: a checkpoint counts what
 its balance has `withdrawn`, and a close is owed what of it did not become a claim ([finalization](#finalization)).
@@ -225,14 +225,13 @@ Finalization moves no ETH: collecting is a separate call.
 The owner signs [offers](signed-messages.md#collateral-offers) of collateral for a channel, and anyone buys one with
 `buyCollateral`, once and before its `expiresAt`, paying its price as the value: any other value is an offer the owner
 did not sign. The price joins house cash and `collateralSales`, and `amount` of house cash moves into the channel's
-`collateral`, which `protectedFunds` counts, so the owner can no longer withdraw it. It adds nothing to what the
-channel is [owed](#finalization). A [withdrawal](#withdrawals) draws on it after the deposits its checkpoint took in, a
-lock-in so making it the account's deposits, and a close is paid out of it what the deposits do not cover; what the
-close is not owed returns to house cash. So withdrawals use collateral up, and it lasts no longer than the channel,
-which the owner can start closing at any time. An offer at no price is collateral the owner gives, and a
-[dispute](#disputes) locks some too, what the disputed bet would win. An offer locks only house
-cash nothing else is owed, `withdrawableHouse()`, so it takes nothing a claim counts on, and one that house cash no
-longer covers reverts and costs its buyer nothing but the fee.
+`collateral`, which `protectedFunds` counts, so the owner can no longer withdraw it. It adds nothing to what the channel
+is [owed](#finalization). A [withdrawal](#withdrawals) draws on it after the deposits its checkpoint took in, a lock-in
+so making it the account's deposits, and a close is paid out of it what the deposits do not cover; what the close is not
+owed returns to house cash ([what that means for a player](../wallet/closing-and-claims.md#collateral)). An offer at no
+price is collateral the owner gives, and a [dispute](#disputes) locks some too, what the disputed bet would win. An
+offer locks only house cash nothing else is owed, `withdrawableHouse()`, so it takes nothing a claim counts on, and one
+that house cash no longer covers reverts and costs its buyer nothing but the fee.
 
 ## The winnings queue
 

@@ -81,8 +81,7 @@ A channel starts from its base, its zero checkpoint `(channelId, 0, 0x0, 0x0, 0,
 close on it without the casino ever answering. Any other checkpoint the contract settles on is signed by both sides.
 
 `deposited` is how much of the channel's deposits the balance has taken in, `withdrawn` how much it has paid out in
-withdrawals and transfers, and `loan` how much of the balance the casino lent. Anyone can deposit into an account's
-current channel with the contract's `deposit`, and the balance takes that money in with a
+withdrawals and transfers, and `loan` how much of the balance the casino lent. The balance takes deposits in with a
 [deposit operation](#transitions); [finalization](contract.md#finalization) says what a close on a checkpoint is owed.
 
 ### Transitions
@@ -339,8 +338,8 @@ channel, checkpoint and round, until `expiresAt`, and whose terms its virtual ba
 [the Kelly rule](economics.md#a-casino-bet-is-one-wager) with no commission: `covers` in
 [protocol.ts](../../protocol/protocol.ts), which the contract's `dispute` checks too.
 
-The casino settles every casino bet a quote of its own covers, and gives a checkpoint one quote, again and again, until
-half its day is left, then a new one on the same round, so a wallet cannot collect several and keep the best. The
+The casino settles every casino bet a quote of its own covers, and gives a checkpoint [one quote at a
+time](../casino-api/channels.md#post-apichannelsidquote), so a wallet cannot collect several and keep the best. The
 wallet sends a bet's seed and quote only when the quote covers it with at least half its day left, and never
 countersigns a decline of a bet it sent so. Every reply that follows a channel's latest checkpoint brings the quote for
 the next casino bet; a wallet asks for one with
