@@ -113,7 +113,10 @@ export const HookedIn = Object.freeze({
   allowance: (group?: string): Promise<GameAllowance> => call('game.allowance', group === undefined ? {} : { group }),
   /** Ask the player for a larger allowance: `amount` more than the game has now, and with `developerBets`, leave to
    * place developer bets too, which the wallet warns about. The wallet shows its own dialog, in its own words, where the
-   * player sets the game's allowance; the reply says whether they did, and the allowance after it. */
+   * player sets the game's allowance; the reply says whether they did, and the allowance after it. The wallet offers
+   * that dialog by itself once the page has loaded, so a game asks when its allowance runs short, and a game that
+   * places developer bets asks for that leave as it loads, to be part of the offer. With nothing in the balance to
+   * allow, an `amount` opens the wallet's Deposit, and leave alone is declined at once. */
   requestAllowance: (
     options: { amount?: bigint | string; developerBets?: boolean } = {},
   ): Promise<GameAllowance & { allowed: boolean }> =>

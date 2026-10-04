@@ -43,14 +43,19 @@ origin ([one Worker](developer-bets.md#one-cloudflare-worker)).
 A game never learns the player's balance. It gets an allowance for the open tab: what the player lets it risk, plus its
 verified winnings.
 
-- A game starts with an allowance of zero, and the wallet's own dialog is the only grant. It asks with
-  `HookedIn.requestAllowance({ amount })`, where `amount` is how much more it suggests; every word in the dialog is the
-  wallet's. The reply says whether the player set an allowance (`allowed`), and the resulting `allowance`, `pending`
-  and `developerBets`. When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and
-  the reply says `allowed: false`.
+- A game starts with an allowance of zero, and the wallet's own dialog is the only grant. The wallet offers it by
+  itself once the game's page has loaded and the player's balance has something to allow, so the player sets the
+  allowance before any bet, and every word in the dialog is the wallet's. When a bet needs more, the game asks with
+  `HookedIn.requestAllowance({ amount })`, where `amount` is how much more it suggests. The reply says whether the
+  player set an allowance (`allowed`), and the resulting `allowance`, `pending` and `developerBets`. When the player's
+  balance has nothing to allow, the wallet opens its Deposit tab instead, the reply says `allowed: false`, and the
+  wallet offers the allowance once a deposit has arrived.
 - Developer bets are allowed apart: the dialog warns that the game's developer takes their stakes and decides what
-  they pay, and only a request with `developerBets: true` asks for them. Casino bets need no more than the allowance,
-  since the wallet checks their odds and their results itself.
+  they pay, and only a request with `developerBets: true` asks for them. A game that places them asks as its page
+  loads, with `HookedIn.requestAllowance({ developerBets: true })`, so the player decides in the dialog the wallet
+  offers, before any betting window, and every dialog the game gets after asks about them too. That leave alone, asked
+  with nothing to allow, is declined at once. Casino bets need no more than the allowance, since the wallet checks
+  their odds and their results itself.
 - `HookedIn.allowance()` reads it. Every bet and payment must fit it. Stakes and payments lower it as they are made;
   verified winnings raise it, a group's once the game has ended the group.
 - The wallet's top bar names the game, by the name it is published under, and shows its allowance in place of the

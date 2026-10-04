@@ -270,11 +270,13 @@ The result is the payment's receipt, `settled` or `rejected`. It carries no amou
 Asks for a larger allowance. The wallet opens its own dialog, in its own words, where the player sets how much of their
 balance the game may risk, or declines. The game passes it an amount, and whether it places developer bets, and nothing
 else: only the player's confirmation there grants a game money. With `developerBets`, the dialog warns that the
-game's developer takes those stakes and decides what they pay, and confirming it allows developer bets too; a game
-opened by its URL alone has no developer, and its dialog offers none. The reply comes once the player has decided.
-When the player's balance has nothing to allow, the wallet opens its Deposit tab instead, and the reply says
-`allowed: false` at once. The player can also open the dialog from the top bar at any time; taking the whole allowance
-back there takes back developer bets with it.
+game's developer takes those stakes and decides what they pay, and confirming it allows developer bets too; every
+dialog the game gets after asks about them, and a game opened by its URL alone has no developer, and its dialog offers
+none. The reply comes once the player has decided. When the player's balance has nothing to allow, the reply says
+`allowed: false` at once, and a request with an `amount` opens the wallet's Deposit tab too. The wallet also offers the
+dialog by itself once the game's page has loaded ([the allowance](../games/how-a-game-works.md#the-allowance)), and
+the player can open it from the top bar at any time; taking the whole allowance back there takes back developer bets
+with it.
 
 | Param           | Type           | Meaning                                                                                                                     |
 | --------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------- |

@@ -24,6 +24,10 @@ interface ActiveGame {
   dispose: () => void;
   /** Whether the game's page has loaded, so the wallet's receipts have somewhere to go. */
   loaded: boolean;
+  /** Whether the allowance dialog has shown for this game: the wallet offers it by itself once. */
+  offered: boolean;
+  /** Whether the game has asked to place developer bets: every allowance dialog it gets asks for them too. */
+  developerBets: boolean;
 }
 /** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
 export type Published = { key: string; developer: string };
@@ -113,6 +117,16 @@ export function renderGameAccount() {
     active.frame.contentWindow?.location.replace(active.frame.src);
   }
   if ($<HTMLDialogElement>('allowance-dialog').open) renderAllowanceDialog();
+  offerAllowance();
+}
+/** The wallet asks for the allowance by itself, before any bet: once the game's page has loaded, the balance has
+ * something to allow it and nothing else is open over it. A bet never waits on the dialog, and the game suggests
+ * nothing in it. */
+function offerAllowance() {
+  if (!active?.loaded || active.offered || uiBusy || BigInt(wallet.game?.allowance ?? 0) > 0n || allowable() === 0n)
+    return;
+  if (document.querySelector('dialog[open]')) return;
+  void openAllowanceDialog();
 }
 
 /** The slider runs linearly from nothing to the whole playable balance, a hundredth of it a step. */
@@ -148,7 +162,9 @@ function renderAllowanceDialog() {
     : total === 0n
       ? 'Your balance is empty. Deposit to play with ETH.'
       : unchanged
-        ? `This is ${name}'s allowance now.`
+        ? allowance
+          ? `This is ${name}'s allowance now.`
+          : `Choose how much ${name} may play with.`
         : amount === allowance
           ? `${name} keeps its allowance of ${shown} METH, and may place developer bets too.`
           : amount > allowance
@@ -175,16 +191,19 @@ const allowable = () => {
 let allowanceRequest: { resolve: (amount: bigint | null) => void } | null = null,
   /** Whether confirming the dialog lets the game place developer bets: it asked to, or already may. */
   allowingDeveloperBets = false;
-/** Opened from the top bar, or by the game's request for a larger allowance, which may suggest how much more, and ask
- * to place developer bets too. With nothing in the balance to allow, the wallet opens on Deposit instead, and the game
- * hears that it has no more. */
-function openAllowanceDialog(amount?: bigint, developerBets = false) {
+/** Whether the open game has nothing to play with, and the balance nothing to allow it. */
+const nothingToAllow = () => allowable() === 0n && BigInt(wallet.game?.allowance ?? 0) === 0n;
+/** Opened by the wallet itself once a game has loaded, from the top bar, or by the game's request for a larger
+ * allowance, which may suggest how much more. With nothing in the balance to allow, the wallet opens on Deposit
+ * instead, and the game hears that it has no more. */
+function openAllowanceDialog(amount?: bigint) {
   if (!active || !wallet.game) return Promise.resolve<bigint | null>(null);
   allowanceRequest?.resolve(null);
-  if (allowable() === 0n && BigInt(wallet.game.allowance) === 0n) {
+  if (nothingToAllow()) {
     openWallet('deposit', `${active.identity.name} plays with ETH from your balance. Deposit some to play.`);
     return Promise.resolve<bigint | null>(null);
   }
+  active.offered = true;
   const dialog = $<HTMLDialogElement>('allowance-dialog');
   // The game page shows nothing but the game, so the dialog that grants it money says who it is, and what it may do.
   const host = new URL(active.frame.src).host;
@@ -192,7 +211,7 @@ function openAllowanceDialog(amount?: bigint, developerBets = false) {
     ? `Published by ${active.publisher}, served from ${host}.`
     : `Served from ${host}.`;
   // Only a published game has a developer to bet against.
-  allowingDeveloperBets = Boolean(active.publisher) && (developerBets || wallet.game.developerBets);
+  allowingDeveloperBets = Boolean(active.publisher) && (active.developerBets || wallet.game.developerBets);
   $('allowance-developer').hidden = !allowingDeveloperBets;
   $('allowance-developer-text').textContent =
     `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into their bank at once, and they decide what each bet pays. Neither the casino nor your wallet can check that result, so allow this only for a developer you trust.`;
@@ -274,10 +293,13 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     frame,
     dispose: () => {},
     loaded: false,
+    offered: false,
+    developerBets: false,
   };
   frame.addEventListener('load', () => {
     if (!isCurrent()) return;
     active!.loaded = true;
+    offerAllowance();
     // The game's own keys, such as Space to play, work without a click into it first.
     if (!document.querySelector('dialog[open]')) frame.focus();
   });
@@ -302,15 +324,19 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
         wallet.gameEnd(params.group);
         return null;
       }
+      // Once a game asks to place developer bets, every allowance dialog it gets asks about them, the wallet's own
+      // offer included.
+      if (method === 'game.requestAllowance' && params.developerBets === true && isCurrent())
+        active!.developerBets = true;
       // What the player is doing in the wallet comes first; the wallet's own checks finish and the game's request
       // follows.
       if (uiBusy) throw gameError('busy', 'The wallet is processing another operation.');
       await wallet.actionDone;
       if (method === 'game.requestAllowance') {
-        const amount = await openAllowanceDialog(
-          params.amount === undefined ? undefined : BigInt(params.amount),
-          params.developerBets === true,
-        );
+        // Leave alone, asked with nothing to allow, waits for the wallet's own offer: only a game asking for ETH sends
+        // the player to Deposit.
+        if (params.amount === undefined && nothingToAllow()) return { allowed: false, ...wallet.gameAllowance() };
+        const amount = await openAllowanceDialog(params.amount === undefined ? undefined : BigInt(params.amount));
         if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
         return { allowed: amount !== null, ...wallet.gameAllowance() };
       }

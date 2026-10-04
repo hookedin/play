@@ -75,7 +75,8 @@ now, or with `group`, what a bet in that group may stake.
 [`game.requestAllowance`](../reference/bridge.md#gamerequestallowance): asks the player for `amount` more than the game
 holds, a suggestion the wallet's own dialog shows, and with `developerBets: true`, to allow developer bets too, which
 the dialog warns about. It resolves once they have decided with `allowed` and the game's
-[`GameAllowance`](#gameallowance) after it.
+[`GameAllowance`](#gameallowance) after it. The wallet also offers the dialog by itself as the game loads
+([the allowance](../games/how-a-game-works.md#the-allowance)).
 
 #### `end`
 
