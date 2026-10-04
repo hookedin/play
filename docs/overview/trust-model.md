@@ -49,7 +49,9 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   deposits and other collateral, until the close is final. A bet still disputed then is won, and its winnings are
   recorded with the close.
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it and collect the
-  claim, with no casino server involved. The challenge window is 7 days; only a dispute moves it, to 7 days from the
+  claim, with no casino server involved. A balance [not on-chain yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet)
+  is opened first with a deposit of nothing, which anyone may send: the contract checks every signature against the
+  channel's account, which it records when the channel opens. The challenge window is 7 days; only a dispute moves it, to 7 days from the
   dispute, which is the time the casino has to settle the disputed bet.
 - **Recorded winnings come before the owner.** Finalizing a close, or recording a withdrawal, records its unpaid
   winnings permanently. The contract pays them first in, first out as cash arrives, no later claim can take cash ahead
@@ -85,7 +87,8 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   owes it to them until their wallet collects it. The casino alone knows which account a name belongs to, so you trust
   it to pay the player you named, and that player trusts it to pay what waits for them; nothing signed says who goes by
   a uname. Once collected it is part of their balance, and beyond their own deposits and collateral it is winnings, paid
-  out of the bankroll, until they lock it in.
+  out of the bankroll, until they lock it in. A player with no balance plays it before their channel is on-chain, where
+  all of their balance is winnings until a deposit, a withdrawal, a lock-in or a close opens it.
 - **Admitting bets.** The casino admits each casino bet against its quote's virtual bankroll with a Kelly rule, and
   sets its commission against the same figure. It names the virtual bankroll it quotes: half its bankroll, by its own
   books.

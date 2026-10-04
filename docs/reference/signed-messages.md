@@ -69,7 +69,9 @@ channelId = keccak256(abi.encode(address player, uint256 index))
 ```
 
 The contract's `channelOf(player)` is the account's current channel, whose `index` is `channelIndex(player)`. Anyone
-can deposit into it, and the first deposit opens it. `keccak256("…")` of a string, here and below, hashes its UTF-8
+can deposit into it, and the first deposit opens it, a deposit of nothing included. Both sides can sign its states before
+then: the contract checks every operation's signature against the channel's account, which it records when the channel
+opens, so it settles them once it is open. `keccak256("…")` of a string, here and below, hashes its UTF-8
 bytes (ethers `id`).
 
 ### The base

@@ -92,9 +92,11 @@ alert, like `observationError`, names no channel.
 
 ### `GET /api/withdrawal-fee`
 
-What a withdrawal or a lock-in pays the casino for sending it to the contract, `{fee}`, in wei as a decimal string:
-150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, at the network's gas price, which the casino reads and
-holds for a minute. The casino declines an operation whose `fee` is below it
+What a withdrawal or a lock-in pays the casino for sending it to the contract, `{fee, opening}`, in wei as decimal
+strings: `fee` is 150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, and `opening` 60,000 gas
+(`OPENING_GAS`), about what the deposit of nothing that opens a channel not on-chain yet costs, which the first
+withdrawal or lock-in from such a channel pays beside `fee`; both at the network's gas price, which the casino reads and
+holds for a minute. The casino declines an operation whose `fee` is below what it pays
 ([operations](channels.md#post-apichannelsidoperations)). `paused` answers while the gas price cannot be read.
 
 ## The bankroll fund
@@ -124,7 +126,6 @@ One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
 | `uname`           | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                                    |
 | `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                              |
 | `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                      |
-| `since`           | number         | When the casino first knew them                                                                                                                                                                                                             |
 | `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |
 | `games`           | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
 

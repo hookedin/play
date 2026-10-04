@@ -1,6 +1,6 @@
 ---
 title: Closing and claims
-description: Collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 7-day challenge window and collecting a claim.
+description: A balance not on-chain yet, collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 7-day challenge window and collecting a claim.
 sidebar:
   order: 3
 ---
@@ -10,6 +10,23 @@ open. Without the casino you close the channel alone, with your latest evidence 
 what it is owed. The wallet shows your balance with any money still arriving, and what the contract still owes you
 under **Waiting to be paid**; Settings shows what protects your balance under **Protection**, at
 `/settings/protection`, and the ways to close and collect under **Recovery**, at `/settings/recovery`.
+
+## A balance not on-chain yet
+
+A channel opens on-chain with the first deposit into it. Until then the casino registers it only while it owes your
+account something, such as a [transfer](getting-started.md#transfer), and your balance plays off-chain all the same: you
+sign each operation and the casino signs your balance after it, as for any balance. Recovery shows it as **not on-chain
+yet**. The contract holds nothing for it, so none of it is protected: beyond your deposits a balance is winnings, and
+here all of it is. Every state both sides signed is evidence the contract settles once the channel is open, and anything
+that settles opens it first, with a deposit of nothing into it, which anyone may send:
+
+- your first deposit opens it, and your balance takes the deposit in;
+- your first withdrawal or lock-in has the casino send that deposit of nothing first, which the fee pays for
+  ([fees and gas](#fees-and-gas));
+- **Close without the casino** sends it from your address before the close, one more transaction to pay for; and so
+  does **Send it now**.
+
+Collateral needs the channel on-chain.
 
 ## Collateral
 
@@ -96,8 +113,9 @@ not to its address: what your deposits and collateral cover as its protected amo
 
 ## Close without the casino
 
-1. Press **Close without the casino** under Recovery, or in the banner of a pending operation. Your account sends
-   `startClose` with your latest evidence, paying its network fee from the deposit address
+1. Press **Close without the casino** under Recovery, or in the banner of a pending operation. Your account opens the
+   channel first if it is [not on-chain yet](#a-balance-not-on-chain-yet), then sends `startClose` with your latest
+   evidence, paying its network fee from the deposit address
    ([fees and gas](#fees-and-gas)); with a pending casino bet its quote covers, it sends `dispute` instead
    ([dispute a casino bet](#dispute-a-casino-bet)). Only your account, or the casino's owner, can start a close.
 2. The contract sets the deadline 7 days after the block that started the close (`CHALLENGE_PERIOD`, 604,800 seconds).
@@ -201,8 +219,8 @@ Depositing, closing, challenging, finishing a close, collecting and **Send it no
 The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 µETH in total fees, and stops before signing when the
 network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins
 to the contract and pays their gas, and each pays the casino a fee for it out of your balance: 150,000 gas, about what
-sending one costs, at the network's gas price
-([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
+sending one costs, and for the first from a balance not on-chain yet 60,000 more for the deposit of nothing that opens
+it, at the network's gas price ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
 tab opens and again before signing, and signs none above 300,000 gas at the gas price it reads itself, or above the fee
 it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it
 is small ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where

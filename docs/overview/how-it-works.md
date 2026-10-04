@@ -24,7 +24,10 @@ contract derives the channel ID as `keccak256(abi.encode(player, index))`, where
 `index` is how many of its channels have started closing, so an account plays on one channel at a time. The account
 signs everything on its channel. Every channel starts from its **base**, a checkpoint that is all zero but for the
 channel's ID, which the contract takes with no signature. Once the first deposit has two confirmations on Sepolia, the
-wallet registers the channel with the casino.
+wallet registers the channel with the casino. A channel's ID is known before it is opened, so the casino also registers
+an account's current channel before it is on-chain while it owes the account something, such as a transfer from
+another player: that balance plays off-chain, and the contract settles its signed states once a deposit opens the
+channel, a deposit of nothing included ([a balance not on-chain yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet)).
 
 **Deposit.** `deposit(player)` adds money to the account's channel, and anyone can send it for any account. The contract
 holds every deposit as it arrives, the first and every later one, as the channel's **principal**, which the owner cannot

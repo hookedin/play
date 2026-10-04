@@ -11,8 +11,9 @@ key. Your own copy of that state, your evidence, is what lets you settle when th
 
 ## Your key
 
-The wallet keeps your key in this browser. Before your first deposit, save it, under **Save your wallet** on the Deposit
-tab or **Backup and keys** under **Keys** in Settings:
+The wallet keeps your key in this browser. Before your first deposit, or once another player's transfer gives you a
+balance, which the wallet then reminds you of under it, save it, under **Save your wallet** on the Deposit tab or
+**Backup and keys** under **Keys** in Settings:
 
 - **Save with a passkey** makes a passkey for play.hookedin.com, which your device or password manager keeps and syncs
   to your other devices as it does any passkey. The account's key is the passkey's secret for the wallet, its

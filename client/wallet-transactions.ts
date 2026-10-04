@@ -1,7 +1,7 @@
 import type { TransactionReceipt, TransactionResponse, TransactionRequest } from 'ethers';
 import type { Checkpoint, Integer } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
-import type { CasinoWallet } from './wallet.ts';
+import type { CasinoWallet, WalletChannel } from './wallet.ts';
 import { exact } from './activity.ts';
 import { ZeroAddress, getAddress, keccak256, Transaction } from 'ethers';
 import {
@@ -220,6 +220,7 @@ export class WalletTransactions {
   async buyCollateral(this: CasinoWallet, amount: bigint) {
     const c = this.channel;
     if (!this.playable || !c) throw new Error('Open a balance before buying collateral.');
+    if (Number(c.onchain?.status) !== 1) throw new Error('Collateral protects a balance on-chain: deposit to open it.');
     if (this.recoveryOnly || this.config.collateralRate == null)
       throw new Error('The casino offers no collateral now.');
     const { offer } = await this.api(`/api/channels/${c.state.channelId}/collateral`, { amount: String(amount) });
@@ -684,7 +685,7 @@ export class WalletTransactions {
   async withdraw(this: CasinoWallet, to: string, amount?: Integer) {
     const recipient = this.recipient(to),
       c = this.channel;
-    if (!c || Number(c.onchain?.status) !== 1 || c.closing) throw new Error('No balance is open to withdraw from.');
+    if (!c || !this.playable) throw new Error('No balance is open to withdraw from.');
     const fee = await this.signedWithdrawalFee(),
       withdrawable = this.withdrawable(),
       value = amount === undefined ? withdrawable : BigInt(amount);
@@ -708,7 +709,7 @@ export class WalletTransactions {
     const c = this.channel,
       value = BigInt(amount),
       transferable = this.transferable();
-    if (!c || Number(c.onchain?.status) !== 1 || c.closing) throw new Error('No balance is open to transfer from.');
+    if (!c || !this.playable) throw new Error('No balance is open to transfer from.');
     if (to.uname === this.uname) throw new Error('A transfer goes to another player.');
     if (value <= 0n || value > transferable)
       throw new Error(
@@ -756,13 +757,19 @@ export class WalletTransactions {
     return left > 0n ? left : 0n;
   }
   /** Ask the casino what sending a withdrawal or a lock-in to the contract costs now: the fee it pays out of the
-   * balance, which the wallet takes up to `MOST_WITHDRAWAL_GAS` at the gas price it reads itself. */
+   * balance, and while the balance is not on-chain yet, what opening its channel first adds to it. The wallet takes up
+   * to `MOST_WITHDRAWAL_GAS` for both at the gas price it reads itself. */
   async quoteWithdrawalFee(this: CasinoWallet) {
-    const [{ fee }, { gasPrice }] = await Promise.all([this.api('/api/withdrawal-fee'), this.provider.getFeeData()]);
-    if (!/^(0|[1-9][0-9]{0,28})$/.test(fee)) throw new Error('The casino sent no valid withdrawal fee');
-    if (gasPrice == null || BigInt(fee) > MOST_WITHDRAWAL_GAS * gasPrice)
-      throw new Error(`The casino asks a withdrawal fee of ${exact(fee)} µETH, more than sending one costs.`);
-    this.withdrawalFee = BigInt(fee);
+    const [{ fee, opening }, { gasPrice }] = await Promise.all([
+      this.api('/api/withdrawal-fee'),
+      this.provider.getFeeData(),
+    ]);
+    if (![fee, opening].every(value => /^(0|[1-9][0-9]{0,28})$/.test(value)))
+      throw new Error('The casino sent no valid withdrawal fee');
+    const total = BigInt(fee) + (Number(this.channel?.onchain?.status) === 0 ? BigInt(opening) : 0n);
+    if (gasPrice == null || total > MOST_WITHDRAWAL_GAS * gasPrice)
+      throw new Error(`The casino asks a withdrawal fee of ${exact(total)} µETH, more than sending one costs.`);
+    this.withdrawalFee = total;
     this.render();
     return this.withdrawalFee;
   }
@@ -783,7 +790,7 @@ export class WalletTransactions {
     const c = this.channel,
       fee = await this.signedWithdrawalFee(),
       amount = this.withdrawable();
-    if (!c || Number(c.onchain?.status) !== 1 || c.closing || !amount) throw new Error('No balance to lock in.');
+    if (!c || !this.playable || !amount) throw new Error('No balance to lock in.');
     // All of it goes out and back in: the open game risks nothing meanwhile, and shows what its groups held.
     if (this.game) Object.assign(this.game, { allowance: '0', developerBets: false, table: {} });
     const receipt = await this.perform('lock-in', { amount, recipient: this.address, fee }, crypto.randomUUID());
@@ -816,6 +823,7 @@ export class WalletTransactions {
       throw new Error('That withdrawal is not waiting to be sent.');
     if (!this.nextToRecord(entry)) throw new Error('Send the withdrawal you made before it first.');
     const hash = await this.exclusive(async () => {
+      await this.openOnChain(this.channels[entry.proof.base.channelId]);
       const tx = await this.sendTransaction('withdraw', [entry.proof]);
       await this.waitTransaction(tx);
       return tx.hash;
@@ -876,6 +884,7 @@ export class WalletTransactions {
       if (!this.channel) throw new Error('No active channel');
       // Keep ETH added for the close's fees at the address, including after a failed estimate or gas check.
       if (this.autoDeposit) await this.save(undefined, { autoDeposit: false });
+      await this.openOnChain(this.channel);
       const tx = this.disputable()
         ? await this.sendTransaction('dispute', [this.disputeEvidence(), quoteTerms(this.pending.quote)])
         : await this.sendTransaction('startClose', [this.evidence()]);
@@ -884,6 +893,13 @@ export class WalletTransactions {
     });
     await this.refresh();
     return result;
+  }
+  /** Open this account's channel on-chain with a deposit of nothing from its address, when it is not yet, under the
+   * wallet's lock: the contract settles nothing of a channel before it is open. */
+  async openOnChain(this: CasinoWallet, c: WalletChannel | undefined) {
+    if (Number(c?.onchain?.status) !== 0) return;
+    this.onProgress('Opening your balance on-chain…');
+    await this.waitTransaction(await this.sendTransaction('deposit', [this.address], { value: 0n }));
   }
   /** Collect a claim: a closed balance's, under its channel's ID, or a withdrawal's, under the withdrawal's. */
   async claim(this: CasinoWallet, id: string, recipient?: string) {

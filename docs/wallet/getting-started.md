@@ -117,7 +117,8 @@ withdrawal of that amount to that address and the casino signs your balance afte
 and you play on with the rest. The contract then pays the address, out of your deposits first, then your
 [collateral](closing-and-claims.md#collateral), and the bankroll for the rest
 ([withdraw](closing-and-claims.md#withdraw)). Your balance also pays the casino a fee for sending the withdrawal to the
-contract, which the tab shows, and pays back what the casino lent it: **Max** is your balance less both.
+contract, which the tab shows, and pays back what the casino lent it: **Max** is your balance less both. While your
+balance is not on-chain yet, the fee also pays for the deposit of nothing that opens it, which the casino sends first.
 
 The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
 much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight
@@ -133,9 +134,10 @@ signs: a Discord username can pass to another member, a uname never does. It is 
 
 A transfer is off-chain: a debit your account signs, naming their uname, which costs no fee and names neither of your
 addresses anywhere, on-chain or to each other. The casino owes it to them until their wallet collects it into their
-balance with a credit naming your uname, by itself, once they have a balance open: a player with none sees what waits
-for them under their balance, and their first deposit opens one. From then on it is part of their balance like any
-other, and beyond their own deposits a balance is paid out of the bankroll, as winnings are
+balance with a credit naming your uname, by itself. A player with no ETH and no balance needs none: their wallet's next
+check registers their balance with the casino before it is on-chain, collects the transfer into it, and they play with
+it off-chain ([a balance not on-chain yet](closing-and-claims.md#a-balance-not-on-chain-yet)). From then on it is part
+of their balance like any other, and beyond their own deposits a balance is paid out of the bankroll, as winnings are
 ([trust model](../overview/trust-model.md)): to make it deposits the contract holds, they lock their balance in. What the
 casino lent your balance stays in it, so **Max** is your balance less that loan. The casino declines a transfer to a name
 nobody goes by, or to yourself.
@@ -161,8 +163,8 @@ is refused, with `l` and `1` read as `i` and `0` as `o`, and so are the casino's
 house's; the same username as another player's, whose Discord account it no longer is, passes to you. **Unlink Discord** goes back to your uname. Your uname stays yours
 either way, and both names find you ([verifying a Discord account](../casino-api/channels.md#verifying-a-discord-account)).
 
-`/@username` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they
-have played with what they won or lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
+`/@username` or `/~uname` is a player's public page: their names, how many bets they have played with what they won or
+lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Others see your page from your first deposit, when the casino first registers your account, or from when you first
 verify your Discord account. Your name, at the top of the account menu, opens your own page, from the start, with
 your Discord username.

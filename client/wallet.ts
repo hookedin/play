@@ -59,6 +59,12 @@ export interface WalletOptions {
   storage?: Store;
   trustedDeployment?: Deployment | null;
 }
+/** A channel holds a balance to play while it is open on-chain, or not on-chain yet with no deposit taken in: one a
+ * reorganisation took back to unopened waits for its deposit to land again. */
+export const live = (c: WalletChannel | null | undefined) => {
+  const status = Number(c?.onchain?.status);
+  return status === 1 || (status === 0 && BigInt(c!.state.deposited) === 0n);
+};
 export interface WalletChannel {
   opening: Opening;
   state: Checkpoint;
@@ -204,20 +210,19 @@ export class CasinoWallet extends GameSessions {
   declare detailsObservedAt: number;
   /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
   declare uname: string | null;
-  /** What the casino owes this account, such as transfers from other players, as it last said while the account had no
-   * open channel: the wallet collects it into the balance once one is open. */
-  declare waiting: string;
+  /** Whether the casino registers this account's current channel before it is on-chain, as it last said: it owes the
+   * account something, such as a transfer, or registered it already, from this device or another. */
+  declare offChain: boolean;
   /** The Discord username it is shown by instead, written `@bob`: the username of the Discord account it verified; null
    * while it has verified none. */
   declare discordUsername: string | null;
-  /** The public profile those names carry: when the casino first knew it, what it has played, and the games it
-   * publishes. Read from the public route, like anybody else's. */
+  /** The public profile those names carry: what it has played, and the games it publishes. Read from the public route,
+   * like anybody else's. */
   declare profile: {
     uname: string;
     discordUsername: string | null;
     /** When it last verified its Discord account. */
     discordVerified: number | null;
-    since: number;
     stats: any;
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
@@ -263,7 +268,7 @@ export class CasinoWallet extends GameSessions {
       trustedDeployment,
       publicState: {},
       uname: null,
-      waiting: '0',
+      offChain: false,
       discordUsername: null,
       profile: null,
       developerEarnings: null,
@@ -357,11 +362,11 @@ export class CasinoWallet extends GameSessions {
   }
   /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
   async check() {
-    await this.refresh();
     // Asked again if the casino did not answer, or had no profile to give before it registered the account's channel,
-    // and while no channel is open, to say what waits for one.
+    // and first while no channel is open: what waits for the account registers one not on-chain yet.
     if (!this.uname || (this.channel?.registered && !this.profile) || !this.playable)
       await this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
+    await this.refresh();
     await this.sweep().catch(error => console.error('Adding ETH to your balance failed', error));
     await this.collectPayouts();
   }
@@ -410,7 +415,7 @@ export class CasinoWallet extends GameSessions {
           lastChainCheck: 0,
           buying: null,
           uname: null,
-          waiting: '0',
+          offChain: false,
           discordUsername: null,
           profile: null,
         });
@@ -429,11 +434,12 @@ export class CasinoWallet extends GameSessions {
   async sync() {
     const named = this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.verified;
+    // What waits for the account decides whether its channel registers before it is on-chain.
+    await named;
     await this.withChannelLock(true, async () => {
       await this.refreshLocked();
       if (this.channel?.registered) await this.activate().catch(() => {});
     });
-    await named;
     this.render();
   }
   hydrate(saved: any) {
@@ -472,10 +478,10 @@ export class CasinoWallet extends GameSessions {
       return 0n;
     }
   }
-  /** Whether this account can play with ETH: its channel is registered, open and not closing. */
+  /** Whether this account can play with ETH: its channel is registered, `live` and not closing. */
   get playable() {
     const c = this.channel;
-    return Boolean(c?.registered) && Number(c!.onchain?.status) === 1 && !c!.closing;
+    return Boolean(c?.registered) && live(c) && !c!.closing;
   }
   get pending() {
     return this.channel?.pending || null;
@@ -566,13 +572,14 @@ export class CasinoWallet extends GameSessions {
     return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
   }
   /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
-   * with it once it has one, and what it owes the account. A profile already here came from a later reply, and stays. */
+   * with it once it has one, and whether it registers the account's channel before it is on-chain. A profile already
+   * here came from a later reply, and stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
     const address = this.address;
-    const { uname, profile, waiting } = await this.accountRequest('uname');
+    const { uname, profile, offChain } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string') return;
-    this.waiting = /^(0|[1-9][0-9]{0,77})$/.test(waiting) ? waiting : '0';
+    this.offChain = offChain === true;
     if (!this.profile) Object.assign(this, { uname, discordUsername: profile?.discordUsername ?? null, profile });
     this.render();
   }
@@ -630,7 +637,7 @@ export class CasinoWallet extends GameSessions {
     // money at stake.
     const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.registered));
     if (!c?.registered) throw new Error('This account has no channel to publish from');
-    if (url && Number(c.onchain?.status) !== 1) throw new Error('Open a balance to publish games');
+    if (url && Number(c.onchain?.status) > 1) throw new Error('Open a balance to publish games');
     return this.takeProfile(await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }));
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
@@ -654,7 +661,7 @@ export class CasinoWallet extends GameSessions {
   render() {
     const c = this.channel,
       closing = this.closingChannel,
-      open = c && Number(c.onchain?.status) === 1,
+      open = c && live(c),
       // Deposited into the open channel and not taken into its balance yet: the player's all the same.
       arriving = open ? BigInt(c.onchain.deposited) - BigInt(c.state.deposited) : 0n,
       balance = open ? BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n) : 0n;
@@ -835,8 +842,13 @@ export class CasinoWallet extends GameSessions {
     }
     const onchain = records.find(([key]) => key === current)![1];
     // Opened by this wallet's deposit or by anybody else's, the channel is this account's to sign for: taken up at
-    // its base, and registered with the casino below.
-    if (!this.channels[current] && Number(onchain.status) === 1) {
+    // its base, and registered with the casino below. So is one not on-chain yet that the casino registers, while it
+    // owes the account something, such as a transfer, or registered already, here or on another device: its balance
+    // plays off-chain until a deposit, a withdrawal or a close opens it.
+    const opened = Number(onchain.status) === 1,
+      notOnChain = Number(onchain.status) === 0,
+      unopened = notOnChain && this.offChain;
+    if (!this.channels[current] && (opened || unopened)) {
       this.channels[current] = {
         opening: { channelId: current, player: this.address, index: String(index) },
         state: baseState(current),
@@ -844,22 +856,31 @@ export class CasinoWallet extends GameSessions {
         casinoSignature: '0x',
         onchain,
       };
-      seen.push({
-        kind: 'opened',
-        operationId: 'opened:' + current,
-        channelId: current,
-        amount: onchain.deposited,
-        status: 'confirmed',
-        createdAt: at,
-      });
+      if (opened)
+        seen.push({
+          kind: 'opened',
+          operationId: 'opened:' + current,
+          channelId: current,
+          amount: onchain.deposited,
+          status: 'confirmed',
+          createdAt: at,
+        });
     }
     this.history = [...seen, ...this.history];
     this.applyChannelObservations(records.filter(([key]) => this.channels[key]));
     this.channelId = this.channels[current] ? current : null;
     const c = this.channel;
+    if (c && !c.registered && Number(c.onchain.status) <= 1 && !this.recoveryOnly)
+      await this.activate().catch(error => {
+        if (opened) console.error('Registering your balance failed', error);
+      });
+    // One not on-chain yet that the casino did not register is no balance. Taking up the casino's state of it replaces
+    // the channel, so it is read again.
+    if (this.channel && !this.channel.registered && notOnChain) {
+      delete this.channels[current];
+      this.channelId = null;
+    }
     await this.saveChanges(before);
-    if (c && !c.registered && Number(c.onchain.status) === 1 && !this.recoveryOnly)
-      await this.activate().catch(error => console.error('Registering your balance failed', error));
     return this.publicState;
   }
   /** The record contents that warrant a new durable revision; observation times are display only. */
