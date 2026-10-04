@@ -31,10 +31,10 @@ test('channel withdrawal requires an explicit positive decimal amount without ro
     assert.equal(result.amount, null, amount);
     assert.ok(result.error, amount);
   }
-  // In µETH, as the wallet counts, or in ETH: a decimal past the wei is never rounded.
+  // In METH, as the wallet counts, or in ETH: a decimal past the wei is never rounded.
   for (const [unit, amount, decimals] of [
-    ['µETH', '1.0000000000000', 12],
-    ['µETH', '0.0000000000001', 12],
+    ['METH', '1.0000000000000', 12],
+    ['METH', '0.0000000000001', 12],
     ['ETH', '0.0000000000000000001', 18],
   ] as const) {
     const result = validateWithdrawal({ ...input, unit, amount });
@@ -49,18 +49,18 @@ test('channel withdrawal requires an explicit positive decimal amount without ro
   assert.equal(validateWithdrawal({ ...input, unit: 'ETH', amount: '0.000000000000000001' }).amount, 1n);
   const excess = validateWithdrawal({ ...input, amount: '2000000.000000000001' });
   assert.equal(excess.amount, parseEther('2.000000000000000001'));
-  assert.match(excess.error!, /At most 2,000,000 µETH can be withdrawn\./);
+  assert.match(excess.error!, /At most 2,000,000 METH can be withdrawn\./);
   assert.match(validateWithdrawal({ ...input, unit: 'ETH', amount: '2.1' }).error!, /At most 2 ETH can be withdrawn\./);
 });
 
 test('an amount reads the same in either unit', () => {
   const wei = parseEther('0.0123456789');
-  assert.equal(inUnit(wei, 'µETH'), '12,345.6789');
-  assert.equal(inUnit(wei, 'µETH', true), '12345.6789');
+  assert.equal(inUnit(wei, 'METH'), '12,345.6789');
+  assert.equal(inUnit(wei, 'METH', true), '12345.6789');
   assert.equal(inUnit(wei, 'ETH'), '0.0123456789');
   assert.equal(inUnit(parseEther('1'), 'ETH'), '1');
   assert.equal(typedIn(inUnit(wei, 'ETH'), 'ETH'), wei);
-  assert.equal(typedIn(inUnit(wei, 'µETH', true), 'µETH'), wei);
+  assert.equal(typedIn(inUnit(wei, 'METH', true), 'METH'), wei);
   assert.equal(typedIn('0', 'ETH'), null);
 });
 

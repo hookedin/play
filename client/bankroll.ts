@@ -19,12 +19,12 @@ export function renderFund() {
     shares = BigInt(wallet.fund?.shares || 0);
   $('fund-value').textContent = f ? formatAmount(f.value, 0) : '—';
   $('fund-equity').textContent = f ? formatAmount(f.equity, 0) : '—';
-  // Shares are counted like µETH, in units of 10^12: one began at 1 µETH, and the price is what the bankroll has made
+  // Shares are counted like METH, in units of 10^12: one began at 1 METH, and the price is what the bankroll has made
   // or lost since.
   $('fund-price').textContent =
     f && BigInt(f.totalShares) > 0n
-      ? `${(Number((BigInt(f.equity) * 1000000n) / BigInt(f.totalShares)) / 1000000).toFixed(6)} µETH`
-      : '1.000000 µETH';
+      ? `${(Number((BigInt(f.equity) * 1000000n) / BigInt(f.totalShares)) / 1000000).toFixed(6)} METH`
+      : '1.000000 METH';
   $('fund-house').textContent = !f
     ? '—'
     : BigInt(f.totalShares) > 0n
@@ -33,7 +33,7 @@ export function renderFund() {
   $('fund-note').textContent = wallet.fund?.alert
     ? `Your wallet refused a share statement: ${wallet.fund.alert}`
     : f && BigInt(f.overdrawn) > 0n
-      ? `The casino's owner has withdrawn ${formatAmount(f.overdrawn)} µETH more than its own shares covered. Holders bore that loss.`
+      ? `The casino's owner has withdrawn ${formatAmount(f.overdrawn)} METH more than its own shares covered. Holders bore that loss.`
       : f?.owed?.length
         ? 'Money from shares you sold is on its way to your balance.'
         : !f
@@ -52,7 +52,7 @@ act('invest', async () => {
   if (wallet.pending) throw new Error('Finish the operation in flight before buying shares.');
   const receipt = await wallet.invest(amount);
   if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this investment.');
-  toast(`Bought ${exact(receipt.shares)} shares for ${exact(amount)} µETH.`);
+  toast(`Bought ${exact(receipt.shares)} shares for ${exact(amount)} METH.`);
   await refreshFund();
 });
 $<HTMLButtonElement>('divest-all').addEventListener('click', () => {
@@ -67,7 +67,7 @@ act('divest', async () => {
   const shares = wanted >= BigInt(status.value) ? held : (wanted * BigInt(status.totalShares)) / BigInt(status.equity);
   if (!shares) throw new Error('That is less than one share.');
   const receipt = await wallet.redeem(shares);
-  toast(`Sold ${exact(shares)} shares for ${exact(receipt.amount)} µETH. It is on its way to your balance.`);
+  toast(`Sold ${exact(shares)} shares for ${exact(receipt.amount)} METH. It is on its way to your balance.`);
   await wallet.collectPayouts();
   await refreshFund();
 });

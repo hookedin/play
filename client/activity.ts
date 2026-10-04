@@ -51,12 +51,12 @@ export function timeOf(at: string | number, className: string, short = false) {
 }
 /** A share in millionths, as a percentage with four decimals. */
 export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
-/** Every digit of an amount in µETH, thousands grouped. A list shows `formatAmount`'s, cut off at a gwei; a bet or an
+/** Every digit of an amount in METH, thousands grouped. A list shows `formatAmount`'s, cut off at a gwei; a bet or an
  * event opened in full has this one. */
 export const exact = (value: bigint | string | number) => formatAmount(value, 12);
-/** A gain or a loss in µETH, with its sign, as a list shows it. */
+/** A gain or a loss in METH, with its sign, as a list shows it. */
 export const signedAmount = (value: bigint) =>
-  `${value < 0n ? '−' : '+'}${formatAmount(value < 0n ? -value : value)} µETH`;
+  `${value < 0n ? '−' : '+'}${formatAmount(value < 0n ? -value : value)} METH`;
 /** JSON as the wallet shows it: a Copy JSON button with its status, above the text. */
 export function jsonBlock(text: string, title: string) {
   const status = h('span', { className: 'activity-copy-status', role: 'status' });
@@ -135,7 +135,7 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
         : bet.collected
           ? 'Payout collected'
           : 'Payout ready',
-    amount: `${formatAmount(amount)} µETH`,
+    amount: `${formatAmount(amount)} METH`,
     amountLabel: !settled
       ? 'Stake with the developer'
       : bet.payout === '0'
@@ -147,7 +147,7 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
     tone: (!settled ? 'neutral' : bet.payout === '0' ? 'neutral' : bet.collected ? 'positive' : 'warning') as Tone,
   };
 }
-const balanceOf = (receipt: any) => `Balance ${exact(receipt.balance)} µETH`;
+const balanceOf = (receipt: any) => `Balance ${exact(receipt.balance)} METH`;
 /** Each kind of receipt as Activity shows it: its title, the label under its amount once settled, what it is called
  * declined, whether it brings money in (`incoming`, positive once settled with an amount), what it says, and a notice.
  * A bet's result and a withdrawal or lock-in still on its way are worked out in `receiptSummary`. */
@@ -223,7 +223,7 @@ const KINDS: Record<
     label: 'Sent',
     describe: r =>
       r.collateral
-        ? `${exact(r.collateral)} µETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`
+        ? `${exact(r.collateral)} METH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`
         : '',
   },
   'transfer-in': {
@@ -297,7 +297,7 @@ export function receiptSummary(
       title: kind?.declined ?? receipt.kind,
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: 'neutral',
-      amount: `0 µETH`,
+      amount: `0 METH`,
       amountLabel: 'Balance change',
       description: `Your balance is unchanged.${['casino-bet', 'payment'].includes(receipt.kind) ? ' You can place another bet.' : ''}`,
       notice: receipt.reason,
@@ -331,7 +331,7 @@ export function receiptSummary(
           ? 'Locking in'
           : 'Withdrawal on its way'
         : (kind?.title ?? receipt.kind);
-  let amount = `${formatAmount(settled ? receipt.amount || '0' : '0')} µETH`;
+  let amount = `${formatAmount(settled ? receipt.amount || '0' : '0')} METH`;
   let amountLabel = !settled ? 'No confirmed payment' : (kind?.label ?? 'ETH received');
   let tone: Tone = !settled
     ? ['reverted', 'replaced'].includes(receipt.status)
@@ -345,11 +345,11 @@ export function receiptSummary(
     amount = settled ? signedAmount(net) : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
     if (settled) tone = net > 0n ? 'positive' : net < 0n ? 'negative' : 'neutral';
-    description = `Stake ${formatAmount(receipt.stake)} µETH · Paid ${formatAmount(receipt.payout ?? 0)} µETH${
+    description = `Stake ${formatAmount(receipt.stake)} METH · Paid ${formatAmount(receipt.payout ?? 0)} METH${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${formatAmount(receipt.maxPayout)} µETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
-    }${receipt.kind === 'casino-bet' ? ` · Balance ${exact(receipt.balance)} µETH` : ''}`;
+        : ` of up to ${formatAmount(receipt.maxPayout)} METH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
+    }${receipt.kind === 'casino-bet' ? ` · Balance ${exact(receipt.balance)} METH` : ''}`;
   }
   if (receipt.kind === 'developer-bet')
     status =
@@ -366,8 +366,8 @@ export function receiptSummary(
       repaid = BigInt(receipt.proof?.base?.loan ?? 0),
       fee = BigInt(receipt.fee ?? 0),
       charges = [
-        fee ? `the casino ${exact(fee)} µETH for sending it` : '',
-        repaid ? `back the ${exact(repaid)} µETH the casino lent it` : '',
+        fee ? `the casino ${exact(fee)} METH for sending it` : '',
+        repaid ? `back the ${exact(repaid)} METH the casino lent it` : '',
       ].filter(Boolean);
     status = receipt.paid
       ? into
@@ -392,9 +392,9 @@ export function receiptSummary(
         : receipt.returned
           ? 'It never became a claim, so the close returned it: it is part of what your closed balance is owed, under Waiting to be paid.'
           : receipt.recorded
-            ? `The contract still owes ${exact(receipt.owed)} µETH of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
+            ? `The contract still owes ${exact(receipt.owed)} METH of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
             : 'The contract makes it a claim under its ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.',
-      `Balance ${exact(receipt.balance)} µETH`,
+      `Balance ${exact(receipt.balance)} METH`,
     ]
       .filter(Boolean)
       .join(' ');

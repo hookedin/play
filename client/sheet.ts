@@ -69,7 +69,7 @@ const paidTo = (to: string) =>
     : same(to, wallet.address)
       ? 'to your address'
       : `to ${short(to)}`;
-/** A typed amount of µETH, in wei: null for anything that is not an amount above zero. */
+/** A typed amount of METH, in wei: null for anything that is not an amount above zero. */
 const positiveAmount = (text: string) => {
   try {
     const value = typedAmount(text);
@@ -81,7 +81,7 @@ const positiveAmount = (text: string) => {
 /** A saved operation in words: what it is, the ID the casino knows it by and the sequence it was signed at, and what the
  * last attempt to send it ran into. */
 function pendingSummary({ kind, request, details, game, operationId }: any) {
-  const what = `${exact(request.amount)} µETH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
+  const what = `${exact(request.amount)} METH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
     failed = wallet.pendingError?.operationId === operationId ? wallet.pendingError : null;
   return (
     `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${BigInt(wallet.channel!.state.sequence) + 1n}). ` +
@@ -190,7 +190,7 @@ function renderSafety() {
     lent = wallet.feeLoan(whole, fee);
   $('deposit-fee').textContent =
     fee > 0n
-      ? `Address balance ${exact(held)} µETH. Estimated maximum network fee ${exact(fee)} µETH. Up to ${exact(whole + lent)} µETH can be added now${lent ? ': the casino lends you the network fee, and your next withdrawal pays it back' : ''}. The final fee is recorded in Activity.`
+      ? `Address balance ${exact(held)} METH. Estimated maximum network fee ${exact(fee)} METH. Up to ${exact(whole + lent)} METH can be added now${lent ? ': the casino lends you the network fee, and your next withdrawal pays it back' : ''}. The final fee is recorded in Activity.`
       : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
 }
 
@@ -290,8 +290,8 @@ function renderWithdraw(state: SendState) {
     unit = withdrawUnit(),
     // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
     charges = [
-      wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it` : '',
-      loan ? `back the ${formatAmount(loan)} µETH the casino lent you` : '',
+      wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} METH for sending it` : '',
+      loan ? `back the ${formatAmount(loan)} METH the casino lent you` : '',
     ].filter(Boolean),
     blocked = sendBlocked(state, 'Withdraw');
   $('withdraw-form').classList.toggle('hidden', !open);
@@ -303,7 +303,7 @@ function renderWithdraw(state: SendState) {
   const receives =
     amount === null
       ? ''
-      : `The address receives ${inUnit(amount, unit)} ${unit} (${unit === 'ETH' ? `${exact(amount)} µETH` : `${inUnit(amount, 'ETH')} ETH`}).`;
+      : `The address receives ${inUnit(amount, unit)} ${unit} (${unit === 'ETH' ? `${exact(amount)} METH` : `${inUnit(amount, 'ETH')} ETH`}).`;
   // A form not yet touched is told what it needs, not that it is wrong.
   const touched = Boolean(
     $<HTMLInputElement>('withdraw-to').value.trim() || $<HTMLInputElement>('withdraw-amount').value.trim(),
@@ -320,7 +320,7 @@ function renderWithdraw(state: SendState) {
  * either, or only a `prompt` for what is still to come: the name, the casino's answer to who goes by it, or the amount. */
 function transferRequest() {
   const typed = $<HTMLInputElement>('transfer-amount').value.trim(),
-    amount = typedIn(typed, 'µETH'),
+    amount = typedIn(typed, 'METH'),
     most = wallet.transferable(),
     profile = payee?.profile ?? null;
   const wrong =
@@ -330,9 +330,9 @@ function transferRequest() {
         : most <= 0n
           ? 'Nothing to transfer: what the casino lent you stays in your balance.'
           : typed && amount === null
-            ? 'Enter an amount in µETH above zero, with at most 12 decimal places.'
+            ? 'Enter an amount in METH above zero, with at most 12 decimal places.'
             : amount !== null && amount > most
-              ? `At most ${exact(most)} µETH can go${BigInt(wallet.channel?.state.loan ?? 0) ? ': what the casino lent you stays in your balance' : ''}.`
+              ? `At most ${exact(most)} METH can go${BigInt(wallet.channel?.state.loan ?? 0) ? ': what the casino lent you stays in your balance' : ''}.`
               : null),
     missing = !payee
       ? 'Enter the Discord username or uname of the player it goes to.'
@@ -353,13 +353,13 @@ function renderTransfer(state: SendState) {
     );
   $('transfer-form').classList.toggle('hidden', !open);
   $<HTMLButtonElement>('transfer').disabled = busy || Boolean(blocked) || Boolean(error);
-  $('transfer').textContent = `Transfer${amount === null ? '' : ` ${exact(amount)} µETH`}`;
+  $('transfer').textContent = `Transfer${amount === null ? '' : ` ${exact(amount)} METH`}`;
   $('transfer-help').textContent =
     blocked ??
     (!touched
       ? 'Enter an amount, or Max, and the player it goes to: @username or ~uname.'
       : error ||
-        `${showName(profile)}${profile.discordUsername ? `, ~${profile.uname},` : ''} receives ${exact(amount!)} µETH once their wallet collects it into their balance. No fee.`);
+        `${showName(profile)}${profile.discordUsername ? `, ~${profile.uname},` : ''} receives ${exact(amount!)} METH once their wallet collects it into their balance. No fee.`);
   $('transfer-help').classList.toggle('check-failed', !blocked && touched && Boolean(error) && !prompt);
 }
 /** The account the saved-accounts list was last set to, so a render only moves it when that changes. */
@@ -381,7 +381,7 @@ export function renderWallet() {
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
     closing = Number(state.channelStatus) === STATUS.closing || Boolean(wallet.channel?.closing);
   $('balance-amount').textContent = formatAmount(balance, 0);
-  $('balance-amount').title = `${exact(balance)} µETH`;
+  $('balance-amount').title = `${exact(balance)} METH`;
   renderCollateral();
   renderSafety();
   const inPlay = wallet.inPlay();
@@ -390,33 +390,33 @@ export function renderWallet() {
     balance && localStorage.getItem(savedSetting()) === null
       ? "This balance's key is only in this browser: save your wallet under Keys in Settings, or the balance is lost with it."
       : inPlay
-        ? `${formatAmount(inPlay)} µETH of it is in play in ${active?.identity.name}: it joins the game's allowance once the game has shown how its round ended.`
+        ? `${formatAmount(inPlay)} METH of it is in play in ${active?.identity.name}: it joins the game's allowance once the game has shown how its round ended.`
         : arriving
-          ? `${formatAmount(arriving)} µETH of it is on its way into your balance.`
+          ? `${formatAmount(arriving)} METH of it is on its way into your balance.`
           : state.closingChannelId && !state.channelId
             ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
             : loan
-              ? `What games play with. The casino lent you ${formatAmount(loan)} µETH of it: your next withdrawal or lock-in pays it back first.`
+              ? `What games play with. The casino lent you ${formatAmount(loan)} METH of it: your next withdrawal or lock-in pays it back first.`
               : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
   $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
   $('developer-earnings').textContent = earnings
-    ? `Your games have earned ${exact(earnings.earned)} µETH in commission; ${exact(earnings.collected)} µETH of it is collected into your balance.`
+    ? `Your games have earned ${exact(earnings.earned)} METH in commission; ${exact(earnings.collected)} METH of it is collected into your balance.`
     : '';
   $('wallet-address').textContent = wallet.address;
 
   // Deposit: ETH sent to the address goes into the balance by itself, unless something the player should decide on
   // is in the way.
-  const held = atAddress ? ` It holds ${formatAmount(atAddress)} µETH.` : '';
+  const held = atAddress ? ` It holds ${formatAmount(atAddress)} METH.` : '';
   const depositStatus = !ready
     ? 'Connecting to your wallet…'
     : !observed
       ? 'Checking your deposit address…'
       : wallet.depositing
-        ? `Adding ${formatAmount(wallet.depositing)} µETH to your balance…`
+        ? `Adding ${formatAmount(wallet.depositing)} METH to your balance…`
         : arriving
-          ? `${formatAmount(arriving)} µETH is on its way into your balance.`
+          ? `${formatAmount(arriving)} METH is on its way into your balance.`
           : wallet.transactionIntent?.method === 'deposit'
             ? `Deposit sent. Waiting for ${wallet.config.confirmations} network confirmation${wallet.config.confirmations === 1 ? '' : 's'} before crediting your balance. Check the pending transaction above.`
             : wallet.recoveryOnly
@@ -451,7 +451,7 @@ export function renderWallet() {
       ? 'Your deposit address is empty.'
       : typed && send.error
         ? send.error
-        : `Your deposit address holds ${formatAmount(atAddress)} µETH. Check the full address before confirming.`;
+        : `Your deposit address holds ${formatAmount(atAddress)} METH. Check the full address before confirming.`;
   $('address-send-help').classList.toggle('check-failed', typed && Boolean(send.error));
 
   $('pending-banner').classList.toggle(
@@ -520,20 +520,20 @@ function renderCollateral() {
   $('collateral-rate').textContent = rate === null ? '—' : `${rateText(rate)} once`;
   $('balance-protection').textContent = [
     missing > 0n
-      ? `${formatAmount(missing)} µETH of your balance is deposits the chain does not hold: a close is owed them only once they land again.`
+      ? `${formatAmount(missing)} METH of your balance is deposits the chain does not hold: a close is owed them only once they land again.`
       : '',
     uncovered > 0n
-      ? `${formatAmount(uncovered)} µETH of your balance is winnings above them, which the bankroll pays only as it has the cash until you lock it in under Recovery or buy collateral for it.`
-      : `${missing > 0n ? 'The rest' : 'All'} of your balance is protected${spare > 0n ? `, and ${formatAmount(spare)} µETH more that you win would be too` : ''}.`,
+      ? `${formatAmount(uncovered)} METH of your balance is winnings above them, which the bankroll pays only as it has the cash until you lock it in under Recovery or buy collateral for it.`
+      : `${missing > 0n ? 'The rest' : 'All'} of your balance is protected${spare > 0n ? `, and ${formatAmount(spare)} METH more that you win would be too` : ''}.`,
   ]
     .filter(Boolean)
     .join(' ');
   const button = $<HTMLButtonElement>('buy-collateral');
   button.disabled = uiBusy || wallet.busy || !wallet.playable || rate === null || !amount || Boolean(buying);
   button.textContent =
-    amount && rate !== null ? `Buy for ${formatAmount(collateralPrice(amount, rate))} µETH` : 'Buy collateral';
+    amount && rate !== null ? `Buy for ${formatAmount(collateralPrice(amount, rate))} METH` : 'Buy collateral';
   $('collateral-help').textContent = buying
-    ? `Send ${formatAmount(BigInt(buying.price) + 2n * wallet.depositFee)} µETH or more to your deposit address by ${new Date(Number(buying.expiresAt) * 1000).toLocaleTimeString()}, the price and its network fee: the wallet buys ${formatAmount(buying.amount)} µETH of collateral with it before it adds anything to your balance.`
+    ? `Send ${formatAmount(BigInt(buying.price) + 2n * wallet.depositFee)} METH or more to your deposit address by ${new Date(Number(buying.expiresAt) * 1000).toLocaleTimeString()}, the price and its network fee: the wallet buys ${formatAmount(buying.amount)} METH of collateral with it before it adds anything to your balance.`
     : !wallet.playable
       ? 'Deposit to open a balance, then buy collateral for it.'
       : rate === null
@@ -638,7 +638,7 @@ function activityEntry(receipt: any) {
   if (channel) facts.push(['Channel', channel]);
   if (base)
     facts.push(['Sequence', String(BigInt(base.sequence) + (Number(operation?.kind) && !receipt.request ? 1n : 0n))]);
-  if (receipt.commission !== undefined) facts.push(['Commission', `${exact(receipt.commission)} µETH`]);
+  if (receipt.commission !== undefined) facts.push(['Commission', `${exact(receipt.commission)} METH`]);
   if (receipt.to)
     facts.push(['To', same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to]);
   // A transfer's other player, as they went by then, and the uname it named.
@@ -668,7 +668,7 @@ function activityEntry(receipt: any) {
         'Send it now',
       ),
     ]);
-  if (receipt.fee !== undefined) facts.push(['Network fee', `${exact(receipt.fee)} µETH`]);
+  if (receipt.fee !== undefined) facts.push(['Network fee', `${exact(receipt.fee)} METH`]);
   if (receipt.txHash) facts.push(['Transaction', transactionLink(receipt.txHash)]);
   if (receipt.recordedIn) facts.push(['Recorded in', transactionLink(receipt.recordedIn)]);
   if (receipt.blockNumber !== undefined) facts.push(['Block', String(receipt.blockNumber)]);
@@ -710,16 +710,16 @@ function renderRecovery() {
   $('channel-observation').classList.toggle('hidden', !state.channelId && !closing);
   $('channel-observation').textContent = [
     open
-      ? `The contract holds ${formatAmount(state.principal || '0')} µETH of your deposits and ${formatAmount(state.collateral || '0')} µETH of collateral for this balance, at saved sequence ${state.savedSequence || '0'}.`
+      ? `The contract holds ${formatAmount(state.principal || '0')} METH of your deposits and ${formatAmount(state.collateral || '0')} METH of collateral for this balance, at saved sequence ${state.savedSequence || '0'}.`
       : '',
     open && wallet.withdrawalFee
-      ? `Locking in pays the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it.`
+      ? `Locking in pays the casino ${formatAmount(wallet.withdrawalFee)} METH for sending it.`
       : '',
     closing
       ? BigInt(state.disputedPrize || 0) > 0n
-        ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${formatAmount(state.disputedPrize)} µETH. Meanwhile the contract holds ${formatAmount(state.disputeHold || '0')} µETH of house cash for it, which the casino cannot take.`
+        ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${formatAmount(state.disputedPrize)} METH. Meanwhile the contract holds ${formatAmount(state.disputeHold || '0')} METH of house cash for it, which the casino cannot take.`
         : state.needsChallenge
-          ? `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${formatAmount(state.balanceAtRisk || '0')} µETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
+          ? `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${formatAmount(state.balanceAtRisk || '0')} METH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
           : `The close stands at sequence ${state.closingSequence || '0'}, your latest saved state.`
       : '',
     `Last checked ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'never: refresh before acting'}.`,
@@ -742,7 +742,7 @@ function renderRecovery() {
       ? 'Retry close'
       : 'Close without the casino';
   $('recovery-gas').textContent =
-    `Your deposit address holds ${formatAmount(state.nativeBalance || 0)} µETH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; turn them back on under Deposits when ready.' : ''}`;
+    `Your deposit address holds ${formatAmount(state.nativeBalance || 0)} METH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; turn them back on under Deposits when ready.' : ''}`;
   $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
   $<HTMLButtonElement>('channel-finalize').disabled = !closing || Date.now() / 1000 < deadline || busy;
 }
@@ -758,10 +758,10 @@ function renderClaims() {
     const unpaid = BigInt(claim.amount) - BigInt(claim.paid),
       ready = BigInt(claim.collectable || '0');
     return (
-      `${claim.channelId ? `Channel ${short(claim.channelId)}` : 'A withdrawal'}, paid ${paidTo(claim.to)}: ${formatAmount(unpaid)} µETH still owed of ${formatAmount(claim.amount)} µETH. ` +
+      `${claim.channelId ? `Channel ${short(claim.channelId)}` : 'A withdrawal'}, paid ${paidTo(claim.to)}: ${formatAmount(unpaid)} METH still owed of ${formatAmount(claim.amount)} METH. ` +
       (ready > 0n
-        ? `${formatAmount(ready)} µETH can be collected now.`
-        : `Its ${formatAmount(claim.winningsRemaining)} µETH of winnings wait for the bankroll to have the cash.`)
+        ? `${formatAmount(ready)} METH can be collected now.`
+        : `Its ${formatAmount(claim.winningsRemaining)} METH of winnings wait for the bankroll to have the cash.`)
     );
   };
   // The wallet re-renders on every observation. Rebuild the rows only when they differ, so a recipient
@@ -787,7 +787,7 @@ function renderClaims() {
           const collected = BigInt(after?.paid ?? claim.amount) - before;
           toast(
             collected > 0n
-              ? `Collected ${formatAmount(collected)} µETH.`
+              ? `Collected ${formatAmount(collected)} METH.`
               : 'Nothing could be paid yet: the bankroll has no cash for these winnings.',
           );
         });
@@ -914,7 +914,7 @@ act('estimate-deposit-fee', () => wallet.depositable());
 act('add-to-balance', async () => {
   const before = BigInt(wallet.publicState.balance || 0);
   await wallet.deposit();
-  funded(`Added ${formatAmount(BigInt(wallet.publicState.balance || 0) - before)} µETH to your balance.`);
+  funded(`Added ${formatAmount(BigInt(wallet.publicState.balance || 0) - before)} METH to your balance.`);
 });
 for (const id of ['withdraw-to', 'withdraw-amount', 'transfer-amount', 'address-send-to', 'collateral-buy-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
@@ -923,7 +923,7 @@ $<HTMLInputElement>('transfer-to').addEventListener('input', lookUpPayee);
 $<HTMLSelectElement>('withdraw-unit').addEventListener('change', () => {
   const input = $<HTMLInputElement>('withdraw-amount'),
     unit = withdrawUnit(),
-    wei = typedIn(input.value, unit === 'ETH' ? 'µETH' : 'ETH');
+    wei = typedIn(input.value, unit === 'ETH' ? 'METH' : 'ETH');
   if (wei !== null) input.value = inUnit(wei, unit, true);
   renderWallet();
 });
@@ -941,11 +941,11 @@ act('withdraw', async () => {
   $<HTMLInputElement>('withdraw-amount').value = '';
   $<HTMLDialogElement>('wallet-dialog').close();
   toast(
-    `Withdrew ${exact(receipt.amount)} µETH: the contract pays it to ${short(to)}, and Activity shows when it has.`,
+    `Withdrew ${exact(receipt.amount)} METH: the contract pays it to ${short(to)}, and Activity shows when it has.`,
   );
 });
 $<HTMLButtonElement>('transfer-max').addEventListener('click', () => {
-  $<HTMLInputElement>('transfer-amount').value = inUnit(wallet.transferable(), 'µETH', true);
+  $<HTMLInputElement>('transfer-amount').value = inUnit(wallet.transferable(), 'METH', true);
   renderWallet();
 });
 act('transfer', async () => {
@@ -958,14 +958,14 @@ act('transfer', async () => {
   $<HTMLInputElement>('transfer-amount').value = '';
   payee = null;
   $<HTMLDialogElement>('wallet-dialog').close();
-  toast(`Transferred ${exact(receipt.amount)} µETH to ${showName(profile)}: their wallet collects it.`);
+  toast(`Transferred ${exact(receipt.amount)} METH to ${showName(profile)}: their wallet collects it.`);
 });
 act('address-send', async () => {
   const { to, error } = addressSendRequest();
   if (error || !to) throw new Error(error || 'Enter a destination address.');
   const receipt = await wallet.withdrawAddress(to);
   $<HTMLInputElement>('address-send-to').value = '';
-  toast(`Sent ${exact(receipt.amount)} µETH to ${short(to)}. Activity shows the transaction and its fee.`);
+  toast(`Sent ${exact(receipt.amount)} METH to ${short(to)}. Activity shows the transaction and its fee.`);
 });
 act('buy-collateral', async () => {
   const amount = positiveAmount($<HTMLInputElement>('collateral-buy-amount').value.trim());
@@ -974,7 +974,7 @@ act('buy-collateral', async () => {
   $<HTMLInputElement>('collateral-buy-amount').value = '';
   toast(
     bought
-      ? `Bought ${formatAmount(amount)} µETH of collateral: the contract holds it for your balance.`
+      ? `Bought ${formatAmount(amount)} METH of collateral: the contract holds it for your balance.`
       : 'Send its price to your deposit address: the wallet buys the collateral as soon as it arrives.',
   );
 });
@@ -1074,7 +1074,7 @@ act('start-over', async () => {
     held = BigInt(wallet.publicState.balance || 0) + BigInt(wallet.publicState.nativeBalance || 0);
   const warning = [
     'Start over? This deletes everything this wallet keeps in this browser and opens a new, empty account.',
-    `It deletes the private key of ${accounts > 1 ? `all ${accounts} accounts` : 'the account'} saved here, with their evidence, receipts, activity and game allowances.${held ? ` This account holds ${formatAmount(held)} µETH.` : ''}`,
+    `It deletes the private key of ${accounts > 1 ? `all ${accounts} accounts` : 'the account'} saved here, with their evidence, receipts, activity and game allowances.${held ? ` This account holds ${formatAmount(held)} METH.` : ''}`,
     `${wallet.address && localStorage.getItem(savedSetting()) === null ? 'This account’s key is saved nowhere else. ' : ''}An account whose key you have not saved with a passkey or a key file is lost for good, with all its money. A passkey stays on your device, and signing in with it opens its account again.`,
     'This cannot be undone.',
   ].join('\n\n');

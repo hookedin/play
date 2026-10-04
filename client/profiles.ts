@@ -183,8 +183,8 @@ export function renderProfile() {
 export async function refreshBank() {
   if (!wallet.channel?.registered) return void ($('bank-balance').textContent = '—');
   const { balance } = await wallet.bankBalance();
-  $('bank-balance').textContent = `${formatAmount(balance, 0)} µETH`;
-  $('bank-balance').title = `${exact(balance)} µETH`;
+  $('bank-balance').textContent = `${formatAmount(balance, 0)} METH`;
+  $('bank-balance').title = `${exact(balance)} METH`;
 }
 
 // Another player's page opens Transfer to them.
@@ -228,14 +228,14 @@ act('bank-deposit', async () => {
   const receipt = await wallet.depositBank(amount);
   if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
   $<HTMLInputElement>('bank-amount').value = '';
-  toast(`Put ${exact(amount)} µETH in your bank.`);
+  toast(`Put ${exact(amount)} METH in your bank.`);
   await refreshBank();
 });
 act('bank-withdraw', async () => {
   const amount = typedAmount($<HTMLInputElement>('bank-amount').value.trim());
   await wallet.withdrawBank(amount);
   $<HTMLInputElement>('bank-amount').value = '';
-  toast(`Took ${exact(amount)} µETH out of your bank. It is on its way to your balance.`);
+  toast(`Took ${exact(amount)} METH out of your bank. It is on its way to your balance.`);
   await wallet.collectPayouts();
   await refreshBank();
 });

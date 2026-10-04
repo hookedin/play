@@ -2,9 +2,9 @@ import { formatEther, getAddress, parseUnits, ZeroAddress } from 'ethers';
 import { exactAmount } from '../sdk/src/wire.ts';
 import { exact } from './activity.ts';
 
-/** What an amount being withdrawn is typed in: µETH, as the wallet counts, or ETH, as the wallet it goes to may. */
-export type Unit = 'µETH' | 'ETH';
-const DECIMALS: Record<Unit, number> = { µETH: 12, ETH: 18 };
+/** What an amount being withdrawn is typed in: METH, as the wallet counts, or ETH, as the wallet it goes to may. */
+export type Unit = 'METH' | 'ETH';
+const DECIMALS: Record<Unit, number> = { METH: 12, ETH: 18 };
 /** Wei in `unit`, every digit: grouped for a sentence, or with `typed` as the amount field holds it. */
 export const inUnit = (wei: bigint, unit: Unit, typed = false) =>
   unit === 'ETH' ? formatEther(wei).replace(/\.0$/, '') : typed ? exactAmount(wei) : exact(wei);
@@ -39,7 +39,7 @@ export interface WithdrawalValidation {
 }
 
 /** One interpretation of a form that sends money for both its preview and its submit handler. */
-export function validateWithdrawal({ unit = 'µETH', ...input }: WithdrawalInput): WithdrawalValidation {
+export function validateWithdrawal({ unit = 'METH', ...input }: WithdrawalInput): WithdrawalValidation {
   let to: string | null = null,
     amount: bigint | null = null,
     error: string | null = null;

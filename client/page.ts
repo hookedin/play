@@ -4,7 +4,7 @@ import config from './config.ts';
 
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 export const short = (value: string | null | undefined) => (value ? `${value.slice(0, 8)}…${value.slice(-6)}` : '—');
-/** A typed amount of µETH, in wei. */
+/** A typed amount of METH, in wei. */
 export const typedAmount = (text: string) => parseUnits(text, 12);
 /** How a player is written: a Discord username wears `@`, a uname wears `~`. */
 export const showName = (names: { uname?: string | null; discordUsername?: string | null } | null) =>

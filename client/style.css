@@ -1654,9 +1654,6 @@ button.bet-row:hover {
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.bet-figure-label .unit {
-  text-transform: none;
-}
 .bet-return .bet-figure-value {
   color: #c6b6ff;
 }

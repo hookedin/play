@@ -1,29 +1,29 @@
 /** What the bridge and the round helper share, safe in Node: amounts as a player reads them, and whose saved state is
- * whose. The bridge carries amounts as decimal strings of whole wei; players read and type them in µETH, a millionth of
+ * whose. The bridge carries amounts as decimal strings of whole wei; players read and type them in METH, a millionth of
  * an ETH, 10^12 wei. */
 
 const DECIMALS = 12;
-/** A µETH, in wei. */
+/** A METH, in wei. */
 export const MICRO_ETH = 10n ** BigInt(DECIMALS);
 
-/** What the player typed, a whole number of µETH, as wei: every stake a player chooses is whole µETH. */
+/** What the player typed, a whole number of METH, as wei: every stake a player chooses is whole METH. */
 export function parseAmount(value: string) {
   if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value.trim()))
-    throw new Error('Enter a whole number of µETH.');
+    throw new Error('Enter a whole number of METH.');
   const wei = BigInt(value.trim()) * MICRO_ETH;
   if (wei <= 0n) throw new Error('Enter an amount greater than zero.');
   return wei.toString();
 }
 
-/** The stake a player can choose at or below `wei`: whole µETH, a multiple of `units` of them, and at least that. */
+/** The stake a player can choose at or below `wei`: whole METH, a multiple of `units` of them, and at least that. */
 export function wholeStake(wei: bigint | string, units = 1n) {
   const step = units * MICRO_ETH,
     whole = BigInt(wei) - (BigInt(wei) % step);
   return whole > 0n ? whole : step;
 }
 
-/** Wei as the player reads them, in µETH: thousands grouped, cut off (never rounded) at `places` decimals, a gwei by
- * default, or whole µETH with none, as a balance reads, without trailing zeros. A positive amount too small for that
+/** Wei as the player reads them, in METH: thousands grouped, cut off (never rounded) at `places` decimals, a gwei by
+ * default, or whole METH with none, as a balance reads, without trailing zeros. A positive amount too small for that
  * reads `<0.001`, or `<1`. */
 export function formatAmount(value: string | number | bigint, places = 3) {
   try {

@@ -201,7 +201,7 @@
                 autocomplete="off"
                 placeholder="10000"
                 aria-label="Amount"
-              /><span>µETH</span>
+              /><span>METH</span>
             </div>
             <button id="bank-deposit" class="button" type="button">Put in</button
             ><button id="bank-withdraw" class="button" type="button">Take out</button>
@@ -222,7 +222,7 @@
         <dl class="figures">
           <div>
             <dt>Your shares are worth</dt>
-            <dd><span id="fund-value">—</span> µETH</dd>
+            <dd><span id="fund-value">—</span> METH</dd>
           </div>
           <div>
             <dt>Share price</dt>
@@ -230,7 +230,7 @@
           </div>
           <div>
             <dt>Bankroll</dt>
-            <dd><span id="fund-equity">—</span> µETH</dd>
+            <dd><span id="fund-equity">—</span> METH</dd>
           </div>
           <div>
             <dt>The house's own part</dt>
@@ -242,7 +242,7 @@
           <section class="card">
             <label for="invest-amount">Buy shares with</label>
             <div class="amount-input">
-              <input id="invest-amount" type="text" inputmode="decimal" value="10000" /><span>µETH</span>
+              <input id="invest-amount" type="text" inputmode="decimal" value="10000" /><span>METH</span>
             </div>
             <button id="invest" class="button full" type="button" disabled>Buy shares</button>
           </section>
@@ -252,7 +252,7 @@
               ><button id="divest-all" class="text-button" type="button" disabled>All</button>
             </div>
             <div class="amount-input">
-              <input id="divest-amount" type="text" inputmode="decimal" /><span>µETH</span>
+              <input id="divest-amount" type="text" inputmode="decimal" /><span>METH</span>
             </div>
             <button id="divest" class="button full" type="button" disabled>Sell shares</button>
           </section>
@@ -290,7 +290,7 @@
             <h1 id="profile-name"></h1>
             <p id="profile-meta" class="muted"></p>
           </div>
-          <button id="profile-transfer" class="button" type="button" hidden>Transfer µETH</button>
+          <button id="profile-transfer" class="button" type="button" hidden>Transfer METH</button>
         </div>
         <p id="profile-stats" class="profile-stats"></p>
         <div id="discord" class="boxed profile-card" hidden>
@@ -339,7 +339,7 @@
       </div>
       <div class="money-card balance sheet-balance" data-section="wallet">
         <span class="label">Balance</span
-        ><strong><span id="balance-amount">—</span> <small title="A millionth of an ETH">µETH</small></strong>
+        ><strong><span id="balance-amount">—</span> <small title="A millionth of an ETH">METH</small></strong>
         <span id="balance-note" class="muted">What games play with.</span>
         <span id="developer-earnings" class="muted hidden"></span>
       </div>
@@ -393,9 +393,9 @@
         </div>
         <p class="help">
           Only send test ETH on the named network. Other assets or networks are not supported. Your balance counts it in
-          µETH, millionths of an ETH: 0.01 ETH is 10,000 µETH. Deposits require network confirmations and a second
-          transaction to add ETH to your balance, whose fee the casino lends you when it adds everything at your
-          address.
+          METH. 1 METH is a millionth of an ETH (0.000001 ETH): 1 ETH = 1,000,000 METH. Deposits require network
+          confirmations and a second transaction to add ETH to your balance, whose fee the casino lends you when it adds
+          everything at your address.
         </p>
         <p class="help">
           Need help with a deposit or withdrawal? <a href="mailto:support@hookedin.com">Contact support</a>. Never send
@@ -414,7 +414,7 @@
               placeholder="Enter an amount"
               spellcheck="false"
             /><select id="withdraw-unit" aria-label="Unit">
-              <option>µETH</option>
+              <option>METH</option>
               <option>ETH</option>
             </select>
           </div>
@@ -535,7 +535,7 @@
                 autocomplete="off"
                 placeholder="Enter an amount"
                 spellcheck="false"
-              /><span>µETH</span>
+              /><span>METH</span>
             </div>
             <button id="transfer-max" class="text-button" type="button">Max</button>
             <label for="transfer-to">To</label>
@@ -562,15 +562,15 @@
           <dl class="figures">
             <div>
               <dt>Your deposits</dt>
-              <dd><span id="held-deposits">—</span> µETH</dd>
+              <dd><span id="held-deposits">—</span> METH</dd>
             </div>
             <div>
               <dt>Collateral</dt>
-              <dd><span id="collateral-amount">—</span> µETH</dd>
+              <dd><span id="collateral-amount">—</span> METH</dd>
             </div>
             <div>
               <dt>Protected</dt>
-              <dd><span id="protected-amount">—</span> µETH</dd>
+              <dd><span id="protected-amount">—</span> METH</dd>
             </div>
             <div>
               <dt>Collateral costs</dt>
@@ -587,7 +587,7 @@
                 autocomplete="off"
                 placeholder="10000"
                 aria-label="Collateral to buy"
-              /><span>µETH</span>
+              /><span>METH</span>
             </div>
             <button id="buy-collateral" class="button" type="button">Buy collateral</button>
           </div>
@@ -643,7 +643,7 @@
         </div>
         <div class="amount-input">
           <input id="allowance-amount" inputmode="numeric" autocomplete="off" aria-describedby="allowance-help" /><span
-            >µETH</span
+            >METH</span
           >
         </div>
         <input

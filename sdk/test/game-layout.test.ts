@@ -84,10 +84,10 @@ test('complete stake amounts are readable on phones and tablets, on pages that h
       }
       // Exercise the same controls with long cash-out and win figures, without placing a bet.
       if (game === 'mines')
-        await frame.locator('#play').evaluate(node => (node.textContent = 'Cash out 123,456.789 µETH'));
+        await frame.locator('#play').evaluate(node => (node.textContent = 'Cash out 123,456.789 METH'));
       if (game === 'samson') {
         await frame.locator('#win-multiple').evaluate(node => (node.textContent = '6912×'));
-        await frame.locator('#win-amount').evaluate(node => (node.textContent = '123,456.789 µETH'));
+        await frame.locator('#win-amount').evaluate(node => (node.textContent = '123,456.789 METH'));
       }
       for (const selector of game === 'mines' ? ['#play'] : game === 'samson' ? ['.meter-value', '#win-amount'] : []) {
         const visible = await frame

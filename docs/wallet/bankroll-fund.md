@@ -22,7 +22,7 @@ shares = amount × totalShares / equity    rounded down
 
 `equity` is the bankroll before reservations for casino bets being decided and disputed closes, and `totalShares` every
 share in issue. The first investment made the bankroll the house built before it the house's own shares, one per wei,
-and the wallet shows shares with 12 decimals, like µETH, so a whole share began at 1 µETH. Your holding belongs to your
+and the wallet shows shares with 12 decimals, like METH, so a whole share began at 1 METH. Your holding belongs to your
 account's address, not to a channel, so it outlives each of your account's channels; buying and selling need an open
 balance. An amount too small to buy a share, or a bankroll with nothing left, is declined with a signed rejection, and
 your balance is unchanged.

@@ -86,7 +86,7 @@ export class WalletTransactions {
       throw new Error('The wallet nonce changed. Recover the pending operation before sending again.');
     if (balance < value + fees.maxCost) {
       throw new Error(
-        `Your address holds too little for this transaction: its fee can be up to ${exact(fees.maxCost)} µETH. Send that much ETH to ${address} first, with "Add ETH that arrives at my deposit address to my balance" off in Settings.`,
+        `Your address holds too little for this transaction: its fee can be up to ${exact(fees.maxCost)} METH. Send that much ETH to ${address} first, with "Add ETH that arrives at my deposit address to my balance" off in Settings.`,
       );
     }
     await this.assertNetwork();
@@ -169,7 +169,7 @@ export class WalletTransactions {
       gasLimit * feePerGas > 50000000000000000n
     )
       throw new Error(
-        'Transaction exceeds the fee caps (2,000,000 gas, 200 gwei, 50,000 µETH total). Check the RPC or use independent recovery with reviewed fees',
+        'Transaction exceeds the fee caps (2,000,000 gas, 200 gwei, 50,000 METH total). Check the RPC or use independent recovery with reviewed fees',
       );
   }
   /** What this account's address can put into its balance: everything but the deposit's own fee, priced once for both
@@ -690,7 +690,7 @@ export class WalletTransactions {
       value = amount === undefined ? withdrawable : BigInt(amount);
     if (value <= 0n || value > withdrawable)
       throw new Error(
-        `Not that much is in your balance: ${exact(withdrawable)} µETH can go, after the fee of ${exact(fee)} µETH for sending it${BigInt(c.state.loan) ? ' and what the casino lent you' : ''}.`,
+        `Not that much is in your balance: ${exact(withdrawable)} METH can go, after the fee of ${exact(fee)} METH for sending it${BigInt(c.state.loan) ? ' and what the casino lent you' : ''}.`,
       );
     // The open game may risk no more than stays in the balance, what its groups hold included.
     if (this.game && BigInt(this.game.allowance) + this.inPlay() > withdrawable - value) {
@@ -712,7 +712,7 @@ export class WalletTransactions {
     if (to.uname === this.uname) throw new Error('A transfer goes to another player.');
     if (value <= 0n || value > transferable)
       throw new Error(
-        `Not that much is in your balance: ${exact(transferable)} µETH can go${BigInt(c.state.loan) ? ', less what the casino lent you' : ''}.`,
+        `Not that much is in your balance: ${exact(transferable)} METH can go${BigInt(c.state.loan) ? ', less what the casino lent you' : ''}.`,
       );
     // The open game may risk no more than stays in the balance, what its groups hold included.
     if (this.game && BigInt(this.game.allowance) + this.inPlay() > transferable - value) {
@@ -761,7 +761,7 @@ export class WalletTransactions {
     const [{ fee }, { gasPrice }] = await Promise.all([this.api('/api/withdrawal-fee'), this.provider.getFeeData()]);
     if (!/^(0|[1-9][0-9]{0,28})$/.test(fee)) throw new Error('The casino sent no valid withdrawal fee');
     if (gasPrice == null || BigInt(fee) > MOST_WITHDRAWAL_GAS * gasPrice)
-      throw new Error(`The casino asks a withdrawal fee of ${exact(BigInt(fee))} µETH, more than sending one costs.`);
+      throw new Error(`The casino asks a withdrawal fee of ${exact(BigInt(fee))} METH, more than sending one costs.`);
     this.withdrawalFee = BigInt(fee);
     this.render();
     return this.withdrawalFee;
@@ -772,7 +772,7 @@ export class WalletTransactions {
     const shown = this.withdrawalFee,
       fee = await this.quoteWithdrawalFee();
     if (shown && fee > shown)
-      throw new Error(`Sending it costs a fee of ${exact(fee)} µETH now, more than shown: check and try again.`);
+      throw new Error(`Sending it costs a fee of ${exact(fee)} METH now, more than shown: check and try again.`);
     return fee;
   }
   /** Lock in the balance: all of it but its loan and the fee for sending it goes into this account's current channel as

@@ -152,7 +152,7 @@ function fly(landed: Landed) {
     $('ticker').prepend(chip);
     while ($('ticker').children.length > 9) $('ticker').lastElementChild!.remove();
     message(
-      `${times(hundredths)}: ${HookedIn.formatAmount(payout)} µETH back from a ${HookedIn.formatAmount(landed.stake)} µETH ball.`,
+      `${times(hundredths)}: ${HookedIn.formatAmount(payout)} METH back from a ${HookedIn.formatAmount(landed.stake)} METH ball.`,
     );
     render();
   });

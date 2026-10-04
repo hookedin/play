@@ -88,18 +88,18 @@ export function renderGameAccount() {
   $('game-allowance').classList.toggle('hidden', !game || !playable);
   $('game-allowance').classList.toggle('unset', unset);
   $('wallet-button').classList.toggle('hidden', unset);
-  // Balances read in whole µETH, cut off, with every digit on hover.
+  // Balances read in whole METH, cut off, with every digit on hover.
   $('game-allowance-amount').replaceChildren(
     ...(allowance
-      ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'µETH')]
+      ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'METH')]
       : ['Set allowance']),
   );
-  $('game-allowance-amount').title = allowance ? `${exact(allowance)} µETH` : '';
+  $('game-allowance-amount').title = allowance ? `${exact(allowance)} METH` : '';
   $('wallet-button-amount').replaceChildren(
     formatAmount(balance, 0),
-    h('small', { title: 'A millionth of an ETH' }, 'µETH'),
+    h('small', { title: 'A millionth of an ETH' }, 'METH'),
   );
-  $('wallet-button-amount').title = `${exact(balance)} µETH`;
+  $('wallet-button-amount').title = `${exact(balance)} METH`;
   $('wallet-button-amount').classList.toggle('hidden', !wallet.publicState?.address || allowance > 0n);
   $('wallet-button-label').textContent = playable && balance > 0n ? 'Wallet' : 'Deposit';
   $('hero-deposit').classList.toggle('hidden', playable || !wallet.address);
@@ -118,16 +118,16 @@ export function renderGameAccount() {
 /** The slider runs linearly from nothing to the whole playable balance, a hundredth of it a step. */
 const SLIDER_STEPS = 100n;
 const sliderAmount = (total: bigint, value: string) => wholeMicro((total * BigInt(value)) / SLIDER_STEPS);
-/** An allowance is whole µETH: wei cut down to them. */
+/** An allowance is whole METH: wei cut down to them. */
 const wholeMicro = (wei: bigint) => wei - (wei % MICRO_ETH);
-/** A whole number of µETH the player typed, as wei: null for anything else. */
+/** A whole number of METH the player typed, as wei: null for anything else. */
 const typedWhole = (text: string) => (/^\d{1,30}$/.test(text.trim()) ? BigInt(text.trim()) * MICRO_ETH : null);
 /** The wallet's own dialog: the sole grant of spending authority over ETH. It says what the game may play with now,
  * what it would, and out of how much, because those are the whole of what is being authorized. */
 function renderAllowanceDialog() {
   if (!active) return;
   const name = active.identity.name;
-  // The dialog deals in whole µETH: the allowance as it stands reads cut down to them, as the top bar shows it.
+  // The dialog deals in whole METH: the allowance as it stands reads cut down to them, as the top bar shows it.
   const allowance = wholeMicro(BigInt(wallet.game?.allowance || '0'));
   $('allowance-title').textContent = allowance > 0n ? `Change the allowance for ${name}` : `Play ${name} with ETH`;
   const total = allowable(),
@@ -138,22 +138,22 @@ function renderAllowanceDialog() {
     // A game that asks to place developer bets as well is allowed them at the allowance it has.
     granting = allowingDeveloperBets && !wallet.game?.developerBets && amount > 0n,
     unchanged = amount === allowance && !granting;
-  $('allowance-total').textContent = `${formatAmount(total, 0)} µETH, your balance`;
+  $('allowance-total').textContent = `${formatAmount(total, 0)} METH, your balance`;
   $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
   $('allowance-help').textContent = !valid
     ? amount > total
-      ? `That is more than your balance of ${formatAmount(total, 0)} µETH.`
-      : 'Enter a whole number of µETH.'
+      ? `That is more than your balance of ${formatAmount(total, 0)} METH.`
+      : 'Enter a whole number of METH.'
     : total === 0n
       ? 'Your balance is empty. Deposit to play with ETH.'
       : unchanged
         ? `This is ${name}'s allowance now.`
         : amount === allowance
-          ? `${name} keeps its allowance of ${shown} µETH, and may place developer bets too.`
+          ? `${name} keeps its allowance of ${shown} METH, and may place developer bets too.`
           : amount > allowance
-            ? `${name} may play with up to ${shown} µETH.`
-            : `${name} may play with up to ${shown} µETH, and the rest stays in your balance.`;
+            ? `${name} may play with up to ${shown} METH.`
+            : `${name} may play with up to ${shown} METH, and the rest stays in your balance.`;
   $('allowance-help').classList.toggle('check-failed', !valid);
   $<HTMLButtonElement>('allowance-confirm').disabled = !valid || unchanged || uiBusy || wallet.busy;
   $('allowance-confirm').textContent =
@@ -164,8 +164,8 @@ function renderAllowanceDialog() {
         : amount === allowance
           ? 'Allow developer bets'
           : amount < allowance
-            ? `Lower to ${shown} µETH`
-            : `Allow ${shown} µETH`;
+            ? `Lower to ${shown} METH`
+            : `Allow ${shown} METH`;
 }
 /** What the player may allow the open game: the playable balance less what its groups hold, which stays theirs. */
 const allowable = () => {
@@ -197,7 +197,7 @@ function openAllowanceDialog(amount?: bigint, developerBets = false) {
   $('allowance-developer-text').textContent =
     `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into their bank at once, and they decide what each bet pays. Neither the casino nor your wallet can check that result, so allow this only for a developer you trust.`;
   // The dialog starts at the allowance as it stands, nothing for a game just opened, or at what the game asked for,
-  // in whole µETH that cover it.
+  // in whole METH that cover it.
   const total = wholeMicro(allowable()),
     allowance = BigInt(wallet.game?.allowance || '0'),
     asked = amount && amount > 0n ? allowance + amount : allowance,
@@ -396,13 +396,13 @@ $<HTMLFormElement>('allowance-form').addEventListener('submit', event => {
   void task(async () => {
     if (!active) return;
     const amount = typedWhole($<HTMLInputElement>('allowance-amount').value || '0');
-    if (amount === null) throw new Error('Enter a whole number of µETH.');
+    if (amount === null) throw new Error('Enter a whole number of METH.');
     // An allowance is held against other tabs.
     await holdGameAllowance();
     await wallet.setGameAllowance(String(amount), allowingDeveloperBets);
     toast(
       amount
-        ? `${active.identity.name} may play with up to ${formatAmount(amount, 0)} µETH${allowingDeveloperBets ? ', developer bets included' : ''}.`
+        ? `${active.identity.name} may play with up to ${formatAmount(amount, 0)} METH${allowingDeveloperBets ? ', developer bets included' : ''}.`
         : `${active.identity.name} may play with nothing.`,
     );
     $<HTMLDialogElement>('allowance-dialog').close(String(amount));

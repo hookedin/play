@@ -69,7 +69,7 @@ let saved: Saved = { applied: null, shown: null, bonus: null },
 
 const persist = () => localStorage.setItem(storageKey, JSON.stringify(saved));
 const mode = (): Mode => (saved.bonus ? 'bonus' : 'base');
-const money = (stakes: number, stake: string) => `${HookedIn.formatAmount(BigInt(stake) * BigInt(stakes))} µETH`;
+const money = (stakes: number, stake: string) => `${HookedIn.formatAmount(BigInt(stake) * BigInt(stakes))} METH`;
 function message(value: string, error = false) {
   $('status').textContent = value;
   $('status').dataset.error = String(error);
@@ -524,7 +524,7 @@ function stepStake(up: boolean) {
   } catch {
     return;
   }
-  // The ladder runs in whole µETH, as every bet a player chooses does.
+  // The ladder runs in whole METH, as every bet a player chooses does.
   const micro = BigInt(HookedIn.parseAmount('1')),
     units = wei / micro,
     magnitude = 10n ** BigInt(units.toString().length - 1);

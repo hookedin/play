@@ -197,7 +197,7 @@ the collection revert and leaves the claim whole: collect to another address.
 ## Fees and gas
 
 Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account.
-The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 µETH in total fees, and stops before signing when the
+The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 METH in total fees, and stops before signing when the
 network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins to the
 contract and pays their gas, and each pays the casino a fee for it out of your balance, set from the network's gas price
 ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw

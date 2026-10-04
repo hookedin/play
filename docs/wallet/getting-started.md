@@ -20,9 +20,9 @@ it is for: **Keys** at `/settings`, **Deposits** at `/settings/deposits`, **Tran
 **Protection** at `/settings/protection` and **Recovery** at `/settings/recovery`. Each address opens its tab, over the
 library when it is a link. Closing it, or Back, brings the page under it back.
 
-The wallet, its games and hookedin.com count money in **µETH**, millionths of an ETH: 0.01 ETH is 10,000 µETH. Amounts
-are cut off, never rounded: a balance in whole µETH, and a stake, a payout or a fee at a thousandth of a µETH, a gwei,
-with every digit on hover or in full.
+The wallet, its games and hookedin.com count money in **METH**. **1 METH is a millionth of an ETH (0.000001 ETH)**,
+so **1 ETH = 1,000,000 METH** and 0.01 ETH = 10,000 METH. Amounts are cut off, never rounded: a balance in whole METH,
+and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every digit on hover or in full.
 
 This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
 offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet
@@ -88,8 +88,8 @@ game may risk, and moves no money:
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
   taken in: a deposit still arriving cannot raise it.
 - It lives only in this tab's memory. Leaving the game, reloading or closing the tab takes it back: every time you open
-  a game it starts with nothing, and asks again. The dialog deals in whole µETH, and starts at what the game holds now,
-  nothing for a game just opened, unless the game asked for an amount: then at that, in whole µETH that cover it. The
+  a game it starts with nothing, and asks again. The dialog deals in whole METH, and starts at what the game holds now,
+  nothing for a game just opened, unless the game asked for an amount: then at that, in whole METH that cover it. The
   wallet gives a game nothing without your word in its dialog.
 - Every verified result of the game's own operations moves it: a stake lowers it as it is bet, and a win raises it once
   the game has shown it, so the figure gives no result away before the game does, and stands still while a round is
@@ -110,7 +110,7 @@ The wallet does not refuse a bet for paying back little: a game can spend its wh
 
 ## Withdraw
 
-On the wallet's **Withdraw** tab, enter an amount in µETH, or in ETH by switching its unit, or choose **Max**, and the
+On the wallet's **Withdraw** tab, enter an amount in METH, or in ETH by switching its unit, or choose **Max**, and the
 address to pay; the tab says what the address receives in both units. The address must be a valid one other than the
 zero address, your own deposit address and the casino's contract. Your account signs a withdrawal of that amount to that
 address and the casino signs your balance after it at once: your balance pays it now, and you play on with the rest. The
@@ -125,10 +125,10 @@ much can be withdrawn now, and your balance is as it was. A withdrawal needs the
 
 ## Transfer
 
-**Transfer**, in Settings, gives part of your balance to another player: enter an amount in µETH or choose **Max**, and
-their Discord username, such as `@bob`, or their uname, such as `~3byt9ocwnnzaxanmiz3stocj`. **Transfer µETH** on
+**Transfer**, in Settings, gives part of your balance to another player: enter an amount in METH or choose **Max**, and
+their Discord username, such as `@bob`, or their uname, such as `~3byt9ocwnnzaxanmiz3stocj`. **Transfer METH** on
 another player's page opens it with their name filled in. The wallet shows who the name belongs to, and the uname it
-signs: a Discord username can pass to another member, a uname never does. It is how you give a friend µETH to play with.
+signs: a Discord username can pass to another member, a uname never does. It is how you give a friend METH to play with.
 
 A transfer is off-chain: a debit your account signs, naming their uname, which costs no fee and names neither of your
 addresses anywhere, on-chain or to each other. The casino owes it to them until their wallet collects it into their

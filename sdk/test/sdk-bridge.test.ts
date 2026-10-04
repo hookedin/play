@@ -14,18 +14,18 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
-    // Amounts are µETH, counted in wei: shown grouped and cut off at a gwei, typed as whole µETH.
+    // Amounts are METH, counted in wei: shown grouped and cut off at a gwei, typed as whole METH.
     assert.equal(HookedIn.parseAmount(' 15 '), '15000000000000');
-    assert.throws(() => HookedIn.parseAmount('1.5'), /whole number of µETH/);
+    assert.throws(() => HookedIn.parseAmount('1.5'), /whole number of METH/);
     assert.equal(HookedIn.formatAmount('1234567891999999999999'), '1,234,567,891.999');
     assert.equal(HookedIn.formatAmount('-1500000000000'), '-1.5');
     assert.equal(HookedIn.formatAmount('1'), '<0.001');
-    // A balance reads in whole µETH.
+    // A balance reads in whole METH.
     assert.equal(HookedIn.formatAmount('48710895123456789', 0), '48,710');
     assert.equal(HookedIn.formatAmount('1', 0), '<1');
     assert.equal(HookedIn.exactAmount('1234567891999999999999'), '1234567891.999999999999');
     assert.throws(() => HookedIn.parseAmount('0'), /greater than zero/);
-    // A stake halved stays whole µETH, at least one, or a multiple of two for a game that halves it again.
+    // A stake halved stays whole METH, at least one, or a multiple of two for a game that halves it again.
     assert.equal(HookedIn.wholeStake(1500000000000n), 1000000000000n);
     assert.equal(HookedIn.wholeStake(500000000000n), 1000000000000n);
     assert.equal(HookedIn.wholeStake(5000000000000n, 2n), 4000000000000n);

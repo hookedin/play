@@ -127,7 +127,7 @@ function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
     h(
       'p',
       { className: 'bet-round-summary', title: `Group ${last.group}` },
-      `You put in ${formatAmount(putIn(rows))} µETH and ${net < 0n ? 'lost' : net > 0n ? 'won' : 'broke even'}${net ? ` ${formatAmount(net < 0n ? -net : net)} µETH` : ''}. Each bet below stakes what the bet before it paid.`,
+      `You put in ${formatAmount(putIn(rows))} METH and ${net < 0n ? 'lost' : net > 0n ? 'won' : 'broke even'}${net ? ` ${formatAmount(net < 0n ? -net : net)} METH` : ''}. Each bet below stakes what the bet before it paid.`,
     ),
     h('div', { className: 'bet-table' }, ...rows.map(row => betRowElement(row, onOpen))),
   );
@@ -197,8 +197,8 @@ export function renderMyGames() {
         known = key ? knownGames.get(key) : undefined;
       const figures: [string, string, string?][] = [
         ['Bets', String(totals.bets)],
-        ['Put in', `${formatAmount(totals.putIn)} µETH`],
-        ['Paid back', `${formatAmount(totals.putIn + totals.net)} µETH`],
+        ['Put in', `${formatAmount(totals.putIn)} METH`],
+        ['Paid back', `${formatAmount(totals.putIn + totals.net)} METH`],
         ['Your result', signedAmount(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
         ['Return of your bets', expected === null ? '—' : percent(expected)],
       ];

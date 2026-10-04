@@ -13,7 +13,7 @@ what the wallet checks and answers.
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
-const stake = HookedIn.parseAmount('1'); // 1 µETH, '1000000000000' wei
+const stake = HookedIn.parseAmount('1'); // 1 METH, '1000000000000' wei
 const answer = await HookedIn.requestAllowance({ amount: stake });
 if (answer.allowed) {
   const id = crypto.randomUUID(); // save it before sending: a lost reply is recovered by this id
@@ -116,16 +116,17 @@ HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:3byt9
 
 #### `parseAmount`
 
-What the player typed, a whole number of µETH, a millionth of an ETH, as wei in a decimal string: digits only, spaces
-trimmed. Every stake a player chooses is whole µETH. It throws an `Error` whose message is for the player,
-`Enter a whole number of µETH.` or, for zero, `Enter an amount greater than zero.`
+What the player typed, a whole number of METH, as wei in a decimal string: digits only, spaces trimmed.
+**1 METH is a millionth of an ETH (0.000001 ETH), or 10^12 wei; 1 ETH = 1,000,000 METH.**
+Every stake a player chooses is whole METH. It throws an `Error` whose message is for the player,
+`Enter a whole number of METH.` or, for zero, `Enter an amount greater than zero.`
 
 #### `formatAmount`
 
-Wei in µETH as the player reads them, as the wallet shows them: thousands grouped, truncated (never rounded) to
+Wei in METH as the player reads them, as the wallet shows them: thousands grouped, truncated (never rounded) to
 `places` decimal places, 3 by default, a gwei, with trailing zeros dropped; the wallet shows a balance with 0, in whole
-µETH. A positive amount that truncates to nothing reads `<0.001`, or `<1` with no places, a negative one keeps its sign,
-and a value `BigInt` cannot read returns `—`. Write the unit after it, `µETH`.
+METH. A positive amount that truncates to nothing reads `<0.001`, or `<1` with no places, a negative one keeps its sign,
+and a value `BigInt` cannot read returns `—`. Write the unit after it, `METH`.
 
 ```ts
 HookedIn.formatAmount('1234567891999999999999'); // '1,234,567,891.999'
@@ -135,18 +136,18 @@ HookedIn.formatAmount('48710895123456789', 0); // '48,710'
 
 #### `exactAmount`
 
-Every digit of an amount in µETH, `formatAmount` to 12 places without grouping: what belongs in a field the player
+Every digit of an amount in METH, `formatAmount` to 12 places without grouping: what belongs in a field the player
 edits.
 
 #### `wholeStake`
 
-`wholeStake(wei, units = 1n)`: the stake a player can choose at or below `wei`, in wei: whole µETH, a multiple of
+`wholeStake(wei, units = 1n)`: the stake a player can choose at or below `wei`, in wei: whole METH, a multiple of
 `units` of them, and at least that. A page halves a stake with it, and a game whose bets are halved again, as
 blackjack's insurance is, keeps its stakes even with `units` 2.
 
 ```ts
-HookedIn.wholeStake(1500000000000n); // 1000000000000n, 1 µETH
-HookedIn.wholeStake(1n, 2n); // 2000000000000n, 2 µETH
+HookedIn.wholeStake(1500000000000n); // 1000000000000n, 1 METH
+HookedIn.wholeStake(1n, 2n); // 2000000000000n, 2 METH
 ```
 
 #### `initializeGame`

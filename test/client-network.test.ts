@@ -167,7 +167,7 @@ test('every transaction the account sends, a close too, needs its fee at the add
   state.balance = 60000n * state.maxFee - 1n;
   await assert.rejects(
     wallet.sendTransaction('startClose', close),
-    /its fee can be up to .* µETH\. Send that much ETH/,
+    /its fee can be up to .* METH\. Send that much ETH/,
   );
   state.balance += 1n;
   await wallet.sendTransaction('startClose', close);

@@ -78,7 +78,7 @@ function show(state: RoundState) {
     net = BigInt(state.cash) - BigInt(state.contributed);
   $('roll').textContent = value.toFixed(2);
   $('roll').dataset.won = String(won);
-  $('result-note').textContent = `${won ? '+' : '−'}${HookedIn.formatAmount(won ? net : -net)} µETH`;
+  $('result-note').textContent = `${won ? '+' : '−'}${HookedIn.formatAmount(won ? net : -net)} METH`;
   $('die').classList.toggle('lost', !won);
   const pin = $('pin');
   pin.hidden = false;

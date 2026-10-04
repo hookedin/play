@@ -31,7 +31,7 @@ let session: RoundState | null = null,
   ready = false,
   connecting = true;
 
-const amount = (wei: bigint | string) => `${HookedIn.formatAmount(wei)} µETH`;
+const amount = (wei: bigint | string) => `${HookedIn.formatAmount(wei)} METH`;
 /** A multiplier to the hundredth, rounded down; whole from a thousand up. */
 function times({ n, d }: Rational) {
   const hundredths = (n * 100n) / d,

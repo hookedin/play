@@ -103,7 +103,7 @@ const figure = (label: string | Node, value: string, className = '', exact = '')
   );
 /** An amount as a row shows it, short, with the exact one on hover. */
 const amount = (label: string | Node, wei: bigint, className = '') =>
-  figure(label, `${formatAmount(wei)} µETH`, className, `${exact(wei)} µETH`);
+  figure(label, `${formatAmount(wei)} METH`, className, `${exact(wei)} METH`);
 
 /** How much went in, how much came back, and both returns side by side: one card, or none for no bets. */
 export function totalCards(totals: BetTotals) {
@@ -157,11 +157,10 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
     amount(
       row.maxPayout === undefined || row.maxPayout === null
         ? 'Paid'
-        : // Labels are capitals, which would make µ a Greek capital: the unit keeps its own case.
-          h('span', null, `Paid of up to ${formatAmount(row.maxPayout)} `, h('span', { className: 'unit' }, 'µETH')),
+        : `Paid of up to ${formatAmount(row.maxPayout)} METH`,
       row.payout,
     ),
-    figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} µETH`),
+    figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} METH`),
     figure(
       'Return of this bet',
       row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
@@ -205,7 +204,7 @@ export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonl
   item.append(
     amount('Put in', putIn(rows)),
     figure('Bets in one round', String(rows.length)),
-    figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} µETH`),
+    figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} METH`),
   );
   item.dataset.search =
     `round group ${last.group} ${rows.map(row => row.operation ?? `bet #${row.index}`).join(' ')}`.toLowerCase();
@@ -287,8 +286,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     h(
       'div',
       { className: 'bet-detail-figures' },
-      figure(stakeLabel(row), `${exact(row.stake)} µETH`),
-      figure('Paid', `${exact(row.payout)} µETH`),
+      figure(stakeLabel(row), `${exact(row.stake)} METH`),
+      figure('Paid', `${exact(row.payout)} METH`),
       figure('Result', signedAmount(net), tone(net)),
       figure(
         'Return of this bet',
@@ -308,8 +307,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       factList([
         ['Developer', hex(receipt.game?.developer)],
         ['The bet you signed', hex(JSON.stringify(receipt.details?.meta))],
-        ['Paid to you', `${exact(receipt.settlement.player)} µETH`],
-        ['Given to the casino', `${exact(receipt.settlement.casino)} µETH`],
+        ['Paid to you', `${exact(receipt.settlement.player)} METH`],
+        ['Given to the casino', `${exact(receipt.settlement.casino)} METH`],
         ['The developer’s signature', hex(receipt.settlement.signature)],
       ]),
     );
@@ -333,7 +332,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     const where = detailSection('Where the round landed');
     const band = h('div', {
         className: 'bet-space-band',
-        title: `Pays ${exact(revealed.prize)} µETH on ${chance(revealed.chance)} of outcomes`,
+        title: `Pays ${exact(revealed.prize)} METH on ${chance(revealed.chance)} of outcomes`,
       }),
       mark = h('div', { className: 'bet-space-mark', title: `The outcome, ${landed}` });
     band.style.width = `${across(revealed.chance)}%`;
@@ -346,8 +345,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         { className: 'bet-detail-note' },
         `The round drew ${landed}, ${across(landed).toFixed(3)}% of the way across the space. ` +
           (won
-            ? `That is below the bet’s chance, so it pays its prize, ${exact(revealed.prize)} µETH.`
-            : `That is not below the bet’s chance, so it pays nothing of the ${exact(revealed.prize)} µETH it could have.`),
+            ? `That is below the bet’s chance, so it pays its prize, ${exact(revealed.prize)} METH.`
+            : `That is not below the bet’s chance, so it pays nothing of the ${exact(revealed.prize)} METH it could have.`),
       ),
     );
     body.append(where);
@@ -358,7 +357,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     );
     terms.append(
       factList([
-        ['Prize', `${exact(revealed.prize)} µETH`],
+        ['Prize', `${exact(revealed.prize)} METH`],
         ['Chance', `${chance(revealed.chance)} · ${revealed.chance} of 2⁶⁴ outcomes`],
         ['Worth', `${percent(returnParts(row.stake, row.expected ?? 0n))} of the stake`],
       ]),
@@ -427,9 +426,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Game key', hex(receipt.details?.game)],
         ['Memo, the hash of the details above', hex(op.memo)],
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
-        ['Balance after it settled', `${exact(receipt.balance ?? 0)} µETH`],
+        ['Balance after it settled', `${exact(receipt.balance ?? 0)} METH`],
         receipt.commission && BigInt(receipt.commission) > 0n
-          ? ['The game’s commission', `${exact(receipt.commission)} µETH`]
+          ? ['The game’s commission', `${exact(receipt.commission)} METH`]
           : null,
         ['The state it moved from', hex(op.previousStateHash)],
         ['Your signature on it', hex(step.authorization)],

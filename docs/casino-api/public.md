@@ -225,6 +225,6 @@ not reach. `unauthorized` answers a wait without the access of the game's develo
 
 ### `POST /api/demo-eth`
 
-Sends 2,000,000 µETH on a local Anvil chain to `address`, one payment at a time, for the wallet's demo setup, and answers
+Sends 2,000,000 METH on a local Anvil chain to `address`, one payment at a time, for the wallet's demo setup, and answers
 `{txHash, amount}`. The route exists only where `GET /api/config` reports `isLocalDevelopment`; elsewhere it answers
 `404` `not-found`. A request while another is being paid is `refused`.
