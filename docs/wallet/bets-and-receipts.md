@@ -113,7 +113,7 @@ balance: the contract protects neither ([trust model](../overview/trust-model.md
 **Activity**, the wallet's tab at `/wallet/activity`, lists every receipt the wallet keeps, newest first: ETH arriving at your deposit address
 (**Received at your address**), your balance opening (**Balance opened**), your deposits and what they add to your
 balance (**Added to your balance**, whoever deposited it), the network fees of deposits the casino lent (**Network fee
-lent**) and the faucet's loans (**Free µETH lent**), bets, payments, rejections, bankroll and bank movements, withdrawals
+lent**), bets, payments, rejections, bankroll and bank movements, withdrawals
 and transfers, closes, challenges and collections, each with its operation ID or its transaction and the raw JSON
 behind it.
 The wallet keeps the latest 100 receipts, and beyond them every receipt still to be settled: a developer bet still open,

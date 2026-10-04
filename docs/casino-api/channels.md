@@ -1,6 +1,6 @@
 ---
 title: Channel endpoints
-description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank, the profile, verifying a Discord account and the faucet.
+description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank, the profile and verifying a Discord account.
 sidebar:
   order: 2
 ---
@@ -85,7 +85,6 @@ What the casino checks and answers, by operation:
 | Withdrawal, kind 5          | `{id}`                                                   | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee) ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with 100,000 gas ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | –                                                                                       |
 | Transfer, kind 6            | `{id}`                                                   | Has the contract put the amount into the current channel of the account the operation's `recipient` names, as deposits: a lock-in when that is the channel's own account; declines one larger than it can pay now or with too small a fee, as for a withdrawal, and one to an account with no channel it knows ("That address has no HookedIn balance to transfer into")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | –                                                                                       |
 | Fee loan, kind 7            | `{id}`: the hash of a deposit's transaction              | Lends the network fee of a deposit the channel's account sent straight to the contract, into this channel, once the balance has taken it in (`unconfirmed` before, and before the casino sees the transaction): the transaction's gas limit at its fee cap, but no more than 20% over the gas it used and the 1.5% a node's estimate of it may run high, at twice the base fee of the block before its own plus its tip, when that is at most `loanLimit` millionths of the deposit ([`GET /api/config`](public.md#get-apiconfig)). The ID lends each deposit once. Declines another transaction ("That is not a deposit this account sent into this balance"), a balance that, less its loan, holds less than the deposit ("The balance no longer holds that deposit"), another amount ("The casino lends that deposit … ETH of its network fee") and a larger fee ("The casino lends a network fee only up to 1% of its deposit") | –                                                                                       |
-| Faucet loan, kind 7         | `{id, counterparty: FAUCET_ID}`                          | Lends what [the faucet](#post-apichannelsidfaucet) lends, `faucet` in [`GET /api/config`](public.md#get-apiconfig), to a balance of less, of an account the faucet lends to, while its budget for loans has it; once an hour for each account. Declines any other, with why ("The faucet lends 10 µETH, no more and no less", "The faucet lends only to a balance of less than 10 µETH", and the faucet's own refusals)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | –                                                                                       |
 
 A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already carried
 out on another channel is declined with `used: true`; a casino bet its quote covers only when that operation was
@@ -377,8 +376,7 @@ without that address's signature: the casino derives unames with a key it keeps 
 | `uname`        | string         | The account's uname                                                 |
 | `profile`      | object or null | Its own profile, once the casino has met the account; `null` before |
 
-An account's own profile is its [public profile](public.md#get-apiplayersname) and `faucet`, whether
-[the faucet](#post-apichannelsidfaucet) lends to it now, which no public route says. Unlinking a Discord account and
+An account's own profile is its [public profile](public.md#get-apiplayersname). Unlinking a Discord account and
 publishing a game answer with it too.
 
 `refused` answers an opening whose `channelId` is not `:id` or does not fit its fields.
@@ -411,8 +409,8 @@ the house, which goes by `@hookedin`.
 
 ### `POST /api/channels/:id/discord/unlink`
 
-Gives up the Discord account that verified the account, `{opening}`: it goes by its uname again, and the faucet lends
-to it no more. Answers its own profile; `not-found` answers an account that verified no Discord account.
+Gives up the Discord account that verified the account, `{opening}`: it goes by its uname again. Answers its own
+profile; `not-found` answers an account that verified no Discord account.
 
 ### `POST /api/discord`
 
@@ -427,28 +425,3 @@ who ran it sees; one run in any other server is told only that it answers in the
   player's Discord username are refused. The same username as another player's is one Discord has moved to this
   member: the player who had it goes by their uname again. Run again, it brings a changed username up to date, and the
   time it was last verified.
-- `/faucet`: the member's account may borrow from [the faucet](#post-apichannelsidfaucet) once in the hour that follows,
-  if the faucet would lend to it now.
-
-## The faucet
-
-### `POST /api/channels/:id/faucet`
-
-Asks the faucet for free µETH, `{opening}`. The faucet lends `faucet` wei, 10 µETH ([`GET /api/config`](public.md#get-apiconfig)),
-to the account of a member of the HookedIn Discord who asked `/faucet` there ([verifying](#post-apidiscord)) in the hour
-before, while the account's balance holds less: once an hour for each member, whichever account they verify. The
-account's [own profile](#post-apichannelsiduname) says `faucet: true` meanwhile. The loan answers the ask. It is a
-[faucet loan](#post-apichannelsidoperations): bets stake it, and a withdrawal, a transfer or a close pays it back first.
-What the faucet lends comes out of a budget the casino sets, and the gas of the deposits that open channels for it out of
-an account of the faucet's own.
-
-| Response field | Type    | Meaning                                                                                                         |
-| -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
-| `amount`       | string  | What the faucet lends                                                                                           |
-| `opening`      | boolean | Whether the account has no open channel, which the casino opens for it with a deposit of nothing, as anyone may |
-
-The account borrows with a faucet loan once its channel is open and registered. The casino opens a channel once an hour
-for each member, and answers `opening: true` again while that deposit is on its way. `not-eligible` answers an account
-whose member has not asked: one that verified no Discord account, or whose member has not run `/faucet` within the hour. `faucet-empty` answers when the budget for loans is spent,
-or the faucet's account holds too little to open the account's channel. `refused` answers a member the faucet lent to,
-or opened a channel for, in the last hour, saying when it does again, and a balance that holds what the faucet lends.

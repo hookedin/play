@@ -665,7 +665,7 @@ main:has(> #page-play:not(.hidden)) {
 .section-title {
   margin: 32px 0 14px;
 }
-/* A player's page: their bets in a line, and on your own, your Discord username and the faucet. */
+/* A player's page: their bets in a line, and on your own, your Discord username. */
 .profile-stats {
   font-size: 15px;
   font-variant-numeric: tabular-nums;

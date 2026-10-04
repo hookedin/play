@@ -40,10 +40,10 @@ a passkey** to open the account of one you made before, or **Save a key file ins
 ([your key](keys-and-recovery.md#your-key)). A passkey's account takes over from the one this browser made, and a game
 you have open opens again under it.
 
-Then send Sepolia ETH to the address: free test ETH from the Sepolia faucet the tab links to, or a withdrawal from
-another player's balance. While the Deposit tab is open and the page visible, the wallet checks the address every 20 seconds and
-adds what arrives to your balance; otherwise it checks every 10 minutes, or at once when you press ↻ beside the
-wallet's title. ETH too small to cover its fee waits for more.
+Then send Sepolia ETH to the address, or have another player withdraw or transfer some to you. While the Deposit tab
+is open and the page visible, the wallet checks the address every 20 seconds and adds what arrives to your balance;
+otherwise it checks every 10 minutes, or at once when you press ↻ beside the wallet's title. ETH too small to cover its
+fee waits for more.
 
 Each deposit is one transaction, `deposit`, into your account's channel, and your first opens it. After two
 confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the
@@ -57,17 +57,6 @@ had. The casino lends no more than the rule the wallet prices transactions by al
 deposit's: 20% over an estimate of the gas the deposit used, which a node makes up to 1.5% high, at twice that block's
 base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
 leaves it in the balance, and your next withdrawal, transfer or close pays it back first.
-
-### Free µETH
-
-Verify your Discord account in the HookedIn Discord ([your name](#your-name)) and you can borrow 10 µETH to play with
-from the casino's faucet: ask `/faucet` there, then **Get 10 µETH** on your profile within the hour, while your balance
-holds less than that. The faucet lends to each member once an hour, whichever HookedIn account they verify, and only as
-long as its budget lasts. An
-account with no balance has one opened for it, with a deposit of nothing the casino sends; it needs no ETH of its own,
-nor a saved wallet, though what you win there is lost with an unsaved wallet. What the faucet lends is a loan, like a
-deposit's network fee: bets stake it, and your next withdrawal, transfer or close pays it back first, so what you win
-above it is yours to take out ([the faucet](../casino-api/channels.md#post-apichannelsidfaucet)).
 
 ### When ETH waits at the address
 
@@ -167,7 +156,7 @@ either way, and both names find you ([verifying a Discord account](../casino-api
 have played with what they won or lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Others see your page from your first deposit, when the casino first registers your account, or from when you first
 verify your Discord account. Your name, at the top of the account menu, opens your own page, from the start, with
-your Discord username and the faucet ([free µETH](#free-µeth)).
+your Discord username.
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.

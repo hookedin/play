@@ -218,15 +218,15 @@ No other key is allowed. `id`, `game` and `counterparty` are `0x` followed by 64
 `meta` appear only beside `game`. A withdrawal's or a transfer's recipient is in the operation, not in its details. By
 kind:
 
-| Kind          | Details                                       |
-| ------------- | --------------------------------------------- |
-| 1, casino bet | `game`, no `counterparty`, no `meta`          |
-| 2, debit      | Exactly one of `game` and `counterparty`      |
-| 3, credit     | `counterparty`, no `game`                     |
-| 4, deposit    | Neither `game` nor `counterparty`             |
-| 5, withdrawal | Neither `game` nor `counterparty`             |
-| 6, transfer   | Neither `game` nor `counterparty`             |
-| 7, loan       | No `game`; no `counterparty`, or the faucet's |
+| Kind          | Details                                  |
+| ------------- | ---------------------------------------- |
+| 1, casino bet | `game`, no `counterparty`, no `meta`     |
+| 2, debit      | Exactly one of `game` and `counterparty` |
+| 3, credit     | `counterparty`, no `game`                |
+| 4, deposit    | Neither `game` nor `counterparty`        |
+| 5, withdrawal | Neither `game` nor `counterparty`        |
+| 6, transfer   | Neither `game` nor `counterparty`        |
+| 7, loan       | Neither `game` nor `counterparty`        |
 
 Each operation the wallet signs, and what its details hold:
 
@@ -245,7 +245,6 @@ Each operation the wallet signs, and what its details hold:
 | Withdrawal                                | 5    | `{id}`; the operation names the address it pays as `recipient`                                     |
 | Transfer, or locking in the balance       | 6    | `{id}`; the operation names the account it goes into as `recipient`, the account itself to lock in |
 | Loan of a deposit's network fee           | 7    | `{id}`, the hash of the deposit's transaction                                                      |
-| Loan from the faucet                      | 7    | `{id, counterparty: FAUCET_ID}`                                                                    |
 
 What the casino checks for each, and what it answers, is under
 [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations).
@@ -286,12 +285,11 @@ operations itself.
 
 ### Counterparties
 
-| Name           | Preimage             | Value                                                                | Debit          | Credit             | Loan            |
-| -------------- | -------------------- | -------------------------------------------------------------------- | -------------- | ------------------ | --------------- |
-| `FUND_ID`      | `HOOKEDIN/BANKROLL`  | `0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530` | An investment  | Redeemed shares    | –               |
-| `BANK_ID`      | `HOOKEDIN/BANK`      | `0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263` | A bank deposit | A bank withdrawal  | –               |
-| `DEVELOPER_ID` | `HOOKEDIN/DEVELOPER` | `0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc` | –              | Developer earnings | –               |
-| `FAUCET_ID`    | `HOOKEDIN/FAUCET`    | `0x22f8eb36cb1354b62e14b927d8102488452f940f792dd1bdbfedc4b5f3ef4c0a` | –              | –                  | From the faucet |
+| Name           | Preimage             | Value                                                                | Debit          | Credit             |
+| -------------- | -------------------- | -------------------------------------------------------------------- | -------------- | ------------------ |
+| `FUND_ID`      | `HOOKEDIN/BANKROLL`  | `0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530` | An investment  | Redeemed shares    |
+| `BANK_ID`      | `HOOKEDIN/BANK`      | `0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263` | A bank deposit | A bank withdrawal  |
+| `DEVELOPER_ID` | `HOOKEDIN/DEVELOPER` | `0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc` | –              | Developer earnings |
 
 Each value is `keccak256` of its preimage. A credit that collects a developer bet's payout names the bet's hash instead.
 The other fixed tag is `HOOKEDIN/OUTCOME` (`0xede2fdd26760847d3c92bb2ebf4da0fdbdf441ed687b86dc1257f1962e3857ff`), in
@@ -455,7 +453,7 @@ canonical JSON of the rules they apply alike. An `encodeType` string is a struct
 `Access(bytes32 channelId,uint256 expiresAt)`. The rules:
 
 ```text
-{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","faucet":"0x22f8eb36cb1354b62e14b927d8102488452f940f792dd1bdbfedc4b5f3ef4c0a","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"loan":7,"none":0,"transfer":6,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
+{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"loan":7,"none":0,"transfer":6,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
 `DEVELOPER_PROTOCOL` fixes only what a developer's server shares with the casino: the `encodeType` strings of

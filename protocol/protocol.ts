@@ -167,10 +167,6 @@ export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequ
  * names it, from the developer's own channel, answered with a statement of the balance; money leaves it only by the
  * developer's own signed `BankWithdraw`, settlement or casino bet. */
 export const BANK_ID = id('HOOKEDIN/BANK');
-/** The casino's faucet: free µETH it lends a member of the HookedIn Discord who asks it there, a loan that names this as
- * its counterparty. Like a deposit's network fee, a bet stakes it, and a withdrawal, a transfer or a close pays it back
- * first. */
-export const FAUCET_ID = id('HOOKEDIN/FAUCET');
 /** The casino signs the balance of a developer's bank after every deposit and withdrawal. `cause` is the hash of the
  * developer's signed deposit or `BankWithdraw`. */
 export const BANK_TYPES = {
@@ -439,9 +435,9 @@ export const BOUNDS = {
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
  * developer bet, whose meta alone says what it is) or what it pays into (an investment or a bank deposit); a credit
- * what it collects from; a deposit, a withdrawal and a transfer nothing but themselves, a withdrawal's and a
- * transfer's recipient being in the operation; and a loan nothing, or the faucet it comes from. Only what names a
- * game carries a group. Every field is in one form, so one meaning has one memo. */
+ * what it collects from; a deposit, a withdrawal, a transfer and a loan nothing but themselves, a withdrawal's and a
+ * transfer's recipient being in the operation. Only what names a game carries a group. Every field is in one form, so
+ * one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
@@ -461,9 +457,7 @@ export function checkDetails(kind: number, details: Details) {
         ? named !== counterparty
         : kind === KIND.credit
           ? counterparty && !named
-          : kind === KIND.loan
-            ? !named && (details.counterparty === undefined || same(details.counterparty, FAUCET_ID))
-            : [KIND.deposit, KIND.withdrawal, KIND.transfer].includes(kind as 4) && !counterparty && !named)
+          : [KIND.deposit, KIND.withdrawal, KIND.transfer, KIND.loan].includes(kind as 4) && !counterparty && !named)
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
@@ -739,7 +733,7 @@ export const PROTOCOL = id(
     canonicalJSON({
       kinds: KIND,
       outcome: OUTCOME_TAG,
-      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID, faucet: FAUCET_ID },
+      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID },
       bounds: BOUNDS,
     }),
 );

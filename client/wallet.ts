@@ -30,7 +30,6 @@ import {
   verifyStep,
   hashOperation,
   KIND,
-  FAUCET_ID,
   assertProtocol,
   owed,
   protection,
@@ -219,9 +218,6 @@ export class CasinoWallet extends GameSessions {
     stats: any;
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
-  /** Whether the casino's faucet lends to this account now, its member having asked `/faucet` in the HookedIn Discord,
-   * as the casino last told the account itself: no public profile says it. */
-  declare faucet: boolean;
   /** Whether ETH at this account's address goes into its balance. Off, it stays available for withdrawal and
    * transaction fees. */
   declare autoDeposit: boolean;
@@ -266,7 +262,6 @@ export class CasinoWallet extends GameSessions {
       uname: null,
       discordUsername: null,
       profile: null,
-      faucet: false,
       developerEarnings: null,
       busy: false,
       depositShown: false,
@@ -412,7 +407,6 @@ export class CasinoWallet extends GameSessions {
           uname: null,
           discordUsername: null,
           profile: null,
-          faucet: false,
         });
         this.hydrate(await this.storage.get(storageKey));
       };
@@ -560,20 +554,18 @@ export class CasinoWallet extends GameSessions {
     this.render();
   }
   /** Ask the casino something for this account itself, signed for its first channel, which every account has whether
-   * or not it was ever opened: its uname, verifying its Discord account, and the faucet. */
+   * or not it was ever opened: its uname, and verifying its Discord account. */
   accountRequest(this: CasinoWallet, action: string, body: Record<string, unknown> = {}) {
     const opening = { channelId: channelId(this.address, 0), player: this.address, index: '0' };
     return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
   }
   /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
-   * with it once it has one, and whether the faucet lends to it. A profile already here came from a later reply, and
-   * stays. */
+   * with it once it has one. A profile already here came from a later reply, and stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
     const address = this.address;
     const { uname, profile } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string') return;
-    this.faucet = Boolean(profile?.faucet);
     if (!this.profile) Object.assign(this, { uname, discordUsername: profile?.discordUsername ?? null, profile });
     this.render();
   }
@@ -603,8 +595,7 @@ export class CasinoWallet extends GameSessions {
   async discordCode(this: CasinoWallet): Promise<{ code: string; expires: number }> {
     return this.accountRequest('discord/code');
   }
-  /** This account's own profile, asked again: how the wallet learns the name `/verify` gave it, and that the faucet
-   * lends to it once its member asked `/faucet`. */
+  /** This account's own profile, asked again: how the wallet learns the name `/verify` gave it. */
   async refreshOwnProfile(this: CasinoWallet) {
     const address = this.address,
       { profile } = await this.accountRequest('uname');
@@ -615,32 +606,11 @@ export class CasinoWallet extends GameSessions {
   async unlinkDiscord(this: CasinoWallet) {
     return this.takeProfile(await this.accountRequest('discord/unlink'));
   }
-  /** This account's profile as the casino answers the account itself with it, the names it shows and whether the faucet
-   * lends to it. */
+  /** This account's profile as the casino answers the account itself with it, and the names it shows. */
   takeProfile(this: CasinoWallet, profile: any) {
-    Object.assign(this, {
-      profile,
-      uname: profile.uname,
-      discordUsername: profile.discordUsername,
-      faucet: Boolean(profile.faucet),
-    });
+    Object.assign(this, { profile, uname: profile.uname, discordUsername: profile.discordUsername });
     this.render();
     return profile;
-  }
-  /** Borrow free µETH from the casino's faucet, which lends to an account it tells it lends to (`faucet`), whose balance
-   * holds less than it lends: one whose member asked `/faucet` in the HookedIn Discord within the hour. A loan that
-   * names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it back first. The faucet opens the account's channel first, if it is not open, with a deposit of nothing, and this
-   * waits until the wallet has registered it. */
-  async borrowFromFaucet(this: CasinoWallet) {
-    const { amount, opening } = await this.accountRequest('faucet');
-    if (!this.playable) {
-      if (opening) this.onProgress('Opening your balance…');
-      for (const until = Date.now() + 180_000; !this.playable; await this.refresh()) {
-        if (Date.now() > until) throw new Error('Your balance has not opened yet. Try again in a minute.');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-    return this.perform('faucet', { amount, source: FAUCET_ID }, crypto.randomUUID());
   }
   /**
    * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing

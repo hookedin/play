@@ -50,8 +50,7 @@ const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
  * developer bet, a payment, an investment and a bank deposit are debits, a withdrawal names the address it pays, a
  * transfer the account it goes into (a lock-in is one to this account itself), a payout collected is a credit, money
- * deposited into the channel is taken in with a deposit, and the network fee of a deposit is a loan the casino makes,
- * as free µETH from its faucet is. */
+ * deposited into the channel is taken in with a deposit, and the network fee of a deposit is a loan the casino makes. */
 export const OPERATIONS: Record<string, { kind: number; name: string; game?: boolean }> = {
   'casino-bet': { kind: KIND.casinoBet, name: 'casino bet', game: true },
   payment: { kind: KIND.debit, name: 'game payment', game: true },
@@ -67,7 +66,6 @@ export const OPERATIONS: Record<string, { kind: number; name: string; game?: boo
   withdrawn: { kind: KIND.credit, name: 'bank withdrawal' },
   'taken-in': { kind: KIND.deposit, name: 'deposit' },
   loan: { kind: KIND.loan, name: 'network fee loan' },
-  faucet: { kind: KIND.loan, name: 'faucet loan' },
 };
 /** A payout collected, a deposit taken in or a loan adds to the balance, and commits none of it. */
 const credit = (kind: string) => [KIND.credit, KIND.deposit, KIND.loan].includes(OPERATIONS[kind]!.kind as 3);

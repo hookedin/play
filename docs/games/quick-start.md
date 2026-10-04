@@ -11,8 +11,8 @@ template to a settled bet: you run the template's bridge probe on your machine a
 ## What you need
 
 - Node 24.4 or later.
-- A HookedIn wallet with a balance: open [play.hookedin.com](https://play.hookedin.com) and deposit Sepolia ETH, free
-  from a faucet ([getting started](../wallet/getting-started.md#deposit)).
+- A HookedIn wallet with a balance: open [play.hookedin.com](https://play.hookedin.com) and deposit Sepolia ETH
+  ([getting started](../wallet/getting-started.md#deposit)).
 
 ## Create the game
 

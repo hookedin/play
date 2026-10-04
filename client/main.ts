@@ -730,7 +730,6 @@ function renderWallet() {
   $('developer-earnings').textContent = earnings
     ? `Your games have earned ${exact(earnings.earned)} µETH in commission; ${exact(earnings.collected)} µETH of it is collected into your balance.`
     : '';
-  $('faucet-link').classList.toggle('hidden', wallet.expectedChainId !== 11155111n);
   $('wallet-address').textContent = wallet.address;
 
   // Deposit: ETH sent to the address goes into the balance by itself, unless something the player should decide on
@@ -762,22 +761,6 @@ function renderWallet() {
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
-  // The faucet, on your own page: free µETH, for an account whose member asked /faucet in the HookedIn Discord within the
-  // hour, while its balance holds less than it lends. Members verify their Discord account first.
-  const faucet = BigInt(wallet.config?.faucet ?? 0),
-    lends = `${formatAmount(faucet)} µETH`,
-    often =
-      'once an hour while your balance holds less. Bets stake it, and a withdrawal pays it back first: what you win above it is yours.';
-  $('faucet').hidden =
-    !ownPage() || !faucet || !wallet.config?.discord || balance >= faucet || wallet.recoveryOnly || closing;
-  $('faucet-text').textContent = wallet.faucet
-    ? `You asked the faucet: the casino lends you ${lends} to play with, ${often}`
-    : wallet.discordUsername
-      ? `Ask /faucet in the HookedIn Discord and the casino lends you ${lends} to play with, ${often}`
-      : `Once you go by your Discord username, ask /faucet in the HookedIn Discord and the casino lends you ${lends} to play with, ${often}`;
-  $('faucet-borrow').textContent = wallet.faucet ? `Get ${lends}` : 'Open Discord';
-  $('faucet-borrow').classList.toggle('hidden', !wallet.faucet && !wallet.discordUsername);
-  $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
 
   const open = status === 1 && !closing;
   for (const send of ['withdraw', 'transfer'] as const) renderSend(send, { open, busy, ready, closing, loan });
@@ -2194,24 +2177,11 @@ $('copy-verify-code').addEventListener('click', async () => {
     toast('The code is selected. Copy it with your browser’s copy command.');
   }
 });
-// Back from the HookedIn Discord: what /faucet did there shows on your page at once.
-addEventListener('focus', () => {
-  if (ownPage() && wallet.discordUsername && !wallet.faucet) void wallet.refreshOwnProfile().catch(() => {});
-});
 act(
   'unlink-discord',
   () => wallet.unlinkDiscord(),
   () => `You go by ~${wallet.uname} again.`,
 );
-// The faucet lends to an account whose member asked /faucet in the HookedIn Discord; any other asks there first.
-$('faucet-borrow').addEventListener('click', () => {
-  if (!wallet.faucet) return void open(wallet.config.discord, '_blank', 'noopener');
-  void task(async () => {
-    const receipt = await wallet.borrowFromFaucet();
-    if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The faucet declined.');
-    toast(`The faucet lent you ${formatAmount(BigInt(wallet.config.faucet))} µETH.`);
-  });
-});
 act('publish-game', async () => {
   const name = $<HTMLInputElement>('game-name-input'),
     url = $<HTMLInputElement>('game-url-input');

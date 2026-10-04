@@ -106,13 +106,13 @@ misses none: save it and resume from it, even after an empty page. `GET /api/pla
 The casino counts requests in fixed 60-second windows, each starting with a key's first request. A budget tracks at
 most 1,024 keys and drops the oldest to make room. A spent budget answers `429` `rate-limited`.
 
-| Budget                                                                                                      | Per       | Requests a minute |
-| ----------------------------------------------------------------------------------------------------------- | --------- | ----------------- |
-| Every request but `OPTIONS`                                                                                 | Client IP | 6,000             |
-| Registering a channel the casino does not know, asking a uname, a Discord code, unlinking it and the faucet | Client IP | 60                |
-| Channel requests, after authentication                                                                      | Channel   | 6,000             |
-| Developer requests, after authentication                                                                    | Developer | 6,000             |
-| Publishing games                                                                                            | Channel   | 200               |
+| Budget                                                                                          | Per       | Requests a minute |
+| ----------------------------------------------------------------------------------------------- | --------- | ----------------- |
+| Every request but `OPTIONS`                                                                     | Client IP | 6,000             |
+| Registering a channel the casino does not know, asking a uname, a Discord code and unlinking it | Client IP | 60                |
+| Channel requests, after authentication                                                          | Channel   | 6,000             |
+| Developer requests, after authentication                                                        | Developer | 6,000             |
+| Publishing games                                                                                | Channel   | 200               |
 
 The client IP is the connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
 
@@ -153,8 +153,6 @@ that waits its turn, `busy`.
 | `unconfirmed`        | 409    | A deposit operation for money the casino has not seen confirmed on-chain yet, or a loan of a deposit's network fee before the casino sees its transaction; the same request can go again later. A loan before the balance has taken its deposit in is refused the same way, and can go only once the take-in is signed |
 | `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                                                                                              |
 | `bank-short`         | 409    | The developer's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                                                                                           |
-| `not-eligible`       | 409    | The faucet does not lend to this account: verify your Discord account in the HookedIn Discord, and ask `/faucet` there                                                                                                                                                                                                 |
-| `faucet-empty`       | 409    | The faucet's budget for loans is spent, or its account holds too little to open a channel                                                                                                                                                                                                                              |
 | `too-many`           | 409    | The profile already publishes 100 games                                                                                                                                                                                                                                                                                |
 | `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                                                                                               |
 | `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                                                                                                       |
