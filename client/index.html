@@ -301,10 +301,13 @@
               Join the <a id="open-discord" class="text-button" target="_blank" rel="noopener">HookedIn Discord</a>.
             </li>
             <li>Get a code below.</li>
-            <li>Type <strong>/verify</strong> in any channel there and give it the code, within 10 minutes.</li>
+            <li>
+              In any channel there, type <code class="command">/verify <var>code</var></code> within 10 minutes.
+            </li>
           </ol>
           <div id="verify" class="address" hidden>
-            <code id="verify-code"></code><button id="copy-verify-code" class="button small" type="button">Copy</button>
+            <code class="command">/verify <var id="verify-code"></var></code
+            ><button id="copy-verify-code" class="button small" type="button">Copy code</button>
           </div>
           <div class="actions">
             <button id="verify-discord" class="button primary" type="button">Verify with Discord</button

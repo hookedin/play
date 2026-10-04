@@ -1293,9 +1293,25 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .address-send > .muted {
   margin-top: 8px;
 }
-/* The code a member runs /verify with: read off the screen and typed, so large and spaced. */
-#verify-code {
+/* What a member types in the HookedIn Discord: the command in the accent, then the code they fill in. */
+.command {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.command var {
+  font-style: normal;
+  color: var(--text);
+}
+/* Read off the screen and typed, so large and spaced. */
+.address .command {
+  padding: 0;
+  background: none;
   font-size: 20px;
+}
+#verify-code {
   letter-spacing: 0.12em;
 }
 #deposit-status {
