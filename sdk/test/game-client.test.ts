@@ -673,13 +673,13 @@ test('a rejected game action survives a lost reply and reload without resampling
   let round = new RoundClient(bridge, graph, undefined, { store });
   await round.start({ stake: '1000' });
   // The casino's quote for the step covers nothing it bets, so the casino declines it, and the wallet takes that.
-  const message = {
-    channelId: w.channel!.state.channelId,
-    previousStateHash: hashState(w.domain, w.channel!.state),
-    round: id('a round'),
-    virtualBankroll: '0',
-    expiresAt: String(Math.floor(Date.now() / 1000) + QUOTE_PERIOD),
-  };
+  const start = structuredClone(w.channel!.state),
+    message = {
+      previousStateHash: hashState(w.domain, start),
+      round: id('a round'),
+      virtualBankroll: '0',
+      expiresAt: String(Math.floor(Date.now() / 1000) + QUOTE_PERIOD),
+    };
   w.channel!.quote = { message, signature: await f.owner.signTypedData(w.domain, QUOTE_TYPES, message) };
   const before = await w.balance();
   await assert.rejects(round.action('roll'), /reply lost/);
@@ -697,9 +697,9 @@ test('a rejected game action survives a lost reply and reload without resampling
   assert.equal(result.events.length, 1);
   for (const field of ['amount', 'chance', 'prize']) assert.deepEqual(attempts[1][field], attempts[0][field]);
   assert.notEqual(attempts[1].memo, attempts[0].memo);
-  // The stub's channel has taken its deposit in at sequence 1; a declined step takes two sequences.
-  assert.equal(attempts[0].sequence, '2');
-  assert.equal(attempts[1].sequence, '4');
+  // The second attempt follows the joint checkpoint that declined the first.
+  assert.equal(attempts[0].previousStateHash, hashState(w.domain, start));
+  assert.equal(attempts[1].previousStateHash, hashState(w.domain, rejectionCheckpoint(w.domain, start, attempts[0])));
 });
 
 test('the state carries the setup its round was started with, across a reload', async () => {

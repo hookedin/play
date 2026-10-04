@@ -13,24 +13,26 @@ export type Json<T> = 0 extends 1 & T
         ? { [K in keyof T]: Json<T[K]> }
         : T;
 
-/** A channel as its account knows it: the account, which signs for it, and which of the account's channels it is. */
+/** A channel: the account, which signs for it, and which of the account's channels it is, with the key it goes by
+ * off-chain. */
 export interface Opening {
   channelId: string;
   player: string;
-  /** 0 for the account's first channel, and one more after each a close ended. */
+  /** 0 for the account's first channel, and one more after each whose close started. */
   index: Integer;
 }
 export interface Checkpoint {
-  channelId: string;
+  player: string;
+  index: Integer;
   sequence: Integer;
   previousStateHash: string;
   transitionHash: string;
   balance: Integer;
   /** How much of the channel's on-chain deposits the balance has taken in. A close adds the rest. */
   deposited: Integer;
-  /** How much the balance has paid out in withdrawals and transfers. A close adds what did not become a claim. */
+  /** How much the balance has paid out in withdrawals and lock-ins. A close adds what did not become a claim. */
   withdrawn: Integer;
-  /** How much of the balance the casino lent it. A withdrawal, a transfer or a close pays it back first. */
+  /** How much of the balance the casino lent it. A withdrawal, a lock-in or a close pays it back first. */
   loan: Integer;
 }
 /** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
@@ -98,15 +100,14 @@ export interface PlayerDeveloperBets {
   more: boolean;
 }
 export interface Operation {
-  channelId: string;
+  /** The hash of the checkpoint it follows, which names its channel and its place. */
   previousStateHash: string;
-  sequence: Integer;
   kind: Integer;
   /** A casino bet's stake, paid to enter; otherwise the amount debited or credited. */
   amount: Integer;
-  /** Whom a withdrawal pays, or the account a transfer goes into; the zero address for any other kind. */
+  /** Whom a withdrawal pays; the zero address for any other kind, a lock-in going into the account's own channel. */
   recipient: string;
-  /** What a withdrawal or a transfer pays the casino for sending it to the contract, out of the balance; zero for any
+  /** What a withdrawal or a lock-in pays the casino for sending it to the contract, out of the balance; zero for any
    * other kind. */
   fee: Integer;
   /** A casino bet's probability, counted in outcomes out of 2^64: it wins when its round's outcome is below this. */
@@ -123,7 +124,6 @@ export interface Operation {
 /** The casino's signed quote for the casino bet that follows a checkpoint (`QUOTE_TYPES`). */
 export interface Quote {
   message: {
-    channelId: string;
     previousStateHash: string;
     /** The round the bet settles on. */
     round: string;
@@ -137,7 +137,8 @@ export interface Quote {
 /** The casino's signed offer of collateral for a channel (`OFFER_TYPES`), which anyone buys on-chain. */
 export interface CollateralOffer {
   message: {
-    channelId: string;
+    player: string;
+    index: Integer;
     /** The house cash it locks into the channel. */
     amount: Integer;
     /** What buying it pays the contract. */
@@ -185,7 +186,6 @@ export interface Deployment {
 }
 /** On-chain channel storage as the service and wallet project it (decimal strings). */
 export interface OnchainChannel {
-  player: string;
   /** Everything ever deposited into the channel: what a state is owed is worked out from it. */
   deposited: string;
   /** The deposits the contract still holds for the channel, which withdrawals are paid out of first, each only out of
@@ -244,8 +244,10 @@ export interface OperationResponse {
    * deposit the statement of the bank. */
   statement?: SignedStatement;
 }
-/** An operation an account signed, with what it means: the proof that a game's operation was carried out elsewhere. */
+/** An operation an account signed, with what it means and the checkpoint it follows, which names its channel: the
+ * proof that a game's operation was carried out elsewhere. */
 export interface Carried {
+  base: Checkpoint;
   operation: Operation;
   authorization: string;
   details: Details;

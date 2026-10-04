@@ -18,16 +18,15 @@ and can close a channel too.
 
 ## Channels
 
-**Open.** A channel belongs to an **account**: an Ethereum key the wallet keeps, whose address it shows as your
-**deposit address**. The account's first deposit opens its channel, and the casino's permission is not needed. The
-contract derives the channel ID as `keccak256(abi.encode(player, index))`, where `player` is the account's address and
-`index` is how many of its channels have started closing, so an account plays on one channel at a time. The account
-signs everything on its channel. Every channel starts from its **base**, a checkpoint that is all zero but for the
-channel's ID, which the contract takes with no signature. Once the first deposit is
-[confirmed](../reference/deployment.md#chains), the wallet registers the channel with the casino. A channel's ID is
-known before it is opened, so a balance can also play off-chain [before its channel is
-on-chain](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet), while the casino owes the account something, such
-as a transfer from another player.
+**Active.** A channel belongs to an **account**: an Ethereum key the wallet keeps, whose address it shows as your
+**deposit address**. A channel is the account's address, `player`, and its `index`, how many of its channels have
+started closing, so an account plays on one channel at a time, its current one, which is active from the start: there
+is nothing to open, and the casino's permission is not needed. Off-chain it goes by the ID
+`keccak256(abi.encode(player, index))`. The account signs everything on its channel. Every channel starts from its
+**base**, a checkpoint that is all zero but for the account and the index, which the contract takes with no signature.
+Once a deposit into it is [confirmed](../reference/deployment.md#chains), the wallet registers the channel with the
+casino, which also registers it before any deposit while it owes the account something, such as a transfer from
+another player.
 
 **Deposit.** `deposit(player)` adds money to the account's channel, and anyone can send it for any account. The contract
 holds every deposit as it arrives, the first and every later one, as the channel's **principal**, which the owner cannot
@@ -37,7 +36,7 @@ casino lends the balance the network fee of a deposit of everything the deposit 
 the deposit, with a **loan** operation, which a withdrawal, a lock-in or a close pays back first.
 
 **Sign.** Every change to the balance is an **operation** that the account signs, answered by a **checkpoint** that the
-casino signs: the channel's sequence number, the hash of the state before it, a hash of the operation that led to it,
+casino signs: the account and index of its channel, its sequence number, the hash of the state before it, a hash of the operation that led to it,
 the balance after it, how much of the channel's deposits the balance has taken in, how much it has paid out in
 withdrawals and lock-ins, and how much of the balance the casino lent. The wallet re-derives the checkpoint, checks the
 casino's signature, countersigns it and saves it before the game hears anything. There are seven kinds of operation, and
@@ -48,9 +47,9 @@ the contract knows no others:
 | 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                  |
 | 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank, transfers        |
 | 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, transfers |
-| 4 deposit    | + amount                    | Taking in money deposited into the open channel                                                              |
+| 4 deposit    | + amount                    | Taking in money deposited into the channel                                                                   |
 | 5 withdrawal | − amount − loan − fee       | Withdrawals, which the contract pays to the address the operation names                                      |
-| 6 transfer   | − amount − loan − fee       | Lock-ins, which the contract pays into the account's own channel as deposits                                 |
+| 6 lock-in    | − amount − loan − fee       | Lock-ins, which the contract pays into the account's own channel as deposits                                 |
 | 7 loan       | + amount                    | The network fee of a deposit, which the casino lends                                                         |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in
@@ -169,7 +168,7 @@ Anyone with a balance can move money from it into the bankroll and hold shares o
 
 ## Withdrawing
 
-A withdrawal takes part or all of the balance out, and the channel stays open. It is an operation that names the address
+A withdrawal takes part or all of the balance out, and the channel stays active. It is an operation that names the address
 to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play goes on
 from the lower balance. With that evidence, which your receipt keeps, anyone can have the contract record and pay the
 withdrawal with `withdraw`, and the casino does straight away. A withdrawal pays back first what the casino lent the
@@ -186,8 +185,8 @@ all of it can be paid now, and otherwise declines it, leaving the balance unchan
 
 Only a close ends a channel, and either side can start one alone with its latest
 [evidence](../reference/signed-messages.md#evidence). That starts a 7-day window, which only a
-[dispute](../wallet/closing-and-claims.md#dispute-a-casino-bet) moves, and the account's next deposit opens its next
-channel at once. Anyone with strictly newer evidence can replace the close's state before the deadline. After it, anyone
+[dispute](../wallet/closing-and-claims.md#dispute-a-casino-bet) moves, and the account moves to its next channel at
+once. Anyone with strictly newer evidence can replace the close's state before the deadline. After it, anyone
 can finalize, which records what the close is owed ([finalization](../reference/contract.md#finalization)) as a
 **claim**: protected up to the channel's principal and collateral, and the rest winnings, paid first in, first out as
 cash arrives. Collecting is a separate transaction. The casino closes a channel nobody plays on ([idle

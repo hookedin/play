@@ -50,9 +50,9 @@ import { WalletTransactions, inbound } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
  * developer bet, a payment, an investment, a bank deposit and a transfer to another player are debits, a withdrawal
- * names the address it pays, a lock-in is the contract's transfer into this account's own channel, a payout or a
- * transfer collected is a credit, money deposited into the channel is taken in with a deposit, and the network fee of a
- * deposit is a loan the casino makes. */
+ * names the address it pays, a lock-in goes into this account's own current channel, a payout or a transfer collected
+ * is a credit, money deposited into the channel is taken in with a deposit, and the network fee of a deposit is a loan
+ * the casino makes. */
 export const OPERATIONS: Record<string, { kind: number; name: string; game?: boolean }> = {
   'casino-bet': { kind: KIND.casinoBet, name: 'casino bet', game: true },
   payment: { kind: KIND.debit, name: 'game payment', game: true },
@@ -61,7 +61,7 @@ export const OPERATIONS: Record<string, { kind: number; name: string; game?: boo
   bank: { kind: KIND.debit, name: 'bank deposit' },
   transfer: { kind: KIND.debit, name: 'transfer' },
   withdrawal: { kind: KIND.withdrawal, name: 'withdrawal' },
-  'lock-in': { kind: KIND.transfer, name: 'lock-in' },
+  'lock-in': { kind: KIND.lockIn, name: 'lock-in' },
   divest: { kind: KIND.credit, name: 'bankroll payout' },
   earnings: { kind: KIND.credit, name: 'earnings payout' },
   'developer-bet-payout': { kind: KIND.credit, name: 'developer bet payout' },
@@ -121,17 +121,20 @@ export class ChannelClient extends WalletTransactions {
     return this.bound(channel) && covers(pending.quote, pending.request, Math.floor(Date.now() / 1000));
   }
   /** Whether the casino proves a declined operation one this account carried out on another channel: the operation
-   * the account signed there, under the same game and operation ID. */
+   * the account signed there, under the same game and operation ID, with the checkpoint it follows, which names that
+   * channel. */
   carriedElsewhere(this: CasinoWallet, response: any, pending: any) {
     const carried = response.carried;
     try {
       assertSignature(this.domain, OP_TYPES, carried.operation, carried.authorization, this.address);
       return (
         response.used === true &&
+        same(hashState(this.domain, carried.base), carried.operation.previousStateHash) &&
+        same(carried.base.player, this.address) &&
+        BigInt(carried.base.index) !== BigInt(this.channel!.opening.index) &&
         same(memo(carried.details), carried.operation.memo) &&
         carried.details.id === pending.details.id &&
-        same(carried.details.game ?? '', pending.details.game ?? '') &&
-        !same(carried.operation.channelId, pending.request.channelId)
+        same(carried.details.game ?? '', pending.details.game ?? '')
       );
     } catch {
       return false;
@@ -315,7 +318,7 @@ export class ChannelClient extends WalletTransactions {
       ...(this.disputable() ? { seed: pending.seed, quote: pending.quote } : {}),
     };
     try {
-      const response = await this.api(`/api/channels/${c.state.channelId}/operations`, entry);
+      const response = await this.api(`/api/channels/${c.opening.channelId}/operations`, entry);
       return await this.accept(response, pending.operationId, pending.kind);
     } catch (error: any) {
       this.pendingError = { operationId: pending.operationId, message: error.message, code: error.code };
@@ -357,7 +360,7 @@ export class ChannelClient extends WalletTransactions {
           ...(response.used === true ? { used: true } : {}),
           ...(response.carried ? { carried: response.carried } : {}),
         };
-        await this.save(undefined, { channels: { ...this.channels, [c.state.channelId]: c } });
+        await this.save(undefined, { channels: { ...this.channels, [c.opening.channelId]: c } });
         return this.resume();
       }
       assertSignature(this.domain, STATE_TYPES, next, response.casinoSignature, this.operator);
@@ -458,7 +461,7 @@ export class ChannelClient extends WalletTransactions {
     });
     c.pending = null;
     await this.save(receipt, {
-      channels: { ...this.channels, [c.state.channelId]: c },
+      channels: { ...this.channels, [c.opening.channelId]: c },
       ...(invested ? { fund: invested.fund } : {}),
       ...(banked ? { bank: banked } : {}),
       // A developer bet is remembered until what its developer paid is collected.
@@ -1014,7 +1017,7 @@ export class ChannelClient extends WalletTransactions {
       !same(c.quote.message.previousStateHash, hashState(this.domain, c.state)) ||
       left < QUOTE_PERIOD / 2
     ) {
-      const { quote } = await this.api(`/api/channels/${c.state.channelId}/quote`, {});
+      const { quote } = await this.api(`/api/channels/${c.opening.channelId}/quote`, {});
       this.adoptQuote(c, quote);
       if (!c.quote) throw new Error('The casino sent no valid quote');
     }

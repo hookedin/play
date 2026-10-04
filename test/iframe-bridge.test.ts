@@ -446,7 +446,7 @@ test('a transfer is a debit naming the player it pays and collected with a credi
     [KIND.debit, { id, game: '0x' + '1'.repeat(64), counterparty: '~' + uname }],
     [KIND.deposit, { id, counterparty: '~' + uname }],
     [KIND.withdrawal, { id, counterparty: '~' + uname }],
-    [KIND.transfer, { id, counterparty: '~' + uname }],
+    [KIND.lockIn, { id, counterparty: '~' + uname }],
   ] as const)
     assert.throws(() => checkDetails(kind, details as any), /Invalid operation details/);
 });

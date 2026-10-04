@@ -1,32 +1,16 @@
 ---
 title: Closing and claims
-description: A balance not on-chain yet, collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 7-day challenge window and collecting a claim.
+description: Collateral, locking in your balance, how a withdrawal is paid, closing without the casino, the 7-day challenge window and collecting a claim.
 sidebar:
   order: 3
 ---
 
-Your balance is a channel in the HookedIn contract. Withdrawing takes part or all of it out while the channel stays
-open. Without the casino you close the channel alone, with your latest evidence and a 7-day window, and then collect
+Your balance is a channel in the HookedIn contract, your account's current one, which is active from the start: there
+is nothing to open, whether the contract holds anything for it yet or not. Withdrawing takes part or all of it out while
+the channel stays active. Without the casino you close the channel alone, with your latest evidence and a 7-day window, and then collect
 what it is owed. The wallet shows your balance with any money still arriving, and what the contract still owes you
 under **Waiting to be paid**; Settings shows what protects your balance under **Protection**, at
 `/settings/protection`, and the ways to close and collect under **Recovery**, at `/settings/recovery`.
-
-## A balance not on-chain yet
-
-A channel opens on-chain with the first deposit into it. Until then the casino registers it only while it owes your
-account something, such as a [transfer](getting-started.md#transfer), and your balance plays off-chain all the same: you
-sign each operation and the casino signs your balance after it, as for any balance. Recovery shows it as **not on-chain
-yet**. The contract holds nothing for it, so none of it is protected: beyond your deposits a balance is winnings, and
-here all of it is. Every state both sides signed is evidence the contract settles once the channel is open, and anything
-that settles opens it first, with a deposit of nothing into it, which anyone may send:
-
-- your first deposit opens it, and your balance takes the deposit in;
-- your first withdrawal or lock-in has the casino send that deposit of nothing first, which [its
-  fee](../casino-api/public.md#get-apiwithdrawal-fee) pays for;
-- **Close without the casino** sends it from your address before the close, one more transaction to pay for; and so
-  does **Send it now**.
-
-Collateral needs the channel on-chain.
 
 ## Collateral
 
@@ -67,14 +51,14 @@ the wallet last read the chain. Its actions are the rest of this page and
 ## Lock in your balance
 
 What your balance holds above your deposits and collateral is winnings, a claim on the shared bankroll. **Lock in my
-balance**, under Recovery, makes your balance deposits: your account signs the contract's transfer, a
-[withdrawal](#withdraw) into an account's channel, to your own account of all of it but its loan and the fee for sending
-it, which it pays as well. The casino signs it at once and sends it to the contract, which pays it like any withdrawal,
-but into your channel, as deposits the contract holds.
+balance**, under Recovery, makes your balance deposits: your account signs a lock-in, a [withdrawal](#withdraw) into
+your own channel, of all of it but its loan and the fee for sending it, which it pays as well. The casino signs it at
+once and sends it to the contract, which pays it like any withdrawal, but into your channel, as deposits the contract
+holds.
 
 Locking in closes the open game first, and your balance is empty until it has taken those deposits in:
 [Activity](bets-and-receipts.md#activity) shows **Locking in**, then **Balance locked in**. The button works while the
-channel is open and Protection shows part of your balance unprotected. The casino declines a lock-in that house cash
+channel is active and Protection shows part of your balance unprotected. The casino declines a lock-in that house cash
 cannot pay now, like any withdrawal, and your balance is as it was. Once it is in, a close pays all of that balance out
 of deposits, and withdrawing it needs no house cash, until you win more.
 
@@ -102,7 +86,7 @@ what the withdrawals it owes will take from it. A withdrawal your deposits and c
 declines the rest like any declined debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It
 also declines a withdrawal to an address that would refuse a payment from the contract, which it tries first with the
 gas the contract sends: _That address does not accept a payment from the contract_. Withdrawing everything leaves the
-channel open with an empty balance.
+channel active with an empty balance.
 
 The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent. One
 not sent yet offers **Send it now** in [Activity](bets-and-receipts.md#activity). A withdrawal can be sent until its
@@ -111,9 +95,8 @@ deposits and collateral cover as its protected amount, and the rest as winnings.
 
 ## Close without the casino
 
-1. Press **Close without the casino** under Recovery, or in the banner of a pending operation. Your account opens the
-   channel first if it is [not on-chain yet](#a-balance-not-on-chain-yet), then sends `startClose` with your latest
-   evidence, paying its network fee from the deposit address
+1. Press **Close without the casino** under Recovery, or in the banner of a pending operation. Your account sends
+   `startClose` with your latest evidence, paying its network fee from the deposit address
    ([fees and gas](#fees-and-gas)); with a pending casino bet its quote covers, it sends `dispute` instead
    ([dispute a casino bet](#dispute-a-casino-bet)). Only your account, or the casino's owner, can start a close.
 2. The contract sets the deadline 7 days after the block that started the close
@@ -125,9 +108,9 @@ deposits and collateral cover as its protected amount, and the rest as winnings.
 The evidence is your latest countersigned checkpoint, or the channel's base while nothing has been signed since it
 began, either alone or followed by the last operation the casino signed;
 [finalization](../reference/contract.md#finalization) says what it is owed, what the casino lent your balance coming off
-it first. A close moves your account to its next channel at once, whoever started it: your next deposit opens a new
-balance while the old channel closes. The close pays your account, at your deposit address, and until your next balance
-opens the wallet puts nothing there into a balance by itself ([when ETH waits at the
+it first. A close moves your account to its next channel at once, whoever started it: your next balance plays there
+while the old channel closes. The close pays your account, at your deposit address, and until your next balance has a
+deposit the wallet puts nothing there into a balance by itself ([when ETH waits at the
 address](getting-started.md#when-eth-waits-at-the-address)).
 
 ## Dispute a casino bet
@@ -160,8 +143,8 @@ the casino's in place of the bet unless your account signed past it, from anothe
 When nobody has played on your channel for 7 days, it holds more deposits and collateral than it is owed, by more than
 the gas of closing it, and no withdrawal from it is owed, the casino closes it on its latest state, so what you lost,
 and the collateral you no longer need, comes back to house cash. Once the close's 7 days are
-up, the casino finishes it and collects what it pays you, to your deposit address. Your next deposit opens your next
-channel.
+up, the casino finishes it and collects what it pays you, to your deposit address. Your next deposit goes into your
+next channel.
 
 ## Challenges
 
@@ -222,7 +205,7 @@ tab opens and again before signing, and signs none above 300,000 gas at the gas 
 it showed you. A deposit's fee comes out of what it deposits, and the casino lends it back when it is small
 ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where the wallet
 keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes into your
-balance while the channel is open. Starting **Close without the casino** turns that off, so ETH sent for its fee stays
+balance while the channel is active. Starting **Close without the casino** turns that off, so ETH sent for its fee stays
 at the address even if starting the close fails. A failure before signing leaves the balance open, and the close can be
 tried again; a signed close keeps its saved transaction to retry. Recovery shows the ETH the address holds for fees. You
 can also turn it off under **Deposits** in Settings and send ETH to the address, or have somebody relay the transaction:

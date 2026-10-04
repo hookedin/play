@@ -211,12 +211,6 @@ const KINDS: Record<
     describe: () =>
       'ETH sent to your deposit address, as your wallet found it there. It goes into your balance by itself unless that is off in Settings.',
   },
-  opened: {
-    title: 'Balance opened',
-    label: 'Deposited',
-    describe: () =>
-      'The contract holds your balance in a channel of its own, opened by a deposit into it: from your address, or from anyone.',
-  },
   deposit: { title: 'Deposited', label: 'Deposited' },
   'taken-in': {
     title: 'Added to your balance',

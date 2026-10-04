@@ -85,8 +85,8 @@ let count = 0;
 export function openingFor(player: string, index: any = 0) {
   return { channelId: channelId(player, index), player, index: String(index) };
 }
-export async function accessFor(d: any, opening: any, signer: any) {
-  const message = { channelId: opening.channelId, expiresAt: Math.floor(Date.now() / 1000) + 120 };
+export async function accessFor(d: any, signer: any) {
+  const message = { player: signer.address, expiresAt: Math.floor(Date.now() / 1000) + 120 };
   return { message, signature: await signer.signTypedData(d, ACCESS_TYPES, message) };
 }
 /** A casino bet's odds: it pays `prize` when the round's outcome falls below `chance`. */
@@ -106,14 +106,20 @@ export function assessBinary({ bankroll, stake, netWin, chance }: Record<string,
     developerFee: risk.fee / 2n,
   };
 }
-/** Deposit into an account's channel, from the account or anyone else: the account's first deposit opens it. The
- * channel is at its base, which takes nothing in: its deposit is owed to a close all the same. */
+/** An account's current channel at its base, with nothing on-chain: it takes play and money from the start. */
+export async function current(f: any, player: any) {
+  const address = player.address ?? player.target,
+    opening = openingFor(address, await f.contract.channelIndex(address)),
+    base = baseState(opening.player, opening.index);
+  return { opening, state: base, player, base: checkpointEvidence(base), evidence: checkpointEvidence(base) };
+}
+/** Deposit into an account's current channel, from the account or anyone else. The channel is at its base, which takes
+ * nothing in: its deposit is owed to a close all the same. */
 export async function fund(f: any, player: any, deposit = 1000n, from = player) {
   const address = player.address ?? player.target,
-    opening = openingFor(address, await f.contract.channelIndex(address));
+    ch = await current(f, player);
   await (await f.contract.connect(from).deposit(address, { value: deposit })).wait();
-  const base = baseState(opening.channelId);
-  return { opening, state: base, player, base: checkpointEvidence(base), evidence: checkpointEvidence(base) };
+  return ch;
 }
 /** A funded channel whose balance has taken its deposit in: a deposit operation, countersigned by the account. */
 export async function open(f: any, player: any, deposit = 1000n, from = player) {
@@ -131,9 +137,11 @@ export async function countersigned(f: any, ch: any, { state, evidence }: any) {
       : evidence.casinoSignature,
   );
 }
+/** A channel's on-chain record. */
+export const channelAt = (f: any, opening: any) => f.contract.channels(opening.player, opening.index);
 /** A finalized channel's claim: what its close was owed and what of it is paid, with what the contract still holds for it. */
-export async function claimOf(f: any, channelId: string) {
-  const [c, claim] = await Promise.all([f.contract.channels(channelId), f.contract.claims(channelId)]);
+export async function claimOf(f: any, opening: any) {
+  const [c, claim] = await Promise.all([channelAt(f, opening), f.contract.claims(opening.channelId)]);
   const amount = BigInt(c.closingBalance),
     protectedRemaining = BigInt(claim.protectedRemaining),
     winningsRemaining = BigInt(claim.winningsRemaining);
@@ -151,7 +159,7 @@ export async function forceClose(f: any, env: any, ch: any, evidence = ch.eviden
   await (await f.contract.connect(by).startClose(evidence)).wait();
   await env.provider.send('evm_increaseTime', [7 * 86400 + 1]);
   await env.provider.send('evm_mine', []);
-  return (await f.contract.finalizeClose(evidence.base.channelId)).wait();
+  return (await f.contract.finalizeClose(evidence.base.player, evidence.base.index)).wait();
 }
 export async function step(f: any, ch: any, kind: any, amount: any, extra = {}) {
   const signer = ch.player;
@@ -203,8 +211,14 @@ export async function signedIncrease(f: any, ch: any, amount: any) {
 }
 /** The casino's offer of `amount` of collateral for a channel at `price`, which `buy` buys from `buyer` on-chain and
  * `attempt` tries without sending. */
-export async function offered(f: any, channelId: string, amount: bigint, price: bigint, expiresAt: bigint) {
-  const message = { channelId, amount: String(amount), price: String(price), expiresAt: String(expiresAt) };
+export async function offered(f: any, opening: any, amount: bigint, price: bigint, expiresAt: bigint) {
+  const message = {
+    player: opening.player,
+    index: String(opening.index),
+    amount: String(amount),
+    price: String(price),
+    expiresAt: String(expiresAt),
+  };
   const offer = { message, signature: await f.owner.signTypedData(f.d, OFFER_TYPES, message) };
   return {
     offer,
@@ -230,7 +244,6 @@ export async function disputedBet(
   }: any,
 ) {
   const message = {
-    channelId: ch.state.channelId,
     previousStateHash: hashState(f.d, ch.state),
     round: roundId(secret),
     virtualBankroll: String(virtualBankroll),

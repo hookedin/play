@@ -4,7 +4,7 @@ import type { Store } from '../client/storage.ts';
 import { baseState, operation, deriveState, verifyEvidence, plain } from '../protocol/protocol.ts';
 
 function checkProtocol(d: Domain, opening: Opening, state: Checkpoint, op: Operation, bundle: EvidenceBundle) {
-  baseState(opening.channelId);
+  baseState(opening.player, opening.index);
   deriveState(d, state, op);
   verifyEvidence(bundle);
   operation(d, state, { amount: 1n, kind: 2 });

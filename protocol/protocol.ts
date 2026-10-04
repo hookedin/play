@@ -62,32 +62,33 @@ export function hashJSON(context: unknown) {
 }
 export const STATE_TYPES = {
   Checkpoint: fields(
-    'bytes32 channelId,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn,uint256 loan',
+    'address player,uint256 index,uint256 sequence,bytes32 previousStateHash,bytes32 transitionHash,uint256 balance,uint256 deposited,uint256 withdrawn,uint256 loan',
   ),
 };
 export const OP_TYPES = {
   Operation: fields(
-    'bytes32 channelId,bytes32 previousStateHash,uint256 sequence,uint256 kind,uint256 amount,address recipient,uint256 fee,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
+    'bytes32 previousStateHash,uint256 kind,uint256 amount,address recipient,uint256 fee,uint64 chance,uint256 prize,bytes32 round,bytes32 seedHash,bytes32 memo',
   ),
 };
-/** The casino's quote for the casino bet that follows a channel's checkpoint `previousStateHash`: the round it settles
+/** The casino's quote for the casino bet that follows the checkpoint `previousStateHash`: the round it settles
  * on and the virtual bankroll it is admitted against, until `expiresAt`, in seconds. The casino settles every casino bet
  * its quote covers; the account disputes one it does not settle on-chain, before the quote expires. */
 export const QUOTE_TYPES = {
-  Quote: fields('bytes32 channelId,bytes32 previousStateHash,bytes32 round,uint256 virtualBankroll,uint256 expiresAt'),
+  Quote: fields('bytes32 previousStateHash,bytes32 round,uint256 virtualBankroll,uint256 expiresAt'),
 };
 /** How long a quote holds, in seconds. */
 export const QUOTE_PERIOD = 24 * 60 * 60;
-/** The casino's offer of collateral for a channel: `amount` of house cash, locked into the channel for `price`, which
- * whoever buys it pays the contract, once and before `expiresAt`, in seconds. */
+/** The casino's offer of collateral for the channel `index` of the account `player`: `amount` of house cash, locked
+ * into the channel for `price`, which whoever buys it pays the contract, once and before `expiresAt`, in seconds. */
 export const OFFER_TYPES = {
-  CollateralOffer: fields('bytes32 channelId,uint256 amount,uint256 price,uint256 expiresAt'),
+  CollateralOffer: fields('address player,uint256 index,uint256 amount,uint256 price,uint256 expiresAt'),
 };
 /** What `amount` of collateral costs at the casino's rate, in millionths of the amount: rounded up, so it costs
  * something. */
 export const collateralPrice = (amount: bigint, rate: bigint) => (amount * rate + 999_999n) / 1_000_000n;
+/** An account proves itself to the casino with its own key, for every one of its channels. */
 export const ACCESS_TYPES = {
-  Access: fields('bytes32 channelId,uint256 expiresAt'),
+  Access: fields('address player,uint256 expiresAt'),
 };
 /** A game's developer settles its game's developer bets, opens its rounds and places its casino bets from its bank,
  * and proves itself with its own key, as an account does on its channel. */
@@ -122,16 +123,20 @@ export const domain = (chainId: Integer, casino: string) => ({
 });
 export const hashState = (d: Domain, s: Checkpoint) => TypedDataEncoder.hash(d, STATE_TYPES, s);
 export const hashOperation = (d: Domain, s: Operation) => TypedDataEncoder.hash(d, OP_TYPES, s);
-/** An account's channel: its first has `index` 0, and each one a close ends is followed by the next. */
+/** The key a channel goes by off-chain, and the ID of its close's claim on-chain: an account's first channel has
+ * `index` 0, and each one whose close started is followed by the next. Nothing signs it. */
 export const channelId = (player: string, index: Integer) =>
   keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [player, index]));
-/** Whether a channel's balance plays: its channel open on-chain, or not on-chain yet with no deposit taken in. Its first
- * deposit opens it, or the deposit of nothing that comes before its first withdrawal, lock-in or close; one a
- * reorganisation took back to unopened waits for its deposit to land again. */
-export const playsOn = (onchain: { status: Integer } | null | undefined, state: { deposited: Integer }) => {
-  const status = Number(onchain?.status);
-  return status === 1 || (status === 0 && BigInt(state.deposited) === 0n);
-};
+/** A channel's status on-chain: an account's current channel is active from the start, with nothing to open, and
+ * takes play and money until its close starts. */
+export const STATUS = { active: 0, closing: 1, finalized: 2 } as const;
+/** Whether a channel's balance plays: the channel active, and every deposit the balance took in held on-chain. One a
+ * reorganisation took back waits for the money to land again: a close nets out what the chain does not hold, so a bet
+ * on it would risk nothing. */
+export const playsOn = (
+  onchain: { status: Integer; deposited: Integer } | null | undefined,
+  state: { deposited: Integer },
+) => !!onchain && Number(onchain.status) === STATUS.active && BigInt(state.deposited) <= BigInt(onchain.deposited);
 export function validateOpening(opening: Opening) {
   if (
     !/^(0|[1-9][0-9]{0,77})$/.test(String(opening.index)) ||
@@ -258,10 +263,11 @@ export function assertSignature(
   if (!/^0x[0-9a-f]{128}1[bc]$/i.test(signature) || !same(verifyTypedData(d, types, message, signature), expected))
     throw new Error('Invalid signature');
 }
-/** The checkpoint a channel starts from: all zero but its ID. The contract takes it with no signature. */
-export function baseState(channelId: string): Checkpoint {
+/** The checkpoint a channel starts from: all zero but its account and index. The contract takes it with no signature. */
+export function baseState(player: string, index: Integer): Checkpoint {
   return {
-    channelId,
+    player: getAddress(player),
+    index: String(index),
     sequence: '0',
     previousStateHash: ZeroHash,
     transitionHash: ZeroHash,
@@ -272,10 +278,10 @@ export function baseState(channelId: string): Checkpoint {
   };
 }
 /** Whether evidence is its channel's base, unsigned. */
-const unsignedBase = (evidence: Evidence) =>
+const unsignedBase = (d: Domain, evidence: Evidence) =>
   evidence.playerSignature === '0x' &&
   evidence.casinoSignature === '0x' &&
-  canonicalJSON(plain(evidence.base)) === canonicalJSON(baseState(evidence.base.channelId));
+  hashState(d, evidence.base) === hashState(d, baseState(evidence.base.player, evidence.base.index));
 /** What a close of the channel in `state` is owed: its balance, whatever of the channel's on-chain `deposited` it has
  * not taken in yet, and what it withdrew that is not yet a claim, less its loan, what the channel's claims took
  * (`claimed`) that it did not withdraw and what it took in that the chain does not hold; never below nothing. The
@@ -297,8 +303,8 @@ export function depositsTakenIn(channel: { deposited: Integer }, principal: bigi
 }
 /** A channel's deposits and collateral once the contract has recorded `withdrawals`, those it owes, each with the
  * `deposited` of its checkpoint, in the order they were signed, and what they take of house cash: each is paid out of
- * the deposits its checkpoint took in, then the collateral, and the rest out of house cash. What a transfer to the
- * account itself pays goes back into its channel as deposits, which this leaves out: no checkpoint before it took
+ * the deposits its checkpoint took in, then the collateral, and the rest out of house cash. What a lock-in pays goes
+ * back into the account's current channel as deposits, which this leaves out: no checkpoint before it took
  * them in. */
 export function recordWithdrawals(
   channel: { deposited: Integer; principal: Integer; collateral: Integer },
@@ -352,9 +358,7 @@ export const withdrawalRecorded = (claimed: Integer, evidence: Evidence) =>
   BigInt(claimed) > BigInt(evidence.base.withdrawn);
 export function operation(d: Domain, base: Checkpoint, values: Partial<Operation>) {
   return plain({
-    channelId: base.channelId,
     previousStateHash: hashState(d, base),
-    sequence: BigInt(base.sequence) + 1n,
     kind: 0,
     amount: 0,
     recipient: ZeroAddress,
@@ -370,13 +374,8 @@ export function operation(d: Domain, base: Checkpoint, values: Partial<Operation
 /** A quote the casino signed for the casino bet that follows `state`. */
 export function verifyQuote(d: Domain, quote: Quote, state: Checkpoint, operator: string) {
   assertSignature(d, QUOTE_TYPES, quote?.message, quote?.signature, operator);
-  const { channelId, previousStateHash, round, virtualBankroll } = quote.message;
-  if (
-    !same(channelId, state.channelId) ||
-    !same(previousStateHash, hashState(d, state)) ||
-    same(round, ZeroHash) ||
-    BigInt(virtualBankroll) >= MAX_BALANCE
-  )
+  const { previousStateHash, round, virtualBankroll } = quote.message;
+  if (!same(previousStateHash, hashState(d, state)) || same(round, ZeroHash) || BigInt(virtualBankroll) >= MAX_BALANCE)
     throw new Error('The quote is not for this checkpoint');
   return quote;
 }
@@ -384,35 +383,39 @@ export function verifyQuote(d: Domain, quote: Quote, state: Checkpoint, operator
  * expired, and its virtual bankroll admits the bet's terms. The contract checks the same when the bet is disputed. */
 export const covers = (quote: Quote, op: Operation, now: number) =>
   Number(op.kind) === KIND.casinoBet &&
-  same(quote.message.channelId, op.channelId) &&
   same(quote.message.previousStateHash, op.previousStateHash) &&
   same(quote.message.round, op.round) &&
   BigInt(quote.message.expiresAt) >= BigInt(now) &&
   admits(BigInt(quote.message.virtualBankroll), betTerms(op.amount, op.chance, op.prize));
-/** A collateral offer the casino signed for `amount` on the channel `channelId`, at the price its `rate` gives. */
+/** A collateral offer the casino signed for `amount` on the channel `opening` names, at the price its `rate` gives. */
 export function verifyOffer(
   d: Domain,
   offer: CollateralOffer,
-  channelId: string,
+  opening: Pick<Opening, 'player' | 'index'>,
   amount: bigint,
   rate: bigint,
   operator: string,
 ) {
   assertSignature(d, OFFER_TYPES, offer?.message, offer?.signature, operator);
   const { message } = offer;
-  if (!same(message.channelId, channelId) || BigInt(message.amount) !== amount)
+  if (
+    !same(message.player, opening.player) ||
+    BigInt(message.index) !== BigInt(opening.index) ||
+    BigInt(message.amount) !== amount
+  )
     throw new Error('The offer is not for this collateral');
   if (BigInt(message.price) !== collateralPrice(amount, rate)) throw new Error("The casino's offer is not at its rate");
   return offer;
 }
 /** What the contract takes of an offer to buy it, the price being what the buyer pays. */
 export const offerTerms = ({ message, signature }: CollateralOffer) => [
-  message.channelId,
+  message.player,
+  String(message.index),
   String(message.amount),
   String(message.expiresAt),
   signature,
 ];
-/** What the contract takes of a quote when a bet is disputed: the operation names its channel, checkpoint and round. */
+/** What the contract takes of a quote when a bet is disputed: the operation names its checkpoint and round. */
 export const quoteTerms = (quote: Quote) => ({
   virtualBankroll: String(quote.message.virtualBankroll),
   expiresAt: String(quote.message.expiresAt),
@@ -453,8 +456,8 @@ export const BOUNDS = {
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
  * developer bet, whose meta alone says what it is) or what it pays into (an investment, a bank deposit or another
- * player); a credit what it collects from; a deposit, a withdrawal, a transfer and a loan nothing but themselves, a
- * withdrawal's and a transfer's recipient being in the operation. Only what names a game carries a group. Every field
+ * player); a credit what it collects from; a deposit, a withdrawal, a lock-in and a loan nothing but themselves, a
+ * withdrawal's recipient being in the operation. Only what names a game carries a group. Every field
  * is in one form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
@@ -477,7 +480,7 @@ export function checkDetails(kind: number, details: Details) {
         ? named !== counterparty
         : kind === KIND.credit
           ? counterparty && !named
-          : [KIND.deposit, KIND.withdrawal, KIND.transfer, KIND.loan].includes(kind as 4) && !counterparty && !named)
+          : [KIND.deposit, KIND.withdrawal, KIND.lockIn, KIND.loan].includes(kind as 4) && !counterparty && !named)
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
@@ -525,9 +528,8 @@ export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigin
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
  * the operation itself; a developer bet is a debit that pays its stake to its developer's bank; a deposit takes in
  * money the player deposited into the channel on-chain; a withdrawal takes out what the contract owes its recipient,
- * and a transfer what it puts into its recipient account's current channel as deposits, which locks the balance in
- * when that account is its own, each paying the casino its fee for sending it; a loan is money the casino lends the
- * balance, which a withdrawal, a transfer or a close pays back first. */
+ * and a lock-in what it puts into the account's current channel as deposits, each paying the casino its fee for
+ * sending it; a loan is money the casino lends the balance, which a withdrawal, a lock-in or a close pays back first. */
 export const KIND = {
   none: 0,
   casinoBet: 1,
@@ -535,19 +537,14 @@ export const KIND = {
   credit: 3,
   deposit: 4,
   withdrawal: 5,
-  transfer: 6,
+  lockIn: 6,
   loan: 7,
 } as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
-  if (
-    !same(base.channelId, op.channelId) ||
-    !same(hashState(d, base), op.previousStateHash) ||
-    BigInt(op.sequence) !== BigInt(base.sequence) + 1n
-  )
-    throw new Error('Operation is not next in this channel');
+  if (!same(hashState(d, base), op.previousStateHash)) throw new Error('Operation is not next in this channel');
   const next = {
     ...base,
-    sequence: String(op.sequence),
+    sequence: String(BigInt(base.sequence) + 1n),
     previousStateHash: hashState(d, base),
     transitionHash: keccak256(
       AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [hashOperation(d, op), secret]),
@@ -561,7 +558,8 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     credit = kind === KIND.credit,
     deposit = kind === KIND.deposit,
     loan = kind === KIND.loan,
-    pays = kind === KIND.withdrawal || kind === KIND.transfer;
+    withdrawal = kind === KIND.withdrawal,
+    pays = withdrawal || kind === KIND.lockIn;
   if (!Object.values(KIND).includes(kind as 1) || kind === KIND.none) throw new Error('Unknown operation');
   // Every field a kind does not use must be zero: one meaning, one encoding. A casino bet names its
   // round, the hash of a secret the casino fixed first, and the hash of its seed; only those two settle it.
@@ -583,10 +581,11 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
         !same(op.round, ZeroHash) ||
         !same(secret, ZeroHash) ||
         !same(seed, ZeroHash)) ||
-    // Only a withdrawal and a transfer name a recipient, never nobody and never the contract, and pay a fee.
-    (pays
+    // Only a withdrawal names a recipient, never nobody and never the contract, and only it and a lock-in pay a fee.
+    (withdrawal
       ? same(op.recipient, ZeroAddress) || same(op.recipient, d.verifyingContract)
-      : !same(op.recipient, ZeroAddress) || fee !== 0n) ||
+      : !same(op.recipient, ZeroAddress)) ||
+    (!pays && fee !== 0n) ||
     amount === 0n ||
     amount >= MAX_BALANCE ||
     fee >= MAX_BALANCE
@@ -600,9 +599,11 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
             ? 'Invalid deposit'
             : loan
               ? 'Invalid loan'
-              : pays
+              : withdrawal
                 ? 'Invalid withdrawal'
-                : 'Invalid debit',
+                : pays
+                  ? 'Invalid lock-in'
+                  : 'Invalid debit',
     );
   if (credit || deposit || loan) {
     next.balance = String(balance + amount);
@@ -610,7 +611,7 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     if (deposit) next.deposited = String(BigInt(base.deposited) + amount);
     if (loan) next.loan = String(BigInt(base.loan) + amount);
   } else {
-    // A withdrawal or a transfer pays the loan back, and its fee as well.
+    // A withdrawal or a lock-in pays the loan back, and its fee as well.
     const repaid = pays ? BigInt(base.loan) + fee : 0n;
     if (amount + repaid > balance)
       throw new Error(casinoBet ? 'Invalid casino bet commitment or balance' : 'Insufficient balance');
@@ -622,19 +623,17 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
     throw new Error('Balance exceeds the protocol maximum');
   return next;
 }
-/** A joint checkpoint above an authorized casino bet, debit, withdrawal, transfer or loan supersedes it without
+/** A joint checkpoint above an authorized casino bet, debit, withdrawal, lock-in or loan supersedes it without
  * consuming entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
-    ![KIND.casinoBet, KIND.debit, KIND.withdrawal, KIND.transfer, KIND.loan].includes(Number(op.kind) as 1) ||
-    !same(op.channelId, base.channelId) ||
-    !same(op.previousStateHash, hashState(d, base)) ||
-    BigInt(op.sequence) !== BigInt(base.sequence) + 1n
+    ![KIND.casinoBet, KIND.debit, KIND.withdrawal, KIND.lockIn, KIND.loan].includes(Number(op.kind) as 1) ||
+    !same(op.previousStateHash, hashState(d, base))
   )
-    throw new Error('Rejection must identify the next casino bet, debit, withdrawal, transfer or loan');
+    throw new Error('Rejection must identify the next casino bet, debit, withdrawal, lock-in or loan');
   return {
     ...base,
-    sequence: String(uint256(BigInt(op.sequence) + 1n)),
+    sequence: String(uint256(BigInt(base.sequence) + 2n)),
     previousStateHash: hashState(d, base),
     transitionHash: hashOperation(d, op),
   };
@@ -652,9 +651,7 @@ export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner
 }
 const emptyStep = (): Step => ({
   operation: {
-    channelId: ZeroHash,
     previousStateHash: ZeroHash,
-    sequence: 0,
     kind: 0,
     amount: 0,
     recipient: ZeroAddress,
@@ -684,9 +681,10 @@ export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   const d = domain(bundle.chainId, bundle.casino),
     { opening, operator, evidence } = bundle;
   validateOpening(opening);
-  if (!same(evidence.base.channelId, opening.channelId)) throw new Error('Evidence channel differs');
+  if (!same(evidence.base.player, opening.player) || BigInt(evidence.base.index) !== BigInt(opening.index))
+    throw new Error('Evidence channel differs');
   // The channel's base needs no signature.
-  if (!unsignedBase(evidence)) {
+  if (!unsignedBase(d, evidence)) {
     assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, opening.player);
     assertSignature(d, STATE_TYPES, evidence.base, evidence.casinoSignature, operator);
   }
@@ -709,13 +707,10 @@ export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
     if (
       Number(evidence.step.operation.kind) ||
       Number(op.kind) !== KIND.casinoBet ||
-      !same(op.channelId, state.channelId) ||
       !same(op.previousStateHash, hashState(d, state)) ||
-      BigInt(op.sequence) !== BigInt(state.sequence) + 1n ||
       !same(seedHash(step.seed), op.seedHash) ||
       !same(step.secret, ZeroHash) ||
       step.casinoSignature !== '0x' ||
-      !same(quote.message.channelId, op.channelId) ||
       !same(quote.message.previousStateHash, op.previousStateHash) ||
       !same(quote.message.round, op.round)
     )

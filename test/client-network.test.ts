@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { keccak256, parseEther, toUtf8Bytes } from 'ethers';
+import { keccak256, parseEther, toUtf8Bytes, ZeroAddress } from 'ethers';
 import { CasinoWallet, CHECK_EVERY } from '../client/wallet.ts';
+import { channelId } from '../protocol/protocol.ts';
 import { MemoryStore } from '../client/storage.ts';
 
 /** A wallet whose address, RPC, signer and contract are stubs: what it signs is recorded, and nothing is broadcast. */
@@ -159,9 +160,10 @@ test('a pending nonce or a failing estimate blocks signing', async () => {
 });
 
 test('every transaction the account sends, a close too, needs its fee at the address', async () => {
-  const { wallet, state } = fixture();
-  wallet.channels.channel = {} as any;
-  const close = [{ base: { channelId: 'channel' } }];
+  const { wallet, state } = fixture(),
+    key = channelId(ZeroAddress, 0);
+  wallet.channels[key] = {} as any;
+  const close = [{ base: { player: ZeroAddress, index: '0' } }];
   state.balance = 60000n * state.maxFee - 1n;
   await assert.rejects(
     wallet.sendTransaction('startClose', close),
@@ -169,7 +171,7 @@ test('every transaction the account sends, a close too, needs its fee at the add
   );
   state.balance += 1n;
   await wallet.sendTransaction('startClose', close);
-  assert.deepEqual([state.signed[0].method, wallet.channels.channel.closing], ['startClose', true]);
+  assert.deepEqual([state.signed[0].method, wallet.channels[key].closing], ['startClose', true]);
 });
 
 test('only a local casino that says so offers demo ETH', async () => {
@@ -186,7 +188,9 @@ test('only a local casino that says so offers demo ETH', async () => {
 test('an operation on a check older than CHECK_EVERY checks again first, and pauses when it cannot', async () => {
   const { wallet } = fixture();
   wallet.channelId = 'test';
-  wallet.channels = { test: { state: { balance: '1' }, onchain: { status: 1 }, registered: true } as any };
+  wallet.channels = {
+    test: { state: { balance: '1', deposited: '0' }, onchain: { status: 0, deposited: '0' }, registered: true } as any,
+  };
   let checks = 0;
   wallet.refreshLocked = async () => {
     checks++;

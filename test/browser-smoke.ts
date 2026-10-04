@@ -31,10 +31,10 @@ try {
   const writer = tab();
   writer.channels[id] = {
     opening: { channelId: id, player: player.address, index: '0' },
-    state: plain(baseState(id)),
+    state: plain(baseState(player.address, 0)),
     playerSignature: '0x',
     casinoSignature: '0x',
-    onchain: { status: '1' },
+    onchain: { status: '0' },
   };
   writer.channelId = id;
   await writer.save();

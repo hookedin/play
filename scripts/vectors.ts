@@ -56,9 +56,9 @@ export function buildVectors() {
     at(100_000_000n, 9_100_000_000n, 9000n),
   ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
-  // The player's first channel, at its base.
+  // The player's first channel, at its base, with the key it goes by off-chain.
   const opening = { channelId: channelId(identity.player, 0), player: identity.player, index: '0' },
-    base = baseState(opening.channelId);
+    base = baseState(opening.player, opening.index);
   // An operation on the checkpoint before it: its details, whose canonical JSON its memo hashes, the operation and its
   // hash, and the checkpoint it leads to with the seed and secret it settles with, zero but for a casino bet.
   const apply = (
@@ -82,7 +82,7 @@ export function buildVectors() {
     };
   };
   const game = gameKey({ developer: identity.developer, name: 'roulette' });
-  // A deposit, taking into the balance the money that opened the channel on-chain.
+  // A deposit, taking into the balance the money deposited into the channel on-chain.
   const opened = apply(base, { kind: KIND.deposit, amount: 1_000_000_000n }, { id: `0x${'81'.repeat(32)}` });
   // A casino bet on red: twice the stake on 18 of the 37 pockets. The round's secret is the first of these whose
   // outcome, with the bettor's seed, is below the bet's chance, so it pays.
@@ -123,7 +123,7 @@ export function buildVectors() {
     { kind: KIND.credit, amount: 120_000_000n },
     { id: `0x${'84'.repeat(32)}`, counterparty: developerBet.hash },
   );
-  // Another deposit, taking in money deposited into the open channel later.
+  // Another deposit, taking in money deposited into the channel later.
   const deposited = apply(payout.next, { kind: KIND.deposit, amount: 500_000_000n }, { id: `0x${'85'.repeat(32)}` });
   // A loan: the casino lends the balance what that deposit's network fee took, its ID the deposit transaction's hash.
   const loan = apply(deposited.next, { kind: KIND.loan, amount: 5_000_000n }, { id: `0x${'87'.repeat(32)}` });
@@ -134,10 +134,10 @@ export function buildVectors() {
     { kind: KIND.withdrawal, amount: 700_000_000n, recipient: identity.recipient, fee: 1_000_000n },
     { id: `0x${'86'.repeat(32)}` },
   );
-  // A lock-in: the contract's transfer into the account's own channel, recorded the same way.
+  // A lock-in into the account's own current channel, as deposits, recorded the same way: it names no recipient.
   const lockIn = apply(
     withdrawal.next,
-    { kind: KIND.transfer, amount: 100_000_000n, recipient: identity.player, fee: 1_000_000n },
+    { kind: KIND.lockIn, amount: 100_000_000n, fee: 1_000_000n },
     { id: `0x${'88'.repeat(32)}` },
   );
   // A transfer to another player: a debit naming their uname, which they collect with a credit naming the player's.
@@ -150,7 +150,6 @@ export function buildVectors() {
   // The casino's quote for the casino bet on red: its round at the checkpoint the bet follows, and a virtual bankroll
   // that admits it. The casino signs the hash.
   const quote = {
-    channelId: opening.channelId,
     previousStateHash: opened.nextHash,
     round: roundId(secret),
     virtualBankroll: 5_000_000_000n,
@@ -158,7 +157,8 @@ export function buildVectors() {
   };
   // The casino's offer of collateral for the channel at a rate of 1%, in millionths of the amount: what buying it pays.
   const offer = {
-    channelId: opening.channelId,
+    player: opening.player,
+    index: opening.index,
     amount: 2_000_000_000n,
     price: collateralPrice(2_000_000_000n, 10_000n),
     expiresAt: 1_800_000_000n,

@@ -5,23 +5,22 @@ sidebar:
   order: 2
 ---
 
-Every route here concerns one channel, `:id`, and needs [channel access](index.md#authentication): a token signed by the
-channel's account, which signs everything on its channel. The checkpoints, operations and statements they carry are
-specified on [Signed messages](../reference/signed-messages.md).
+Every route here concerns one channel, `:id`, and needs [account access](index.md#authentication): a token signed by
+the channel's account, which signs everything on its channel. The account's own routes, its uname and its Discord
+account, are [at the end](#the-account). The checkpoints, operations and statements they carry are specified on
+[Signed messages](../reference/signed-messages.md).
 
-## Opening a channel
+## Registering a channel
 
 ### `POST /api/channels/:id/activate`
 
-Registers a channel with the casino, or returns it as the casino holds it. A channel opens on-chain with the first
-[deposit](../reference/contract.md#functions-that-change-state) into it, whoever sends it. The casino requires that
-deposit [confirmed](../reference/deployment.md#chains) and the channel open for the account the opening names, and
-registers it at its [base](../reference/signed-messages.md#the-base), all zero: the balance takes the deposit in with a
-[deposit operation](#post-apichannelsidoperations). It also registers the account's current channel, the one its next
-deposit opens, before it is on-chain, while it owes the account something, such as a
-[transfer](#post-apichannelsidoperations): that balance plays off-chain until its channel opens ([a balance not on-chain
-yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet)). A channel the casino knows is returned with no chain
-read. Registering a channel counts against [budgets](index.md#budgets-and-queues) of its own.
+Registers the account's current channel with the casino, or returns it as the casino holds it. The channel is active
+from the start, with nothing to open: the casino registers it at its [base](../reference/signed-messages.md#the-base),
+all zero, once the chain holds a deposit for it, [confirmed](../reference/deployment.md#chains), whoever sent it, and
+the balance takes the deposit in with a [deposit operation](#post-apichannelsidoperations). It also registers it before
+any deposit while it owes the account something, such as a [transfer](#post-apichannelsidoperations). A channel the
+casino knows is returned with no chain read. Registering a channel counts against
+[budgets](index.md#budgets-and-queues) of its own.
 
 | Body field | Type   | Meaning                                                                                                                                                                            |
 | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,10 +32,10 @@ read. Registering a channel counts against [budgets](index.md#budgets-and-queues
 | `state`                    | Checkpoint             | The latest checkpoint                                                                                                                   |
 | `lastResponse`             | object or null         | The reply that signed `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `quote`; `null` at the base |
 
-`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel the confirmed chain
-does not show open for that account, unless it is the account's current channel, not on-chain yet, and the casino owes
-the account something ("Channel is not open on-chain, nor owed anything before its first deposit, or differs"), and a
-chain that moved on during the check ("Chain observation advanced; retry activation").
+`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel that is not the
+account's current one ("Channel is not the account's current one"), one the confirmed chain holds no deposit for while
+the casino owes its account nothing ("Channel holds no deposit, and its account is owed nothing"), and a chain that
+moved on during the check ("Chain observation advanced; retry activation").
 
 ## Playing
 
@@ -49,7 +48,8 @@ half the bankroll, and holds for a day. A checkpoint has one quote: asking again
 is left, and a new one then, on the same round. The round is the same until a casino bet settles on it. Every reply of
 [`POST …/operations`](#post-apichannelsidoperations) that follows the channel's latest checkpoint brings its quote, so a
 wallet asks here only before a channel's first casino bet, after losing track, or when its quote has less than half its
-day left; it picks its seed once it has the round. The body is `{}`. `channel-closed` answers a channel that is not open.
+day left; it picks its seed once it has the round. The body is `{}`. `channel-closed` answers a channel that is not
+active.
 
 ### `POST /api/channels/:id/operations`
 
@@ -60,7 +60,7 @@ recorded reply ([retries](index.md#retries)).
 
 | Body field           | Type      | Meaning                                                                                                                                             |
 | -------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `request`            | Operation | The signed [operation](../reference/signed-messages.md#transitions), with exactly its fields; `channelId` is `:id`                                  |
+| `request`            | Operation | The signed [operation](../reference/signed-messages.md#transitions), with exactly its fields, following the latest checkpoint of `:id`              |
 | `details`            | Details   | What it means: [details](../reference/signed-messages.md#details-and-memo) whose hash is `request.memo`                                             |
 | `signature`          | string    | The account's EIP-712 signature of `request`                                                                                                        |
 | `acknowledgment`     | object    | `{stateHash, signature}`: the hash of the channel's latest checkpoint and the account's signature of it; required unless the channel is at its base |
@@ -87,78 +87,75 @@ What the casino checks and answers, by operation:
 | Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                                                 | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | –                                                                                       |
 | Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID, the bet's hash or "~" + the sender's uname}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
 | Deposit, kind 4             | `{id}`                                                                             | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposits cover the state's `deposited` plus the amount; reads the chain again when it has not seen that, and refuses with `unconfirmed` if it still has not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | –                                                                                       |
-| Withdrawal, kind 5          | `{id}`                                                                             | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee), with its `opening` added for a channel not on-chain yet ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with [the contract's gas](../reference/contract.md#withdrawals) ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
-| Lock-in, kind 6             | `{id}`                                                                             | Has the contract put the amount into the channel's own account's current channel, as deposits; declines one larger than it can pay now or with too small a fee, as for a withdrawal, and one whose `recipient` is any other account ("Locking in goes into your own balance: transfer to another player by their name")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | –                                                                                       |
+| Withdrawal, kind 5          | `{id}`                                                                             | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee) ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with [the contract's gas](../reference/contract.md#withdrawals) ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                                                                               | –                                                                                       |
+| Lock-in, kind 6             | `{id}`                                                                             | Has the contract put the amount into the account's current channel, as deposits; declines one larger than it can pay now or with too small a fee, as for a withdrawal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | –                                                                                       |
 | Fee loan, kind 7            | `{id}`: the hash of a deposit's transaction                                        | Lends the network fee of a deposit the channel's account sent straight to the contract, into this channel, once the balance has taken it in (`unconfirmed` before, and before the casino sees the transaction): the transaction's gas limit at its fee cap, but no more than 20% over the gas it used and the 1.5% a node's estimate of it may run high, at twice the base fee of the block before its own plus its tip, when that is at most `loanLimit` millionths of the deposit ([`GET /api/config`](public.md#get-apiconfig)). The ID lends each deposit once. Declines another transaction ("That is not a deposit this account sent into this balance"), a balance that, less its loan, holds less than the deposit ("The balance no longer holds that deposit"), another amount ("The casino lends that deposit … ETH of its network fee") and a larger fee ("The casino lends a network fee only up to 1% of its deposit") | –                                                                                       |
 
 A debit that names any other counterparty is refused with `400` `invalid`. A game's operation its player already carried
 out on another channel is declined with `used: true`; a casino bet its quote covers only when that operation was
-settled there, and with `carried`, the operation the account signed there, which the wallet checks. A developer bet is
+settled there, and with `carried`, the operation the account signed there and the checkpoint it follows, which the
+wallet checks. A developer bet is
 known afterwards by the hash of its operation, which [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet)
 takes.
 
 So is a withdrawal or a lock-in: the reply's `evidence` is what the contract makes a claim of
 ([withdrawals](../reference/contract.md#withdrawals)), and it has recorded one once its channel's `claimed` has passed
 the `withdrawn` of the checkpoint the withdrawal follows. The casino takes it on and sends it as it
-[promises](../overview/trust-model.md#what-you-trust-the-casino-for), the first from a channel not on-chain yet once the
-deposit of nothing it sends before it has opened the channel; while one cannot be sent, `/api/status` raises
+[promises](../overview/trust-model.md#what-you-trust-the-casino-for); while one cannot be sent, `/api/status` raises
 `withdrawal-unsent`.
 
-| Response field    | Type       | Meaning                                                                                                                               |
-| ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`          | string     | `signed` for a result, `rejected` for a declined operation                                                                            |
-| `state`           | Checkpoint | The result, or the proposed or completed [rejection checkpoint](../reference/signed-messages.md#rejection-checkpoints)                |
-| `casinoSignature` | string     | The casino's signature of `state`, or `"0x"` for a rejection proposal                                                                 |
-| `evidence`        | Evidence   | A result's base and step; a completed rejection's joint checkpoint and empty step; a proposal's unchanged base and empty step         |
-| `details`         | Details    | As sent                                                                                                                               |
-| `operationId`     | bytes32    | `details.id`                                                                                                                          |
-| `commission`      | string     | A casino bet's commission; `"0"` otherwise                                                                                            |
-| `developer`       | address    | A casino bet in a published game: its developer, who earns half the commission                                                        |
-| `statement`       | object     | An investment's `ShareStatement` or a deposit's `BankStatement`, as `{message, signature}`                                            |
-| `reason`          | string     | Rejected: why, for people                                                                                                             |
-| `request`         | Operation  | Rejected: the declined operation                                                                                                      |
-| `used`            | boolean    | A game's operation declined because its player carried it out on another channel: `true`                                              |
-| `carried`         | object     | A covered casino bet declined as `used`: `{operation, authorization, details}`, the operation the account signed on the other channel |
-| `quote`           | object     | The quote for the channel's next casino bet, which follows `state`, when `state` is the channel's latest checkpoint; not recorded     |
+| Response field    | Type       | Meaning                                                                                                                                                                   |
+| ----------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`          | string     | `signed` for a result, `rejected` for a declined operation                                                                                                                |
+| `state`           | Checkpoint | The result, or the proposed or completed [rejection checkpoint](../reference/signed-messages.md#rejection-checkpoints)                                                    |
+| `casinoSignature` | string     | The casino's signature of `state`, or `"0x"` for a rejection proposal                                                                                                     |
+| `evidence`        | Evidence   | A result's base and step; a completed rejection's joint checkpoint and empty step; a proposal's unchanged base and empty step                                             |
+| `details`         | Details    | As sent                                                                                                                                                                   |
+| `operationId`     | bytes32    | `details.id`                                                                                                                                                              |
+| `commission`      | string     | A casino bet's commission; `"0"` otherwise                                                                                                                                |
+| `developer`       | address    | A casino bet in a published game: its developer, who earns half the commission                                                                                            |
+| `statement`       | object     | An investment's `ShareStatement` or a deposit's `BankStatement`, as `{message, signature}`                                                                                |
+| `reason`          | string     | Rejected: why, for people                                                                                                                                                 |
+| `request`         | Operation  | Rejected: the declined operation                                                                                                                                          |
+| `used`            | boolean    | A game's operation declined because its player carried it out on another channel: `true`                                                                                  |
+| `carried`         | object     | A covered casino bet declined as `used`: `{base, operation, authorization, details}`, the operation the account signed on the other channel and the checkpoint it follows |
+| `quote`           | object     | The quote for the channel's next casino bet, which follows `state`, when `state` is the channel's latest checkpoint; not recorded                                         |
 
 A casino bet, and its signed result:
 
 ```json title="Request"
 {
   "request": {
-    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
-    "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
-    "sequence": "2",
+    "previousStateHash": "0x220d7bc0a190b2df17eec1edc5e2e45c505b755c8b2b9202b71be033736053f1",
     "kind": 1,
     "amount": "1000000000000000",
     "recipient": "0x0000000000000000000000000000000000000000",
     "fee": "0",
     "chance": "9131138316486228049",
     "prize": "2000000000000000",
-    "round": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064",
-    "seedHash": "0xea1d67f022cb78a665653c306d850cb8364022e300a1979e0a828c11d579b74f",
-    "memo": "0x3961ce1ce0c4af6107dc57d15c2529aee4dfc895d15466e59b4c0f97fd553b55"
+    "round": "0xd66d18052d51b799348ff80954250c2d9df4dcb3f4b7e072e300d69aa5cf0599",
+    "seedHash": "0xfa3cc4619661fee59d9d528dc41ee2d1f03b6bac3d855d94cf81f10354808e5f",
+    "memo": "0x14c0e7a10ee2990b106abe2966d66289db7f7ad2c457a2d8790179809e579f76"
   },
   "details": {
-    "id": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
-    "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
+    "id": "0xef9dcc1eb1273ed3947730f697191b5f74ad40cfff6be51b88daee247abdfcf1",
+    "game": "0x582b13c97fb125c2ec72de240af75bfa92bb51690779516a414f85f65b9561b6",
     "group": "hand-1"
   },
-  "signature": "0xd7fb858d156249da5fdb9f8440bcf0ab3e0fc64a2c0a83a5d42fb112d813b4f303f37d91e4c97ae6c77e2af808b21ffa0e82a22e95c62bc191bd180869b5390c1b",
+  "signature": "0xf1772758124db87ebc018a07a7cec02dc9eb4f7561f01790538cc1c445cd29f02885ab4f9fb135cf33070438fba200d7139e3b6aa164857c77ced5205ad66a5d1b",
   "acknowledgment": {
-    "stateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
-    "signature": "0x0b4d21d70375db74b5d5140399236706b832c96416b09386503684c2ba5f7fcd02d17c7ae4ef47ff9eb05221be13339dc3be076443022bf06740c39a52d249c41b"
+    "stateHash": "0x220d7bc0a190b2df17eec1edc5e2e45c505b755c8b2b9202b71be033736053f1",
+    "signature": "0xdf0d4a1ec02874005ac9ee49202212f16c67e420fdd25311a31dba11fd92738747906cf61e994dcbb64b2187fb7e5a2e60dcedadca025b1d72e3140e10f66a241c"
   },
-  "seed": "0x15a0475949567258453e0333760f324a2f243ef9f573009e0c42b40452deecc6",
+  "seed": "0x9fb2e6252566fd6d559926ee050164b714b1b0050d390b606b5826cc06f50635",
   "quote": {
     "message": {
-      "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
-      "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
-      "round": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064",
-      "virtualBankroll": "49999492507499751500",
-      "expiresAt": "1790889131"
+      "previousStateHash": "0x220d7bc0a190b2df17eec1edc5e2e45c505b755c8b2b9202b71be033736053f1",
+      "round": "0xd66d18052d51b799348ff80954250c2d9df4dcb3f4b7e072e300d69aa5cf0599",
+      "virtualBankroll": "500000000000000000000",
+      "expiresAt": "1791216765"
     },
-    "signature": "0x5d2b4c1a9e0f7c83d6a41b2e9f07c5d318a6e2f40b9c7d15e8a3f62c0d4b97e1395a0c7e6b2f8d41a0c3e9b75f16d28a4c0e7b93d5f2a61c8e04b7d9136f2a581c"
+    "signature": "0xdadcfb8403a74e359816c7a727093cc1709b9dfb0cb69067d1c54e015c92ddd05cbc5fc6e788a75e1ae564e1287cb33d888a731519855516d31adcb250a0bb921b"
   }
 }
 ```
@@ -167,67 +164,66 @@ A casino bet, and its signed result:
 {
   "status": "signed",
   "state": {
-    "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+    "player": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "index": "0",
     "sequence": "2",
-    "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
-    "transitionHash": "0xe56cfe8518544aaeb907795cb359008a92ea6defe0a07e2ce6b799025b5865e7",
+    "previousStateHash": "0x220d7bc0a190b2df17eec1edc5e2e45c505b755c8b2b9202b71be033736053f1",
+    "transitionHash": "0x19cc249fddf4c37baf8842146e7740b588ea4f84506d2bd9ff1954d5f1a3db22",
     "balance": "1001000000000000000",
     "deposited": "1000000000000000000",
     "withdrawn": "0",
     "loan": "0"
   },
-  "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b",
+  "casinoSignature": "0xa242f2510f10ab432ad1283da52882c07f8ef7c88111b1c73962b0b2d2bb299b1c323676597149a6ad55f4fbc7096d5288ace1d653327a2a0183113fcce2980f1c",
   "evidence": {
     "base": {
-      "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
+      "player": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "index": "0",
       "sequence": "1",
-      "previousStateHash": "0x03a4949cf8dab89441a8dd3d97a00ba70241378963de55b71d4904f9947faaf7",
-      "transitionHash": "0x55d7d3aaec36d5dcc2f93931ea03c9f8af126ae418902c57be007f663070a546",
+      "previousStateHash": "0x36b9d60f0b983aead7fcd4bd8f01de4b97e2840d1b8a195e64fec94d959f572e",
+      "transitionHash": "0xeee08d65cdf8376e9bde02c1d9d43dd2a3d0c008e81489cb8c9d15727d8d99ec",
       "balance": "1000000000000000000",
       "deposited": "1000000000000000000",
       "withdrawn": "0",
       "loan": "0"
     },
-    "playerSignature": "0x0b4d21d70375db74b5d5140399236706b832c96416b09386503684c2ba5f7fcd02d17c7ae4ef47ff9eb05221be13339dc3be076443022bf06740c39a52d249c41b",
-    "casinoSignature": "0xe9bbcfbbe3301f83cc24c02ddaac74d545baf2eaded6aa2cb7f8774809c02a2474205687f4e17d9088a44abf35a66dd3e3636a8d0cad822dbfc1aa52a10e1dcf1b",
+    "playerSignature": "0xdf0d4a1ec02874005ac9ee49202212f16c67e420fdd25311a31dba11fd92738747906cf61e994dcbb64b2187fb7e5a2e60dcedadca025b1d72e3140e10f66a241c",
+    "casinoSignature": "0x56985580bc400d79210179f1393777f4c08e7ee035edd0f921557f16cc24a629129387fd811d558c9cf7811122988e2f1c9f0ad47c005868719e9e39e79aa77f1c",
     "step": {
       "operation": {
-        "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
-        "previousStateHash": "0x111739ff43adee0f9487a987022dedb98dc851f6e9606f61b5a58c5aba9b68d5",
-        "sequence": "2",
+        "previousStateHash": "0x220d7bc0a190b2df17eec1edc5e2e45c505b755c8b2b9202b71be033736053f1",
         "kind": 1,
         "amount": "1000000000000000",
         "recipient": "0x0000000000000000000000000000000000000000",
         "fee": "0",
         "chance": "9131138316486228049",
         "prize": "2000000000000000",
-        "round": "0x04b71074c8781f41322187ac63ec00b8b1b1dce26a027048295c4115ca653064",
-        "seedHash": "0xea1d67f022cb78a665653c306d850cb8364022e300a1979e0a828c11d579b74f",
-        "memo": "0x3961ce1ce0c4af6107dc57d15c2529aee4dfc895d15466e59b4c0f97fd553b55"
+        "round": "0xd66d18052d51b799348ff80954250c2d9df4dcb3f4b7e072e300d69aa5cf0599",
+        "seedHash": "0xfa3cc4619661fee59d9d528dc41ee2d1f03b6bac3d855d94cf81f10354808e5f",
+        "memo": "0x14c0e7a10ee2990b106abe2966d66289db7f7ad2c457a2d8790179809e579f76"
       },
-      "authorization": "0xd7fb858d156249da5fdb9f8440bcf0ab3e0fc64a2c0a83a5d42fb112d813b4f303f37d91e4c97ae6c77e2af808b21ffa0e82a22e95c62bc191bd180869b5390c1b",
-      "seed": "0x15a0475949567258453e0333760f324a2f243ef9f573009e0c42b40452deecc6",
-      "secret": "0xd4e24340d8948ea05a2e977910ee74f150ff1866f01423c0e429f913e71fe236",
-      "casinoSignature": "0x7bc02687e2a128e01bf033ec44171101da589c01c9a7328570db2c99d45cddef1b09a1ba895c28e7d25e03706a4ba127b4a4652bdbf3510147241848c603df181b"
+      "authorization": "0xf1772758124db87ebc018a07a7cec02dc9eb4f7561f01790538cc1c445cd29f02885ab4f9fb135cf33070438fba200d7139e3b6aa164857c77ced5205ad66a5d1b",
+      "seed": "0x9fb2e6252566fd6d559926ee050164b714b1b0050d390b606b5826cc06f50635",
+      "secret": "0x03d26c92c8987bcfcf2fbe7eb579388c6e6549369b602e6bcb0f40a28c562acf",
+      "casinoSignature": "0xa242f2510f10ab432ad1283da52882c07f8ef7c88111b1c73962b0b2d2bb299b1c323676597149a6ad55f4fbc7096d5288ace1d653327a2a0183113fcce2980f1c"
     }
   },
   "details": {
-    "id": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
-    "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
+    "id": "0xef9dcc1eb1273ed3947730f697191b5f74ad40cfff6be51b88daee247abdfcf1",
+    "game": "0x582b13c97fb125c2ec72de240af75bfa92bb51690779516a414f85f65b9561b6",
     "group": "hand-1"
   },
-  "operationId": "0x7d356bc43b8055bb2b85cde2c30565d0246c4bf1619746b08105ddf34ac289ef",
-  "commission": "9990000998000",
+  "operationId": "0xef9dcc1eb1273ed3947730f697191b5f74ad40cfff6be51b88daee247abdfcf1",
+  "commission": "9998000199920",
   "developer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
   "quote": {
     "message": {
-      "channelId": "0x215be5d23550ceb1beff54fb579a765903ba2ccc85b6f79bcf9bda4e8cb86034",
-      "previousStateHash": "0x9a3c61e0f4b27d58c1e3a90b6d25f7c48e0a1b93d6c5f2e7408b1d9a3c6e5f20",
-      "round": "0x1bec23aaea291a614dc96efa7a96a0fd6a0020219eb6c0755e70b52f58fd1c1e",
-      "virtualBankroll": "49998992507499751500",
-      "expiresAt": "1790889132"
+      "previousStateHash": "0xacd8879b850aa2a29823855e2cf80575bc0b9b7a78a4f96f05566b8ac1424665",
+      "round": "0xa33f40bd191331cbf3b13aa8568be118d833d49ca5204b650ef937f84369e510",
+      "virtualBankroll": "499998992501499850060",
+      "expiresAt": "1791216765"
     },
-    "signature": "0x7e40a9c2d51f3b86e0c4d27a9b15f68e3c0d2a74b9e61f58c3a0d7e24b96f1c5082d4e7a1c9b3f60e5d28a4c71b0f9e36d2c5a87e14b0f93d6c2a7e58b140d3e1b"
+    "signature": "0x6281f414f0fb068482ad6f51ada03b975f35646daf15e5298c66f0f449918d4d321af47a54f58052f923eeb7c6f288f31de710e414d40db8e5dddc69033cf0661b"
   }
 }
 ```
@@ -247,13 +243,13 @@ A developer bet's details, whose `meta` is the game's own JSON:
 ```
 
 `invalid` with `400` answers fields other than the operation's, details that do not hash to the memo, a missing seed, a
-debit's unknown counterparty, a withdrawal or a lock-in whose `recipient` is not an address, is zero or is the
-contract, and a nonzero `recipient` on any other operation ("Only a withdrawal and a transfer name a recipient, never
-nobody and never the contract"); with `409`, details that break
+debit's unknown counterparty, a withdrawal whose `recipient` is not an address, is zero or is the contract, and a
+nonzero `recipient` on any other operation, a lock-in's among them ("Only a withdrawal names a recipient, never nobody
+and never the contract"); with `409`, details that break
 [the details rules](../reference/signed-messages.md#details-and-memo). `unacknowledged` answers a missing or wrong
-acknowledgment, `channel-closed` a channel that is not open, and `id-conflict`, `not-due` and `unconfirmed` what the
-table says. `refused` answers a `request.channelId` other than `:id`, a bad signature or acknowledgment signature, an
-operation that is not the channel's next, an amount above the balance (less its loan and fee, for a withdrawal or a
+acknowledgment, `channel-closed` a channel that is not active, and `id-conflict`, `not-due` and `unconfirmed` what the
+table says. `refused` answers a bad signature or acknowledgment signature, an operation that does not follow the
+latest checkpoint of `:id`, an amount above the balance (less its loan and fee, for a withdrawal or a
 lock-in), a nonzero `fee` on any other operation, and a casino bet whose chance or prize breaks the rules.
 
 ## Collateral
@@ -267,8 +263,7 @@ as `{message, signature}`: `amount` of house cash locked into the channel for `p
 as a decimal string, below 2^96 (`400` `invalid` otherwise). The casino offers no more than the house cash no claim or
 withdrawal it owes counts on, and refuses more ("At most … ETH of collateral is on offer now"). An offer reserves
 nothing: what is bought first is locked, and one bought once that cash has gone reverts. `channel-closed` answers a
-channel that is not open, and one not on-chain yet, which the contract sells no collateral for ("Collateral protects a
-balance on-chain: deposit to open it").
+channel that is not active.
 
 ## Payouts and developer bets
 
@@ -330,7 +325,7 @@ casino bets counting on that money to settle.
 | `signature` | string | The account's EIP-712 signature of `message` |
 
 The reply is `{statement}`, the casino's `ShareStatement`, whose `amount` is what the shares paid. `channel-closed`
-answers a channel that is not open; `refused` answers another holder, a bad signature, a `sequence` that does not follow
+answers a channel that is not active; `refused` answers another holder, a bad signature, a `sequence` that does not follow
 the latest statement, more shares than are held, shares worth nothing, and an amount the bankroll cannot release yet.
 
 ## The developer bank
@@ -357,7 +352,7 @@ the bank's latest. The `BankWithdraw` names the channel's own account and follow
 | `signature` | string | The account's EIP-712 signature of `message`        |
 
 The reply is `{statement}`, the casino's `BankStatement` with the balance after the withdrawal. `invalid` answers another
-account's bank; `channel-closed` a channel that is not open; `refused` a bad signature, a `sequence` that does not follow
+account's bank; `channel-closed` a channel that is not active; `refused` a bad signature, a `sequence` that does not follow
 the latest statement, and an amount of zero or above the balance.
 
 ## The profile
@@ -366,59 +361,56 @@ A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayer
 the Discord and games routes. The casino has one for every account it has registered a channel of, and every account
 that verified a Discord account.
 
-### `POST /api/channels/:id/uname`
-
-The account's uname, told to the account alone: the token proves it holds the account's key, for any of its channels,
-opened or not, so an account has its uname before its first deposit. The wallet asks with its first channel, `index`
-`0`, as soon as it loads an account. Asking records nothing, and this route tells nobody the uname of an address
-without that address's signature: the casino derives unames with a key it keeps secret. It counts against the
-[budget](index.md#budgets-and-queues) of registering a channel.
-
-| Body field | Type   | Meaning                                                                                                                                         |
-| ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids) of any of the account's channels; `channelId` is `:id` |
-
-| Response field | Type           | Meaning                                                                                                                                   |
-| -------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`        | string         | The account's uname                                                                                                                       |
-| `profile`      | object or null | Its own profile, once the casino has met the account; `null` before                                                                       |
-| `offChain`     | boolean        | Whether the casino registers the account's current channel before it is on-chain: it owes the account something, or registered it already |
-
-An account's own profile is its [public profile](public.md#get-apiplayersname). Unlinking a Discord account and
-publishing a game answer with it too.
-
-`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields.
-
 ### `POST /api/channels/:id/games`
 
 Publishes a game under the channel's player, or takes it down: `{name, url}`. The player becomes the game's developer:
 it earns the game's commission and settles its developer bets, and the game's key is
 [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with another URL moves the
-game and keeps its key. Publishing needs an open channel; taking a game down, with a `null` `url`, works from any
+game and keeps its key. Publishing needs an active channel; taking a game down, with a `null` `url`, works from any
 channel. [The game's URL](../games/publishing.md#the-games-url) gives the rules for `name` and `url`.
 `invalid` answers a name or URL those rules do not allow, `channel-closed` a channel that is closing or closed, and `too-many` a
 profile that already publishes 100 games.
 
-## Verifying a Discord account
+## The account
+
+What an account asks for itself, whatever its channels: its uname, and verifying its Discord account. These routes take
+the [account's token](index.md#authentication), `{}` as their body, and count against the
+[budget](index.md#budgets-and-queues) of registering a channel.
+
+### `POST /api/account/uname`
+
+The account's uname, told to the account alone: the token proves it holds the account's key, so an account has its
+uname before its first deposit. The wallet asks as soon as it loads an account. Asking records nothing, and this route
+tells nobody the uname of an address without that address's signature: the casino derives unames with a key it keeps
+secret.
+
+| Response field | Type           | Meaning                                                                                                                                                     |
+| -------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`        | string         | The account's uname                                                                                                                                         |
+| `profile`      | object or null | Its own profile, once the casino has met the account; `null` before                                                                                         |
+| `registers`    | boolean        | Whether the casino registers the account's current channel before the chain holds a deposit for it: it owes the account something, or registered it already |
+
+An account's own profile is its [public profile](public.md#get-apiplayersname). Unlinking a Discord account and
+publishing a game answer with it too.
+
+### Verifying a Discord account
 
 An account goes by the username of the Discord account that verified it, and its profile says when it last did
 ([your name](../wallet/getting-started.md#your-name)). The account asks for a code, and a member of the
 HookedIn Discord runs `/verify` with it there. Discord sends the casino each command run in that server, signed with
-the key of the casino's Discord app, and the casino learns of a Discord account only from those. The account routes
-take `{opening}`, as [the uname](#post-apichannelsiduname) does, from an account with a channel or without one, and
-count against the [budget](index.md#budgets-and-queues) of registering a channel. `not-found` answers where the casino
-has no Discord server: `discord` in [`GET /api/config`](public.md#get-apiconfig) is `null`.
+the key of the casino's Discord app, and the casino learns of a Discord account only from those. `not-found` answers
+where the casino has no Discord server: `discord` in [`GET /api/config`](public.md#get-apiconfig) is `null`.
 
-### `POST /api/channels/:id/discord/code`
+### `POST /api/account/discord/code`
 
 A code for the account, `{code, expires}`: eight characters with no `l`, `0` or `1`, which a member runs `/verify` with
 until `expires`, 10 minutes on. An account has one code at most: asking again ends the one before. `refused` answers
 the house, which goes by `@hookedin`.
 
-### `POST /api/channels/:id/discord/unlink`
+### `POST /api/account/discord/unlink`
 
-Gives up the Discord account that verified the account, `{opening}`: it goes by its uname again. Answers its own
-profile; `not-found` answers an account that verified no Discord account.
+Gives up the Discord account that verified the account: it goes by its uname again. Answers its own profile;
+`not-found` answers an account that verified no Discord account.
 
 ### `POST /api/discord`
 

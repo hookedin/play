@@ -1,5 +1,5 @@
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
-import { betPayout, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
+import { betPayout, channelId, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
 import { activityJSON, exact, h, jsonBlock, percent, signedAmount, timeOf } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 
@@ -252,6 +252,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
   const net = row.payout - row.stake,
     receipt = row.receipt ?? {},
     step = receipt.proof?.step,
+    // The checkpoint the bet follows names its channel and its place.
+    base = receipt.proof?.base,
     op = step?.operation,
     developerBet = receipt.kind === 'developer-bet',
     // A casino bet keeps its chance, its prize, its round and the hash of its seed in its operation, and the seed and
@@ -418,8 +420,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     record.append(
       factList([
         ['Operation', hex(receipt.operationId)],
-        ['Channel', hex(op.channelId)],
-        ['Sequence', String(op.sequence)],
+        ['Channel', hex(base && channelId(base.player, base.index))],
+        ['Sequence', base ? String(BigInt(base.sequence) + 1n) : '—'],
         ['Game', receipt.game?.name ?? '—'],
         ['Game key', hex(receipt.details?.game)],
         ['Memo, the hash of the details above', hex(op.memo)],

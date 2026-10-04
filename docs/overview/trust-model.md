@@ -41,9 +41,8 @@ below.
   ([disputes](../reference/contract.md#disputes)).
 - **You can leave alone.** With your latest evidence you can start a close, and anyone can finalize it after its 7-day
   window and collect the claim, with no casino server involved ([close without the
-  casino](../wallet/closing-and-claims.md#close-without-the-casino)). A balance [not on-chain
-  yet](../wallet/closing-and-claims.md#a-balance-not-on-chain-yet) is opened first with a deposit of nothing, which
-  anyone may send.
+  casino](../wallet/closing-and-claims.md#close-without-the-casino)), whether the contract holds anything for your
+  channel or not: there is nothing to open.
 - **Recorded winnings come before the owner.** Finalizing a close, or recording a withdrawal, records its unpaid
   winnings permanently in [the winnings queue](../reference/contract.md#the-winnings-queue): no later claim can take
   cash ahead of them, and the owner cannot withdraw the cash they are owed. Winnings not yet recorded have none of this.

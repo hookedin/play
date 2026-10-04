@@ -145,7 +145,7 @@ export async function gameWallet({
   /** The player's channel number `index`, with `deposit` taken into its balance and jointly signed. */
   const openChannel = async (deposit = 1000000n, index = 0) => {
     const opening = { channelId: channelId(player.address, index), player: player.address, index: String(index) },
-      base = baseState(opening.channelId),
+      base = baseState(opening.player, opening.index),
       state = {
         ...base,
         sequence: '1',
@@ -159,7 +159,7 @@ export async function gameWallet({
       playerSignature: await player.signTypedData(d, STATE_TYPES, state),
       casinoSignature: await owner.signTypedData(d, STATE_TYPES, state),
       registered: true,
-      onchain: { status: '1', deposited: String(deposit), principal: String(deposit), collateral: '0', claimed: '0' },
+      onchain: { status: '0', deposited: String(deposit), principal: String(deposit), collateral: '0', claimed: '0' },
     };
   };
   const first = await openChannel(deposit);
@@ -182,7 +182,6 @@ export async function gameWallet({
   const quoteFor = async (channel: string, state: any) => {
     if (!own.has(channel)) own.set(channel, createRound());
     const message = {
-      channelId: channel,
       previousStateHash: hashState(d, state),
       round: own.get(channel)!,
       virtualBankroll: String(bankroll / 2n),
@@ -288,35 +287,44 @@ export async function gameWallet({
         return [...owed]
           .slice(0, MAX_PAYOUTS)
           .map(([source, amount]) => ({ source, index: 0, amount: String(amount) }));
-      if (!path.endsWith('/operations')) throw refused(404, 'not-found', `The stub casino has no ${path}`);
+      const channel = /^\/api\/channels\/(0x[0-9a-f]{64})\/operations$/.exec(path)?.[1];
+      if (!channel) throw refused(404, 'not-found', `The stub casino has no ${path}`);
       const { request, details, signature, seed, quote, rejectionSignature } = body as any,
-        recorded = `${request.channelId}:${details.id}`;
+        recorded = `${channel}:${details.id}`;
       if (responses.has(recorded)) return responses.get(recorded);
       const kind = Number(request.kind),
-        elsewhere = details.game && carried.has(details.id) && carried.get(details.id) !== request.channelId;
+        elsewhere = details.game && carried.has(details.id) && carried.get(details.id) !== channel;
       if (rejectionSignature)
-        return decline(request, details, 'Cancelled by player', elsewhere ? { used: true } : {}, rejectionSignature);
-      if (kind === KIND.casinoBet) return casinoBet(request, details, signature, seed, quote, elsewhere);
+        return decline(
+          channel,
+          request,
+          details,
+          'Cancelled by player',
+          elsewhere ? { used: true } : {},
+          rejectionSignature,
+        );
+      if (kind === KIND.casinoBet) return casinoBet(channel, request, details, signature, seed, quote, elsewhere);
       if (elsewhere)
-        return decline(request, details, 'This operation was carried out on another channel', { used: true });
-      if (kind === KIND.debit && details.meta) return placeDeveloperBet(request, details, signature);
+        return decline(channel, request, details, 'This operation was carried out on another channel', { used: true });
+      if (kind === KIND.debit && details.meta) return placeDeveloperBet(channel, request, details, signature);
       if (kind === KIND.credit && owed.has(details.counterparty)) {
         if (owed.get(details.counterparty) !== BigInt(request.amount))
           throw new Error('No payout of this amount is due');
         owed.delete(details.counterparty);
       }
       if (kind === KIND.debit) bankroll += BigInt(request.amount);
-      return settle(request, details, signature, ZeroHash, ZeroHash, 0n);
+      return settle(channel, request, details, signature, ZeroHash, ZeroHash, 0n);
     };
     /** The casino proposes a rejection, then completes it once the player signs its unchanged-balance checkpoint. */
     const decline = async (
+      channel: string,
       request: any,
       details: any,
       reason: string,
       extra: Record<string, unknown> = {},
       rejectionSignature?: string,
     ) => {
-      const base = wallet.channels[request.channelId]!,
+      const base = wallet.channels[channel]!,
         state = rejectionCheckpoint(d, base.state, request);
       if (rejectionSignature) assertSignature(d, STATE_TYPES, state, rejectionSignature, player.address);
       const casinoSignature = rejectionSignature ? await owner.signTypedData(d, STATE_TYPES, state) : '0x';
@@ -332,14 +340,22 @@ export async function gameWallet({
         evidence: rejectionSignature
           ? checkpointEvidence(state, rejectionSignature, casinoSignature)
           : checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
-        ...(rejectionSignature ? { quote: await quoteFor(request.channelId, state) } : {}),
+        ...(rejectionSignature ? { quote: await quoteFor(channel, state) } : {}),
         ...extra,
       });
-      if (rejectionSignature) responses.set(`${request.channelId}:${details.id}`, response);
+      if (rejectionSignature) responses.set(`${channel}:${details.id}`, response);
       return response;
     };
-    const settle = async (request: any, details: any, signature: string, seed: string, secret: string, fee: bigint) => {
-      const base = wallet.channels[request.channelId]!;
+    const settle = async (
+      channel: string,
+      request: any,
+      details: any,
+      signature: string,
+      seed: string,
+      secret: string,
+      fee: bigint,
+    ) => {
+      const base = wallet.channels[channel]!;
       const next = deriveState(d, base.state, request, secret, seed);
       const signed = await owner.signTypedData(d, STATE_TYPES, next);
       const response = plain({
@@ -353,16 +369,17 @@ export async function gameWallet({
           ...checkpointEvidence(base.state, base.playerSignature, base.casinoSignature),
           step: { operation: request, authorization: signature, seed, secret, casinoSignature: signed },
         },
-        quote: await quoteFor(request.channelId, next),
+        quote: await quoteFor(channel, next),
       });
-      responses.set(`${request.channelId}:${details.id}`, response);
-      if (details.game) carried.set(details.id, request.channelId);
+      responses.set(`${channel}:${details.id}`, response);
+      if (details.game) carried.set(details.id, channel);
       settlements++;
       return response;
     };
     /** A casino bet on the channel's own round: settled when the stub's quote covers it, and otherwise declined,
      * revealing nothing. A covered one carried out on another channel is declined with the proof the wallet checks. */
     const casinoBet = async (
+      channel: string,
       request: any,
       details: any,
       signature: string,
@@ -372,7 +389,7 @@ export async function gameWallet({
     ) => {
       const round = String(request.round).toLowerCase(),
         used = 'This operation was carried out on another channel';
-      let covered = own.get(request.channelId) === round;
+      let covered = own.get(channel) === round;
       try {
         assertSignature(d, QUOTE_TYPES, quote?.message ?? {}, quote?.signature ?? '', owner.address);
         covered &&= covers(quote, request, Math.floor(Date.now() / 1000));
@@ -380,32 +397,33 @@ export async function gameWallet({
         covered = false;
       }
       if (!covered)
-        return decline(request, details, elsewhere ? used : 'No quote of the casino covers this casino bet', {
+        return decline(channel, request, details, elsewhere ? used : 'No quote of the casino covers this casino bet', {
           ...(elsewhere ? { used: true } : {}),
         });
       if (elsewhere) {
         const other = responses.get(`${carried.get(details.id)}:${details.id}`);
-        return decline(request, details, used, {
+        return decline(channel, request, details, used, {
           used: true,
           carried: {
+            base: other.evidence.base,
             operation: other.evidence.step.operation,
             authorization: other.evidence.step.authorization,
             details: other.details,
           },
         });
       }
-      own.set(request.channelId, createRound());
+      own.set(channel, createRound());
       const secret = secrets.get(round)!,
         terms = betTerms(request.amount, request.chance, request.prize),
         fee = assessBet({ bankroll: BigInt(quote.message.virtualBankroll), bet: terms }).fee,
         paid = betPayout(terms, outcome(seed, secret).value);
       bankroll += terms.stake - paid - fee / 2n;
-      return settle(request, details, signature, seed, secret, fee);
+      return settle(channel, request, details, signature, seed, secret, fee);
     };
     /** A developer bet is final and completes at once if its game is published: its stake goes into the developer's
      * bank, and the developer settles it. */
-    const placeDeveloperBet = async (request: any, details: any, signature: string) => {
-      if (!published.has(details.game)) return decline(request, details, 'This game is published nowhere');
+    const placeDeveloperBet = async (channel: string, request: any, details: any, signature: string) => {
+      if (!published.has(details.game)) return decline(channel, request, details, 'This game is published nowhere');
       const hash = hashOperation(d, request).toLowerCase();
       bank += BigInt(request.amount);
       developerBets.set(hash, {
@@ -422,7 +440,7 @@ export async function gameWallet({
       });
       placed.set(hash, placed.size + 1);
       waiting();
-      return settle(request, details, signature, ZeroHash, ZeroHash, 0n);
+      return settle(channel, request, details, signature, ZeroHash, ZeroHash, 0n);
     };
     return wallet;
   };
@@ -580,7 +598,7 @@ export async function gameWallet({
     async replaceChannel() {
       const old = wallet.channels[wallet.channelId!]!,
         next = await openChannel(1000000n, Number(old.opening.index) + 1);
-      wallet.channels[old.opening.channelId] = { ...old, onchain: { ...old.onchain, status: '3' } };
+      wallet.channels[old.opening.channelId] = { ...old, onchain: { ...old.onchain, status: '2' } };
       wallet.channels[next.opening.channelId] = structuredClone(next);
       wallet.channelId = next.opening.channelId;
       await wallet.save();

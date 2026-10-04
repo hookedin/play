@@ -78,7 +78,7 @@ for (const location of ['cached', 'pending'])
       wallet.channelId = 'channel';
       wallet.channels.channel = {
         key: 'unused',
-        onchain: { status: '1', deposited: '10', principal: '10', claimed: '0' },
+        onchain: { status: '0', deposited: '10', principal: '10', claimed: '0' },
         pending: { operationId: 'operation', request: operation, details },
       } as any;
       wallet.resume = (async () => receipt) as any;
@@ -127,7 +127,7 @@ function observingWallet(storage = new MemoryStore()) {
   });
   wallet.channels[ACTIVE] = {
     state: {
-      channelId: ACTIVE,
+      player: ZeroAddress,
       balance: '10',
       deposited: '10',
       withdrawn: '0',
@@ -137,7 +137,7 @@ function observingWallet(storage = new MemoryStore()) {
       length: '1',
     },
     opening: { channelId: ACTIVE, player: ZeroAddress, index: '0' },
-    onchain: { status: '1', deposited: '10', principal: '10', collateral: '0', claimed: '0' },
+    onchain: { status: '0', deposited: '10', principal: '10', collateral: '0', claimed: '0' },
   } as any;
   const block = { number: 10, hash: id('block') };
   wallet.observer = {
@@ -146,10 +146,17 @@ function observingWallet(storage = new MemoryStore()) {
     accept: async () => {},
     corroborate: async (_: any, read: any) => read({ getBlock: async () => block }),
     contractRead: async (_: any, method: any) =>
-      method === 'channelIndex' ? 0n : { status: 2n, closingSequence: 0n, closingBalance: 0n, deadline: 1000n },
+      method === 'channelIndex'
+        ? 0n
+        : { status: 1n, deposited: 10n, closingSequence: 0n, closingBalance: 0n, deadline: 1000n },
   } as any;
   return wallet;
 }
+/** Another channel of the account, known by `key`, as the wallet's own is. */
+const elsewhere = (wallet: CasinoWallet, key: string) => ({
+  ...structuredClone(wallet.channel!),
+  opening: { channelId: key, player: ZeroAddress, index: key },
+});
 
 test('an unchanged background observation does not bump the revision another tab acts on', async () => {
   const storage = new MemoryStore(),
@@ -157,7 +164,7 @@ test('an unchanged background observation does not bump the revision another tab
     b = observingWallet(storage);
   await a.refresh();
   await a.detailsRefreshing;
-  assert.equal(a.channel!.onchain.status, '2', 'the first observation is saved');
+  assert.equal(a.channel!.onchain.status, '1', 'the first observation is saved');
   b.hydrate(await storage.get(a.storageKey));
   const revision = a.revision;
   await a.refresh();
@@ -169,7 +176,8 @@ test('an unchanged background observation does not bump the revision another tab
     method === 'channelIndex'
       ? 0n
       : {
-          status: 3n,
+          status: 2n,
+          deposited: 10n,
           closingSequence: 0n,
           closingBalance: 0n,
           deadline: 1000n,
@@ -187,8 +195,8 @@ test('an unchanged background observation does not bump the revision another tab
 
 test('slow historical refresh merges across active polls without reverting newer records or another tab', async () => {
   const wallet = observingWallet();
-  wallet.channels.old = structuredClone(wallet.channel!);
-  wallet.channels.newer = structuredClone(wallet.channel!);
+  wallet.channels.old = elsewhere(wallet, 'old');
+  wallet.channels.newer = elsewhere(wallet, 'newer');
   wallet.history = [{ operationId: 'unchanged' }, { operationId: 'edited', status: 'old' }];
   await wallet.save();
   const gate = deferred(),
@@ -207,15 +215,15 @@ test('slow historical refresh merges across active polls without reverting newer
   await wallet.refresh();
   await wallet.refresh();
   const saved = await wallet.storage.get(wallet.storageKey);
-  saved.channels.newer.onchain.status = '3';
+  saved.channels.newer.onchain.status = '2';
   saved.history = [{ operationId: 'new' }, { operationId: 'unchanged' }, { operationId: 'edited', status: 'newer' }];
   saved.revision++;
   await wallet.storage.put(wallet.storageKey, saved);
   gate.resolve!();
   await details;
   const result = await wallet.storage.get(wallet.storageKey);
-  assert.equal(result.channels.old.onchain.status, '2');
-  assert.equal(result.channels.newer.onchain.status, '3');
+  assert.equal(result.channels.old.onchain.status, '1');
+  assert.equal(result.channels.newer.onchain.status, '2');
   assert.deepEqual(result.history, [
     { operationId: 'new' },
     { operationId: 'unchanged', status: 'checked' },
@@ -226,10 +234,10 @@ test('slow historical refresh merges across active polls without reverting newer
 
 test('historical results commit, and an account change discards late results', async () => {
   const wallet = observingWallet();
-  wallet.channels.old = structuredClone(wallet.channel!);
+  wallet.channels.old = elsewhere(wallet, 'old');
   await wallet.save();
   await wallet.refreshDetails();
-  assert.equal((await wallet.storage.get(wallet.storageKey)).channels.old.onchain.status, '2');
+  assert.equal((await wallet.storage.get(wallet.storageKey)).channels.old.onchain.status, '1');
   assert.ok(wallet.detailsObservedAt);
   const read = deferred(),
     entered = deferred();
@@ -281,10 +289,10 @@ test('a stalled activity refresh cannot block a challenge or overwrite it', asyn
 
 test('optional failures leave active recovery fresh, label details stale, and bound activity RPCs', async () => {
   const wallet = observingWallet();
-  wallet.channels.old = { ...structuredClone(wallet.channel!), state: { ...wallet.channel!.state, channelId: 'old' } };
+  wallet.channels.old = elsewhere(wallet, 'old');
   const read = wallet.observer.contractRead;
   wallet.observer.contractRead = (...args) =>
-    args[2][0] === 'old' ? Promise.reject(new Error('old claim unavailable')) : read(...args);
+    args[2][1] === 'old' ? Promise.reject(new Error('old claim unavailable')) : read(...args);
   await wallet.refresh();
   await wallet.refreshDetails();
   assert.match(wallet.detailsError as any, /old claim unavailable/);
@@ -314,7 +322,7 @@ test('optional failures leave active recovery fresh, label details stale, and bo
 
 test('an action waits for the optional storage commit without being rejected as busy', async () => {
   const wallet = observingWallet();
-  wallet.channels.old = structuredClone(wallet.channel!);
+  wallet.channels.old = elsewhere(wallet, 'old');
   await wallet.save();
   const write = deferred(),
     started = deferred();
@@ -346,7 +354,7 @@ test("the balance's protection follows the contract's rule for the withdrawals i
     c.onchain = { ...c.onchain, ...onchain };
     wallet.history = withdrawals.map(([amount, base], i) => ({
       withdrawal: id('withdrawal ' + i),
-      proof: { base, step: { operation: { channelId: ACTIVE, amount } } },
+      proof: { base: { player: ZeroAddress, index: '0', ...base }, step: { operation: { amount } } },
     }));
     const { covered, uncovered, missing, spare } = wallet.render().protection;
     return [covered, uncovered, missing, spare].map(Number);

@@ -6,7 +6,7 @@ import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
 import { BrowserStore } from './storage.ts';
-import { json, same, verifyEvidence, collateralPrice, UNAME } from '../protocol/protocol.ts';
+import { json, same, verifyEvidence, collateralPrice, channelId, STATUS, UNAME } from '../protocol/protocol.ts';
 import {
   activityJSON,
   createActivityEntry,
@@ -84,7 +84,7 @@ function pendingSummary({ kind, request, details, game, operationId }: any) {
   const what = `${exact(request.amount)} µETH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
     failed = wallet.pendingError?.operationId === operationId ? wallet.pendingError : null;
   return (
-    `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${request.sequence}). ` +
+    `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${BigInt(wallet.channel!.state.sequence) + 1n}). ` +
     'Retry sends exactly the same request again.' +
     (wallet.disputable()
       ? ` The casino's quote covers this bet until ${new Date(Number(wallet.pending.quote.message.expiresAt) * 1000).toLocaleString()}: Close without the casino disputes it, and the casino then has 7 days to settle it on-chain, or it counts as won.`
@@ -288,12 +288,9 @@ function renderWithdraw(state: SendState) {
     request = withdrawRequest(),
     amount = request.amount,
     unit = withdrawUnit(),
-    // What the balance pays beside the amount: the casino's fee for sending it, and for opening the balance on-chain
-    // first while it is not, and back what the casino lent it.
+    // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
     charges = [
-      wallet.withdrawalFee
-        ? `the casino ${formatAmount(wallet.withdrawalFee)} µETH for ${Number(wallet.publicState.channelStatus) === 0 ? 'opening your balance on-chain and sending it' : 'sending it'}`
-        : '',
+      wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it` : '',
       loan ? `back the ${formatAmount(loan)} µETH the casino lent you` : '',
     ].filter(Boolean),
     blocked = sendBlocked(state, 'Withdraw');
@@ -382,8 +379,7 @@ export function renderWallet() {
     loan = BigInt(state.loan || 0),
     // What the deposit address holds, read from the chain: until it has been, there is nothing to show.
     atAddress = observed ? BigInt(state.nativeBalance || '0') : 0n,
-    status = Number(state.channelStatus),
-    closing = status === 2 || Boolean(wallet.channel?.closing);
+    closing = Number(state.channelStatus) === STATUS.closing || Boolean(wallet.channel?.closing);
   $('balance-amount').textContent = formatAmount(balance, 0);
   $('balance-amount').title = `${exact(balance)} µETH`;
   renderCollateral();
@@ -533,19 +529,16 @@ function renderCollateral() {
     .filter(Boolean)
     .join(' ');
   const button = $<HTMLButtonElement>('buy-collateral');
-  const onchain = wallet.playable && Number(state.channelStatus) === 1;
-  button.disabled = uiBusy || wallet.busy || !onchain || rate === null || !amount || Boolean(buying);
+  button.disabled = uiBusy || wallet.busy || !wallet.playable || rate === null || !amount || Boolean(buying);
   button.textContent =
     amount && rate !== null ? `Buy for ${formatAmount(collateralPrice(amount, rate))} µETH` : 'Buy collateral';
   $('collateral-help').textContent = buying
     ? `Send ${formatAmount(BigInt(buying.price) + 2n * wallet.depositFee)} µETH or more to your deposit address by ${new Date(Number(buying.expiresAt) * 1000).toLocaleTimeString()}, the price and its network fee: the wallet buys ${formatAmount(buying.amount)} µETH of collateral with it before it adds anything to your balance.`
     : !wallet.playable
       ? 'Deposit to open a balance, then buy collateral for it.'
-      : !onchain
-        ? 'Collateral protects a balance on-chain: your first deposit opens yours, then buy collateral for it.'
-        : rate === null
-          ? 'The casino offers no collateral right now.'
-          : `Collateral costs ${rateText(rate)} of its amount, once, paid from your deposit address with the network fee. Your withdrawals use it up after your deposits, and it lasts until your balance closes, which the casino can do at any time; the price is never refunded.`;
+      : rate === null
+        ? 'The casino offers no collateral right now.'
+        : `Collateral costs ${rateText(rate)} of its amount, once, paid from your deposit address with the network fee. Your withdrawals use it up after your deposits, and it lasts until your balance closes, which the casino can do at any time; the price is never refunded.`;
 }
 /** What each row of a list was built from, so that a row that has not changed is not built again. */
 const signatures = new WeakMap<Element, string>();
@@ -637,11 +630,14 @@ export function renderActivity() {
 function activityEntry(receipt: any) {
   // A declined operation's proof is the checkpoint above it, with no step: the operation is the one it declined.
   const operation = receipt.request ?? receipt.proof?.step?.operation;
-  const channelId = operation?.channelId || receipt.proof?.base?.channelId || receipt.channelId;
+  // The checkpoint it reached names its channel: the one after its step, or the rejection's.
+  const base = receipt.proof?.base,
+    channel = base ? channelId(base.player, base.index) : receipt.channelId;
   const presentation = receiptSummary(receipt, wallet.config.contractAddress);
   const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
-  if (channelId) facts.push(['Channel', channelId]);
-  if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
+  if (channel) facts.push(['Channel', channel]);
+  if (base)
+    facts.push(['Sequence', String(BigInt(base.sequence) + (Number(operation?.kind) && !receipt.request ? 1n : 0n))]);
   if (receipt.commission !== undefined) facts.push(['Commission', `${exact(receipt.commission)} µETH`]);
   if (receipt.to)
     facts.push(['To', same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to]);
@@ -691,23 +687,21 @@ function activityEntry(receipt: any) {
     notice: [presentation.description, presentation.notice].filter(Boolean).join(' '),
   });
 }
-/** Whether the balance can be closed without the casino: its channel open on-chain, or not on-chain yet with a
- * balance registered, which the close opens first. */
-const closable = () => Number(wallet.publicState.channelStatus) === 1 || wallet.playable;
+/** Whether the balance can be closed without the casino: it has an active channel. */
+const closable = () => Boolean(wallet.channel) && Number(wallet.publicState.channelStatus) === STATUS.active;
 /** The balance's channel and any whose close is under way, for recovery: their state on the chain, and the lock in,
  * close, challenge and collect a player can do without the casino. */
 function renderRecovery() {
   const state = wallet.publicState,
     busy = uiBusy || wallet.busy,
-    unopened = Number(state.channelStatus) === 0 && wallet.playable,
-    open = (Number(state.channelStatus) === 1 || unopened) && !wallet.channel?.closing,
+    open = closable() && !wallet.channel?.closing,
     closing = state.closingChannelId,
     deadline = Number(state.deadline);
   $('channel-status').textContent = wallet.missingChannel
     ? 'The casino holds another state of this balance than this browser: import its recovery bundle.'
     : [
         state.channelId
-          ? `Channel ${short(state.channelId)} · ${unopened ? 'not on-chain yet' : Number(state.channelStatus) === 1 ? (wallet.channel?.closing ? 'close signed; retry submission' : 'open') : 'closing'}`
+          ? `Channel ${short(state.channelId)} · ${Number(state.channelStatus) === STATUS.active ? (wallet.channel?.closing ? 'close signed; retry submission' : 'active') : 'closing'}`
           : 'No balance open',
         closing ? `channel ${short(closing)} · closing` : '',
       ]
@@ -715,13 +709,11 @@ function renderRecovery() {
         .join(' · ');
   $('channel-observation').classList.toggle('hidden', !state.channelId && !closing);
   $('channel-observation').textContent = [
-    unopened
-      ? `Your balance is not on-chain yet, at saved sequence ${state.savedSequence || '0'}: the contract holds nothing for it, and none of it is protected. Your first deposit opens its channel; a withdrawal or locking in has the casino open it first, and closing without the casino opens it from your address.`
-      : open
-        ? `The contract holds ${formatAmount(state.principal || '0')} µETH of your deposits and ${formatAmount(state.collateral || '0')} µETH of collateral for this balance, at saved sequence ${state.savedSequence || '0'}.`
-        : '',
+    open
+      ? `The contract holds ${formatAmount(state.principal || '0')} µETH of your deposits and ${formatAmount(state.collateral || '0')} µETH of collateral for this balance, at saved sequence ${state.savedSequence || '0'}.`
+      : '',
     open && wallet.withdrawalFee
-      ? `Locking in pays the casino ${formatAmount(wallet.withdrawalFee)} µETH for ${unopened ? 'opening your balance on-chain and sending it' : 'sending it'}.`
+      ? `Locking in pays the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it.`
       : '',
     closing
       ? BigInt(state.disputedPrize || 0) > 0n
@@ -740,7 +732,9 @@ function renderRecovery() {
     !open || !BigInt(state.protection?.uncovered || 0) || !wallet.withdrawalFee || Boolean(wallet.pending) || busy;
   $<HTMLButtonElement>('channel-start-close').disabled = !closable() || Boolean(wallet.transactionIntent) || busy;
   $('channel-start-close').textContent =
-    wallet.channel?.closing && Number(state.channelStatus) === 1 ? 'Retry close' : 'Close without the casino';
+    wallet.channel?.closing && Number(state.channelStatus) === STATUS.active
+      ? 'Retry close'
+      : 'Close without the casino';
   $('recovery-gas').textContent =
     `Your deposit address holds ${formatAmount(state.nativeBalance || 0)} µETH for network fees. Closing, challenging and finishing need ETH at this address. Starting a close pauses automatic deposits so gas top-ups stay here.${!wallet.autoDeposit ? ' Automatic deposits are paused; turn them back on under Deposits when ready.' : ''}`;
   $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
@@ -888,7 +882,7 @@ $('wallet-dialog').addEventListener('close', () => {
 function downloadEvidence(report: any) {
   download(`hookedin-channel-${report.opening.channelId}.json`, json(report));
   const { state } = verifyEvidence(report);
-  toast(`Exported the recovery bundle of channel ${short(state.channelId)}, sequence ${state.sequence}.`);
+  toast(`Exported the recovery bundle of channel ${short(report.opening.channelId)}, sequence ${state.sequence}.`);
 }
 act('export-evidence', async () => downloadEvidence(await wallet.exportEvidence()));
 for (const id of ['start-close', 'channel-start-close'])
@@ -979,8 +973,8 @@ act('buy-collateral', async () => {
 });
 // The open balance's bundle, and the bundle of any channel still closing beside it.
 act('channel-export', async () => {
-  for (const channelId of new Set([wallet.channelId, wallet.closingChannel?.state.channelId]))
-    if (channelId) downloadEvidence(await wallet.exportEvidence(channelId));
+  for (const key of new Set([wallet.channelId, wallet.closingChannel?.opening.channelId]))
+    if (key) downloadEvidence(await wallet.exportEvidence(key));
 });
 /** Whether the browser keeps the wallet's data or may clear it to free disk space; `ask` asks it to keep it. */
 async function renderStorage(ask: boolean) {

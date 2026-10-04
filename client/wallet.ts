@@ -35,6 +35,7 @@ import {
   protection,
   withdrawalRecorded,
   disputedStep,
+  STATUS,
   playsOn,
 } from '../protocol/protocol.ts';
 import {
@@ -97,7 +98,6 @@ export const CHECK_EVERY = 600_000,
   DEPOSIT_CHECK_EVERY = 20_000;
 /** What the wallet keeps of an on-chain channel record. */
 const CHANNEL_FIELDS = [
-  'player',
   'deposited',
   'principal',
   'collateral',
@@ -205,9 +205,9 @@ export class CasinoWallet extends GameSessions {
   declare detailsObservedAt: number;
   /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
   declare uname: string | null;
-  /** Whether the casino registers this account's current channel before it is on-chain, as it last said: it owes the
-   * account something, such as a transfer, or registered it already, from this device or another. */
-  declare offChain: boolean;
+  /** Whether the casino registers this account's current channel before the chain holds a deposit for it, as it last
+   * said: it owes the account something, such as a transfer, or registered it already, from this device or another. */
+  declare registers: boolean;
   /** The Discord username it is shown by instead, written `@bob`: the username of the Discord account it verified; null
    * while it has verified none. */
   declare discordUsername: string | null;
@@ -229,12 +229,12 @@ export class CasinoWallet extends GameSessions {
   /** The fee the last deposit was priced at: the sweep leaves alone an address holding less than twice it, since a
    * deposit of that would cost more than half of it. */
   depositFee = 0n;
-  /** What the casino last said sending a withdrawal or a transfer to the contract costs. */
+  /** What the casino last said sending a withdrawal or a lock-in to the contract costs. */
   withdrawalFee = 0n;
   /** The casino's offer of collateral the account asked to buy, until it is bought or expires: the sweep buys it with
    * ETH at the account's address before it adds anything to the balance. */
   buying: CollateralOffer | null = null;
-  /** Each channel's signed `Access` token while it has time left: one signature serves a minute of requests. */
+  /** Each account's signed `Access` token while it has time left: one signature serves a minute of requests. */
   tokens = new Map<string, { expiresAt: number; header: string }>();
   declare actionDone: Promise<void> | undefined;
   declare game: GameSession | null;
@@ -263,7 +263,7 @@ export class CasinoWallet extends GameSessions {
       trustedDeployment,
       publicState: {},
       uname: null,
-      offChain: false,
+      registers: false,
       discordUsername: null,
       profile: null,
       developerEarnings: null,
@@ -358,7 +358,7 @@ export class CasinoWallet extends GameSessions {
   /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
   async check() {
     // Asked again if the casino did not answer, or had no profile to give before it registered the account's channel,
-    // and first while no channel is open: what waits for the account registers one not on-chain yet.
+    // and first while no balance plays: what waits for the account registers its channel before any deposit.
     if (!this.uname || (this.channel?.registered && !this.profile) || !this.playable)
       await this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.refresh();
@@ -410,7 +410,7 @@ export class CasinoWallet extends GameSessions {
           lastChainCheck: 0,
           buying: null,
           uname: null,
-          offChain: false,
+          registers: false,
           discordUsername: null,
           profile: null,
         });
@@ -429,7 +429,7 @@ export class CasinoWallet extends GameSessions {
   async sync() {
     const named = this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.verified;
-    // What waits for the account decides whether its channel registers before it is on-chain.
+    // What waits for the account decides whether its channel registers before any deposit.
     await named;
     await this.withChannelLock(true, async () => {
       await this.refreshLocked();
@@ -458,10 +458,10 @@ export class CasinoWallet extends GameSessions {
   get channel(): WalletChannel | null {
     return this.channels[this.channelId!] || null;
   }
-  /** This account's newest channel whose close is under way. It no longer holds the account's balance, which the next
-   * deposit opens a new channel for, but it may need a challenge, and it needs finishing. */
+  /** This account's newest channel whose close is under way. It no longer holds the account's balance, which its next
+   * channel holds from then on, but it may need a challenge, and it needs finishing. */
   get closingChannel(): WalletChannel | null {
-    const closing = Object.values(this.channels).filter(c => Number(c.onchain?.status) === 2);
+    const closing = Object.values(this.channels).filter(c => Number(c.onchain?.status) === STATUS.closing);
     return closing.sort((a, b) => Number(b.opening.index) - Number(a.opening.index))[0] || null;
   }
   /** What a closing channel's latest saved state is owed beyond what its close proposes: what a challenge would win. */
@@ -487,11 +487,12 @@ export class CasinoWallet extends GameSessions {
   }
   /** Whether this account's newest balance was closed, or is closing, by either side, and none is open since. */
   get forceClosed() {
-    return !this.channel && Object.values(this.channels).some(c => c.claim || Number(c.onchain?.status) === 2);
+    return (
+      !this.channel && Object.values(this.channels).some(c => c.claim || Number(c.onchain?.status) === STATUS.closing)
+    );
   }
   /** Whether ETH at this account's address goes into its balance by itself: with the setting on, while the casino is
-   * there and nothing is closing or in flight. A channel a reorganisation took back to unopened opens again with it.
-   * After a close it waits for the player, who may want it elsewhere. */
+   * there and nothing is closing or in flight. After a close it waits for the player, who may want it elsewhere. */
   get sweeps() {
     const c = this.channel;
     return (
@@ -501,7 +502,7 @@ export class CasinoWallet extends GameSessions {
       !this.transactionIntent &&
       !this.missingChannel &&
       !(this.pending && !inbound(this.pending.kind)) &&
-      (c ? Number(c.onchain?.status) <= 1 && !c.closing : !this.forceClosed) &&
+      (c ? Number(c.onchain?.status) === STATUS.active && !c.closing : !this.forceClosed) &&
       BigInt(this.nativeBalance || 0) > 2n * this.depositFee
     );
   }
@@ -560,21 +561,20 @@ export class CasinoWallet extends GameSessions {
     }
     this.render();
   }
-  /** Ask the casino something for this account itself, signed for its first channel, which every account has whether
-   * or not it was ever opened: its uname, and verifying its Discord account. */
-  accountRequest(this: CasinoWallet, action: string, body: Record<string, unknown> = {}) {
-    const opening = { channelId: channelId(this.address, 0), player: this.address, index: '0' };
-    return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
+  /** Ask the casino something for this account itself, whatever its channels: its uname, and verifying its Discord
+   * account. */
+  accountRequest(this: CasinoWallet, action: string) {
+    return this.api(`/api/account/${action}`, {});
   }
   /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
-   * with it once it has one, and whether it registers the account's channel before it is on-chain. A profile already
-   * here came from a later reply, and stays. */
+   * with it once it has one, and whether it registers the account's channel before any deposit. A profile already here
+   * came from a later reply, and stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
     const address = this.address;
-    const { uname, profile, offChain } = await this.accountRequest('uname');
+    const { uname, profile, registers } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string') return;
-    this.offChain = offChain === true;
+    this.registers = registers === true;
     if (!this.profile) Object.assign(this, { uname, discordUsername: profile?.discordUsername ?? null, profile });
     this.render();
   }
@@ -623,17 +623,17 @@ export class CasinoWallet extends GameSessions {
   }
   /**
    * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing
-   * claims a public name and asks for an open channel; taking your own game down only has to be you, so a
+   * claims a public name and asks for an active channel; taking your own game down only has to be you, so a
    * developer who has closed their channel can still withdraw a game that turned out to be broken.
    */
   async publishGame(this: CasinoWallet, name: string, url: string | null) {
-    // Publishing speaks from the open channel. Taking a game down speaks from any channel of this account,
+    // Publishing speaks from the active channel. Taking a game down speaks from any channel of this account,
     // including one already closed, because a broken game has to come down whether or not its developer still has
     // money at stake.
     const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.registered));
     if (!c?.registered) throw new Error('This account has no channel to publish from');
-    if (url && Number(c.onchain?.status) > 1) throw new Error('Open a balance to publish games');
-    return this.takeProfile(await this.api(`/api/channels/${c.state.channelId}/games`, { name: name.trim(), url }));
+    if (url && Number(c.onchain?.status) !== STATUS.active) throw new Error('Open a balance to publish games');
+    return this.takeProfile(await this.api(`/api/channels/${c.opening.channelId}/games`, { name: name.trim(), url }));
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
    * checkpoint took in: those this browser made, from their proofs, and any made on another device, whose proof is not
@@ -644,7 +644,7 @@ export class CasinoWallet extends GameSessions {
         .filter(
           proof =>
             proof &&
-            same(proof.step.operation.channelId, c.state.channelId) &&
+            channelId(proof.base.player, proof.base.index) === c.opening.channelId &&
             !withdrawalRecorded(c.onchain.claimed, proof),
         )
         .sort((a, b) => (BigInt(a.base.withdrawn) < BigInt(b.base.withdrawn) ? -1 : 1))
@@ -656,8 +656,8 @@ export class CasinoWallet extends GameSessions {
   render() {
     const c = this.channel,
       closing = this.closingChannel,
-      open = c && playsOn(c.onchain, c.state),
-      // Deposited into the open channel and not taken into its balance yet: the player's all the same.
+      open = c && Number(c.onchain?.status) === STATUS.active,
+      // Deposited into the channel and not taken into its balance yet: the player's all the same.
       arriving = open ? BigInt(c.onchain.deposited) - BigInt(c.state.deposited) : 0n,
       balance = open ? BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n) : 0n;
     this.publicState = {
@@ -665,7 +665,7 @@ export class CasinoWallet extends GameSessions {
       balance: String(balance),
       arriving: String(arriving > 0n ? arriving : 0n),
       nativeBalance: this.nativeBalance || '0',
-      channelId: c?.state.channelId || null,
+      channelId: c?.opening.channelId || null,
       channelStatus: c?.onchain?.status || '0',
       // What the casino lent the balance, which a withdrawal, a lock-in or a close pays back first, and what a
       // withdrawal can take.
@@ -683,7 +683,7 @@ export class CasinoWallet extends GameSessions {
       observedAt: this.lastChainCheck || 0,
       savedSequence: c?.state.sequence || '0',
       // The channel whose close is under way, beside the open one.
-      closingChannelId: closing?.state.channelId || null,
+      closingChannelId: closing?.opening.channelId || null,
       deadline: closing?.onchain.deadline || '0',
       closingSequence: closing?.onchain.closingSequence || '0',
       closingSaved: closing?.state.sequence || '0',
@@ -705,8 +705,8 @@ export class CasinoWallet extends GameSessions {
         ...Object.values(this.channels)
           .filter(v => v.claim)
           .map(v => ({
-            id: v.state.channelId,
-            channelId: v.state.channelId,
+            id: v.opening.channelId,
+            channelId: v.opening.channelId,
             to: v.claim.recipient,
             observedAt: v.observedAt,
             ...v.claim,
@@ -771,12 +771,12 @@ export class CasinoWallet extends GameSessions {
       if (this.refreshing === pending) this.refreshing = null;
     }
   }
-  async observeChannels(keys: string[], block: ChainBlock): Promise<[string, any, any][]> {
-    return mapBounded(keys, async key => {
-      const value = await this.observer.contractRead(this.reader, 'channels', [key], block);
+  async observeChannels(openings: Opening[], block: ChainBlock): Promise<[string, any, any][]> {
+    return mapBounded(openings, async ({ channelId: key, player, index }) => {
+      const value = await this.observer.contractRead(this.reader, 'channels', [player, index], block);
       const onchain = plain(Object.fromEntries(CHANNEL_FIELDS.map(field => [field, value[field]])));
       let claim = null;
-      if (Number(value.status) === 3) {
+      if (Number(value.status) === STATUS.finalized) {
         const [terms, collectable] = await Promise.all([
           this.observer.contractRead(this.reader, 'claims', [key], block),
           this.observer.contractRead(this.reader, 'collectable', [key], block),
@@ -813,14 +813,18 @@ export class CasinoWallet extends GameSessions {
       this.observer.contractRead(this.reader, 'channelIndex', [this.address], observation.block),
     ]);
     // The account's current channel: its first, or the one after the last whose close started.
-    const current = channelId(this.address, index);
+    const opening = { channelId: channelId(this.address, index), player: this.address, index: String(index) },
+      current = opening.channelId;
     // Only current recovery state belongs inside the action lock: the current channel, the one before it, whose close
     // may be under way, and any known to be closing.
     const previous = BigInt(index) > 0n ? channelId(this.address, BigInt(index) - 1n) : null,
-      closing = Object.keys(this.channels).filter(key => Number(this.channels[key].onchain?.status) === 2);
-    const selected = [...new Set([current, this.channelId, also, previous, ...closing])].filter(
-      key => key && (key === current || this.channels[key]),
-    ) as string[];
+      closing = Object.keys(this.channels).filter(key => Number(this.channels[key].onchain?.status) === STATUS.closing);
+    const selected = [
+      opening,
+      ...[...new Set([this.channelId, also, previous, ...closing])]
+        .filter(key => key && key !== current && this.channels[key])
+        .map(key => this.channels[key!].opening),
+    ];
     const before = this.durable();
     const records = await this.observeChannels(selected, observation.block);
     await this.observer.accept(observation);
@@ -836,42 +840,30 @@ export class CasinoWallet extends GameSessions {
       this.atAddress = String(native);
     }
     const onchain = records.find(([key]) => key === current)![1];
-    // Opened by this wallet's deposit or by anybody else's, the channel is this account's to sign for: taken up at
-    // its base, and registered with the casino below. So is one not on-chain yet that the casino registers, while it
-    // owes the account something, such as a transfer, or registered already, here or on another device: its balance
-    // plays off-chain until a deposit, a withdrawal or a close opens it.
-    const opened = Number(onchain.status) === 1,
-      notOnChain = Number(onchain.status) === 0,
-      unopened = notOnChain && this.offChain;
-    if (!this.channels[current] && (opened || unopened)) {
+    // The current channel is this account's to sign for from the start: taken up at its base once the chain holds a
+    // deposit for it, from this wallet or from anybody, or once the casino registers it before then, as it does while it
+    // owes the account something, such as a transfer, or registered it already, here or on another device. It is
+    // registered with the casino below.
+    const deposited = BigInt(onchain.deposited) > 0n;
+    if (!this.channels[current] && (deposited || this.registers))
       this.channels[current] = {
-        opening: { channelId: current, player: this.address, index: String(index) },
-        state: baseState(current),
+        opening,
+        state: baseState(this.address, index),
         playerSignature: '0x',
         casinoSignature: '0x',
         onchain,
       };
-      if (opened)
-        seen.push({
-          kind: 'opened',
-          operationId: 'opened:' + current,
-          channelId: current,
-          amount: onchain.deposited,
-          status: 'confirmed',
-          createdAt: at,
-        });
-    }
     this.history = [...seen, ...this.history];
     this.applyChannelObservations(records.filter(([key]) => this.channels[key]));
     this.channelId = this.channels[current] ? current : null;
     const c = this.channel;
-    if (c && !c.registered && Number(c.onchain.status) <= 1 && !this.recoveryOnly)
+    if (c && !c.registered && !this.recoveryOnly)
       await this.activate().catch(error => {
-        if (opened) console.error('Registering your balance failed', error);
+        if (deposited) console.error('Registering your balance failed', error);
       });
-    // One not on-chain yet that the casino did not register is no balance. Taking up the casino's state of it replaces
+    // One with no deposit that the casino did not register is no balance. Taking up the casino's state of it replaces
     // the channel, so it is read again.
-    if (this.channel && !this.channel.registered && notOnChain) {
+    if (this.channel && !this.channel.registered && !deposited) {
       delete this.channels[current];
       this.channelId = null;
     }
@@ -919,7 +911,7 @@ export class CasinoWallet extends GameSessions {
         const observation = await observer.observe();
         if (!current()) return this.publicState;
         const keys = Object.keys(this.channels).filter(
-          key => key !== this.channelId && Number(this.channels[key].onchain?.status) !== 2,
+          key => key !== this.channelId && Number(this.channels[key].onchain?.status) !== STATUS.closing,
         );
         const cursor = (this.monitorCursor || 0) % (keys.length || 1);
         const selected = Array.from(
@@ -930,7 +922,10 @@ export class CasinoWallet extends GameSessions {
         const history = this.history;
         const historyBefore = new Map(history.map(entry => [entry.operationId, json(entry)]));
         // Share the eight-read budget between old claims and activity.
-        const records = await this.observeChannels(selected, observation.block);
+        const records = await this.observeChannels(
+          selected.map(key => this.channels[key].opening),
+          observation.block,
+        );
         const activity = new Map(
           (await this.observeTransactionHistory(observation.block, history)).map(entry => [entry.operationId, entry]),
         );
@@ -999,23 +994,23 @@ export class CasinoWallet extends GameSessions {
     if (!this.lastChainCheck || Date.now() - this.lastChainCheck > CHECK_EVERY) await this.refreshLocked();
     if (!this.playable) throw new Error('Open or recover a channel before playing');
   }
-  /** A request to the casino. One under `/api/channels/:id` carries that channel's access token. */
+  /** A request to the casino. One under `/api/channels/:id` or `/api/account` carries the account's access token. */
   async api(path: string, body: unknown = undefined) {
     if (body !== undefined) this.requireDurableState();
     if (path !== '/api/config') this.requireService();
     const headers: Record<string, string> = { 'content-type': 'application/json' };
-    const channel = /^\/api\/channels\/(0x[0-9a-fA-F]{64})/.exec(path)?.[1];
-    if (channel) {
-      const now = Math.floor(Date.now() / 1000);
-      let token = this.tokens.get(channel);
+    if (/^\/api\/(channels|account)\//.test(path)) {
+      const now = Math.floor(Date.now() / 1000),
+        { address, signer } = this;
+      let token = this.tokens.get(address);
       // A token is signed for a minute and used while it has twenty seconds left, room for a slow request.
       if (!token || token.expiresAt - now < 20) {
-        const message = { channelId: channel, expiresAt: now + 60 };
+        const message = { player: address, expiresAt: now + 60 };
         token = {
           expiresAt: message.expiresAt,
-          header: authorization(message, await this.signer.signTypedData(this.domain, ACCESS_TYPES, message)),
+          header: authorization(message, await signer.signTypedData(this.domain, ACCESS_TYPES, message)),
         };
-        this.tokens.set(channel, token);
+        this.tokens.set(address, token);
       }
       headers.authorization = token.header;
     }
@@ -1104,9 +1099,7 @@ export class CasinoWallet extends GameSessions {
   }
   /** Whether a close of `channel` under way stops short of its pending casino bet, which its quote still covers. */
   disputesClose(channel: WalletChannel) {
-    return (
-      this.disputable(channel) && BigInt(channel.pending.request.sequence) > BigInt(channel.onchain.closingSequence)
-    );
+    return this.disputable(channel) && BigInt(channel.state.sequence) + 1n > BigInt(channel.onchain.closingSequence);
   }
   async withSavedRecord<T>(read: (record: any) => T | Promise<T>) {
     if (this.busy) throw new Error('Wait for the current wallet operation');
@@ -1125,7 +1118,7 @@ export class CasinoWallet extends GameSessions {
   }
   async exportEvidence(channelId?: string | null) {
     return this.withSavedRecord(async record => {
-      const c = record.channels[channelId ?? record.channelId ?? this.closingChannel?.state.channelId];
+      const c = record.channels[channelId ?? record.channelId ?? this.closingChannel?.opening.channelId];
       if (!c) throw new Error('No channel evidence saved');
       return plain({
         chainId: String(this.expectedChainId),
@@ -1158,13 +1151,10 @@ export class CasinoWallet extends GameSessions {
         !same(bundle.opening.player, this.address)
       )
         throw new Error('Evidence belongs to a different wallet or deployment');
-      const channelId = checked.state.channelId,
-        old = this.channels[channelId!];
+      const channelId = bundle.opening.channelId,
+        old = this.channels[channelId];
       if (old && this.behind(old.state, checked.state))
         throw new Error('The evidence is older than the saved checkpoint, or conflicts with it');
-      const registered = await this.reader.channels(channelId);
-      if (!Number(registered.status) || !same(registered.player, this.address))
-        throw new Error('Recovery evidence is not for a channel of this account on this contract');
       // The bundle's withdrawals join the activity as ones this wallet sent do, whatever the chain says of them now: it
       // says how each stands from here on. Each must be this account's operation, followed by the casino's signature.
       const known = new Set(this.history.map(entry => entry.withdrawal)),
@@ -1173,7 +1163,7 @@ export class CasinoWallet extends GameSessions {
         const op = proof.step.operation;
         let next;
         try {
-          if (![KIND.withdrawal, KIND.transfer].includes(Number(op.kind) as 5)) throw new Error('Not a withdrawal');
+          if (![KIND.withdrawal, KIND.lockIn].includes(Number(op.kind) as 5)) throw new Error('Not a withdrawal');
           next = verifyStep(this.domain, proof.base, proof.step, this.address, this.operator);
         } catch {
           throw new Error('The bundle names a withdrawal that is not one this account and the casino signed');
@@ -1209,7 +1199,7 @@ export class CasinoWallet extends GameSessions {
           ? evidence.step.casinoSignature
           : evidence.casinoSignature,
         lastResponse: Number(evidence.step.operation.kind) ? { evidence } : null,
-        onchain: old?.onchain || { status: 0 },
+        onchain: old?.onchain || { status: STATUS.active },
       };
       if (Number(evidence.step.operation.kind))
         this.channels[channelId].playerSignature = await this.signer.signTypedData(

@@ -14,15 +14,17 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
   wallet.reader = {} as any;
   wallet.assertNetwork = async () => {};
   // The account's channels, each after a close started on the one before: the last is closing, and the account's
-  // current channel is the next, unopened.
+  // current channel is the next, with nothing on-chain.
   const keys = Array.from({ length: 513 }, (_, i) => channelId(ZeroAddress, i));
-  for (const key of keys)
-    wallet.channels[key] = {
-      opening: { deposit: '10' },
-      state: { channelId: key, balance: '10', sequence: '1', index: '0', length: '1' },
-      onchain: { status: 3 },
-      claim: { amount: '10', paid: '10' },
-    } as any;
+  keys.forEach(
+    (key, i) =>
+      (wallet.channels[key] = {
+        opening: { channelId: key, player: ZeroAddress, index: String(i) },
+        state: { player: ZeroAddress, index: String(i), balance: '10', sequence: '1' },
+        onchain: { status: 2 },
+        claim: { amount: '10', paid: '10' },
+      } as any),
+  );
   let current = keys.length - 1,
     reads: any[] = [],
     fail = false;
@@ -32,14 +34,15 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
     balance: async () => 1n,
     accept: async () => {},
     corroborate: async (_: any, read: any) => read({ getBlock: async () => ({ hash: 'canonical' }) }),
-    contractRead: async (_: any, method: any, [key]: any) => {
+    contractRead: async (_: any, method: any, args: any) => {
       if (method === 'channelIndex') return BigInt(current + 1);
       if (fail) throw new Error('RPC unavailable');
       if (method === 'channels') {
+        const key = channelId(args[0], args[1]);
         reads.push(key);
         seen.add(key);
-        const status = key === keys[current] ? 2 : keys.includes(key) ? 3 : 0;
-        return { status, closingSequence: 0n, closingBalance: 0n, deadline: 999n };
+        const status = key === keys[current] ? 1 : keys.includes(key) ? 2 : 0;
+        return { status, deposited: 0n, closingSequence: 0n, closingBalance: 0n, deadline: 999n };
       }
       if (method === 'collectable') return 0n;
       if (method === 'claims') return { amount: 10n, paid: 10n, protectedRemaining: 0n, winningsRemaining: 0n };

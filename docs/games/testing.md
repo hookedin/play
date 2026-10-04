@@ -6,7 +6,7 @@ sidebar:
 ---
 
 Game tests do not mock the wallet. `import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';` builds the
-real wallet, in memory, with an open channel, wired to a casino stub that derives and signs every state exactly as the
+real wallet, in memory, with an active channel, wired to a casino stub that derives and signs every state exactly as the
 protocol says. A bet your test places is a real signed bet, sent through the same checks the wallet's bridge makes. The
 module is Node-safe and made for Node tests.
 
@@ -50,7 +50,7 @@ start: a bet that settles, the same bet sent twice and placed once, and a bet wi
 ### `gameWallet`
 
 `gameWallet({ bankroll?, bank?, deposit? })` resolves with a real `CasinoWallet` from play's client, with an in-memory
-store, a random player and one open channel on the local chain, 31337, wired to a stub casino in place of the network.
+store, a random player and one active channel on the local chain, 31337, wired to a stub casino in place of the network.
 `bankroll` is what the stub covers casino bets with, whose half its quotes name as the virtual bankroll, and `bank` what
 the developer's bank holds before any developer bet pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
 

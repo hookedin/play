@@ -46,8 +46,8 @@ test('durable wallet state survives reload, and a failed write latches a waiting
   wallet.storageKey = 'wallet:test';
   wallet.render = (() => {}) as any;
   wallet.channelId = 'channel';
-  // A funded account: it plays on its on-chain channel.
-  wallet.channels.channel = { key: 'unused', onchain: { status: '1' } } as any;
+  // A funded account: it plays on its channel.
+  wallet.channels.channel = { key: 'unused', onchain: { status: '0' } } as any;
   wallet.pending = { request: { operationId: 'saved' }, signature: 'signed' };
   await wallet.save();
   const next = new CasinoWallet({ network: 'local', storage });
@@ -153,7 +153,7 @@ test('a withdrawal is read again when its recording is taken back, or the block 
     none = { beneficiary: ZeroAddress, recipient: ZeroAddress, protectedRemaining: 0n, winningsRemaining: 0n };
   // The chain: what the claim still owes, and the channel's status and `claimed`, which says whether it is recorded.
   let claim = { beneficiary: account, recipient: first, protectedRemaining: 0n, winningsRemaining: 500n },
-    channel = { status: 1, claimed: 1500n },
+    channel = { status: 0, claimed: 1500n },
     chain: Record<number, string> = {};
   wallet.observer = {
     contractRead: async (_: unknown, method: string) =>
@@ -169,8 +169,8 @@ test('a withdrawal is read again when its recording is taken back, or the block 
     to: first,
     paid: false,
     proof: {
-      base: { channelId: 'channel', withdrawn: '0' },
-      step: { operation: { channelId: 'channel', recipient: first, amount: '1500' } },
+      base: { player: account, index: '0', withdrawn: '0' },
+      step: { operation: { recipient: first, amount: '1500' } },
     },
   };
   const observe = async (number: number, entry: any) => {
@@ -184,11 +184,11 @@ test('a withdrawal is read again when its recording is taken back, or the block 
   assert.equal((await observe(11, recorded)).to, elsewhere);
   // A reorganisation took the recording back: nothing read of it stands, and it can be sent again.
   claim = none;
-  channel = { status: 1, claimed: 0n };
+  channel = { status: 0, claimed: 0n };
   assert.deepEqual(await observe(12, recorded), sent);
   // Recorded again and paid in full at once, which leaves no claim: read paid at block 13, and not read again while
   // that block stands.
-  channel = { status: 1, claimed: 1500n };
+  channel = { status: 0, claimed: 1500n };
   const paid = await observe(13, sent);
   assert.deepEqual([paid.paid, paid.to, paid.settledAt], [true, first, { number: 13, hash: '0x13' }]);
   claim = { beneficiary: account, recipient: first, protectedRemaining: 0n, winningsRemaining: 500n };
@@ -199,7 +199,7 @@ test('a withdrawal is read again when its recording is taken back, or the block 
   assert.deepEqual([owed.paid, owed.owed, owed.settledAt], [false, '500', undefined]);
   // Not recorded by the time its channel's close is final: the close returned it.
   claim = none;
-  channel = { status: 3, claimed: 0n };
+  channel = { status: 2, claimed: 0n };
   const returned = await observe(16, owed);
   assert.deepEqual(
     [returned.returned, returned.recorded, returned.settledAt],
@@ -208,16 +208,16 @@ test('a withdrawal is read again when its recording is taken back, or the block 
 });
 test("the wallet sends a channel's withdrawals in the order they were made, as the contract records them", async () => {
   const wallet = new CasinoWallet({ network: 'local', storage: new MemoryStore() });
-  const withdrawal = (operationId: string, channelId: string, sequence: string) => ({
+  const withdrawal = (operationId: string, index: string, sequence: string) => ({
     kind: 'withdrawal',
     operationId,
     withdrawal: '0x' + operationId,
     paid: false,
-    proof: { base: { channelId, sequence } },
+    proof: { base: { player: ZeroAddress, index, sequence } },
   });
-  const first = withdrawal('aa', 'one', '3'),
-    second = withdrawal('bb', 'one', '5'),
-    elsewhere = withdrawal('cc', 'two', '9');
+  const first = withdrawal('aa', '0', '3'),
+    second = withdrawal('bb', '0', '5'),
+    elsewhere = withdrawal('cc', '1', '9');
   wallet.history = [second, elsewhere, first];
   assert.deepEqual(
     [first, second, elsewhere].map(entry => wallet.nextToRecord(entry)),

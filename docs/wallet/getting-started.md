@@ -45,8 +45,8 @@ is open and the page visible, the wallet checks the address every 20 seconds and
 otherwise it checks every 10 minutes, or at once when you press ↻ beside the wallet's title. ETH too small to cover its
 fee waits for more.
 
-Each deposit is one transaction, `deposit`, into your account's channel, and your first opens it. After two
-confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the
+Each deposit is one transaction, `deposit`, into your account's current channel, which needs nothing to open it. After
+two confirmations the wallet registers the channel with the casino and asks it to sign a deposit operation, which takes the
 money into your balance; until then the wallet shows it as arriving, and a close would pay it back all the same.
 From then on bets need no transactions. Anyone can deposit into your channel through the contract, naming your deposit
 address, and the wallet takes it in the same way.
@@ -133,9 +133,8 @@ signs: a Discord username can pass to another member, a uname never does. It is 
 A transfer is off-chain: a debit your account signs, naming their uname, which costs no fee and names neither of your
 addresses anywhere, on-chain or to each other. The casino owes it to them until their wallet collects it into their
 balance with a credit naming your uname, by itself. A player with no ETH and no balance needs none: their wallet's next
-check registers their balance with the casino before it is on-chain, collects the transfer into it, and they play with
-it off-chain ([a balance not on-chain yet](closing-and-claims.md#a-balance-not-on-chain-yet)). From then on it is part
-of their balance like any other: beyond their own deposits it is winnings, paid out of the bankroll, until they [lock
+check registers their channel with the casino, which the contract holds nothing for yet, collects the transfer into it,
+and they play with it. From then on it is part of their balance like any other: beyond their own deposits it is winnings, paid out of the bankroll, until they [lock
 their balance in](closing-and-claims.md#lock-in-your-balance). What the casino lent your balance stays in it, so **Max**
 is your balance less that loan. The casino declines a transfer to a name nobody goes by, or to yourself.
 

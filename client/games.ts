@@ -260,7 +260,7 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     name: slug === undefined ? entry.host : gameTitle(slug),
   };
   frame.title = `${identity.name}, a sandboxed game`;
-  // A game bound to a channel closes with it; a game opened without one adopts the first channel that opens.
+  // A game bound to a channel closes with it; a game opened without one adopts the first channel the wallet takes up.
   const isCurrent = () =>
     active?.frame === frame && (active.channelId === null || active.channelId === wallet.channelId);
   const path = gamePath(gameRoute);

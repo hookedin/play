@@ -63,17 +63,17 @@ Two kinds of token travel in the `Authorization` header as `HookedIn <token>`, a
 
 | Token            | Message                                  | Signed by                                        | Routes                                                                                                                             |
 | ---------------- | ---------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Channel access   | `Access {channelId, expiresAt}`          | The channel's account                            | Every `/api/channels/:id/…` route                                                                                                  |
+| Account access   | `Access {player, expiresAt}`             | The account                                      | Every `/api/channels/:id/…` route of its channels, and every `/api/account/…` route                                                |
 | Developer access | `DeveloperAccess {developer, expiresAt}` | The developer: the account that publishes a game | `POST /api/rounds`, `POST /api/rounds/:round/casino-bet`, `POST /api/developer-bets/settle`, `GET /api/developer-bets` with `wait` |
 
 The casino accepts a token whose `expiresAt` is not in the past and at most 120 seconds ahead. A token is not bound to
 one request and serves until it expires: the wallet signs one for 60 seconds and reuses it while at least 20 seconds
 remain, and the [developer kit](../sdk/developer.md) signs one for each request.
 
-A channel route answers `401` `unauthorized` to a missing, expired or wrongly signed token and to a channel it does not
-know, before anything else: an unknown channel never answers `404`. The two routes that take an unknown channel are
-[activation](channels.md#post-apichannelsidactivate) and the [uname](channels.md#post-apichannelsiduname), which check
-the opening in their body and then the token against it. Opening a round needs a key whose account publishes a game; settling needs
+A channel route answers `401` `unauthorized` to a missing, expired or wrongly signed token, to a token of another
+account and to a channel it does not know, before anything else: an unknown channel never answers `404`. The one route
+that takes an unknown channel is [activation](channels.md#post-apichannelsidactivate), which checks the opening in its
+body and then the token against it; the [account's routes](channels.md#the-account) need no channel at all. Opening a round needs a key whose account publishes a game; settling needs
 only the key of the bets' developer, so a developer who takes their last game down still pays the bets placed on it.
 
 The token only says who is asking. What a request commits to is signed in its body: an operation, a `Redeem`, a
@@ -143,7 +143,7 @@ that waits its turn, `busy`.
 | Code                 | Status | Meaning                                                                                                                                                                                                                                                                                                                |
 | -------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code                                                                         |
-| `unauthorized`       | 401    | The token is missing, expired, too far ahead or wrongly signed, the channel is unknown, or a developer key that publishes no game opens a round                                                                                                                                                                        |
+| `unauthorized`       | 401    | The token is missing, expired, too far ahead, wrongly signed or another account's, the channel is unknown, or a developer key that publishes no game opens a round                                                                                                                                                     |
 | `not-found`          | 404    | No such path, name, game, round or developer bet, an account that verified no Discord account, or no demo ETH or Discord server here                                                                                                                                                                                   |
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                                                                                     |
 | `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                                                                                        |

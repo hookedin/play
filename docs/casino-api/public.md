@@ -47,7 +47,7 @@ The casino's health, its books, what developers have earned, the last observed b
 | `observationError`  | string or null | Why the last observation failed                                                                                                         |
 | `alerts`            | array          | What is wrong, below                                                                                                                    |
 | `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight: a challenge, a withdrawal, or an idle channel's close, finalization or collection |
-| `channels`          | number         | Channels open or closing                                                                                                                |
+| `channels`          | number         | Channels active or closing                                                                                                              |
 | `signingLogRecords` | number         | Records in the casino's signing history                                                                                                 |
 | `signingLogDigest`  | string         | The digest of its last record: 64 hex digits, without `0x`                                                                              |
 | `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                 |
@@ -58,33 +58,33 @@ The casino's health, its books, what developers have earned, the last observed b
 
 The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
 
-| Field                              | Meaning                                                                                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cash`                             | Pool cash: the contract's balance                                                                                                           |
-| `protectedFunds`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                   |
-| `activeLiabilities`                | What open and closing channels are owed: their signed balances less their loans, and the deposits they have not taken in                    |
-| `openWinnings`                     | What open and closing channels are owed above the deposits and collateral the contract holds for them: winnings, which only house cash pays |
-| `collateral`                       | The [collateral](../reference/contract.md#collateral) open and closing channels hold, which pays their winnings before house cash           |
-| `collateralSales`                  | What collateral has sold for, the contract's `collateralSales`: the bankroll's, as commission is                                            |
-| `claimLiabilities`                 | The unpaid winnings and protected amounts of claims: finalized closes' and withdrawals'                                                     |
-| `commissions`                      | Developer commission earned and not yet collected                                                                                           |
-| `escrow`                           | Payouts awarded and not yet collected                                                                                                       |
-| `banks`                            | Everything in developers' banks                                                                                                             |
-| `withdrawals`                      | Withdrawals the casino has taken on, until the chain records them or their channel's close returns them                                     |
-| `houseFeesEarned`                  | The casino's own commission, in total                                                                                                       |
-| `reserved`                         | The worst cases of casino bets being decided, plus disputed closes' possible payouts above obligations already in the books                 |
-| `equity`                           | The bankroll before reservations: what fund shares are a claim on                                                                           |
-| `unreservedBankroll`               | `equity − reserved`; it can be negative                                                                                                     |
-| `bankroll`                         | `max(0, unreservedBankroll)`: the betting bankroll                                                                                          |
-| `virtualBankroll`                  | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a developer's casino bet is admitted against          |
-| `withdrawableHouse`                | `max(0, cash − protectedFunds − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                   |
+| Field                              | Meaning                                                                                                                                       |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cash`                             | Pool cash: the contract's balance                                                                                                             |
+| `protectedFunds`, `unpaidWinnings` | The contract's [storage](../reference/contract.md#storage) of those names                                                                     |
+| `activeLiabilities`                | What active and closing channels are owed: their signed balances less their loans, and the deposits they have not taken in                    |
+| `openWinnings`                     | What active and closing channels are owed above the deposits and collateral the contract holds for them: winnings, which only house cash pays |
+| `collateral`                       | The [collateral](../reference/contract.md#collateral) active and closing channels hold, which pays their winnings before house cash           |
+| `collateralSales`                  | What collateral has sold for, the contract's `collateralSales`: the bankroll's, as commission is                                              |
+| `claimLiabilities`                 | The unpaid winnings and protected amounts of claims: finalized closes' and withdrawals'                                                       |
+| `commissions`                      | Developer commission earned and not yet collected                                                                                             |
+| `escrow`                           | Payouts awarded and not yet collected                                                                                                         |
+| `banks`                            | Everything in developers' banks                                                                                                               |
+| `withdrawals`                      | Withdrawals the casino has taken on, until the chain records them or their channel's close returns them                                       |
+| `houseFeesEarned`                  | The casino's own commission, in total                                                                                                         |
+| `reserved`                         | The worst cases of casino bets being decided, plus disputed closes' possible payouts above obligations already in the books                   |
+| `equity`                           | The bankroll before reservations: what fund shares are a claim on                                                                             |
+| `unreservedBankroll`               | `equity − reserved`; it can be negative                                                                                                       |
+| `bankroll`                         | `max(0, unreservedBankroll)`: the betting bankroll                                                                                            |
+| `virtualBankroll`                  | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a developer's casino bet is admitted against            |
+| `withdrawableHouse`                | `max(0, cash − protectedFunds − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                     |
 
 `alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
 left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older checkpoint than the
 casino holds, and the casino challenges it), `disputed-bet` (a close disputes a casino bet, and the casino settles it
 with its result), `dispute-unsettled` (the casino could not settle a disputed bet; `detail` says why),
 `missed-deadline`, `conflicting-sequence`, `finalized-state-differs`, `invalid-evidence`, `channel-defense-failed`,
-`recovery-transaction-failed`, `winnings-exceed-cash` (open channels have
+`recovery-transaction-failed`, `winnings-exceed-cash` (active channels have
 won more than house cash can pay now, [as a withdrawal counts it](channels.md#post-apichannelsidoperations), so not
 every winner can withdraw now), `operator-gas-low` (the key that sends challenges and withdrawals holds less than 0.01
 ETH for their gas) or `withdrawal-unsent` (a withdrawal the casino took on could not be sent yet; `detail` says why). An
@@ -92,10 +92,8 @@ alert, like `observationError`, names no channel.
 
 ### `GET /api/withdrawal-fee`
 
-What a withdrawal or a lock-in pays the casino for sending it to the contract, `{fee, opening}`, in wei as decimal
-strings: `fee` is 150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, and `opening` 60,000 gas
-(`OPENING_GAS`), about what the deposit of nothing that opens a channel not on-chain yet costs, which the first
-withdrawal or lock-in from such a channel pays beside `fee`; both at the network's gas price, which the casino reads and
+What a withdrawal or a lock-in pays the casino for sending it to the contract, `{fee}`, in wei as a decimal string:
+150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, at the network's gas price, which the casino reads and
 holds for a minute. The casino declines an operation whose `fee` is below what it pays
 ([operations](channels.md#post-apichannelsidoperations)). `paused` answers while the gas price cannot be read.
 
