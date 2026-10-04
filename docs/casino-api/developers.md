@@ -77,7 +77,7 @@ Settles developer bets on the developer's games, each with its own signed `Settl
 what the casino is given, both from the developer's bank. The bank must hold the sum over every bet in the batch not yet
 settled, or nothing in the batch is settled (`bank-short`). A bet already settled is left as it is, unchecked, so a
 batch sent again answers as it stands. A settled bet's payout is owed to its player:
-[`…/payouts`](channels.md#get-apichannelsidpayouts) lists it under the bet's hash, and the player's wallet collects it
+[`GET /api/account/payouts`](channels.md#get-apiaccountpayouts) lists it under the bet's hash, and the player's wallet collects it
 after checking the developer's signature. The casino's part is its commission on the bet.
 
 | Body field                | Type    | Meaning                                                                |

@@ -63,8 +63,7 @@ the wallet writes as numbers.
 
 A channel is an account's and an index: `player` is the account, not the zero address, and `index` how many of the
 account's channels started closing before this one, 0 for its first. Every checkpoint names both, so it settles on its
-channel alone. Off-chain a channel goes by its ID, which nothing signs, and its _opening_ is
-`{channelId, player, index}`:
+channel alone. Off-chain a channel goes by its ID, which nothing signs:
 
 ```text
 channelId = keccak256(abi.encode(address player, uint256 index))
@@ -183,8 +182,7 @@ and the [watchtower](../wallet/keys-and-recovery.md#the-watchtower) reads:
 | `chainId`     | string     | The chain, as a decimal string                                                                                                                                                                                                  |
 | `casino`      | address    | The contract                                                                                                                                                                                                                    |
 | `operator`    | address    | The casino, the contract's owner                                                                                                                                                                                                |
-| `opening`     | object     | `{channelId, player, index}`                                                                                                                                                                                                    |
-| `evidence`    | Evidence   | The latest evidence of the channel                                                                                                                                                                                              |
+| `evidence`    | Evidence   | The latest evidence of the channel, whose base names it                                                                                                                                                                         |
 | `details`     | Details    | Optional: the details of the step's operation, whose hash is its `memo`                                                                                                                                                         |
 | `withdrawals` | Evidence[] | Optional: the evidence of each of the account's withdrawals and lock-ins the contract may still owe something, whose step is the withdrawal or the lock-in ([withdrawals](contract.md#withdrawals))                             |
 | `dispute`     | object     | Optional: `{step, quote}`, a casino bet the account sent with its seed on a [quote](#quotes) that covers it, which the casino has not settled: its disputed step, which follows the checkpoint `evidence` proves, and the quote |
@@ -485,7 +483,7 @@ the hashing and pricing rules in numbers.
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, the developer `0x4444…44`, the recipient `0x5555…55` and the friend's uname `3byt9ocwnnzaxanmiz3stocj`                                             |
 | `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#bounds-and-the-protocol-revision)                                                                                                                                                                           |
-| `opening`                       | The opening of the player's first channel, whose `index` is `0`                                                                                                                                                                                    |
+| `channel`                       | The player's first channel, whose `index` is `0`, with its ID                                                                                                                                                                                      |
 | `base`, `baseHash`              | The channel's base, and its hash                                                                                                                                                                                                                   |
 | `operations`                    | Nine operations, each on the checkpoint before it: its `details`, their `canonical` JSON, the signed `operation`, its `hash`, the `seed` and `secret` it settles with (zero but for the casino bet), and the `next` checkpoint with its `nextHash` |
 | `outcome`                       | `{randomHash, value, payout}` of the casino bet                                                                                                                                                                                                    |
@@ -506,7 +504,7 @@ fee; and a transfer of `50000000` to `identity.friend`, a debit naming `~` and t
 `808000000`, `withdrawn` at `800000000` and `loan` at `0`.
 
 An implementation built from this page reproduces the file with the domain of `identity`: both protocol hashes; the
-opening's [channel ID](#channel-ids), the [base](#the-base) and `baseHash`; each operation's `canonical` details, their
+channel's [ID](#channel-ids), the [base](#the-base) and `baseHash`; each operation's `canonical` details, their
 hash as its `memo`, and its `hash`; each `next`, the operation applied with its `seed` and `secret` to the checkpoint
 before it, whose `transitionHash` is `keccak256(abi.encode(hash, secret))`, and its `nextHash`; the casino bet's
 `round`, `seedHash` and [outcome](#the-outcome); the [rejection checkpoint](#rejection-checkpoints) and its hash; the

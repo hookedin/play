@@ -1100,7 +1100,6 @@ test('offline evidence and the contract enforce the same checkpoint amount bound
           chainId: env.chainId,
           casino: String(f.contract.target),
           operator: f.owner.address,
-          opening: ch.opening,
           evidence,
         };
       if (amount < cap) {

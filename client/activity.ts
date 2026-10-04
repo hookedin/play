@@ -196,7 +196,7 @@ const KINDS: Record<
     label: 'Sent',
     declined: 'Transfer declined',
     describe: r =>
-      `To ${r.name ?? r.details?.counterparty}, off-chain: their wallet collects it into their balance once they have one open, and nothing about it goes on-chain. ${balanceOf(r)}`,
+      `To ${r.name ?? r.details?.counterparty}, off-chain: their wallet collects it into their balance, and nothing about it goes on-chain. ${balanceOf(r)}`,
   },
   'lock-in': { title: 'Balance locked in', declined: 'Lock-in declined' },
   loan: {

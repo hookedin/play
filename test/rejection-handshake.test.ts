@@ -41,7 +41,6 @@ test('a rejection is agreed durably before completion, and a lost completion sur
       chainId: restored.expectedChainId,
       casino: restored.config.contractAddress,
       operator: restored.operator,
-      opening: restored.channel!.opening,
       evidence: receipt.proof,
     }).state,
     restored.channel!.state,

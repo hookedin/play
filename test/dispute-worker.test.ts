@@ -25,8 +25,8 @@ test("evidence this contract cannot settle blocks no other channel's challenge",
   await (await f.contract.startClose(bad.evidence)).wait();
   await (await f.contract.startClose(good.evidence)).wait();
   const bundles = [
-    { opening: bad.opening, evidence: stale.evidence, casino: String(other.contract.target) },
-    { opening: good.opening, evidence: win.evidence, casino: String(f.contract.target) },
+    { evidence: stale.evidence, casino: String(other.contract.target) },
+    { evidence: win.evidence, casino: String(f.contract.target) },
   ].map(bundle => ({ ...bundle, chainId: env.chainId, operator: f.owner.address }));
   // Signed as it says, and not this contract's: it must not monopolize the submission queue.
   assert.equal(elsewhere.opening.channelId, bad.opening.channelId);
@@ -78,7 +78,6 @@ test('a disputed casino bet is settled by the evidence at its own sequence', asy
       file: path.join(directory, 'journal.json'),
     }),
     bundle = {
-      opening: ch.opening,
       evidence: settled.evidence,
       casino: String(f.contract.target),
       chainId: env.chainId,
@@ -111,7 +110,6 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
       file: path.join(directory, 'journal.json'),
     }),
     bundleOf = (ch: any, bet: any) => ({
-      opening: ch.opening,
       evidence: ch.evidence,
       dispute: { step: bet.evidence.step, quote: bet.quote },
       casino: String(f.contract.target),
@@ -181,7 +179,6 @@ function watchtower(t: any, env: any, f: any) {
       file: path.join(directory, 'journal.json'),
     }),
     bundleOf: (ch: any, bet?: any, evidence = ch.evidence) => ({
-      opening: ch.opening,
       evidence,
       ...(bet ? { dispute: { step: bet.evidence.step, quote: bet.quote } } : {}),
       casino: String(f.contract.target),

@@ -72,8 +72,8 @@ remain, and the [developer kit](../sdk/developer.md) signs one for each request.
 
 A channel route answers `401` `unauthorized` to a missing, expired or wrongly signed token, to a token of another
 account and to a channel it does not know, before anything else: an unknown channel never answers `404`. The one route
-that takes an unknown channel is [activation](channels.md#post-apichannelsidactivate), which checks the opening in its
-body and then the token against it; the [account's routes](channels.md#the-account) need no channel at all. Opening a round needs a key whose account publishes a game; settling needs
+that takes an unknown channel is [activation](channels.md#post-apichannelsidactivate), which checks it is the current
+channel of the account the token proves; the [account's routes](channels.md#the-account) need no channel at all. Opening a round needs a key whose account publishes a game; settling needs
 only the key of the bets' developer, so a developer who takes their last game down still pays the bets placed on it.
 
 The token only says who is asking. What a request commits to is signed in its body: an operation, a `Redeem`, a
@@ -127,8 +127,8 @@ the bets of at most 4 games at once, and the casino holds at most 128 waits; one
 The casino stops signing while its chain observation fails or is more than 60 seconds old;
 [`GET /api/status`](public.md#get-apistatus) shows why, in `status`, `stale` and `observationError`. Meanwhile every
 `POST` answers `503` `paused`, except demo ETH, a uname, the activation of a channel the casino knows and an exact retry
-of a recorded operation; so do `GET /api/fund`, `GET /api/developer-bets`, `GET /api/channels/:id/payouts` and
-`GET /api/channels/:id/developer-bets`. Every other read goes on.
+of a recorded operation; so do `GET /api/fund`, `GET /api/developer-bets`, `GET /api/account/payouts` and
+`GET /api/account/developer-bets`. Every other read goes on.
 
 Once a write to its database fails, the casino stops until it restarts: every request, reads and `OPTIONS` included,
 answers `503` `paused`.

@@ -623,17 +623,12 @@ export class CasinoWallet extends GameSessions {
   }
   /**
    * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing
-   * claims a public name and asks for an active channel; taking your own game down only has to be you, so a
+   * claims a public name and asks for a balance that plays; taking your own game down only has to be you, so a
    * developer who has closed their channel can still withdraw a game that turned out to be broken.
    */
   async publishGame(this: CasinoWallet, name: string, url: string | null) {
-    // Publishing speaks from the active channel. Taking a game down speaks from any channel of this account,
-    // including one already closed, because a broken game has to come down whether or not its developer still has
-    // money at stake.
-    const c = url ? this.channel : (this.channel ?? Object.values(this.channels).find(row => row.registered));
-    if (!c?.registered) throw new Error('This account has no channel to publish from');
-    if (url && Number(c.onchain?.status) !== STATUS.active) throw new Error('Open a balance to publish games');
-    return this.takeProfile(await this.api(`/api/channels/${c.opening.channelId}/games`, { name: name.trim(), url }));
+    if (url && !this.playable) throw new Error('Open a balance to publish games');
+    return this.takeProfile(await this.api('/api/account/games', { name: name.trim(), url }));
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
    * checkpoint took in: those this browser made, from their proofs, and any made on another device, whose proof is not
@@ -994,7 +989,7 @@ export class CasinoWallet extends GameSessions {
     if (!this.lastChainCheck || Date.now() - this.lastChainCheck > CHECK_EVERY) await this.refreshLocked();
     if (!this.playable) throw new Error('Open or recover a channel before playing');
   }
-  /** A request to the casino. One under `/api/channels/:id` or `/api/account` carries the account's access token. */
+  /** A request to the casino. One under `/api/channels/:id` or `/api/account/` carries the account's access token. */
   async api(path: string, body: unknown = undefined) {
     if (body !== undefined) this.requireDurableState();
     if (path !== '/api/config') this.requireService();
@@ -1124,7 +1119,6 @@ export class CasinoWallet extends GameSessions {
         chainId: String(this.expectedChainId),
         casino: this.config.contractAddress,
         operator: this.operator,
-        opening: c.opening,
         evidence: plain(this.evidence(c)),
         // The proofs of the account's withdrawals the contract may still owe something: each is collected under the
         // hash of its operation.
@@ -1141,18 +1135,22 @@ export class CasinoWallet extends GameSessions {
       if (this.pending || this.transactionIntent)
         throw new Error('Recover the saved operation before importing another checkpoint');
       // A file that is JSON but not a bundle is answered here, before the protocol reads its parts.
-      if (!bundle?.chainId || !bundle.casino || !bundle.operator || !bundle.opening || !bundle.evidence)
-        throw new Error('That file is not a recovery bundle: it names no deployment, channel or evidence.');
+      if (!bundle?.chainId || !bundle.casino || !bundle.operator || !bundle.evidence?.base)
+        throw new Error('That file is not a recovery bundle: it names no deployment or evidence.');
       const checked = verifyEvidence(bundle);
       if (
         String(bundle.chainId) !== String(this.expectedChainId) ||
         !same(bundle.casino, this.config.contractAddress) ||
         !same(bundle.operator, this.operator) ||
-        !same(bundle.opening.player, this.address)
+        !same(checked.state.player, this.address)
       )
         throw new Error('Evidence belongs to a different wallet or deployment');
-      const channelId = bundle.opening.channelId,
-        old = this.channels[channelId];
+      const opening = {
+          channelId: channelId(this.address, checked.state.index),
+          player: this.address,
+          index: String(checked.state.index),
+        },
+        old = this.channels[opening.channelId];
       if (old && this.behind(old.state, checked.state))
         throw new Error('The evidence is older than the saved checkpoint, or conflicts with it');
       // The bundle's withdrawals join the activity as ones this wallet sent do, whatever the chain says of them now: it
@@ -1190,24 +1188,25 @@ export class CasinoWallet extends GameSessions {
         );
       }
       const evidence = bundle.evidence;
-      this.channels[channelId] = {
+      this.channels[opening.channelId] = {
         ...old,
-        opening: bundle.opening,
+        opening,
         state: checked.state,
         playerSignature: Number(evidence.step.operation.kind) ? '0x' : evidence.playerSignature,
         casinoSignature: Number(evidence.step.operation.kind)
           ? evidence.step.casinoSignature
           : evidence.casinoSignature,
         lastResponse: Number(evidence.step.operation.kind) ? { evidence } : null,
-        onchain: old?.onchain || { status: STATUS.active },
+        // Read from the chain by the refresh that follows.
+        onchain: old?.onchain ?? null,
       };
       if (Number(evidence.step.operation.kind))
-        this.channels[channelId].playerSignature = await this.signer.signTypedData(
+        this.channels[opening.channelId].playerSignature = await this.signer.signTypedData(
           this.domain,
           STATE_TYPES,
           checked.state,
         );
-      if (!this.channelId || this.channelId === channelId) this.channelId = channelId;
+      if (!this.channelId || this.channelId === opening.channelId) this.channelId = opening.channelId;
       this.history = [...withdrawals, ...this.history];
       await this.save();
     });

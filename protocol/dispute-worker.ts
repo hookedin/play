@@ -9,7 +9,16 @@ export interface DisputeAlert {
   remaining?: number;
   detail?: string;
 }
-import { STATUS, covers, domain, hashState, quoteTerms, verifyEvidence, same } from './protocol.ts';
+import {
+  STATUS,
+  channelId as channelOf,
+  covers,
+  domain,
+  hashState,
+  quoteTerms,
+  verifyEvidence,
+  same,
+} from './protocol.ts';
 import { TransactionJournal } from './transaction-journal.ts';
 /** How long before its quote expires the watcher disputes a casino bet the casino has not settled, in seconds. */
 export const DISPUTE_MARGIN = 3600;
@@ -49,8 +58,10 @@ export class DisputeWorker {
     await this.outbox.reconcile();
     const jobs = [];
     for (const bundle of bundles) {
-      const { channelId, player, index } = bundle.opening ?? {};
+      let channelId: string | undefined;
       try {
+        const { player, index } = bundle.evidence.base;
+        channelId = channelOf(player, index);
         const c =
           observedChannels?.get(channelId) ||
           (await this.observer.contractRead(this.contract, 'channels', [player, index], observation.block));

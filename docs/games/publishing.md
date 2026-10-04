@@ -82,7 +82,7 @@ game with a server deploys the same way, as one Worker that also answers `/api/`
 Publish from the wallet of the account that is to be the game's developer, and a game with a server from the account
 whose key the server holds. On **My games**, give the game's name and its URL; the wallet fetches nothing first.
 Publishing needs an open balance, a profile holds 100 games, and the name and URL follow the rules of
-[`POST /api/channels/:id/games`](../casino-api/channels.md#post-apichannelsidgames).
+[`POST /api/account/games`](../casino-api/channels.md#post-apiaccountgames).
 
 The game is then at `https://play.hookedin.com/@<username>/<name>`, by your Discord username, or
 `/~<uname>/<name>` for an account that verified no Discord account ([your name](../wallet/getting-started.md#your-name)), for anyone with a wallet, and on your profile. Its key,
@@ -111,7 +111,7 @@ and the casino: a [settled trade-off](../overview/architecture.md#settled-trade-
   ([the casino's share](developer-bets.md#the-casinos-share)).
 
 The casino keeps the tally for the publishing account's address, and a HookedIn wallet opened with that account's key
-([open the wallet](../wallet/getting-started.md#open-the-wallet)) collects it by itself, with a balance open, as a
+([open the wallet](../wallet/getting-started.md#open-the-wallet)) collects it by itself, with a balance that plays, as a
 credit that account signs into its balance. Nobody at the casino approves or sends anything, nothing moves on-chain,
 and the bankroll does not change: money the casino owed you becomes your signed balance, which settles like any other
 ([closing and claims](../wallet/closing-and-claims.md)). The wallet shows, under your balance, what your games have earned and how much

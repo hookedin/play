@@ -402,7 +402,7 @@ export class WalletTransactions {
   async activate(this: CasinoWallet) {
     const c = this.channel!;
     if (this.recoveryOnly) return;
-    const reply = await this.api(`/api/channels/${c.opening.channelId}/activate`, { opening: c.opening });
+    const reply = await this.api(`/api/channels/${c.opening.channelId}/activate`, {});
     this.noteNames(reply);
     if (same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
       if (c.registered) return;
@@ -434,12 +434,14 @@ export class WalletTransactions {
       chainId: this.expectedChainId,
       casino: this.config.contractAddress,
       operator: this.operator,
-      opening: c.opening,
       evidence: last.evidence,
     }).state;
     const next = proven,
       casinoSignature = rejected ? last.evidence.casinoSignature : last.evidence.step.casinoSignature;
-    if (!same(hashState(this.domain, next), hashState(this.domain, state)))
+    if (
+      channelId(next.player, next.index) !== c.opening.channelId ||
+      !same(hashState(this.domain, next), hashState(this.domain, state))
+    )
       throw new Error("The casino's state of your balance differs from its evidence.");
     const playerSignature = rejected
       ? last.evidence.playerSignature
@@ -494,6 +496,8 @@ export class WalletTransactions {
           amount = String(event.args.amount);
           to = event.args.recipient;
         }
+        // What a close recorded as owed to the balance, collected later.
+        if (event?.name === 'CloseFinalized') amount = String(event.args.amount);
         if (event?.name === 'CollateralBought') collateral = String(event.args.amount);
         if (event?.name === 'ChannelDeposit') deposited = channelId(event.args.player, event.args.index);
       } catch {}
@@ -698,7 +702,7 @@ export class WalletTransactions {
     return receipt;
   }
   /** Transfer `amount` of the balance to another player, as their public profile names them: a debit that names their
-   * uname, which their wallet collects into their balance once it has an open channel. Nothing goes on-chain, so it
+   * uname, which their wallet collects into their balance, deposit or none. Nothing goes on-chain, so it
    * costs no fee and tells nobody either account's address; it is the casino's to pay until they collect it. */
   async transfer(this: CasinoWallet, to: { uname: string; discordUsername: string | null }, amount: Integer) {
     const c = this.channel,

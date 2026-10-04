@@ -94,7 +94,7 @@ export function betTotals(rows: readonly BetRow[]) {
 
 const tone = (net: bigint) => (net < 0n ? 'negative' : net > 0n ? 'positive' : '');
 /** One figure under its label, as a bet's row and a bet in full both show it; `exact`, when the figure is cut short. */
-const figure = (label: string, value: string, className = '', exact = '') =>
+const figure = (label: string | Node, value: string, className = '', exact = '') =>
   h(
     'div',
     { className: `bet-figure ${className}`.trim(), ...(exact ? { title: exact } : {}) },
@@ -102,7 +102,7 @@ const figure = (label: string, value: string, className = '', exact = '') =>
     h('span', { className: 'bet-figure-label' }, label),
   );
 /** An amount as a row shows it, short, with the exact one on hover. */
-const amount = (label: string, wei: bigint, className = '') =>
+const amount = (label: string | Node, wei: bigint, className = '') =>
   figure(label, `${formatAmount(wei)} µETH`, className, `${exact(wei)} µETH`);
 
 /** How much went in, how much came back, and both returns side by side: one card, or none for no bets. */
@@ -157,7 +157,8 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
     amount(
       row.maxPayout === undefined || row.maxPayout === null
         ? 'Paid'
-        : `Paid of up to ${formatAmount(row.maxPayout)} µETH`,
+        : // Labels are capitals, which would make µ a Greek capital: the unit keeps its own case.
+          h('span', null, `Paid of up to ${formatAmount(row.maxPayout)} `, h('span', { className: 'unit' }, 'µETH')),
       row.payout,
     ),
     figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} µETH`),

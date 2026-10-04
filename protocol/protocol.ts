@@ -137,14 +137,6 @@ export const playsOn = (
   onchain: { status: Integer; deposited: Integer } | null | undefined,
   state: { deposited: Integer },
 ) => !!onchain && Number(onchain.status) === STATUS.active && BigInt(state.deposited) <= BigInt(onchain.deposited);
-export function validateOpening(opening: Opening) {
-  if (
-    !/^(0|[1-9][0-9]{0,77})$/.test(String(opening.index)) ||
-    same(opening.player, ZeroAddress) ||
-    opening.channelId !== channelId(opening.player, opening.index)
-  )
-    throw new Error('Invalid channel opening');
-}
 /** Wire terms as exact integers: a stake, the bet's chance out of 2^64 and the prize it pays. */
 export const betTerms = (stake: Integer, chance: Integer, prize: Integer) => ({
   stake: BigInt(stake),
@@ -676,23 +668,23 @@ const isEmptyStep = (d: Domain, step: Step) =>
 export function checkpointEvidence(state: Checkpoint, playerSignature = '0x', casinoSignature = '0x'): Evidence {
   return { base: state, playerSignature, casinoSignature, step: emptyStep() };
 }
-/** The checkpoint a bundle proves, once every signature in it checks out. */
+/** The checkpoint a bundle proves, once every signature in it checks out. Its base names its channel: the account,
+ * which signs for it, and the index. */
 export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   const d = domain(bundle.chainId, bundle.casino),
-    { opening, operator, evidence } = bundle;
-  validateOpening(opening);
-  if (!same(evidence.base.player, opening.player) || BigInt(evidence.base.index) !== BigInt(opening.index))
-    throw new Error('Evidence channel differs');
+    { operator, evidence } = bundle,
+    player = evidence.base.player;
+  if (!/^0x[0-9a-fA-F]{40}$/.test(player) || same(player, ZeroAddress)) throw new Error('Evidence names no account');
   // The channel's base needs no signature.
   if (!unsignedBase(d, evidence)) {
-    assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, opening.player);
+    assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, player);
     assertSignature(d, STATE_TYPES, evidence.base, evidence.casinoSignature, operator);
   }
   // A checkpoint-only proof carries the canonical empty step: one meaning, one encoding.
   if (!Number(evidence.step.operation.kind) && !isEmptyStep(d, evidence.step))
     throw new Error('Checkpoint evidence must carry an empty step');
   const state = Number(evidence.step.operation.kind)
-    ? verifyStep(d, evidence.base, evidence.step, opening.player, operator)
+    ? verifyStep(d, evidence.base, evidence.step, player, operator)
     : evidence.base;
   if ([state.balance, state.deposited, state.withdrawn, state.loan].some(amount => BigInt(amount) >= MAX_BALANCE))
     throw new Error('Balance exceeds the protocol maximum');
@@ -715,7 +707,7 @@ export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
       !same(quote.message.round, op.round)
     )
       throw new Error('The disputed bet does not follow the checkpoint');
-    assertSignature(d, OP_TYPES, op, step.authorization, opening.player);
+    assertSignature(d, OP_TYPES, op, step.authorization, player);
     assertSignature(d, QUOTE_TYPES, quote.message, quote.signature, operator);
   }
   return { state };

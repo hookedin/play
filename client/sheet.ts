@@ -718,14 +718,20 @@ function renderRecovery() {
     closing
       ? BigInt(state.disputedPrize || 0) > 0n
         ? `The close disputes your casino bet at sequence ${state.closingSequence}: the casino has until the deadline to settle it on-chain, or it counts as won and pays ${formatAmount(state.disputedPrize)} µETH. Meanwhile the contract holds ${formatAmount(state.disputeHold || '0')} µETH of house cash for it, which the casino cannot take.`
-        : `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${formatAmount(state.balanceAtRisk || '0')} µETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
+        : state.needsChallenge
+          ? `The close proposes sequence ${state.closingSequence || '0'} where you saved ${state.closingSaved || '0'}, ${formatAmount(state.balanceAtRisk || '0')} µETH less than yours${state.challengePending ? '; a challenge is on its way' : ''}.`
+          : `The close stands at sequence ${state.closingSequence || '0'}, your latest saved state.`
       : '',
     `Last checked ${state.observedAt ? new Date(state.observedAt).toLocaleString() : 'never: refresh before acting'}.`,
   ]
     .filter(Boolean)
     .join(' ');
   $('challenge-deadline').textContent =
-    closing && deadline ? `The close can be challenged until ${new Date(deadline * 1000).toLocaleString()}.` : '';
+    closing && deadline
+      ? Date.now() / 1000 < deadline
+        ? `The close can be challenged until ${new Date(deadline * 1000).toLocaleString()}.`
+        : `The close's challenge period ended ${new Date(deadline * 1000).toLocaleString()}: finish it.`
+      : '';
   $<HTMLButtonElement>('channel-export').disabled = !(wallet.channel || wallet.closingChannel) || busy;
   // Locking in moves winnings into the deposits: with all of the balance protected, there is nothing to lock in.
   $<HTMLButtonElement>('channel-lock').disabled =
@@ -880,9 +886,10 @@ $('wallet-dialog').addEventListener('close', () => {
   }
 });
 function downloadEvidence(report: any) {
-  download(`hookedin-channel-${report.opening.channelId}.json`, json(report));
-  const { state } = verifyEvidence(report);
-  toast(`Exported the recovery bundle of channel ${short(report.opening.channelId)}, sequence ${state.sequence}.`);
+  const { state } = verifyEvidence(report),
+    channel = channelId(state.player, state.index);
+  download(`hookedin-channel-${channel}.json`, json(report));
+  toast(`Exported the recovery bundle of channel ${short(channel)}, sequence ${state.sequence}.`);
 }
 act('export-evidence', async () => downloadEvidence(await wallet.exportEvidence()));
 for (const id of ['start-close', 'channel-start-close'])

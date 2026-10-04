@@ -168,7 +168,7 @@ export interface EvidenceBundle {
   chainId: Integer;
   casino: string;
   operator: string;
-  opening: Opening;
+  /** The channel's latest evidence, whose base names the channel. */
   evidence: Evidence;
   /** The evidence of each of the account's withdrawals the contract may still owe something: the operation the account
    * signed and the casino's signature after it. Each is a claim of its own once recorded, under the operation's hash. */

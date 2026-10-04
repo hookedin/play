@@ -1,14 +1,14 @@
 ---
-title: Channel endpoints
-description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank, the profile and verifying a Discord account.
+title: Channel and account endpoints
+description: The wallet's routes, for registering a channel, placing operations and collateral on it, and what belongs to the account, whatever its channels - its names, what it is owed, its developer bets, its shares, its bank, its games and verifying a Discord account.
 sidebar:
   order: 2
 ---
 
-Every route here concerns one channel, `:id`, and needs [account access](index.md#authentication): a token signed by
-the channel's account, which signs everything on its channel. The account's own routes, its uname and its Discord
-account, are [at the end](#the-account). The checkpoints, operations and statements they carry are specified on
-[Signed messages](../reference/signed-messages.md).
+The wallet's routes need [account access](index.md#authentication): a token the account signed, which serves for all
+its channels. Those under `/api/channels/:id` concern one channel, which the account signs everything on; those under
+`/api/account/`, [the account](#the-account), what belongs to it whatever its channels. The checkpoints, operations
+and statements they carry are specified on [Signed messages](../reference/signed-messages.md).
 
 ## Registering a channel
 
@@ -19,12 +19,8 @@ from the start, with nothing to open: the casino registers it at its [base](../r
 all zero, once the chain holds a deposit for it, [confirmed](../reference/deployment.md#chains), whoever sent it, and
 the balance takes the deposit in with a [deposit operation](#post-apichannelsidoperations). It also registers it before
 any deposit while it owes the account something, such as a [transfer](#post-apichannelsidoperations). A channel the
-casino knows is returned with no chain read. Registering a channel counts against
-[budgets](index.md#budgets-and-queues) of its own.
-
-| Body field | Type   | Meaning                                                                                                                                                                            |
-| ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids), the account and how many of its channels started closing before it; `channelId` is `:id` |
+casino knows is returned with no chain read. The body is `{}`: the token names the account, and the chain which of its
+channels is current. Registering a channel counts against [budgets](index.md#budgets-and-queues) of its own.
 
 | Response field             | Type                   | Meaning                                                                                                                                 |
 | -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -32,8 +28,7 @@ casino knows is returned with no chain read. Registering a channel counts agains
 | `state`                    | Checkpoint             | The latest checkpoint                                                                                                                   |
 | `lastResponse`             | object or null         | The reply that signed `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `quote`; `null` at the base |
 
-`refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel that is not the
-account's current one ("Channel is not the account's current one"), one the confirmed chain holds no deposit for while
+`refused` answers a `:id` that is not the account's current channel ("Channel is not the account's current one"), one the confirmed chain holds no deposit for while
 the casino owes its account nothing ("Channel holds no deposit, and its account is owed nothing"), and a chain that
 moved on during the check ("Chain observation advanced; retry activation").
 
@@ -83,9 +78,9 @@ What the casino checks and answers, by operation:
 | Developer bet, kind 2       | `{id, game, group?, meta}`                                                         | Moves the stake into the bank of the game's developer; declines a bet on a game nobody publishes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | –                                                                                       |
 | Investment, kind 2          | `{id, counterparty: FUND_ID}`                                                      | Mints shares to the channel's player at the current price; declines one too small to buy a share, and one while shares are in issue and the fund's equity is not positive                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `statement`: the `ShareStatement`                                                       |
 | Bank deposit, kind 2        | `{id, counterparty: BANK_ID}`                                                      | Moves the amount into the bank of the channel's own account                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `statement`: the `BankStatement`                                                        |
-| Transfer, kind 2            | `{id, counterparty: "~" + the recipient's uname}`                                  | Debits the amount and owes it to the player the uname belongs to, as a [payout](#get-apichannelsidpayouts) under this account's uname, which their wallet collects; nothing goes on-chain. Declines one to a uname nobody goes by ("Nobody goes by ~…"), one to the account itself ("A transfer goes to another player"), and one that would spend what the casino lent the balance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | –                                                                                       |
+| Transfer, kind 2            | `{id, counterparty: "~" + the recipient's uname}`                                  | Debits the amount and owes it to the player the uname belongs to, as a [payout](#get-apiaccountpayouts) under this account's uname, which their wallet collects; nothing goes on-chain. Declines one to a uname nobody goes by ("Nobody goes by ~…"), one to the account itself ("A transfer goes to another player"), and one that would spend what the casino lent the balance                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | –                                                                                       |
 | Developer earnings, kind 3  | `{id, counterparty: DEVELOPER_ID}`                                                 | Pays at most what the account has earned and not collected; `not-due` beyond it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | –                                                                                       |
-| Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID, the bet's hash or "~" + the sender's uname}` | Pays exactly the amount of a [payout](#get-apichannelsidpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | –                                                                                       |
+| Collecting a payout, kind 3 | `{id, counterparty: FUND_ID, BANK_ID, the bet's hash or "~" + the sender's uname}` | Pays exactly the amount of a [payout](#get-apiaccountpayouts) listed under that source; `not-due` otherwise                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | –                                                                                       |
 | Deposit, kind 4             | `{id}`                                                                             | Takes in money deposited into the channel on-chain: signs once the chain has confirmed, at the casino's finality, that the channel's deposits cover the state's `deposited` plus the amount; reads the chain again when it has not seen that, and refuses with `unconfirmed` if it still has not                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | –                                                                                       |
 | Withdrawal, kind 5          | `{id}`                                                                             | Has the contract pay the amount to the operation's `recipient`; declines one larger than it can pay now ("At most … ETH can be withdrawn now"), one whose `fee` is below the [withdrawal fee](public.md#get-apiwithdrawal-fee) ("Sending a withdrawal costs a fee of … ETH now"), and one to an address that would refuse the contract's payment, a call with [the contract's gas](../reference/contract.md#withdrawals) ("That address does not accept a payment from the contract")                                                                                                                                                                                                                                                                                                                                                                                                                                               | –                                                                                       |
 | Lock-in, kind 6             | `{id}`                                                                             | Has the contract put the amount into the account's current channel, as deposits; declines one larger than it can pay now or with too small a fee, as for a withdrawal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | –                                                                                       |
@@ -265,15 +260,36 @@ withdrawal it owes counts on, and refuses more ("At most … ETH of collateral i
 nothing: what is bought first is locked, and one bought once that cash has gone reverts. `channel-closed` answers a
 channel that is not active.
 
-## Payouts and developer bets
+## The account
 
-### `GET /api/channels/:id/payouts`
+What belongs to the account, whatever its channels: its names, what it is owed, its developer bets, its shares in the
+fund, its bank and the games it publishes. Every route takes the [account's token](index.md#authentication) alone, so an
+account with no balance asks too. Its uname and Discord routes count against the
+[budget](index.md#budgets-and-queues) of registering a channel, and the rest against the account's own.
 
-What the casino owes the channel's account, for the wallet to collect with credits, transfers from other players among
-them. Payouts belong to the account, so any of its channels lists and collects them. The list holds at most 256 entries: first the account's developer
-earnings, if it has ever earned any, then every payout not yet collected, ordered by source and index. The wallet
-collects each with a credit whose details name `source` as their `counterparty`, for exactly `amount` (for earnings, at
-most `amount`), and the next reply lists the rest.
+### `POST /api/account/uname`
+
+The account's uname, told to the account alone: the token proves it holds the account's key, so an account has its
+uname before its first deposit. The wallet asks as soon as it loads an account. Asking records nothing, and this route
+tells nobody the uname of an address without that address's signature: the casino derives unames with a key it keeps
+secret. The body is `{}`.
+
+| Response field | Type           | Meaning                                                                                                                                                     |
+| -------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`        | string         | The account's uname                                                                                                                                         |
+| `profile`      | object or null | Its own profile, once the casino has met the account; `null` before                                                                                         |
+| `registers`    | boolean        | Whether the casino registers the account's current channel before the chain holds a deposit for it: it owes the account something, or registered it already |
+
+An account's own profile is its [public profile](public.md#get-apiplayersname). Unlinking a Discord account and
+publishing a game answer with it too.
+
+### `GET /api/account/payouts`
+
+What the casino owes the account, for its wallet to collect into its balance with credits, transfers from other players
+among them. The list holds at most 256 entries: first the account's developer earnings, if it has ever earned any, then
+every payout not yet collected, ordered by source and index. The wallet collects each with a credit whose details name
+`source` as their `counterparty`, for exactly `amount` (for earnings, at most `amount`), and the next reply lists the
+rest.
 
 | Response field    | Type           | Meaning                                                                                                                                                                                                                                                                  |
 | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -284,7 +300,7 @@ most `amount`), and the next reply lists the rest.
 | `collected`       | string         | Earnings only: what of it has been collected                                                                                                                                                                                                                             |
 | `discordUsername` | string or null | Transfers only: the Discord username the sender goes by now, if any                                                                                                                                                                                                      |
 
-### `GET /api/channels/:id/developer-bets`
+### `GET /api/account/developer-bets`
 
 The account's developer bets, across all its channels: `{bets, cursor, more}` ([pages](index.md#pages)). A bet is
 `{bet, game, group?, status, stake, collected}`, and a settled one adds `payout`, what its settlement pays the player,
@@ -299,52 +315,52 @@ collecting and stays `false`.
 
 `invalid` answers a missing status, or a malformed cursor or limit.
 
-## The bankroll fund
+### The bankroll fund
 
 [The bankroll fund](../wallet/bankroll-fund.md) explains investing, which is an
 [operation](#post-apichannelsidoperations); the messages are [the fund's](../reference/signed-messages.md#bankroll-fund-messages).
-A holding belongs to the channel's account, so it outlives any one channel.
+A holding belongs to the account, so it outlives any one channel.
 
-### `GET /api/channels/:id/fund`
+### `GET /api/account/fund`
 
 The account's holding: `{statement, redeems}`, the casino's latest `ShareStatement` of it (`null` before any), and every
 `Redeem` the account signed, each as `{request: {message, signature}, statement}` with the statement it produced. A
 wallet that missed statements takes the latest up with them ([bankroll fund](../wallet/bankroll-fund.md)).
 
-### `POST /api/channels/:id/fund/redeem`
+### `POST /api/account/fund/redeem`
 
 Burns shares at the current price; what they are worth leaves the bankroll and is owed to the account at once, listed
-by [`…/payouts`](#get-apichannelsidpayouts) under `FUND_ID`. The same `Redeem` again returns its statement while it is
-the holding's latest. The `Redeem` names the channel's own account as its holder and follows the holding's latest
-statement; the amount must be more than zero and within the unreserved bankroll, so a larger redemption waits for the
-casino bets counting on that money to settle.
+by [`…/payouts`](#get-apiaccountpayouts) under `FUND_ID`. The same `Redeem` again returns its statement while it is
+the holding's latest. The `Redeem` names the account as its holder and follows the holding's latest statement; the
+amount must be more than zero and within the unreserved bankroll, so a larger redemption waits for the casino bets
+counting on that money to settle.
 
 | Body field  | Type   | Meaning                                      |
 | ----------- | ------ | -------------------------------------------- |
 | `message`   | object | The `Redeem`: `{holder, shares, sequence}`   |
 | `signature` | string | The account's EIP-712 signature of `message` |
 
-The reply is `{statement}`, the casino's `ShareStatement`, whose `amount` is what the shares paid. `channel-closed`
-answers a channel that is not active; `refused` answers another holder, a bad signature, a `sequence` that does not follow
-the latest statement, more shares than are held, shares worth nothing, and an amount the bankroll cannot release yet.
+The reply is `{statement}`, the casino's `ShareStatement`, whose `amount` is what the shares paid. `refused` answers
+another holder, a bad signature, a `sequence` that does not follow the latest statement, more shares than are held,
+shares worth nothing, and an amount the bankroll cannot release yet.
 
-## The developer bank
+### The developer bank
 
 A developer's bank holds its money at the casino: the stakes of its games' developer bets go in, its settlements and
 casino bets are paid from it ([developer bank messages](../reference/signed-messages.md#developer-bank-messages)). It
-belongs to the channel's account. A deposit is an [operation](#post-apichannelsidoperations).
+belongs to the account. A deposit is an [operation](#post-apichannelsidoperations).
 
-### `GET /api/channels/:id/bank`
+### `GET /api/account/bank`
 
 The account's bank: `{developer, balance, sequence, statement}`, what it holds and the casino's latest `BankStatement`
 (`null` and 0 before any). Developer bets, settlements and casino bets move the balance between statements, so `balance`
 can differ from the statement's.
 
-### `POST /api/channels/:id/bank/withdraw`
+### `POST /api/account/bank/withdraw`
 
 Takes money out of the account's bank: any amount up to the balance, at any time, owed at once and listed by
-[`…/payouts`](#get-apichannelsidpayouts) under `BANK_ID`. The same `BankWithdraw` again returns its statement while it is
-the bank's latest. The `BankWithdraw` names the channel's own account and follows the bank's latest statement.
+[`…/payouts`](#get-apiaccountpayouts) under `BANK_ID`. The same `BankWithdraw` again returns its statement while it is
+the bank's latest. The `BankWithdraw` names the account and follows the bank's latest statement.
 
 | Body field  | Type   | Meaning                                             |
 | ----------- | ------ | --------------------------------------------------- |
@@ -352,46 +368,19 @@ the bank's latest. The `BankWithdraw` names the channel's own account and follow
 | `signature` | string | The account's EIP-712 signature of `message`        |
 
 The reply is `{statement}`, the casino's `BankStatement` with the balance after the withdrawal. `invalid` answers another
-account's bank; `channel-closed` a channel that is not active; `refused` a bad signature, a `sequence` that does not follow
-the latest statement, and an amount of zero or above the balance.
+account's bank; `refused` a bad signature, a `sequence` that does not follow the latest statement, and an amount of zero
+or above the balance.
 
-## The profile
+### `POST /api/account/games`
 
-A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is the reply of
-the Discord and games routes. The casino has one for every account it has registered a channel of, and every account
-that verified a Discord account.
-
-### `POST /api/channels/:id/games`
-
-Publishes a game under the channel's player, or takes it down: `{name, url}`. The player becomes the game's developer:
-it earns the game's commission and settles its developer bets, and the game's key is
+Publishes a game under the account, or takes it down: `{name, url}`. The account becomes the game's developer: it earns
+the game's commission and settles its developer bets, and the game's key is
 [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with another URL moves the
-game and keeps its key. Publishing needs an active channel; taking a game down, with a `null` `url`, works from any
-channel. [The game's URL](../games/publishing.md#the-games-url) gives the rules for `name` and `url`.
-`invalid` answers a name or URL those rules do not allow, `channel-closed` a channel that is closing or closed, and `too-many` a
-profile that already publishes 100 games.
-
-## The account
-
-What an account asks for itself, whatever its channels: its uname, and verifying its Discord account. These routes take
-the [account's token](index.md#authentication), `{}` as their body, and count against the
-[budget](index.md#budgets-and-queues) of registering a channel.
-
-### `POST /api/account/uname`
-
-The account's uname, told to the account alone: the token proves it holds the account's key, so an account has its
-uname before its first deposit. The wallet asks as soon as it loads an account. Asking records nothing, and this route
-tells nobody the uname of an address without that address's signature: the casino derives unames with a key it keeps
-secret.
-
-| Response field | Type           | Meaning                                                                                                                                                     |
-| -------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`        | string         | The account's uname                                                                                                                                         |
-| `profile`      | object or null | Its own profile, once the casino has met the account; `null` before                                                                                         |
-| `registers`    | boolean        | Whether the casino registers the account's current channel before the chain holds a deposit for it: it owes the account something, or registered it already |
-
-An account's own profile is its [public profile](public.md#get-apiplayersname). Unlinking a Discord account and
-publishing a game answer with it too.
+game and keeps its key. A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayersname) shows it,
+and it is this route's reply. Publishing needs a balance that plays; taking a game down, with a `null` `url`, works
+whatever the account holds. [The game's URL](../games/publishing.md#the-games-url) gives the rules for `name` and `url`.
+`invalid` answers a name or URL those rules do not allow, `channel-closed` an account with no balance that plays
+("Publish games from a balance that plays"), and `too-many` a profile that already publishes 100 games.
 
 ### Verifying a Discord account
 
@@ -405,12 +394,12 @@ where the casino has no Discord server: `discord` in [`GET /api/config`](public.
 
 A code for the account, `{code, expires}`: eight characters with no `l`, `0` or `1`, which a member runs `/verify` with
 until `expires`, 10 minutes on. An account has one code at most: asking again ends the one before. `refused` answers
-the house, which goes by `@hookedin`.
+the house, which goes by `@hookedin`. The body is `{}`.
 
 ### `POST /api/account/discord/unlink`
 
 Gives up the Discord account that verified the account: it goes by its uname again. Answers its own profile;
-`not-found` answers an account that verified no Discord account.
+`not-found` answers an account that verified no Discord account. The body is `{}`.
 
 ### `POST /api/discord`
 

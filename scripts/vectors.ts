@@ -57,8 +57,8 @@ export function buildVectors() {
   ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
   // The player's first channel, at its base, with the key it goes by off-chain.
-  const opening = { channelId: channelId(identity.player, 0), player: identity.player, index: '0' },
-    base = baseState(opening.player, opening.index);
+  const channel = { channelId: channelId(identity.player, 0), player: identity.player, index: '0' },
+    base = baseState(channel.player, channel.index);
   // An operation on the checkpoint before it: its details, whose canonical JSON its memo hashes, the operation and its
   // hash, and the checkpoint it leads to with the seed and secret it settles with, zero but for a casino bet.
   const apply = (
@@ -157,8 +157,8 @@ export function buildVectors() {
   };
   // The casino's offer of collateral for the channel at a rate of 1%, in millionths of the amount: what buying it pays.
   const offer = {
-    player: opening.player,
-    index: opening.index,
+    player: channel.player,
+    index: channel.index,
     amount: 2_000_000_000n,
     price: collateralPrice(2_000_000_000n, 10_000n),
     expiresAt: 1_800_000_000n,
@@ -168,7 +168,7 @@ export function buildVectors() {
     identity,
     protocol: PROTOCOL,
     developerProtocol: DEVELOPER_PROTOCOL,
-    opening,
+    channel,
     base,
     baseHash: hashState(d, base),
     operations: [opened, bet, developerBet, payout, deposited, loan, withdrawal, lockIn, transfer],

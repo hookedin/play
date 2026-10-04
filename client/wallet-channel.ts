@@ -368,7 +368,6 @@ export class ChannelClient extends WalletTransactions {
         chainId: this.expectedChainId,
         casino: this.config.contractAddress,
         operator: this.operator,
-        opening: c.opening,
         evidence: response.evidence,
       }).state;
       if (!same(hashState(this.domain, next), hashState(this.domain, proven)))
@@ -586,14 +585,13 @@ export class ChannelClient extends WalletTransactions {
   /** Refresh the account's open developer bets and consume its durable feed of settled ones. Save each page with its
    * cursor before attempting collection, so a failed credit cannot hide a settled bet. */
   async refreshDeveloperBets(this: CasinoWallet) {
-    const channelId = this.channelId;
-    if (!channelId) return;
+    const address = this.address;
     try {
       for (const status of ['open', 'settled'] as const) {
         let after = status === 'settled' ? this.developerBetCursor : '';
         for (;;) {
           const page: PlayerDeveloperBets = await this.api(
-            `/api/channels/${channelId}/developer-bets?status=${status}&after=${encodeURIComponent(after)}`,
+            `/api/account/developer-bets?status=${status}&after=${encodeURIComponent(after)}`,
           );
           if (
             !Array.isArray(page.bets) ||
@@ -602,10 +600,10 @@ export class ChannelClient extends WalletTransactions {
             (page.more && page.cursor === after)
           )
             throw new Error('Invalid bet list');
-          if (this.channelId !== channelId) return;
+          if (this.address !== address) return;
           await this.exclusive(
             async () => {
-              if (this.channelId !== channelId) return;
+              if (this.address !== address) return;
               if (status === 'settled' && Number(page.cursor) <= Number(this.developerBetCursor)) return;
               const developerBets = { ...this.developerBets };
               for (const state of page.bets) {
@@ -639,7 +637,7 @@ export class ChannelClient extends WalletTransactions {
       }
       this.developerBetError = null;
     } catch (error: any) {
-      if (this.channelId === channelId) this.developerBetError = error.message;
+      if (this.address === address) this.developerBetError = error.message;
       throw error;
     } finally {
       this.render();
@@ -671,14 +669,14 @@ export class ChannelClient extends WalletTransactions {
   }
   /** This account's bank as the casino has it now. */
   async bankBalance(this: CasinoWallet) {
-    const { balance, sequence } = await this.api(`/api/channels/${this.channelId}/bank`);
+    const { balance, sequence } = await this.api('/api/account/bank');
     return { balance: String(BigInt(balance)), sequence: Number(sequence) };
   }
   /** Take money out of this account's bank: any balance, at any time. The signed `BankWithdraw` is saved
-   * before it is sent, and what it takes out is owed to this account, collected into the open channel. */
+   * before it is sent, and what it takes out is owed to this account, collected into its balance. */
   async withdrawBank(this: CasinoWallet, amount: Integer) {
     return this.exclusive(async () => {
-      await this.ready();
+      this.requireService();
       const held = { ...this.bank };
       if (!held.withdrawing) {
         const bank = await this.bankBalance();
@@ -698,7 +696,7 @@ export class ChannelClient extends WalletTransactions {
       const request = held.withdrawing;
       let statement;
       try {
-        ({ statement } = await this.api(`/api/channels/${this.channelId}/bank/withdraw`, request));
+        ({ statement } = await this.api('/api/account/bank/withdraw', request));
       } catch (error: any) {
         // Refused, so never taken: the next withdrawal is signed afresh.
         if (error.status === 409 || error.status === 400)
@@ -775,8 +773,8 @@ export class ChannelClient extends WalletTransactions {
    * or a redemption is pending, whose own reply brings its statement; a statement that fails is kept out and shown as
    * an alert. */
   async syncFund(this: CasinoWallet) {
-    if (!this.channel?.registered || this.pending || this.fund.redeeming) return;
-    const { statement, redeems } = await this.api(`/api/channels/${this.channelId}/fund`);
+    if (this.pending || this.fund.redeeming) return;
+    const { statement, redeems } = await this.api('/api/account/fund');
     if (!statement || Number(statement.message?.sequence) <= this.fund.sequence) return;
     await this.exclusive(
       () => {
@@ -848,17 +846,17 @@ export class ChannelClient extends WalletTransactions {
   }
   /** Turn shares back into money. The signed request is saved before it is sent, so a lost reply is
    * asked for again; the casino's statement says what the shares fetched, and that money is then
-   * collected into the open channel. */
+   * collected into the balance. */
   async redeem(this: CasinoWallet, shares: Integer) {
     // A redemption follows the latest statement: a wallet that missed some takes them up before it signs.
     await this.syncFund();
     return this.exclusive(async () => {
-      await this.ready();
+      this.requireService();
       if (!this.fund.redeeming) {
         if (BigInt(shares) <= 0n || BigInt(shares) > BigInt(this.fund.shares))
           throw new Error('Not that many shares to redeem');
         const message = {
-          holder: this.channel!.opening.player,
+          holder: this.address,
           shares: String(BigInt(shares)),
           sequence: String(this.fund.sequence + 1),
         };
@@ -874,7 +872,7 @@ export class ChannelClient extends WalletTransactions {
       const request = this.fund.redeeming!;
       let statement;
       try {
-        ({ statement } = await this.api(`/api/channels/${this.channelId}/fund/redeem`, request));
+        ({ statement } = await this.api('/api/account/fund/redeem', request));
       } catch (error: any) {
         // A considered refusal leaves nothing pending; a lost reply is asked for again with the same request.
         if (error.status === 409) {
@@ -925,7 +923,7 @@ export class ChannelClient extends WalletTransactions {
     if (this.busy || this.pending || !this.playable) return [];
     const channelId = this.channelId,
       collected: any[] = [];
-    const due = await this.api(`/api/channels/${channelId}/payouts`);
+    const due = await this.api('/api/account/payouts');
     if (!Array.isArray(due) || due.length > MAX_PAYOUTS) throw new Error('Invalid payout list');
     for (const payout of due) {
       if (this.channelId !== channelId || this.busy || this.pending) break;

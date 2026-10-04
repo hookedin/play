@@ -81,8 +81,8 @@ test('reorged, reverted, replaced and unknown receipts never advertise a confirm
 });
 
 test('closures and actual collections remain distinct from off-chain payments', () => {
-  const closure = receiptSummary({ kind: 'closure', amount: '0', status: 'confirmed' }, contract);
-  assert.equal(closure.amount, '0 µETH');
+  const closure = receiptSummary({ kind: 'closure', amount: '1500000000000', status: 'confirmed' }, contract);
+  assert.deepEqual([closure.amount, closure.amountLabel], ['1.5 µETH', 'Claim recorded']);
   assert.match(closure.notice!, /Collect it under Wallet → Waiting to be paid/);
   assert.equal(
     receiptSummary({ kind: 'withdrawal', amount: '123', status: 'confirmed' }, contract).amountLabel,

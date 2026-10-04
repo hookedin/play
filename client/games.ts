@@ -10,7 +10,7 @@ import { gamePath, showPage, walletRoute, type GameRoute } from './routes.ts';
 import { openWallet, task, uiBusy, wallet } from './sheet.ts';
 
 interface ActiveGame {
-  /** The channel this game is bound to; null until a channel is open. */
+  /** The channel this game is bound to; null until the wallet has a channel. */
   channelId: string | null;
   /** The uname the page was told, once it asked: a game keys what it saves by it, so it restarts when that changes, as
    * it does with the account. */

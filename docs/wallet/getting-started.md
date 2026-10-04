@@ -61,8 +61,8 @@ or a bank deposit or a transfer leaves it in the balance, and your next withdraw
 ### When ETH waits at the address
 
 ETH stays at the deposit address instead, for fees or to withdraw elsewhere, while **Add ETH that arrives at my deposit
-address to my balance** is off under **Deposits** in Settings, while the casino is unavailable, and from the start of a close until your
-next balance opens ([closing and claims](closing-and-claims.md)). **Add to balance**, on the Deposit tab, adds it when
+address to my balance** is off under **Deposits** in Settings, which starting a close turns off, and while the casino is
+unavailable ([closing and claims](closing-and-claims.md)). **Add to balance**, on the Deposit tab, adds it when
 you choose.
 
 ## Games and their allowances
