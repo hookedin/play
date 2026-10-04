@@ -1,6 +1,6 @@
 ---
 title: Channel endpoints
-description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank, the profile, signing in with X and the faucet.
+description: The wallet's routes, for registering a channel, placing operations, collecting what is owed, the fund, the developer bank, the profile, verifying a Discord account and the faucet.
 sidebar:
   order: 2
 ---
@@ -357,8 +357,8 @@ the latest statement, and an amount of zero or above the balance.
 ## The profile
 
 A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is the reply of
-the X and games routes. The casino has one for every account it has registered a channel of, and every account that
-signed in with X.
+the Discord and games routes. The casino has one for every account it has registered a channel of, and every account
+that verified a Discord account.
 
 ### `POST /api/channels/:id/uname`
 
@@ -378,8 +378,8 @@ without that address's signature: the casino derives unames with a key it keeps 
 | `profile`      | object or null | Its own profile, once the casino has met the account; `null` before |
 
 An account's own profile is its [public profile](public.md#get-apiplayersname) and `faucet`, whether
-[the faucet](#post-apichannelsidfaucet) lends to it, which no public route says. Signing in and out of X and publishing a
-game answer with it too.
+[the faucet](#post-apichannelsidfaucet) lends to it now, which no public route says. Unlinking a Discord account and
+publishing a game answer with it too.
 
 `refused` answers an opening whose `channelId` is not `:id` or does not fit its fields.
 
@@ -393,52 +393,53 @@ channel. [The game's URL](../games/publishing.md#the-games-url) gives the rules 
 `invalid` answers a name or URL those rules do not allow, `channel-closed` a channel that is closing or closed, and `too-many` a
 profile that already publishes 100 games.
 
-## Signing in with X
+## Verifying a Discord account
 
-Signing in with X is the one way to an alias: an account signed in with an X account goes by its username
-([your name](../wallet/getting-started.md#your-name)). The casino asks X about an X account only as its player signs
-in, and keeps no token. These routes take `{opening}`, as [the uname](#post-apichannelsiduname) does, from an account
-with a channel or without one, and count against the [budget](index.md#budgets-and-queues) of registering a channel.
-`not-found` answers where the casino offers no signing in with X: `x` in [`GET /api/config`](public.md#get-apiconfig)
-is `false`.
+Verifying a Discord account is the one way to an alias: an account goes by the username of the Discord account that
+verified it ([your name](../wallet/getting-started.md#your-name)). The account asks for a code, and a member of the
+HookedIn Discord runs `/verify` with it there. Discord sends the casino each command run in that server, signed with
+the key of the casino's Discord app, and the casino learns of a Discord account only from those. The account routes
+take `{opening}`, as [the uname](#post-apichannelsiduname) does, from an account with a channel or without one, and
+count against the [budget](index.md#budgets-and-queues) of registering a channel. `not-found` answers where the casino
+has no Discord server: `discord` in [`GET /api/config`](public.md#get-apiconfig) is `null`.
 
-### `POST /api/channels/:id/x/start`
+### `POST /api/channels/:id/discord/code`
 
-Starts signing in with X for the account, and answers `{url}`: X's sign-in page, which the wallet sends the browser to.
-X sends it back to the wallet's `/x` page with `state` and `code`, or with `error` when the player cancels. A sign-in
-waits 10 minutes, and an account has one waiting at most: starting another ends the one before.
+A code for the account, `{code, expires}`: eight characters with no `l`, `0` or `1`, which a member runs `/verify` with
+until `expires`, 10 minutes on. An account has one code at most: asking again ends the one before. `refused` answers
+the house, which goes by `@playhookedin`.
 
-### `POST /api/channels/:id/x/finish`
+### `POST /api/channels/:id/discord/unlink`
 
-Finishes the account's sign-in with X: `{opening, state, code}`, what X sent the browser back with. The casino trades
-the code for a token and reads the X account once with it, with the X API's `GET /2/users/me`: its ID, its username and
-whether it has X Premium, X's blue check (`verified_type` `blue`). From then on the account's alias is the username, and
-its profile's `x` says whether the X account had X Premium then, and when. X Premium lets the account borrow from
-[the faucet](#post-apichannelsidfaucet). An X account is one account's: signing in with it on another account signs the
-first out of it. Answers the account's [own profile](#post-apichannelsiduname).
+Gives up the Discord account that verified the account, `{opening}`: it goes by its uname again, and the faucet lends
+to it no more. Answers its own profile; `not-found` answers an account that verified no Discord account.
 
-`x-refused` answers a sign-in another account started, one finished already or older than 10 minutes, and a code X
-does not accept: sign in again. `x-unavailable` answers when X does not answer, or does not answer the casino's app.
-`reserved` answers a username the casino keeps for itself, and `taken` one that reads like another player's alias. The
-same username as another player's alias, whatever its case, is one X has moved to this X account: the player who had it
-is signed out of X.
+### `POST /api/discord`
 
-### `POST /api/channels/:id/x/sign-out`
+Discord's own route: the commands members run in the HookedIn Discord, each signed with the key of the casino's Discord
+app in the `X-Signature-Ed25519` and `X-Signature-Timestamp` headers. `unauthorized` answers anything else. The casino
+answers a command with a message only the member who ran it sees, and a command run in any other server with nothing
+else.
 
-Signs the account out of X, `{opening}`: it goes by its uname again, its profile's `x` is `null`, and the faucet lends
-to it no more. Answers its own profile; `not-found` answers an account not signed in with X.
+- `/verify code`: the account the code was given to goes by the member's Discord username from then on. The code is
+  spent, and one over 10 minutes old does nothing. A Discord account is one account's: verifying it on another takes it
+  from the first. A username of more than 23 characters, one the casino keeps for itself, and one that reads like
+  another player's alias are refused. The same username as another player's alias is one Discord has moved to this
+  member: the player who had it goes by their uname again. Run again, it brings a changed username up to date.
+- `/faucet`: the member's account may borrow from [the faucet](#post-apichannelsidfaucet) once in the hour that follows,
+  if the faucet would lend to it now.
 
 ## The faucet
 
 ### `POST /api/channels/:id/faucet`
 
 Asks the faucet for free µETH, `{opening}`. The faucet lends `faucet` wei, 10 µETH ([`GET /api/config`](public.md#get-apiconfig)),
-to an account whose [own profile](#post-apichannelsiduname) says `faucet: true`, while the account's balance holds
-less: once an hour for each account. Signing in with an X account that has X Premium switches `faucet` on, and
-the casino switches it on or off for any account. An account that loses its X account, signing out of it, to another
-account or for another X account, loses `faucet` with it, whoever switched it on. It is a [faucet loan](#post-apichannelsidoperations): bets stake it, and a
-withdrawal, a transfer or a close pays it back first. What the faucet lends comes out of a budget the casino sets, and
-the gas of the deposits that open channels for it out of an account of the faucet's own.
+to the account of a member of the HookedIn Discord who asked `/faucet` there ([verifying](#post-apidiscord)) in the hour
+before, while the account's balance holds less: once an hour for each member, whichever account they verify. The
+account's [own profile](#post-apichannelsiduname) says `faucet: true` meanwhile. The loan answers the ask. It is a
+[faucet loan](#post-apichannelsidoperations): bets stake it, and a withdrawal, a transfer or a close pays it back first.
+What the faucet lends comes out of a budget the casino sets, and the gas of the deposits that open channels for it out of
+an account of the faucet's own.
 
 | Response field | Type    | Meaning                                                                                                         |
 | -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
@@ -446,8 +447,7 @@ the gas of the deposits that open channels for it out of an account of the fauce
 | `opening`      | boolean | Whether the account has no open channel, which the casino opens for it with a deposit of nothing, as anyone may |
 
 The account borrows with a faucet loan once its channel is open and registered. The casino opens a channel once an hour
-for each account, and answers `opening: true` again while that deposit is on its way. `not-eligible` answers an
-account the faucet does not lend to: sign in with X Premium. `faucet-empty` answers when the budget for loans is spent,
-or the faucet's account holds too little to open the account's channel. `refused` answers an account the faucet lent
-to, or opened a channel for, in the last hour, saying when it does again, and a balance that holds what the faucet
-lends.
+for each member, and answers `opening: true` again while that deposit is on its way. `not-eligible` answers an account
+whose member has not asked: one that verified no Discord account, or whose member has not run `/faucet` within the hour. `faucet-empty` answers when the budget for loans is spent,
+or the faucet's account holds too little to open the account's channel. `refused` answers a member the faucet lent to,
+or opened a channel for, in the last hour, saying when it does again, and a balance that holds what the faucet lends.

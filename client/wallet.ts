@@ -205,22 +205,20 @@ export class CasinoWallet extends GameSessions {
   declare detailsObservedAt: number;
   /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
   declare uname: string | null;
-  /** The alias it is shown by instead, written `@alias`: the username of the X account it signed in with; null while it
-   * is signed in with none. */
+  /** The alias it is shown by instead, written `@alias`: the username of the Discord account it verified; null while it
+   * has verified none. */
   declare alias: string | null;
-  /** The public profile those names carry: when the casino first knew it, what it has played, whether its X account
-   * had X Premium when it last signed in with X, and the games it publishes. Read from the public route, like anybody
-   * else's. */
+  /** The public profile those names carry: when the casino first knew it, what it has played, and the games it
+   * publishes. Read from the public route, like anybody else's. */
   declare profile: {
     uname: string;
     alias: string | null;
     since: number;
     stats: any;
-    x: { premium: boolean; checked: number } | null;
     games: { name: string; url: string; key: string; developer: string }[];
   } | null;
-  /** Whether the casino's faucet lends to this account, as the casino last told the account itself: no public profile
-   * says it. */
+  /** Whether the casino's faucet lends to this account now, its member having asked `/faucet` in the HookedIn Discord,
+   * as the casino last told the account itself: no public profile says it. */
   declare faucet: boolean;
   /** Whether ETH at this account's address goes into its balance. Off, it stays available for withdrawal and
    * transaction fees. */
@@ -560,7 +558,7 @@ export class CasinoWallet extends GameSessions {
     this.render();
   }
   /** Ask the casino something for this account itself, signed for its first channel, which every account has whether
-   * or not it was ever opened: its uname, signing in with X, and the faucet. */
+   * or not it was ever opened: its uname, verifying its Discord account, and the faucet. */
   accountRequest(this: CasinoWallet, action: string, body: Record<string, unknown> = {}) {
     const opening = { channelId: channelId(this.address, 0), player: this.address, index: '0' };
     return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
@@ -598,18 +596,22 @@ export class CasinoWallet extends GameSessions {
     }
     return this.profile;
   }
-  /** Start signing in with X: the page of X's to send the browser to. X sends it back to the wallet's `/x` page. */
-  async signInWithX(this: CasinoWallet): Promise<string> {
-    return (await this.accountRequest('x/start')).url;
+  /** A code to run `/verify` with in the HookedIn Discord, `{code, expires}`: the member who runs it gives this account
+   * their Discord username as its alias. */
+  async discordCode(this: CasinoWallet): Promise<{ code: string; expires: number }> {
+    return this.accountRequest('discord/code');
   }
-  /** Finish signing in with X, with what X sent the browser back with: this account is shown by the X account's
-   * username from then on, and its profile says whether that account has X Premium. */
-  async finishSignInWithX(this: CasinoWallet, state: string, code: string) {
-    return this.takeProfile(await this.accountRequest('x/finish', { state, code }));
+  /** This account's own profile, asked again: how the wallet learns the name `/verify` gave it, and that the faucet
+   * lends to it once its member asked `/faucet`. */
+  async refreshOwnProfile(this: CasinoWallet) {
+    const address = this.address,
+      { profile } = await this.accountRequest('uname');
+    if (this.address === address && profile) this.takeProfile(profile);
+    return this.profile;
   }
-  /** Sign out of X: this account is shown by its uname again, and the faucet lends to it no more. */
-  async signOutOfX(this: CasinoWallet) {
-    return this.takeProfile(await this.accountRequest('x/sign-out'));
+  /** Give up the Discord account this account verified: it is shown by its uname again. */
+  async unlinkDiscord(this: CasinoWallet) {
+    return this.takeProfile(await this.accountRequest('discord/unlink'));
   }
   /** This account's profile as the casino answers the account itself with it, the names it shows and whether the faucet
    * lends to it. */
@@ -619,8 +621,8 @@ export class CasinoWallet extends GameSessions {
     return profile;
   }
   /** Borrow free µETH from the casino's faucet, which lends to an account it tells it lends to (`faucet`), whose balance
-   * holds less than it lends: signing in with X Premium lets an account borrow, and the casino lets any, or stops it. A loan that names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it
-   * back first. The faucet opens the account's channel first, if it is not open, with a deposit of nothing, and this
+   * holds less than it lends: one whose member asked `/faucet` in the HookedIn Discord within the hour. A loan that
+   * names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it back first. The faucet opens the account's channel first, if it is not open, with a deposit of nothing, and this
    * waits until the wallet has registered it. */
   async borrowFromFaucet(this: CasinoWallet) {
     const { amount, opening } = await this.accountRequest('faucet');

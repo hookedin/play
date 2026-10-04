@@ -288,7 +288,7 @@
       <section id="page-profile" class="page hidden">
         <div class="page-head">
           <div>
-            <h1><span id="profile-name"></span> <span id="profile-premium" class="badge hidden">X Premium</span></h1>
+            <h1 id="profile-name"></h1>
             <p id="profile-meta" class="muted"></p>
           </div>
           <a id="profile-edit" class="button small hidden" href="/settings" data-wallet-tab="profile">Edit name</a>
@@ -444,17 +444,29 @@
           <h3 id="name-title">Your name</h3>
           <p class="muted">
             All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
-            yours for good. Sign in with X and you go by your X username instead, <code>@like-this</code>: your alias.
+            yours for good. Verify your Discord account in the HookedIn Discord and you go by your Discord username
+            instead, <code>@like-this</code>: your alias.
           </p>
           <p class="name-line">
             <a id="wallet-name-link"><strong id="wallet-name">—</strong></a>
             <span id="wallet-uname" class="handle"></span>
           </p>
-          <p id="x-status" class="muted"></p>
           <a id="settings-profile" class="text-button hidden" href="/">See your profile</a>
-          <button id="sign-in-x" class="button full" type="button">Sign in with X</button>
-          <p id="x-note" class="muted"></p>
-          <button id="sign-out-x" class="text-button hidden" type="button">Sign out of X</button>
+          <button id="verify-discord" class="button full" type="button">Verify with Discord</button>
+          <div id="verify" hidden>
+            <label for="verify-code"
+              >Type <strong>/verify</strong> in the HookedIn Discord and give it this code:</label
+            >
+            <div class="address">
+              <code id="verify-code"></code
+              ><button id="copy-verify-code" class="button small" type="button">Copy</button>
+            </div>
+            <a id="open-discord" class="button primary full" target="_blank" rel="noopener"
+              >Open the HookedIn Discord</a
+            >
+          </div>
+          <p id="discord-note" class="muted"></p>
+          <button id="unlink-discord" class="text-button hidden" type="button">Unlink Discord</button>
         </section>
       </section>
       <section class="tab-panel" data-panel="keys" hidden>

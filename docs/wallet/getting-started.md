@@ -61,10 +61,10 @@ leaves it in the balance, and your next withdrawal, transfer or close pays it ba
 
 ### Free µETH
 
-Sign in with an X Premium account ([your name](#your-name)) and you can borrow 10 µETH to play with from the casino's
-faucet: **Get 10 µETH** on your profile, while your balance holds less than that, once an hour. Signing out of X, or
-in with your X account on another HookedIn account, ends it. The casino can let any account borrow, or stop one, and
-the faucet lends only as long as its budget lasts. An
+Verify your Discord account in the HookedIn Discord ([your name](#your-name)) and you can borrow 10 µETH to play with
+from the casino's faucet: ask `/faucet` there, then **Get 10 µETH** on your profile within the hour, while your balance
+holds less than that. The faucet lends to each member once an hour, whichever HookedIn account they verify, and only as
+long as its budget lasts. An
 account with no balance has one opened for it, with a deposit of nothing the casino sends; it needs no ETH of its own,
 nor a saved wallet, though what you win there is lost with an unsaved wallet. What the faucet lends is a loan, like a
 deposit's network fee: bets stake it, and your next withdrawal, transfer or close pays it back first, so what you win
@@ -155,21 +155,21 @@ uname does not reveal the address; it is the same for every channel of your acco
 the casino for it as soon as it loads your account, with a request only your key can sign, so you have it before your
 first deposit. It is what games, developers and other players learn about you.
 
-An **alias** is the name you go by instead: the username of your X account, written with an at sign, such as `@Bob`.
-**Sign in with X**, under **Profile** in Settings, is the only way to one, and needs no balance. X tells the casino your
-username and whether you have X Premium, X's blue check, when you sign in, and at no other time: sign in again after you
-rename your X account or change your subscription. Your profile shows X Premium if your X account had it when you last
-signed in. An X account is one HookedIn account's: signing in with it on another signs the first out of it. A
-username that reads like another player's alias, with `l` and `1` read as `i` and `0` as `o`, is refused, and so are
-the casino's own names, such as `@playhookedin`, the house's account on X; the same username as another player's, whose
-X account it no longer is, passes to you. **Sign out of X** goes back to your uname. Your uname stays yours either way,
-and both names find you ([signing in with X](../casino-api/channels.md#signing-in-with-x)).
+An **alias** is the name you go by instead: the username of your Discord account, written with an at sign, such as
+`@bob`. Verifying your Discord account in the HookedIn Discord is the only way to one, and needs no balance: **Verify
+with Discord**, under **Profile** in Settings, gives you a code, and you type `/verify` with it in the server within 10
+minutes. Discord tells the casino your username as you run it, and at no other time: verify again after you change it.
+A Discord account is one HookedIn account's: verifying it on another takes it from the first. A username of more than
+23 characters is refused, and so is one that reads like another player's alias, with `l` and `1` read as `i` and `0` as
+`o`, and the casino's own names, such as `@playhookedin`, the house's; the same username as another player's, whose
+Discord account it no longer is, passes to you. **Unlink Discord** goes back to your uname. Your uname stays yours
+either way, and both names find you ([verifying a Discord account](../casino-api/channels.md#verifying-a-discord-account)).
 
-`/@alias` or `/~uname` is a player's public page: their names, whether their X account had X Premium, when the casino
-first knew them, how many bets they have played with what they won or lost, and the games they publish
-([publishing](../games/publishing.md#publish-it)). Others see your page from your first deposit, when the casino first
-registers your account, or from when you first sign in with X. **Your profile**, in the account menu, is your own page,
-from the start, with the way to your name in Settings and the faucet ([free µETH](#free-µeth)).
+`/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they
+have played with what they won or lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
+Others see your page from your first deposit, when the casino first registers your account, or from when you first
+verify your Discord account. **Your profile**, in the account menu, is your own page, from the start, with the way to
+your name in Settings and the faucet ([free µETH](#free-µeth)).
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.

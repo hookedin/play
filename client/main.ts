@@ -316,9 +316,6 @@ const gamePath = (route: GameRoute) =>
 /** How a player is written: an alias wears `@`, a uname wears `~`. */
 const showName = (names: { uname?: string | null; alias?: string | null } | null) =>
   names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
-/** Whether an alias's X account had X Premium, as X said when its player last signed in with it. */
-const xPremium = (x: { premium: boolean; checked: number }) =>
-  `${x.premium ? 'X Premium' : 'no X Premium'} as of ${new Date(x.checked).toLocaleDateString()}`;
 /** Show a section; the URL is the caller's responsibility. */
 function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -394,18 +391,11 @@ function navigate(page: string, push = true, path = PAGES[page]!.path) {
 }
 /** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<alias>` or `/~<uname>` for a player, the same and
  * `/<game>` for a game they publish, `/games/<key>` for a game's public record, `/games/custom?url=<url>`, and
- * `/bets?game=<key>` for the bets of one game; the wallet or Settings over a page, `/wallet[/<tab>]` and
- * `/settings[/<tab>]`; and `/x`, where X sends the browser back to after signing in. */
+ * `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page, `/wallet[/<tab>]` and
+ * `/settings[/<tab>]`. */
 function parseRoute(
   url: URL,
-):
-  | string
-  | GameRoute
-  | { profile: string }
-  | { record: string }
-  | { wallet: WalletTab }
-  | { x: URLSearchParams }
-  | { unknown: string } {
+): string | GameRoute | { profile: string } | { record: string } | { wallet: WalletTab } | { unknown: string } {
   // A player's sigil survives a link that encodes it: `encodeURIComponent` writes `@` as `%40`, and the
   // static host decodes the path the same way before it serves this page.
   let pathname = url.pathname;
@@ -414,8 +404,7 @@ function parseRoute(
   } catch {}
   const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === pathname);
   if (tab) return { wallet: tab };
-  if (pathname === '/x') return { x: url.searchParams };
-  const named = /^\/([~@][A-Za-z0-9_]{1,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
+  const named = /^\/([~@][A-Za-z0-9_.]{1,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
   const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
@@ -425,7 +414,6 @@ function parseRoute(
 async function route(push = false) {
   const target = parseRoute(new URL(location.href));
   if (typeof target === 'object' && 'wallet' in target) return showWallet(target.wallet);
-  if (typeof target === 'object' && 'x' in target) return finishSignInWithX(target.x);
   // Anywhere else, the wallet is closed.
   $<HTMLDialogElement>('wallet-dialog').close();
   if (typeof target === 'string')
@@ -442,41 +430,6 @@ async function route(push = false) {
     showPage('library');
     history.replaceState(null, '', '/');
   }
-}
-/** Where the page was when signing in with X started, to go back to once X sends the browser back. */
-const X_RETURN = 'hookedin:x-return';
-/** Sign in with X: the browser goes to X, which sends it back to `/x`. */
-const signInWithX = () =>
-  task(async () => {
-    const url = await wallet.signInWithX();
-    try {
-      sessionStorage.setItem(X_RETURN, location.pathname);
-    } catch {}
-    location.assign(url);
-  });
-/** X sent the browser back: the sign-in is finished where it was started, on a wallet or Settings tab, or on your
- * profile, which then is at the name signing in gave you. */
-function finishSignInWithX(query: URLSearchParams) {
-  let started: string | null = null;
-  try {
-    started = sessionStorage.getItem(X_RETURN);
-    sessionStorage.removeItem(X_RETURN);
-  } catch {}
-  const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === started),
-    profile = !tab && started;
-  const back = (path: string) => {
-    history.replaceState(null, '', path);
-    void route();
-  };
-  if (profile) back(profile);
-  else showWallet(tab ?? 'profile');
-  void task(async () => {
-    const error = query.get('error');
-    if (error)
-      throw new Error(error === 'access_denied' ? 'You cancelled signing in with X.' : 'X did not sign you in.');
-    await wallet.finishSignInWithX(query.get('state') ?? '', query.get('code') ?? '');
-    toast(`You go by @${wallet.alias} now.`);
-  }).then(() => profile && back(`/${showName(wallet)}`));
 }
 /** Open the game a route names: true once it is open. */
 const openGame = (target: GameRoute, push = false) =>
@@ -810,26 +763,24 @@ function renderWallet() {
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
-  // The faucet, on your own page: free µETH, for an account it lends to whose balance holds less than it lends. Signing
-  // in with X Premium lets an account borrow; one the casino stopped, it is not offered to.
+  // The faucet, on your own page: free µETH, for an account whose member asked /faucet in the HookedIn Discord within the
+  // hour, while its balance holds less than it lends. Members verify their Discord account first.
   const faucet = BigInt(wallet.config?.faucet ?? 0),
-    allowed = wallet.faucet,
-    x = wallet.profile?.x ?? null,
     lends = `${formatAmount(faucet)} µETH`,
-    terms = 'Bets stake it, and a withdrawal pays it back first: what you win above it is yours.';
+    often =
+      'once an hour while your balance holds less. Bets stake it, and a withdrawal pays it back first: what you win above it is yours.';
   $('faucet').hidden =
-    !ownPage() ||
-    !faucet ||
-    balance >= faucet ||
-    wallet.recoveryOnly ||
-    closing ||
-    (!allowed && (!wallet.config?.x || !!x?.premium));
-  $('faucet-text').textContent = allowed
-    ? `The casino lends you ${lends} to play with, once an hour while your balance holds less. ${terms}`
-    : !x
-      ? `Sign in with an X Premium account and the casino lends you ${lends} to play with, once an hour while your balance holds less. ${terms}`
-      : `@${wallet.alias} had no X Premium when you signed in with X. The faucet lends to X Premium accounts: sign in again once yours has it.`;
-  $('faucet-borrow').textContent = allowed ? `Get ${lends}` : x ? 'Sign in with X again' : 'Sign in with X';
+    !ownPage() || !faucet || !wallet.config?.discord || balance >= faucet || wallet.recoveryOnly || closing;
+  $('faucet-text').textContent = wallet.faucet
+    ? `You asked the faucet: the casino lends you ${lends} to play with, ${often}`
+    : wallet.alias
+      ? `Ask /faucet in the HookedIn Discord and the casino lends you ${lends} to play with, ${often}`
+      : `Verify your Discord account in the HookedIn Discord, then ask /faucet there, and the casino lends you ${lends} to play with, ${often}`;
+  $('faucet-borrow').textContent = wallet.faucet
+    ? `Get ${lends}`
+    : wallet.alias
+      ? 'Open Discord'
+      : 'Verify with Discord';
   $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
 
   const open = status === 1 && !closing;
@@ -1411,6 +1362,22 @@ async function loadLibrary() {
 /** The page at a player's name: the name, and their profile once the casino answers, or `missing` when nobody goes by
  * it. */
 let shown: { name: string; profile: any; missing: boolean } | null = null;
+/** The code Settings shows to run /verify with in the HookedIn Discord, while it lasts. */
+let verifying: { code: string; expires: number } | null = null;
+/** Ask the casino every few seconds, while the code lasts, whether its member ran /verify with it: the account then goes
+ * by their Discord username. */
+async function watchVerify(code: { code: string; expires: number }, before: string | null) {
+  while (verifying === code && Date.now() < code.expires) {
+    await new Promise(resolve => setTimeout(resolve, 4000));
+    const profile = await wallet.refreshOwnProfile().catch(() => null);
+    if (verifying === code && profile?.alias && profile.alias !== before) {
+      toast(`You go by @${profile.alias} now.`);
+      break;
+    }
+  }
+  if (verifying === code) verifying = null;
+  renderWallet();
+}
 /** Whether the page shown is this account's own. */
 const ownPage = () =>
   Boolean(wallet.uname) &&
@@ -1422,7 +1389,6 @@ async function openProfile(name: string, push = true) {
   const page: typeof shown = { name, profile: null, missing: false };
   shown = page;
   $('profile-name').textContent = name;
-  $('profile-premium').classList.add('hidden');
   $('profile-meta').textContent = '';
   $('profile-stats').textContent = 'Loading…';
   $('profile-games-heading').classList.add('hidden');
@@ -1445,31 +1411,14 @@ function drawProfile(profile: any) {
   const name = showName(profile);
   document.title = `${name} · HookedIn`;
   $('profile-name').textContent = name;
-  // X Premium, X's blue check, as X said when they last signed in with it.
-  $('profile-premium').classList.toggle('hidden', !profile.x?.premium);
-  if (profile.x) $('profile-premium').title = `As of ${shortDate(profile.x.checked)}, when they last signed in with X`;
-  // The uname an alias covers up, the X account the alias is, and when the casino met them.
-  const meta: (string | Node)[] = profile.alias
-    ? [
-        '~' + profile.uname,
-        h(
-          'a',
-          {
-            href: `https://x.com/${profile.alias}`,
-            target: '_blank',
-            rel: 'noopener noreferrer',
-            title: `@${profile.alias} on X`,
-          },
-          'X ↗',
-        ),
-      ]
-    : [];
+  // The uname an alias covers up, and when the casino met them.
+  const meta = profile.alias ? ['~' + profile.uname] : [];
   meta.push(
     profile.since
       ? `Joined ${shortDate(profile.since)}`
-      : 'Others see your page from your first deposit, or once you sign in with X.',
+      : 'Others see your page from your first deposit, or once you verify your Discord account.',
   );
-  $('profile-meta').replaceChildren(...meta.flatMap((part, i) => (i ? [' · ', part] : [part])));
+  $('profile-meta').textContent = meta.join(' · ');
   const plays = profile.stats.plays,
     net = BigInt(profile.stats.net);
   $('profile-stats').replaceChildren(
@@ -1516,7 +1465,6 @@ function renderProfile() {
       (shown.profile = {
         uname: wallet.uname,
         alias: null,
-        x: null,
         since: null,
         stats: { plays: 0, net: '0' },
         games: [],
@@ -1527,16 +1475,24 @@ function renderProfile() {
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
-  // Signing in with X is the one way to an alias, and asks X again whether the account has X Premium.
-  const x = wallet.profile?.x ?? null;
-  $('x-status').textContent = x ? `Signed in with X as @${wallet.alias}: ${xPremium(x)}.` : '';
-  $('sign-in-x').textContent = x ? 'Sign in with X again' : 'Sign in with X';
-  $<HTMLButtonElement>('sign-in-x').disabled = uiBusy || !wallet.uname || !wallet.config?.x;
-  $('sign-out-x').classList.toggle('hidden', !x);
-  $<HTMLButtonElement>('sign-out-x').disabled = uiBusy;
-  $('x-note').textContent = !wallet.config?.x
-    ? 'Signing in with X is not offered here.'
-    : 'X tells the casino your username and whether you have X Premium when you sign in, and at no other time: sign in again to bring them up to date. Your profile shows both.';
+  // Verifying a Discord account is the one way to an alias: its member runs /verify with a code the casino gives.
+  const discord = wallet.config?.discord ?? null,
+    house = wallet.alias === HOUSE;
+  $('verify-discord').textContent = wallet.alias ? 'Verify again' : 'Verify with Discord';
+  $('verify-discord').classList.toggle('hidden', Boolean(verifying) || house);
+  $<HTMLButtonElement>('verify-discord').disabled = uiBusy || !wallet.uname || !discord;
+  $('verify').hidden = !verifying;
+  if (verifying) $('verify-code').textContent = verifying.code;
+  if (discord) $<HTMLAnchorElement>('open-discord').href = discord;
+  $('unlink-discord').classList.toggle('hidden', !wallet.alias || house);
+  $<HTMLButtonElement>('unlink-discord').disabled = uiBusy;
+  $('discord-note').textContent = !discord
+    ? 'Verifying a Discord account is not offered here.'
+    : verifying
+      ? 'The code lasts 10 minutes. Discord tells the casino your username as you run /verify, and at no other time.'
+      : wallet.alias
+        ? `You go by your Discord username, @${wallet.alias}. Verify again after you change it in Discord.`
+        : 'Discord tells the casino your username as you run /verify, and at no other time.';
   const games = wallet.profile?.games ?? [];
   $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
   const key = json([name, games]);
@@ -2221,15 +2177,36 @@ act('start-over', async () => {
 $('import-key').addEventListener('keydown', event => {
   if (event.key === 'Enter') $('import-wallet').click();
 });
-$('sign-in-x').addEventListener('click', signInWithX);
+act('verify-discord', async () => {
+  verifying = await wallet.discordCode();
+  void watchVerify(verifying, wallet.alias);
+});
+$('copy-verify-code').addEventListener('click', async () => {
+  if (!verifying) return;
+  try {
+    await navigator.clipboard.writeText(verifying.code);
+    toast('Code copied. Paste it into /verify in the HookedIn Discord.');
+  } catch {
+    getSelection()?.selectAllChildren($('verify-code'));
+    toast('The code is selected. Copy it with your browser’s copy command.');
+  }
+});
+// Back from the HookedIn Discord: what /faucet did there shows on your page at once.
+addEventListener('focus', () => {
+  if (ownPage() && wallet.alias && !wallet.faucet) void wallet.refreshOwnProfile().catch(() => {});
+});
 act(
-  'sign-out-x',
-  () => wallet.signOutOfX(),
+  'unlink-discord',
+  () => wallet.unlinkDiscord(),
   () => `You go by ~${wallet.uname} again.`,
 );
-// The faucet lends to an account it lends to; any other signs in with X Premium first.
+// The faucet lends to an account whose member asked /faucet in the HookedIn Discord; any other asks there first, once
+// it has verified its Discord account.
 $('faucet-borrow').addEventListener('click', () => {
-  if (!wallet.faucet) return void signInWithX();
+  if (!wallet.faucet) {
+    if (!wallet.alias) return openWallet('profile');
+    return void open(wallet.config.discord, '_blank', 'noopener');
+  }
   void task(async () => {
     const receipt = await wallet.borrowFromFaucet();
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The faucet declined.');

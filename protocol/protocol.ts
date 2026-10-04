@@ -167,8 +167,8 @@ export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequ
  * names it, from the developer's own channel, answered with a statement of the balance; money leaves it only by the
  * developer's own signed `BankWithdraw`, settlement or casino bet. */
 export const BANK_ID = id('HOOKEDIN/BANK');
-/** The casino's faucet: free µETH it lends a player signed in with an X Premium account, a loan that names this as its
- * counterparty. Like a deposit's network fee, a bet stakes it, and a withdrawal, a transfer or a close pays it back
+/** The casino's faucet: free µETH it lends a member of the HookedIn Discord who asks it there, a loan that names this as
+ * its counterparty. Like a deposit's network fee, a bet stakes it, and a withdrawal, a transfer or a close pays it back
  * first. */
 export const FAUCET_ID = id('HOOKEDIN/FAUCET');
 /** The casino signs the balance of a developer's bank after every deposit and withdrawal. `cause` is the hash of the

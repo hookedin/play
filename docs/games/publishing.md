@@ -84,8 +84,8 @@ whose key the server holds. On **My games**, give the game's name and its URL; t
 Publishing needs an open balance, a profile holds 100 games, and the name and URL follow the rules of
 [`POST /api/channels/:id/games`](../casino-api/channels.md#post-apichannelsidgames).
 
-The game is then at `https://play.hookedin.com/@<alias>/<name>`, your alias being your X username, or
-`/~<uname>/<name>` for an account not signed in with X ([your name](../wallet/getting-started.md#your-name)), for anyone with a wallet, and on your profile. Its key,
+The game is then at `https://play.hookedin.com/@<alias>/<name>`, your alias being your Discord username, or
+`/~<uname>/<name>` for an account that verified no Discord account ([your name](../wallet/getting-started.md#your-name)), for anyone with a wallet, and on your profile. Its key,
 `keccak256(abi.encode(developer, name))`, does not change with its URL: to move a game, publish the same name with the
 new URL, and it keeps its bets, its players' receipts and its public record.
 
