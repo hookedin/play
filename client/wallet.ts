@@ -615,8 +615,8 @@ export class CasinoWallet extends GameSessions {
   }
   /** Borrow free µETH from the casino's faucet, which lends to an account it tells it lends to (`faucet`), whose balance
    * holds less than it lends: signing in with X Premium lets an account borrow, and the casino lets any, or stops it. A loan that names the faucet: bets stake it, and a withdrawal, a transfer or a close pays it
-   * back first. The faucet opens the account's channel first, if it is not open, and this waits until the wallet has
-   * registered it, and taken in the wei that opened it. */
+   * back first. The faucet opens the account's channel first, if it is not open, with a deposit of nothing, and this
+   * waits until the wallet has registered it. */
   async borrowFromFaucet(this: CasinoWallet) {
     const { amount, opening } = await this.accountRequest('faucet');
     if (!this.playable) {
@@ -625,7 +625,6 @@ export class CasinoWallet extends GameSessions {
         if (Date.now() > until) throw new Error('Your balance has not opened yet. Try again in a minute.');
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      await this.takeDeposits();
     }
     return this.perform('faucet', { amount, source: FAUCET_ID }, crypto.randomUUID());
   }

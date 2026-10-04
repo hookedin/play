@@ -437,16 +437,17 @@ to an account whose [own profile](#post-apichannelsiduname) says `faucet: true`,
 less: once every 24 hours for each account. Signing in with an X account that has X Premium switches `faucet` on, and
 the casino switches it on or off for any account. An account that loses its X account, signing out of it, to another
 account or for another X account, loses `faucet` with it, whoever switched it on. It is a [faucet loan](#post-apichannelsidoperations): bets stake it, and a
-withdrawal, a transfer or a close pays it back first. What the faucet lends, and the deposits and gas that open
-channels for it, each come out of a budget the casino sets.
+withdrawal, a transfer or a close pays it back first. What the faucet lends comes out of a budget the casino sets, and
+the gas of the deposits that open channels for it out of an account of the faucet's own.
 
-| Response field | Type    | Meaning                                                                                                       |
-| -------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| `amount`       | string  | What the faucet lends                                                                                         |
-| `opening`      | boolean | Whether the account has no open channel, which the casino opens for it with a deposit of 1 wei, as anyone may |
+| Response field | Type    | Meaning                                                                                                         |
+| -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `amount`       | string  | What the faucet lends                                                                                           |
+| `opening`      | boolean | Whether the account has no open channel, which the casino opens for it with a deposit of nothing, as anyone may |
 
 The account borrows with a faucet loan once its channel is open and registered. The casino opens a channel once every 24
 hours for each account, and answers `opening: true` again while that deposit is on its way. `not-eligible` answers an
-account the faucet does not lend to: sign in with X Premium. `faucet-empty` answers when the budget for loans, or for
-opening the account's channel, is spent. `refused` answers an account the faucet lent to, or opened a channel for, in
-the last 24 hours, saying when it does again, and a balance that holds what the faucet lends.
+account the faucet does not lend to: sign in with X Premium. `faucet-empty` answers when the budget for loans is spent,
+or the faucet's account holds too little to open the account's channel. `refused` answers an account the faucet lent
+to, or opened a channel for, in the last 24 hours, saying when it does again, and a balance that holds what the faucet
+lends.

@@ -32,7 +32,7 @@ withdraw. The balance takes it in with a **deposit** operation, which the casino
 confirmed on-chain. Until then a close adds it to what the channel is owed, so the money is the player's either way. The
 casino lends the balance the network fee of a deposit of everything the deposit address held, when it is small next to
 the deposit, with a **loan** operation, which a withdrawal, a transfer or a close pays back first. Its faucet lends a
-player signed in with X Premium, or one the casino lets borrow, a few µETH to play with the same way, opening their channel first with a wei when they
+player signed in with X Premium, or one the casino lets borrow, a few µETH to play with the same way, opening their channel first with a deposit of nothing when they
 have none ([free µETH](../wallet/getting-started.md#free-µeth)).
 
 **Sign.** Every change to the balance is an **operation** that the account signs, answered by a **checkpoint** that the

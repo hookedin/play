@@ -65,7 +65,7 @@ Sign in with an X Premium account ([your name](#your-name)) and you can borrow 1
 faucet: **Get 10 µETH** on your profile, while your balance holds less than that, once a day. Signing out of X, or
 in with your X account on another HookedIn account, ends it. The casino can let any account borrow, or stop one, and
 the faucet lends only as long as its budget lasts. An
-account with no balance has one opened for it, with a deposit of a wei the casino sends; it needs no ETH of its own,
+account with no balance has one opened for it, with a deposit of nothing the casino sends; it needs no ETH of its own,
 nor a saved wallet, though what you win there is lost with an unsaved wallet. What the faucet lends is a loan, like a
 deposit's network fee: bets stake it, and your next withdrawal, transfer or close pays it back first, so what you win
 above it is yours to take out ([the faucet](../casino-api/channels.md#post-apichannelsidfaucet)).
