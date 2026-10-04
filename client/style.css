@@ -641,6 +641,26 @@ main:has(> #page-play:not(.hidden)) {
 .section-title {
   margin: 32px 0 14px;
 }
+/* A player's page: X Premium beside their name, their bets in a line, and on your own, the faucet. */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+.profile-stats {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.profile-faucet {
+  max-width: 520px;
+  margin-top: 24px;
+}
 .card {
   margin-top: 16px;
   padding: 20px;
@@ -1291,10 +1311,6 @@ main:has(> #page-play:not(.hidden)) > .banner {
   align-self: flex-start;
   margin-top: 10px;
   font-size: 12px;
-}
-/* A note in a grid of cards, such as a profile with no games, takes the whole row. */
-.grid-note {
-  grid-column: 1 / -1;
 }
 .bet-round-summary {
   margin-bottom: 12px;

@@ -454,21 +454,29 @@ const signInWithX = () =>
     } catch {}
     location.assign(url);
   });
-/** X sent the browser back: the sign-in is finished, on the wallet or Settings tab it was started from. */
+/** X sent the browser back: the sign-in is finished where it was started, on a wallet or Settings tab, or on your
+ * profile, which then is at the name signing in gave you. */
 function finishSignInWithX(query: URLSearchParams) {
   let started: string | null = null;
   try {
     started = sessionStorage.getItem(X_RETURN);
     sessionStorage.removeItem(X_RETURN);
   } catch {}
-  showWallet((Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === started) ?? 'profile');
+  const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === started),
+    profile = !tab && started;
+  const back = (path: string) => {
+    history.replaceState(null, '', path);
+    void route();
+  };
+  if (profile) back(profile);
+  else showWallet(tab ?? 'profile');
   void task(async () => {
     const error = query.get('error');
     if (error)
       throw new Error(error === 'access_denied' ? 'You cancelled signing in with X.' : 'X did not sign you in.');
     await wallet.finishSignInWithX(query.get('state') ?? '', query.get('code') ?? '');
     toast(`You go by @${wallet.alias} now.`);
-  });
+  }).then(() => profile && back(`/${showName(wallet)}`));
 }
 /** Open the game a route names: true once it is open. */
 const openGame = (target: GameRoute, push = false) =>
@@ -789,15 +797,20 @@ function renderWallet() {
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
-  // The faucet: free µETH, for an account it lends to whose balance holds less than it lends. Signing in with X Premium
-  // lets an account borrow; one the casino stopped, it is not offered to.
+  // The faucet, on your own page: free µETH, for an account it lends to whose balance holds less than it lends. Signing
+  // in with X Premium lets an account borrow; one the casino stopped, it is not offered to.
   const faucet = BigInt(wallet.config?.faucet ?? 0),
     allowed = wallet.faucet,
     x = wallet.profile?.x ?? null,
     lends = `${formatAmount(faucet)} µETH`,
     terms = 'Bets stake it, and a withdrawal pays it back first: what you win above it is yours.';
   $('faucet').hidden =
-    !faucet || balance >= faucet || wallet.recoveryOnly || closing || (!allowed && (!wallet.config?.x || !!x?.premium));
+    !ownPage() ||
+    !faucet ||
+    balance >= faucet ||
+    wallet.recoveryOnly ||
+    closing ||
+    (!allowed && (!wallet.config?.x || !!x?.premium));
   $('faucet-text').textContent = allowed
     ? `The casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
     : !x
@@ -1389,64 +1402,83 @@ async function loadLibrary() {
   }
   list.setAttribute('aria-busy', 'false');
 }
+/** The page at a player's name: the name, and their profile once the casino answers, or `missing` when nobody goes by
+ * it. */
+let shown: { name: string; profile: any; missing: boolean } | null = null;
+/** Whether the page shown is this account's own. */
+const ownPage = () =>
+  Boolean(wallet.uname) &&
+  (shown?.profile?.uname === wallet.uname || (Boolean(shown?.missing) && shown?.name === `~${wallet.uname}`));
+const shortDate = (time: number) =>
+  new Date(time).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 /** Anybody's page: their names, what they have played, and the games they publish. */
 async function openProfile(name: string, push = true) {
+  const page: typeof shown = { name, profile: null, missing: false };
+  shown = page;
   $('profile-name').textContent = name;
-  $('profile-uname').textContent = '';
-  $('profile-x').replaceChildren();
-  $('profile-since').textContent = '';
-  $('profile-own').classList.add('hidden');
-  $('profile-stats').replaceChildren();
-  const games = $('profile-games');
-  games.textContent = 'Loading…';
-  $('profile-games-heading').classList.remove('hidden');
+  $('profile-premium').classList.add('hidden');
+  $('profile-meta').textContent = '';
+  $('profile-stats').textContent = 'Loading…';
+  $('profile-games-heading').classList.add('hidden');
+  $('profile-games').replaceChildren();
   navigate('profile', push, `/${name}`);
   try {
     const profile = await wallet.api(`/api/players/${name}`);
-    $('profile-name').textContent = showName(profile);
-    // An alias is what they are called; the uname is who they are, and is shown beside it.
-    $('profile-uname').textContent = profile.alias ? '~' + profile.uname : '';
-    // An alias is an X username: the X account it is, and whether it had X Premium when they last signed in with it.
-    if (profile.alias)
-      $('profile-x').replaceChildren(
+    if (shown !== page) return;
+    drawProfile((page.profile = profile));
+  } catch (error: any) {
+    if (shown !== page) return;
+    page.missing = error.code === 'not-found';
+    $('profile-meta').textContent = page.missing ? 'Nobody goes by that name.' : error.message;
+    $('profile-stats').textContent = '';
+  }
+  renderWallet();
+}
+/** A player's profile, as anybody sees it. One with no `since` is your own before the casino has met you. */
+function drawProfile(profile: any) {
+  const name = showName(profile);
+  document.title = `${name} · HookedIn`;
+  $('profile-name').textContent = name;
+  // X Premium, X's blue check, as X said when they last signed in with it.
+  $('profile-premium').classList.toggle('hidden', !profile.x?.premium);
+  if (profile.x) $('profile-premium').title = `As of ${shortDate(profile.x.checked)}, when they last signed in with X`;
+  // The uname an alias covers up, the X account the alias is, and when the casino met them.
+  const meta: (string | Node)[] = profile.alias
+    ? [
+        '~' + profile.uname,
         h(
           'a',
-          { href: `https://x.com/${profile.alias}`, target: '_blank', rel: 'noopener noreferrer' },
-          `@${profile.alias} on X ↗`,
+          {
+            href: `https://x.com/${profile.alias}`,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            title: `@${profile.alias} on X`,
+          },
+          'X ↗',
         ),
-        profile.x ? ` · ${xPremium(profile.x)}` : '',
-      );
-    document.title = `${showName(profile)} · HookedIn`;
-    $('profile-since').textContent = `Playing here since ${new Date(profile.since).toLocaleDateString()}.`;
-    // Your own page is what others see of you; your name is set in Settings, and your bets are yours alone.
-    const own = Boolean(wallet.uname) && profile.uname === wallet.uname;
-    $('profile-own').classList.toggle('hidden', !own);
-    $('profile-games-heading').textContent = own ? 'Games you publish' : 'Games they publish';
-    $('profile-stats').replaceChildren(
-      h(
-        'div',
-        { className: 'money-card' },
-        h('span', { className: 'label' }, 'Bets'),
-        h('strong', null, String(profile.stats.plays)),
-        h('span', { className: 'muted' }, `Net ${signedAmount(BigInt(profile.stats.net))}`),
-      ),
-    );
-    const cards = profileCards(showName(profile), profile.games);
-    if (cards.length) games.replaceChildren(...cards);
-    else
-      games.replaceChildren(
-        h(
-          'p',
-          { className: 'muted grid-note' },
-          own ? 'You publish no games.' : `${showName(profile)} publishes no games.`,
-        ),
-      );
-  } catch (error: any) {
-    $('profile-since').textContent = error.code === 'not-found' ? 'Nobody goes by that name.' : error.message;
-    games.replaceChildren();
-    // Nobody is here, so neither is anything of theirs.
-    $('profile-games-heading').classList.add('hidden');
-  }
+      ]
+    : [];
+  meta.push(
+    profile.since
+      ? `Joined ${shortDate(profile.since)}`
+      : 'Others see your page from your first deposit, or once you sign in with X.',
+  );
+  $('profile-meta').replaceChildren(...meta.flatMap((part, i) => (i ? [' · ', part] : [part])));
+  const plays = profile.stats.plays,
+    net = BigInt(profile.stats.net);
+  $('profile-stats').replaceChildren(
+    ...(plays
+      ? [
+          h('strong', null, String(plays)),
+          plays === 1 ? ' bet · ' : ' bets · ',
+          h('strong', { className: net < 0n ? 'negative' : net > 0n ? 'positive' : '' }, signedAmount(net)),
+          ' net',
+        ]
+      : ['No bets yet.']),
+  );
+  $('profile-game-total').textContent = String(profile.games.length);
+  $('profile-games-heading').classList.toggle('hidden', !profile.games.length);
+  $('profile-games').replaceChildren(...profileCards(name, profile.games));
 }
 /** The lobby is loaded again whenever what this account publishes changes. */
 let libraryKey = '';
@@ -1456,8 +1488,8 @@ let shownAccount: string | null = null;
 function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
     open = wallet.playable && !wallet.recoveryOnly,
-    // A name is the account's from the start; its public page is there once the casino has met it, at its first deposit.
-    page = name && wallet.profile ? `/${name}` : null;
+    // A name is the account's from the start, and so is its page: others see it once the casino has met the account.
+    page = name ? `/${name}` : null;
   $('account-name').textContent = name ?? 'Account';
   $('menu-name').textContent = name ?? 'Your account';
   // The uname is always there; when an alias covers it up, it is shown underneath.
@@ -1471,6 +1503,21 @@ function renderProfile() {
   $('wallet-name').textContent = name ?? '—';
   if (page) $<HTMLAnchorElement>('wallet-name-link').href = page;
   else $('wallet-name-link').removeAttribute('href');
+  // Your own page: the way to your name, and before the casino has met you, the page itself.
+  if (shown?.missing && ownPage()) {
+    shown.missing = false;
+    drawProfile(
+      (shown.profile = {
+        uname: wallet.uname,
+        alias: null,
+        x: null,
+        since: null,
+        stats: { plays: 0, net: '0' },
+        games: [],
+      }),
+    );
+  }
+  $('profile-edit').classList.toggle('hidden', !ownPage());
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
@@ -2210,7 +2257,7 @@ for (const id of ['wallet-name-link', 'menu-profile', 'settings-profile'])
   $(id).addEventListener('click', event => {
     event.preventDefault();
     $('account-menu').hidePopover?.();
-    if (wallet.profile) void openProfile(showName(wallet));
+    if (wallet.uname) void openProfile(showName(wallet));
   });
 $('network-name').textContent = wallet.networkName;
 // The account is saved with a passkey, whose secret is its key, or as the key itself in a file.

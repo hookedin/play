@@ -62,7 +62,7 @@ leaves it in the balance, and your next withdrawal, transfer or close pays it ba
 ### Free µETH
 
 Sign in with an X Premium account ([your name](#your-name)) and you can borrow 10 µETH to play with from the casino's
-faucet: **Get 10 µETH** on the Deposit tab, while your balance holds less than that, once a day. Signing out of X, or
+faucet: **Get 10 µETH** on your profile, while your balance holds less than that, once a day. Signing out of X, or
 in with your X account on another HookedIn account, ends it. The casino can let any account borrow, or stop one, and
 the faucet lends only as long as its budget lasts. An
 account with no balance has one opened for it, with a deposit of a wei the casino sends; it needs no ETH of its own,
@@ -158,18 +158,18 @@ first deposit. It is what games, developers and other players learn about you.
 An **alias** is the name you go by instead: the username of your X account, written with an at sign, such as `@Bob`.
 **Sign in with X**, under **Profile** in Settings, is the only way to one, and needs no balance. X tells the casino your
 username and whether you have X Premium, X's blue check, when you sign in, and at no other time: sign in again after you
-rename your X account or change your subscription. Your profile shows whether your X account had X Premium, and when you
-last signed in. An X account is one HookedIn account's: signing in with it on another signs the first out of it. A
+rename your X account or change your subscription. Your profile shows X Premium if your X account had it when you last
+signed in. An X account is one HookedIn account's: signing in with it on another signs the first out of it. A
 username that reads like another player's alias, with `l` and `1` read as `i` and `0` as `o`, is refused, and so are
 the casino's own names, such as `@playhookedin`, the house's account on X; the same username as another player's, whose
 X account it no longer is, passes to you. **Sign out of X** goes back to your uname. Your uname stays yours either way,
 and both names find you ([signing in with X](../casino-api/channels.md#signing-in-with-x)).
 
-`/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they have
-played with what they staked and won, and the games they publish ([publishing](../games/publishing.md#publish-it)).
-Your page starts with your first deposit, when the casino first registers your account, or when you first sign in with
-X: until then the wallet shows your uname and links to no page. **Your profile**, in the account menu, is your own page as others see it, with the
-way to your name in Settings and to your bets, which are yours alone.
+`/@alias` or `/~uname` is a player's public page: their names, whether their X account had X Premium, when the casino
+first knew them, how many bets they have played with what they won or lost, and the games they publish
+([publishing](../games/publishing.md#publish-it)). Others see your page from your first deposit, when the casino first
+registers your account, or from when you first sign in with X. **Your profile**, in the account menu, is your own page,
+from the start, with the way to your name in Settings and the faucet ([free µETH](#free-µeth)).
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.

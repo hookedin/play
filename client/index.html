@@ -286,16 +286,22 @@
       </section>
 
       <section id="page-profile" class="page hidden">
-        <h1 id="profile-name"></h1>
-        <p id="profile-uname" class="handle"></p>
-        <p id="profile-x" class="muted"></p>
-        <p id="profile-since" class="muted"></p>
-        <div id="profile-own" class="actions hidden">
-          <a class="button small" href="/settings" data-wallet-tab="profile">Edit your name</a
-          ><a class="button small" href="/bets" data-page="bets">Your bets</a>
+        <div class="page-head">
+          <div>
+            <h1><span id="profile-name"></span> <span id="profile-premium" class="badge hidden">X Premium</span></h1>
+            <p id="profile-meta" class="muted"></p>
+          </div>
+          <a id="profile-edit" class="button small hidden" href="/settings" data-wallet-tab="profile">Edit name</a>
         </div>
-        <div id="profile-stats" class="money"></div>
-        <h2 id="profile-games-heading" class="section-title">Games they publish</h2>
+        <p id="profile-stats" class="profile-stats"></p>
+        <div id="faucet" class="boxed profile-faucet" hidden>
+          <strong>Free µETH</strong>
+          <p id="faucet-text"></p>
+          <button id="faucet-borrow" class="button primary" type="button">Get free µETH</button>
+        </div>
+        <h2 id="profile-games-heading" class="section-title hidden">
+          Games <span id="profile-game-total" class="count">0</span>
+        </h2>
         <div id="profile-games" class="game-grid"></div>
       </section>
     </main>
@@ -345,11 +351,6 @@
         ><button role="tab" type="button" data-tab="recovery" aria-selected="false">Recovery</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
-        <div id="faucet" class="boxed" hidden>
-          <strong>Free µETH</strong>
-          <p id="faucet-text"></p>
-          <button id="faucet-borrow" class="button full" type="button">Get free µETH</button>
-        </div>
         <div id="deposit-save" class="boxed">
           <strong>Save your wallet</strong>
           <p>
@@ -450,7 +451,7 @@
             <span id="wallet-uname" class="handle"></span>
           </p>
           <p id="x-status" class="muted"></p>
-          <a id="settings-profile" class="text-button hidden" href="/">See your profile as others do</a>
+          <a id="settings-profile" class="text-button hidden" href="/">See your profile</a>
           <button id="sign-in-x" class="button full" type="button">Sign in with X</button>
           <p id="x-note" class="muted"></p>
           <button id="sign-out-x" class="text-button hidden" type="button">Sign out of X</button>
