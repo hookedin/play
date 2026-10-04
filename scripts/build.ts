@@ -28,7 +28,7 @@ export async function buildWallet(dist = path.join(root, 'dist')) {
         setup(build) {
           build.onResolve({ filter: /^ethers$/ }, () => ({ path: '/vendor/ethers.js', external: true }));
           build.onResolve({ filter: /\/config\.ts$/ }, args =>
-            args.importer.endsWith(path.join('client', 'main.ts')) ? { path: '/config.js', external: true } : null,
+            args.importer.endsWith(path.join('client', 'page.ts')) ? { path: '/config.js', external: true } : null,
           );
         },
       },
