@@ -51,7 +51,7 @@ at its name.
 
 ## Place a first bet
 
-1. Press **Allowance** in the wallet's top bar: the wallet's own dialog asks how much the game may play with. The
+1. Press **Set allowance** in the wallet's top bar: the wallet's own dialog asks how much the game may play with. The
    **game.allowance** preset prints what the game may now stake.
 2. Press **game.casinoBet · 50% to double**, then **Send**. The bet pays twice the stake on half the outcomes, which
    leaves the casino no edge, so it declines it: the receipt says `"status": "rejected"`, and the balance is unchanged.

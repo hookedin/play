@@ -490,18 +490,24 @@ const openGame = (target: GameRoute, push = false) =>
     return true;
   });
 
-/** The top bar: the open game, by the wallet's name for it, and its allowance, which takes the balance's place once
- * it is set, so the bar shows one amount. What the game's groups have won and it has not shown yet is in neither. */
+/** The top bar: the open game, by the wallet's name for it, and its allowance, which takes the balance's place, so the
+ * bar shows one amount. Until it is set, setting it is all the bar offers. What the game's groups have won and it has
+ * not shown yet is in neither. */
 function renderGameAccount() {
   const playable = wallet.playable,
     game = active ? wallet.game : null,
     allowance = BigInt(game?.allowance ?? 0),
-    balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay();
+    balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay(),
+    unset = Boolean(game) && playable && !allowance;
   $('game-title').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('hidden', !game || !playable);
+  $('game-allowance').classList.toggle('unset', unset);
+  $('wallet-button').classList.toggle('hidden', unset);
   // Balances read in whole µETH, cut off, with every digit on hover.
   $('game-allowance-amount').replaceChildren(
-    ...(allowance ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'µETH')] : ['Set']),
+    ...(allowance
+      ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'µETH')]
+      : ['Set allowance']),
   );
   $('game-allowance-amount').title = allowance ? `${exact(allowance)} µETH` : '';
   $('wallet-button-amount').replaceChildren(
@@ -509,7 +515,7 @@ function renderGameAccount() {
     h('small', { title: 'A millionth of an ETH' }, 'µETH'),
   );
   $('wallet-button-amount').title = `${exact(balance)} µETH`;
-  $('wallet-button-amount').classList.toggle('hidden', !playable || allowance > 0n);
+  $('wallet-button-amount').classList.toggle('hidden', !wallet.publicState?.address || allowance > 0n);
   $('wallet-button-label').textContent = playable && balance > 0n ? 'Wallet' : 'Deposit';
   $('hero-deposit').classList.toggle('hidden', playable || !wallet.address);
   if (!active || !game) return;
@@ -819,9 +825,9 @@ function renderWallet() {
     closing ||
     (!allowed && (!wallet.config?.x || !!x?.premium));
   $('faucet-text').textContent = allowed
-    ? `The casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
+    ? `The casino lends you ${lends} to play with, once an hour while your balance holds less. ${terms}`
     : !x
-      ? `Sign in with an X Premium account and the casino lends you ${lends} to play with, once a day while your balance holds less. ${terms}`
+      ? `Sign in with an X Premium account and the casino lends you ${lends} to play with, once an hour while your balance holds less. ${terms}`
       : `@${wallet.alias} had no X Premium when you signed in with X. The faucet lends to X Premium accounts: sign in again once yours has it.`;
   $('faucet-borrow').textContent = allowed ? `Get ${lends}` : x ? 'Sign in with X again' : 'Sign in with X';
   $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
@@ -1008,26 +1014,19 @@ function renderActivity() {
       ? `This may be out of date; your saved proofs are safe. ${refreshError}`
       : historyBusy || wallet.detailsRefreshing
         ? 'Checking the chain and the casino…'
-        : 'Every signed result, deposit and withdrawal, with the JSON behind it.' +
+        : 'Everything your wallet signed, sent and found, with the JSON behind it.' +
           (wallet.detailsObservedAt
             ? ` Checked ${new Date(wallet.detailsObservedAt).toLocaleTimeString([], { hour12: false })}.`
             : '');
   $('history-status').classList.toggle('check-failed', Boolean(historyError || wallet.detailsError));
-  // A deposit taken into the balance is the deposit's own bookkeeping: the deposit is what the player sees.
-  syncRows(
-    $('activity-list'),
-    wallet.history.filter(receipt => receipt.kind !== 'taken-in'),
-    receipt => receipt.operationId,
-    activityJSON,
-    activityEntry,
-  );
+  syncRows($('activity-list'), wallet.history, receipt => receipt.operationId, activityJSON, activityEntry);
   filterList('activity');
 }
 /** One receipt as Activity lists it, with the facts behind it. */
 function activityEntry(receipt: any) {
   // A declined operation's proof is the checkpoint above it, with no step: the operation is the one it declined.
   const operation = receipt.request ?? receipt.proof?.step?.operation;
-  const channelId = operation?.channelId || receipt.proof?.base?.channelId;
+  const channelId = operation?.channelId || receipt.proof?.base?.channelId || receipt.channelId;
   const presentation = receiptSummary(receipt, wallet.config.contractAddress);
   const facts: [string, string | Node][] = [['Operation ID', receipt.operationId]];
   if (channelId) facts.push(['Channel', channelId]);

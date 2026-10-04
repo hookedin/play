@@ -49,7 +49,7 @@ import { saveAccounts, readAccounts } from './accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
 import trustedArtifact from './contract-artifact.ts';
 import { GameSessions } from './wallet-games.ts';
-import { inbound } from './wallet-transactions.ts';
+import { addressReceipt, inbound } from './wallet-transactions.ts';
 export interface WalletOptions {
   casinoURL?: string;
   network?: string;
@@ -195,6 +195,9 @@ export class CasinoWallet extends GameSessions {
   declare storageFailed: boolean | undefined;
   declare refreshing: Promise<any> | null;
   declare nativeBalance: string;
+  /** What the address held at the wallet's last look, after its own last transaction: ETH beyond it has arrived since.
+   * Null until the wallet has looked. */
+  declare atAddress: string | null;
   declare missingChannel: string | null;
   declare detailsError: string | null;
   declare detailsRefreshing: Promise<Record<string, any>> | null;
@@ -448,6 +451,7 @@ export class CasinoWallet extends GameSessions {
       developerBetError: null,
       bank: saved?.bank || {},
       autoDeposit: saved?.autoDeposit ?? true,
+      atAddress: saved?.atAddress ?? null,
     });
   }
   get channel(): WalletChannel | null {
@@ -537,6 +541,7 @@ export class CasinoWallet extends GameSessions {
         developerBetCursor: this.developerBetCursor,
         bank: this.bank,
         autoDeposit: this.autoDeposit,
+        atAddress: this.atAddress,
         ...changes,
         revision,
       });
@@ -834,10 +839,19 @@ export class CasinoWallet extends GameSessions {
     await this.observer.accept(observation);
     this.nativeBalance = String(native);
     this.lastChainCheck = Date.now();
+    const at = new Date().toISOString(),
+      seen: any[] = [];
+    // ETH sent to the address since the last look. A transaction of this wallet's in flight moves what it holds: the
+    // wallet looks again once it is recorded.
+    if (!this.transactionIntent) {
+      if (this.atAddress !== null && native > BigInt(this.atAddress))
+        seen.push(addressReceipt(native - BigInt(this.atAddress), at));
+      this.atAddress = String(native);
+    }
     const onchain = records.find(([key]) => key === current)![1];
     // Opened by this wallet's deposit or by anybody else's, the channel is this account's to sign for: taken up at
     // its base, and registered with the casino below.
-    if (!this.channels[current] && Number(onchain.status) === 1)
+    if (!this.channels[current] && Number(onchain.status) === 1) {
       this.channels[current] = {
         opening: { channelId: current, player: this.address, index: String(index) },
         state: baseState(current),
@@ -845,6 +859,16 @@ export class CasinoWallet extends GameSessions {
         casinoSignature: '0x',
         onchain,
       };
+      seen.push({
+        kind: 'opened',
+        operationId: 'opened:' + current,
+        channelId: current,
+        amount: onchain.deposited,
+        status: 'confirmed',
+        createdAt: at,
+      });
+    }
+    this.history = [...seen, ...this.history];
     this.applyChannelObservations(records.filter(([key]) => this.channels[key]));
     this.channelId = this.channels[current] ? current : null;
     const c = this.channel;
@@ -859,6 +883,7 @@ export class CasinoWallet extends GameSessions {
       this.channelId,
       this.transactionIntent,
       this.history,
+      this.atAddress,
       Object.entries(this.channels).map(([key, c]) => [key, { ...c, observedAt: undefined }]),
     ]);
   }

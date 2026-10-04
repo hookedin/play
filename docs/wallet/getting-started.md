@@ -62,7 +62,7 @@ leaves it in the balance, and your next withdrawal, transfer or close pays it ba
 ### Free µETH
 
 Sign in with an X Premium account ([your name](#your-name)) and you can borrow 10 µETH to play with from the casino's
-faucet: **Get 10 µETH** on your profile, while your balance holds less than that, once a day. Signing out of X, or
+faucet: **Get 10 µETH** on your profile, while your balance holds less than that, once an hour. Signing out of X, or
 in with your X account on another HookedIn account, ends it. The casino can let any account borrow, or stop one, and
 the faucet lends only as long as its budget lasts. An
 account with no balance has one opened for it, with a deposit of nothing the casino sends; it needs no ETH of its own,
@@ -92,9 +92,9 @@ A published game's developer is the account that published it: it earns half of 
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
 all of its commission, and it takes no developer bets.
 
-While a game is open, the top bar names it and shows its allowance, in place of your balance once you have set one;
-**Allowance** there opens the wallet's own dialog, which also opens when the game asks. Every word in it is the
-wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab instead. The allowance caps what the
+While a game is open, the top bar names it and shows its allowance in place of your balance; until you set one,
+**Set allowance** is all it offers. The allowance opens the wallet's own dialog, which also opens when the game asks.
+Every word in it is the wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab instead. The allowance caps what the
 game may risk, and moves no money:
 
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has

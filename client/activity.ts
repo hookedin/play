@@ -215,7 +215,10 @@ export function receiptSummary(
                 : 'Withdrawal on its way'
             : (
                 {
+                  received: 'Received at your address',
+                  opened: 'Balance opened',
                   deposit: 'Deposited',
+                  'taken-in': 'Added to your balance',
                   loan: 'Network fee lent',
                   faucet: 'Free µETH lent',
                   collateral: 'Collateral bought',
@@ -241,25 +244,27 @@ export function receiptSummary(
   let amount = `${formatAmount(settled ? receipt.amount || '0' : '0')} µETH`;
   let amountLabel = !settled
     ? 'No confirmed payment'
-    : receipt.kind === 'deposit'
+    : receipt.kind === 'deposit' || receipt.kind === 'opened'
       ? 'Deposited'
-      : receipt.kind === 'withdrawal'
-        ? 'Paid out'
-        : receipt.kind === 'loan' || receipt.kind === 'faucet'
-          ? 'Lent to you'
-          : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
-            ? 'Received'
-            : receipt.kind === 'invest'
-              ? 'Invested'
-              : receipt.kind === 'redeem'
-                ? 'Owed to you'
-                : ['payment', 'developer-bet', 'bank', 'collateral'].includes(receipt.kind)
-                  ? 'Sent'
-                  : receipt.kind === 'closure'
-                    ? 'Claim recorded'
-                    : ['withdrawal-sent', 'close-started', 'bet-disputed', 'dispute'].includes(receipt.kind)
-                      ? 'No payment'
-                      : `ETH received`;
+      : receipt.kind === 'taken-in'
+        ? 'Added'
+        : receipt.kind === 'withdrawal'
+          ? 'Paid out'
+          : receipt.kind === 'loan' || receipt.kind === 'faucet'
+            ? 'Lent to you'
+            : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn'].includes(receipt.kind)
+              ? 'Received'
+              : receipt.kind === 'invest'
+                ? 'Invested'
+                : receipt.kind === 'redeem'
+                  ? 'Owed to you'
+                  : ['payment', 'developer-bet', 'bank', 'collateral'].includes(receipt.kind)
+                    ? 'Sent'
+                    : receipt.kind === 'closure'
+                      ? 'Claim recorded'
+                      : ['withdrawal-sent', 'close-started', 'bet-disputed', 'dispute'].includes(receipt.kind)
+                        ? 'No payment'
+                        : `ETH received`;
   let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
   let description = '';
   if (played) {
@@ -277,6 +282,14 @@ export function receiptSummary(
     BigInt(receipt.amount || 0) > 0n
   )
     tone = 'positive';
+  if (receipt.kind === 'received')
+    description =
+      'ETH sent to your deposit address, as your wallet found it there. It goes into your balance by itself unless that is off in Settings.';
+  if (receipt.kind === 'opened')
+    description =
+      'The contract holds your balance in a channel of its own, opened by a deposit into it: from your address, or from anyone, as the faucet opens one.';
+  if (receipt.kind === 'taken-in')
+    description = `What was deposited into your channel, signed into your balance once the casino had seen it confirmed: from your address, a lock-in, another account's transfer or anyone's deposit. Balance ${exact(receipt.balance)} µETH`;
   if (receipt.kind === 'collateral' && receipt.collateral)
     description = `${exact(receipt.collateral)} µETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`;
   if (receipt.kind === 'invest')

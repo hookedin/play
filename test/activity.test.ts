@@ -165,3 +165,16 @@ test('a loan from the faucet reads as free µETH lent', () => {
     ['Faucet loan declined', 'Your balance is unchanged.', 'Not today'],
   );
 });
+
+test('ETH arriving at the address, the balance opening and what a deposit adds each read as their own step', () => {
+  const received = receiptSummary({ kind: 'received', status: 'confirmed', amount: '2000000000000000000' }, contract);
+  assert.deepEqual(
+    [received.title, received.amount, received.amountLabel],
+    ['Received at your address', '2,000,000 µETH', 'ETH received'],
+  );
+  const opened = receiptSummary({ kind: 'opened', status: 'confirmed', amount: '0' }, contract);
+  assert.deepEqual([opened.title, opened.amount, opened.amountLabel], ['Balance opened', '0 µETH', 'Deposited']);
+  assert.match(opened.description!, /from anyone, as the faucet opens one/);
+  const added = receiptSummary({ kind: 'taken-in', status: 'signed', amount: '5000000000000', balance: '5' }, contract);
+  assert.deepEqual([added.title, added.amount, added.amountLabel], ['Added to your balance', '5 µETH', 'Added']);
+});

@@ -28,6 +28,14 @@ import {
 /** What the wallet signs by itself as money comes into the balance: a deposit taken in, and the loan of its network
  * fee. It goes before anything else the player signs. */
 export const inbound = (kind?: string) => kind === 'taken-in' || kind === 'loan';
+/** ETH that arrived at the account's address, as Activity lists it. */
+export const addressReceipt = (amount: bigint, createdAt: string) => ({
+  kind: 'received',
+  operationId: 'received:' + createdAt,
+  amount: String(amount),
+  status: 'confirmed',
+  createdAt,
+});
 /** The most gas a withdrawal fee may pay for, twice what sending a withdrawal costs: the wallet signs no fee above it
  * at the gas price it reads itself. */
 const MOST_WITHDRAWAL_GAS = 300_000n;
@@ -535,7 +543,14 @@ export class WalletTransactions {
   }
   async recordTransaction(this: CasinoWallet, receipt: TransactionReceipt, status = 'confirmed') {
     const record = this.transactionRecord(receipt, this.transactionIntent, status);
-    await this.save(record, { transactionIntent: null });
+    // What the address held before the block the transaction is in, beyond the last look, arrived meanwhile; what it
+    // held once it had run is the next look's start. A state too old to read starts the next look afresh.
+    const [before, after] = await Promise.all(
+      [receipt.blockNumber - 1, receipt.blockNumber].map(async block => this.provider.getBalance(this.address, block)),
+    ).catch(() => [null, null]);
+    if (before !== null && this.atAddress !== null && before > BigInt(this.atAddress))
+      this.history = [addressReceipt(before - BigInt(this.atAddress), record.createdAt), ...this.history];
+    await this.save(record, { transactionIntent: null, atAddress: after === null ? null : String(after) });
   }
   transactionRecovery(this: CasinoWallet) {
     return { provider: this.provider, observer: this.observer, confirmations: this.config.confirmations };
