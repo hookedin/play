@@ -542,7 +542,10 @@ function renderAllowanceDialog() {
     slider = $<HTMLInputElement>('allowance-slider'),
     amount = typedWhole($<HTMLInputElement>('allowance-amount').value || '0') ?? -1n,
     valid = amount >= 0n && amount <= total,
-    shown = formatAmount(amount, 0);
+    shown = formatAmount(amount, 0),
+    // A game that asks to place developer bets as well is allowed them at the allowance it has.
+    granting = allowingDeveloperBets && !wallet.game?.developerBets && amount > 0n,
+    unchanged = amount === allowance && !granting;
   $('allowance-total').textContent = `${formatAmount(total, 0)} µETH, your balance`;
   $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
   slider.value = String(valid && total > 0n ? (amount * SLIDER_STEPS) / total : 0n);
@@ -552,21 +555,25 @@ function renderAllowanceDialog() {
       : 'Enter a whole number of µETH.'
     : total === 0n
       ? 'Your balance is empty. Deposit to play with ETH.'
-      : amount === allowance
+      : unchanged
         ? `This is ${name}'s allowance now.`
-        : amount > allowance
-          ? `${name} may play with up to ${shown} µETH.`
-          : `${name} may play with up to ${shown} µETH, and the rest stays in your balance.`;
+        : amount === allowance
+          ? `${name} keeps its allowance of ${shown} µETH, and may place developer bets too.`
+          : amount > allowance
+            ? `${name} may play with up to ${shown} µETH.`
+            : `${name} may play with up to ${shown} µETH, and the rest stays in your balance.`;
   $('allowance-help').classList.toggle('check-failed', !valid);
-  $<HTMLButtonElement>('allowance-confirm').disabled = !valid || amount === allowance || uiBusy || wallet.busy;
+  $<HTMLButtonElement>('allowance-confirm').disabled = !valid || unchanged || uiBusy || wallet.busy;
   $('allowance-confirm').textContent =
-    !valid || amount === allowance
+    !valid || unchanged
       ? 'Allow'
       : amount === 0n
         ? 'Take it all back'
-        : amount < allowance
-          ? `Lower to ${shown} µETH`
-          : `Allow ${shown} µETH`;
+        : amount === allowance
+          ? 'Allow developer bets'
+          : amount < allowance
+            ? `Lower to ${shown} µETH`
+            : `Allow ${shown} µETH`;
 }
 /** What the player may allow the open game: the playable balance less what its groups hold, which stays theirs. */
 const allowable = () => {
@@ -1943,11 +1950,15 @@ $<HTMLFormElement>('allowance-form').addEventListener('submit', event => {
   });
 });
 $<HTMLDialogElement>('allowance-dialog').addEventListener('close', () => {
-  const value = $<HTMLDialogElement>('allowance-dialog').returnValue;
+  const dialog = $<HTMLDialogElement>('allowance-dialog'),
+    value = dialog.returnValue;
+  dialog.returnValue = '';
+  // The close is heard a moment after it: a game's request can have opened the dialog again by then, and this close
+  // belongs to the request before.
+  if (dialog.open) return;
   const request = allowanceRequest;
   allowanceRequest = null;
   request?.resolve(value ? BigInt(value) : null);
-  $<HTMLDialogElement>('allowance-dialog').returnValue = '';
 });
 $<HTMLButtonElement>('bet-detail-close').addEventListener('click', () => $<HTMLDialogElement>('bet-dialog').close());
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-allowance-cancel]'))
