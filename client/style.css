@@ -587,7 +587,10 @@ label {
 }
 .account-menu {
   inset: 64px 16px auto auto;
-  width: 240px;
+  /* Wide enough for the account's name on one line. */
+  width: max-content;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
   margin: 0;
   padding: 6px;
   border: 1px solid var(--line-strong);
@@ -605,14 +608,19 @@ label {
 .account-menu a:hover {
   background: var(--raised);
 }
-.menu-head {
+.account-menu .menu-head {
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 10px 12px 12px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--line);
-  overflow-wrap: anywhere;
+  border-radius: 8px 8px 0 0;
+}
+.menu-head > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .menu-head .handle:empty {
   display: none;
@@ -1947,6 +1955,7 @@ body:has(#page-play:not(.hidden)) .footer {
   }
   .account-menu {
     inset: 60px 8px auto auto;
+    max-width: calc(100vw - 16px);
   }
   main {
     padding: 20px 14px 40px;

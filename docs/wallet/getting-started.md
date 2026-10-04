@@ -168,8 +168,8 @@ either way, and both names find you ([verifying a Discord account](../casino-api
 `/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they
 have played with what they won or lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Others see your page from your first deposit, when the casino first registers your account, or from when you first
-verify your Discord account. **Your profile**, in the account menu, is your own page, from the start, with the way to
-your name in Settings and the faucet ([free µETH](#free-µeth)).
+verify your Discord account. Your name, at the top of the account menu, opens your own page, from the start, with the
+way to your name in Settings and the faucet ([free µETH](#free-µeth)).
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.

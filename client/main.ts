@@ -1451,13 +1451,12 @@ function renderProfile() {
   const uname = wallet.alias && wallet.uname ? '~' + wallet.uname : '';
   $('menu-uname').textContent = uname;
   $('wallet-uname').textContent = uname;
-  for (const id of ['menu-profile', 'settings-profile']) {
-    $<HTMLAnchorElement>(id).href = page ?? '/';
-    $(id).classList.toggle('hidden', !page);
-  }
+  $<HTMLAnchorElement>('settings-profile').href = page ?? '/';
+  $('settings-profile').classList.toggle('hidden', !page);
   $('wallet-name').textContent = name ?? '—';
-  if (page) $<HTMLAnchorElement>('wallet-name-link').href = page;
-  else $('wallet-name-link').removeAttribute('href');
+  for (const id of ['menu-profile', 'wallet-name-link'])
+    if (page) $<HTMLAnchorElement>(id).href = page;
+    else $(id).removeAttribute('href');
   // Your own page: the way to your name, and before the casino has met you, the page itself.
   if (shown?.missing && ownPage()) {
     shown.missing = false;
