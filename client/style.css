@@ -665,14 +665,23 @@ main:has(> #page-play:not(.hidden)) {
 .section-title {
   margin: 32px 0 14px;
 }
-/* A player's page: their bets in a line, and on your own, the faucet. */
+/* A player's page: their bets in a line, and on your own, your Discord username and the faucet. */
 .profile-stats {
   font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
-.profile-faucet {
+.profile-card {
   max-width: 520px;
   margin-top: 24px;
+}
+.steps {
+  margin: 10px 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.steps li + li {
+  margin-top: 4px;
 }
 .card {
   margin-top: 16px;
@@ -770,10 +779,6 @@ main:has(> #page-play:not(.hidden)) {
   font-size: 17px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.name-line {
-  margin-top: 14px;
-  font-size: 18px;
 }
 
 /* Money: the balance, what games play with. */

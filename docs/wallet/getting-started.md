@@ -16,10 +16,9 @@ deposit you [save your key](keys-and-recovery.md#your-key).
 **Wallet** in the top bar opens the wallet over the page you are on, a game going on under it: your balance, what the
 contract still owes you, and three tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw` and **Activity**
 at `/wallet/activity`. **Settings**, in the account menu, opens the same way at `/settings`, with a tab for each thing
-it is for: **Profile** at `/settings` for your name, **Keys** at `/settings/keys`, **Deposits** at
-`/settings/deposits`, **Transfer** at `/settings/transfer`, **Protection** at `/settings/protection` and **Recovery** at
-`/settings/recovery`. Each address
-opens its tab, over the library when it is a link. Closing it, or Back, brings the page under it back.
+it is for: **Keys** at `/settings`, **Deposits** at `/settings/deposits`, **Transfer** at `/settings/transfer`,
+**Protection** at `/settings/protection` and **Recovery** at `/settings/recovery`. Each address opens its tab, over the
+library when it is a link. Closing it, or Back, brings the page under it back.
 
 The wallet, its games and hookedin.com count money in **µETH**, millionths of an ETH: 0.01 ETH is 10,000 µETH. Amounts
 are cut off, never rounded: a balance in whole µETH, and a stake, a payout or a fee at a thousandth of a µETH, a gwei,
@@ -156,8 +155,8 @@ the casino for it as soon as it loads your account, with a request only your key
 first deposit. It is what games, developers and other players learn about you.
 
 Verify your Discord account and you go by its **Discord username** instead, written with an at sign, such as `@bob`.
-Verifying needs no balance: **Verify with Discord**, under **Profile** in Settings, gives you a code, and you type
-`/verify` with it in the HookedIn Discord within 10 minutes. Discord tells the casino your username as you run it, and
+Verifying needs no balance. Your own page shows how: join the HookedIn Discord, which it links to, press **Verify with
+Discord** there for a code, and type `/verify` with it in any channel of the HookedIn Discord within 10 minutes. Discord tells the casino your username as you run it, and
 at no other time: verify again after you change it. Your page shows when you last verified. A Discord account is one
 HookedIn account's: verifying it on another takes it from the first. A username that reads like another player's name
 is refused, with `l` and `1` read as `i` and `0` as `o`, and so are the casino's own names, such as `@hookedin`, the
@@ -167,8 +166,8 @@ either way, and both names find you ([verifying a Discord account](../casino-api
 `/@username` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they
 have played with what they won or lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Others see your page from your first deposit, when the casino first registers your account, or from when you first
-verify your Discord account. Your name, at the top of the account menu, opens your own page, from the start, with the
-way to your name in Settings and the faucet ([free µETH](#free-µeth)).
+verify your Discord account. Your name, at the top of the account menu, opens your own page, from the start, with
+your Discord username and the faucet ([free µETH](#free-µeth)).
 Anyone can read it, from [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list
 of players is at https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the
 game's developer.

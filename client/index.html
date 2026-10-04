@@ -69,7 +69,7 @@
         <a href="/games" data-page="games">My games</a>
         <a href="/bankroll" data-page="bankroll">Bankroll</a>
       </details>
-      <a href="/settings" data-wallet-tab="profile">Settings</a>
+      <a href="/settings" data-wallet-tab="keys">Settings</a>
       <a href="mailto:support@hookedin.com">Contact support</a>
       <button id="menu-sign-in" class="text-button" type="button" data-key="sign-in">Sign in with a passkey</button>
     </div>
@@ -290,10 +290,27 @@
             <h1 id="profile-name"></h1>
             <p id="profile-meta" class="muted"></p>
           </div>
-          <a id="profile-edit" class="button small hidden" href="/settings" data-wallet-tab="profile">Edit name</a>
         </div>
         <p id="profile-stats" class="profile-stats"></p>
-        <div id="faucet" class="boxed profile-faucet" hidden>
+        <div id="discord" class="boxed profile-card" hidden>
+          <strong>Your Discord username</strong>
+          <p id="discord-text"></p>
+          <ol id="discord-steps" class="steps">
+            <li>
+              Join the <a id="open-discord" class="text-button" target="_blank" rel="noopener">HookedIn Discord</a>.
+            </li>
+            <li>Get a code below.</li>
+            <li>Type <strong>/verify</strong> in any channel there and give it the code, within 10 minutes.</li>
+          </ol>
+          <div id="verify" class="address" hidden>
+            <code id="verify-code"></code><button id="copy-verify-code" class="button small" type="button">Copy</button>
+          </div>
+          <div class="actions">
+            <button id="verify-discord" class="button primary" type="button">Verify with Discord</button
+            ><button id="unlink-discord" class="text-button hidden" type="button">Unlink Discord</button>
+          </div>
+        </div>
+        <div id="faucet" class="boxed profile-card" hidden>
           <strong>Free µETH</strong>
           <p id="faucet-text"></p>
           <button id="faucet-borrow" class="button primary" type="button">Get free µETH</button>
@@ -342,8 +359,7 @@
         ><button role="tab" type="button" data-tab="activity" aria-selected="false">Activity</button>
       </div>
       <div class="tabs" role="tablist" aria-label="Settings" data-section="settings">
-        <button role="tab" type="button" data-tab="profile" aria-selected="false">Profile</button
-        ><button role="tab" type="button" data-tab="keys" aria-selected="false">Keys</button
+        <button role="tab" type="button" data-tab="keys" aria-selected="false">Keys</button
         ><button role="tab" type="button" data-tab="deposits" aria-selected="false">Deposits</button
         ><button role="tab" type="button" data-tab="transfer" aria-selected="false">Transfer</button
         ><button role="tab" type="button" data-tab="protection" aria-selected="false">Protection</button
@@ -437,36 +453,6 @@
         <p id="history-status" class="muted" role="status"></p>
         <div id="activity-list" class="list"></div>
         <p id="activity-empty" class="empty hidden"></p>
-      </section>
-      <section class="tab-panel" data-panel="profile" hidden>
-        <section class="setting" aria-labelledby="name-title">
-          <h3 id="name-title">Your name</h3>
-          <p class="muted">
-            All that games, developers and other players ever learn about you. Your uname, <code>~like-this</code>, is
-            yours for good. Verify your Discord account in the HookedIn Discord and you go by your Discord username
-            instead, <code>@like-this</code>.
-          </p>
-          <p class="name-line">
-            <a id="wallet-name-link"><strong id="wallet-name">—</strong></a>
-            <span id="wallet-uname" class="handle"></span>
-          </p>
-          <a id="settings-profile" class="text-button hidden" href="/">See your profile</a>
-          <button id="verify-discord" class="button full" type="button">Verify with Discord</button>
-          <div id="verify" hidden>
-            <label for="verify-code"
-              >Type <strong>/verify</strong> in the HookedIn Discord and give it this code:</label
-            >
-            <div class="address">
-              <code id="verify-code"></code
-              ><button id="copy-verify-code" class="button small" type="button">Copy</button>
-            </div>
-            <a id="open-discord" class="button primary full" target="_blank" rel="noopener"
-              >Open the HookedIn Discord</a
-            >
-          </div>
-          <p id="discord-note" class="muted"></p>
-          <button id="unlink-discord" class="text-button hidden" type="button">Unlink Discord</button>
-        </section>
       </section>
       <section class="tab-panel" data-panel="keys" hidden>
         <section class="setting" aria-labelledby="keys-title">

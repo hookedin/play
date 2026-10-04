@@ -296,8 +296,7 @@ const SHEET_TABS = {
   deposit: '/wallet',
   withdraw: '/wallet/withdraw',
   activity: '/wallet/activity',
-  profile: '/settings',
-  keys: '/settings/keys',
+  keys: '/settings',
   deposits: '/settings/deposits',
   transfer: '/settings/transfer',
   protection: '/settings/protection',
@@ -775,12 +774,9 @@ function renderWallet() {
     ? `You asked the faucet: the casino lends you ${lends} to play with, ${often}`
     : wallet.discordUsername
       ? `Ask /faucet in the HookedIn Discord and the casino lends you ${lends} to play with, ${often}`
-      : `Verify your Discord account in the HookedIn Discord, then ask /faucet there, and the casino lends you ${lends} to play with, ${often}`;
-  $('faucet-borrow').textContent = wallet.faucet
-    ? `Get ${lends}`
-    : wallet.discordUsername
-      ? 'Open Discord'
-      : 'Verify with Discord';
+      : `Once you go by your Discord username, ask /faucet in the HookedIn Discord and the casino lends you ${lends} to play with, ${often}`;
+  $('faucet-borrow').textContent = wallet.faucet ? `Get ${lends}` : 'Open Discord';
+  $('faucet-borrow').classList.toggle('hidden', !wallet.faucet && !wallet.discordUsername);
   $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
 
   const open = status === 1 && !closing;
@@ -1440,7 +1436,7 @@ function drawProfile(profile: any) {
 let libraryKey = '';
 /** The account the saved-accounts list was last set to, so a render only moves it when that changes. */
 let shownAccount: string | null = null;
-/** The account's own names, in the top bar, its menu and Settings, and the games it publishes. */
+/** The account's own names, in the top bar, its menu and its own page, and the games it publishes. */
 function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
     open = wallet.playable && !wallet.recoveryOnly,
@@ -1451,13 +1447,8 @@ function renderProfile() {
   // The uname is always there; when a Discord username covers it up, it is shown underneath.
   const uname = wallet.discordUsername && wallet.uname ? '~' + wallet.uname : '';
   $('menu-uname').textContent = uname;
-  $('wallet-uname').textContent = uname;
-  $<HTMLAnchorElement>('settings-profile').href = page ?? '/';
-  $('settings-profile').classList.toggle('hidden', !page);
-  $('wallet-name').textContent = name ?? '—';
-  for (const id of ['menu-profile', 'wallet-name-link'])
-    if (page) $<HTMLAnchorElement>(id).href = page;
-    else $(id).removeAttribute('href');
+  if (page) $<HTMLAnchorElement>('menu-profile').href = page;
+  else $('menu-profile').removeAttribute('href');
   // Your own page: the way to your name, and before the casino has met you, the page itself.
   if (shown?.missing && ownPage()) {
     shown.missing = false;
@@ -1472,28 +1463,39 @@ function renderProfile() {
       }),
     );
   }
-  $('profile-edit').classList.toggle('hidden', !ownPage());
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
-  // Verifying a Discord account: its member runs /verify with a code the casino gives.
+  // Your own page, while it shows, follows the name /verify gives you, or unlinking takes away.
+  const own = wallet.profile;
+  if (
+    own &&
+    ownPage() &&
+    !$('page-profile').classList.contains('hidden') &&
+    (shown!.profile.discordUsername !== own.discordUsername || shown!.profile.discordVerified !== own.discordVerified)
+  )
+    drawProfile((shown!.profile = own));
+  // Your own page: how to go by your Discord username. A member of the HookedIn Discord gives it to the account by
+  // running /verify there with a code the casino gives here.
   const discord = wallet.config?.discord ?? null,
-    house = wallet.discordUsername === HOUSE;
-  $('verify-discord').textContent = wallet.discordUsername ? 'Verify again' : 'Verify with Discord';
-  $('verify-discord').classList.toggle('hidden', Boolean(verifying) || house);
-  $<HTMLButtonElement>('verify-discord').disabled = uiBusy || !wallet.uname || !discord;
+    verified = Boolean(wallet.discordUsername),
+    when = wallet.profile?.discordVerified;
+  $('discord').hidden = !ownPage() || !discord || wallet.discordUsername === HOUSE;
+  if (discord) $<HTMLAnchorElement>('open-discord').href = discord;
+  $('discord-text').textContent = verifying
+    ? 'Discord tells the casino your username as you run /verify, and at no other time.'
+    : verified
+      ? `You go by your Discord username, @${wallet.discordUsername}${when ? `, verified ${shortDate(when)}` : ''}. Discord tells the casino your username only as you run /verify: verify again after you change it there.`
+      : `Go by your Discord username here instead of your uname, ~${wallet.uname}. It takes no deposit.`;
+  $('discord-steps').hidden = verified && !verifying;
   $('verify').hidden = !verifying;
   if (verifying) $('verify-code').textContent = verifying.code;
-  if (discord) $<HTMLAnchorElement>('open-discord').href = discord;
-  $('unlink-discord').classList.toggle('hidden', !wallet.discordUsername || house);
+  $('verify-discord').textContent = verified ? 'Verify again' : 'Verify with Discord';
+  $('verify-discord').classList.toggle('primary', !verified);
+  $('verify-discord').classList.toggle('hidden', Boolean(verifying));
+  $<HTMLButtonElement>('verify-discord').disabled = uiBusy || !wallet.uname;
+  $('unlink-discord').classList.toggle('hidden', !verified || Boolean(verifying));
   $<HTMLButtonElement>('unlink-discord').disabled = uiBusy;
-  $('discord-note').textContent = !discord
-    ? 'Verifying a Discord account is not offered here.'
-    : verifying
-      ? 'The code lasts 10 minutes. Discord tells the casino your username as you run /verify, and at no other time.'
-      : wallet.discordUsername
-        ? `You go by your Discord username, @${wallet.discordUsername}${wallet.profile?.discordVerified ? `, verified ${shortDate(wallet.profile.discordVerified)}` : ''}. Verify again after you change it in Discord.`
-        : 'Discord tells the casino your username as you run /verify, and at no other time.';
   const games = wallet.profile?.games ?? [];
   $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
   const key = json([name, games]);
@@ -2201,13 +2203,9 @@ act(
   () => wallet.unlinkDiscord(),
   () => `You go by ~${wallet.uname} again.`,
 );
-// The faucet lends to an account whose member asked /faucet in the HookedIn Discord; any other asks there first, once
-// it has verified its Discord account.
+// The faucet lends to an account whose member asked /faucet in the HookedIn Discord; any other asks there first.
 $('faucet-borrow').addEventListener('click', () => {
-  if (!wallet.faucet) {
-    if (!wallet.discordUsername) return openWallet('profile');
-    return void open(wallet.config.discord, '_blank', 'noopener');
-  }
+  if (!wallet.faucet) return void open(wallet.config.discord, '_blank', 'noopener');
   void task(async () => {
     const receipt = await wallet.borrowFromFaucet();
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The faucet declined.');
@@ -2241,12 +2239,11 @@ act('bank-withdraw', async () => {
   await wallet.collectPayouts();
   await refreshBank();
 });
-for (const id of ['wallet-name-link', 'menu-profile', 'settings-profile'])
-  $(id).addEventListener('click', event => {
-    event.preventDefault();
-    $('account-menu').hidePopover?.();
-    if (wallet.uname) void openProfile(showName(wallet));
-  });
+$('menu-profile').addEventListener('click', event => {
+  event.preventDefault();
+  $('account-menu').hidePopover?.();
+  if (wallet.uname) void openProfile(showName(wallet));
+});
 $('network-name').textContent = wallet.networkName;
 // The account is saved with a passkey, whose secret is its key, or as the key itself in a file.
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
