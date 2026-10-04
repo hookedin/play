@@ -418,8 +418,8 @@ to it no more. Answers its own profile; `not-found` answers an account that veri
 
 Discord's own route: the commands members run in the HookedIn Discord, each signed with the key of the casino's Discord
 app in the `X-Signature-Ed25519` and `X-Signature-Timestamp` headers. `unauthorized` answers anything else. The casino
-answers a command with a message only the member who ran it sees, and a command run in any other server with nothing
-else.
+answers each command with a message everyone in the channel sees; one run in any other server is told only that it
+answers in the HookedIn server.
 
 - `/verify code`: the account the code was given to goes by the member's Discord username from then on. The code is
   spent, and one over 10 minutes old does nothing. A Discord account is one account's: verifying it on another takes it
