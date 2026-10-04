@@ -108,7 +108,7 @@ settled by its developer and collected by the wallet, and returns a function tha
 
 A storage key for this page, chain and player, from a `wallet.info` result: `hookedin:<pathname>:<chainId>:<uname>`,
 with `chain` for a missing chain and `anonymous` for a missing uname, in lower case. It keys on the uname, so taking or
-dropping an alias keeps what the player had ([storage](../games/how-a-game-works.md#storage)).
+dropping a Discord username keeps what the player had ([storage](../games/how-a-game-works.md#storage)).
 
 ```ts
 HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:11155111:3byt9ocwnnzaxanmiz3stocj'
@@ -195,7 +195,7 @@ Every bound the wallet holds a bet to, `{ outcomeSpace, meta, group }`, as `hell
 ### `WalletInfo`
 
 The result of [`wallet.info`](../reference/bridge.md#walletinfo):
-`{ uname, alias, chainId, virtualBankroll, recommendedStake }`.
+`{ uname, discordUsername, chainId, virtualBankroll, recommendedStake }`.
 
 ### `CasinoBetRequest`
 

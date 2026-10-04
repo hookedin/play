@@ -108,7 +108,7 @@ The bankroll fund's state, signed by the casino: a quote it can be held to. The 
 
 ## Players and games
 
-A player is public by their names alone, a `~uname` and an `@alias` ([your name](../wallet/getting-started.md#your-name)).
+A player is public by their names alone, a `~uname` and a Discord username, `@username` ([your name](../wallet/getting-started.md#your-name)).
 A name is compared case-insensitively, with `l` and `1` read as `i` and `0` as `o`.
 
 ### `GET /api/players`
@@ -118,20 +118,21 @@ other values are clamped, and one that is not a number counts as 1.
 
 ### `GET /api/players/:name`
 
-One player's profile; `:name` is `~` and a uname or `@` and an alias.
+One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
 
-| Response field | Type           | Meaning                                                                                                                                                                                                                                     |
-| -------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`        | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                                    |
-| `alias`        | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `playhookedin`, is the casino's to give                                                                                                          |
-| `since`        | number         | When the casino first knew them                                                                                                                                                                                                             |
-| `stats`        | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |
-| `games`        | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
+| Response field    | Type           | Meaning                                                                                                                                                                                                                                     |
+| ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`           | string         | The player's uname: 24 characters of `2`–`9` and `a`–`z` without `l` and `u`, derived from their address                                                                                                                                    |
+| `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                              |
+| `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                      |
+| `since`           | number         | When the casino first knew them                                                                                                                                                                                                             |
+| `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |
+| `games`           | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
 
 ### `GET /api/players/:name/:game`
 
-A game a player publishes, which `@alias/game` or `~uname/game` opens in the wallet: the player's names and the game's
-entry in their profile, `{uname, alias, name, url, key, developer}`. `:game` is the name it is published under.
+A game a player publishes, which `@username/game` or `~uname/game` opens in the wallet: the player's names and the game's
+entry in their profile, `{uname, discordUsername, name, url, key, developer}`. `:game` is the name it is published under.
 
 ### `GET /api/games/:key`
 
@@ -150,7 +151,7 @@ and reveals do not appear. An unknown key answers with totals of zero and no bet
 | `key`           | bytes32 | The game, lowercase                                                                                                   |
 | `developerBets` | object  | `{open, settled}`: how many of the game's developer bets, of the group if the request names one, are open and settled |
 | `totals`        | object  | `{bets, staked, paid, expected, priced}`, below                                                                       |
-| `bets`          | array   | `{index, kind, uname, alias, group?, stake, chance?, prize?, payout, at}`, below                                      |
+| `bets`          | array   | `{index, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below                            |
 
 The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. `bets` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
@@ -159,7 +160,7 @@ staked and paid, a round's steps each on its own, so only `paid − staked` is w
 `expected / (priced × 2^64)`. A developer bet has no odds and counts in neither.
 
 A bet's `index` is its number in the casino's record of every settled bet. `kind` is `casino`, `developer`, or `bank`
-for a developer's casino bet from its bank. Its player is their `uname` and `alias`, a developer's casino bet its
+for a developer's casino bet from its bank. Its player is their `uname` and `discordUsername`, a developer's casino bet its
 developer's. `stake` and `payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and
 `at` is when it settled.
 
@@ -185,19 +186,19 @@ channel's own rounds are not shown here.
 
 One developer bet, by its hash: the hash of the operation that placed it.
 
-| Response field   | Type                   | Meaning                                                                                                                           |
-| ---------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `bet`            | bytes32                | The bet's hash                                                                                                                    |
-| `game`           | bytes32                | The game's key                                                                                                                    |
-| `group`          | string                 | The group the game gave it, when it has one                                                                                       |
-| `stake`          | string                 | What the player staked, paid into the developer's bank                                                                            |
-| `placedAt`       | number                 | When the casino took it                                                                                                           |
-| `developer`      | address                | The game's developer when the bet was placed: its bank took the stake and its key settles the bet                                 |
-| `status`         | string                 | `open` or `settled`                                                                                                               |
-| `meta`           | object                 | The game's own JSON, as the player signed it                                                                                      |
-| `settlement`     | object                 | Settled: `{player, casino, signature}`, the developer's signed [`Settlement`](../reference/signed-messages.md#developer-messages) |
-| `settledAt`      | number                 | Settled: when                                                                                                                     |
-| `uname`, `alias` | string, string or null | The player's names                                                                                                                |
+| Response field             | Type                   | Meaning                                                                                                                           |
+| -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `bet`                      | bytes32                | The bet's hash                                                                                                                    |
+| `game`                     | bytes32                | The game's key                                                                                                                    |
+| `group`                    | string                 | The group the game gave it, when it has one                                                                                       |
+| `stake`                    | string                 | What the player staked, paid into the developer's bank                                                                            |
+| `placedAt`                 | number                 | When the casino took it                                                                                                           |
+| `developer`                | address                | The game's developer when the bet was placed: its bank took the stake and its key settles the bet                                 |
+| `status`                   | string                 | `open` or `settled`                                                                                                               |
+| `meta`                     | object                 | The game's own JSON, as the player signed it                                                                                      |
+| `settlement`               | object                 | Settled: `{player, casino, signature}`, the developer's signed [`Settlement`](../reference/signed-messages.md#developer-messages) |
+| `settledAt`                | number                 | Settled: when                                                                                                                     |
+| `uname`, `discordUsername` | string, string or null | The player's names                                                                                                                |
 
 ### `GET /api/developer-bets`
 

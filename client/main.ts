@@ -42,7 +42,7 @@ interface ActiveGame {
    * it does with the account. */
   uname?: string | null;
   identity: GameIdentity;
-  /** Who publishes it, written as they are written (`@alias` or `~uname`); none for a game opened by its URL. */
+  /** Who publishes it, written as they are written (`@username` or `~uname`); none for a game opened by its URL. */
   publisher: string | null;
   /** The wallet path that reopens this game. */
   path: string;
@@ -51,7 +51,7 @@ interface ActiveGame {
   /** Whether the game's page has loaded, so the wallet's receipts have somewhere to go. */
   loaded: boolean;
 }
-/** A published game is `@alias/name` or `~uname/name`: its owner, written as they are written, and
+/** A published game is `@username/name` or `~uname/name`: its owner, written as they are written, and
  * the name it has in their profile. Any other game is linkable by its URL alone. */
 type GameRoute = { owner: string; name: string } | { url: string };
 /** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
@@ -103,7 +103,7 @@ let historyBusy = false,
   historyError: any = null;
 const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
 /** The casino's own profile, its account on X: the games it ships with are published there. */
-const HOUSE = 'playhookedin';
+const HOUSE = 'hookedin';
 /** How many games one profile holds. */
 const MAX_GAMES = 100;
 const storage = new BrowserStore();
@@ -313,9 +313,9 @@ function walletRoute() {
 }
 const gamePath = (route: GameRoute) =>
   'url' in route ? `/games/custom?url=${encodeURIComponent(route.url)}` : `/${route.owner}/${route.name}`;
-/** How a player is written: an alias wears `@`, a uname wears `~`. */
-const showName = (names: { uname?: string | null; alias?: string | null } | null) =>
-  names?.alias ? '@' + names.alias : names?.uname ? '~' + names.uname : '—';
+/** How a player is written: a Discord username wears `@`, a uname wears `~`. */
+const showName = (names: { uname?: string | null; discordUsername?: string | null } | null) =>
+  names?.discordUsername ? '@' + names.discordUsername : names?.uname ? '~' + names.uname : '—';
 /** Show a section; the URL is the caller's responsibility. */
 function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -389,7 +389,7 @@ function navigate(page: string, push = true, path = PAGES[page]!.path) {
   closeGame();
   if (push && location.pathname !== path) history.pushState(null, '', path);
 }
-/** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<alias>` or `/~<uname>` for a player, the same and
+/** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<username>` or `/~<uname>` for a player, the same and
  * `/<game>` for a game they publish, `/games/<key>` for a game's public record, `/games/custom?url=<url>`, and
  * `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page, `/wallet[/<tab>]` and
  * `/settings[/<tab>]`. */
@@ -404,7 +404,7 @@ function parseRoute(
   } catch {}
   const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === pathname);
   if (tab) return { wallet: tab };
-  const named = /^\/([~@][A-Za-z0-9_.]{1,24})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
+  const named = /^\/([~@][A-Za-z0-9_.]{1,32})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
   if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
   const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
@@ -421,7 +421,7 @@ async function route(push = false) {
   if ('unknown' in target) {
     navigate('library', false, '/');
     history.replaceState(null, '', '/');
-    return void toast(`Nothing lives at ${target.unknown}. A player is @alias or ~uname.`, true);
+    return void toast(`Nothing lives at ${target.unknown}. A player is @username or ~uname.`, true);
   }
   if ('profile' in target) return void openProfile(target.profile, push);
   if ('record' in target) return void openGameRecord(target.record, push);
@@ -773,12 +773,12 @@ function renderWallet() {
     !ownPage() || !faucet || !wallet.config?.discord || balance >= faucet || wallet.recoveryOnly || closing;
   $('faucet-text').textContent = wallet.faucet
     ? `You asked the faucet: the casino lends you ${lends} to play with, ${often}`
-    : wallet.alias
+    : wallet.discordUsername
       ? `Ask /faucet in the HookedIn Discord and the casino lends you ${lends} to play with, ${often}`
       : `Verify your Discord account in the HookedIn Discord, then ask /faucet there, and the casino lends you ${lends} to play with, ${often}`;
   $('faucet-borrow').textContent = wallet.faucet
     ? `Get ${lends}`
-    : wallet.alias
+    : wallet.discordUsername
       ? 'Open Discord'
       : 'Verify with Discord';
   $<HTMLButtonElement>('faucet-borrow').disabled = busy || !ready;
@@ -1346,13 +1346,13 @@ function gameCard(route: { owner: string; name: string }, game: Published & { na
 /** Every game a profile publishes, as cards. */
 const profileCards = (owner: string, games: (Published & { name: string; url: string })[]) =>
   games.map(game => gameCard({ owner, name: game.name }, game));
-/** The lobby is what `@playhookedin` publishes, and whatever this account publishes itself. It needs nothing of the
+/** The lobby is what `@hookedin` publishes, and whatever this account publishes itself. It needs nothing of the
  * wallet but the casino's address, so it shows before the wallet has started. */
 async function loadLibrary() {
   const list = $('game-library');
   try {
     const house = await wallet.api(`/api/players/@${HOUSE}`);
-    const mine = wallet.alias === HOUSE ? [] : (wallet.profile?.games ?? []);
+    const mine = wallet.discordUsername === HOUSE ? [] : (wallet.profile?.games ?? []);
     list.replaceChildren(...profileCards('@' + HOUSE, house.games), ...profileCards(showName(wallet.profile), mine));
   } catch {
     list.textContent = 'The games could not be loaded. You can still open a game by its URL below.';
@@ -1366,12 +1366,12 @@ let shown: { name: string; profile: any; missing: boolean } | null = null;
 let verifying: { code: string; expires: number } | null = null;
 /** Ask the casino every few seconds, while the code lasts, whether its member ran /verify with it: the account then goes
  * by their Discord username. */
-async function watchVerify(code: { code: string; expires: number }, before: string | null) {
+async function watchVerify(code: { code: string; expires: number }, before: number | null) {
   while (verifying === code && Date.now() < code.expires) {
     await new Promise(resolve => setTimeout(resolve, 4000));
     const profile = await wallet.refreshOwnProfile().catch(() => null);
-    if (verifying === code && profile?.alias && profile.alias !== before) {
-      toast(`You go by @${profile.alias} now.`);
+    if (verifying === code && profile?.discordUsername && profile.discordVerified !== before) {
+      toast(`You go by @${profile.discordUsername} now.`);
       break;
     }
   }
@@ -1411,8 +1411,9 @@ function drawProfile(profile: any) {
   const name = showName(profile);
   document.title = `${name} · HookedIn`;
   $('profile-name').textContent = name;
-  // The uname an alias covers up, and when the casino met them.
-  const meta = profile.alias ? ['~' + profile.uname] : [];
+  // The uname a Discord username covers up, when they last verified it, and when the casino met them.
+  const meta = profile.discordUsername ? ['~' + profile.uname] : [];
+  if (profile.discordVerified) meta.push(`Verified on Discord ${shortDate(profile.discordVerified)}`);
   meta.push(
     profile.since
       ? `Joined ${shortDate(profile.since)}`
@@ -1447,8 +1448,8 @@ function renderProfile() {
     page = name ? `/${name}` : null;
   $('account-name').textContent = name ?? 'Account';
   $('menu-name').textContent = name ?? 'Your account';
-  // The uname is always there; when an alias covers it up, it is shown underneath.
-  const uname = wallet.alias && wallet.uname ? '~' + wallet.uname : '';
+  // The uname is always there; when a Discord username covers it up, it is shown underneath.
+  const uname = wallet.discordUsername && wallet.uname ? '~' + wallet.uname : '';
   $('menu-uname').textContent = uname;
   $('wallet-uname').textContent = uname;
   $<HTMLAnchorElement>('settings-profile').href = page ?? '/';
@@ -1463,7 +1464,8 @@ function renderProfile() {
     drawProfile(
       (shown.profile = {
         uname: wallet.uname,
-        alias: null,
+        discordUsername: null,
+        discordVerified: null,
         since: null,
         stats: { plays: 0, net: '0' },
         games: [],
@@ -1474,23 +1476,23 @@ function renderProfile() {
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
-  // Verifying a Discord account is the one way to an alias: its member runs /verify with a code the casino gives.
+  // Verifying a Discord account: its member runs /verify with a code the casino gives.
   const discord = wallet.config?.discord ?? null,
-    house = wallet.alias === HOUSE;
-  $('verify-discord').textContent = wallet.alias ? 'Verify again' : 'Verify with Discord';
+    house = wallet.discordUsername === HOUSE;
+  $('verify-discord').textContent = wallet.discordUsername ? 'Verify again' : 'Verify with Discord';
   $('verify-discord').classList.toggle('hidden', Boolean(verifying) || house);
   $<HTMLButtonElement>('verify-discord').disabled = uiBusy || !wallet.uname || !discord;
   $('verify').hidden = !verifying;
   if (verifying) $('verify-code').textContent = verifying.code;
   if (discord) $<HTMLAnchorElement>('open-discord').href = discord;
-  $('unlink-discord').classList.toggle('hidden', !wallet.alias || house);
+  $('unlink-discord').classList.toggle('hidden', !wallet.discordUsername || house);
   $<HTMLButtonElement>('unlink-discord').disabled = uiBusy;
   $('discord-note').textContent = !discord
     ? 'Verifying a Discord account is not offered here.'
     : verifying
       ? 'The code lasts 10 minutes. Discord tells the casino your username as you run /verify, and at no other time.'
-      : wallet.alias
-        ? `You go by your Discord username, @${wallet.alias}. Verify again after you change it in Discord.`
+      : wallet.discordUsername
+        ? `You go by your Discord username, @${wallet.discordUsername}${wallet.profile?.discordVerified ? `, verified ${shortDate(wallet.profile.discordVerified)}` : ''}. Verify again after you change it in Discord.`
         : 'Discord tells the casino your username as you run /verify, and at no other time.';
   const games = wallet.profile?.games ?? [];
   $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
@@ -1805,7 +1807,7 @@ async function openGameRecord(key: string, push = true) {
     const record = await wallet.api(`/api/games/${key}?limit=200`);
     if (location.pathname !== path) return;
     const rows: BetRow[] = record.bets.map((bet: any) => {
-      const who = bet.alias ? '@' + bet.alias : bet.uname ? '~' + bet.uname : 'a player';
+      const who = bet.discordUsername ? '@' + bet.discordUsername : bet.uname ? '~' + bet.uname : 'a player';
       return {
         at: Number(bet.at),
         game: name,
@@ -2178,7 +2180,7 @@ $('import-key').addEventListener('keydown', event => {
 });
 act('verify-discord', async () => {
   verifying = await wallet.discordCode();
-  void watchVerify(verifying, wallet.alias);
+  void watchVerify(verifying, wallet.profile?.discordVerified ?? null);
 });
 $('copy-verify-code').addEventListener('click', async () => {
   if (!verifying) return;
@@ -2192,7 +2194,7 @@ $('copy-verify-code').addEventListener('click', async () => {
 });
 // Back from the HookedIn Discord: what /faucet did there shows on your page at once.
 addEventListener('focus', () => {
-  if (ownPage() && wallet.alias && !wallet.faucet) void wallet.refreshOwnProfile().catch(() => {});
+  if (ownPage() && wallet.discordUsername && !wallet.faucet) void wallet.refreshOwnProfile().catch(() => {});
 });
 act(
   'unlink-discord',
@@ -2203,7 +2205,7 @@ act(
 // it has verified its Discord account.
 $('faucet-borrow').addEventListener('click', () => {
   if (!wallet.faucet) {
-    if (!wallet.alias) return openWallet('profile');
+    if (!wallet.discordUsername) return openWallet('profile');
     return void open(wallet.config.discord, '_blank', 'noopener');
   }
   void task(async () => {

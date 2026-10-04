@@ -70,8 +70,8 @@ build without one takes the casino's word for its contract. The checks are in
   pins, and the casino's URL. The casino service runs the deployment this file names and refuses a signing key that is
   not its operator, so the casino and the wallet release that pins it cannot disagree.
 - [catalog.json](../../catalog.json): the house developer, `developer`, the account that publishes the house games as
-  `@playhookedin`, and `games`, each game's name and [URL](../games/publishing.md#the-games-url). The casino publishes
-  these in `@playhookedin`'s profile as it starts.
+  `@hookedin`, and `games`, each game's name and [URL](../games/publishing.md#the-games-url). The casino publishes
+  these in `@hookedin`'s profile as it starts.
 - The casino itself: `contractAddress`, `operator`, `chainId`, `protocol` and `developerProtocol` in
   [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the commit it runs in
   [`GET /api/status`](../casino-api/public.md#get-apistatus).
@@ -93,7 +93,7 @@ a comment or a name. `npm run release:artifact` rewrites the pin; maintainers ru
 | `main.js`, `main.js.map`                                      | Every wallet and protocol module, bundled by esbuild into one readable, unminified ES module, with its map |
 | `vendor/ethers.js`                                            | Byte for byte the `dist/ethers.min.js` of the ethers release in `package-lock.json`                        |
 | `config.js`                                                   | The deployment's settings, `export default { network, casino, deployment }`                                |
-| `index.html`, `style.css`, `brand/`, `_headers`, `_redirects` | The page, its styles, the mark, the response headers and the rewrite for `/@alias` routes                  |
+| `index.html`, `style.css`, `brand/`, `_headers`, `_redirects` | The page, its styles, the mark, the response headers and the rewrite for `/@username` routes               |
 
 `main.js` imports exactly `/config.js` and `/vendor/ethers.js`, and a test holds it to that. The headers set
 `script-src 'self'` and `frame-ancestors 'none'`. [The deploy workflow](../../.github/workflows/deploy.yml) publishes

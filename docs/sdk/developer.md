@@ -127,18 +127,18 @@ and prize all zero is a [reveal](#reveal).
 
 A developer bet as anyone may read it by its hash.
 
-| Field            | Meaning                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------- |
-| `bet`            | The bet's hash: the hash of the operation that placed it, which signs its meta            |
-| `game`, `group`  | The game's key, and the group the page gave the bet                                       |
-| `uname`, `alias` | The player's names                                                                        |
-| `developer`      | The developer whose bank took the stake and whose key settles it                          |
-| `stake`          | The stake, a decimal string of wei                                                        |
-| `placedAt`       | When the casino took it, in milliseconds since the Unix epoch                             |
-| `status`         | `open` until the developer settles it                                                     |
-| `meta`           | The game's own JSON, as the player signed it                                              |
-| `settlement`     | Once settled: what it pays the player and gives the casino, and the developer's signature |
-| `settledAt`      | When it was settled, in milliseconds since the Unix epoch                                 |
+| Field                      | Meaning                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| `bet`                      | The bet's hash: the hash of the operation that placed it, which signs its meta            |
+| `game`, `group`            | The game's key, and the group the page gave the bet                                       |
+| `uname`, `discordUsername` | The player's names                                                                        |
+| `developer`                | The developer whose bank took the stake and whose key settles it                          |
+| `stake`                    | The stake, a decimal string of wei                                                        |
+| `placedAt`                 | When the casino took it, in milliseconds since the Unix epoch                             |
+| `status`                   | `open` until the developer settles it                                                     |
+| `meta`                     | The game's own JSON, as the player signed it                                              |
+| `settlement`               | Once settled: what it pays the player and gives the casino, and the developer's signature |
+| `settledAt`                | When it was settled, in milliseconds since the Unix epoch                                 |
 
 ### `Round`
 

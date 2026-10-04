@@ -18,9 +18,9 @@ export interface WalletInfo {
   /** Their uname, written `~uname`: theirs for good, whatever they are called today. Key anything of
    * your own by this. Every account has one from the start; null only while the wallet cannot reach the casino. */
   uname: string | null;
-  /** The alias they are shown by, written `@alias`: the username of the Discord account that verified them; null
-   * unless one did. */
-  alias: string | null;
+  /** The Discord username they are shown by, written `@bob`: the username of the Discord account that verified them;
+   * null unless one did. */
+  discordUsername: string | null;
   chainId: string;
   /** The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino
    * bets against. The casino settles every casino bet its quote's virtual bankroll admits. */
@@ -94,8 +94,8 @@ const hello = (): Promise<{ bounds: WalletBounds }> =>
 if (window.parent !== window) hello().catch(() => {});
 
 /** Scope game storage to this page and to the player: games sharing a host and accounts sharing a browser must not
- * see each other's state. It keys on the player's uname, so taking or giving up an alias does not lose what they
- * had. */
+ * see each other's state. It keys on the player's uname, so taking or giving up a Discord username does not lose
+ * what they had. */
 const storageScope = (wallet: WalletInfo | null | undefined) => `hookedin:${location.pathname}:${playerScope(wallet)}`;
 
 export const HookedIn = Object.freeze({

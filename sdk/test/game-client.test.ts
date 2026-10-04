@@ -401,18 +401,18 @@ test('saved round state belongs to one player', async () => {
     ...bridgeFor(w),
     call: async (method: string, params: any = {}) => {
       const value = await bridgeFor(w).call(method, params);
-      return method === 'wallet.info' ? { ...value, uname: 'somebodyelse', alias: null } : value;
+      return method === 'wallet.info' ? { ...value, uname: 'somebodyelse', discordUsername: null } : value;
     },
   };
   const theirs = new RoundClient(other, createMines, undefined, { store, name: 'mines' });
   await theirs.restore();
   assert.notEqual(theirs['storageKey'], mine);
-  // An alias is what they are called today; it never moves what they saved.
+  // A Discord username is what they are called today; it never moves what they saved.
   const renamed = {
     ...bridgeFor(w),
     call: async (method: string, params: any = {}) => {
       const value = await bridgeFor(w).call(method, params);
-      return method === 'wallet.info' ? { ...value, alias: 'Renamed' } : value;
+      return method === 'wallet.info' ? { ...value, discordUsername: 'renamed' } : value;
     },
   };
   const after = new RoundClient(renamed, createMines, undefined, { store, name: 'mines' });

@@ -43,7 +43,7 @@ export function formatAmount(value: string | number | bigint, places = 3) {
 /** Every digit of an amount, ungrouped: what belongs in a field the player edits. */
 export const exactAmount = (value: string | number | bigint) => formatAmount(value, DECIMALS).replaceAll(',', '');
 
-/** What tells one player's saved state from another's: the chain, and the player's uname, which an alias never
- * changes. Games that share a host and accounts that share a browser must not read each other's state. */
+/** What tells one player's saved state from another's: the chain, and the player's uname, which a Discord username
+ * never changes. Games that share a host and accounts that share a browser must not read each other's state. */
 export const playerScope = (names: { uname?: string | null; chainId?: string } | null | undefined) =>
   `${names?.chainId ?? 'chain'}:${String(names?.uname ?? 'anonymous').toLowerCase()}`;

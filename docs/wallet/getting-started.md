@@ -79,14 +79,14 @@ you choose.
 
 ## Games and their allowances
 
-The library at `/` lists the games `@playhookedin` publishes and the games your own account publishes, each by its
+The library at `/` lists the games `@hookedin` publishes and the games your own account publishes, each by its
 [icon](../games/publishing.md#the-icon); **Open a game by its URL** opens any other.
 
-| URL                       | Opens                                               |
-| ------------------------- | --------------------------------------------------- |
-| `/@alias/game`            | The game published as `game` by the player `@alias` |
-| `/~uname/game`            | The same, for a player named by their uname         |
-| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game |
+| URL                       | Opens                                                  |
+| ------------------------- | ------------------------------------------------------ |
+| `/@username/game`         | The game published as `game` by the player `@username` |
+| `/~uname/game`            | The same, for a player named by their uname            |
+| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game    |
 
 A published game's developer is the account that published it: it earns half of each casino bet's commission in the
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
@@ -155,17 +155,16 @@ uname does not reveal the address; it is the same for every channel of your acco
 the casino for it as soon as it loads your account, with a request only your key can sign, so you have it before your
 first deposit. It is what games, developers and other players learn about you.
 
-An **alias** is the name you go by instead: the username of your Discord account, written with an at sign, such as
-`@bob`. Verifying your Discord account in the HookedIn Discord is the only way to one, and needs no balance: **Verify
-with Discord**, under **Profile** in Settings, gives you a code, and you type `/verify` with it in the server within 10
-minutes. Discord tells the casino your username as you run it, and at no other time: verify again after you change it.
-A Discord account is one HookedIn account's: verifying it on another takes it from the first. A username of more than
-23 characters is refused, and so is one that reads like another player's alias, with `l` and `1` read as `i` and `0` as
-`o`, and the casino's own names, such as `@playhookedin`, the house's; the same username as another player's, whose
-Discord account it no longer is, passes to you. **Unlink Discord** goes back to your uname. Your uname stays yours
+Verify your Discord account and you go by its **Discord username** instead, written with an at sign, such as `@bob`.
+Verifying needs no balance: **Verify with Discord**, under **Profile** in Settings, gives you a code, and you type
+`/verify` with it in the HookedIn Discord within 10 minutes. Discord tells the casino your username as you run it, and
+at no other time: verify again after you change it. Your page shows when you last verified. A Discord account is one
+HookedIn account's: verifying it on another takes it from the first. A username that reads like another player's name
+is refused, with `l` and `1` read as `i` and `0` as `o`, and so are the casino's own names, such as `@hookedin`, the
+house's; the same username as another player's, whose Discord account it no longer is, passes to you. **Unlink Discord** goes back to your uname. Your uname stays yours
 either way, and both names find you ([verifying a Discord account](../casino-api/channels.md#verifying-a-discord-account)).
 
-`/@alias` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they
+`/@username` or `/~uname` is a player's public page: their names, when the casino first knew them, how many bets they
 have played with what they won or lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Others see your page from your first deposit, when the casino first registers your account, or from when you first
 verify your Discord account. Your name, at the top of the account menu, opens your own page, from the start, with the

@@ -90,7 +90,7 @@ const { allowance, pending } = await HookedIn.allowance(); // what the game may 
 
 Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('1000')`, 1,000 µETH, is `'1000000000000000'`, and
 `formatAmount` reads one back. [`wallet.info`](../reference/bridge.md#walletinfo) is all a game learns of the player:
-their uname, theirs for good, the alias they go by today, the virtual bankroll of the casino's latest quote and a
+their uname, theirs for good, the Discord username they go by today, the virtual bankroll of the casino's latest quote and a
 recommended stake. The player's address, channel and balances never cross the bridge.
 
 ## Operation IDs
@@ -167,7 +167,7 @@ host and accounts sharing a browser never read each other's state. `HookedIn.sto
 hookedin:<page path>:<chainId>:<uname>
 ```
 
-It keys on the uname, which is the player's for good; never key by the alias, which the player can change. Every
+It keys on the uname, which is the player's for good; never key by the Discord username, which the player can change. Every
 account has its uname as soon as the wallet loads it, before any deposit, and the wallet loads the page again when the
 player switches accounts. `RoundClient` saves its round under `hookedin:round:<name>:<chainId>:<uname>`, where `name`
 is the page's path unless you pass one.

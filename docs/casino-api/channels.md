@@ -24,11 +24,11 @@ Registering a channel counts against [budgets](index.md#budgets-and-queues) of i
 | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `opening`  | object | `{channelId, player, index}`: [the opening](../reference/signed-messages.md#channel-ids), the account and how many of its channels started closing before it; `channelId` is `:id` |
 
-| Response field   | Type                   | Meaning                                                                                                                                 |
-| ---------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`, `alias` | string, string or null | The player's names                                                                                                                      |
-| `state`          | Checkpoint             | The latest checkpoint                                                                                                                   |
-| `lastResponse`   | object or null         | The reply that signed `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `quote`; `null` at the base |
+| Response field             | Type                   | Meaning                                                                                                                                 |
+| -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`, `discordUsername` | string, string or null | The player's names                                                                                                                      |
+| `state`                    | Checkpoint             | The latest checkpoint                                                                                                                   |
+| `lastResponse`             | object or null         | The reply that signed `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `quote`; `null` at the base |
 
 `refused` answers an opening whose `channelId` is not `:id` or does not fit its fields, a channel the confirmed chain
 does not show open for that account ("Channel is not open on-chain or differs from registration"), and a chain that
@@ -395,8 +395,8 @@ profile that already publishes 100 games.
 
 ## Verifying a Discord account
 
-Verifying a Discord account is the one way to an alias: an account goes by the username of the Discord account that
-verified it ([your name](../wallet/getting-started.md#your-name)). The account asks for a code, and a member of the
+An account goes by the username of the Discord account that verified it, and its profile says when it last did
+([your name](../wallet/getting-started.md#your-name)). The account asks for a code, and a member of the
 HookedIn Discord runs `/verify` with it there. Discord sends the casino each command run in that server, signed with
 the key of the casino's Discord app, and the casino learns of a Discord account only from those. The account routes
 take `{opening}`, as [the uname](#post-apichannelsiduname) does, from an account with a channel or without one, and
@@ -407,7 +407,7 @@ has no Discord server: `discord` in [`GET /api/config`](public.md#get-apiconfig)
 
 A code for the account, `{code, expires}`: eight characters with no `l`, `0` or `1`, which a member runs `/verify` with
 until `expires`, 10 minutes on. An account has one code at most: asking again ends the one before. `refused` answers
-the house, which goes by `@playhookedin`.
+the house, which goes by `@hookedin`.
 
 ### `POST /api/channels/:id/discord/unlink`
 
@@ -423,9 +423,10 @@ who ran it sees; one run in any other server is told only that it answers in the
 
 - `/verify code`: the account the code was given to goes by the member's Discord username from then on. The code is
   spent, and one over 10 minutes old does nothing. A Discord account is one account's: verifying it on another takes it
-  from the first. A username of more than 23 characters, one the casino keeps for itself, and one that reads like
-  another player's alias are refused. The same username as another player's alias is one Discord has moved to this
-  member: the player who had it goes by their uname again. Run again, it brings a changed username up to date.
+  from the first. A username the casino keeps for itself, one that reads like a uname, and one that reads like another
+  player's Discord username are refused. The same username as another player's is one Discord has moved to this
+  member: the player who had it goes by their uname again. Run again, it brings a changed username up to date, and the
+  time it was last verified.
 - `/faucet`: the member's account may borrow from [the faucet](#post-apichannelsidfaucet) once in the hour that follows,
   if the faucet would lend to it now.
 

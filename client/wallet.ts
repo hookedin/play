@@ -205,14 +205,16 @@ export class CasinoWallet extends GameSessions {
   declare detailsObservedAt: number;
   /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
   declare uname: string | null;
-  /** The alias it is shown by instead, written `@alias`: the username of the Discord account it verified; null while it
-   * has verified none. */
-  declare alias: string | null;
+  /** The Discord username it is shown by instead, written `@bob`: the username of the Discord account it verified; null
+   * while it has verified none. */
+  declare discordUsername: string | null;
   /** The public profile those names carry: when the casino first knew it, what it has played, and the games it
    * publishes. Read from the public route, like anybody else's. */
   declare profile: {
     uname: string;
-    alias: string | null;
+    discordUsername: string | null;
+    /** When it last verified its Discord account. */
+    discordVerified: number | null;
     since: number;
     stats: any;
     games: { name: string; url: string; key: string; developer: string }[];
@@ -262,7 +264,7 @@ export class CasinoWallet extends GameSessions {
       trustedDeployment,
       publicState: {},
       uname: null,
-      alias: null,
+      discordUsername: null,
       profile: null,
       faucet: false,
       developerEarnings: null,
@@ -408,7 +410,7 @@ export class CasinoWallet extends GameSessions {
           lastChainCheck: 0,
           buying: null,
           uname: null,
-          alias: null,
+          discordUsername: null,
           profile: null,
           faucet: false,
         });
@@ -572,16 +574,16 @@ export class CasinoWallet extends GameSessions {
     const { uname, profile } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string') return;
     this.faucet = Boolean(profile?.faucet);
-    if (!this.profile) Object.assign(this, { uname, alias: profile?.alias ?? null, profile });
+    if (!this.profile) Object.assign(this, { uname, discordUsername: profile?.discordUsername ?? null, profile });
     this.render();
   }
   /** Every channel reply carries both names its player answers to, and a registered channel means the casino has met
    * the account, so its public profile exists. */
-  noteNames(this: CasinoWallet, reply: { uname?: unknown; alias?: unknown }) {
+  noteNames(this: CasinoWallet, reply: { uname?: unknown; discordUsername?: unknown }) {
     if (typeof reply?.uname !== 'string') return;
-    const alias = typeof reply.alias === 'string' ? reply.alias : null;
-    if (reply.uname === this.uname && alias === this.alias && this.profile) return;
-    Object.assign(this, { uname: reply.uname, alias, profile: null });
+    const discordUsername = typeof reply.discordUsername === 'string' ? reply.discordUsername : null;
+    if (reply.uname === this.uname && discordUsername === this.discordUsername && this.profile) return;
+    Object.assign(this, { uname: reply.uname, discordUsername, profile: null });
     this.render();
     void this.refreshProfile().catch(() => {});
   }
@@ -591,13 +593,13 @@ export class CasinoWallet extends GameSessions {
     const profile = await this.api(`/api/players/~${this.uname}`);
     if (profile?.uname === this.uname) {
       this.profile = profile;
-      this.alias = profile.alias;
+      this.discordUsername = profile.discordUsername;
       this.render();
     }
     return this.profile;
   }
   /** A code to run `/verify` with in the HookedIn Discord, `{code, expires}`: the member who runs it gives this account
-   * their Discord username as its alias. */
+   * their Discord username to go by. */
   async discordCode(this: CasinoWallet): Promise<{ code: string; expires: number }> {
     return this.accountRequest('discord/code');
   }
@@ -616,7 +618,12 @@ export class CasinoWallet extends GameSessions {
   /** This account's profile as the casino answers the account itself with it, the names it shows and whether the faucet
    * lends to it. */
   takeProfile(this: CasinoWallet, profile: any) {
-    Object.assign(this, { profile, uname: profile.uname, alias: profile.alias, faucet: Boolean(profile.faucet) });
+    Object.assign(this, {
+      profile,
+      uname: profile.uname,
+      discordUsername: profile.discordUsername,
+      faucet: Boolean(profile.faucet),
+    });
     this.render();
     return profile;
   }

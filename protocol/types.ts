@@ -64,7 +64,7 @@ export interface PublicDeveloperBet {
   game: string;
   group?: string;
   uname: string | null;
-  alias: string | null;
+  discordUsername: string | null;
   /** The game's developer, whose bank took the stake and whose key settles it. */
   developer: string;
   stake: string;

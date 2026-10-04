@@ -84,7 +84,7 @@ does **Every bet in this game** in one of your bets. The page shows:
 
 - the totals, expected and paid back, as on My games;
 - how many of the game's developer bets are open, and how many its developer has settled;
-- the latest 200 bets, newest first, each naming its player by alias or uname and never by address or channel, with
+- the latest 200 bets, newest first, each naming its player by Discord username or uname and never by address or channel, with
   its stake, payout, result and return.
 
 Anyone can judge a game by what it has paid, without taking the game's word for anything.

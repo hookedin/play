@@ -78,7 +78,10 @@ export function createStaticServer(dir, config, build) {
           pathname.split('/').some(p => p === '..' || p.startsWith('.') || p.startsWith('_'))
         )
           throw new Error('Invalid path');
-        if (build && (!path.extname(pathname) || pathname.endsWith('.html'))) {
+        // A path without an extension, such as the wallet's /wallet, or a player's, such as /@bob.jones/dice, is a
+        // route of the page's own.
+        const route = !path.extname(pathname) || pathname.startsWith('/@');
+        if (build && (route || pathname.endsWith('.html'))) {
           try {
             await build();
           } catch (error) {
@@ -91,8 +94,7 @@ export function createStaticServer(dir, config, build) {
           data = `export default ${JSON.stringify(config)};`;
           type = types['.js'];
         } else {
-          // A path without an extension, such as the wallet's /wallet or /@playhookedin/dice, is a route of the page's own.
-          const file = path.join(dir, path.extname(pathname) ? pathname : 'index.html');
+          const file = path.join(dir, route ? 'index.html' : pathname);
           data = await fs.promises.readFile(file);
           type = types[path.extname(file)] ?? 'application/octet-stream';
         }

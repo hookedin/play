@@ -44,7 +44,7 @@ test('complete stake amounts are readable on phones and tablets, on pages that h
             : request.method === 'wallet.info'
               ? {
                   uname: 'layout',
-                  alias: null,
+                  discordUsername: null,
                   chainId: '31337',
                   virtualBankroll: '1000000000000000000000',
                   recommendedStake: '1000000000000',
