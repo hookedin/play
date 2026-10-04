@@ -113,14 +113,14 @@ balance: the contract protects neither ([trust model](../overview/trust-model.md
 **Activity**, the wallet's tab at `/wallet/activity`, lists every receipt the wallet keeps, newest first: ETH arriving at your deposit address
 (**Received at your address**), your balance opening (**Balance opened**), your deposits and what they add to your
 balance (**Added to your balance**, whoever deposited it), the network fees of deposits the casino lent (**Network fee
-lent**), bets, payments, rejections, bankroll and bank movements, withdrawals
-and transfers, closes, challenges and collections, each with its operation ID or its transaction and the raw JSON
+lent**), bets, payments, rejections, bankroll and bank movements, transfers to and from other players (**Transferred**
+and **Transfer received**, naming the other player), withdrawals and lock-ins, closes, challenges and collections, each with its operation ID or its transaction and the raw JSON
 behind it.
 The wallet keeps the latest 100 receipts, and beyond them every receipt still to be settled: a developer bet still open,
-and a withdrawal, transfer or lock-in not yet paid or returned.
+and a withdrawal or lock-in not yet paid or returned.
 
-A withdrawal is **Withdrawal on its way** until the contract has paid it, and **Withdrawn** after; a transfer is
-**Transfer on its way**, then **Transferred**. Its **Network fee** is what your balance paid the casino for sending it.
+A withdrawal is **Withdrawal on its way** until the contract has paid it, and **Withdrawn** after; a lock-in is
+**Locking in**, then **Balance locked in**. Its **Network fee** is what your balance paid the casino for sending it.
 What the contract recorded without the cash to pay it waits under **Waiting to be paid** in the wallet
 ([claims and collection](closing-and-claims.md#claims-and-collection)), and one nobody sent before its channel's close
 was final is **Withdrawal returned**: the close was owed it back. Each shows its **Withdrawal ID**, the hash of its

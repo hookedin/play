@@ -31,7 +31,7 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   channel's close is final, and only after every withdrawal you made before it, so nobody can make a lock-in take less
   of your deposits than it should. The contract pays at once what your deposits and house cash cover and owes the rest;
   a recipient that refuses the payment leaves all of it owed. One never recorded comes back to you with the close. A
-  transfer, a withdrawal into another account's balance, is recorded the same way and paid into that balance.
+  lock-in, a withdrawal into your own channel, is recorded the same way and paid into it as deposits.
 - **Losses are real.** A close is owed your final balance, less what the casino lent it, and the deposits above that
   return to house cash. Nothing refunds what you lost.
 - **Only signed states settle.** A close settles a balance both sides signed, or the channel's base, which needs no
@@ -80,6 +80,12 @@ A game, its developer and a bankroll fund share each carry trust of their own, s
   shows it recorded, whoever sent it, or its channel's close final without it. One it cannot send yet waits while the
   next is sent, and its public status says why. Play never waits for a withdrawal. It pays the gas, and charges a fee
   for it that it sets from the network's gas price.
+- **Transfers between players.** A [transfer](../wallet/getting-started.md#transfer) is off-chain, so the contract
+  never sees it: it leaves your balance with a debit your account signs, naming the recipient's uname, and the casino
+  owes it to them until their wallet collects it. The casino alone knows which account a name belongs to, so you trust
+  it to pay the player you named, and that player trusts it to pay what waits for them; nothing signed says who goes by
+  a uname. Once collected it is part of their balance, and beyond their own deposits and collateral it is winnings, paid
+  out of the bankroll, until they lock it in.
 - **Admitting bets.** The casino admits each casino bet against its quote's virtual bankroll with a Kelly rule, and
   sets its commission against the same figure. It names the virtual bankroll it quotes: half its bankroll, by its own
   books.

@@ -40,7 +40,7 @@ a passkey** to open the account of one you made before, or **Save a key file ins
 ([your key](keys-and-recovery.md#your-key)). A passkey's account takes over from the one this browser made, and a game
 you have open opens again under it.
 
-Then send Sepolia ETH to the address, or have another player withdraw or transfer some to you. While the Deposit tab
+Then send Sepolia ETH to the address, or have another player withdraw some to it. While the Deposit tab
 is open and the page visible, the wallet checks the address every 20 seconds and adds what arrives to your balance;
 otherwise it checks every 10 minutes, or at once when you press ↻ beside the wallet's title. ETH too small to cover its
 fee waits for more.
@@ -56,7 +56,7 @@ your balance has taken the deposit in, the wallet asks the casino to lend it tha
 had. The casino lends no more than the rule the wallet prices transactions by allows for the block before the
 deposit's: 20% over an estimate of the gas the deposit used, which a node makes up to 1.5% high, at twice that block's
 base fee plus the deposit's tip, and at most 1% of the deposit. A deposit that waited for a later block while the base fee fell is lent a little less. The wallet shows the loan under your balance. Bets can stake it, but an investment or a bank deposit
-leaves it in the balance, and your next withdrawal, transfer or close pays it back first.
+or a transfer leaves it in the balance, and your next withdrawal, lock-in or close pays it back first.
 
 ### When ETH waits at the address
 
@@ -126,10 +126,19 @@ much can be withdrawn now, and your balance is as it was. A withdrawal needs the
 
 ## Transfer
 
-**Transfer**, in Settings, moves part of your balance into another HookedIn account's balance: enter an amount in µETH or
-choose **Max**, and that account's deposit address. It is a withdrawal the contract puts into the balance of the account
-at that address, as deposits, instead of paying the address, with the same fee and checks; it is how you give a friend
-ETH to play with. The casino declines a transfer to an address with no HookedIn balance.
+**Transfer**, in Settings, gives part of your balance to another player: enter an amount in µETH or choose **Max**, and
+their Discord username, such as `@bob`, or their uname, such as `~3byt9ocwnnzaxanmiz3stocj`. **Transfer µETH** on
+another player's page opens it with their name filled in. The wallet shows who the name belongs to, and the uname it
+signs: a Discord username can pass to another member, a uname never does. It is how you give a friend µETH to play with.
+
+A transfer is off-chain: a debit your account signs, naming their uname, which costs no fee and names neither of your
+addresses anywhere, on-chain or to each other. The casino owes it to them until their wallet collects it into their
+balance with a credit naming your uname, by itself, once they have a balance open: a player with none sees what waits
+for them under their balance, and their first deposit opens one. From then on it is part of their balance like any
+other, and beyond their own deposits a balance is paid out of the bankroll, as winnings are
+([trust model](../overview/trust-model.md)): to make it deposits the contract holds, they lock their balance in. What the
+casino lent your balance stays in it, so **Max** is your balance less that loan. The casino declines a transfer to a name
+nobody goes by, or to yourself.
 
 **Send ETH out of my deposit address**, under **Deposits** in Settings, sends everything held at your deposit address to
 the address you name, less the network fee, and leaves your balance as it is. It is for ETH that stays at the address:

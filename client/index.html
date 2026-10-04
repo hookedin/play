@@ -290,6 +290,7 @@
             <h1 id="profile-name"></h1>
             <p id="profile-meta" class="muted"></p>
           </div>
+          <button id="profile-transfer" class="button" type="button" hidden>Transfer µETH</button>
         </div>
         <p id="profile-stats" class="profile-stats"></p>
         <div id="discord" class="boxed profile-card" hidden>
@@ -516,8 +517,10 @@
       <section class="tab-panel" data-panel="transfer" hidden>
         <section class="setting">
           <p class="muted">
-            Move part of your balance into another HookedIn account's balance, which the contract puts it into as that
-            account's deposits. It is theirs from then on. To send ETH to an address of your own, use Withdraw.
+            Give part of your balance to another player, by their Discord username or uname. It goes off-chain: no fee,
+            and neither of your addresses is named anywhere. Their wallet collects it into their balance once they have
+            one open; until then the casino owes it to them, and beyond their own deposits their balance is paid out of
+            the bankroll, as winnings are.
           </p>
           <div id="transfer-form" class="send-form">
             <label for="transfer-amount">Amount</label>
@@ -532,8 +535,15 @@
               /><span>µETH</span>
             </div>
             <button id="transfer-max" class="text-button" type="button">Max</button>
-            <label for="transfer-to">The account's deposit address</label>
-            <input id="transfer-to" type="text" autocomplete="off" placeholder="0x…" spellcheck="false" />
+            <label for="transfer-to">To</label>
+            <input
+              id="transfer-to"
+              type="text"
+              autocomplete="off"
+              autocapitalize="none"
+              placeholder="@username or ~uname"
+              spellcheck="false"
+            />
             <button id="transfer" class="button primary full" type="button">Transfer</button>
           </div>
           <p id="transfer-help" class="help"></p>

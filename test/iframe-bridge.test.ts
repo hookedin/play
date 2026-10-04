@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { attachGameBridge, validateRequest } from '../client/bridge.ts';
-import { checkDetails, KIND } from '../protocol/protocol.ts';
+import { checkDetails, counterpartyPlayer, KIND } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
 
 const request = (id = 1, method = 'wallet.info', params = {}) => ({ hookedin: true, id, method, params });
@@ -419,6 +419,34 @@ test('a debit that names a game and carries meta is a developer bet, and nothing
     [KIND.debit, { id, counterparty: fund, meta }],
     [KIND.credit, { id, counterparty: fund, meta }],
     [KIND.debit, { id, game, meta: { odds: 1.5 } }],
+  ] as const)
+    assert.throws(() => checkDetails(kind, details as any), /Invalid operation details/);
+});
+
+test('a transfer is a debit naming the player it pays and collected with a credit naming the player it came from, each by their uname', () => {
+  const id = '0x' + '3'.repeat(64),
+    uname = '3byt9ocwnnzaxanmiz3stocj';
+  checkDetails(KIND.debit, { id, counterparty: '~' + uname });
+  checkDetails(KIND.credit, { id, counterparty: '~' + uname });
+  assert.equal(counterpartyPlayer('~' + uname), uname);
+  // A uname has one form: lowercase, 24 characters of its alphabet, written with its tilde. Nothing else names a player.
+  for (const counterparty of [
+    uname,
+    '~' + uname.toUpperCase(),
+    '~' + uname.slice(1),
+    '~' + uname + 'k',
+    '~' + uname.slice(1) + 'l',
+    '@bob',
+    '0x' + '2'.repeat(64),
+  ])
+    assert.equal(counterpartyPlayer(counterparty), null, counterparty);
+  for (const [kind, details] of [
+    [KIND.debit, { id, counterparty: '~' + uname.toUpperCase() }],
+    [KIND.debit, { id, counterparty: '@bob' }],
+    [KIND.debit, { id, game: '0x' + '1'.repeat(64), counterparty: '~' + uname }],
+    [KIND.deposit, { id, counterparty: '~' + uname }],
+    [KIND.withdrawal, { id, counterparty: '~' + uname }],
+    [KIND.transfer, { id, counterparty: '~' + uname }],
   ] as const)
     assert.throws(() => checkDetails(kind, details as any), /Invalid operation details/);
 });

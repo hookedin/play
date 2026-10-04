@@ -167,6 +167,17 @@ export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequ
  * names it, from the developer's own channel, answered with a statement of the balance; money leaves it only by the
  * developer's own signed `BankWithdraw`, settlement or casino bet. */
 export const BANK_ID = id('HOOKEDIN/BANK');
+/** The characters a uname is written in: no `l`, `0`, `1` or `u`, so no two of them read alike. */
+export const UNAME_ALPHABET = '23456789abcdefghijkmnopqrstvwxyz';
+export const UNAME_LENGTH = 24;
+/** A player's uname, which the casino derives from their address. */
+export const UNAME = new RegExp(`^[${UNAME_ALPHABET}]{${UNAME_LENGTH}}$`);
+/** Another player as a counterparty: their uname, written `~uname`. A debit that pays another player names them, and
+ * the credit that player collects it with names the player it came from. */
+const PLAYER = new RegExp(`^~[${UNAME_ALPHABET}]{${UNAME_LENGTH}}$`);
+/** The uname of the player a counterparty names, or null for any other counterparty. */
+export const counterpartyPlayer = (counterparty: unknown) =>
+  typeof counterparty === 'string' && PLAYER.test(counterparty) ? counterparty.slice(1) : null;
 /** The casino signs the balance of a developer's bank after every deposit and withdrawal. `cause` is the hash of the
  * developer's signed deposit or `BankWithdraw`. */
 export const BANK_TYPES = {
@@ -434,15 +445,17 @@ export const BOUNDS = {
   group: MAX_GROUP,
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
- * developer bet, whose meta alone says what it is) or what it pays into (an investment or a bank deposit); a credit
- * what it collects from; a deposit, a withdrawal, a transfer and a loan nothing but themselves, a withdrawal's and a
- * transfer's recipient being in the operation. Only what names a game carries a group. Every field is in one form, so
- * one meaning has one memo. */
+ * developer bet, whose meta alone says what it is) or what it pays into (an investment, a bank deposit or another
+ * player); a credit what it collects from; a deposit, a withdrawal, a transfer and a loan nothing but themselves, a
+ * withdrawal's and a transfer's recipient being in the operation. Only what names a game carries a group. Every field
+ * is in one form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
   const named = typeof game === 'string' && bytes32Pattern.test(game);
-  const counterparty = typeof details?.counterparty === 'string' && bytes32Pattern.test(details.counterparty);
+  const counterparty =
+    typeof details?.counterparty === 'string' &&
+    (bytes32Pattern.test(details.counterparty) || counterpartyPlayer(details.counterparty) !== null);
   if (
     !keys.every(key => ['id', 'game', 'group', 'counterparty', 'meta'].includes(key)) ||
     typeof details.id !== 'string' ||
@@ -733,7 +746,7 @@ export const PROTOCOL = id(
     canonicalJSON({
       kinds: KIND,
       outcome: OUTCOME_TAG,
-      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID },
+      counterparties: { fund: FUND_ID, bank: BANK_ID, developer: DEVELOPER_ID, player: PLAYER.source },
       bounds: BOUNDS,
     }),
 );

@@ -131,13 +131,6 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   // A withdrawal whose claim its account collects into the contract names that, not the address it first paid.
   const redirected = receiptSummary({ ...sent, to: contract, recorded: true, owed: '500' }, contract);
   assert.match(redirected.description!, /^From your balance into your own channel, as deposits the contract holds\./);
-  // A transfer goes into the HookedIn balance of the account it names.
-  const transfer = receiptSummary({ ...sent, kind: 'transfer', recorded: true, paid: true, owed: '0' }, contract);
-  assert.deepEqual(
-    [transfer.title, transfer.status, transfer.amountLabel],
-    ['Transferred', 'In as deposits', 'Transferred'],
-  );
-  assert.match(transfer.description!, /^From your balance into the HookedIn balance of 0x3333.*\./);
   // One that paid the casino its fee for sending it, and back a loan, says so.
   const repaying = receiptSummary({ ...sent, fee: '2', proof: { base: { loan: '5' } } }, contract);
   assert.match(
@@ -146,13 +139,55 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   );
 });
 
+test('a transfer reads as sent to the player it named, and one collected as received from the player who sent it', () => {
+  const bob = '~3byt9ocwnnzaxanmiz3stocj',
+    sent = receiptSummary(
+      {
+        kind: 'transfer',
+        status: 'signed',
+        amount: '1500',
+        balance: '500',
+        name: '@bob',
+        details: { id: '0x' + 'c'.repeat(64), counterparty: bob },
+      },
+      contract,
+    );
+  assert.deepEqual([sent.title, sent.amountLabel, sent.tone], ['Transferred', 'Sent', 'neutral']);
+  assert.match(
+    sent.description!,
+    /^To @bob, off-chain: .* nothing about it goes on-chain\. Balance 0\.0000000005 µETH$/,
+  );
+  // A receipt without the name it went by names the uname.
+  const unnamed = receiptSummary(
+    { kind: 'transfer', status: 'signed', amount: '1', details: { counterparty: bob } },
+    contract,
+  );
+  assert.match(unnamed.description!, new RegExp(`^To ${bob},`));
+  const received = receiptSummary(
+    {
+      kind: 'transfer-in',
+      status: 'signed',
+      amount: '1500',
+      balance: '2000',
+      name: '@alice',
+      details: { id: '0x' + 'd'.repeat(64), counterparty: '~' + 'k'.repeat(24) },
+    },
+    contract,
+  );
+  assert.deepEqual(
+    [received.title, received.amountLabel, received.tone],
+    ['Transfer received', 'Received', 'positive'],
+  );
+  assert.match(received.description!, /^From @alice, collected into your balance\./);
+});
+
 test('a loan reads as the network fee the casino lent the balance', () => {
   const lent = receiptSummary(
     { kind: 'loan', status: 'signed', amount: '5', details: { id: '0x' + 'b'.repeat(64) }, balance: '15' },
     contract,
   );
   assert.deepEqual([lent.title, lent.amountLabel], ['Network fee lent', 'Lent to you']);
-  assert.match(lent.description!, /your next withdrawal or transfer pays it back first/);
+  assert.match(lent.description!, /your next withdrawal or lock-in pays it back first/);
 });
 
 test('ETH arriving at the address, the balance opening and what a deposit adds each read as their own step', () => {

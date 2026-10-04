@@ -196,7 +196,9 @@ anyone may send it:
   recipient, so nobody sends a withdrawal twice.
 - A transfer pays into the current channel of the account it names instead, as deposits, adding to its `deposited` and
   `principal`, and no ETH leaves the contract. What stays owed is a claim whose beneficiary is that account and whose
-  recipient is the contract. A transfer to the account itself locks the balance in.
+  recipient is the contract. A transfer to the account itself locks the balance in, and is the only one the casino
+  signs: a transfer to another player goes off-chain, as a debit and a credit
+  ([transfers](../wallet/getting-started.md#transfer)), so the chain never names the two accounts together.
 
 A withdrawal never recorded comes back with the close, to the account and not its recipient: a checkpoint counts what
 its balance has `withdrawn`, and a close is owed what of it did not become a claim ([finalization](#finalization)).

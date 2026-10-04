@@ -35,8 +35,8 @@ export function buildVectors() {
     developer: '0x4444444444444444444444444444444444444444',
     // Where a withdrawal pays: any address the player names.
     recipient: '0x5555555555555555555555555555555555555555',
-    // Where a transfer goes: another account, into its current channel.
-    friend: '0x6666666666666666666666666666666666666666',
+    // Whom a transfer pays: another player, by their uname.
+    friend: '3byt9ocwnnzaxanmiz3stocj',
   };
   const Q = OUTCOME_SPACE,
     priced = (bankroll: bigint, bet: { stake: bigint; chance: bigint; prize: bigint }) => {
@@ -134,11 +134,17 @@ export function buildVectors() {
     { kind: KIND.withdrawal, amount: 700_000_000n, recipient: identity.recipient, fee: 1_000_000n },
     { id: `0x${'86'.repeat(32)}` },
   );
-  // A transfer into another account's current channel, recorded the same way.
-  const transfer = apply(
+  // A lock-in: the contract's transfer into the account's own channel, recorded the same way.
+  const lockIn = apply(
     withdrawal.next,
-    { kind: KIND.transfer, amount: 100_000_000n, recipient: identity.friend, fee: 1_000_000n },
+    { kind: KIND.transfer, amount: 100_000_000n, recipient: identity.player, fee: 1_000_000n },
     { id: `0x${'88'.repeat(32)}` },
+  );
+  // A transfer to another player: a debit naming their uname, which they collect with a credit naming the player's.
+  const transfer = apply(
+    lockIn.next,
+    { kind: KIND.debit, amount: 50_000_000n },
+    { id: `0x${'89'.repeat(32)}`, counterparty: `~${identity.friend}` },
   );
   const rejection = rejectionCheckpoint(d, opened.next, bet.operation);
   // The casino's quote for the casino bet on red: its round at the checkpoint the bet follows, and a virtual bankroll
@@ -165,7 +171,7 @@ export function buildVectors() {
     opening,
     base,
     baseHash: hashState(d, base),
-    operations: [opened, bet, developerBet, payout, deposited, loan, withdrawal, transfer],
+    operations: [opened, bet, developerBet, payout, deposited, loan, withdrawal, lockIn, transfer],
     outcome: { ...outcome(seed, secret), payout: betPayout(red, outcome(seed, secret).value) },
     rejection,
     rejectionHash: hashState(d, rejection),

@@ -7,7 +7,7 @@ import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
 import { BrowserStore, withLock } from './storage.ts';
-import { json, same, verifyEvidence, gameKey, collateralPrice } from '../protocol/protocol.ts';
+import { json, same, verifyEvidence, gameKey, collateralPrice, UNAME } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import {
   activityJSON,
@@ -127,22 +127,50 @@ const wallet = new CasinoWallet({
   },
 });
 
-/** Money out of the open balance: Withdraw pays it to an address, and Settings → Transfer into another account's
- * balance. */
-type Send = 'withdraw' | 'transfer';
-/** What a form's amount is typed in: Withdraw's in the unit the player chooses, a transfer's in µETH. */
-const sendUnit = (send: Send) => (send === 'withdraw' ? ($<HTMLSelectElement>('withdraw-unit').value as Unit) : 'µETH');
-/** Money out of the open balance, as its form has it. */
-const sendRequest = (send: Send) =>
+/** What Withdraw's amount is typed in: the unit the player chooses. */
+const withdrawUnit = () => $<HTMLSelectElement>('withdraw-unit').value as Unit;
+/** Money out of the open balance to an address, as Withdraw's form has it. */
+const withdrawRequest = () =>
   validateWithdrawal({
-    destination: $<HTMLInputElement>(`${send}-to`).value,
+    destination: $<HTMLInputElement>('withdraw-to').value,
     ownAddress: wallet.address,
     contractAddress: wallet.config.contractAddress,
-    amount: $<HTMLInputElement>(`${send}-amount`).value,
-    unit: sendUnit(send),
+    amount: $<HTMLInputElement>('withdraw-amount').value,
+    unit: withdrawUnit(),
     maximum: wallet.withdrawable(),
     channel: true,
   });
+/** The player Settings → Transfer names: the name typed, with its sigil, and once the casino has answered, their public
+ * profile, or why there is none. */
+let payee: { name: string; profile: any; error: string | null } | null = null;
+let lookingUp: ReturnType<typeof setTimeout> | undefined;
+/** Find the player whose name is typed under Transfer, a moment after the typing stops. A name typed without its
+ * sigil is a uname when it reads like one, and otherwise a Discord username. */
+function lookUpPayee() {
+  clearTimeout(lookingUp);
+  const typed = $<HTMLInputElement>('transfer-to').value.trim(),
+    name = /^[@~]/.test(typed) ? typed : (UNAME.test(typed.toLowerCase()) ? '~' : '@') + typed;
+  payee = typed
+    ? {
+        name,
+        profile: null,
+        error: /^[@~][A-Za-z0-9_.]{2,32}$/.test(name)
+          ? null
+          : 'Enter a Discord username, such as @bob, or a uname, such as ~3byt9ocwnnzaxanmiz3stocj.',
+      }
+    : null;
+  const asked = payee;
+  if (asked && !asked.error)
+    lookingUp = setTimeout(async () => {
+      try {
+        asked.profile = await wallet.api(`/api/players/${name}`);
+      } catch (error: any) {
+        asked.error = error.code === 'not-found' ? `Nobody goes by ${name}.` : error.message;
+      }
+      if (payee === asked) renderWallet();
+    }, 300);
+  renderWallet();
+}
 /** Everything at the deposit address, to the address Settings names. */
 const addressSendRequest = () =>
   validateWithdrawal({
@@ -170,6 +198,7 @@ function renderSafety() {
     $('export-key').textContent = "Show this wallet's private key";
     for (const id of ['withdraw-to', 'withdraw-amount', 'transfer-to', 'transfer-amount', 'address-send-to'])
       $<HTMLInputElement>(id).value = '';
+    payee = null;
   }
   const saved = localStorage.getItem(savedSetting()) !== null;
   $('deposit-save').hidden = saved;
@@ -608,8 +637,7 @@ function showWallet(tab: WalletTab) {
   dialog.scrollTop = 0;
   // What sending a withdrawal costs now, for Max and the help to count with, and what locking in costs, shown before it
   // is signed.
-  if (['withdraw', 'transfer', 'recovery'].includes(tab) && wallet.channel)
-    void wallet.quoteWithdrawalFee().catch(() => {});
+  if (['withdraw', 'recovery'].includes(tab) && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
   if (tab === 'activity') void refreshWallet();
   // The deposit address is checked for ETH every 20 seconds while it is shown.
   wallet.showDeposit(tab === 'deposit');
@@ -620,47 +648,17 @@ function funded(message: string) {
   $<HTMLDialogElement>('wallet-dialog').close();
   toast(message);
 }
-/** Withdraw, or Settings → Transfer: part of the signed balance, or all of it with Max, which the casino then pays to the
- * address entered, or into the balance of the account it names. */
-function renderSend(
-  send: Send,
-  {
-    open,
-    busy,
-    ready,
-    closing,
-    loan,
-  }: { open: boolean; busy: boolean; ready: boolean; closing: boolean; loan: bigint },
-) {
-  const request = sendRequest(send),
-    amount = request.amount,
-    unit = sendUnit(send),
-    verb = send === 'withdraw' ? 'Withdraw' : 'Transfer',
-    // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
-    charges = [
-      wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it` : '',
-      loan ? `back the ${formatAmount(loan)} µETH the casino lent you` : '',
-    ].filter(Boolean);
-  $(`${send}-form`).classList.toggle('hidden', !open);
-  // Money goes out signing the casino's fee only once it is shown.
-  $<HTMLButtonElement>(send).disabled =
-    busy ||
-    !ready ||
-    !open ||
-    !wallet.withdrawalFee ||
-    Boolean(request.error) ||
-    Boolean(wallet.transactionIntent) ||
-    Boolean(wallet.pending) ||
-    wallet.recoveryOnly;
-  $(send).textContent = `${verb}${amount === null ? '' : ` ${inUnit(amount, unit)} ${unit}`}`;
-  // A withdrawal leaves for a wallet that may count in ETH: what it receives is said in both units.
-  const receives =
-    amount === null
-      ? ''
-      : send === 'transfer'
-        ? `That account's HookedIn balance receives ${exact(amount)} µETH.`
-        : `The address receives ${inUnit(amount, unit)} ${unit} (${unit === 'ETH' ? `${exact(amount)} µETH` : `${inUnit(amount, 'ETH')} ETH`}).`;
-  $(`${send}-help`).textContent = !ready
+/** The open balance's state, as both forms that take money out of it render it. */
+interface SendState {
+  open: boolean;
+  busy: boolean;
+  ready: boolean;
+  closing: boolean;
+  loan: bigint;
+}
+/** Why a form that takes money out of the balance cannot now, when the balance itself is the reason. */
+const sendBlocked = ({ open, ready, closing }: SendState, verb: string) =>
+  !ready
     ? 'Connecting to your wallet…'
     : closing
       ? 'Your balance is closing: once its 7-day window ends, finish the close under Settings → Recovery and collect it.'
@@ -672,26 +670,86 @@ function renderSend(
             ? `A deposit is on its way into your balance. ${verb} once it has arrived.`
             : wallet.transactionIntent || wallet.pending
               ? 'Finish the operation in flight first.'
-              : request.error ||
-                `${receives}${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`;
+              : null;
+/** Withdraw: part of the signed balance, or all of it with Max, which the casino then pays to the address entered. */
+function renderWithdraw(state: SendState) {
+  const { open, busy, loan } = state,
+    request = withdrawRequest(),
+    amount = request.amount,
+    unit = withdrawUnit(),
+    // What the balance pays beside the amount: the casino's fee for sending it, and back what the casino lent it.
+    charges = [
+      wallet.withdrawalFee ? `the casino ${formatAmount(wallet.withdrawalFee)} µETH for sending it` : '',
+      loan ? `back the ${formatAmount(loan)} µETH the casino lent you` : '',
+    ].filter(Boolean),
+    blocked = sendBlocked(state, 'Withdraw');
+  $('withdraw-form').classList.toggle('hidden', !open);
+  // Money goes out signing the casino's fee only once it is shown.
+  $<HTMLButtonElement>('withdraw').disabled =
+    busy || Boolean(blocked) || !wallet.withdrawalFee || Boolean(request.error);
+  $('withdraw').textContent = `Withdraw${amount === null ? '' : ` ${inUnit(amount, unit)} ${unit}`}`;
+  // A withdrawal leaves for a wallet that may count in ETH: what it receives is said in both units.
+  const receives =
+    amount === null
+      ? ''
+      : `The address receives ${inUnit(amount, unit)} ${unit} (${unit === 'ETH' ? `${exact(amount)} µETH` : `${inUnit(amount, 'ETH')} ETH`}).`;
   // A form not yet touched is told what it needs, not that it is wrong.
   const touched = Boolean(
-    $<HTMLInputElement>(`${send}-to`).value.trim() || $<HTMLInputElement>(`${send}-amount`).value.trim(),
+    $<HTMLInputElement>('withdraw-to').value.trim() || $<HTMLInputElement>('withdraw-amount').value.trim(),
   );
-  $(`${send}-help`).classList.toggle('check-failed', open && touched && Boolean(request.error));
-  if (
-    ready &&
-    open &&
-    !touched &&
-    request.error &&
-    !wallet.pending &&
-    !wallet.transactionIntent &&
-    !wallet.recoveryOnly
-  )
-    $(`${send}-help`).textContent =
-      send === 'withdraw'
-        ? 'Enter an amount, or Max, and the address that should receive it.'
-        : 'Enter an amount, or Max, and the deposit address of the account that should receive it.';
+  $('withdraw-help').textContent =
+    blocked ??
+    (!touched && request.error
+      ? 'Enter an amount, or Max, and the address that should receive it.'
+      : request.error ||
+        `${receives}${charges.length ? ` Your balance also pays ${charges.join(' and pays ')}.` : ''} Check the full address before confirming.`);
+  $('withdraw-help').classList.toggle('check-failed', !blocked && touched && Boolean(request.error));
+}
+/** A transfer as Settings → Transfer has it: the amount, the player the name typed belongs to, and what is wrong with
+ * either, or only a `prompt` for what is still to come: the name, the casino's answer to who goes by it, or the amount. */
+function transferRequest() {
+  const typed = $<HTMLInputElement>('transfer-amount').value.trim(),
+    amount = typedIn(typed, 'µETH'),
+    most = wallet.transferable(),
+    profile = payee?.profile ?? null;
+  const wrong =
+      payee?.error ||
+      (profile?.uname === wallet.uname
+        ? 'That is you: transfer to another player.'
+        : most <= 0n
+          ? 'Nothing to transfer: what the casino lent you stays in your balance.'
+          : typed && amount === null
+            ? 'Enter an amount in µETH above zero, with at most 12 decimal places.'
+            : amount !== null && amount > most
+              ? `At most ${exact(most)} µETH can go${BigInt(wallet.channel?.state.loan ?? 0) ? ': what the casino lent you stays in your balance' : ''}.`
+              : null),
+    missing = !payee
+      ? 'Enter the Discord username or uname of the player it goes to.'
+      : !profile
+        ? `Looking up ${payee.name}…`
+        : amount === null
+          ? 'Enter an amount or choose Max.'
+          : null;
+  return { profile, amount, error: wrong || missing, prompt: !wrong };
+}
+/** Settings → Transfer: part of the signed balance, or all of it with Max, to the player whose name is typed. */
+function renderTransfer(state: SendState) {
+  const { open, busy } = state,
+    { profile, amount, error, prompt } = transferRequest(),
+    blocked = sendBlocked(state, 'Transfer'),
+    touched = Boolean(
+      $<HTMLInputElement>('transfer-to').value.trim() || $<HTMLInputElement>('transfer-amount').value.trim(),
+    );
+  $('transfer-form').classList.toggle('hidden', !open);
+  $<HTMLButtonElement>('transfer').disabled = busy || Boolean(blocked) || Boolean(error);
+  $('transfer').textContent = `Transfer${amount === null ? '' : ` ${exact(amount)} µETH`}`;
+  $('transfer-help').textContent =
+    blocked ??
+    (!touched
+      ? 'Enter an amount, or Max, and the player it goes to: @username or ~uname.'
+      : error ||
+        `${showName(profile)}${profile.discordUsername ? `, ~${profile.uname},` : ''} receives ${exact(amount!)} µETH once their wallet collects it into their balance. No fee.`);
+  $('transfer-help').classList.toggle('check-failed', !blocked && touched && Boolean(error) && !prompt);
 }
 function renderWallet() {
   renderFund();
@@ -719,11 +777,13 @@ function renderWallet() {
     ? `${formatAmount(inPlay)} µETH of it is in play in ${active?.identity.name}: it joins the game's allowance once the game has shown how its round ended.`
     : arriving
       ? `${formatAmount(arriving)} µETH of it is on its way into your balance.`
-      : state.closingChannelId && !state.channelId
-        ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
-        : loan
-          ? `What games play with. The casino lent you ${formatAmount(loan)} µETH of it: your next withdrawal or transfer pays it back first.`
-          : 'What games play with.';
+      : BigInt(wallet.waiting) && !wallet.playable
+        ? `${formatAmount(BigInt(wallet.waiting))} µETH waits for you, such as transfers from other players: it joins your balance once a deposit opens one.`
+        : state.closingChannelId && !state.channelId
+          ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
+          : loan
+            ? `What games play with. The casino lent you ${formatAmount(loan)} µETH of it: your next withdrawal or lock-in pays it back first.`
+            : 'What games play with.';
   const earnings = state.developerEarnings;
   // The tally the casino keeps for this account, collected into its balance.
   $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
@@ -763,7 +823,8 @@ function renderWallet() {
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
 
   const open = status === 1 && !closing;
-  for (const send of ['withdraw', 'transfer'] as const) renderSend(send, { open, busy, ready, closing, loan });
+  renderWithdraw({ open, busy, ready, closing, loan });
+  renderTransfer({ open, busy, ready, closing, loan });
 
   // Settings → Deposits: everything at the deposit address, out to another address.
   const send = addressSendRequest(),
@@ -963,13 +1024,13 @@ function activityEntry(receipt: any) {
   if (operation?.sequence !== undefined) facts.push(['Sequence', String(operation.sequence)]);
   if (receipt.commission !== undefined) facts.push(['Commission', `${exact(receipt.commission)} µETH`]);
   if (receipt.to)
+    facts.push(['To', same(receipt.to, wallet.config.contractAddress) ? 'Your own channel, as deposits' : receipt.to]);
+  // A transfer's other player, as they went by then, and the uname it named.
+  const player = receipt.details?.counterparty;
+  if (player?.startsWith('~'))
     facts.push([
-      'To',
-      same(receipt.to, wallet.config.contractAddress)
-        ? 'Your own channel, as deposits'
-        : receipt.kind === 'transfer'
-          ? `The HookedIn balance of ${receipt.to}`
-          : receipt.to,
+      receipt.kind === 'transfer' ? 'To' : 'From',
+      receipt.name === player ? player : `${receipt.name} (${player})`,
     ]);
   if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
   // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away: the
@@ -1000,7 +1061,13 @@ function activityEntry(receipt: any) {
     timestamp: receipt.createdAt,
     payload: activityJSON(receipt),
     facts,
-    description: receipt.game?.name || (receipt.to ? `To ${short(receipt.to)}` : undefined),
+    description:
+      receipt.game?.name ||
+      (receipt.to
+        ? `To ${short(receipt.to)}`
+        : receipt.name
+          ? `${receipt.kind === 'transfer' ? 'To' : 'From'} ${receipt.name}`
+          : undefined),
     notice: [presentation.description, presentation.notice].filter(Boolean).join(' '),
   });
 }
@@ -1369,6 +1436,7 @@ async function openProfile(name: string, push = true) {
   shown = page;
   $('profile-name').textContent = name;
   $('profile-meta').textContent = '';
+  $('profile-transfer').hidden = true;
   $('profile-stats').textContent = 'Loading…';
   $('profile-games-heading').classList.add('hidden');
   $('profile-games').replaceChildren();
@@ -1446,6 +1514,8 @@ function renderProfile() {
       }),
     );
   }
+  // Anybody else's page offers to transfer to them.
+  $('profile-transfer').hidden = !shown?.profile || ownPage();
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
   for (const id of ['bank-deposit', 'bank-withdraw'])
     $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
@@ -1973,44 +2043,50 @@ act('add-to-balance', async () => {
   await wallet.deposit();
   funded(`Added ${formatAmount(BigInt(wallet.publicState.balance || 0) - before)} µETH to your balance.`);
 });
-for (const id of [
-  'withdraw-to',
-  'withdraw-amount',
-  'transfer-to',
-  'transfer-amount',
-  'address-send-to',
-  'collateral-buy-amount',
-])
+for (const id of ['withdraw-to', 'withdraw-amount', 'transfer-amount', 'address-send-to', 'collateral-buy-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
+$<HTMLInputElement>('transfer-to').addEventListener('input', lookUpPayee);
 // Switching Withdraw's unit keeps the amount typed, written in the other unit.
 $<HTMLSelectElement>('withdraw-unit').addEventListener('change', () => {
   const input = $<HTMLInputElement>('withdraw-amount'),
-    unit = sendUnit('withdraw'),
+    unit = withdrawUnit(),
     wei = typedIn(input.value, unit === 'ETH' ? 'µETH' : 'ETH');
   if (wei !== null) input.value = inUnit(wei, unit, true);
   renderWallet();
 });
-for (const send of ['withdraw', 'transfer'] as const) {
-  $<HTMLButtonElement>(`${send}-max`).addEventListener('click', () => {
-    $<HTMLInputElement>(`${send}-amount`).value = inUnit(wallet.withdrawable(), sendUnit(send), true);
-    renderWallet();
-  });
-  act(send, async () => {
-    const { to, amount, error } = sendRequest(send);
-    if (error || !to || amount === null) throw new Error(error || 'Enter a destination address.');
-    // Money partly out leaves the open game its allowance; all of it takes back what the game holds.
-    if (amount >= wallet.withdrawable()) abandonGame();
-    const receipt = await wallet.withdraw(to, amount, { into: send === 'transfer' });
-    $<HTMLInputElement>(`${send}-to`).value = '';
-    $<HTMLInputElement>(`${send}-amount`).value = '';
-    $<HTMLDialogElement>('wallet-dialog').close();
-    toast(
-      send === 'transfer'
-        ? `Transferred ${exact(receipt.amount)} µETH: the contract puts it into the HookedIn balance of ${short(to)}.`
-        : `Withdrew ${exact(receipt.amount)} µETH: the contract pays it to ${short(to)}, and Activity shows when it has.`,
-    );
-  });
-}
+$<HTMLButtonElement>('withdraw-max').addEventListener('click', () => {
+  $<HTMLInputElement>('withdraw-amount').value = inUnit(wallet.withdrawable(), withdrawUnit(), true);
+  renderWallet();
+});
+act('withdraw', async () => {
+  const { to, amount, error } = withdrawRequest();
+  if (error || !to || amount === null) throw new Error(error || 'Enter a destination address.');
+  // Money partly out leaves the open game its allowance; all of it takes back what the game holds.
+  if (amount >= wallet.withdrawable()) abandonGame();
+  const receipt = await wallet.withdraw(to, amount);
+  $<HTMLInputElement>('withdraw-to').value = '';
+  $<HTMLInputElement>('withdraw-amount').value = '';
+  $<HTMLDialogElement>('wallet-dialog').close();
+  toast(
+    `Withdrew ${exact(receipt.amount)} µETH: the contract pays it to ${short(to)}, and Activity shows when it has.`,
+  );
+});
+$<HTMLButtonElement>('transfer-max').addEventListener('click', () => {
+  $<HTMLInputElement>('transfer-amount').value = inUnit(wallet.transferable(), 'µETH', true);
+  renderWallet();
+});
+act('transfer', async () => {
+  const { profile, amount, error } = transferRequest();
+  if (error || !profile || amount === null) throw new Error(error || 'Enter an amount and the player it goes to.');
+  // Money partly out leaves the open game its allowance; all of it takes back what the game holds.
+  if (amount >= wallet.transferable()) abandonGame();
+  const receipt = await wallet.transfer(profile, amount);
+  $<HTMLInputElement>('transfer-to').value = '';
+  $<HTMLInputElement>('transfer-amount').value = '';
+  payee = null;
+  $<HTMLDialogElement>('wallet-dialog').close();
+  toast(`Transferred ${exact(receipt.amount)} µETH to ${showName(profile)}: their wallet collects it.`);
+});
 act('address-send', async () => {
   const { to, error } = addressSendRequest();
   if (error || !to) throw new Error(error || 'Enter a destination address.');
@@ -2162,6 +2238,12 @@ act('start-over', async () => {
 // A field with a button beside it does what the button does on Enter.
 $('import-key').addEventListener('keydown', event => {
   if (event.key === 'Enter') $('import-wallet').click();
+});
+// Another player's page opens Transfer to them.
+$('profile-transfer').addEventListener('click', () => {
+  $<HTMLInputElement>('transfer-to').value = showName(shown!.profile);
+  openWallet('transfer');
+  lookUpPayee();
 });
 act('verify-discord', async () => {
   verifying = await wallet.discordCode();

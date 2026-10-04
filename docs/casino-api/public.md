@@ -92,7 +92,7 @@ alert, like `observationError`, names no channel.
 
 ### `GET /api/withdrawal-fee`
 
-What a withdrawal or a transfer pays the casino for sending it to the contract, `{fee}`, in wei as a decimal string:
+What a withdrawal or a lock-in pays the casino for sending it to the contract, `{fee}`, in wei as a decimal string:
 150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, at the network's gas price, which the casino reads and
 holds for a minute. The casino declines an operation whose `fee` is below it
 ([operations](channels.md#post-apichannelsidoperations)). `paused` answers while the gas price cannot be read.

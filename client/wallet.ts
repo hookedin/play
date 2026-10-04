@@ -204,6 +204,9 @@ export class CasinoWallet extends GameSessions {
   declare detailsObservedAt: number;
   /** This account's uname, as the casino last reported it: permanent, and written `~uname`. */
   declare uname: string | null;
+  /** What the casino owes this account, such as transfers from other players, as it last said while the account had no
+   * open channel: the wallet collects it into the balance once one is open. */
+  declare waiting: string;
   /** The Discord username it is shown by instead, written `@bob`: the username of the Discord account it verified; null
    * while it has verified none. */
   declare discordUsername: string | null;
@@ -260,6 +263,7 @@ export class CasinoWallet extends GameSessions {
       trustedDeployment,
       publicState: {},
       uname: null,
+      waiting: '0',
       discordUsername: null,
       profile: null,
       developerEarnings: null,
@@ -354,8 +358,9 @@ export class CasinoWallet extends GameSessions {
   /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
   async check() {
     await this.refresh();
-    // Asked again if the casino did not answer, or had no profile to give before it registered the account's channel.
-    if (!this.uname || (this.channel?.registered && !this.profile))
+    // Asked again if the casino did not answer, or had no profile to give before it registered the account's channel,
+    // and while no channel is open, to say what waits for one.
+    if (!this.uname || (this.channel?.registered && !this.profile) || !this.playable)
       await this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.sweep().catch(error => console.error('Adding ETH to your balance failed', error));
     await this.collectPayouts();
@@ -405,6 +410,7 @@ export class CasinoWallet extends GameSessions {
           lastChainCheck: 0,
           buying: null,
           uname: null,
+          waiting: '0',
           discordUsername: null,
           profile: null,
         });
@@ -560,12 +566,13 @@ export class CasinoWallet extends GameSessions {
     return this.api(`/api/channels/${opening.channelId}/${action}`, { opening, ...body });
   }
   /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
-   * with it once it has one. A profile already here came from a later reply, and stays. */
+   * with it once it has one, and what it owes the account. A profile already here came from a later reply, and stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
     const address = this.address;
-    const { uname, profile } = await this.accountRequest('uname');
+    const { uname, profile, waiting } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string') return;
+    this.waiting = /^(0|[1-9][0-9]{0,77})$/.test(waiting) ? waiting : '0';
     if (!this.profile) Object.assign(this, { uname, discordUsername: profile?.discordUsername ?? null, profile });
     this.render();
   }
@@ -658,7 +665,7 @@ export class CasinoWallet extends GameSessions {
       nativeBalance: this.nativeBalance || '0',
       channelId: c?.state.channelId || null,
       channelStatus: c?.onchain?.status || '0',
-      // What the casino lent the balance, which a withdrawal, a transfer or a close pays back first, and what a
+      // What the casino lent the balance, which a withdrawal, a lock-in or a close pays back first, and what a
       // withdrawal can take.
       loan: open ? c.state.loan : '0',
       withdrawable: String(this.withdrawable()),
@@ -702,9 +709,8 @@ export class CasinoWallet extends GameSessions {
             observedAt: v.observedAt,
             ...v.claim,
           })),
-        // A transfer's claim is the account's it went to.
         ...this.history
-          .filter(entry => entry.withdrawal && entry.recorded && !entry.paid && entry.kind !== 'transfer')
+          .filter(entry => entry.withdrawal && entry.recorded && !entry.paid)
           .map(entry => ({
             id: entry.withdrawal,
             to: entry.to,
@@ -1161,12 +1167,7 @@ export class CasinoWallet extends GameSessions {
         known.add(id);
         withdrawals.push(
           plain({
-            kind:
-              Number(op.kind) === KIND.withdrawal
-                ? 'withdrawal'
-                : same(op.recipient, this.address)
-                  ? 'lock-in'
-                  : 'transfer',
+            kind: Number(op.kind) === KIND.withdrawal ? 'withdrawal' : 'lock-in',
             operationId: 'withdrawal:' + id,
             status: 'signed',
             verified: true,

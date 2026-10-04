@@ -50,8 +50,10 @@ the wallet last read the chain. Its actions are the rest of this page and
 ## Lock in your balance
 
 What your balance holds above your deposits and collateral is winnings, a claim on the shared bankroll. **Lock in my
-balance**, under Recovery, makes your balance deposits: your account signs a [transfer](#withdraw) to your own account
-of all of it but its loan and the fee for sending it, which the transfer pays as well. The casino signs it at once and
+balance**, under Recovery, makes your balance deposits: your account signs the contract's transfer, a
+[withdrawal](#withdraw) into an account's channel, to your own account of all of it but its loan and the fee for
+sending it, which it pays as well. The casino signs no such transfer into anyone else's channel: a
+[transfer](getting-started.md#transfer) to another player is off-chain. The casino signs it at once and
 sends it to the contract. Your deposits pay back what they cover, your collateral the next part and house cash the rest,
 and all of it goes into your channel as deposits the contract holds.
 
@@ -91,11 +93,6 @@ The casino sends each withdrawal it takes on at once, so the contract normally p
 not sent yet offers **Send it now** in Activity once every withdrawal you made before it from that balance is sent. A
 withdrawal can be sent until its channel's close is finished; one nobody sent by then comes back to you with the close,
 not to its address: what your deposits and collateral cover as its protected amount, and the rest as winnings.
-
-A [transfer](getting-started.md#transfer) is a withdrawal into another account's balance, its `recipient` being that
-account: the contract records it the same way and pays it into that account's current channel as deposits, and what
-stays owed of it is that account's claim. The casino declines a transfer to an address it knows no balance for: _That
-address has no HookedIn balance to transfer into_.
 
 ## Close without the casino
 
@@ -176,7 +173,7 @@ Finalizing records a claim for what the close is owed, in two parts:
   for the channel and `collateral` its collateral: paid in full whenever the claim is collected.
 - **Winnings**, whatever is above it: they join the queue of every claim's winnings, first in, first out.
 
-A withdrawal or a transfer is a claim too, under its ID, with its protected amount and winnings worked out the same way
+A withdrawal or a lock-in is a claim too, under its ID, with its protected amount and winnings worked out the same way
 when it is recorded.
 
 **Waiting to be paid**, above the wallet's tabs, lists every claim of this account that is still owed something, a closed
@@ -202,7 +199,7 @@ address.
 
 Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account.
 The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 µETH in total fees, and stops before signing when the
-network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals, transfers and lock-ins
+network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins
 to the contract and pays their gas, and each pays the casino a fee for it out of your balance: 150,000 gas, about what
 sending one costs, at the network's gas price
 ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw

@@ -37,6 +37,7 @@ import {
   BANK_TYPES,
   BANK_WITHDRAW_TYPES,
   BANK_ID,
+  counterpartyPlayer,
   hashBankWithdraw,
   settleStep,
   checkpointEvidence,
@@ -48,22 +49,24 @@ import { gameAmount, gameError, gameRef, META } from './bridge.ts';
 import { WalletTransactions, inbound } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
- * developer bet, a payment, an investment and a bank deposit are debits, a withdrawal names the address it pays, a
- * transfer the account it goes into (a lock-in is one to this account itself), a payout collected is a credit, money
- * deposited into the channel is taken in with a deposit, and the network fee of a deposit is a loan the casino makes. */
+ * developer bet, a payment, an investment, a bank deposit and a transfer to another player are debits, a withdrawal
+ * names the address it pays, a lock-in is the contract's transfer into this account's own channel, a payout or a
+ * transfer collected is a credit, money deposited into the channel is taken in with a deposit, and the network fee of a
+ * deposit is a loan the casino makes. */
 export const OPERATIONS: Record<string, { kind: number; name: string; game?: boolean }> = {
   'casino-bet': { kind: KIND.casinoBet, name: 'casino bet', game: true },
   payment: { kind: KIND.debit, name: 'game payment', game: true },
   'developer-bet': { kind: KIND.debit, name: 'developer bet', game: true },
   invest: { kind: KIND.debit, name: 'bankroll investment' },
   bank: { kind: KIND.debit, name: 'bank deposit' },
+  transfer: { kind: KIND.debit, name: 'transfer' },
   withdrawal: { kind: KIND.withdrawal, name: 'withdrawal' },
-  transfer: { kind: KIND.transfer, name: 'transfer' },
   'lock-in': { kind: KIND.transfer, name: 'lock-in' },
   divest: { kind: KIND.credit, name: 'bankroll payout' },
   earnings: { kind: KIND.credit, name: 'earnings payout' },
   'developer-bet-payout': { kind: KIND.credit, name: 'developer bet payout' },
   withdrawn: { kind: KIND.credit, name: 'bank withdrawal' },
+  'transfer-in': { kind: KIND.credit, name: 'transfer received' },
   'taken-in': { kind: KIND.deposit, name: 'deposit' },
   loan: { kind: KIND.loan, name: 'network fee loan' },
 };
@@ -175,7 +178,7 @@ export class ChannelClient extends WalletTransactions {
     };
     // What the operation means, signed as its memo. A casino bet, a developer bet and a payment are always the open
     // game's, so which game that is has one source of truth: the session this wallet has open; the game may give
-    // them a group. An investment, a bank deposit and a payout name what they pay into or collect from.
+    // them a group. An investment, a bank deposit, a transfer and a payout name what they pay into or collect from.
     const details: Details = plain({
       // A loan is known by the hash of the deposit transaction whose network fee it lends: one loan for each.
       id: kind === 'loan' ? input.transaction : id(operationId),
@@ -207,8 +210,9 @@ export class ChannelClient extends WalletTransactions {
             'The player has not let this game place developer bets: ask with requestAllowance({ developerBets: true }).',
           );
       } else if (
-        // Only a bet stakes what the casino lent the balance: money moved into the fund or a bank leaves it.
-        debit + (['invest', 'bank'].includes(kind) ? BigInt(this.channel!.state.loan) : 0n) >
+        // Only a bet stakes what the casino lent the balance: money moved into the fund, a bank or another player's
+        // balance leaves it.
+        debit + (['invest', 'bank', 'transfer'].includes(kind) ? BigInt(this.channel!.state.loan) : 0n) >
         this.availableBalance()
       )
         throw new Error("Debit exceeds your balance less the game's allowance and what the casino lent it");
@@ -250,6 +254,8 @@ export class ChannelClient extends WalletTransactions {
       this.pending = {
         ...(game ? { game } : {}),
         ...(covered ? { seed, quote } : {}),
+        // The name a transfer's other player went by, as the receipt shows it.
+        ...(input.name ? { name: input.name } : {}),
         kind,
         operationId,
         request,
@@ -418,13 +424,11 @@ export class ChannelClient extends WalletTransactions {
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null,
       banked =
         kind === 'bank' && !rejected ? this.bankStatement(response.statement, hashOperation(this.domain, op)) : null,
-      // A developer bet is known by the hash of the operation that placed it, and a withdrawal or a transfer is a claim
+      // A developer bet is known by the hash of the operation that placed it, and a withdrawal or a lock-in is a claim
       // under it.
       developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null,
       withdrawal =
-        ['withdrawal', 'transfer', 'lock-in'].includes(kind) && !rejected
-          ? hashOperation(this.domain, op).toLowerCase()
-          : null;
+        ['withdrawal', 'lock-in'].includes(kind) && !rejected ? hashOperation(this.domain, op).toLowerCase() : null;
     const receipt = plain({
       kind,
       operationId,
@@ -443,6 +447,7 @@ export class ChannelClient extends WalletTransactions {
       ...(table ? { maxPayout: table.maxPayout, expectedPayout: table.expectedPayout } : {}),
       amount: rejected ? '0' : op.amount,
       details,
+      ...(c.pending.name ? { name: c.pending.name } : {}),
       ...(developerBet ? { bet: developerBet } : {}),
       // Where it goes: the contract records it as a claim under the withdrawal's ID once anyone sends the proof.
       ...(withdrawal ? { withdrawal, to: this.destination(op), fee: op.fee, paid: false } : {}),
@@ -908,9 +913,9 @@ export class ChannelClient extends WalletTransactions {
     });
   }
 
-  /** Collect what the fund, the games this player develops and the developer bets they placed owe them. A redemption
-   * is checked against this wallet's own share statement before it signs the credit, and a developer bet against its
-   * developer's settlement; commission is simply collected. */
+  /** Collect what the fund, the games this player develops, the developer bets they placed and other players' transfers
+   * owe them. A redemption is checked against this wallet's own share statement before it signs the credit, and a
+   * developer bet against its developer's settlement; commission and transfers are simply collected. */
   async collectPayouts(this: CasinoWallet) {
     // Money deposited into the channel goes into the balance first: a waiting casino is asked again next time.
     if (!this.busy) await this.takeDeposits().catch(() => {});
@@ -933,6 +938,19 @@ export class ChannelClient extends WalletTransactions {
               `earnings:${payout.collected}`,
             ),
           );
+        continue;
+      }
+      const from = counterpartyPlayer(payout.source);
+      if (from !== null) {
+        // A transfer from another player, named as they went by when it was listed.
+        const name = typeof payout.discordUsername === 'string' ? '@' + payout.discordUsername : '~' + from;
+        collected.push(
+          await this.perform(
+            'transfer-in',
+            { amount: payout.amount, source: payout.source, name },
+            `transfer:${payout.source}:${payout.index}`,
+          ),
+        );
         continue;
       }
       if (same(payout.source, FUND_ID)) {
