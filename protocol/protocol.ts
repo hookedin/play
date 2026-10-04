@@ -125,6 +125,13 @@ export const hashOperation = (d: Domain, s: Operation) => TypedDataEncoder.hash(
 /** An account's channel: its first has `index` 0, and each one a close ends is followed by the next. */
 export const channelId = (player: string, index: Integer) =>
   keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [player, index]));
+/** Whether a channel's balance plays: its channel open on-chain, or not on-chain yet with no deposit taken in. Its first
+ * deposit opens it, or the deposit of nothing that comes before its first withdrawal, lock-in or close; one a
+ * reorganisation took back to unopened waits for its deposit to land again. */
+export const playsOn = (onchain: { status: Integer } | null | undefined, state: { deposited: Integer }) => {
+  const status = Number(onchain?.status);
+  return status === 1 || (status === 0 && BigInt(state.deposited) === 0n);
+};
 export function validateOpening(opening: Opening) {
   if (
     !/^(0|[1-9][0-9]{0,77})$/.test(String(opening.index)) ||

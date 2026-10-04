@@ -35,6 +35,7 @@ import {
   protection,
   withdrawalRecorded,
   disputedStep,
+  playsOn,
 } from '../protocol/protocol.ts';
 import {
   ChainObserver,
@@ -59,12 +60,6 @@ export interface WalletOptions {
   storage?: Store;
   trustedDeployment?: Deployment | null;
 }
-/** A channel holds a balance to play while it is open on-chain, or not on-chain yet with no deposit taken in: one a
- * reorganisation took back to unopened waits for its deposit to land again. */
-export const live = (c: WalletChannel | null | undefined) => {
-  const status = Number(c?.onchain?.status);
-  return status === 1 || (status === 0 && BigInt(c!.state.deposited) === 0n);
-};
 export interface WalletChannel {
   opening: Opening;
   state: Checkpoint;
@@ -478,10 +473,10 @@ export class CasinoWallet extends GameSessions {
       return 0n;
     }
   }
-  /** Whether this account can play with ETH: its channel is registered, `live` and not closing. */
+  /** Whether this account can play with ETH: its channel is registered, plays (`playsOn`) and is not closing. */
   get playable() {
     const c = this.channel;
-    return Boolean(c?.registered) && live(c) && !c!.closing;
+    return Boolean(c?.registered) && playsOn(c!.onchain, c!.state) && !c!.closing;
   }
   get pending() {
     return this.channel?.pending || null;
@@ -661,7 +656,7 @@ export class CasinoWallet extends GameSessions {
   render() {
     const c = this.channel,
       closing = this.closingChannel,
-      open = c && live(c),
+      open = c && playsOn(c.onchain, c.state),
       // Deposited into the open channel and not taken into its balance yet: the player's all the same.
       arriving = open ? BigInt(c.onchain.deposited) - BigInt(c.state.deposited) : 0n,
       balance = open ? BigInt(c.state.balance) + (arriving > 0n ? arriving : 0n) : 0n;

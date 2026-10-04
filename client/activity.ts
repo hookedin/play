@@ -147,36 +147,165 @@ export function developerBetSummary(bet: PlayerDeveloperBet, name = 'A developer
     tone: (!settled ? 'neutral' : bet.payout === '0' ? 'neutral' : bet.collected ? 'positive' : 'warning') as Tone,
   };
 }
+const balanceOf = (receipt: any) => `Balance ${exact(receipt.balance)} µETH`;
+/** Each kind of receipt as Activity shows it: its title, the label under its amount once settled, what it is called
+ * declined, whether it brings money in (`incoming`, positive once settled with an amount), what it says, and a notice.
+ * A bet's result and a withdrawal or lock-in still on its way are worked out in `receiptSummary`. */
+const KINDS: Record<
+  string,
+  {
+    title: string;
+    label?: string;
+    declined?: string;
+    incoming?: boolean;
+    describe?: (receipt: any) => string;
+    notice?: string;
+  }
+> = {
+  'casino-bet': { title: 'Casino bet', declined: 'Casino bet rejected' },
+  'developer-bet': {
+    title: 'Developer bet placed',
+    label: 'Sent',
+    declined: 'Developer bet rejected',
+    describe: r => `Placed with the game’s developer. ${DEVELOPER_BET} ${balanceOf(r)}`,
+  },
+  payment: {
+    title: 'Game payment',
+    label: 'Sent',
+    declined: 'Payment rejected',
+    describe: r =>
+      `${r.details?.group ? "Part of one of this game's rounds, paid into the casino's bankroll: Bets shows the round together." : "A payment this game charged, paid into the casino's bankroll."} ${balanceOf(r)}`,
+  },
+  invest: {
+    title: 'Invested in the bankroll',
+    label: 'Invested',
+    declined: 'Investment declined',
+    describe: r =>
+      `Bought ${exact(r.shares)} shares; you hold ${exact(r.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. ${balanceOf(r)}`,
+  },
+  bank: {
+    title: 'Put into your bank',
+    label: 'Sent',
+    declined: 'Bank deposit declined',
+    describe: r =>
+      `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. ${balanceOf(r)}`,
+  },
+  withdrawal: { title: 'Withdrawn', label: 'Paid out', declined: 'Withdrawal declined', incoming: true },
+  transfer: {
+    title: 'Transferred',
+    label: 'Sent',
+    declined: 'Transfer declined',
+    describe: r =>
+      `To ${r.name ?? r.details?.counterparty}, off-chain: their wallet collects it into their balance once they have one open, and nothing about it goes on-chain. ${balanceOf(r)}`,
+  },
+  'lock-in': { title: 'Balance locked in', declined: 'Lock-in declined' },
+  loan: {
+    title: 'Network fee lent',
+    label: 'Lent to you',
+    declined: 'Loan declined',
+    describe: r =>
+      `The network fee your deposit ${r.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or lock-in pays it back first, and a close is owed your balance less it. ${balanceOf(r)}`,
+  },
+  received: {
+    title: 'Received at your address',
+    describe: () =>
+      'ETH sent to your deposit address, as your wallet found it there. It goes into your balance by itself unless that is off in Settings.',
+  },
+  opened: {
+    title: 'Balance opened',
+    label: 'Deposited',
+    describe: () =>
+      'The contract holds your balance in a channel of its own, opened by a deposit into it: from your address, or from anyone.',
+  },
+  deposit: { title: 'Deposited', label: 'Deposited' },
+  'taken-in': {
+    title: 'Added to your balance',
+    label: 'Added',
+    describe: r =>
+      `What was deposited into your channel, signed into your balance once the casino had seen it confirmed: from your address, a lock-in or anyone's deposit. ${balanceOf(r)}`,
+  },
+  collateral: {
+    title: 'Collateral bought',
+    label: 'Sent',
+    describe: r =>
+      r.collateral
+        ? `${exact(r.collateral)} µETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`
+        : '',
+  },
+  'transfer-in': {
+    title: 'Transfer received',
+    label: 'Received',
+    incoming: true,
+    describe: r =>
+      `From ${r.name ?? r.details?.counterparty}, collected into your balance. Beyond your own deposits, your balance is paid out of the casino's bankroll, as winnings are. ${balanceOf(r)}`,
+  },
+  'withdrawal-sent': { title: 'Withdrawal sent', label: 'No payment' },
+  'close-started': {
+    title: 'Close started',
+    label: 'No payment',
+    notice: 'A close without the casino can be challenged for 7 days. Then finish it under Settings → Recovery.',
+  },
+  'bet-disputed': {
+    title: 'Bet disputed',
+    label: 'No payment',
+    notice:
+      'The casino has 7 days to settle the disputed bet on-chain; if it does not, the bet counts as won. Then finish the close under Settings → Recovery.',
+  },
+  closure: {
+    title: 'Balance closed',
+    label: 'Claim recorded',
+    notice:
+      'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.',
+  },
+  dispute: { title: 'Close challenged', label: 'No payment' },
+  'developer-bet-payout': {
+    title: 'Developer bet payout',
+    label: 'Received',
+    incoming: true,
+    describe: r =>
+      `What a developer bet’s developer paid, checked by your wallet and collected into your balance. ${balanceOf(r)}`,
+  },
+  withdrawn: {
+    title: 'Taken from your bank',
+    label: 'Received',
+    incoming: true,
+    describe: r => `Taken from your bank and collected into your balance. ${balanceOf(r)}`,
+  },
+  redeem: {
+    title: 'Shares redeemed',
+    label: 'Owed to you',
+    describe: r =>
+      `Sold ${exact(r.shares)} shares; you hold ${exact(r.holding)}. Your wallet collects the money into your balance.`,
+  },
+  divest: {
+    title: 'Bankroll payout',
+    label: 'Received',
+    incoming: true,
+    describe: r => `Paid for redeemed bankroll shares. ${balanceOf(r)}`,
+  },
+  earnings: {
+    title: 'Developer earnings',
+    label: 'Received',
+    incoming: true,
+    describe: r => `Commission your games earned, collected into your balance. ${balanceOf(r)}`,
+  },
+  transaction: { title: 'Transaction' },
+};
 /** A receipt as Activity shows it. `contract` is the deployment's: a withdrawal or a claim paid to it goes into the
  * account's own channel as deposits. */
 export function receiptSummary(
   receipt: any,
   contract: string,
 ): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
+  const kind = KINDS[receipt.kind];
   if (receipt.status === 'rejected')
     return {
-      title: (
-        {
-          'casino-bet': 'Casino bet rejected',
-          'developer-bet': 'Developer bet rejected',
-          payment: 'Payment rejected',
-          invest: 'Investment declined',
-          bank: 'Bank deposit declined',
-          withdrawal: 'Withdrawal declined',
-          transfer: 'Transfer declined',
-          'lock-in': 'Lock-in declined',
-          loan: 'Loan declined',
-        } as Record<string, string>
-      )[receipt.kind],
+      title: kind?.declined ?? receipt.kind,
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: 'neutral',
       amount: `0 µETH`,
       amountLabel: 'Balance change',
-      description: ['invest', 'developer-bet', 'bank', 'withdrawal', 'transfer', 'lock-in', 'loan'].includes(
-        receipt.kind,
-      )
-        ? 'Your balance is unchanged.'
-        : 'Your balance is unchanged. You can place another bet.',
+      description: `Your balance is unchanged.${['casino-bet', 'payment'].includes(receipt.kind) ? ' You can place another bet.' : ''}`,
       notice: receipt.reason,
     };
   const settled = ['signed', 'confirmed'].includes(receipt.status);
@@ -195,75 +324,29 @@ export function receiptSummary(
   const played = receipt.kind === 'casino-bet' || (receipt.kind === 'developer-bet' && receipt.payout !== undefined),
     net = played ? BigInt(receipt.payout ?? 0) - BigInt(receipt.stake ?? 0) : 0n,
     bet = receipt.kind === 'developer-bet' ? 'Developer bet' : 'Casino bet';
-  const title =
-    receipt.kind === 'developer-bet' && !played
-      ? 'Developer bet placed'
-      : played
-        ? net > 0n
-          ? `${bet} won`
-          : net < 0n
-            ? `${bet} lost`
-            : `${bet} broke even`
-        : receipt.withdrawal && receipt.returned
-          ? 'Withdrawal returned'
-          : receipt.withdrawal && !receipt.paid
-            ? receipt.kind === 'lock-in'
-              ? 'Locking in'
-              : 'Withdrawal on its way'
-            : (
-                {
-                  received: 'Received at your address',
-                  opened: 'Balance opened',
-                  deposit: 'Deposited',
-                  'taken-in': 'Added to your balance',
-                  loan: 'Network fee lent',
-                  collateral: 'Collateral bought',
-                  withdrawal: 'Withdrawn',
-                  transfer: 'Transferred',
-                  'transfer-in': 'Transfer received',
-                  'lock-in': 'Balance locked in',
-                  'withdrawal-sent': 'Withdrawal sent',
-                  'close-started': 'Close started',
-                  'bet-disputed': 'Bet disputed',
-                  closure: 'Balance closed',
-                  dispute: 'Close challenged',
-                  payment: 'Game payment',
-                  'developer-bet-payout': 'Developer bet payout',
-                  bank: 'Put into your bank',
-                  withdrawn: 'Taken from your bank',
-                  invest: 'Invested in the bankroll',
-                  redeem: 'Shares redeemed',
-                  divest: 'Bankroll payout',
-                  earnings: 'Developer earnings',
-                  transaction: 'Transaction',
-                } as Record<string, string>
-              )[receipt.kind] || receipt.kind;
+  const title = played
+    ? net > 0n
+      ? `${bet} won`
+      : net < 0n
+        ? `${bet} lost`
+        : `${bet} broke even`
+    : receipt.withdrawal && receipt.returned
+      ? 'Withdrawal returned'
+      : receipt.withdrawal && !receipt.paid
+        ? receipt.kind === 'lock-in'
+          ? 'Locking in'
+          : 'Withdrawal on its way'
+        : (kind?.title ?? receipt.kind);
   let amount = `${formatAmount(settled ? receipt.amount || '0' : '0')} µETH`;
-  let amountLabel = !settled
-    ? 'No confirmed payment'
-    : receipt.kind === 'deposit' || receipt.kind === 'opened'
-      ? 'Deposited'
-      : receipt.kind === 'taken-in'
-        ? 'Added'
-        : receipt.kind === 'withdrawal'
-          ? 'Paid out'
-          : receipt.kind === 'loan'
-            ? 'Lent to you'
-            : ['divest', 'earnings', 'developer-bet-payout', 'withdrawn', 'transfer-in'].includes(receipt.kind)
-              ? 'Received'
-              : receipt.kind === 'invest'
-                ? 'Invested'
-                : receipt.kind === 'redeem'
-                  ? 'Owed to you'
-                  : ['payment', 'developer-bet', 'bank', 'collateral', 'transfer'].includes(receipt.kind)
-                    ? 'Sent'
-                    : receipt.kind === 'closure'
-                      ? 'Claim recorded'
-                      : ['withdrawal-sent', 'close-started', 'bet-disputed', 'dispute'].includes(receipt.kind)
-                        ? 'No payment'
-                        : `ETH received`;
-  let tone: Tone = !settled ? (['reverted', 'replaced'].includes(receipt.status) ? 'negative' : 'warning') : 'neutral';
-  let description = '';
+  let amountLabel = !settled ? 'No confirmed payment' : (kind?.label ?? 'ETH received');
+  let tone: Tone = !settled
+    ? ['reverted', 'replaced'].includes(receipt.status)
+      ? 'negative'
+      : 'warning'
+    : kind?.incoming && BigInt(receipt.amount || 0) > 0n
+      ? 'positive'
+      : 'neutral';
+  let description = kind?.describe?.(receipt) ?? '';
   if (played) {
     amount = settled ? signedAmount(net) : '—';
     amountLabel = settled ? 'Net game result' : 'Unconfirmed result';
@@ -273,49 +356,14 @@ export function receiptSummary(
         ? ''
         : ` of up to ${formatAmount(receipt.maxPayout)} µETH · RTP ${percent(returnParts(BigInt(receipt.stake), BigInt(receipt.expectedPayout)))}`
     }${receipt.kind === 'casino-bet' ? ` · Balance ${exact(receipt.balance)} µETH` : ''}`;
-  } else if (
-    settled &&
-    ['withdrawal', 'divest', 'earnings', 'developer-bet-payout', 'withdrawn', 'transfer-in'].includes(receipt.kind) &&
-    BigInt(receipt.amount || 0) > 0n
-  )
-    tone = 'positive';
-  if (receipt.kind === 'received')
-    description =
-      'ETH sent to your deposit address, as your wallet found it there. It goes into your balance by itself unless that is off in Settings.';
-  if (receipt.kind === 'opened')
-    description =
-      'The contract holds your balance in a channel of its own, opened by a deposit into it: from your address, or from anyone.';
-  if (receipt.kind === 'taken-in')
-    description = `What was deposited into your channel, signed into your balance once the casino had seen it confirmed: from your address, a lock-in or anyone's deposit. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'collateral' && receipt.collateral)
-    description = `${exact(receipt.collateral)} µETH of the casino's cash locked into your balance: it pays your winnings before the bankroll does, and the casino cannot take it back until your balance closes.`;
-  if (receipt.kind === 'invest')
-    description = `Bought ${exact(receipt.shares)} shares; you hold ${exact(receipt.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'redeem')
-    description = `Sold ${exact(receipt.shares)} shares; you hold ${exact(receipt.holding)}. Your wallet collects the money into your balance.`;
-  if (receipt.kind === 'divest')
-    description = `Paid for redeemed bankroll shares. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'payment')
-    description = `${receipt.details?.group ? "Part of one of this game's rounds, paid into the casino's bankroll: Bets shows the round together." : "A payment this game charged, paid into the casino's bankroll."} Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'developer-bet') {
-    const open = receipt.payout === undefined;
-    status = open ? 'Waiting for the developer' : BigInt(receipt.payout) ? 'Payout collected' : 'Settled · no payout';
-    if (open) description = `Placed with the game’s developer. ${DEVELOPER_BET} Balance ${exact(receipt.balance)} µETH`;
   }
-  if (receipt.kind === 'developer-bet-payout')
-    description = `What a developer bet’s developer paid, checked by your wallet and collected into your balance. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'bank')
-    description = `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'withdrawn')
-    description = `Taken from your bank and collected into your balance. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'transfer')
-    description = `To ${receipt.name ?? receipt.details?.counterparty}, off-chain: their wallet collects it into their balance once they have one open, and nothing about it goes on-chain. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'transfer-in')
-    description = `From ${receipt.name ?? receipt.details?.counterparty}, collected into your balance. Beyond your own deposits, your balance is paid out of the casino's bankroll, as winnings are. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'earnings')
-    description = `Commission your games earned, collected into your balance. Balance ${exact(receipt.balance)} µETH`;
-  if (receipt.kind === 'loan')
-    description = `The network fee your deposit ${receipt.details?.id ?? ''} kept back, which the casino lent your balance: your next withdrawal or lock-in pays it back first, and a close is owed your balance less it. Balance ${exact(receipt.balance)} µETH`;
+  if (receipt.kind === 'developer-bet')
+    status =
+      receipt.payout === undefined
+        ? 'Waiting for the developer'
+        : BigInt(receipt.payout)
+          ? 'Payout collected'
+          : 'Settled · no payout';
   // The contract makes a withdrawal or a lock-in a claim under its ID once the casino, or anyone, sends it, and pays what
   // it can at once; anyone can see how it stands. One that pays the contract, as a lock-in does, goes into the account's
   // own channel.
@@ -360,12 +408,6 @@ export function receiptSummary(
   const notice =
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or retry it from your deposit address with the saved transaction details.'
-      : receipt.kind === 'close-started'
-        ? 'A close without the casino can be challenged for 7 days. Then finish it under Settings → Recovery.'
-        : receipt.kind === 'bet-disputed'
-          ? 'The casino has 7 days to settle the disputed bet on-chain; if it does not, the bet counts as won. Then finish the close under Settings → Recovery.'
-          : receipt.kind === 'closure'
-            ? 'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.'
-            : undefined;
+      : kind?.notice;
   return { title, status, tone, amount, amountLabel, description, notice };
 }
