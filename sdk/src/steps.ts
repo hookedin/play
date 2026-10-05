@@ -67,13 +67,13 @@ export function next(node: StepNode, side: Side, outcome: bigint): StepNode {
  * The cash every node needs, backward from `owed`, what the developer owes on each leaf, against `bankroll`: a leaf
  * needs what is owed on it, a node whose children need the same cash needs that, and any other node the least cash
  * whose bet between its children the casino's rule admits. More cash is never less safe for the bankroll, and a stake
- * of the whole difference cannot lose it anything, so the search is a bisection.
+ * of the whole difference cannot lose it anything, so the search is a bisection. A bankroll of nothing admits no bet,
+ * so against it every node needs the cash of its dearer child: the developer's bank carries the whole walk.
  */
 export function priceSteps(owed: readonly bigint[], bankroll: bigint): StepPlan {
   if (!owed.length || owed.some(amount => typeof amount !== 'bigint' || amount < 0n))
     throw new RangeError('a walk owes a whole amount on each of at least one outcome');
-  if (typeof bankroll !== 'bigint' || bankroll <= 0n)
-    throw new RangeError('a walk is priced against a positive bankroll');
+  if (typeof bankroll !== 'bigint' || bankroll < 0n) throw new RangeError('a walk is priced against a whole bankroll');
   const cash = new Map<string, bigint>();
   const price = (node: StepNode): bigint => {
     let needed: bigint;

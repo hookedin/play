@@ -86,6 +86,20 @@ test('the least cash a node needs is the least its bet between its children is a
     }
 });
 
+test('against a bankroll of nothing, a walk starts with the most it owes and stakes the whole difference at each level', () => {
+  const owed = owedOn(37, 3, 36n * 10n ** 18n),
+    plan = priceSteps(owed, 0n);
+  assert.equal(
+    stepsCash(plan),
+    owed.reduce((most, amount) => (amount > most ? amount : most)),
+  );
+  for (let leaf = 0; leaf < 37; leaf++)
+    for (const { node } of route(37, leaf)) {
+      const bet = stepBet(plan, node);
+      if (bet) assert.equal(bet.stake, bet.prize);
+    }
+});
+
 test('each pocket of a 37-pocket wheel is reached with its share of the outcomes, whichever sides the bets name', () => {
   for (const owed of [owedOn(37, 4, 10n ** 18n), Array(37).fill(0n)]) {
     const plan = priceSteps(owed, 10n ** 21n);
@@ -120,6 +134,6 @@ test('a verifier refuses steps that do not walk to one pocket', () => {
   assert.equal(stepOutcome(2, [{ side: 'right', chance: String(Q / 2n), outcome: '0' }]), 1);
   assert.throws(() => priceSteps([], 1n), /at least one outcome/);
   assert.throws(() => priceSteps([1n, -1n], 1n), /whole amount/);
-  assert.throws(() => priceSteps([1n, 2n], 0n), /positive bankroll/);
+  assert.throws(() => priceSteps([1n, 2n], -1n), /whole bankroll/);
   assert.throws(() => stepBet(priceSteps([1n, 2n], 10n ** 18n), { lo: 1, hi: 2 }), /two outcomes or more/);
 });

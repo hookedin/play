@@ -60,8 +60,9 @@ node needs the least cash whose bet between its children the casino's rule, [`ad
 dearer side's chance. More cash is never less safe for the bankroll, and a stake of the whole difference cannot lose it
 anything, so the search is a bisection. The casino admits a developer's casino bet against its virtual bankroll when the
 bet arrives, so price against the virtual bankroll it reports, half its bankroll, as roulette does. Throws a
-`RangeError` unless `owed` holds at least one amount, every
-amount is a nonnegative bigint and `bankroll` is a positive one.
+`RangeError` unless `owed` holds at least one amount and every amount and `bankroll` is a nonnegative bigint. A bankroll
+of nothing admits no bet, so against it every node needs the cash of its dearer child: the developer's bank carries the
+whole walk, and the casino declines its bets and reveals their rounds.
 
 ### `stepsCash`
 
