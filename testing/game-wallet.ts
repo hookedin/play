@@ -178,11 +178,12 @@ export async function gameWallet({
   };
   const rounds = new Map<string, { id: string; createdAt: number; seed?: string; casinoBet?: DeveloperCasinoBet }>();
   // Developer bets, what each settled bet owes this player until the wallet collects it, the order bets were placed and
-  // settled in, and the developer's wait for the next bet.
+  // settled in, each bet's ID, which a cursor names, and the developer's wait for the next bet.
   const developerBets = new Map<string, PublicDeveloperBet>(),
     owed = new Map<string, bigint>(),
     placed = new Map<string, number>(),
-    order = new Map<string, number>();
+    order = new Map<string, number>(),
+    ids = new Map<string, string>();
   let waiting: () => void = () => {};
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
@@ -213,17 +214,14 @@ export async function gameWallet({
   /** A page of developer bets, as the casino's feeds give them: open ones in the order they were placed, settled ones
    * in the order they settled. */
   const page = (bets: PublicDeveloperBet[], settled: boolean, after: string, limit: number) => {
-    if (!/^(0|[1-9][0-9]*)?$/.test(after)) throw refused(400, 'invalid', 'Invalid developer bet cursor or limit');
-    const at = settled ? order : placed;
+    const at = settled ? order : placed,
+      from = [...ids].find(([, id]) => id === after)?.[0];
+    if (after && !(from && at.has(from))) throw refused(400, 'invalid', 'Invalid developer bet cursor or limit');
     const all = bets
-      .filter(bet => bet.status === (settled ? 'settled' : 'open') && at.get(bet.bet)! > Number(after || '0'))
+      .filter(bet => bet.status === (settled ? 'settled' : 'open') && at.get(bet.bet)! > (from ? at.get(from)! : 0))
       .sort((a, b) => at.get(a.bet)! - at.get(b.bet)!);
     const bets$ = all.slice(0, limit);
-    return {
-      bets: bets$,
-      cursor: String(bets$.length ? at.get(bets$.at(-1)!.bet) : after || '0'),
-      more: all.length > limit,
-    };
+    return { bets: bets$, cursor: bets$.length ? ids.get(bets$.at(-1)!.bet)! : after, more: all.length > limit };
   };
   const make = () => {
     const wallet = new CasinoWallet({ network: 'local', storage });
@@ -274,7 +272,7 @@ export async function gameWallet({
       if (path.endsWith('/payouts'))
         return [...owed]
           .slice(0, MAX_PAYOUTS)
-          .map(([source, amount]) => ({ source, index: 0, amount: String(amount) }));
+          .map(([source, amount]) => ({ source, record: ids.get(source) ?? source, amount: String(amount) }));
       const channel = /^\/api\/channels\/(0x[0-9a-f]{64})\/operations$/.exec(path)?.[1];
       if (!channel) throw refused(404, 'not-found', `The stub casino has no ${path}`);
       const { request, details, signature, seed, quote, rejectionSignature } = body as any,
@@ -426,6 +424,7 @@ export async function gameWallet({
         meta: details.meta,
       });
       placed.set(hash, placed.size + 1);
+      ids.set(hash, crypto.randomUUID());
       waiting();
       return settle(channel, request, details, signature, ZeroHash, ZeroHash, 0n);
     };

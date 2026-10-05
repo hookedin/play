@@ -303,7 +303,7 @@ export async function openGameRecord(key: string, push = true) {
         payout: BigInt(bet.payout),
         expected: bet.chance === undefined ? null : BigInt(bet.prize) * BigInt(bet.chance),
         maxPayout: bet.prize === undefined ? null : BigInt(bet.prize),
-        index: Number(bet.index),
+        id: bet.id,
       };
     });
     const totals = record.totals;

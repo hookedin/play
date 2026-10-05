@@ -50,6 +50,7 @@ casino holds at most 512 connections at once.
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Amounts                                                 | Decimal strings of wei: `"1000000000000000"` is 1,000 METH                                                                                                                                                      |
 | Hashes and IDs                                          | `0x` followed by 64 lowercase hex digits. Path parameters also take upper-case hex, except a channel's `:id`, which must be lowercase                                                                           |
+| Records and bets                                        | A UUIDv7 in lowercase, which says when the casino made the record: a game record's bet `id`, a payout's `record`, a cursor                                                                                      |
 | Addresses                                               | Checksummed in openings, profiles, statements, `contractAddress`, `operator`, a casino bet's `developer` and a game's `server`                                                                                  |
 | Times in milliseconds since the Unix epoch              | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                      |
 | Times in Unix seconds                                   | `expiresAt`, the fund's `at`, the observed block's `timestamp` and a channel's on-chain `deadline`                                                                                                              |
@@ -95,11 +96,11 @@ the meantime.
 ## Pages
 
 The developer bet lists return `{bets, cursor, more}`. Pass `cursor` back as `after` while `more` is `true`. Open bets
-come in the order they were placed and settled bets in the order they settled; each cursor is a decimal position in its
-order, which survives restarts. An open cursor goes on to the bets placed since, leaving out those settled meanwhile, so
-a server that follows it sees each bet once; start from the beginning to read every bet open now, and after `invalid`,
-which answers an open cursor the casino's records do not reach, as after a restore of its database. A settled cursor
-misses none: save it and resume from it, even after an empty page. `GET /api/players` and `GET /api/games/:key` take a
+come in the order they were placed and settled bets in the order they settled; each cursor is the ID of the page's last
+bet, or after an empty page the cursor it was given, so it survives restarts. An open cursor goes on to the bets placed
+since, leaving out those settled meanwhile, so a server that follows it sees each bet once; start from the beginning to
+read every bet open now, and after `invalid`, which answers a cursor that names no bet the casino placed, as after a
+restore of its database. A settled cursor misses none: save it and resume from it, even after an empty page. `GET /api/players` and `GET /api/games/:key` take a
 `limit` and have no cursor.
 
 ## Budgets and queues

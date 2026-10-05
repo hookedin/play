@@ -592,10 +592,15 @@ export class ChannelClient extends WalletTransactions {
     try {
       for (const status of ['open', 'settled'] as const) {
         let after = status === 'settled' ? this.developerBetCursor : '';
+        const read = () => this.api(`/api/account/developer-bets?status=${status}&after=${encodeURIComponent(after)}`);
         for (;;) {
-          const page: PlayerDeveloperBets = await this.api(
-            `/api/account/developer-bets?status=${status}&after=${encodeURIComponent(after)}`,
-          );
+          const page: PlayerDeveloperBets = await read().catch(async (error: any) => {
+            // A cursor the casino does not know, as after a restore of its database: the feed is read from the start.
+            if (!after || error.code !== 'invalid') throw error;
+            await this.exclusive(() => this.save(undefined, { developerBetCursor: '' }), { wait: true });
+            after = '';
+            return read();
+          });
           if (
             !Array.isArray(page.bets) ||
             page.bets.length > 100 ||
@@ -607,7 +612,8 @@ export class ChannelClient extends WalletTransactions {
           await this.exclusive(
             async () => {
               if (this.address !== address) return;
-              if (status === 'settled' && Number(page.cursor) <= Number(this.developerBetCursor)) return;
+              // Another refresh moved the feed on since this page was read: it saw this page already.
+              if (status === 'settled' && this.developerBetCursor !== after) return;
               const developerBets = { ...this.developerBets };
               for (const state of page.bets) {
                 if (state.status !== status) throw new Error('Invalid bet list');
@@ -955,7 +961,7 @@ export class ChannelClient extends WalletTransactions {
           await this.perform(
             'transfer-in',
             { amount: payout.amount, source: payout.source, name },
-            `transfer:${payout.source}:${payout.index}`,
+            `transfer:${payout.source}:${payout.record}`,
           ),
         );
         continue;
@@ -966,7 +972,7 @@ export class ChannelClient extends WalletTransactions {
           at = owed.indexOf(String(payout.amount));
         if (at < 0) continue;
         collected.push(
-          await this.perform('divest', { amount: payout.amount, source: FUND_ID }, `divest:${payout.index}`),
+          await this.perform('divest', { amount: payout.amount, source: FUND_ID }, `divest:${payout.record}`),
         );
         await this.exclusive(() => this.save(undefined, { fund: { ...this.fund, owed: owed.toSpliced(at, 1) } }), {
           wait: true,
@@ -984,7 +990,7 @@ export class ChannelClient extends WalletTransactions {
           await this.perform(
             'withdrawn',
             { amount: payout.amount, source: game, name: held.name },
-            `bank:${payout.index}`,
+            `bank:${payout.record}`,
           ),
         );
         await this.exclusive(

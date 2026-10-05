@@ -452,7 +452,7 @@ export class CasinoWallet extends GameSessions {
       // channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
       developerBets: saved?.developerBets || {},
-      developerBetCursor: saved?.developerBetCursor || '0',
+      developerBetCursor: saved?.developerBetCursor || '',
       developerBetError: null,
       banks: saved?.banks || {},
       autoDeposit: saved?.autoDeposit ?? true,

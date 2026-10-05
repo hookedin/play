@@ -38,22 +38,21 @@ nothing else here on trust ([how it pins its deployment](../reference/deployment
 
 The casino's health, its books, the last observed block and the commit it runs.
 
-| Response field      | Type           | Meaning                                                                                                                                 |
-| ------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`            | string         | Chain observation: `starting`, `reconciling`, `ready` or `error`. The casino signs only when `ready`                                    |
-| `lastCheck`         | number         | When the last observation finished                                                                                                      |
-| `stale`             | boolean        | `true` when `status` is not `ready` or the last observation is more than 60 seconds old                                                 |
-| `lastProgress`      | number         | When the chain was last seen to advance                                                                                                 |
-| `observationError`  | string or null | Why the last observation failed                                                                                                         |
-| `alerts`            | array          | What is wrong, below                                                                                                                    |
-| `ownerTransaction`  | string or null | The hash of the casino's owner transaction in flight: a challenge, a withdrawal, or an idle channel's close, finalization or collection |
-| `channels`          | number         | Channels active or closing                                                                                                              |
-| `signingLogRecords` | number         | Records in the casino's signing history                                                                                                 |
-| `signingLogDigest`  | bytes32        | The digest of its last record                                                                                                           |
-| `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                 |
-| `block`             | object or null | The last confirmed block the casino observed, `{number, hash, timestamp}`                                                               |
-| The books           | strings        | Below                                                                                                                                   |
-| `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                        |
+| Response field     | Type           | Meaning                                                                                                                                 |
+| ------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`           | string         | Chain observation: `starting`, `reconciling`, `ready` or `error`. The casino signs only when `ready`                                    |
+| `lastCheck`        | number         | When the last observation finished                                                                                                      |
+| `stale`            | boolean        | `true` when `status` is not `ready` or the last observation is more than 60 seconds old                                                 |
+| `lastProgress`     | number         | When the chain was last seen to advance                                                                                                 |
+| `observationError` | string or null | Why the last observation failed                                                                                                         |
+| `alerts`           | array          | What is wrong, below                                                                                                                    |
+| `ownerTransaction` | string or null | The hash of the casino's owner transaction in flight: a challenge, a withdrawal, or an idle channel's close, finalization or collection |
+| `channels`         | number         | Channels active or closing                                                                                                              |
+| `signingLogDigest` | bytes32        | The digest of the last record in the casino's signing history                                                                           |
+| `queueDepth`       | number         | Requests waiting in the casino's queues                                                                                                 |
+| `block`            | object or null | The last confirmed block the casino observed, `{number, hash, timestamp}`                                                               |
+| The books          | strings        | Below                                                                                                                                   |
+| `commit`           | string or null | The source commit the casino runs, when its deployment names one                                                                        |
 
 The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
 
@@ -142,13 +141,13 @@ takes it. Declined bets and reveals do not appear. An unknown key answers with a
 | ------- | ------ | ----------------------------------------------------------------------- |
 | `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players` |
 
-| Response field  | Type    | Meaning                                                                                    |
-| --------------- | ------- | ------------------------------------------------------------------------------------------ |
-| `key`           | bytes32 | The game, lowercase                                                                        |
-| `bank`          | string  | What the game's bank holds now: nothing for a game nobody published                        |
-| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled              |
-| `totals`        | object  | `{bets, staked, paid, expected, priced, earned}`, below                                    |
-| `bets`          | array   | `{index, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
+| Response field  | Type    | Meaning                                                                                 |
+| --------------- | ------- | --------------------------------------------------------------------------------------- |
+| `key`           | bytes32 | The game, lowercase                                                                     |
+| `bank`          | string  | What the game's bank holds now: nothing for a game nobody published                     |
+| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled           |
+| `totals`        | object  | `{bets, staked, paid, expected, priced, earned}`, below                                 |
+| `bets`          | array   | `{id, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
 
 The totals are the players' bets: the game's own casino bets are listed, and add up to nothing here. `bets` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
@@ -157,10 +156,11 @@ staked and paid, a round's steps each on its own, so only `paid − staked` is w
 `expected / (priced × 2^64)`. A developer bet has no odds and counts in neither. `earned` is what the game's bank took
 of their [commission](../games/publishing.md#earnings), its own casino bets' included.
 
-A bet's `index` is its place in the casino's signing history: the record that settled it times 1000, plus its place in
-that record, so a later bet has a higher one. `kind` is `casino`, `developer`, or `bank` for the game's casino bet from
-its bank. Its player is their `uname` and `discordUsername`, the game's casino bet its developer's. `stake` and
-`payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and `at` is when it settled.
+The bets are the latest settled, newest first. A bet's `id` is a UUIDv7, the ID of the casino's record that placed it:
+it says when the bet was placed and nothing of how many bets there are. `kind` is `casino`, `developer`, or `bank` for
+the game's casino bet from its bank. Its player is their `uname` and `discordUsername`, the game's casino bet its
+developer's. `stake` and `payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and
+`at` is when it settled.
 
 ## Rounds and developer bets
 
@@ -209,17 +209,17 @@ has one wait at a time, a server's key at most 4, and the casino 128 ([budgets](
 published game is waited for: a server whose game is taken down reads its bets without waiting. A server follows its
 game's bets by waiting again with each page's `cursor`.
 
-| Query    | Type    | Meaning                                                                                         |
-| -------- | ------- | ----------------------------------------------------------------------------------------------- |
-| `game`   | bytes32 | The game's key; required                                                                        |
-| `status` | string  | `open` (the default) or `settled`                                                               |
-| `group`  | string  | Only the bets of this group, matched exactly                                                    |
-| `after`  | string  | The `cursor` of the previous page: a decimal position in the order bets were placed, or settled |
-| `limit`  | number  | How many, a whole number from 1 to 256; default 100                                             |
-| `wait`   | number  | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25          |
+| Query    | Type    | Meaning                                                                                |
+| -------- | ------- | -------------------------------------------------------------------------------------- |
+| `game`   | bytes32 | The game's key; required                                                               |
+| `status` | string  | `open` (the default) or `settled`                                                      |
+| `group`  | string  | Only the bets of this group, matched exactly                                           |
+| `after`  | string  | The `cursor` of the previous page: the ID of its last bet                              |
+| `limit`  | number  | How many, a whole number from 1 to 256; default 100                                    |
+| `wait`   | number  | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25 |
 
-`invalid` answers a missing or malformed key, status, cursor, limit or wait, and an open cursor the casino's records do
-not reach. `unauthorized` answers a wait without the access of the published game's server, and `busy` one too many.
+`invalid` answers a missing or malformed key, status, cursor, limit or wait, and a cursor that names no bet, or for
+settled bets no settled bet. `unauthorized` answers a wait without the access of the published game's server, and `busy` one too many.
 
 ## Local development
 

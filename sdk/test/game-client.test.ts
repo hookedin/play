@@ -863,14 +863,15 @@ test("the stub developer pages a game's bets 100 at a time in the order they wer
     placed,
   );
   const waiting = f.developer.bets({ after: rest.cursor, wait: 25 }),
-    next = (await w.gameDeveloperBet({ id: 'next', stake: '1', meta: {} })).bet;
+    next = (await w.gameDeveloperBet({ id: 'next', stake: '1', meta: {} })).bet,
+    last = await waiting;
   assert.deepEqual(
-    (await waiting).bets.map(bet => bet.bet),
+    last.bets.map(bet => bet.bet),
     [next],
   );
-  // A newer wait answers the one before, and the stub refuses what the casino refuses.
-  const older = f.developer.bets({ after: String(placed.length + 1), wait: 25 });
-  await f.developer.bets({ after: String(placed.length + 1), wait: 1 });
+  // A newer wait answers the one before, and the stub refuses what the casino refuses: a cursor that names no bet.
+  const older = f.developer.bets({ after: last.cursor, wait: 25 });
+  await f.developer.bets({ after: last.cursor, wait: 1 });
   assert.deepEqual((await older).bets, []);
   for (const query of [{ wait: 26 }, { wait: 0.5 }, { status: 'settled' as const, wait: 1 }, { after: next! }])
     await assert.rejects(f.developer.bets(query), /Wait 1 to 25 seconds|cursor/);

@@ -28,10 +28,10 @@ export interface BetRow {
   expected: bigint | null;
   /** The most the bet could pay, when the reader knows it. */
   maxPayout?: bigint | null;
-  /** This wallet's own name for the bet. A public row has none: it is known by `index` instead. */
+  /** This wallet's own name for the bet. A public row has none: it is known by `id` instead. */
   operation?: string;
-  /** A public row's place in the casino's signing history, which orders every settled bet. */
-  index?: number;
+  /** A public row's ID in the casino's record, which says when it was placed and nothing of how many were. */
+  id?: string;
   /** This wallet's own receipt, whole: the odds, the preimages and the signatures it kept. A
    * public row has none, because the casino's list is only what anyone may read. */
   receipt?: any;
@@ -167,8 +167,8 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
       'bet-return',
     ),
   );
-  // This wallet's own operation ID is long: it is searched, not shown. A public row is its number in the game's record.
-  const named = row.operation ? `operation ${row.operation}` : row.index === undefined ? null : `bet #${row.index}`;
+  // This wallet's own operation ID is long: it is searched, not shown, and so is a public row's ID in the game's record.
+  const named = row.operation ? `operation ${row.operation}` : row.id === undefined ? null : `bet ${row.id}`;
   if (named) {
     item.dataset.search = `${named} ${row.group ?? ''}`.toLowerCase();
     item.title = onOpen ? `Open this bet in full · ${named}` : named[0].toUpperCase() + named.slice(1);
@@ -207,7 +207,7 @@ export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonl
     figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} METH`),
   );
   item.dataset.search =
-    `round group ${last.group} ${rows.map(row => row.operation ?? `bet #${row.index}`).join(' ')}`.toLowerCase();
+    `round group ${last.group} ${rows.map(row => row.operation ?? `bet ${row.id}`).join(' ')}`.toLowerCase();
   item.title = onOpen ? `Open the round's ${rows.length} bets` : `The round's ${rows.length} bets`;
   return item;
 }

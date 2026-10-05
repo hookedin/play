@@ -283,14 +283,14 @@ publishing a game answer with it too.
 ### `GET /api/account/payouts`
 
 What the casino owes the account, for its wallet to collect into its balance with credits, transfers from other players
-among them. The list holds at most 256 entries: every payout not yet collected, ordered by source and index. The wallet
-collects each with a credit whose details name `source` as their `counterparty`, for exactly `amount`, and the next
-reply lists the rest.
+among them. The list holds at most 256 entries: every payout not yet collected, ordered by source and then by record.
+The wallet collects each with a credit whose details name `source` as their `counterparty`, for exactly `amount`, and
+the next reply lists the rest.
 
 | Response field    | Type           | Meaning                                                                                                                                                                                                                                        |
 | ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `source`          | string         | `FUND_ID` for redeemed shares; a game's key for money taken out of its bank; a developer bet's hash for what its settlement paid; `~` and the sender's uname for a transfer ([counterparties](../reference/signed-messages.md#counterparties)) |
-| `index`           | number         | The index of the signing-history record that made it owed                                                                                                                                                                                      |
+| `record`          | string         | The ID of the signing-history record that made it owed                                                                                                                                                                                         |
 | `amount`          | string         | What is owed                                                                                                                                                                                                                                   |
 | `discordUsername` | string or null | Transfers only: the Discord username the sender goes by now, if any                                                                                                                                                                            |
 
@@ -301,13 +301,14 @@ The account's developer bets, across all its channels: `{bets, cursor, more}` ([
 and `settledAt`. `collected` is `true` once a positive payout has been credited to a channel; a payout of `"0"` needs no
 collecting and stays `false`.
 
-| Query    | Type   | Meaning                                                                                         |
-| -------- | ------ | ----------------------------------------------------------------------------------------------- |
-| `status` | string | `open` or `settled`; required                                                                   |
-| `after`  | string | The `cursor` of the previous page: a decimal position in the order bets were placed, or settled |
-| `limit`  | number | How many, a whole number from 1 to 100; default 50                                              |
+| Query    | Type   | Meaning                                                   |
+| -------- | ------ | --------------------------------------------------------- |
+| `status` | string | `open` or `settled`; required                             |
+| `after`  | string | The `cursor` of the previous page: the ID of its last bet |
+| `limit`  | number | How many, a whole number from 1 to 100; default 50        |
 
-`invalid` answers a missing status, or a malformed cursor or limit.
+`invalid` answers a missing status, a malformed limit, or a cursor that names no bet, or for settled bets no settled
+bet.
 
 ### The bankroll fund
 

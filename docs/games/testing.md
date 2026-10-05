@@ -87,7 +87,7 @@ What the stub holds a game to:
 - `developer.bets()` pages as the casino does, 100 bets at a time, open ones in the order they were placed: page with
   `after` and `more`, and the size never matters. With `wait`, a page with no open bets is held until the next bet is
   placed or the time is up, and the stub refuses what the casino refuses: a wait outside 1 to 25 seconds or on settled
-  bets, and a cursor that is not a decimal position.
+  bets, and a cursor that names no bet.
 
 ### `bridgeTo`
 
