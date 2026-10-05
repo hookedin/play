@@ -84,15 +84,15 @@ reply you did not expect.
 The house's games are what `@hookedin` publishes, each with its README, its tests and its deployment. Start from the
 one closest to your game.
 
-| Game                                                    | What it shows                                                                   | Copy                                                                                             |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [Dice](../../games/dice/)                               | The smallest `RoundClient` game: one decision, two outcomes                     | [src/rules.ts](../../games/dice/src/rules.ts), [src/game.ts](../../games/dice/src/game.ts)       |
-| [Plinko](../../games/plinko/)                           | One decision of many outcomes, collapsed into one bet per drop                  | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts) |
-| [Samson](../../games/samson/)                           | A 243-ways slot whose odds are counted exactly from its reels                   | [src/math.ts](../../games/samson/src/math.ts)                                                    |
-| [Mines](../../games/mines/)                             | Reveal or cash out: the simplest multi-step graph                               | [src/rules.ts](../../games/mines/src/rules.ts)                                                   |
-| [Blackjack](https://github.com/hookedin/game-blackjack) | Doubles, splits and insurance, with precomputed prices                          | The whole repository                                                                             |
-| [Roulette](https://github.com/hookedin/game-roulette)   | Many players' developer bets on one spin, backed by the wheel's casino bets     | The whole repository                                                                             |
-| [Crash](https://github.com/hookedin/game-crash)         | Many players on one flight, each a developer bet paid from the game's bank | The whole repository                                                                             |
+| Game                                                    | What it shows                                                               | Copy                                                                                             |
+| ------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [Dice](../../games/dice/)                               | The smallest `RoundClient` game: one decision, two outcomes                 | [src/rules.ts](../../games/dice/src/rules.ts), [src/game.ts](../../games/dice/src/game.ts)       |
+| [Plinko](../../games/plinko/)                           | One decision of many outcomes, collapsed into one bet per drop              | [src/tables.ts](../../games/plinko/src/tables.ts), [src/drop.ts](../../games/plinko/src/drop.ts) |
+| [Samson](../../games/samson/)                           | A 243-ways slot whose odds are counted exactly from its reels               | [src/math.ts](../../games/samson/src/math.ts)                                                    |
+| [Mines](../../games/mines/)                             | Reveal or cash out: the simplest multi-step graph                           | [src/rules.ts](../../games/mines/src/rules.ts)                                                   |
+| [Blackjack](https://github.com/hookedin/game-blackjack) | Doubles, splits and insurance, with precomputed prices                      | The whole repository                                                                             |
+| [Roulette](https://github.com/hookedin/game-roulette)   | Many players' developer bets on one spin, backed by the wheel's casino bets | The whole repository                                                                             |
+| [Crash](https://github.com/hookedin/game-crash)         | Many players on one flight, each a developer bet paid from the game's bank  | The whole repository                                                                             |
 
 The four static games live in play's [games/](../../games/) folder. From play's root, after `npm ci`,
 `node sdk/bin/hookedin-game.js serve games/<id>` serves one at `http://127.0.0.1:4185/`. To make one your own, start a

@@ -94,12 +94,12 @@ Anyone can judge a game by what it has paid, without taking the game's word for 
 A developer bet's stake is with the game's developer from the moment it is placed. The wallet's Activity tab lists your
 developer bets under **Developer bets** until what each was paid has been collected:
 
-| Status                    | Meaning                                                                       |
-| ------------------------- | ----------------------------------------------------------------------------- |
+| Status                    | Meaning                                                                  |
+| ------------------------- | ------------------------------------------------------------------------ |
 | Waiting for the developer | Open: the stake is in the game's bank, and the developer has not settled |
-| Payout ready              | Settled, and the payout is not yet in your balance                            |
-| Payout collected          | The payout is in your balance                                                 |
-| Settled · no payout       | Settled for nothing: there is nothing to collect                              |
+| Payout ready              | Settled, and the payout is not yet in your balance                       |
+| Payout collected          | The payout is in your balance                                            |
+| Settled · no payout       | Settled for nothing: there is nothing to collect                         |
 
 The wallet asks the casino for your settled bets every 10 minutes while its tab is visible, when you press ↻ beside
 its title, and at once when the game asks about the bet. For each, it checks the

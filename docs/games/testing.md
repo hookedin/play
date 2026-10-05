@@ -61,7 +61,7 @@ the game's bank holds before any developer bet pays its stake in: 10^12 wei each
 | `identity(name?, declared?)` | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about it. Every name given here is published  |
 | `developer`                  | A stub [`Developer`](../sdk/developer.md#developer) with the fixture's key, serving the game named `test`, to hand to your server's code           |
 | `storage`, `owner`, `player` | What the wallet saves, the stub casino's signing key, and the player's key                                                                         |
-| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the game's bank holds                                                  |
+| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the game's bank holds                                                       |
 | `secretOf(round)`            | A round's secret, which only the casino knows until it reveals the round                                                                           |
 | `reload()`                   | A wallet started afresh from what this one saved, as a reload of the page starts one                                                               |
 | `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                           |

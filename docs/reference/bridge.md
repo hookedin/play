@@ -206,7 +206,7 @@ the player has allowed them, a developer bet is refused with `developer-bets-not
 | Param   | Type           | Meaning                                                                                                                                |
 | ------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`    | `string`       | The game's ID for the operation                                                                                                        |
-| `stake` | decimal string | Paid into the game's bank; at most the game's allowance and what its group holds                                                  |
+| `stake` | decimal string | Paid into the game's bank; at most the game's allowance and what its group holds                                                       |
 | `meta`  | object         | The game's own JSON, saying what the bet is. The casino keeps it with the bet and never reads it; the developer's server settles by it |
 | `group` | `string`       | Optional: the group the bet belongs to, such as a match or a spin                                                                      |
 
@@ -324,10 +324,10 @@ Every reply about an operation, whichever method asked, is one receipt under the
 never the signed evidence. The evidence, the channel and its balance stay in the wallet, and every receipt a game gets
 is one the wallet checked.
 
-| `kind`          | `status`                                                                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `casino-bet`    | `settled`: done, and what it paid is in the player's balance. `rejected`: declined, the balance unchanged, with a signed checkpoint the wallet checked            |
-| `payment`       | `settled` or `rejected`, as for a casino bet                                                                                                                      |
+| `kind`          | `status`                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `casino-bet`    | `settled`: done, and what it paid is in the player's balance. `rejected`: declined, the balance unchanged, with a signed checkpoint the wallet checked       |
+| `payment`       | `settled` or `rejected`, as for a casino bet                                                                                                                 |
 | `developer-bet` | `open`: its stake is in the game's bank. `settled`: its developer settled it and the wallet collected what that pays. `rejected`: the casino did not take it |
 
 | Field     | Type           | Present                                                                                                                    |
