@@ -1262,6 +1262,69 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .send-form {
   display: contents;
 }
+/* Transfer's players: the ones of the last transfers, a tap each, and the one the name typed belongs to. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 12px 0 4px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip:hover {
+  background: var(--raised);
+}
+.chip .avatar,
+.payee .avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+.payee {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e121b;
+}
+.payee .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+}
+.payee div {
+  min-width: 0;
+}
+.payee strong,
+.payee small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.payee small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
 .claims {
   margin-top: 14px;
 }

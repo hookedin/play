@@ -138,11 +138,12 @@ export function renderProfile() {
   $<HTMLButtonElement>('unlink-discord').disabled = uiBusy;
 }
 
-// Another player's page opens Transfer to them.
+// Another player's page opens Transfer to them: the amount is what is left to enter.
 $('profile-transfer').addEventListener('click', () => {
   $<HTMLInputElement>('transfer-to').value = showName(shown!.profile);
   openWallet('transfer');
   lookUpPayee();
+  $('transfer-amount').focus();
 });
 act('verify-discord', async () => {
   verifying = await wallet.discordCode();

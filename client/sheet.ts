@@ -28,6 +28,7 @@ import {
   short,
   showName,
   showOnTop,
+  shortDate,
   showSheet,
   toast,
   typedAmount,
@@ -109,15 +110,22 @@ const withdrawRequest = () =>
     maximum: wallet.withdrawable(),
     channel: true,
   });
-/** The player Settings → Transfer names: the name typed, with its sigil, and once the casino has answered, their public
- * profile, or why there is none. */
+/** The player Transfer names: the name typed, with its sigil, and once the casino has answered, their public profile,
+ * or why there is none. */
 let payee: { name: string; profile: any; error: string | null } | null = null;
 let lookingUp: ReturnType<typeof setTimeout> | undefined;
-/** Find the player whose name is typed under Transfer, a moment after the typing stops. A name typed without its
- * sigil is a uname when it reads like one, and otherwise a Discord username. */
+/** Find the player whose name is typed under Transfer, a moment after the typing stops. A link to a player's page is
+ * written as their name; a name typed without its sigil is a uname when it reads like one, and otherwise a Discord
+ * username. */
 export function lookUpPayee() {
   clearTimeout(lookingUp);
-  const typed = $<HTMLInputElement>('transfer-to').value.trim(),
+  const input = $<HTMLInputElement>('transfer-to');
+  if (/^https?:\/\//i.test(input.value.trim()))
+    try {
+      const target = parseRoute(new URL(input.value.trim()));
+      if (typeof target === 'object' && 'profile' in target) input.value = target.profile;
+    } catch {}
+  const typed = input.value.trim(),
     name = /^[@~]/.test(typed) ? typed : (UNAME.test(typed.toLowerCase()) ? '~' : '@') + typed;
   payee = typed
     ? {
@@ -125,7 +133,7 @@ export function lookUpPayee() {
         profile: null,
         error: /^[@~][A-Za-z0-9_.]{2,32}$/.test(name)
           ? null
-          : 'Enter a Discord username, such as @bob, or a uname, such as ~3byt9ocwnnzaxanmiz3stocj.',
+          : 'Enter a Discord username, such as @bob, a uname, such as ~3byt9ocwnnzaxanmiz3stocj, or a link to their page.',
       }
     : null;
   const asked = payee;
@@ -312,8 +320,8 @@ function renderWithdraw(state: SendState) {
         `${receives}${wallet.withdrawalFee ? ` Your balance also pays the casino ${formatAmount(wallet.withdrawalFee)} METH for sending it.` : ''} Check the full address before confirming.`);
   $('withdraw-help').classList.toggle('check-failed', !blocked && touched && Boolean(request.error));
 }
-/** A transfer as Settings → Transfer has it: the amount, the player the name typed belongs to, and what is wrong with
- * either, or only a `prompt` for what is still to come: the name, the casino's answer to who goes by it, or the amount. */
+/** A transfer as Transfer has it: the amount, the player the name typed belongs to, and what is wrong with either, or
+ * only a `prompt` for what is still to come: the name, the casino's answer to who goes by it, or the amount. */
 function transferRequest() {
   const typed = $<HTMLInputElement>('transfer-amount').value.trim(),
     amount = typedIn(typed, 'METH'),
@@ -331,7 +339,7 @@ function transferRequest() {
               ? `At most ${exact(most)} METH can go.`
               : null),
     missing = !payee
-      ? 'Enter the Discord username or uname of the player it goes to.'
+      ? 'Choose who it goes to: their Discord username, uname or a link to their page.'
       : !profile
         ? `Looking up ${payee.name}…`
         : amount === null
@@ -339,23 +347,80 @@ function transferRequest() {
           : null;
   return { profile, amount, error: wrong || missing, prompt: !wrong };
 }
-/** Settings → Transfer: part of the signed balance, or all of it with Max, to the player whose name is typed. */
+/** The players this account last transferred to or received from, newest first: the uname each transfer named, and the
+ * name they went by then. */
+function recentPlayers() {
+  const players = new Map<string, string>();
+  for (const receipt of wallet.history) {
+    const uname = receipt.details?.counterparty;
+    if (
+      ['transfer', 'transfer-in'].includes(receipt.kind) &&
+      receipt.status !== 'rejected' &&
+      uname?.startsWith('~') &&
+      !players.has(uname)
+    )
+      players.set(uname, receipt.name || uname);
+  }
+  return [...players].slice(0, 6);
+}
+/** A player's badge: the first letter of their name. */
+const badge = (name: string) => h('span', { className: 'avatar' }, name.charAt(1).toUpperCase());
+/** Transfer: who it goes to, picked from the players of this account's last transfers or found by the name typed, then
+ * part of the signed balance, or all of it with Max. */
 function renderTransfer(state: SendState) {
   const { open, busy } = state,
     { profile, amount, error, prompt } = transferRequest(),
     blocked = sendBlocked(state, 'Transfer'),
-    touched = Boolean(
-      $<HTMLInputElement>('transfer-to').value.trim() || $<HTMLInputElement>('transfer-amount').value.trim(),
-    );
+    to = $<HTMLInputElement>('transfer-to').value.trim(),
+    touched = Boolean(to || $<HTMLInputElement>('transfer-amount').value.trim()),
+    found = profile && profile.uname !== wallet.uname ? profile : null;
   $('transfer-form').classList.toggle('hidden', !open);
+  // Until a name is typed, the players of this account's last transfers are a tap away.
+  const recent = recentPlayers(),
+    list = $('transfer-recent');
+  list.hidden = !recent.length || Boolean(to);
+  if (list.dataset.players !== JSON.stringify(recent)) {
+    list.dataset.players = JSON.stringify(recent);
+    list.replaceChildren(
+      ...recent.map(([uname, name]) =>
+        h('button', { type: 'button', className: 'chip', value: uname, title: uname }, badge(name), name),
+      ),
+    );
+  }
+  // The player the name belongs to, as their page shows them: the uname the transfer signs is the one under it.
+  $('transfer-payee').hidden = !found;
+  if (found)
+    $('transfer-payee').replaceChildren(
+      badge(showName(found)),
+      h(
+        'div',
+        null,
+        h('strong', null, showName(found)),
+        h(
+          'small',
+          null,
+          [
+            found.discordUsername ? `~${found.uname}` : '',
+            found.discordVerified
+              ? `Verified on Discord ${shortDate(found.discordVerified)}`
+              : `Joined ${shortDate(found.createdAt)}`,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        ),
+      ),
+    );
   $<HTMLButtonElement>('transfer').disabled = busy || Boolean(blocked) || Boolean(error);
-  $('transfer').textContent = `Transfer${amount === null ? '' : ` ${exact(amount)} METH`}`;
+  $('transfer').textContent =
+    `Transfer${amount === null ? '' : ` ${exact(amount)} METH`}${found ? ` to ${showName(found)}` : ''}`;
   $('transfer-help').textContent =
     blocked ??
     (!touched
-      ? 'Enter an amount, or Max, and the player it goes to: @username or ~uname.'
+      ? recent.length
+        ? 'Choose a player from your last transfers, or enter the name of another.'
+        : 'Enter the Discord username or uname of the player it goes to, or a link to their page.'
       : error ||
-        `${showName(profile)}${profile.discordUsername ? `, ~${profile.uname},` : ''} receives ${exact(amount!)} METH once their wallet collects it into their balance. No fee.`);
+        `${showName(profile)} receives ${exact(amount!)} METH once their wallet collects it into their balance. No fee.`);
   $('transfer-help').classList.toggle('check-failed', !blocked && touched && Boolean(error) && !prompt);
 }
 /** The account the saved-accounts list was last set to, so a render only moves it when that changes. */
@@ -916,6 +981,14 @@ act('add-to-balance', async () => {
 for (const id of ['withdraw-to', 'withdraw-amount', 'transfer-amount', 'address-send-to', 'collateral-buy-amount'])
   $<HTMLInputElement>(id).addEventListener('input', () => renderWallet());
 $<HTMLInputElement>('transfer-to').addEventListener('input', lookUpPayee);
+// A player picked from this account's last transfers: the amount is what is left to enter.
+$('transfer-recent').addEventListener('click', event => {
+  const chip = (event.target as Element).closest('button');
+  if (!chip) return;
+  $<HTMLInputElement>('transfer-to').value = chip.value;
+  lookUpPayee();
+  $('transfer-amount').focus();
+});
 // Switching Withdraw's unit keeps the amount typed, written in the other unit.
 $<HTMLSelectElement>('withdraw-unit').addEventListener('change', () => {
   const input = $<HTMLInputElement>('withdraw-amount'),

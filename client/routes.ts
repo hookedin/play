@@ -22,10 +22,10 @@ const PAGES: Record<string, { path: string; title: string }> = {
 const SHEET_TABS = {
   deposit: '/wallet',
   withdraw: '/wallet/withdraw',
+  transfer: '/wallet/transfer',
   activity: '/wallet/activity',
   keys: '/settings',
   deposits: '/settings/deposits',
-  transfer: '/settings/transfer',
   protection: '/settings/protection',
   recovery: '/settings/recovery',
 };

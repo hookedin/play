@@ -14,9 +14,9 @@ with your money. Its address is your **deposit address**. Nothing needs setting 
 deposit you [save your key](keys-and-recovery.md#your-key).
 
 **Wallet** in the top bar opens the wallet over the page you are on, a game going on under it: your balance, what the
-contract still owes you, and three tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw` and **Activity**
-at `/wallet/activity`. **Settings**, in the account menu, opens the same way at `/settings`, with a tab for each thing
-it is for: **Keys** at `/settings`, **Deposits** at `/settings/deposits`, **Transfer** at `/settings/transfer`,
+contract still owes you, and four tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw`, **Transfer** at
+`/wallet/transfer` and **Activity** at `/wallet/activity`. **Settings**, in the account menu, opens the same way at
+`/settings`, with a tab for each thing it is for: **Keys** at `/settings`, **Deposits** at `/settings/deposits`,
 **Protection** at `/settings/protection` and **Recovery** at `/settings/recovery`. Each address opens its tab, over the
 library when it is a link. Closing it, or Back, brings the page under it back.
 
@@ -126,10 +126,12 @@ much can be withdrawn now, and your balance is as it was. A withdrawal needs the
 
 ## Transfer
 
-**Transfer**, in Settings, gives part of your balance to another player: enter an amount in METH or choose **Max**, and
-their Discord username, such as `@bob`, or their uname, such as `~3byt9ocwnnzaxanmiz3stocj`. **Transfer METH** on
-another player's page opens it with their name filled in. The wallet shows who the name belongs to, and the uname it
-signs: a Discord username can pass to another member, a uname never does. It is how you give a friend METH to play with.
+**Transfer**, in the wallet, gives part of your balance to another player. Choose who it goes to: one of the players
+you last transferred to or received from, a tap each, or anyone by their Discord username, such as `@bob`, their uname,
+such as `~3byt9ocwnnzaxanmiz3stocj`, or a link to their page. **Transfer METH** on another player's page opens it with
+their name filled in. The wallet shows who the name belongs to, and the uname it signs: a Discord username can pass to
+another member, a uname never does. Then enter an amount in METH or choose **Max**. It is how you give a friend METH to
+play with.
 
 A transfer is off-chain: a debit your account signs, naming their uname, which costs no fee and names neither of your
 addresses anywhere, on-chain or to each other. The casino owes it to them until their wallet collects it into their
