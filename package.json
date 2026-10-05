@@ -7,7 +7,7 @@
   "description": "HookedIn player wallet, settlement contract, shared protocol, game SDK and the house's games",
   "repository": "github:hookedin/play",
   "engines": {
-    "node": ">=24.4"
+    "node": ">=26"
   },
   "exports": {
     "./sdk/engine": "./sdk/src/engine/index.ts",
@@ -34,7 +34,7 @@
     "ethers": "6.17.0"
   },
   "devDependencies": {
-    "@types/node": "24.13.5",
+    "@types/node": "26.6.4",
     "github-slugger": "2.0.0",
     "playwright-core": "1.63.0",
     "prettier": "3.9.8",

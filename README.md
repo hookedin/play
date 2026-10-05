@@ -17,7 +17,7 @@ The public half of [HookedIn](https://hookedin.com): the wallet served at <https
 
 ## Quick start
 
-Requires Node **24.4 or later** and npm. Node runs the TypeScript sources directly; nothing is emitted by `tsc`. The tests also need Foundry's `anvil` on `PATH` and an installed Google Chrome.
+Requires Node **26 or later** and npm. Node runs the TypeScript sources directly; nothing is emitted by `tsc`. The tests also need Foundry's `anvil` on `PATH` and an installed Google Chrome.
 
 ```sh
 npm ci

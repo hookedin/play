@@ -23,7 +23,7 @@ The [template](https://github.com/hookedin/game-template)'s workflow runs `npm u
 and builds, so every deploy takes play's newest commit, and the lockfile is only where a local install starts. There are
 no versions and no tags: a push to play's `main` is the release.
 
-- Node 24.4 or later.
+- Node 26 or later.
 - The package ships raw `.ts` files, with no compiled JavaScript and no declaration files.
   [`hookedin-game build`](../games/publishing.md#build) bundles a page with esbuild.
 - TypeScript checks the SDK as source. The template's `tsconfig.json` (`module` and `moduleResolution` `NodeNext`,

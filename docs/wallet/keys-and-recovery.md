@@ -98,7 +98,7 @@ and **Send it now** work, against the pinned contract through the pinned RPCs; p
 balance and locking in do not. Reload once the casino is back.
 
 With your key file, recovery needs play.hookedin.com no more than the casino: the same wallet builds from a checkout of
-this repository, with Node 24.4 or later, and serves at http://127.0.0.1:4184, where you import it. A passkey works only
+this repository, with Node 26 or later, and serves at http://127.0.0.1:4184, where you import it. A passkey works only
 at play.hookedin.com.
 
 ```sh

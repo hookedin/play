@@ -110,7 +110,7 @@ curl -s https://play.hookedin.com/main.js | shasum -a 256
 shasum -a 256 dist/main.js
 ```
 
-**The tests.** `npm test` needs Node 24.4 or later, Foundry's `anvil` on `PATH` (or named by `ANVIL_BIN`) and an
+**The tests.** `npm test` needs Node 26 or later, Foundry's `anvil` on `PATH` (or named by `ANVIL_BIN`) and an
 installed Google Chrome. It builds everything, type-checks every source and test, checks the committed
 [test vectors](../../vectors/protocol.json), and runs every suite in [test/](../../test/), [sdk/test/](../../sdk/test/)
 and each game's `test/`. The contract's suites deploy it on disposable Anvil chains and sign evidence by hand
