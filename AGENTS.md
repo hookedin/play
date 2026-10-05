@@ -11,7 +11,7 @@ complexity needs a concrete requirement, and an explanation of why nothing simpl
 
 Nothing here has been released, so there is nothing to stay compatible with. Ever.
 
-- Never worry about backward compatibility: no shims, no migrations, no fallbacks, no reserved fields, no deprecation
+- Never worry about backward compatibility: no shims, no fallbacks, no reserved fields, no deprecation
   paths. Change contracts, signed structures, APIs, schemas, storage and formats freely.
 - Never bump version numbers, and never cut version tags. Everything stays at the version it has. Repositories depend
   on each other's `main`; a push to `main` is the release.
@@ -19,6 +19,10 @@ Nothing here has been released, so there is nothing to stay compatible with. Eve
   comments, documents or commit messages. Describe what is, not what was. Delete old code; do not keep it, comment it
   out or point at it.
 - Deployments and their data are disposable. A fresh deployment is always an acceptable answer.
+
+When making changes to keep the production server the same, you can do manual migrations. As in, migratations that
+don't leave any cruft in the code. e.g. If there is a new field added, it's fine to just add it in production with
+some backfilled data.
 
 ## 3. Clean up immediately
 
