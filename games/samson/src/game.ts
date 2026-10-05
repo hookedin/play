@@ -333,7 +333,7 @@ async function spin() {
       session = await round.start({ stake, mode: mode() });
     } else {
       await round.restore();
-      await round.ensureAllowance(BigInt(session.cash), BigInt(session.setup.stake), session.id);
+      await round.checkAllowance(BigInt(session.cash), session.id);
     }
     const stake = session.setup.stake,
       machine = MACHINES[session.setup.mode === 'bonus' ? 'bonus' : 'base'];

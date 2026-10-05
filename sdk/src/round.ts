@@ -194,18 +194,11 @@ export class RoundClient {
   private save() {
     this.store.set(this.storageKey, JSON.stringify(plain(this.data)));
   }
-  /**
-   * Ask the wallet for a larger allowance when `group` may stake less than `required`; the player decides in the
-   * wallet's own dialog. The suggestion covers a few more rounds so one authorization lasts.
-   */
-  async ensureAllowance(required: bigint, stake: bigint, group?: string) {
-    const available = async () =>
-      BigInt((await this.call('game.allowance', group === undefined ? {} : { group })).allowance);
-    const before = await available();
-    if (before >= required) return;
-    await this.call('game.requestAllowance', { amount: String(required - before + 4n * stake) });
-    if ((await available()) < required)
-      throw new Error('Allow this game more ETH to play, or deposit if your balance is empty.');
+  /** Refuse, before anything is drawn or priced, what `group` may not stake: `required` above the allowance, which
+   * only the player sets, in the wallet's top bar. */
+  async checkAllowance(required: bigint, group?: string) {
+    const { allowance } = await this.call('game.allowance', group === undefined ? {} : { group });
+    if (BigInt(allowance) < required) throw new Error('Not enough allowance for this bet. Set it in the top bar.');
   }
   /** Another tab of this game changed the round: reload it and tell the caller. Browser only. */
   watch(listener: () => void) {
@@ -221,7 +214,7 @@ export class RoundClient {
   private async begin(setup: { stake: string; [key: string]: unknown }) {
     await this.load();
     if (this.data?.pending) throw new Error('Recover the pending action first');
-    await this.ensureAllowance(BigInt(setup.stake), BigInt(setup.stake));
+    await this.checkAllowance(BigInt(setup.stake));
     const info = await this.call('wallet.info'),
       bankroll = BigInt(info.virtualBankroll);
     const reusable =
@@ -285,11 +278,7 @@ export class RoundClient {
       const node = getNode(this.plan, this.data.nodeId);
       const selected = node.kind === 'decision' ? node.actions.find(a => a.id === action) : undefined;
       if (!selected) throw new Error('Illegal game action');
-      await this.ensureAllowance(
-        BigInt(this.data.cash) + selected.additionalCash,
-        BigInt(this.data.setup.stake),
-        this.data.id,
-      );
+      await this.checkAllowance(BigInt(this.data.cash) + selected.additionalCash, this.data.id);
       const info = await this.call('wallet.info'),
         random = rngFromBytes(bytes => crypto.getRandomValues(bytes));
       // The page draws the step's branch now, and a step without a bet its successor. Both are saved with the step's

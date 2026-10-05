@@ -32,11 +32,11 @@ test('the allowance lives in memory: leaving the game releases it, and nothing a
     w = f.wallet;
   await assert.rejects(w.setGameAllowance('100'), /No game is open/);
   w.openGame(f.identity('a'));
-  await assert.rejects(w.gameCasinoBet(terms()), /exceeds the game's allowance/);
+  await assert.rejects(w.gameCasinoBet(terms()), /Not enough allowance/);
   await w.setGameAllowance('100');
   assert.equal(w.availableBalance(), 999900n);
   await assert.rejects(w.setGameAllowance('1000001'), /exceeds your balance/);
-  await assert.rejects(w.gameCasinoBet({ ...terms(), stake: '101' }), /game's allowance/);
+  await assert.rejects(w.gameCasinoBet({ ...terms(), stake: '101' }), /Not enough allowance/);
   await assert.rejects(w.payBankroll(999901n), /less the game's allowance/);
   w.closeGame();
   assert.equal(w.availableBalance(), 1000000n);
@@ -71,7 +71,7 @@ test('a group keeps what its bets win out of the allowance until the game ends i
   // Another group stakes only the allowance.
   await assert.rejects(
     w.gameCasinoBet({ id: 'other', stake: String(allowance + 1n), ...odds, group: 'other' }),
-    /game's allowance/,
+    /Not enough allowance/,
   );
   // The player sets the allowance itself; what the group holds stays with it, and is the player's all the same.
   await w.setGameAllowance('500');
@@ -101,10 +101,36 @@ test("what a bet keeps of its group's cash leaves the allowance with its stake, 
   );
   await assert.rejects(
     w.gameCasinoBet({ ...terms('step-2'), group: 'round', kept: String(986n + 4n + won) }),
-    /game's allowance/,
+    /Not enough allowance/,
   );
   w.gameEnd('round');
   assert.equal(w.gameAllowance().allowance, String(990n + won));
+});
+
+test('a visit adds up: what the player allowed, less what they took back, and what the game won or lost, is left', async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity());
+  const visit = () => {
+    const { allowed, takenBack, result, left } = w.gameVisit();
+    assert.equal(allowed - takenBack + result, left);
+    return [allowed, takenBack, result, left];
+  };
+  assert.deepEqual(visit(), [0n, 0n, 0n, 0n]);
+  await w.setGameAllowance('1000');
+  const first = BigInt((await w.gameCasinoBet(terms('op-1'))).payout!);
+  assert.deepEqual(visit(), [1000n, 0n, first - 10n, 990n + first]);
+  // A round's whole stake shows as lost until the game has shown how it ended.
+  const won = BigInt((await w.gameCasinoBet({ ...terms('step-1'), group: 'round', kept: '4' })).payout!);
+  assert.deepEqual(visit(), [1000n, 0n, first - 24n, 976n + first]);
+  w.gameEnd('round');
+  const left = 980n + first + won;
+  assert.deepEqual(visit(), [1000n, 0n, first + won - 20n, left]);
+  // Lowering the allowance takes money back; raising it again allows more.
+  await w.setGameAllowance('500');
+  assert.deepEqual(visit(), [1000n, left - 500n, first + won - 20n, 500n]);
+  await w.setGameAllowance('600');
+  assert.deepEqual(visit(), [1100n, left - 500n, first + won - 20n, 600n]);
 });
 
 test('a game places developer bets only once the player allows them, and only a published game can be', async () => {
@@ -508,7 +534,6 @@ test('additional game wagers debit the allowance once and recover their cards an
   let loseReply = true,
     settlements = 0;
   const bridge = bridgeFor(w, async (method, params) => {
-    if (method === 'game.requestAllowance') return { allowed: false, ...w.gameAllowance() };
     if (method !== 'game.casinoBet' && method !== 'game.payment') return undefined;
     const receipt = method === 'game.casinoBet' ? await w.gameCasinoBet(params) : await w.gamePayment(params);
     settlements++;
@@ -528,7 +553,7 @@ test('additional game wagers debit the allowance once and recover their cards an
   let round = new RoundClient(bridge, graph, undefined, { store });
   await round.start({ stake: '1000' });
   const before = await w.balance();
-  await assert.rejects(round.action('double'), /Allow this game more ETH/);
+  await assert.rejects(round.action('double'), /Not enough allowance/);
   assert.equal(settlements, 0);
   assert.equal(
     JSON.parse(store.get(round['storageKey'])!).pending,
@@ -548,33 +573,21 @@ test('additional game wagers debit the allowance once and recover their cards an
   assert.equal(settlements, 1);
 });
 
-test('the round helper asks the wallet for exactly the shortfall and stops when the player declines', async () => {
+test('the round helper refuses what the allowance does not cover, which only the player sets', async () => {
   const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity('shortfall'));
-  const requests: any[] = [];
-  let approve = true;
-  // The player authorizes only the stated minimum, not the suggested session amount.
-  const minimum = (params: any) => String(BigInt(params.amount) - 4000n);
-  const bridge = bridgeFor(w, async (method, params) => {
-    if (method !== 'game.requestAllowance') return undefined;
-    requests.push(params);
-    if (approve) await w.setGameAllowance(String(BigInt(w.gameAllowance().allowance) + BigInt(minimum(params))));
-    return { allowed: approve, ...w.gameAllowance() };
-  });
   const graph = coin({ action: 'double', additionalCash: 1000n, payout: () => 3000n });
-  const round = new RoundClient(bridge, graph, undefined, { store: memoryStore() });
+  const round = new RoundClient(bridgeTo(w), graph, undefined, { store: memoryStore() });
+  await assert.rejects(round.start({ stake: '1000' }), {
+    message: 'Not enough allowance for this bet. Set it in the top bar.',
+  });
+  // The player sets the allowance in the wallet's top bar.
+  await w.setGameAllowance('1000');
   await round.start({ stake: '1000' });
-  assert.deepEqual(requests, [{ amount: '5000' }], 'shortfall plus four stakes');
-  assert.equal(w.gameAllowance().allowance, '1000');
-  approve = false;
-  await assert.rejects(round.action('double'), /Allow this game more ETH/);
-  assert.deepEqual(requests.at(-1), { amount: '5000' });
-  approve = true;
-  const state = await round.action('double');
-  assert.equal(state.terminal, true);
-  assert.deepEqual(requests.at(-1), { amount: '5000' });
-  assert.equal(requests.length, 3);
+  await assert.rejects(round.action('double'), /Not enough allowance/);
+  await w.setGameAllowance('2000');
+  assert.equal((await round.action('double')).terminal, true);
 });
 
 test('a stake the casino cannot back fails with a plain capacity message, not a pricing error', async () => {

@@ -108,22 +108,12 @@ export const HookedIn = Object.freeze({
    * its rounds here. */
   round: (id: string): Promise<Round> => call('wallet.round', { id }),
   /** What the game may stake now, whether an operation awaits recovery, and whether it may place developer bets. With
-   * `group`, what a bet of that group may stake: the allowance and what the group has won and not shown yet. The wallet
-   * shows the player the allowance itself, in its top bar. */
+   * `group`, what a bet of that group may stake: the allowance and what the group has won and not shown yet. Only the
+   * player sets it, in the wallet's top bar, and a bet it does not cover is refused with `insufficient-allowance`. */
   allowance: (group?: string): Promise<GameAllowance> => call('game.allowance', group === undefined ? {} : { group }),
-  /** Ask the player for a larger allowance: `amount` more than the game has now, and with `developerBets`, leave to
-   * place developer bets too, which the wallet warns about. The wallet shows its own dialog, in its own words, where the
-   * player sets the game's allowance; the reply says whether they did, and the allowance after it. The wallet offers
-   * that dialog by itself once the page has loaded, so a game asks when its allowance runs short, and a game that
-   * places developer bets asks for that leave as it loads, to be part of the offer. With nothing in the balance to
-   * allow, an `amount` opens the wallet's Deposit, and leave alone is declined at once. */
-  requestAllowance: (
-    options: { amount?: bigint | string; developerBets?: boolean } = {},
-  ): Promise<GameAllowance & { allowed: boolean }> =>
-    call('game.requestAllowance', {
-      ...(options.amount === undefined ? {} : { amount: String(options.amount) }),
-      ...(options.developerBets ? { developerBets: true } : {}),
-    }),
+  /** Say, as the page loads, that the game places developer bets: the allowance dialog the player opens from the
+   * wallet's top bar then asks them to allow developer bets too, with the wallet's warning. Nothing opens. */
+  placesDeveloperBets: (): Promise<null> => call('game.placesDeveloperBets'),
   /** The player has seen how `group` ended. Until then, what its bets won stays out of the allowance and the balance
    * the wallet shows, so they never give a result away before the game does; and the group's own bets may stake it.
    * A stake leaves them when it is bet. Leaving the game ends every group. */

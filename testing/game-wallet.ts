@@ -41,16 +41,14 @@ import type { BankCasinoBet, Developer, Settlement } from '../sdk/src/developer.
 import type { GamePlan } from '../sdk/src/engine/index.ts';
 
 /** A game's side of the bridge, as `RoundClient` and a game's own client take it: every request goes through the
- * checks the wallet's bridge makes, and the player agrees to every request for a larger allowance, developer bets
- * included when the game asks for them. */
+ * checks the wallet's bridge makes. The test sets the allowance, as the player does in the wallet's top bar. */
 export interface TestBridge {
   call(method: string, params?: any): Promise<any>;
   /** Called with every receipt the wallet pushes: a developer bet its developer settled, once collected. */
   onReceipt(listener: (receipt: GameReceipt) => void): () => void;
 }
 
-/** A game's side of the bridge to any wallet: requests go through the checks the wallet's bridge makes, the player
- * agrees to every request for a larger allowance, developer bets included when the game asks for them, and every
+/** A game's side of the bridge to any wallet: requests go through the checks the wallet's bridge makes, and every
  * receipt the wallet pushes reaches the listeners. */
 const pushes = new WeakMap<CasinoWallet, Set<(receipt: GameReceipt) => void>>();
 export function bridgeTo(wallet: CasinoWallet): TestBridge {
@@ -75,18 +73,7 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
         wallet.gameEnd(checked.group);
         return null;
       }
-      if (method === 'game.requestAllowance') {
-        // The player agrees: the game may risk what it asked for more, as far as the balance goes.
-        const most = wallet.playableBalance() - wallet.inPlay(),
-          more = checked.amount === undefined ? most : BigInt(checked.amount),
-          allowance = BigInt(wallet.gameAllowance().allowance) + more,
-          amount = allowance < most ? allowance : most;
-        await wallet.setGameAllowance(
-          String(amount),
-          checked.developerBets === true || wallet.gameAllowance().developerBets,
-        );
-        return { allowed: true, ...wallet.gameAllowance() };
-      }
+      if (method === 'game.placesDeveloperBets') return null;
       if (method === 'game.casinoBet') return wallet.gameCasinoBet(checked);
       if (method === 'game.developerBet') return wallet.gameDeveloperBet(checked);
       return wallet.gamePayment(checked);

@@ -35,12 +35,12 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     deliver(parent, {
       hookedin: true,
       id: posted.at(-1).id,
-      error: { code: 'insufficient-allowance', message: "Bet exceeds the game's allowance" },
+      error: { code: 'insufficient-allowance', message: 'Not enough allowance for this bet. Set it in the top bar.' },
     });
     await assert.rejects(
       refused,
       (error: any) =>
-        error instanceof HookedInError && error.code === 'insufficient-allowance' && /exceeds/.test(error.message),
+        error instanceof HookedInError && error.code === 'insufficient-allowance' && /top bar/.test(error.message),
     );
     const reply = HookedIn.info();
     const { id, method } = posted.at(-1);
@@ -51,27 +51,25 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     ] as const)
       listeners.forEach(listener => listener({ source, data: { hookedin: true, id, result } }));
     assert.equal(await reply, 'real');
-    // The allowance is asked for, the whole of it or what one group may stake; asking for more can ask for developer
-    // bets too; and a group the player has seen ends.
+    // The allowance is read, the whole of it or what one group may stake; a game says it places developer bets; and
+    // a group the player has seen ends.
     const asks = [
       HookedIn.allowance(),
       HookedIn.allowance('hand-1'),
-      HookedIn.requestAllowance({ amount: 12n }),
-      HookedIn.requestAllowance({ developerBets: true }),
+      HookedIn.placesDeveloperBets(),
       HookedIn.end('hand-1'),
     ];
     assert.deepEqual(
-      posted.slice(-5).map(({ method, params }) => ({ method, params })),
+      posted.slice(-4).map(({ method, params }) => ({ method, params })),
       [
         { method: 'game.allowance', params: {} },
         { method: 'game.allowance', params: { group: 'hand-1' } },
-        { method: 'game.requestAllowance', params: { amount: '12' } },
-        { method: 'game.requestAllowance', params: { developerBets: true } },
+        { method: 'game.placesDeveloperBets', params: {} },
         { method: 'game.end', params: { group: 'hand-1' } },
       ],
     );
-    for (const { id } of posted.slice(-5)) deliver(parent, { hookedin: true, id, result: null });
-    assert.deepEqual(await Promise.all(asks), [null, null, null, null, null]);
+    for (const { id } of posted.slice(-4)) deliver(parent, { hookedin: true, id, result: null });
+    assert.deepEqual(await Promise.all(asks), [null, null, null, null]);
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
     const bet = { id: 'coin', stake: '5', chance: '9', prize: '10', group: 'hand-1' };
     const calls = [HookedIn.casinoBet(bet), HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } })];

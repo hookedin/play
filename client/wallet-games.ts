@@ -62,6 +62,8 @@ export class GameSessions extends ChannelClient {
       key: identity.key,
       identity: { ...identity, developer: getAddress(identity.developer) },
       allowance: '0',
+      allowed: '0',
+      net: '0',
       developerBets: false,
       table: {},
     };
@@ -84,6 +86,15 @@ export class GameSessions extends ChannelClient {
       pending: this.pending?.game?.key === game.key,
       developerBets: game.developerBets,
     };
+  }
+  /** The open game's visit so far: what the player allowed it, what they took back, what its bets won or lost, and
+   * the allowance left. What its groups hold counts as staked until the game has shown how they ended. */
+  gameVisit(this: CasinoWallet) {
+    const game = this.requireGame(),
+      allowed = BigInt(game.allowed),
+      result = BigInt(game.net) - this.inPlay(),
+      left = BigInt(game.allowance);
+    return { allowed, takenBack: allowed + result - left, result, left };
   }
   /** What the open game's groups have won and it has not shown yet: still the player's, and in their balance. */
   inPlay(this: CasinoWallet) {
@@ -109,6 +120,7 @@ export class GameSessions extends ChannelClient {
       drawn = needed < held ? needed : held,
       allowance = BigInt(game.allowance) - (needed - drawn) + (group ? 0n : won);
     game.allowance = String(allowance < 0n ? 0n : allowance);
+    game.net = String(BigInt(game.net) + won - spent);
     if (group) game.table = { ...game.table, [group]: String(held - drawn + kept + won) };
   }
   /** What a game page learns when it loads: every bound a bet is held to, as the protocol this wallet and its casino
@@ -184,6 +196,7 @@ export class GameSessions extends ChannelClient {
         if (n > this.playableBalance() - this.inPlay()) throw new Error('The allowance exceeds your balance');
         if (developerBets && BigInt(game.identity.developer) === 0n)
           throw new Error('Only a published game places developer bets');
+        if (n > BigInt(game.allowance)) game.allowed = String(BigInt(game.allowed) + n - BigInt(game.allowance));
         game.allowance = String(n);
         // Taking the whole allowance back takes back every permission with it.
         game.developerBets = n > 0n && developerBets;

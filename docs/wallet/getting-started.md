@@ -80,26 +80,26 @@ A published game's developer is the account that published it: it earns half of 
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
 all of its commission, and it takes no developer bets.
 
-Once a game has loaded, the wallet's own dialog asks how much it may play with, before you bet; **Not now** leaves you
-to look first. While the game is open, the top bar names it and shows its allowance in place of your balance; until
-you set one, **Set allowance** is all it offers, and opens the dialog again. It also opens when the game asks for
-more. Every word in it is the wallet's. When your balance has nothing to allow, the wallet opens its Deposit tab
-instead, and asks for the allowance once your deposit has arrived. The allowance caps what the game may risk, and
-moves no money:
+A game opens with nothing to play with, and nothing opens over it: a bet it has no allowance for is refused, and the
+game says to set one in the top bar. While the game is open, the top bar names it and shows its allowance in place of
+your balance, with what the game has won or lost since you opened it; until you set one, **Set allowance** is all it
+offers. It opens the wallet's own dialog, where every word is the wallet's; when your balance has nothing to allow, it
+opens the Deposit tab instead. Once you have allowed the game something, the dialog adds up the visit: what you
+allowed, what you took back, what the game won or lost, and what is left. The allowance caps what the game may risk,
+and moves no money:
 
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
   taken in: a deposit still arriving cannot raise it.
 - It lives only in this tab's memory. Leaving the game, reloading or closing the tab takes it back: every time you open
-  a game it starts with nothing, and asks again. The dialog deals in whole METH, and starts at what the game holds now,
-  nothing for a game just opened, unless the game asked for an amount: then at that, in whole METH that cover it. The
-  wallet gives a game nothing without your word in its dialog.
+  a game it starts with nothing, and so does its visit. The dialog deals in whole METH, and starts at what the game
+  holds now, nothing for a game just opened. The wallet gives a game nothing without your word in its dialog.
 - Every verified result of the game's own operations moves it: a stake lowers it as it is bet, and a win raises it once
   the game has shown it, so the figure gives no result away before the game does, and stands still while a round is
   played. Until then the wallet's window says how much of your balance is in play. A game can lose everything it
   holds, its winnings included, and not a wei more.
 - Casino bets need nothing more: your wallet checks their odds and their results. A developer bet is a bet against the
-  game's developer, who takes the stake and decides what it pays, so the dialog asks you to allow developer bets apart,
-  and warns you first. Taking the whole allowance back takes that leave back too.
+  game's developer, who takes the stake and decides what it pays, so for a game that places them the dialog asks you
+  to allow developer bets too, and warns you first. Taking the whole allowance back takes that leave back too.
 - A withdrawal lowers it to what stays in your balance, if it was more; taking out everything, or locking in, closes
   the game.
 - It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation

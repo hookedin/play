@@ -150,7 +150,7 @@ test('operations take their turn in the order asked, while questions are answere
   const queued = bridge.send(request(2, 'game.casinoBet', { ...params, id: 'op-2' }));
   await Promise.resolve();
   assert.equal(bridge.calls.length, 1, 'the second bet waits for the first');
-  // A question never waits behind a bet or the player's dialog.
+  // A question never waits behind a bet.
   await bridge.send(request(3, 'game.receipt', { id: 'op-1' }));
   assert.deepEqual(bridge.replies.at(-1).message, { hookedin: true, id: 3, result: { cash: '200' } });
   assert.equal(bridge.calls.length, 2);
@@ -229,7 +229,7 @@ test('requests still waiting their turn when their game closes never reach the w
     await started.promise;
     const queued = [
       bridge.send(request(2, 'game.payment', { id: 'op-2', amount: '10' })),
-      bridge.send(request(3, 'game.requestAllowance', {})),
+      bridge.send(request(3, 'game.developerBet', { id: 'op-3', stake: '10', meta: {} })),
     ];
     if (close === 'detach') bridge.detach();
     else bridge.setCurrent(false);
@@ -324,17 +324,13 @@ test('a message relayed by a frame nested inside the game iframe is ignored', as
   bridge.detach();
 });
 
-test('an allowance request carries a suggested amount and whether it is for developer bets, and nothing else', () => {
-  const ask = (params: any) => validateRequest(request(1, 'game.requestAllowance', params));
-  assert.deepEqual(ask({}).params, {});
-  assert.equal(ask({ amount: '5' }).params.amount, '5');
-  assert.equal(ask({ amount: '5', developerBets: true }).params.developerBets, true);
-  assert.throws(() => ask({ amount: '0' }), /range/);
-  assert.throws(() => ask({ amount: 5 }), /wei/);
-  assert.throws(() => ask({ developerBets: 'yes' }), /true or false/);
-  // Every word in the wallet's authorization is the wallet's own.
-  for (const field of ['reason', 'developer', 'approved', 'autoApprove', 'revision', 'data'])
-    assert.throws(() => ask({ [field]: '1' }), /Unexpected game request field/);
+test('a game asks for no allowance: it says it places developer bets, and nothing else', () => {
+  assert.throws(() => validateRequest(request(1, 'game.requestAllowance', {})), /not available to games/);
+  const say = (params: any) => validateRequest(request(1, 'game.placesDeveloperBets', params));
+  assert.deepEqual(say({}).params, {});
+  // Every word in the wallet's authorization is the wallet's own, and only the player sets an amount.
+  for (const field of ['amount', 'reason', 'developer', 'approved', 'autoApprove', 'data'])
+    assert.throws(() => say({ [field]: '1' }), /no parameters/);
 });
 
 test('the allowance is read whole or for a group, and a group ends by its label', () => {

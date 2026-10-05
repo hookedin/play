@@ -43,24 +43,20 @@ origin ([one Worker](developer-bets.md#one-cloudflare-worker)).
 A game never learns the player's balance. It gets an allowance for the open tab: what the player lets it risk, plus its
 verified winnings.
 
-- A game starts with an allowance of zero, and the wallet's own dialog is the only grant. The wallet offers it by
-  itself once the game's page has loaded and the player's balance has something to allow, so the player sets the
-  allowance before any bet, and every word in the dialog is the wallet's. When a bet needs more, the game asks with
-  `HookedIn.requestAllowance({ amount })`, where `amount` is how much more it suggests. The reply says whether the
-  player set an allowance (`allowed`), and the resulting `allowance`, `pending` and `developerBets`. When the player's
-  balance has nothing to allow, the wallet opens its Deposit tab instead, the reply says `allowed: false`, and the
-  wallet offers the allowance once a deposit has arrived.
+- A game starts with an allowance of zero, and the wallet's own dialog is the only grant. Only the player opens it,
+  from **Set allowance** in the wallet's top bar, and every word in it is the wallet's. A game never asks: nothing
+  opens over it, and a bet or payment the allowance does not cover is refused with `insufficient-allowance`, whose
+  message tells the player to set it in the top bar. Show that message, or your own, before anything is drawn.
 - Developer bets are allowed apart: the dialog warns that the game's developer takes their stakes and decides what
-  they pay, and only a request with `developerBets: true` asks for them. A game that places them asks as its page
-  loads, with `HookedIn.requestAllowance({ developerBets: true })`, so the player decides in the dialog the wallet
-  offers, before any betting window, and every dialog the game gets after asks about them too. That leave alone, asked
-  with nothing to allow, is declined at once. Casino bets need no more than the allowance, since the wallet checks
-  their odds and their results itself.
-- `HookedIn.allowance()` reads it. Every bet and payment must fit it. Stakes and payments lower it as they are made;
-  verified winnings raise it, a group's once the game has ended the group.
+  they pay. A game that places them says so as its page loads, with `HookedIn.placesDeveloperBets()`, and the dialog
+  then asks about them too. Casino bets need no more than the allowance, since the wallet checks their odds and their
+  results itself.
+- `HookedIn.allowance()` reads it, with `pending` and `developerBets`. Every bet and payment must fit it. Stakes and
+  payments lower it as they are made; verified winnings raise it, a group's once the game has ended the group.
 - The wallet's top bar names the game, by the name it is published under, and shows its allowance in place of the
-  player's balance. The player opens the dialog from there to change the allowance or take it all back. A page shows
-  no header, allowance or balance of its own: only the game.
+  player's balance, with what the game has won or lost since it opened. The dialog adds the visit up: what the player
+  allowed, took back, and won or lost, and what is left. A page shows no header, allowance or balance of its own: only
+  the game.
 - Leaving the game, reloading or closing the tab takes the allowance back, its leave to place developer bets with it:
   a game opens with nothing every time. The money never left the player's balance.
 - One game per wallet holds an allowance at a time, across tabs.
@@ -81,7 +77,7 @@ the figure twice: down by the stake on its first step, and up by what it paid wh
 
 The page posts `{ hookedin: true, id, method, params }` to its parent window; the wallet answers the page's origin,
 and only it, with `{ hookedin: true, id, result }` or `{ hookedin: true, id, error: { code, message } }`. Questions are
-answered at once; anything that signs or asks the player waits its turn, in the order asked, up to 32 at a time.
+answered at once; anything that signs waits its turn, in the order asked, up to 32 at a time.
 [`HookedIn`](../sdk/hookedin.md#hookedin) wraps all of it, with a typed method per request and a `HookedInError` for
 every refusal: act on its `code`, show its `message`. The [bridge reference](../reference/bridge.md) has every method,
 field, reply and [error](../reference/bridge.md#errors).

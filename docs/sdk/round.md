@@ -41,8 +41,8 @@ if (state.actions.includes('cash-out')) state = await round.action('cash-out');
 
 Each step is at most one operation, whose group is the round's `id`: what the steps win stays with the round, out of
 the allowance the wallet shows, until the game calls [`HookedIn.end(state.id)`](hookedin.md#end) once the player has
-seen how the round ended. The round asks the player for more when what the round may stake, the allowance and what it
-holds, is short of what the step needs, draws the step's branch with the page's own randomness
+seen how the round ended. The round refuses a step when what the round may stake, the allowance and what it holds, is
+short of what the step needs; otherwise it draws the step's branch with the page's own randomness
 ([`prepareAction`](engine.md#prepareaction)) and saves it with a fresh operation ID before it sends anything, and then
 sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing, each with what it `kept` of the round's
 cash: the cash of the lower class a bet goes between, or what a payment leaves, so the round's whole stake leaves the
@@ -84,10 +84,11 @@ with the bridge's errors. It waits while another tab of the game plays a step.
 
 Starts a round at the graph's root with `setup.stake`, a decimal string of wei, as its cash; the setup goes to `graph`
 and is saved with the round. It throws `Recover the pending action first` while a step is pending, which `restore`
-resolves, and `Wait for the action under way` while a `start` or `action` runs, here or in another tab. It makes sure the game's allowance covers the stake, prices the graph, and saves the round under a fresh
-`id`, replacing a saved unfinished round, whose cash is in the player's balance already. It places no bet; the first
-`action` does. It throws the pricing error above, `Allow this game more ETH to play, or deposit if your balance is empty.` when the player does not
-allow the game enough, and the bridge's errors.
+resolves, and `Wait for the action under way` while a `start` or `action` runs, here or in another tab. It checks
+that the game's allowance covers the stake, prices the graph, and saves the round under a fresh `id`, replacing a saved
+unfinished round, whose cash is in the player's balance already. It places no bet; the first `action` does. It throws
+the pricing error above, `Not enough allowance for this bet. Set it in the top bar.` when the allowance does not cover
+the stake, and the bridge's errors.
 
 #### `action`
 
@@ -103,7 +104,7 @@ with its state unchanged.
 | `Illegal game action`                                                                          | The node does not offer the action                                                                      | –                                                                             |
 | `Retry the pending action first`                                                               | Another step is pending                                                                                 | Pending                                                                       |
 | A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The virtual bankroll `wallet.info` reports is below the planning floor or does not admit the bet drawn  | –                                                                             |
-| `Allow this game more ETH to play, or deposit if your balance is empty.`                       | The player did not allow the game enough, or has nothing to allow                                       | –                                                                             |
+| `Not enough allowance for this bet. Set it in the top bar.`                                    | The allowance does not cover the step, checked before anything is drawn                                 | –                                                                             |
 | The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                                            | Pending, under a fresh operation ID                                           |
 | The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                                                  | Pending, under the same operation ID, so sending it again is the same request |
 
@@ -121,13 +122,13 @@ Follows other tabs of the game: when another tab writes this round's key in `loc
 calls the listener, ignoring a failed restore. It does nothing where there is no `window`, and a listener cannot be
 removed.
 
-#### `ensureAllowance`
+#### `checkAllowance`
 
-`ensureAllowance(required, stake, group?)` makes sure the game may stake `required`, or with `group`, that a bet in that
-group may ([`game.allowance`](../reference/bridge.md#gameallowance)). When it may not, it asks the player for the
-shortfall plus four times `stake`, so one authorization lasts a few rounds, and throws
-`Allow this game more ETH to play, or deposit if your balance is empty.` if it is still short. `start` and `action`
-call it; a page calls it to ask before something of its own, such as reels that spin before a resumed step.
+`checkAllowance(required, group?)` throws `Not enough allowance for this bet. Set it in the top bar.` unless the game
+may stake `required`, or with `group`, unless a bet in that group may
+([`game.allowance`](../reference/bridge.md#gameallowance)). Only the player sets the allowance, in the wallet's top bar.
+`start` and `action` call it; a page calls it before something of its own, such as reels that spin before a resumed
+step.
 
 ## Types
 

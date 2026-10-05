@@ -14,8 +14,8 @@ what the wallet checks and answers.
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 
 const stake = HookedIn.parseAmount('1'); // 1 METH, '1000000000000' wei
-const answer = await HookedIn.requestAllowance({ amount: stake });
-if (answer.allowed) {
+const { allowance } = await HookedIn.allowance(); // the player sets it in the wallet's top bar
+if (BigInt(allowance) >= BigInt(stake)) {
   const id = crypto.randomUUID(); // save it before sending: a lost reply is recovered by this id
   const receipt = await HookedIn.casinoBet({
     id,
@@ -70,12 +70,11 @@ A developer's round as the casino shows it to anyone, read through the player's 
 [`game.allowance`](../reference/bridge.md#gameallowance), a [`GameAllowance`](#gameallowance): what the game may stake
 now, or with `group`, what a bet in that group may stake.
 
-#### `requestAllowance`
+#### `placesDeveloperBets`
 
-[`game.requestAllowance`](../reference/bridge.md#gamerequestallowance): asks the player for `amount` more than the game
-holds, a suggestion the wallet's own dialog shows, and with `developerBets: true`, to allow developer bets too, which
-the dialog warns about. It resolves once they have decided with `allowed` and the game's
-[`GameAllowance`](#gameallowance) after it. The wallet also offers the dialog by itself as the game loads
+[`game.placesDeveloperBets`](../reference/bridge.md#gameplacesdeveloperbets): the game places developer bets, so the
+allowance dialog the player opens from the wallet's top bar asks them to allow those too. Call it as the page loads. It
+resolves with `null`, and nothing opens: a game never asks the player for anything
 ([the allowance](../games/how-a-game-works.md#the-allowance)).
 
 #### `end`
@@ -155,7 +154,7 @@ HookedIn.wholeStake(1n, 2n); // 2000000000000n, 2 METH
 
 A page's start: it waits for `wallet.info`, and fills `stakeInput` with the recommended stake unless the player edited
 it meanwhile. It resolves with the player's `wallet.info` as `wallet`, and `scope`, the page's
-[`storageScope`](#storagescope). It signs nothing and asks the player nothing.
+[`storageScope`](#storagescope). It signs nothing.
 
 ## Error class
 
@@ -173,9 +172,8 @@ async function place(bet: CasinoBetRequest) {
   try {
     return await HookedIn.casinoBet(bet);
   } catch (error) {
-    if (!(error instanceof HookedInError) || error.code !== 'insufficient-allowance') throw error;
-    const answer = await HookedIn.requestAllowance({ amount: bet.stake });
-    if (answer.allowed) return HookedIn.casinoBet(bet); // the same id: the same bet
+    // Refused before anything was signed: the message tells the player to set the allowance in the top bar.
+    if (error instanceof HookedInError && error.code === 'insufficient-allowance') return show(error.message);
     throw error;
   }
 }

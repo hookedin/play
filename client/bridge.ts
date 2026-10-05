@@ -11,18 +11,19 @@ export const METHODS = [
   'game.developerBet',
   'game.payment',
   'game.allowance',
-  'game.requestAllowance',
+  'game.placesDeveloperBets',
   'game.end',
 ];
 const methods = new Set(METHODS);
-/** Questions the wallet answers at once, and the end of a group, which signs nothing. Everything else signs or asks
- * the player, and waits its turn. */
+/** Questions the wallet answers at once, and what a game tells it, which signs nothing. Everything else signs, and
+ * waits its turn. */
 const IMMEDIATE = new Set([
   'wallet.hello',
   'wallet.info',
   'wallet.round',
   'game.receipt',
   'game.allowance',
+  'game.placesDeveloperBets',
   'game.end',
 ]);
 /** Requests a game may have waiting for their turn. */
@@ -98,18 +99,11 @@ function validate(data: any) {
   if (!object(data.params ?? {})) throw new Error('Request parameters must be an object.');
   if (!withinSize(data, 70000)) throw new Error('Game request is too large.');
   const params = data.params ?? {};
-  if (data.method === 'wallet.hello' || data.method === 'wallet.info') {
+  if (['wallet.hello', 'wallet.info', 'game.placesDeveloperBets'].includes(data.method)) {
     if (Object.keys(params).length) throw new Error('This method takes no parameters.');
   } else if (data.method === 'wallet.round') {
     if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.id))
       throw new Error('A round is named by its 32-byte hash, as 0x and 64 hex digits.');
-  } else if (data.method === 'game.requestAllowance') {
-    // The wallet's modal decides, and every word in it is the wallet's: a game suggests an amount, and says whether it
-    // places developer bets.
-    if (!only(params, ['amount', 'developerBets'])) throw new Error('Unexpected game request field.');
-    if (params.amount !== undefined) gameAmount(params.amount);
-    if (params.developerBets !== undefined && typeof params.developerBets !== 'boolean')
-      throw new Error('developerBets is true or false.');
   } else if (data.method === 'game.allowance' || data.method === 'game.end') {
     if (!only(params, ['group'])) throw new Error('Unexpected game request field.');
     if (params.group === undefined ? data.method === 'game.end' : !validGroup(params.group))
@@ -203,7 +197,7 @@ export function attachGameBridge({
     last = request.id;
     const asked = page;
     if (IMMEDIATE.has(request.method)) return answer(request, asked);
-    // Whatever signs or asks the player takes its turn, in the order the game asked.
+    // Whatever signs takes its turn, in the order the game asked.
     if (waiting >= MAX_QUEUE) return fail(request.id, gameError('busy', 'Too many game requests are waiting.'));
     waiting++;
     // A request that waited its turn runs only for the page that asked, while its game is still the one open: the

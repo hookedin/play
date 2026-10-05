@@ -521,6 +521,9 @@ label {
   font-size: 10px;
   font-weight: 600;
 }
+.game-allowance > small > span {
+  margin-left: 3px;
+}
 .game-allowance > span {
   font-size: 13px;
   font-weight: 600;
@@ -1387,6 +1390,21 @@ main:has(> #page-play:not(.hidden)) > .banner {
   margin-top: 8px;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+/* How the visit stands: what the player allowed, took back, and won or lost, and what is left. */
+.figures.visit {
+  grid-template-columns: none;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+.figures.visit > div {
+  padding: 10px 12px;
+}
+.figures.visit dd {
+  margin-top: 4px;
+  font-size: 15px;
 }
 .terms {
   margin-top: 16px;

@@ -205,13 +205,11 @@ export class ChannelClient extends WalletTransactions {
     const allowed = (debit: bigint) => {
       if (game) {
         if (this.game?.key !== game.key) throw gameError('game-closed', 'The game is no longer open');
+        // The game shows these to the player, who sets the allowance in the wallet's top bar.
         if (debit + BigInt(game.kept ?? 0) > BigInt(this.gameAllowance(game.group).allowance))
-          throw gameError('insufficient-allowance', "Bet exceeds the game's allowance");
+          throw gameError('insufficient-allowance', 'Not enough allowance for this bet. Set it in the top bar.');
         if (kind === 'developer-bet' && !this.game.developerBets)
-          throw gameError(
-            'developer-bets-not-allowed',
-            'The player has not let this game place developer bets: ask with requestAllowance({ developerBets: true }).',
-          );
+          throw gameError('developer-bets-not-allowed', 'Allow developer bets with the allowance in the top bar.');
       } else if (debit > this.availableBalance())
         throw new Error("Debit exceeds your balance less the game's allowance");
       if (kind === 'casino-bet')

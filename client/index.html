@@ -35,7 +35,8 @@
       >
       <div class="money-control">
         <button id="game-allowance" class="game-allowance hidden" type="button" aria-haspopup="dialog">
-          <small>Allowance</small><span id="game-allowance-amount"></span>
+          <small>Allowance <span id="game-allowance-result" hidden></span></small
+          ><span id="game-allowance-amount"></span>
         </button>
         <button id="wallet-button" class="wallet-button" type="button" aria-haspopup="dialog">
           <span id="wallet-button-amount" class="wallet-button-amount hidden"></span
@@ -628,6 +629,24 @@
           <button class="close" type="button" data-allowance-cancel aria-label="Close">×</button>
         </div>
         <p id="allowance-who" class="muted"></p>
+        <dl id="allowance-visit" class="figures visit" hidden>
+          <div>
+            <dt>Allowed</dt>
+            <dd id="allowance-allowed"></dd>
+          </div>
+          <div>
+            <dt>Taken back</dt>
+            <dd id="allowance-taken-back"></dd>
+          </div>
+          <div>
+            <dt>Won or lost</dt>
+            <dd id="allowance-result"></dd>
+          </div>
+          <div>
+            <dt>Left</dt>
+            <dd id="allowance-left"></dd>
+          </div>
+        </dl>
         <ul class="permissions">
           <li>
             <strong>Casino bets</strong> The casino settles each one at once, and your wallet checks its odds before it
@@ -658,7 +677,7 @@
         <div class="scale"><span>0</span><span id="allowance-total"></span></div>
         <p id="allowance-help" class="help"></p>
         <div class="actions end">
-          <button class="button" type="button" data-allowance-cancel>Not now</button
+          <button class="button" type="button" data-allowance-cancel>Cancel</button
           ><button id="allowance-confirm" class="button primary" type="submit">Allow</button>
         </div>
         <details class="terms">

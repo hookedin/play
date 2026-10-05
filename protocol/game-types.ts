@@ -21,6 +21,11 @@ export interface GameSession {
   identity: GameIdentity;
   /** Decimal wei the game may still risk: its allowance, as the player sees and sets it. */
   allowance: string;
+  /** Decimal wei the player has allowed it since it opened: every raise of its allowance, added up. */
+  allowed: string;
+  /** Decimal wei its settled operations have paid less what they staked since it opened, what its groups hold
+   * included. */
+  net: string;
   /** Whether the player let it place developer bets, which its developer settles. */
   developerBets: boolean;
   /** What each group's bets have won and the game has not shown yet, by group: it stays out of the allowance and

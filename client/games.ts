@@ -24,9 +24,7 @@ interface ActiveGame {
   dispose: () => void;
   /** Whether the game's page has loaded, so the wallet's receipts have somewhere to go. */
   loaded: boolean;
-  /** Whether the allowance dialog has shown for this game: the wallet offers it by itself once. */
-  offered: boolean;
-  /** Whether the game has asked to place developer bets: every allowance dialog it gets asks for them too. */
+  /** Whether the game has said it places developer bets: its allowance dialog asks the player about them too. */
   developerBets: boolean;
 }
 /** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
@@ -57,7 +55,7 @@ export function closeGame() {
   wallet.closeGame();
   allowanceLock?.();
   allowanceLock = null;
-  if ($<HTMLDialogElement>('allowance-dialog').open) $<HTMLDialogElement>('allowance-dialog').close('');
+  if ($<HTMLDialogElement>('allowance-dialog').open) $<HTMLDialogElement>('allowance-dialog').close();
 }
 /** The game went away without navigation (a balance or account change): the lobby replaces its URL, or the wallet open
  * over it closes onto the lobby. */
@@ -79,17 +77,25 @@ export const openGame = (target: GameRoute, push = false) =>
     }
     return true;
   });
+/** A visit's gain or loss in whole METH, with its sign, and every digit on hover. */
+function showResult(element: HTMLElement, result: bigint) {
+  element.textContent = `${result < 0n ? '−' : '+'}${formatAmount(result < 0n ? -result : result, 0)}`;
+  element.title = `${result < 0n ? 'Lost' : 'Won'} ${exact(result < 0n ? -result : result)} METH since you opened it`;
+  element.className = result < 0n ? 'negative' : 'positive';
+}
 /** The top bar: the open game, by the wallet's name for it, and its allowance, which takes the balance's place, so the
- * bar shows one amount. Until it is set, setting it is all the bar offers. What the game's groups have won and it has
- * not shown yet is in neither. */
+ * bar shows one amount, with what the game has won or lost since it opened. Until the allowance is set, setting it is
+ * all the bar offers, deposit or none: the only way a game gets money to play with, where its refusals point. What
+ * the game's groups have won and it has not shown yet is in none of these. */
 export function renderGameAccount() {
   const playable = wallet.playable,
     game = active ? wallet.game : null,
     allowance = BigInt(game?.allowance ?? 0),
     balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay(),
-    unset = Boolean(game) && playable && !allowance;
+    unset = Boolean(game) && !allowance,
+    result = game ? wallet.gameVisit().result : 0n;
   $('game-title').classList.toggle('hidden', !game);
-  $('game-allowance').classList.toggle('hidden', !game || !playable);
+  $('game-allowance').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('unset', unset);
   $('wallet-button').classList.toggle('hidden', unset);
   // Balances read in whole METH, cut off, with every digit on hover.
@@ -99,6 +105,8 @@ export function renderGameAccount() {
       : ['Set allowance']),
   );
   $('game-allowance-amount').title = allowance ? `${exact(allowance)} METH` : '';
+  $('game-allowance-result').hidden = !result;
+  if (result) showResult($('game-allowance-result'), result);
   $('wallet-button-amount').replaceChildren(
     formatAmount(balance, 0),
     h('small', { title: 'A millionth of an ETH' }, 'METH'),
@@ -117,16 +125,6 @@ export function renderGameAccount() {
     active.frame.contentWindow?.location.replace(active.frame.src);
   }
   if ($<HTMLDialogElement>('allowance-dialog').open) renderAllowanceDialog();
-  offerAllowance();
-}
-/** The wallet asks for the allowance by itself, before any bet: once the game's page has loaded, the balance has
- * something to allow it and nothing else is open over it. A bet never waits on the dialog, and the game suggests
- * nothing in it. */
-function offerAllowance() {
-  if (!active?.loaded || active.offered || uiBusy || BigInt(wallet.game?.allowance ?? 0) > 0n || allowable() === 0n)
-    return;
-  if (document.querySelector('dialog[open]')) return;
-  void openAllowanceDialog();
 }
 
 /** The slider runs linearly from nothing to the whole playable balance, a hundredth of it a step. */
@@ -137,20 +135,33 @@ const wholeMicro = (wei: bigint) => wei - (wei % MICRO_ETH);
 /** A whole number of METH the player typed, as wei: null for anything else. */
 const typedWhole = (text: string) => (/^\d{1,30}$/.test(text.trim()) ? BigInt(text.trim()) * MICRO_ETH : null);
 /** The wallet's own dialog: the sole grant of spending authority over ETH. It says what the game may play with now,
- * what it would, and out of how much, because those are the whole of what is being authorized. */
+ * what it would, and out of how much, because those are the whole of what is being authorized; and, once the player
+ * has allowed it something, how the visit stands. */
 function renderAllowanceDialog() {
-  if (!active) return;
+  if (!active || !wallet.game) return;
   const name = active.identity.name;
   // The dialog deals in whole METH: the allowance as it stands reads cut down to them, as the top bar shows it.
-  const allowance = wholeMicro(BigInt(wallet.game?.allowance || '0'));
+  const allowance = wholeMicro(BigInt(wallet.game.allowance)),
+    visit = wallet.gameVisit();
   $('allowance-title').textContent = allowance > 0n ? `Change the allowance for ${name}` : `Play ${name} with ETH`;
+  $('allowance-visit').hidden = !visit.allowed;
+  $('allowance-taken-back').parentElement!.hidden = !visit.takenBack;
+  for (const [id, amount] of [
+    ['allowance-allowed', visit.allowed],
+    ['allowance-taken-back', visit.takenBack],
+    ['allowance-left', visit.left],
+  ] as const) {
+    $(id).textContent = formatAmount(amount, 0);
+    $(id).title = `${exact(amount)} METH`;
+  }
+  showResult($('allowance-result'), visit.result);
   const total = allowable(),
     slider = $<HTMLInputElement>('allowance-slider'),
     amount = typedWhole($<HTMLInputElement>('allowance-amount').value || '0') ?? -1n,
     valid = amount >= 0n && amount <= total,
     shown = formatAmount(amount, 0),
-    // A game that asks to place developer bets as well is allowed them at the allowance it has.
-    granting = allowingDeveloperBets && !wallet.game?.developerBets && amount > 0n,
+    // A game that places developer bets can be allowed them at the allowance it has.
+    granting = allowingDeveloperBets && !wallet.game.developerBets && amount > 0n,
     unchanged = amount === allowance && !granting;
   $('allowance-total').textContent = `${formatAmount(total, 0)} METH, your balance`;
   $<HTMLButtonElement>('allowance-take-all').classList.toggle('hidden', allowance === 0n);
@@ -188,22 +199,16 @@ const allowable = () => {
   const total = wallet.playableBalance() - wallet.inPlay();
   return total < 0n ? 0n : total;
 };
-let allowanceRequest: { resolve: (amount: bigint | null) => void } | null = null,
-  /** Whether confirming the dialog lets the game place developer bets: it asked to, or already may. */
-  allowingDeveloperBets = false;
-/** Whether the open game has nothing to play with, and the balance nothing to allow it. */
-const nothingToAllow = () => allowable() === 0n && BigInt(wallet.game?.allowance ?? 0) === 0n;
-/** Opened by the wallet itself once a game has loaded, from the top bar, or by the game's request for a larger
- * allowance, which may suggest how much more. With nothing in the balance to allow, the wallet opens on Deposit
- * instead, and the game hears that it has no more. */
-function openAllowanceDialog(amount?: bigint) {
-  if (!active || !wallet.game) return Promise.resolve<bigint | null>(null);
-  allowanceRequest?.resolve(null);
-  if (nothingToAllow()) {
+/** Whether confirming the dialog lets the game place developer bets: it said it places them, or already may. */
+let allowingDeveloperBets = false;
+/** Opened only by the player, from the top bar: a game never opens it, and a bet the allowance does not cover is
+ * refused. With nothing in the balance to allow, the wallet opens on Deposit instead. */
+function openAllowanceDialog() {
+  if (!active || !wallet.game) return;
+  if (allowable() === 0n && BigInt(wallet.game.allowance) === 0n) {
     openWallet('deposit', `${active.identity.name} plays with ETH from your balance. Deposit some to play.`);
-    return Promise.resolve<bigint | null>(null);
+    return;
   }
-  active.offered = true;
   const dialog = $<HTMLDialogElement>('allowance-dialog');
   // The game page shows nothing but the game, so the dialog that grants it money says who it is, and what it may do.
   const host = new URL(active.frame.src).host;
@@ -215,19 +220,13 @@ function openAllowanceDialog(amount?: bigint) {
   $('allowance-developer').hidden = !allowingDeveloperBets;
   $('allowance-developer-text').textContent =
     `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into their bank at once, and they decide what each bet pays. Neither the casino nor your wallet can check that result, so allow this only for a developer you trust.`;
-  // The dialog starts at the allowance as it stands, nothing for a game just opened, or at what the game asked for,
-  // in whole METH that cover it.
+  // The dialog starts at the allowance as it stands: nothing, for a game just opened.
   const total = wholeMicro(allowable()),
-    allowance = BigInt(wallet.game?.allowance || '0'),
-    asked = amount && amount > 0n ? allowance + amount : allowance,
-    suggested = amount && amount > 0n ? wholeMicro(asked + MICRO_ETH - 1n) : wholeMicro(asked);
-  $<HTMLInputElement>('allowance-amount').value = String((suggested > total ? total : suggested) / MICRO_ETH);
+    allowance = wholeMicro(BigInt(wallet.game.allowance));
+  $<HTMLInputElement>('allowance-amount').value = String((allowance > total ? total : allowance) / MICRO_ETH);
   renderAllowanceDialog();
   if (!dialog.open) dialog.showModal();
   $<HTMLInputElement>('allowance-amount').select();
-  return new Promise<bigint | null>(resolve => {
-    allowanceRequest = { resolve };
-  });
 }
 
 /** A game's address, checked before the wallet frames it: HTTP(S) without credentials, and never the wallet's own
@@ -293,13 +292,11 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     frame,
     dispose: () => {},
     loaded: false,
-    offered: false,
     developerBets: false,
   };
   frame.addEventListener('load', () => {
     if (!isCurrent()) return;
     active!.loaded = true;
-    offerAllowance();
     // The game's own keys, such as Space to play, work without a click into it first.
     if (!document.querySelector('dialog[open]')) frame.focus();
   });
@@ -324,22 +321,16 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
         wallet.gameEnd(params.group);
         return null;
       }
-      // Once a game asks to place developer bets, every allowance dialog it gets asks about them, the wallet's own
-      // offer included.
-      if (method === 'game.requestAllowance' && params.developerBets === true && isCurrent())
-        active!.developerBets = true;
+      // Its allowance dialog asks about developer bets from now on; only a published game has a developer to bet
+      // against.
+      if (method === 'game.placesDeveloperBets') {
+        if (isCurrent()) active!.developerBets = true;
+        return null;
+      }
       // What the player is doing in the wallet comes first; the wallet's own checks finish and the game's request
       // follows.
       if (uiBusy) throw gameError('busy', 'The wallet is processing another operation.');
       await wallet.actionDone;
-      if (method === 'game.requestAllowance') {
-        // Leave alone, asked with nothing to allow, waits for the wallet's own offer: only a game asking for ETH sends
-        // the player to Deposit.
-        if (params.amount === undefined && nothingToAllow()) return { allowed: false, ...wallet.gameAllowance() };
-        const amount = await openAllowanceDialog(params.amount === undefined ? undefined : BigInt(params.amount));
-        if (!isCurrent()) throw gameError('game-closed', 'The game was closed.');
-        return { allowed: amount !== null, ...wallet.gameAllowance() };
-      }
       if (method === 'game.casinoBet') return wallet.gameCasinoBet(params);
       if (method === 'game.developerBet') return wallet.gameDeveloperBet(params);
       return wallet.gamePayment(params);
@@ -431,27 +422,16 @@ $<HTMLFormElement>('allowance-form').addEventListener('submit', event => {
         ? `${active.identity.name} may play with up to ${formatAmount(amount, 0)} METH${allowingDeveloperBets ? ', developer bets included' : ''}.`
         : `${active.identity.name} may play with nothing.`,
     );
-    $<HTMLDialogElement>('allowance-dialog').close(String(amount));
+    $<HTMLDialogElement>('allowance-dialog').close();
   });
 });
-$<HTMLDialogElement>('allowance-dialog').addEventListener('close', () => {
-  const dialog = $<HTMLDialogElement>('allowance-dialog'),
-    value = dialog.returnValue;
-  dialog.returnValue = '';
-  // The close is heard a moment after it: a game's request can have opened the dialog again by then, and this close
-  // belongs to the request before.
-  if (dialog.open) return;
-  const request = allowanceRequest;
-  allowanceRequest = null;
-  request?.resolve(value ? BigInt(value) : null);
-});
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-allowance-cancel]'))
-  button.addEventListener('click', () => $<HTMLDialogElement>('allowance-dialog').close(''));
+  button.addEventListener('click', () => $<HTMLDialogElement>('allowance-dialog').close());
 $<HTMLButtonElement>('allowance-deposit').addEventListener('click', () => {
-  $<HTMLDialogElement>('allowance-dialog').close('');
+  $<HTMLDialogElement>('allowance-dialog').close();
   openWallet('deposit');
 });
-$('game-allowance').addEventListener('click', () => void openAllowanceDialog());
+$('game-allowance').addEventListener('click', openAllowanceDialog);
 $<HTMLInputElement>('allowance-slider').addEventListener('input', () => {
   $<HTMLInputElement>('allowance-amount').value = String(
     sliderAmount(allowable(), $<HTMLInputElement>('allowance-slider').value) / MICRO_ETH,

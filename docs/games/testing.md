@@ -93,9 +93,8 @@ What the stub holds a game to:
 
 `bridgeTo(wallet)` is a game's side of the bridge to any wallet, such as one `reload()` returns. Every request goes
 through the checks the wallet's bridge makes, with an envelope ID above the last, and on to the wallet's own methods.
-The player agrees to every `game.requestAllowance`: the allowance rises by the amount asked, or by the whole playable
-balance when none is, up to the playable balance, with developer bets when the game asks for them. Every receipt the wallet pushes reaches the `onReceipt` listeners of
-every bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
+The test sets the allowance with `setGameAllowance`, as the player does in the wallet's top bar. Every receipt the
+wallet pushes reaches the `onReceipt` listeners of every bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
 refusal.
 
 ### `TestBridge`

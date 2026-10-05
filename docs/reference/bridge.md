@@ -36,7 +36,7 @@ The wallet answers each request once, with the same `id` and either `result` or 
 {
   "hookedin": true,
   "id": 8,
-  "error": { "code": "insufficient-allowance", "message": "Bet exceeds the game's allowance" }
+  "error": { "code": "insufficient-allowance", "message": "Not enough allowance for this bet. Set it in the top bar." }
 }
 ```
 
@@ -73,10 +73,9 @@ deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [b
 
 ## Queueing
 
-`wallet.hello`, `wallet.round`, `game.receipt`, `game.allowance` and `game.end` are answered at once, also while a bet
-or the player's dialog is open, and so is `wallet.info`, except that it waits until the wallet has first heard from the
-casino. `game.casinoBet`,
-`game.developerBet`, `game.payment` and `game.requestAllowance` sign something or ask the player, so they take their
+`wallet.hello`, `wallet.round`, `game.receipt`, `game.allowance`, `game.placesDeveloperBets` and `game.end` are
+answered at once, also while a bet is open, and so is `wallet.info`, except that it waits until the wallet has first
+heard from the casino. `game.casinoBet`, `game.developerBet` and `game.payment` sign something, so they take their
 turn one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`. A request whose
 turn comes while the player is doing something in the wallet is refused with `busy` too; one whose turn comes while the
 wallet does work of its own, such as its regular look at the chain, waits for it.
@@ -201,8 +200,8 @@ partial loss. The result is the bet's [receipt](#receipt), `settled` or `rejecte
 A developer bet: a bet against the game's developer. Its stake comes out of the game's allowance and goes into the
 developer's bank at once, and the bet is final. The developer settles it when it chooses, on its word, and the player
 trusts it to pay. So the player allows developer bets apart from casino bets, in the wallet's dialog, after a warning
-that says so: a game asks with [`game.requestAllowance`](#gamerequestallowance) and `developerBets`, and until the
-player has allowed them, a developer bet is refused with `developer-bets-not-allowed`.
+that says so: a game that places them says so with [`game.placesDeveloperBets`](#gameplacesdeveloperbets), and until
+the player has allowed them, a developer bet is refused with `developer-bets-not-allowed`.
 
 | Param   | Type           | Meaning                                                                                                                                |
 | ------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -265,34 +264,14 @@ A payment to the bankroll: the balance drops by `amount`, with no chance involve
 
 The result is the payment's receipt, `settled` or `rejected`. It carries no amount.
 
-### `game.requestAllowance`
+### `game.placesDeveloperBets`
 
-Asks for a larger allowance. The wallet opens its own dialog, in its own words, where the player sets how much of their
-balance the game may risk, or declines. The game passes it an amount, and whether it places developer bets, and nothing
-else: only the player's confirmation there grants a game money. With `developerBets`, the dialog warns that the
-game's developer takes those stakes and decides what they pay, and confirming it allows developer bets too; every
-dialog the game gets after asks about them, and a game opened by its URL alone has no developer, and its dialog offers
-none. The reply comes once the player has decided. When the player's balance has nothing to allow, the reply says
-`allowed: false` at once, and a request with an `amount` opens the wallet's Deposit tab too. The wallet also offers the
-dialog by itself once the game's page has loaded ([the allowance](../games/how-a-game-works.md#the-allowance)), and
-the player can open it from the top bar at any time; taking the whole allowance back there takes back developer bets
-with it.
-
-| Param           | Type           | Meaning                                                                                                                     |
-| --------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `amount`        | decimal string | Optional: how much more than the game holds. The dialog suggests the game's allowance plus this, up to the player's balance |
-| `developerBets` | `boolean`      | Optional: `true` asks the player to allow developer bets too                                                                |
-
-The result is the game's [`game.allowance`](#gameallowance) after it, with `allowed`, whether the player set an
-allowance. The allowance may be lower than the game had.
-
-```json title="Reply"
-{
-  "hookedin": true,
-  "id": 3,
-  "result": { "allowed": true, "allowance": "5000000000000", "pending": false, "developerBets": false }
-}
-```
+Says the game places developer bets. No params; the result is `null`, at once, and nothing opens. A game never asks the
+player for money: only the player opens the wallet's allowance dialog, from its top bar, and sets in its own words how
+much of their balance the game may risk ([the allowance](../games/how-a-game-works.md#the-allowance)). Once a game has
+said this, that dialog also warns that the game's developer takes developer bets' stakes and decides what they pay,
+and confirming it allows developer bets too. A game opened by its URL alone has no developer, and its dialog offers
+none. Taking the whole allowance back takes back developer bets with it.
 
 ### `game.allowance`
 
@@ -407,8 +386,8 @@ A refusal is `{ code, message }`. The wallet's codes:
 | `invalid-request`            | The envelope or its parameters break a rule on this page, the envelope ID did not rise, or the request asks a developer bet of a game published nowhere | Fixes the request: sent again unchanged, it fails again                                                                                                                                                                                                    |
 | `unknown-method`             | The wallet offers no such method                                                                                                                        | Keeps to the methods on this page                                                                                                                                                                                                                          |
 | `busy`                       | The player is doing something in the wallet, or 32 requests already wait                                                                                | Sends the same request again shortly                                                                                                                                                                                                                       |
-| `insufficient-allowance`     | The stake or amount exceeds the game's allowance and what its group holds                                                                               | Calls `game.requestAllowance`, then sends the same request again                                                                                                                                                                                           |
-| `developer-bets-not-allowed` | The player has not allowed the game's developer bets                                                                                                    | Calls `game.requestAllowance` with `developerBets`, then sends the same request again                                                                                                                                                                      |
+| `insufficient-allowance`     | The stake or amount exceeds the game's allowance and what its group holds                                                                               | Shows the message, which tells the player to set the allowance in the top bar; the same request can go again once they have                                                                                                                                |
+| `developer-bets-not-allowed` | The player has not allowed the game's developer bets                                                                                                    | Shows the message, which tells the player to allow them in the top bar, after `game.placesDeveloperBets`                                                                                                                                                   |
 | `pending-operation`          | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the wallet finishes a deposit it is taking in by itself, and the player recovers anything else from the wallet's banner. When `game.allowance`'s `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |
 | `id-conflict`                | The ID is bound to other terms or another game, or a pending request under it differs                                                                   | Sends the terms saved with the ID, or a fresh ID for a fresh operation                                                                                                                                                                                     |
 | `id-used`                    | The operation was carried out on another channel, and this wallet has no receipt of it                                                                  | Does not place it again under another ID without asking the player                                                                                                                                                                                         |
