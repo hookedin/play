@@ -20,8 +20,8 @@ A game depends on play's `main` branch:
 ```
 
 The [template](https://github.com/hookedin/game-template)'s workflow runs `npm update @hookedin/play` before it tests
-and builds, so every deploy takes play's newest commit, and the lockfile is only where a local install starts. There are
-no versions and no tags: a push to play's `main` is the release.
+and builds, so every deploy takes play's newest commit, and on `main` commits the lockfile it tested, so a local install
+starts from the play the last deploy took. There are no versions and no tags: a push to play's `main` is the release.
 
 - Node 26 or later.
 - The package ships raw `.ts` files, with no compiled JavaScript and no declaration files.
