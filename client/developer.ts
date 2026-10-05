@@ -41,9 +41,10 @@ function ownGame(owner: string, game: AccountGame) {
     record = records.get(game.key.toLowerCase()),
     bank = BigInt(game.bank),
     own = same(game.server, wallet.address),
+    published = game.takenDownAt === null,
     play = (event: Event) => {
       event.preventDefault();
-      if (game.url) task(() => loadGame(game.url!, route, true, { key: game.key, developer: wallet.address }));
+      if (published) task(() => loadGame(game.url, route, true, { key: game.key, developer: wallet.address }));
     };
   let figures: Node[];
   if (record?.totals) {
@@ -121,21 +122,25 @@ function ownGame(owner: string, game: AccountGame) {
       h(
         'a',
         { className: 'game-line-icon', href: path, onclick: play, ariaLabel: `Play ${title}` },
-        gameIcon(game.url ?? '', title),
+        gameIcon(game.url, title),
       ),
       h(
         'div',
         { className: 'game-line-names' },
         h('h3', null, title),
-        ...(game.url
-          ? [
-              h('a', { href: path, onclick: play }, `${location.host}${path}`),
-              h('a', { href: game.url, target: '_blank', rel: 'noopener noreferrer' }, `Served from ${game.url} ↗`),
-            ]
-          : [h('span', null, 'Taken down: publish it again to bring it back.')]),
+        ...(published ? [h('a', { href: path, onclick: play }, `${location.host}${path}`)] : []),
+        h(
+          'a',
+          { href: game.url, target: '_blank', rel: 'noopener noreferrer' },
+          `${published ? 'Served' : 'Last served'} from ${game.url} ↗`,
+        ),
         h('code', { title: 'The game’s key: your server names the game by it' }, game.key),
       ),
-      h('span', { className: 'game-line-when' }, `Published ${shortDate(game.createdAt)}`),
+      h(
+        'span',
+        { className: 'game-line-when' },
+        published ? `Published ${shortDate(game.createdAt)}` : `Taken down ${shortDate(game.takenDownAt!)}`,
+      ),
     ),
     ...figures,
     h(
@@ -219,13 +224,31 @@ function ownGame(owner: string, game: AccountGame) {
     h(
       'div',
       { className: 'game-actions' },
-      ...(game.url ? [h('a', { className: 'button small primary', href: path, onclick: play }, 'Play')] : []),
+      published
+        ? h('a', { className: 'button small primary', href: path, onclick: play }, 'Play')
+        : h(
+            'button',
+            {
+              type: 'button',
+              className: 'button small primary',
+              title: `Publish ${owner}/${game.name} again at ${game.url}, with its bank and its record.`,
+              disabled: uiBusy || !wallet.playable || wallet.recoveryOnly,
+              onclick: () =>
+                task(async () => {
+                  await wallet.publishGame(game.name, game.url);
+                  await loadLibrary();
+                  await loadOwned();
+                  toast(`${owner}/${game.name} is published again.`);
+                }),
+            },
+            'Publish again',
+          ),
       h(
         'button',
         { type: 'button', className: 'button small', onclick: () => void openGameRecord(game.key.toLowerCase()) },
         'Every bet in it ↗',
       ),
-      ...(game.url
+      ...(published
         ? [
             h(
               'button',
@@ -254,8 +277,8 @@ function ownGame(owner: string, game: AccountGame) {
 export function renderDeveloper() {
   const name = wallet.uname ? showName(wallet) : null,
     games = owned ?? [],
-    live = games.filter(game => game.url),
-    down = games.filter(game => !game.url),
+    live = games.filter(game => game.takenDownAt === null),
+    down = games.filter(game => game.takenDownAt !== null),
     banked = games.reduce((sum, game) => sum + BigInt(game.bank), 0n);
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !wallet.playable || wallet.recoveryOnly;
   $('developer-banks').textContent = owned ? formatAmount(banked) : '—';

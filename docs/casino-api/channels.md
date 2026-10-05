@@ -345,15 +345,16 @@ and takes money out of its bank. A game's bank holds its money at the casino: ha
 the stakes of its developer bets go in, and its settlements and its own casino bets are paid from it
 ([game bank messages](../reference/signed-messages.md#game-bank-messages)). Nothing in it is reserved. Only the developer
 puts money in, with an [operation](#post-apichannelsidoperations) naming the game's key, and only the developer takes it
-out. A game taken down keeps its bank, its server and its record.
+out. A game taken down keeps its URL, its bank, its server and its record.
 
 ### `GET /api/account/games`
 
-Every game the account has published, taken down since or not, by name: each `{key, name, url, server, bank, sequence,
-statement, createdAt}`. `url` is `null` while it is taken down, `server` is the address its server signs with (the
-account's own until it names another), `bank` what the bank holds, and `statement` the casino's latest `BankStatement`
-of it (`null` and `sequence` 0 before any). Developer bets, settlements and casino bets move the bank between
-statements, so `bank` can differ from the statement's balance.
+Every game the account has published, taken down since or not, by name: each `{key, name, url, takenDownAt, server,
+bank, sequence, statement, createdAt}`. `url` is where it is served, or was last; `takenDownAt` is when the account
+took it down, and `null` while it is published; `server` is the address its server signs with (the account's own until
+it names another), `bank` what the bank holds, and `statement` the casino's latest `BankStatement` of it (`null` and
+`sequence` 0 before any). Developer bets, settlements and casino bets move the bank between statements, so `bank` can
+differ from the statement's balance.
 
 ### `POST /api/account/games`
 

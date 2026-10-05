@@ -76,12 +76,14 @@ export interface PublicDeveloperBet {
   settlement?: { player: string; casino: string; signature: string; server?: SignedStatement };
   settledAt?: number;
 }
-/** A game an account has published, taken down since or not, as its developer sees it: where it is served (none while
- * it is taken down), the address its server signs with, and its bank with the casino's latest statement of it. */
+/** A game an account has published, taken down since or not, as its developer sees it: where it is served, or was last,
+ * when it was taken down (null while it is published), the address its server signs with, and its bank with the
+ * casino's latest statement of it. */
 export interface AccountGame {
   key: string;
   name: string;
-  url: string | null;
+  url: string;
+  takenDownAt: number | null;
   server: string;
   bank: string;
   sequence: number;
