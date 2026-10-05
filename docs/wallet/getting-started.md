@@ -82,11 +82,10 @@ all of its commission, and it takes no developer bets.
 
 A game opens with nothing to play with, and nothing opens over it: a bet it has no allowance for is refused, and the
 game says to set one in the top bar. While the game is open, the top bar names it and shows its allowance in place of
-your balance, with what the game has won or lost since you opened it; until you set one, **Set allowance** is all it
-offers. It opens the wallet's own dialog, where every word is the wallet's; when your balance has nothing to allow, it
-opens the Deposit tab instead. Once you have allowed the game something, the dialog adds up the visit: what you
-allowed, what you took back, what the game won or lost, and what is left. The allowance caps what the game may risk,
-and moves no money:
+your balance; until you set one, **Set allowance** is all it offers. It opens the wallet's own dialog, where every word
+is the wallet's; when your balance has nothing to allow, it opens the Deposit tab instead. Once you have allowed the
+game something, the dialog adds up the visit: what you allowed, what you took back, what the game won or lost, and
+what is left. The allowance caps what the game may risk, and moves no money:
 
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
   taken in: a deposit still arriving cannot raise it.

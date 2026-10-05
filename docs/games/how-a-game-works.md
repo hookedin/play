@@ -54,9 +54,8 @@ verified winnings.
 - `HookedIn.allowance()` reads it, with `pending` and `developerBets`. Every bet and payment must fit it. Stakes and
   payments lower it as they are made; verified winnings raise it, a group's once the game has ended the group.
 - The wallet's top bar names the game, by the name it is published under, and shows its allowance in place of the
-  player's balance, with what the game has won or lost since it opened. The dialog adds the visit up: what the player
-  allowed, took back, and won or lost, and what is left. A page shows no header, allowance or balance of its own: only
-  the game.
+  player's balance. The dialog adds the visit up: what the player allowed, took back, and won or lost, and what is
+  left. A page shows no header, allowance or balance of its own: only the game.
 - Leaving the game, reloading or closing the tab takes the allowance back, its leave to place developer bets with it:
   a game opens with nothing every time. The money never left the player's balance.
 - One game per wallet holds an allowance at a time, across tabs.

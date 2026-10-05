@@ -77,23 +77,16 @@ export const openGame = (target: GameRoute, push = false) =>
     }
     return true;
   });
-/** A visit's gain or loss in whole METH, with its sign, and every digit on hover. */
-function showResult(element: HTMLElement, result: bigint) {
-  element.textContent = `${result < 0n ? '−' : '+'}${formatAmount(result < 0n ? -result : result, 0)}`;
-  element.title = `${result < 0n ? 'Lost' : 'Won'} ${exact(result < 0n ? -result : result)} METH since you opened it`;
-  element.className = result < 0n ? 'negative' : 'positive';
-}
 /** The top bar: the open game, by the wallet's name for it, and its allowance, which takes the balance's place, so the
- * bar shows one amount, with what the game has won or lost since it opened. Until the allowance is set, setting it is
- * all the bar offers, deposit or none: the only way a game gets money to play with, where its refusals point. What
- * the game's groups have won and it has not shown yet is in none of these. */
+ * bar shows one amount. Until the allowance is set, setting it is all the bar offers, deposit or none: the only way a
+ * game gets money to play with, where its refusals point. What the game's groups have won and it has not shown yet is
+ * in none of these. */
 export function renderGameAccount() {
   const playable = wallet.playable,
     game = active ? wallet.game : null,
     allowance = BigInt(game?.allowance ?? 0),
     balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay(),
-    unset = Boolean(game) && !allowance,
-    result = game ? wallet.gameVisit().result : 0n;
+    unset = Boolean(game) && !allowance;
   $('game-title').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('unset', unset);
@@ -105,8 +98,6 @@ export function renderGameAccount() {
       : ['Set allowance']),
   );
   $('game-allowance-amount').title = allowance ? `${exact(allowance)} METH` : '';
-  $('game-allowance-result').hidden = !result;
-  if (result) showResult($('game-allowance-result'), result);
   $('wallet-button-amount').replaceChildren(
     formatAmount(balance, 0),
     h('small', { title: 'A millionth of an ETH' }, 'METH'),
@@ -154,7 +145,11 @@ function renderAllowanceDialog() {
     $(id).textContent = formatAmount(amount, 0);
     $(id).title = `${exact(amount)} METH`;
   }
-  showResult($('allowance-result'), visit.result);
+  // The visit's gain or loss in whole METH, with its sign, and every digit on hover.
+  const result = visit.result < 0n ? -visit.result : visit.result;
+  $('allowance-result').textContent = `${visit.result < 0n ? '−' : '+'}${formatAmount(result, 0)}`;
+  $('allowance-result').title = `${visit.result < 0n ? 'Lost' : 'Won'} ${exact(result)} METH since you opened it`;
+  $('allowance-result').className = visit.result < 0n ? 'negative' : 'positive';
   const total = allowable(),
     slider = $<HTMLInputElement>('allowance-slider'),
     amount = typedWhole($<HTMLInputElement>('allowance-amount').value || '0') ?? -1n,
