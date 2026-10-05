@@ -92,7 +92,7 @@ one closest to your game.
 | [Mines](../../games/mines/)                             | Reveal or cash out: the simplest multi-step graph                               | [src/rules.ts](../../games/mines/src/rules.ts)                                                   |
 | [Blackjack](https://github.com/hookedin/game-blackjack) | Doubles, splits and insurance, with precomputed prices                          | The whole repository                                                                             |
 | [Roulette](https://github.com/hookedin/game-roulette)   | Many players' developer bets on one spin, backed by the wheel's casino bets     | The whole repository                                                                             |
-| [Crash](https://github.com/hookedin/game-crash)         | Many players on one flight, each a developer bet paid from the developer's bank | The whole repository                                                                             |
+| [Crash](https://github.com/hookedin/game-crash)         | Many players on one flight, each a developer bet paid from the game's bank | The whole repository                                                                             |
 
 The four static games live in play's [games/](../../games/) folder. From play's root, after `npm ci`,
 `node sdk/bin/hookedin-game.js serve games/<id>` serves one at `http://127.0.0.1:4185/`. To make one your own, start a

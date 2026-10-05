@@ -150,15 +150,16 @@ which bet a collapsed step draws, or the files a game serves. Playing a game tru
 
 ## Developer bets trust their developer
 
-A developer bet is a bet against the game's developer, not the bankroll. Its stake goes into the developer's bank at
-the casino as it is placed, and it is paid what the developer settles, from that bank, with no escrow, no deadline and
-no refund. The wallet checks that the developer signed the settlement, and nothing about what the bet should have paid.
-A developer can keep a stake by never settling; the game's public record then shows the bet as open.
+A developer bet is a bet against the game's developer, not the bankroll. Its stake goes into the game's bank at the
+casino as it is placed, and it is paid what the game's server settles, from that bank, with no escrow, no deadline and
+no refund. The wallet checks that the settlement is signed by the developer's key or by a server key the developer
+named for the game in a signed `GameServer`, and nothing about what the bet should have paid. A developer can keep a
+stake by never settling; the game's public record then shows the bet as open.
 
 A game can make its developer bets provably fair with a scheme of its own, which anyone can check against what the
 casino publishes; [roulette](https://github.com/hookedin/game-roulette#fairness-and-trust) does. What a developer bet
 is paid is the casino's promise until your wallet collects it, and until then it is outside what the contract
-protects. A developer's bank reserves nothing: whether a developer can pay its bets is between the developer and its
+protects. A game's bank reserves nothing: whether a developer can pay its bets is between the developer and its
 players ([settled trade-offs](architecture.md#settled-trade-offs)).
 
 ## Fund shares are the casino's promise
@@ -182,13 +183,13 @@ The wallet checks:
 - every collateral offer: the casino's signature, the channel and amount it names, and that its price is the casino's
   rate, before buying it;
 - every rejection, and that it declines no casino bet a quote covers but one the account signed on another channel;
-- developer settlements, share statements, bank statements and the fund's quote, by their signatures and what
-  they refer to;
+- developer settlements and the developer's naming of the key that signed them, share statements, bank statements and
+  the fund's quote, by their signatures and what they refer to;
 - whether the contract has recorded each withdrawal, by its ID, and what it still owes of it;
 - game URLs and every bridge request.
 
 It takes on the casino's word: commission, the virtual bankroll a quote names, the withdrawal fee up to [the wallet's
-cap](../wallet/closing-and-claims.md#fees-and-gas), the fund's equity and total shares, the developer earnings tally, a
-developer bank's balance, and, on a device without your evidence, that the state it holds of your balance is the latest.
+cap](../wallet/closing-and-claims.md#fees-and-gas), the fund's equity and total shares, a game's bank and the commission
+that went into it, and, on a device without your evidence, that the state it holds of your balance is the latest.
 It takes on the developer's word what a developer bet pays and which bet a collapsed step draws, and on the game's word
 everything a game shows.

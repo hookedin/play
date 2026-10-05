@@ -154,15 +154,18 @@ export class CasinoWallet extends GameSessions {
   /** What the last attempt to send the pending operation it names ran into: a casino that refuses an operation
    * refuses it the same way on every retry. */
   pendingError: { operationId: string; message: string; code?: string } | null = null;
-  /** This account's bank as a developer: the casino's statement for its latest deposit or withdrawal, a withdrawal
-   * signed and not yet answered, and withdrawn money not yet collected. */
-  declare bank: {
-    statement?: { message: any; signature: string };
-    withdrawing?: { message: any; signature: string } | null;
-    owed?: string[];
-  };
-  /** What the casino says this account's games have earned and what it has collected; shown, never relied on. */
-  declare developerEarnings: { earned: string; collected: string } | null;
+  /** The banks of this account's games that it has put money into or taken money out of, by the game's key: the game's
+   * name, the casino's statement for the latest deposit or withdrawal, a withdrawal signed and not yet answered, and
+   * withdrawn money not yet collected. */
+  declare banks: Record<
+    string,
+    {
+      name?: string;
+      statement?: { message: any; signature: string };
+      withdrawing?: { message: any; signature: string } | null;
+      owed?: string[];
+    }
+  >;
   declare channels: Record<string, WalletChannel>;
   declare busy: boolean;
   declare revision: number;
@@ -268,7 +271,6 @@ export class CasinoWallet extends GameSessions {
       registers: false,
       discordUsername: null,
       profile: null,
-      developerEarnings: null,
       busy: false,
       depositShown: false,
     });
@@ -386,7 +388,6 @@ export class CasinoWallet extends GameSessions {
       await this.refreshing?.catch(() => {});
       this.requireDurableState();
       const address = getAddress(signer.address);
-      this.developerEarnings = null;
       const contract = new Contract(this.config.contractAddress, trustedArtifact.abi, signer);
       const reader = contract.connect(this.provider) as Contract;
       const storageKey =
@@ -447,12 +448,13 @@ export class CasinoWallet extends GameSessions {
       history: saved?.history || [],
       revision: saved?.revision || 0,
       transactionIntent: saved?.transactionIntent || null,
-      // Bankroll shares, developer bets and a developer's bank belong to the account, not to any one channel.
+      // Bankroll shares, developer bets and the banks of the account's games belong to the account, not to any one
+      // channel.
       fund: saved?.fund || { sequence: 0, shares: '0', statement: null },
       developerBets: saved?.developerBets || {},
       developerBetCursor: saved?.developerBetCursor || '0',
       developerBetError: null,
-      bank: saved?.bank || {},
+      banks: saved?.banks || {},
       autoDeposit: saved?.autoDeposit ?? true,
       atAddress: saved?.atAddress ?? null,
     });
@@ -543,7 +545,7 @@ export class CasinoWallet extends GameSessions {
         fund: this.fund,
         developerBets: this.developerBets,
         developerBetCursor: this.developerBetCursor,
-        bank: this.bank,
+        banks: this.banks,
         autoDeposit: this.autoDeposit,
         atAddress: this.atAddress,
         ...changes,
@@ -717,8 +719,6 @@ export class CasinoWallet extends GameSessions {
             collectable: entry.collectable,
           })),
       ],
-      // Commission this account's games have earned, as the casino reports it to this channel.
-      developerEarnings: this.developerEarnings,
     };
     this.onChange(this);
     return this.publicState;

@@ -41,14 +41,14 @@ the balance after it, how much of the channel's deposits the balance has taken i
 withdrawals and lock-ins. The wallet re-derives the checkpoint, checks the casino's signature, countersigns it and saves
 it before the game hears anything. There are six kinds of operation, and the contract knows no others:
 
-| Kind         | Effect on the balance       | Used for                                                                                                                              |
-| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                                           |
-| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a developer's bank, transfers                                 |
-| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, developer earnings, bank withdrawals, transfers, a deposit's network fee |
-| 4 deposit    | + amount                    | Taking in money deposited into the channel                                                                                            |
-| 5 withdrawal | − amount − fee              | Withdrawals, which the contract pays to the address the operation names                                                               |
-| 6 lock-in    | − amount − fee              | Lock-ins, which the contract pays into the account's own channel as deposits                                                          |
+| Kind         | Effect on the balance       | Used for                                                                                                                        |
+| ------------ | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1 casino bet | − stake, + prize if it wins | Casino bets                                                                                                                     |
+| 2 debit      | − amount                    | Payments, developer bets, investing in the bankroll fund, deposits into a game's bank, transfers                                |
+| 3 credit     | + amount                    | Collecting what is owed: developer bet payouts, sold shares, withdrawals from a game's bank, transfers, a deposit's network fee |
+| 4 deposit    | + amount                    | Taking in money deposited into the channel                                                                                      |
+| 5 withdrawal | − amount − fee              | Withdrawals, which the contract pays to the address the operation names                                                         |
+| 6 lock-in    | − amount − fee              | Lock-ins, which the contract pays into the account's own channel as deposits                                                    |
 
 What an operation means (which game asked for it, the group it belongs to, what it pays into or collects from) is in
 its **details**, whose hash the operation signs as its `memo`. The contract never reads them; the wallet and the casino
@@ -135,17 +135,17 @@ nothing.
 ## Developer bets
 
 A developer bet is a bet against the game's developer instead of the bankroll: a debit whose details carry `meta`, the
-game's own JSON saying what the bet is. Its stake goes into the developer's **bank** at the casino at once, and the
-developer settles the bet later with a `Settlement` its key signs, which the wallet checks and collects with a credit
-([trust model](trust-model.md#developer-bets-trust-their-developer)).
+game's own JSON saying what the bet is. Its stake goes into the game's **bank** at the casino at once, and the game's
+server settles the bet later with a `Settlement` signed by the key its developer named for it, which the wallet checks
+and collects with a credit ([trust model](trust-model.md#developer-bets-trust-their-developer)).
 
-|              | Casino bet                                              | Developer bet                                |
-| ------------ | ------------------------------------------------------- | -------------------------------------------- |
-| Against      | The casino's bankroll                                   | The game's developer                         |
-| Settled      | In the request that places it, by its round             | When the developer signs a settlement        |
-| What it pays | Its prize, when the round's outcome is below its chance | What the developer's settlement says         |
-| Its return   | Measured from its chance and prize                      | None: it has no odds                         |
-| Games        | Any game                                                | A published game, whose developer settles it |
+|              | Casino bet                                              | Developer bet                             |
+| ------------ | ------------------------------------------------------- | ----------------------------------------- |
+| Against      | The casino's bankroll                                   | The game's developer                      |
+| Settled      | In the request that places it, by its round             | When the game's server signs a settlement |
+| What it pays | Its prize, when the round's outcome is below its chance | What the server's settlement says         |
+| Its return   | Measured from its chance and prize                      | None: it has no odds                      |
+| Games        | Any game                                                | A published game, whose server settles it |
 
 ## Payments
 
@@ -156,8 +156,8 @@ round and earns no commission. A game uses it for a charge that does not depend 
 
 The casino's **bankroll** backs every casino bet. The casino admits a bet only when its quote's virtual bankroll, half
 the bankroll, could take it with no commission at all, by the exact Kelly condition for its two outcomes. Its
-**commission** is then the edge that virtual bankroll does not need, split equally between the game's developer and the
-casino. Commission is the casino's
+**commission** is then the edge that virtual bankroll does not need, split equally between the game's bank, which its
+developer takes money out of, and the casino. Commission is the casino's
 accounting, not a second debit from your balance; a bet's receipt reports it. [Economics](../reference/economics.md)
 derives the rule, and [earnings](../games/publishing.md#earnings) explains what a developer collects.
 

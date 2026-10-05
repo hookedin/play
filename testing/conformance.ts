@@ -2,8 +2,8 @@
  * What a game can count on from any casino it runs against, as tests. play runs them against the stub in
  * `game-wallet.ts` and the casino service runs them against itself, so the stub a game is tested with behaves as the
  * casino does wherever a game depends on it: a lost reply, a new channel, a wallet that lost its receipts, a casino
- * bet the bankroll cannot back, a developer bet on its developer's word, a developer that restarts, a casino bet of
- * the developer's the bankroll declines, a round revealed without a bet, and a game whose rules changed under a saved
+ * bet the bankroll cannot back, a developer bet on its developer's word, a game's server that restarts, a casino bet
+ * of the game's the bankroll declines, a round revealed without a bet, and a game whose rules changed under a saved
  * round.
  */
 import test from 'node:test';
@@ -125,7 +125,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     assert.deepEqual(await x.bridge.call('game.casinoBet', bet), declined);
   });
 
-  test(`${name}: a developer bet is paid what its developer signs, and the game hears`, async t => {
+  test(`${name}: a developer bet is paid what the game's server signs, and the game hears`, async t => {
     const x = await open(t),
       developer = await x.developer(),
       before = await x.wallet.balance(),
@@ -144,7 +144,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     assert.equal(await x.wallet.balance(), before + 2n * BigInt(x.within.stake));
   });
 
-  test(`${name}: a developer that restarts places the same casino bet, on the seed it published before the bet`, async t => {
+  test(`${name}: a game's server that restarts places the same casino bet, on the seed it published before the bet`, async t => {
     const x = await open(t),
       developer = await x.developer(),
       round = await developer.openRound(),
@@ -177,7 +177,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     assert.deepEqual([settled.status, settled.payout], ['settled', String(owed)]);
   });
 
-  test(`${name}: a casino bet of the developer's the bankroll declines reveals its round and moves no money`, async t => {
+  test(`${name}: a game's casino bet the bankroll declines reveals its round and moves no money`, async t => {
     const x = await open(t),
       developer = await x.developer(),
       round = await developer.openRound(),

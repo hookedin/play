@@ -1,6 +1,6 @@
 ---
 title: Binary steps
-description: Reference for @hookedin/play/sdk/steps, which backs a draw a game's players share, such as a roulette spin, with binary casino bets from its developer's bank, and checks where a spin ends.
+description: Reference for @hookedin/play/sdk/steps, which backs a draw a game's players share, such as a roulette spin, with binary casino bets from its game's bank, and checks where a spin ends.
 sidebar:
   order: 5
 ---
@@ -58,15 +58,15 @@ draw's outcomes. A leaf needs what is owed on it, and a node whose children need
 node needs the least cash whose bet between its children the casino's rule, [`admits`](admits.md#admits), takes at
 `bankroll`: a stake of the node's cash less the lower child's, paying the difference between the children with the
 dearer side's chance. More cash is never less safe for the bankroll, and a stake of the whole difference cannot lose it
-anything, so the search is a bisection. The casino admits a developer's casino bet against its virtual bankroll when the
+anything, so the search is a bisection. The casino admits a game's casino bet against its virtual bankroll when the
 bet arrives, so price against the virtual bankroll it reports, half its bankroll, as roulette does. Throws a
 `RangeError` unless `owed` holds at least one amount and every amount and `bankroll` is a nonnegative bigint. A bankroll
-of nothing admits no bet, so against it every node needs the cash of its dearer child: the developer's bank carries the
+of nothing admits no bet, so against it every node needs the cash of its dearer child: the game's bank carries the
 whole walk, and the casino declines its bets and reveals their rounds.
 
 ### `stepsCash`
 
-What a spin needs to start: the root's cash. A walk moves the developer's bank by what is owed on its leaf less this.
+What a spin needs to start: the root's cash. A walk moves the game's bank by what is owed on its leaf less this.
 
 ### `StepBet`
 

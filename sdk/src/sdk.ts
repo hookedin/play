@@ -103,8 +103,8 @@ export const HookedIn = Object.freeze({
   hello,
   /** Who is playing and what to price bets against. */
   info: (): Promise<WalletInfo> => call('wallet.info'),
-  /** A developer's round as the casino shows it to anyone, read through the player's wallet: open, or revealed with
-   * its seed, its secret, its outcome and the developer's casino bet on it. A game whose players share a draw checks
+  /** A game's round as the casino shows it to anyone, read through the player's wallet: open, or revealed with its
+   * seed, its secret, its outcome and the game's casino bet on it. A game whose players share a draw checks
    * its rounds here. */
   round: (id: string): Promise<Round> => call('wallet.round', { id }),
   /** What the game may stake now, whether an operation awaits recovery, and whether it may place developer bets. With
@@ -126,9 +126,9 @@ export const HookedIn = Object.freeze({
    * enter, and `prize` pays when the round's outcome is below `chance`, counted in outcomes out of 2^64. `group`
    * labels bets that belong together, such as the steps of one hand. */
   casinoBet: (request: CasinoBetRequest): Promise<GameReceipt> => call('game.casinoBet', { ...request }),
-  /** A developer bet: a bet against your game's developer, whose bank takes the stake at once and who settles it,
-   * paying what its settlement says. `meta` is your game's own JSON, saying what the bet is: the casino keeps it with
-   * the bet and never reads it, and your developer's server does. The receipt says `open`; once it is settled,
+  /** A developer bet: a bet against your game's developer. Your game's bank takes the stake at once and your server
+   * settles it, paying what its settlement says. `meta` is your game's own JSON, saying what the bet is: the casino
+   * keeps it with the bet and never reads it, and your server does. The receipt says `open`; once it is settled,
    * `onReceipt` hears. */
   developerBet: (request: DeveloperBetRequest): Promise<GameReceipt> => call('game.developerBet', { ...request }),
   /** Called with the new receipt whenever one of your developer bets has been settled and the wallet has checked

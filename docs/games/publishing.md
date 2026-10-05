@@ -79,24 +79,32 @@ game with a server deploys the same way, as one Worker that also answers `/api/`
 
 ## Publish it
 
-Publish from the wallet of the account that is to be the game's developer, and a game with a server from the account
-whose key the server holds. On **Developer**, `/developer`, give the game's name and its URL; the wallet fetches nothing first.
+Publish from the wallet of the account that is to be the game's developer. On **Developer**, `/developer`, give the
+game's name and its URL; the wallet fetches nothing first.
 Publishing needs an open balance, a profile holds 100 games, and the name and URL follow the rules of
 [`POST /api/account/games`](../casino-api/channels.md#post-apiaccountgames).
 
 The game is then at `https://play.hookedin.com/@<username>/<name>`, by your Discord username, or
 `/~<uname>/<name>` for an account that verified no Discord account ([your name](../wallet/getting-started.md#your-name)), for anyone with a wallet, and on your profile. Its key,
 `keccak256(abi.encode(developer, name))`, does not change with its URL: to move a game, publish the same name with the
-new URL, and it keeps its bets, its players' receipts and its public record.
+new URL, and it keeps its bets, its players' receipts, its bank and its public record. Taking it down takes it out of
+your profile and keeps the rest: publishing it again brings it back.
+
+A game with a server gets a key of its own for it. Make a key for the server, keep it there alone, and give its address
+beside the game on **Developer**, as its server key
+([`POST /api/account/games/server`](../casino-api/channels.md#post-apiaccountgamesserver)): that key then settles the
+game's developer bets and places its casino bets from its bank, and nothing else. Until you name one, a server signs
+with your account's own key, which holds everything your account holds.
 
 The library a deployment ships with is what `@hookedin` publishes, listed in [catalog.json](../../catalog.json). To be
 in it, open an issue or a pull request on [hookedin/play](https://github.com/hookedin/play).
 
 ## Earnings
 
-You earn half the commission on every casino bet placed in a game you publish. Commission is the edge the bankroll does
-not need, set when the bet is admitted, rounded down to an even amount and split in half between the game's developer
-and the casino: a [settled trade-off](../overview/architecture.md#settled-trade-offs), whose arithmetic is in
+Every game you publish has a **bank** at the casino, and half the commission on every casino bet placed in the game goes
+into it. Commission is the edge the bankroll does not need, set when the bet is admitted, rounded down to an even amount
+and split in half between the game's bank and the casino: a
+[settled trade-off](../overview/architecture.md#settled-trade-offs), whose arithmetic is in
 [pricing and commission](../reference/economics.md).
 
 - It depends on the bet's edge and on the casino's bankroll. A bet with no more edge than the bankroll needs earns
@@ -105,20 +113,23 @@ and the casino: a [settled trade-off](../overview/architecture.md#settled-trade-
 - No fee protects a player from a game. A game can spend its whole allowance on bets that pay back little, and the
   wallet records each bet's [measured return](casino-bets.md#measured-return) without refusing it: the allowance the
   player sets is their protection.
-- Every settled casino bet earns it, won or lost, your own casino bets on your rounds included, for whoever publishes
-  the game when the bet settles. A rejected bet earns nothing, nor does a reveal, and a game nobody publishes earns its
-  developer nothing. A developer bet earns no commission, since the bankroll does not back it
-  ([the casino's share](developer-bets.md#the-casinos-share)).
+- Every settled casino bet earns it, won or lost, the game's own casino bets on its rounds included, while the game is
+  published. A rejected bet earns nothing, nor does a reveal, and a game nobody publishes, or one taken down, earns
+  nothing. A developer bet earns no commission, since the bankroll does not back it
+  ([the casino's share](developer-bets.md#the-casinos-share)); its stake goes into the same bank.
 
-The casino keeps the tally for the publishing account's address, and a HookedIn wallet opened with that account's key
-([open the wallet](../wallet/getting-started.md#open-the-wallet)) collects it by itself, with a balance that plays, as a
-credit that account signs into its balance. Nobody at the casino approves or sends anything, nothing moves on-chain,
-and the bankroll does not change: money the casino owed you becomes your signed balance, which settles like any other
-([closing and claims](../wallet/closing-and-claims.md)). The wallet's **Developer** page shows what your games have
-earned and how much of it is collected, and beside each game its bets, what its players staked and came out with, its
-return and what it earned, from its [public record](../casino-api/public.md#get-apigameskey).
+The wallet's **Developer** page shows each game's bank, and beside it the game's bets, what its players staked and came
+out with, its return and what commission it took, from its [public record](../casino-api/public.md#get-apigameskey).
+**Take out** moves money from a game's bank into your balance: your wallet signs a `BankWithdraw`, the casino owes you
+the amount at once, and the wallet collects it with a credit naming the game
+([`POST /api/account/games/withdraw`](../casino-api/channels.md#post-apiaccountgameswithdraw)). Nobody at the casino
+approves or sends anything, nothing moves on-chain, and the bankroll does not change: money the casino owed the game
+becomes your signed balance, which settles like any other ([closing and claims](../wallet/closing-and-claims.md)), and
+from there you withdraw it or transfer it as you like. Only you take money out of your games' banks; a server key you
+name spends a bank on its game's bets and settlements alone. A game taken down keeps its bank, so you take out what is
+left after taking it down.
 
-Every developer's totals are public: [`GET /api/status`](../casino-api/public.md#get-apistatus) lists them under
-`developers`, with `earned`, `collected` and `outstanding`, and [hookedin.com/bankroll](https://hookedin.com/bankroll/)
-shows them. The tally is the casino's word: casino bets are private to their channels, so nobody can check that it
-counted every one. Each player's receipts show the commission of their own bets.
+A bank is the casino's word until you take it out: casino bets are private to their channels, so nobody can check that
+it counted every one, and what is in a bank is a promise of the casino's, like a fund share, until it is in your
+balance. Take out what the game does not need. Each game's bank and commission are public in its record, and each
+player's receipts show the commission of their own bets.

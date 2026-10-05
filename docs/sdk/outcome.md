@@ -38,8 +38,8 @@ The hash a bet names its seed by: `keccak256(seed)`, in lower-case hex.
 
 ## Checking a round
 
-The wallet checks a casino bet on the player's own round before the game hears of it. A developer's round is public
-once the developer's casino bet reveals it ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), which
+The wallet checks a casino bet on the player's own round before the game hears of it. A game's round is public
+once the game's casino bet reveals it ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), which
 a game page reads with [`HookedIn.round`](hookedin.md#round)), and anyone can check it by hand:
 
 1. `roundId(round.secret)` is the round's ID: the casino revealed the secret it committed to.

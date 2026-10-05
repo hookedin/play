@@ -52,7 +52,7 @@ start: a bet that settles, the same bet sent twice and placed once, and a bet wi
 `gameWallet({ bankroll?, bank?, deposit? })` resolves with a real `CasinoWallet` from play's client, with an in-memory
 store, a random player and one active channel on the local chain, 31337, wired to a stub casino in place of the network.
 `bankroll` is what the stub covers casino bets with, whose half its quotes name as the virtual bankroll, and `bank` what
-the developer's bank holds before any developer bet pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
+the game's bank holds before any developer bet pays its stake in: 10^12 wei each by default. `deposit` is the channel's balance, 1,000,000 wei by default.
 
 | Member                       | What it is                                                                                                                                         |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -61,7 +61,7 @@ the developer's bank holds before any developer bet pays its stake in: 10^12 wei
 | `identity(name?, declared?)` | A game as the fixture's developer published it, named `test` by default; `declared` is anything else about it. Every name given here is published  |
 | `developer`                  | A stub [`Developer`](../sdk/developer.md#developer) with the fixture's key, serving the game named `test`, to hand to your server's code           |
 | `storage`, `owner`, `player` | What the wallet saves, the stub casino's signing key, and the player's key                                                                         |
-| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the developer's bank holds                                                  |
+| `settlements()`, `bank()`    | How many channel operations the stub has signed a result for, and what the game's bank holds                                                  |
 | `secretOf(round)`            | A round's secret, which only the casino knows until it reveals the round                                                                           |
 | `reload()`                   | A wallet started afresh from what this one saved, as a reload of the page starts one                                                               |
 | `replaceChannel()`           | The player closes their channel and opens another of 1,000,000 wei. A game's operation IDs stay the player's across both                           |
@@ -82,7 +82,7 @@ What the stub holds a game to:
 - Operation IDs behave as the casino's do: the same `id` returns the same receipt, on the player's next channel too,
   and a wallet that has lost the receipt is refused with `id-used`.
 - Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`.
-- The developer's casino bet names a group, is admitted against the virtual bankroll and reveals its round, once: the same bet again
+- The game's casino bet names a group, is admitted against the virtual bankroll and reveals its round, once: the same bet again
   gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
 - `developer.bets()` pages as the casino does, 100 bets at a time, open ones in the order they were placed: page with
   `after` and `more`, and the size never matters. With `wait`, a page with no open bets is held until the next bet is
@@ -145,7 +145,7 @@ clients over one store are one game in two tabs, or before and after a reload. `
 ## Testing a server
 
 Hand `f.developer` to your server's code in place of the one `createDeveloper` makes: it opens rounds, derives seed
-hashes, places the developer's casino bets and reveals, and settles bets, against the stub's bankroll and bank. The
+hashes, places the game's casino bets and reveals, and settles bets, against the stub's bankroll and bank. The
 template's [test/developer-bet.test.ts](https://github.com/hookedin/game-template/blob/main/test/developer-bet.test.ts)
 backs a developer bet with a casino bet on a round and settles it by the outcome. Roulette's wheel takes everything
 outside it as arguments, so its tests run it against a casino and a clock of their own
@@ -179,9 +179,9 @@ service runs it against itself, so the stub behaves as the casino does wherever 
 2. An operation ID is the player's, so on the player's next channel it finds the bet instead of placing another.
 3. A wallet that lost its receipts is told an operation was carried out, with `id-used`, and plays on.
 4. A casino bet the bankroll cannot back is declined with the balance unchanged, and declined the same way again.
-5. A developer bet is paid what its developer signs, and the game hears.
-6. A developer that restarts places the same casino bet, on the seed it published before the bet.
-7. A developer's casino bet the bankroll declines reveals its round and moves no money.
+5. A developer bet is paid what the game's server signs, and the game hears.
+6. A game's server that restarts places the same casino bet, on the seed it published before the bet.
+7. A game's casino bet the bankroll declines reveals its round and moves no money.
 8. A round revealed without a bet shows its outcome in its group and moves no money.
 9. A round saved under rules the game does not play is let go once, and the next one plays.
 

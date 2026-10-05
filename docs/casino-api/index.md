@@ -50,7 +50,7 @@ casino holds at most 512 connections at once.
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Amounts                                                 | Decimal strings of wei: `"1000000000000000"` is 1,000 METH                                                                                                                                                      |
 | Hashes and IDs                                          | `0x` followed by 64 lowercase hex digits. Path parameters also take upper-case hex, except a channel's `:id`, which must be lowercase                                                                           |
-| Addresses                                               | Checksummed in openings, profiles, statements, `contractAddress`, `operator` and a casino bet's `developer`; lowercase in rounds and developer bets                                                             |
+| Addresses                                               | Checksummed in openings, profiles, statements, `contractAddress`, `operator`, a casino bet's `developer` and a game's `server`                                                                                  |
 | Times in milliseconds since the Unix epoch              | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                      |
 | Times in Unix seconds                                   | `expiresAt`, the fund's `at`, the observed block's `timestamp` and a channel's on-chain `deadline`                                                                                                              |
 | Counts, indexes and the `sequence` of a holding or bank | JSON numbers                                                                                                                                                                                                    |
@@ -61,10 +61,10 @@ casino holds at most 512 connections at once.
 Two kinds of token travel in the `Authorization` header as `HookedIn <token>`, a signed message encoded as on
 [Signed messages](../reference/signed-messages.md#access-tokens):
 
-| Token            | Message                                  | Signed by                                        | Routes                                                                                                                             |
-| ---------------- | ---------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Account access   | `Access {player, expiresAt}`             | The account                                      | Every `/api/channels/:id/…` route of its channels, and every `/api/account/…` route                                                |
-| Developer access | `DeveloperAccess {developer, expiresAt}` | The developer: the account that publishes a game | `POST /api/rounds`, `POST /api/rounds/:round/casino-bet`, `POST /api/developer-bets/settle`, `GET /api/developer-bets` with `wait` |
+| Token            | Message                               | Signed by                                                            | Routes                                                                                                                             |
+| ---------------- | ------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Account access   | `Access {player, expiresAt}`          | The account                                                          | Every `/api/channels/:id/…` route of its channels, and every `/api/account/…` route                                                |
+| Developer access | `DeveloperAccess {server, expiresAt}` | A game's server: the key its developer named, or the developer's own | `POST /api/rounds`, `POST /api/rounds/:round/casino-bet`, `POST /api/developer-bets/settle`, `GET /api/developer-bets` with `wait` |
 
 The casino accepts a token whose `expiresAt` is not in the past and at most 120 seconds ahead. A token is not bound to
 one request and serves until it expires: the wallet signs one for 60 seconds and reuses it while at least 20 seconds
@@ -73,11 +73,12 @@ remain, and the [developer kit](../sdk/developer.md) signs one for each request.
 A channel route answers `401` `unauthorized` to a missing, expired or wrongly signed token, to a token of another
 account and to a channel it does not know, before anything else: an unknown channel never answers `404`. The one route
 that takes an unknown channel is [activation](channels.md#post-apichannelsidactivate), which checks it is the current
-channel of the account the token proves; the [account's routes](channels.md#the-account) need no channel at all. Opening a round needs a key whose account publishes a game; settling needs
-only the key of the bets' developer, so a developer who takes their last game down still pays the bets placed on it.
+channel of the account the token proves; the [account's routes](channels.md#the-account) need no channel at all. Opening a round needs the key of a published game's
+server; settling needs only the key of the bets' game's server, so the server of a game taken down still pays the bets
+placed on it.
 
 The token only says who is asking. What a request commits to is signed in its body: an operation, a `Redeem`, a
-`BankWithdraw`, a `Settlement` or a `BankCasinoBet`.
+`BankWithdraw`, a `GameServer`, a `Settlement` or a `BankCasinoBet`.
 
 ## Retries
 
@@ -111,16 +112,16 @@ most 1,024 keys and drops the oldest to make room. A spent budget answers `429` 
 | Every request but `OPTIONS`                                                                     | Client IP | 6,000             |
 | Registering a channel the casino does not know, asking a uname, a Discord code and unlinking it | Client IP | 60                |
 | Channel requests, after authentication                                                          | Channel   | 6,000             |
-| Developer requests, after authentication                                                        | Developer | 6,000             |
+| Game server requests, after authentication                                                      | Server    | 6,000             |
 | Publishing games                                                                                | Channel   | 200               |
 
 The client IP is the connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
 
 The casino does one thing at a time for each channel and for each shared thing a request touches: the bankroll fund, a
-round, a profile, the counterparty of a credit, a developer's bank, the house cash withdrawals are paid from. Each of
-these queues holds 8 waiting requests, a developer's bank 1,024, and at most 4,096 queues exist at once. At most four
-channel registrations run at once. A full queue or a fifth registration answers `429` `busy`. A developer waits for
-the bets of at most 4 games at once, and the casino holds at most 128 waits; one more answers `busy` too.
+round, a profile, the counterparty of a credit, a game's bank, the house cash withdrawals are paid from. Each of these
+queues holds 8 waiting requests, a game's bank 1,024, and at most 4,096 queues exist at once. At most four channel
+registrations run at once. A full queue or a fifth registration answers `429` `busy`. A server's key waits for the bets
+of at most 4 games at once, and the casino holds at most 128 waits; one more answers `busy` too.
 
 ## Pauses
 
@@ -137,13 +138,13 @@ answers `503` `paused`.
 
 A refusal is `{"error": "…", "code": "…"}`: the text is for people, and the code is what a client acts on. Beside the
 codes each route names, any request can be answered `rate-limited`, or `paused` ([pauses](#pauses)); a `POST`,
-`too-large`, or `refused` when its body is not JSON; a channel or developer route, `unauthorized` first; and a route
+`too-large`, or `refused` when its body is not JSON; a channel or server route, `unauthorized` first; and a route
 that waits its turn, `busy`.
 
 | Code                 | Status | Meaning                                                                                                                                                                                                                                                                                                               |
 | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code                                                                        |
-| `unauthorized`       | 401    | The token is missing, expired, too far ahead, wrongly signed or another account's, the channel is unknown, or a developer key that publishes no game opens a round                                                                                                                                                    |
+| `unauthorized`       | 401    | The token is missing, expired, too far ahead, wrongly signed or another account's, the channel is unknown, or a key that is not a game's server asks for the game's rounds, casino bets, settlements or a wait for its bets                                                                                           |
 | `not-found`          | 404    | No such path, name, game, round or developer bet, an account that verified no Discord account, or no demo ETH or Discord server here                                                                                                                                                                                  |
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                                                                                    |
 | `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                                                                                       |
@@ -152,7 +153,7 @@ that waits its turn, `busy`.
 | `not-due`            | 409    | A credit for money the casino does not owe or pay                                                                                                                                                                                                                                                                     |
 | `unconfirmed`        | 409    | A deposit operation for money the casino has not seen confirmed on-chain yet, or a deposit's network fee before the casino sees its transaction; the same request can go again later. A deposit's fee before the balance has taken its deposit in is refused the same way, and can go only once the take-in is signed |
 | `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                                                                                             |
-| `bank-short`         | 409    | The developer's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                                                                                          |
+| `bank-short`         | 409    | The game's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                                                                                               |
 | `too-many`           | 409    | The profile already publishes 100 games                                                                                                                                                                                                                                                                               |
 | `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                                                                                              |
 | `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                                                                                                      |

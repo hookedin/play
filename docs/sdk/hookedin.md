@@ -60,7 +60,7 @@ that failed is forgotten, so the next call asks again.
 
 #### `round`
 
-A developer's round as the casino shows it to anyone, read through the player's wallet with
+A game's round as the casino shows it to anyone, read through the player's wallet with
 [`wallet.round`](../reference/bridge.md#walletround), since a game page talks to nobody but its own origin: a
 [`Round`](developer.md#round), open or revealed. The wallet passes the casino's answer on as it is: check it as
 [checking a round](outcome.md#checking-a-round) shows.

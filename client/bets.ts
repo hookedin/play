@@ -298,18 +298,20 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
   );
 
   if (developerBet && receipt.settlement) {
-    // A developer bet is settled by its developer, from their bank, on their word.
+    // A developer bet is settled by its game's server, from the game's bank, on its developer's word.
+    const server = receipt.settlement.server?.message.server;
     const settled = detailSection(
       'How it settled',
-      'The game’s developer signed what this bet paid you and what it gave the casino, from their bank. Your wallet checked the signature before it collected.',
+      'The game’s server signed what this bet paid you and what it gave the casino, from the game’s bank, with the developer’s key or one the developer signed for it. Your wallet checked both before it collected.',
     );
     settled.append(
       factList([
         ['Developer', hex(receipt.game?.developer)],
+        server && ['Server key the developer named', hex(server)],
         ['The bet you signed', hex(JSON.stringify(receipt.details?.meta))],
         ['Paid to you', `${exact(receipt.settlement.player)} METH`],
         ['Given to the casino', `${exact(receipt.settlement.casino)} METH`],
-        ['The developer’s signature', hex(receipt.settlement.signature)],
+        ['The server’s signature', hex(receipt.settlement.signature)],
       ]),
     );
     body.append(settled);

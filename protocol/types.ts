@@ -48,14 +48,14 @@ export interface Details {
   game?: string;
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a developer's bank, a settled developer bet,
-   * a developer's earnings, a deposit's network fee, or another player, written `~uname`: a debit that pays a player
+  /** What a debit pays into or a credit collects from: the bankroll fund, a game's bank, named by the game's key, a
+   * settled developer bet, a deposit's network fee, or another player, written `~uname`: a debit that pays a player
    * names them, and the credit that collects it the player it came from. A game's payment pays the bankroll and names
    * nothing. */
   counterparty?: string;
   /** A developer bet's meta: the game's own JSON, saying what the bet is, which the casino keeps and never reads. A
    * debit that names its game and carries meta is a developer bet: a bet against the game's developer, whose bank
-   * takes the stake at once and who settles it when they choose. */
+   * takes the stake at once and whose server settles it when it chooses. */
   meta?: Record<string, unknown>;
 }
 /** A developer bet, as anyone may read it by its hash (the hash of the operation that placed it). */
@@ -66,16 +66,27 @@ export interface PublicDeveloperBet {
   group?: string;
   uname: string | null;
   discordUsername: string | null;
-  /** The game's developer, whose bank took the stake and whose key settles it. */
-  developer: string;
   stake: string;
   placedAt: number;
   status: 'open' | 'settled';
   /** The game's own JSON, as the player signed it. */
   meta: Record<string, unknown>;
-  /** Once settled: the developer's signed settlement, what it pays the player and gives the casino. */
-  settlement?: { player: string; casino: string; signature: string };
+  /** Once settled: the settlement the game's server signed, what it pays the player and gives the casino. `server` is
+   * the developer's signed `GameServer` naming the key that signed it; none when the developer's own key did. */
+  settlement?: { player: string; casino: string; signature: string; server?: SignedStatement };
   settledAt?: number;
+}
+/** A game an account has published, taken down since or not, as its developer sees it: where it is served (none while
+ * it is taken down), the address its server signs with, and its bank with the casino's latest statement of it. */
+export interface AccountGame {
+  key: string;
+  name: string;
+  url: string | null;
+  server: string;
+  bank: string;
+  sequence: number;
+  statement: SignedStatement | null;
+  createdAt: number;
 }
 /** An account's developer bet, across its channels: open, or settled and whether what it paid has been collected into
  * a channel. */
@@ -221,13 +232,13 @@ export interface OperationResponse {
   evidence: Evidence;
   operationId: string;
   commission: string;
-  /** A casino bet: the developer of its game, who earns half of its commission. A game nobody publishes has
-   * none. */
+  /** A casino bet: the developer of its game when it settled, whose game's bank takes half of its commission. A game
+   * nobody publishes has none. */
   developer?: string;
   /** The quote for the channel's next casino bet, which follows `state`. */
   quote?: Quote;
-  /** An investment's response carries the casino's signed statement of the holding, and a bank
-   * deposit the statement of the bank. */
+  /** An investment's response carries the casino's signed statement of the holding, and a deposit into a game's
+   * bank the statement of the bank. */
   statement?: SignedStatement;
 }
 /** An operation an account signed, with what it means and the checkpoint it follows, which names its channel: the
@@ -250,15 +261,16 @@ export interface Submission {
   seed?: string;
   quote?: Quote;
 }
-/** A developer's round, as anyone may read it: the hash of a secret the casino keeps, named for one developer, for
- * the developer's casino bet. That casino bet reveals it: its seed, the casino's secret and their outcome, and the
- * casino bet itself, which may bet nothing and only reveal the round. */
+/** A game's round, as anyone may read it: the hash of a secret the casino keeps, named for one game, for the game's
+ * casino bet. That casino bet reveals it: its seed, the casino's secret and their outcome, and the casino bet itself,
+ * which may bet nothing and only reveal the round. */
 export interface Round {
   id: string;
-  developer: string;
-  /** When the developer opened it, in Unix milliseconds. */
+  /** The key of the game it was opened for. */
+  game: string;
+  /** When the game's server opened it, in Unix milliseconds. */
   createdAt: number;
-  /** `open` until the developer's casino bet on it reveals it. */
+  /** `open` until the game's casino bet on it reveals it. */
   status: 'open' | 'revealed';
   seed?: string;
   secret?: string;
@@ -266,10 +278,10 @@ export interface Round {
   outcome?: string;
   casinoBet?: DeveloperCasinoBet;
 }
-/** The developer's casino bet on its round, as it signed it (`BankCasinoBet`, with the round's id and the hash of its
+/** A game's casino bet on its round, as its server signed it (`BankCasinoBet`, with the round's id and the hash of its
  * meta), and whether the bankroll took it. A stake, chance and prize of zero bet nothing and only reveal the round. */
 export interface DeveloperCasinoBet {
-  /** The game whose commission it earns. */
+  /** The game whose bank it is placed from. */
   game: string;
   stake: string;
   /** Its probability, counted in outcomes out of 2^64: it wins when the round's outcome is below this. */
@@ -283,7 +295,7 @@ export interface DeveloperCasinoBet {
   signature: string;
   /** Declined, it moved no money. */
   accepted: boolean;
-  /** What it paid the developer's bank, once accepted. */
+  /** What it paid the game's bank, once accepted. */
   payout?: string;
 }
 export interface SignedStatement {

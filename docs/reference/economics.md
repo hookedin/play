@@ -98,8 +98,8 @@ developer commission = F / 2
 casino commission    = F / 2
 ```
 
-The developer is the account that publishes the game. A game nobody publishes has none, and all of its commission is
-the casino's. The rounding leaves under two wei in the bankroll. Every intermediate product is an exact integer.
+The developer is the account that publishes the game, and its half goes into the game's bank. A game nobody publishes,
+or one taken down, has none, and all of its commission is the casino's. The rounding leaves under two wei in the bankroll. Every intermediate product is an exact integer.
 
 This defines excess profit as what can be removed while leaving the bankroll a Kelly-compliant residual wager, which is
 [a settled trade-off](../overview/architecture.md#settled-trade-offs). Subtracting two advertised edge percentages is not
@@ -120,17 +120,17 @@ changes by `−100.500050` or `+99.499950`, because the casino keeps its half of
 profit on every bet.
 
 A [developer bet](../games/developer-bets.md) is not the bankroll's: the casino neither admits it by Kelly nor prices
-its commission, and nothing in a developer's bank is reserved. The casino's part of it is what the developer's
-settlement gives it ([the casino's share](../games/developer-bets.md#the-casinos-share)).
+its commission, and nothing in a game's bank is reserved. The casino's part of it is what the settlement of the game's
+server gives it ([the casino's share](../games/developer-bets.md#the-casinos-share)).
 
 ## Available capital and concurrency
 
 The casino keeps its half of every commission in the bankroll's equity: a player's loss adds `S − F/2` to the bankroll
-and a win takes `W + F/2`, the developer's half being owed to the developer (a game nobody publishes leaves all of `F`
-in the bankroll). Admission uses the conservative full-fee condition against the quote's virtual bankroll and reserves
+and a win takes `W + F/2`, the developer's half going into the game's bank (a game nobody publishes leaves all of `F` in
+the bankroll). Admission uses the conservative full-fee condition against the quote's virtual bankroll and reserves
 `max(W, 0) + F` while the bet is decided, before it reads the round's secret, so a casino bet it admits settles with
 the commission its admission priced. A bet no quote covers gets a signed rejection, with no commission, revealing
-nothing. A developer's casino bet is admitted against the virtual bankroll as it stands, and one that does not fit is
+nothing. A game's casino bet is admitted against the virtual bankroll as it stands, and one that does not fit is
 declined with its round revealed. Reservations last only while a bet is decided, and lower the virtual bankroll quoted
 meanwhile: they do not fund a whole future hand, do not bound what the quotes out at once admit, and do not stop the
 owner from withdrawing on-chain.
@@ -139,7 +139,7 @@ At a consistent confirmed block, in the books that [`GET /api/status`](../casino
 and defines, the bankroll is:
 
 ```text
-bankroll = max(0, cash − activeLiabilities − claimLiabilities − commissions − reserved − escrow − banks − withdrawals)
+bankroll = max(0, cash − activeLiabilities − claimLiabilities − reserved − escrow − banks − withdrawals)
 virtualBankroll = bankroll / 2
 ```
 

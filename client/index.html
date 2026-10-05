@@ -166,34 +166,18 @@
 
       <section id="page-developer" class="page hidden">
         <h1>Developer</h1>
-        <p class="muted">The games you publish, what they earn you, and the bank that takes their developer bets.</p>
+        <p class="muted">
+          The games you publish, each with its bank: half the commission of its casino bets and the stakes of its
+          developer bets go in, and you take money out into your balance.
+        </p>
         <div class="money">
           <div class="money-card">
-            <span class="label">Earned in commission</span>
-            <strong><span id="developer-earned">0</span> <small title="A millionth of an ETH">METH</small></strong>
-            <p id="developer-earned-note"></p>
-          </div>
-          <div class="money-card">
-            <span class="label">Your developer bank</span>
-            <strong><span id="bank-balance">—</span> <small title="A millionth of an ETH">METH</small></strong>
+            <span class="label">In your games' banks</span>
+            <strong><span id="developer-banks">—</span> <small title="A millionth of an ETH">METH</small></strong>
             <p>
-              Your games' developer bets pay their stakes into it, and it pays their settlements and your own casino
-              bets. A settlement it cannot pay in full is refused. Take it out any time.
+              Each game's bank pays its own settlements and casino bets, and nothing in it is reserved: what is in it is
+              yours to take out.
             </p>
-            <div class="field-row">
-              <div class="amount-input">
-                <input
-                  id="bank-amount"
-                  type="text"
-                  inputmode="decimal"
-                  autocomplete="off"
-                  placeholder="10000"
-                  aria-label="Amount"
-                /><span>METH</span>
-              </div>
-              <button id="bank-deposit" class="button" type="button">Put in</button
-              ><button id="bank-withdraw" class="button" type="button">Take out</button>
-            </div>
           </div>
         </div>
         <h2 class="section-title">
@@ -201,13 +185,17 @@
         </h2>
         <div id="published-games" class="game-lines"></div>
         <p id="published-empty" class="empty hidden">You publish no games yet. Publish one below.</p>
+        <div id="taken-down" class="hidden">
+          <h2 class="section-title">Taken down</h2>
+          <div id="taken-down-games" class="game-lines"></div>
+        </div>
         <section class="card" aria-labelledby="publish-title">
           <h2 id="publish-title">Publish a game</h2>
           <p class="muted">
-            A game you publish lives at your name, and anyone can play it with their own wallet. You earn half of each
-            casino bet's commission, your bank takes its developer bets, and your key settles them. Publish the same
-            name with a new URL to move it: it keeps its record. Publishing needs an open balance; taking a game down
-            never does.
+            A game you publish lives at your name, and anyone can play it with their own wallet. Its bank takes half of
+            each casino bet's commission and its developer bets, and your key, or a server key you name, settles them.
+            Publish the same name with a new URL to move it, or again after taking it down: it keeps its bank and its
+            record. Publishing needs an open balance; taking a game down never does.
             <a
               class="text-button"
               href="https://hookedin.com/docs/games/publishing/"

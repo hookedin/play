@@ -219,7 +219,7 @@ function openAllowanceDialog() {
   allowingDeveloperBets = Boolean(active.publisher) && (active.developerBets || wallet.game.developerBets);
   $('allowance-developer').hidden = !allowingDeveloperBets;
   $('allowance-developer-text').textContent =
-    `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into their bank at once, and they decide what each bet pays. Neither the casino nor your wallet can check that result, so allow this only for a developer you trust.`;
+    `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into the game's bank at once, and they decide what each bet pays. Neither the casino nor your wallet can check that result, so allow this only for a developer you trust.`;
   // The dialog starts at the allowance as it stands: nothing, for a game just opened.
   const total = wholeMicro(allowable()),
     allowance = wholeMicro(BigInt(wallet.game.allowance));

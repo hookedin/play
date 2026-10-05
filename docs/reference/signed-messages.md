@@ -43,18 +43,20 @@ withdrawal's or a lock-in's ID, a rejection's `transitionHash`, a statement's `c
 | `Quote`           | `bytes32 previousStateHash`, `bytes32 round`, `uint256 virtualBankroll`, `uint256 expiresAt`                                                                                             | The casino                                       | Wallet, casino, contract |
 | `CollateralOffer` | `address player`, `uint256 index`, `uint256 amount`, `uint256 price`, `uint256 expiresAt`                                                                                                | The casino                                       | Wallet, contract         |
 | `Access`          | `address player`, `uint256 expiresAt`                                                                                                                                                    | The account                                      | Casino                   |
-| `DeveloperAccess` | `address developer`, `uint256 expiresAt`                                                                                                                                                 | The developer                                    | Casino                   |
-| `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                        | The developer                                    | Casino, wallet           |
-| `BankCasinoBet`   | `bytes32 round`, `bytes32 game`, `uint256 stake`, `uint64 chance`, `uint256 prize`, `string group`, `bytes32 seedHash`, `bytes32 meta`                                                   | The developer                                    | Casino                   |
+| `GameServer`      | `bytes32 game`, `address server`                                                                                                                                                         | The developer                                    | Casino, wallet           |
+| `DeveloperAccess` | `address server`, `uint256 expiresAt`                                                                                                                                                    | The game's server                                | Casino                   |
+| `Settlement`      | `bytes32 bet`, `uint256 player`, `uint256 casino`                                                                                                                                        | The game's server                                | Casino, wallet           |
+| `BankCasinoBet`   | `bytes32 round`, `bytes32 game`, `uint256 stake`, `uint64 chance`, `uint256 prize`, `string group`, `bytes32 seedHash`, `bytes32 meta`                                                   | The game's server                                | Casino                   |
 | `ShareStatement`  | `address holder`, `uint256 sequence`, `uint256 shares`, `uint256 amount`, `uint256 equity`, `uint256 totalShares`, `bytes32 cause`                                                       | The casino                                       | Wallet                   |
 | `Fund`            | `uint256 sequence`, `uint256 totalShares`, `uint256 houseShares`, `uint256 equity`, `uint256 overdrawn`, `uint256 at`                                                                    | The casino                                       | Wallet                   |
 | `Redeem`          | `address holder`, `uint256 shares`, `uint256 sequence`                                                                                                                                   | The holder                                       | Casino                   |
-| `BankStatement`   | `address developer`, `uint256 sequence`, `uint256 balance`, `bytes32 cause`                                                                                                              | The casino                                       | Wallet                   |
-| `BankWithdraw`    | `address developer`, `uint256 amount`, `uint256 sequence`                                                                                                                                | The developer                                    | Casino                   |
+| `BankStatement`   | `bytes32 game`, `uint256 sequence`, `uint256 balance`, `bytes32 cause`                                                                                                                   | The casino                                       | Wallet                   |
+| `BankWithdraw`    | `bytes32 game`, `uint256 amount`, `uint256 sequence`                                                                                                                                     | The developer                                    | Casino                   |
 
 The _account_ is the `player` a channel's checkpoints name, which signs everything on it. The _casino_ is the contract's `owner`, which
 [`GET /api/config`](../casino-api/public.md#get-apiconfig) reports as `operator`. The _developer_ is the account that
-publishes a game. In JSON an integer is a decimal string, except an operation's `kind` and a token's `expiresAt`, which
+publishes a game, and the game's _server_ the key the developer names for it in a `GameServer`, the developer's own
+until they name another. In JSON an integer is a decimal string, except an operation's `kind` and a token's `expiresAt`, which
 the wallet writes as numbers.
 
 ## Channels
@@ -204,13 +206,13 @@ reads it. A request carries the details whole beside the signed operation, and b
 memo = keccak256(utf8(canonicalJSON(details)))
 ```
 
-| Field          | Type    | Meaning                                                                                                                                            |
-| -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`           | bytes32 | The hash of the operation's name: its [operation ID](#operation-ids)                                                                               |
-| `game`         | bytes32 | The [key](#game-keys) of the game that asked for a casino bet, a developer bet or a payment                                                        |
-| `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units of well-formed text, without a NUL                       |
-| `counterparty` | string  | What a debit pays into or a credit collects from: a [counterparty ID](#counterparties), a developer bet's hash or another player, written `~uname` |
-| `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers                                                 |
+| Field          | Type    | Meaning                                                                                                                                                          |
+| -------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | bytes32 | The hash of the operation's name: its [operation ID](#operation-ids)                                                                                             |
+| `game`         | bytes32 | The [key](#game-keys) of the game that asked for a casino bet, a developer bet or a payment                                                                      |
+| `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units of well-formed text, without a NUL                                     |
+| `counterparty` | string  | What a debit pays into or a credit collects from: a [counterparty ID](#counterparties), a game's key, a developer bet's hash or another player, written `~uname` |
+| `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers                                                               |
 
 No other key is allowed. `id` and `game` are `0x` followed by 64 lowercase hex digits, and so is `counterparty`, unless
 it names a player: `~` and their 24-character uname. `group` and `meta` appear only beside `game`. A withdrawal's
@@ -227,23 +229,22 @@ recipient is in the operation, not in its details. By kind:
 
 Each operation the wallet signs, and what its details hold:
 
-| Operation                                 | Kind | Details                                                                          |
-| ----------------------------------------- | ---- | -------------------------------------------------------------------------------- |
-| Casino bet                                | 1    | `{id, game, group?}`                                                             |
-| Payment to the bankroll                   | 2    | `{id, game, group?}`                                                             |
-| Developer bet                             | 2    | `{id, game, group?, meta}`; the bet is known by the operation's hash             |
-| Investment in the bankroll fund           | 2    | `{id, counterparty: FUND_ID}`                                                    |
-| Deposit into the account's developer bank | 2    | `{id, counterparty: BANK_ID}`                                                    |
-| Transfer to another player                | 2    | `{id, counterparty: "~" + their uname}`                                          |
-| Collecting redeemed shares                | 3    | `{id, counterparty: FUND_ID}`                                                    |
-| Collecting a bank withdrawal              | 3    | `{id, counterparty: BANK_ID}`                                                    |
-| Collecting developer earnings             | 3    | `{id, counterparty: DEVELOPER_ID}`                                               |
-| Collecting a developer bet's payout       | 3    | `{id, counterparty: <the bet's hash>}`                                           |
-| Collecting a transfer                     | 3    | `{id, counterparty: "~" + the sender's uname}`                                   |
-| Collecting a deposit's network fee        | 3    | `{id, counterparty: DEPOSIT_FEE_ID}`, `id` the hash of the deposit's transaction |
-| Taking in a deposit                       | 4    | `{id}`                                                                           |
-| Withdrawal                                | 5    | `{id}`; the operation names the address it pays as `recipient`                   |
-| Locking in the balance                    | 6    | `{id}`; the operation names no `recipient`                                       |
+| Operation                                           | Kind | Details                                                                          |
+| --------------------------------------------------- | ---- | -------------------------------------------------------------------------------- |
+| Casino bet                                          | 1    | `{id, game, group?}`                                                             |
+| Payment to the bankroll                             | 2    | `{id, game, group?}`                                                             |
+| Developer bet                                       | 2    | `{id, game, group?, meta}`; the bet is known by the operation's hash             |
+| Investment in the bankroll fund                     | 2    | `{id, counterparty: FUND_ID}`                                                    |
+| Deposit into the bank of one of the account's games | 2    | `{id, counterparty: <the game's key>}`                                           |
+| Transfer to another player                          | 2    | `{id, counterparty: "~" + their uname}`                                          |
+| Collecting redeemed shares                          | 3    | `{id, counterparty: FUND_ID}`                                                    |
+| Collecting a withdrawal from a game's bank          | 3    | `{id, counterparty: <the game's key>}`                                           |
+| Collecting a developer bet's payout                 | 3    | `{id, counterparty: <the bet's hash>}`                                           |
+| Collecting a transfer                               | 3    | `{id, counterparty: "~" + the sender's uname}`                                   |
+| Collecting a deposit's network fee                  | 3    | `{id, counterparty: DEPOSIT_FEE_ID}`, `id` the hash of the deposit's transaction |
+| Taking in a deposit                                 | 4    | `{id}`                                                                           |
+| Withdrawal                                          | 5    | `{id}`; the operation names the address it pays as `recipient`                   |
+| Locking in the balance                              | 6    | `{id}`; the operation names no `recipient`                                       |
 
 What the casino checks for each, and what it answers, is under
 [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations).
@@ -284,15 +285,14 @@ operations itself.
 
 ### Counterparties
 
-| Name             | Preimage               | Value                                                                | Debit          | Credit                                         |
-| ---------------- | ---------------------- | -------------------------------------------------------------------- | -------------- | ---------------------------------------------- |
-| `FUND_ID`        | `HOOKEDIN/BANKROLL`    | `0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530` | An investment  | Redeemed shares                                |
-| `BANK_ID`        | `HOOKEDIN/BANK`        | `0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263` | A bank deposit | A bank withdrawal                              |
-| `DEVELOPER_ID`   | `HOOKEDIN/DEVELOPER`   | `0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc` | –              | Developer earnings                             |
-| `DEPOSIT_FEE_ID` | `HOOKEDIN/DEPOSIT_FEE` | `0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf` | –              | A deposit's network fee, which the casino pays |
+| Name             | Preimage               | Value                                                                | Debit         | Credit                                         |
+| ---------------- | ---------------------- | -------------------------------------------------------------------- | ------------- | ---------------------------------------------- |
+| `FUND_ID`        | `HOOKEDIN/BANKROLL`    | `0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530` | An investment | Redeemed shares                                |
+| `DEPOSIT_FEE_ID` | `HOOKEDIN/DEPOSIT_FEE` | `0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf` | –             | A deposit's network fee, which the casino pays |
 
-Each value is `keccak256` of its preimage. A credit that collects a developer bet's payout names the bet's hash instead,
-and a transfer names a player: its debit the player it pays, and the credit that collects it the player it came from,
+Each value is `keccak256` of its preimage. A debit into a game's bank, and the credit that collects money taken out of
+it, name the game's key instead; a credit that collects a developer bet's payout names the bet's hash; and a transfer
+names a player: its debit the player it pays, and the credit that collects it the player it came from,
 each written `~` and their uname, 24 characters of `23456789abcdefghijkmnopqrstvwxyz`.
 The other fixed tag is `HOOKEDIN/OUTCOME` (`0xede2fdd26760847d3c92bb2ebf4da0fdbdf441ed687b86dc1257f1962e3857ff`), in
 [the outcome](#the-outcome).
@@ -308,7 +308,7 @@ gameKey = keccak256(abi.encode(address developer, string name))
 `developer` is the account that publishes the game and `name` the name it is published under (1 to 32 of `a-z`, `0-9`
 and `-`, starting with a letter or digit). A game opened by its [URL](../games/publishing.md#the-games-url) alone takes
 the zero address as `developer` and, as `name`, its URL as the URL parser normalises it, so no published game shares its
-key; nobody earns its commission, and it takes no developer bets. The key is lowercase hex in details and in the API.
+key; it has no bank, and takes no developer bets. The key is lowercase hex in details and in the API.
 The vectors' game, developer `0x4444444444444444444444444444444444444444` and name `roulette`, has the key
 `0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d`.
 
@@ -320,7 +320,7 @@ picks and keeps until the round is revealed. A casino bet signs its round and th
 of the 32 raw bytes. Only that secret and that seed settle the bet.
 
 A round settles one casino bet. A channel's own round is the one its [quote](#quotes) names, revealed only by the casino
-bet that settles on it; a developer's round is revealed by the developer's own `BankCasinoBet`, which may bet nothing
+bet that settles on it; a game's round is revealed by the game's own `BankCasinoBet`, which may bet nothing
 ([`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet)). Once revealed, a
 round settles nothing more.
 
@@ -368,8 +368,8 @@ asks for one with [`POST /api/channels/:id/collateral`](../casino-api/channels.m
 
 ### Access tokens
 
-`Access(player, expiresAt)` and `DeveloperAccess(developer, expiresAt)` authenticate API requests: an account's token
-serves for every one of its channels. `expiresAt` is a
+`Access(player, expiresAt)` and `DeveloperAccess(server, expiresAt)` authenticate API requests: an account's token
+serves for every one of its channels, and a server's for every game whose server it is. `expiresAt` is a
 time in Unix seconds, a JSON number or a decimal string. A token is the header value
 
 ```text
@@ -394,16 +394,20 @@ Which key signs which token, and the time window the casino accepts, are under
 
 ### Developer messages
 
-`Settlement(bet, player, casino)` settles a developer bet. `bet` is the bet's hash, the hash of the operation that
-placed it, which signed its meta. `player` is what the player is paid and `casino` what the casino is given, both from
-the developer's bank and each below 2^128.
+`GameServer(game, server)` names the key a game's server signs with. The game's developer signs it; `game` is the
+game's key and `server` an address, the developer's own giving the game back to the developer's key. The casino keeps
+it, takes the game's `DeveloperAccess`, `Settlement` and `BankCasinoBet` from that key alone from then on, and gives it
+with every developer bet that key settles, so a wallet checks the settlement against the developer's own signature.
 
-`BankCasinoBet(round, game, stake, chance, prize, group, seedHash, meta)` is a developer's casino bet from its bank, on
-a round of its own. `game` is the key of one of the developer's games, whose commission the bet earns; `stake`,
-`chance` and `prize` are as for any casino bet; `group` is the label the game gives the bets that belong together, 1 to
-64 UTF-16 code units; `seedHash` is `keccak256(seed)` of the seed the request brings; `meta` is
-`keccak256(utf8(canonicalJSON(meta)))` of the developer's own JSON, which the casino keeps with the reveal and never
-reads. A stake, chance and prize all zero is a _reveal_: it bets nothing and only reveals the round, and is signed,
+`Settlement(bet, player, casino)` settles a developer bet, signed by its game's server. `bet` is the bet's hash, the
+hash of the operation that placed it, which signed its meta. `player` is what the player is paid and `casino` what the
+casino is given, both from the game's bank and each below 2^128.
+
+`BankCasinoBet(round, game, stake, chance, prize, group, seedHash, meta)` is a game's casino bet from its bank, on a
+round of its own, signed by its server. `game` is the game's key; `stake`, `chance` and `prize` are as for any casino
+bet; `group` is the label the game gives the bets that belong together, 1 to 64 UTF-16 code units; `seedHash` is
+`keccak256(seed)` of the seed the request brings; `meta` is `keccak256(utf8(canonicalJSON(meta)))` of the game's own
+JSON, which the casino keeps with the reveal and never reads. A stake, chance and prize all zero is a _reveal_: it bets nothing and only reveals the round, and is signed,
 grouped and kept like any other.
 
 ### Bankroll fund messages
@@ -425,15 +429,15 @@ the number of fund changes so far, every share in issue, the house's own shares,
 (0 when there is none), the wei the owner withdrew beyond the house's shares (a loss the other holders bore), and the
 time in Unix seconds. [The bankroll fund](../wallet/bankroll-fund.md) explains holding shares.
 
-### Developer bank messages
+### Game bank messages
 
-`BankStatement(developer, sequence, balance, cause)` is the casino's statement of a developer's bank after each deposit
-and withdrawal: `sequence` numbers the bank's statements from 1, `balance` is what it holds afterwards, and `cause` is
-the hash of the depositing operation or of the `BankWithdraw`. Between statements, developer bets, settlements and the
-developer's casino bets move the balance without a statement.
+`BankStatement(game, sequence, balance, cause)` is the casino's statement of a game's bank after each deposit and
+withdrawal: `sequence` numbers the bank's statements from 1, `balance` is what it holds afterwards, and `cause` is the
+hash of the depositing operation or of the `BankWithdraw`. Between statements, the game's casino bets and developer
+bets and their settlements move the balance without a statement.
 
-`BankWithdraw(developer, amount, sequence)` takes money out of the bank. `developer` signs it and sends it through its
-active channel, and `sequence` is the number of the statement it will produce, so it works once.
+`BankWithdraw(game, amount, sequence)` takes money out of a game's bank. The game's developer signs it and sends it
+with its account's token, and `sequence` is the number of the statement it will produce, so it works once.
 
 ## Bounds and the protocol revision
 
@@ -451,23 +455,23 @@ The first three are `BOUNDS`, which `GET /api/config` reports as `bounds`:
 `{"outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64}`.
 
 `PROTOCOL` fixes everything a wallet and the casino must agree on. It is the keccak-256 of the UTF-8 bytes of the
-thirteen EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
+fourteen EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
 canonical JSON of the rules they apply alike. An `encodeType` string is a structure's name and its fields, as in
 `Access(address player,uint256 expiresAt)`. The rules:
 
 ```text
-{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"bank":"0x6036e2ff95363cd3feb09ac645f9fa63a1d231a7d546f8ea5688615e683b9263","depositFee":"0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf","developer":"0x2fc2d32d54413eba8857124e3e8c3261740cccc0ba5885f6ea7498ea5bc68adc","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530","player":"^~[23456789abcdefghijkmnopqrstvwxyz]{24}$"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"lockIn":6,"none":0,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
+{"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"counterparties":{"depositFee":"0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530","player":"^~[23456789abcdefghijkmnopqrstvwxyz]{24}$"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"lockIn":6,"none":0,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
-`DEVELOPER_PROTOCOL` fixes only what a developer's server shares with the casino: the `encodeType` strings of
+`DEVELOPER_PROTOCOL` fixes only what a game's server shares with the casino: the `encodeType` strings of
 `DeveloperAccess`, `Settlement` and `BankCasinoBet`, followed by:
 
 ```text
 {"bounds":{"group":64,"meta":4096,"outcomeSpace":"18446744073709551616"},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
-`GET /api/config` reports both, as `protocol` and `developerProtocol`. A wallet compares `protocol`, and a developer's
-server `developerProtocol`, with its own before it signs anything, and stops on a difference (`assertProtocol`; the SDK
+`GET /api/config` reports both, as `protocol` and `developerProtocol`. A wallet compares `protocol`, and a game's server
+`developerProtocol`, with its own before it signs anything, and stops on a difference (`assertProtocol`; the SDK
 throws `protocol-mismatch`). A change to a structure only wallets sign moves `PROTOCOL` and leaves
 `DEVELOPER_PROTOCOL` as it is.
 

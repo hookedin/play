@@ -128,16 +128,16 @@ when the player switches accounts, so that it keys what it saves by that name.
 
 ### `wallet.round`
 
-A developer's round, as the casino shows it to anyone at
+A game's round, as the casino shows it to anyone at
 [`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), read through the wallet. Answered at once.
 
 | Param | Type          | Meaning                           |
 | ----- | ------------- | --------------------------------- |
 | `id`  | `bytes32` hex | The round, `0x` and 64 hex digits |
 
-The result is the casino's reply as it came: `{ id, developer, status }`, and once the developer's casino bet has
+The result is the casino's reply as it came: `{ id, game, createdAt, status }`, and once the game's casino bet has
 revealed the round, its `seed`, `secret`, `outcome` and `casinoBet`. The wallet checks none of it. A game whose players
-share one draw, such as roulette, checks its developer's rounds with it: each secret hashes to its round, each seed to
+share one draw, such as roulette, checks its rounds with it: each secret hashes to its round, each seed to
 the seed hash its bet signed, and the outcomes lead where the game says. A round the casino does not know is refused
 with the casino's `not-found`.
 
@@ -198,15 +198,15 @@ partial loss. The result is the bet's [receipt](#receipt), `settled` or `rejecte
 ### `game.developerBet`
 
 A developer bet: a bet against the game's developer. Its stake comes out of the game's allowance and goes into the
-developer's bank at once, and the bet is final. The developer settles it when it chooses, on its word, and the player
-trusts it to pay. So the player allows developer bets apart from casino bets, in the wallet's dialog, after a warning
+game's bank at once, and the bet is final. The game's server settles it when it chooses, on its developer's word, and
+the player trusts the developer to pay. So the player allows developer bets apart from casino bets, in the wallet's dialog, after a warning
 that says so: a game that places them says so with [`game.placesDeveloperBets`](#gameplacesdeveloperbets), and until
 the player has allowed them, a developer bet is refused with `developer-bets-not-allowed`.
 
 | Param   | Type           | Meaning                                                                                                                                |
 | ------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`    | `string`       | The game's ID for the operation                                                                                                        |
-| `stake` | decimal string | Paid into the developer's bank; at most the game's allowance and what its group holds                                                  |
+| `stake` | decimal string | Paid into the game's bank; at most the game's allowance and what its group holds                                                  |
 | `meta`  | object         | The game's own JSON, saying what the bet is. The casino keeps it with the bet and never reads it; the developer's server settles by it |
 | `group` | `string`       | Optional: the group the bet belongs to, such as a match or a spin                                                                      |
 
@@ -328,7 +328,7 @@ is one the wallet checked.
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `casino-bet`    | `settled`: done, and what it paid is in the player's balance. `rejected`: declined, the balance unchanged, with a signed checkpoint the wallet checked            |
 | `payment`       | `settled` or `rejected`, as for a casino bet                                                                                                                      |
-| `developer-bet` | `open`: its stake is in the developer's bank. `settled`: its developer settled it and the wallet collected what that pays. `rejected`: the casino did not take it |
+| `developer-bet` | `open`: its stake is in the game's bank. `settled`: its developer settled it and the wallet collected what that pays. `rejected`: the casino did not take it |
 
 | Field     | Type           | Present                                                                                                                    |
 | --------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |

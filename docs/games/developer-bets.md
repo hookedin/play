@@ -7,24 +7,26 @@ sidebar:
 
 A developer bet is a bet against you, the game's developer, not the casino's bankroll: many players on one roulette
 spin, a crash curve, a football match. The player's wallet places it with the casino, and its stake goes straight into
-your bank; your server settles it later, paying from that bank. A game that takes developer bets runs a server with
-your key.
+your game's bank; your server settles it later, paying from that bank. A game that takes developer bets runs a server
+with a key you name for it.
 
 Playing such a game trusts you. The player is paid what your settlement says, and whether you can pay is between you and
 your players, outside HookedIn: a [settled trade-off](../overview/architecture.md#settled-trade-offs). The wallet tells
 players so ([trust model](../overview/trust-model.md)).
 
-## Your key and your bank
+## Your game's server key and bank
 
-Your server signs with the key of the account you publish the game from: publishing makes that account the game's
-developer. The casino lets only that key settle the game's developer bets and place the casino bets that back them.
-The server therefore holds everything the account holds: its games, their commission and its bank. A developer who
-wants the server to hold less publishes the game from an account of its own.
+Your server signs with the game's **server key**: a key you make for it and name on the wallet's **Developer** page,
+beside the game ([`POST /api/account/games/server`](../casino-api/channels.md#post-apiaccountgamesserver)). The casino
+lets only that key settle the game's developer bets, open its rounds and place the casino bets that back them. It spends
+the game's bank on those and does nothing else: it cannot publish or move the game, take money out of its bank, or touch
+your balance or your other games. A key that leaks costs the game's bank at most; name another and the old one is
+nothing. Until you name one, the server key is your account's own, which holds everything the account holds.
 
-Your **bank** is a balance at the casino. The stakes of your developer bets go in as they are placed; your settlements
-and your casino bets are paid from it, and an accepted casino bet's payout goes back in. Nothing in it is reserved.
-Put money in and take it out on the wallet's **Developer** page, from the account's own balance. A batch of settlements
-the bank cannot pay in full is refused whole, with `bank-short`.
+The game's **bank** is a balance at the casino. Half the commission of the game's casino bets and the stakes of its
+developer bets go in as they are placed; its settlements and its casino bets are paid from it, and an accepted casino
+bet's payout goes back in. Nothing in it is reserved. Put money in and take it out on the **Developer** page, from and
+into your own balance. A batch of settlements the bank cannot pay in full is refused whole, with `bank-short`.
 
 ## Placing a bet from the page
 
@@ -41,7 +43,7 @@ const receipt = await HookedIn.developerBet({
   group: 'match-812',
   meta: { pick: 'home', odds: 210 },
 });
-// 'open': the stake is in your bank and the bet is final. receipt.bet is the hash that names it.
+// 'open': the stake is in your game's bank and the bet is final. receipt.bet is the hash that names it.
 ```
 
 `show` is your page's own.
@@ -58,7 +60,8 @@ const receipt = await HookedIn.developerBet({
   ([the allowance](how-a-game-works.md#the-allowance)). It warns that you take the stakes and decide what they pay,
   which neither the casino nor the wallet can check. Until the player allows them, a developer bet is refused with
   `developer-bets-not-allowed`, and `HookedIn.allowance()` says `developerBets: false`.
-- Once you settle a bet, the wallet checks your signed settlement and collects what it pays into the player's balance.
+- Once your server settles a bet, the wallet checks the settlement against the server key you named, and your signed
+  naming of it, and collects what it pays into the player's balance.
   While the game is open, it adds that to the bet's group, which joins the allowance once the page ends the group with
   [`HookedIn.end`](../sdk/hookedin.md#end), and pushes the receipt, `settled` with its `payout`, as a `game.receipt`
   event. The wallet looks only every 10 minutes while its tab is visible, so a page that hears from your server
@@ -87,11 +90,11 @@ developers sign, with `protocol-mismatch`.
 import { createDeveloper } from '@hookedin/play/sdk/developer';
 import type { PublicDeveloperBet } from '@hookedin/play/sdk/developer';
 
-// Your key, and the name you publish the game under: with the key's address it makes the game's key.
+// The game's server key, and the game's key, which the Developer page shows beside the game.
 const developer = await createDeveloper({
   casinoURL: 'https://casino.hookedin.com',
-  key: process.env.DEVELOPER_KEY!,
-  name: 'my-game',
+  key: process.env.SERVER_KEY!,
+  game: process.env.GAME!,
 });
 
 /** Every open bet of the game, a page at a time, in the order they were placed. */
@@ -124,8 +127,8 @@ async function follow(take: (bets: PublicDeveloperBet[]) => Promise<void>, runni
 - A server that runs a table follows its bets: the casino holds each request until a bet on the game is placed, so
   your server hears of it at once, and asks again with the page's cursor. Take each page before moving the cursor on,
   so a bet your server failed to take comes again.
-- Only your key waits, for a published game, one wait per game at a time: a newer wait answers the one before. Run one
-  server per game, as one Durable Object does. A key waits for at most 4 games at once.
+- Only the game's server key waits, for a published game, one wait per game at a time: a newer wait answers the one
+  before. Run one server per game, as one Durable Object does. A key waits for at most 4 games at once.
 - Start from the beginning after a restart or a failed read: the bets open then are the ones still to settle, and your
   server finds those it already took by their hash.
 
@@ -154,10 +157,10 @@ async function settleMatch(group: string, result: string) {
 }
 ```
 
-- [`settle`](../sdk/developer.md#settle) signs a `Settlement` for each bet with your key: the bet's hash, `player`,
-  what the player is paid, and `casino`, what the casino is given, both from your bank. It posts them 256 at a time;
-  each batch is paid whole or refused with `bank-short`, and its bets stay open. A bet settled before answers with what
-  settled it.
+- [`settle`](../sdk/developer.md#settle) signs a `Settlement` for each bet with the server key: the bet's hash,
+  `player`, what the player is paid, and `casino`, what the casino is given, both from the game's bank. It posts them
+  256 at a time; each batch is paid whole or refused with `bank-short`, and its bets stay open. A bet settled before
+  answers with what settled it.
 - Settle each bet the moment it is decided, at the spin, the cash-out or the final whistle, so the player is paid at
   once.
 - Give a bet you should not have taken its stake back.
@@ -176,14 +179,14 @@ and your casino bets on them.
 - [`developer.openRound()`](../sdk/developer.md#openround) asks the casino for a round, named by the hash of a secret
   the casino keeps. Every call names another round; keep track of yours.
 - [`developer.seedHash(round.id)`](../sdk/developer.md#seedhash) is the hash of the seed your casino bet on that round
-  will bring. The seed is derived from your key and the round, so it is the same on every call, and nobody without the
-  key can know it.
+  will bring. The seed is derived from the server key and the round, so it is the same on every call, and nobody without
+  the key can know it.
 - [`developer.casinoBet({ round, stake, chance, prize, group, meta })`](../sdk/developer.md#casinobet) places a casino
-  bet on the round from your bank: it pays `prize` into your bank when the round's outcome is below `chance`. Your bank
-  must hold the stake, or the casino refuses the bet with `bank-short` and reveals nothing. The casino admits the bet
-  like any casino bet, before it reads the round's secret, and reveals the round: its seed, secret, 64-bit outcome and
-  your casino bet. Accepted, the stake leaves your bank, the prize comes back if the bet wins, and half its commission
-  is yours. Declined, it moves no money, and the round is revealed all the same.
+  bet on the round from the game's bank: it pays `prize` into the bank when the round's outcome is below `chance`. The
+  bank must hold the stake, or the casino refuses the bet with `bank-short` and reveals nothing. The casino admits the
+  bet like any casino bet, before it reads the round's secret, and reveals the round: its seed, secret, 64-bit outcome
+  and your casino bet. Accepted, the stake leaves the bank, the prize comes back if the bet wins, and half its
+  commission goes into the bank too. Declined, it moves no money, and the round is revealed all the same.
 - [`developer.reveal({ round, group, meta })`](../sdk/developer.md#reveal) reveals a round without betting anything: a
   casino bet of stake, chance and prize zero, signed, grouped and kept like any other.
 - `group`, 1 to 64 characters, is required: give your casino bets the group of the developer bets they concern, so
@@ -199,14 +202,14 @@ know the secret. What a casino bet's meta commits to before its round is reveale
 
 A casino bet has two outcomes. A game whose players share one draw of `n` equally likely outcomes, such as a roulette
 wheel's 37 pockets, draws it as a walk down a fixed balanced binary tree over them, one level per round. Each level is
-one casino bet of yours, from your bank, priced backward from what you owe on each outcome, so the bankroll backs the
-whole draw. [Binary steps](../sdk/steps.md) prices the tree, gives each level's bet and walks it, and `stepOutcome`
+one casino bet of yours, from the game's bank, priced backward from what you owe on each outcome, so the bankroll backs
+the whole draw. [Binary steps](../sdk/steps.md) prices the tree, gives each level's bet and walks it, and `stepOutcome`
 checks a walk from what the casino publishes.
 
 Each chance rounds down to whole outcomes, so an outcome is reached with its share to within one outcome in 2^64 per
-level. Name each level's side in its casino bet's meta, which is signed before its round is revealed. A level your bank
+level. Name each level's side in its casino bet's meta, which is signed before its round is revealed. A level the bank
 cannot fund still reveals its round, with `reveal`, and one the bankroll declines is revealed by the declined bet: the
-walk goes on either way, and your bank carries that level itself. Whether the bankroll takes a step decides who carries
+walk goes on either way, and the bank carries that level itself. Whether the bankroll takes a step decides who carries
 it, never how likely each outcome is.
 
 **Open the rounds before anybody bets.** A draw needs [`levels(n)`](../sdk/steps.md#levels) rounds, one per level of
@@ -253,7 +256,7 @@ for (let level = 0; node.hi - node.lo > 1; level++) {
             meta: { ...meta, side: bet.side },
           })
           .catch(error => {
-            if (error.code === 'bank-short') return reveal(); // your bank carries this level
+            if (error.code === 'bank-short') return reveal(); // the bank carries this level
             throw error;
           })
       : await reveal();
@@ -282,25 +285,27 @@ One draw of a provably fair game, from the first request to the players' money, 
 
 1. **The server opens the draw.** `developer.openRound()` sends
    [`POST /api/rounds`](../casino-api/developers.md#post-apirounds) once per level, authorized by a `DeveloperAccess`
-   token your key signs, and the server publishes the draw's ID.
+   token the server key signs, and the server publishes the draw's ID.
 2. **Players bet.** Each page calls [`game.developerBet`](../reference/bridge.md#gamedeveloperbet) with the draw's ID
    in its `group`. The player's wallet signs a debit with the account's key and sends it to
    [`POST /api/channels/:id/operations`](../casino-api/channels.md#post-apichannelsidoperations); the casino signs the
-   channel's next state, records the bet with its meta, group and time, and puts the stake in your bank.
+   channel's next state, records the bet with its meta, group and time, and puts the stake in the game's bank.
 3. **The server closes betting.** It reads the open bets
    ([`GET /api/developer-bets`](../casino-api/public.md#get-apideveloper-bets)), saves which it covers and what it owes
    on each outcome, and prices the walk.
 4. **The server walks, one of the draw's rounds per level.** `developer.casinoBet`, or `developer.reveal`, sends
    [`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet) with the seed and a
-   `BankCasinoBet` your key signs over the round, the game, the stake, the chance, the prize, the group, the seed hash
-   and the meta's hash. The casino admits it before reading the secret, then reveals the round, which the kit checks
+   `BankCasinoBet` the server key signs over the round, the game, the stake, the chance, the prize, the group, the seed
+   hash and the meta's hash. The casino admits it before reading the secret, then reveals the round, which the kit checks
    ([`casinoBet`](../sdk/developer.md#casinobet)).
-5. **The server settles.** For each bet a `Settlement` your key signs over the bet's hash, the player's amount and the
-   casino's: `developer.settle` sends
-   [`POST /api/developer-bets/settle`](../casino-api/developers.md#post-apideveloper-betssettle), paid from your bank.
+5. **The server settles.** For each bet a `Settlement` the server key signs over the bet's hash, the player's
+   amount and the casino's: `developer.settle` sends
+   [`POST /api/developer-bets/settle`](../casino-api/developers.md#post-apideveloper-betssettle), paid from the game's
+   bank.
 6. **The wallet collects.** Each player's wallet reads the settled bet
-   ([`GET /api/developer-bets/:bet`](../casino-api/public.md#get-apideveloper-betsbet)), checks your signature over it,
-   signs a credit for exactly the player's amount with the account's key, and the casino signs the channel's next state.
+   ([`GET /api/developer-bets/:bet`](../casino-api/public.md#get-apideveloper-betsbet)), checks the server key's
+   signature over it and your `GameServer` naming that key, signs a credit for exactly the player's amount with the
+   account's key, and the casino signs the channel's next state.
    The wallet then pushes the settled receipt to the page ([events](../reference/bridge.md#events)).
 
 Anyone can then check the draw: [`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround) shows each
@@ -315,7 +320,7 @@ crash points, and on each the server owes what the cash-outs it reaches pay. A c
 climbs cannot ride a round: to know when to crash, the server would have to reveal the draw at take-off, and a revealed
 round is public, so every page would know the crash point. Such a game keeps its crash point to itself and settles
 every bet on its word, as the house's [crash](https://github.com/hookedin/game-crash) does: a flight's ID is the hash of
-a secret revealed after the crash, and each escape is paid from the developer's bank.
+a secret revealed after the crash, and each escape is paid from the game's bank.
 
 ## One Cloudflare Worker
 
@@ -324,6 +329,5 @@ A game with a server ships page and server as one Cloudflare Worker: `dist/` as 
 Roulette's Durable Object follows the game's bets while a page watches, and sends every page the table as it changes,
 as server-sent events.
 [Roulette's repository](https://github.com/hookedin/game-roulette) is a GitHub template with all of this in place: its
-`wrangler.jsonc` names the casino and the game, and its README sets `DEVELOPER_KEY`, the key of the account you publish
-from, as a secret. Developer bets need the game published under that name from that account
-([publishing](publishing.md#publish-it)).
+`wrangler.jsonc` names the casino and the game's key, and its README sets `SERVER_KEY`, the key you name as the game's
+server, as a secret. Developer bets need the game published ([publishing](publishing.md#publish-it)).

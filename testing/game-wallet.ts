@@ -111,10 +111,10 @@ export function worstReturn(plan: GamePlan) {
 
 /**
  * A real wallet wired to an in-memory casino stub, and a stub developer shaped like the one a game's server creates
- * with its developer's key: what a game is tested against without the private casino. The stub holds every casino
- * bet to the casino's own admission rule and charges its commission, so a bet it takes is one the casino takes.
- * `bankroll` is what it covers casino bets with, and admits them against half of, as the casino's quotes do; `bank`
- * is what the developer's bank holds before any developer bet pays its stake into it.
+ * with its key, here the developer's own: what a game is tested against without the private casino. The stub holds
+ * every casino bet to the casino's own admission rule and charges its commission, so a bet it takes is one the casino
+ * takes. `bankroll` is what it covers casino bets with, and admits them against half of, as the casino's quotes do;
+ * `bank` is what the game's bank holds before any developer bet pays its stake into it.
  */
 export async function gameWallet({
   bankroll: capital = 10n ** 12n,
@@ -155,8 +155,8 @@ export async function gameWallet({
   const responses = new Map<string, any>(),
     carried = new Map<string, string>();
   let settlements = 0;
-  // The stub casino's rounds: each is the hash of its secret. A channel's own settles its next casino bet; a
-  // developer's is revealed by the developer's casino bet on it.
+  // The stub casino's rounds: each is the hash of its secret. A channel's own settles its next casino bet; a game's is
+  // revealed by the game's casino bet on it.
   const secrets = new Map<string, string>(),
     own = new Map<string, string>();
   const createRound = () => {
@@ -196,7 +196,7 @@ export async function gameWallet({
     const secret = secrets.get(round.id)!;
     return plain({
       id: round.id,
-      developer: developerKey.address.toLowerCase(),
+      game: game.key,
       createdAt: round.createdAt,
       status: round.casinoBet ? ('revealed' as const) : ('open' as const),
       ...(round.casinoBet
@@ -408,8 +408,8 @@ export async function gameWallet({
       bankroll += terms.stake - paid - fee / 2n;
       return settle(channel, request, details, signature, seed, secret, fee);
     };
-    /** A developer bet is final and completes at once if its game is published: its stake goes into the developer's
-     * bank, and the developer settles it. */
+    /** A developer bet is final and completes at once if its game is published: its stake goes into the game's bank,
+     * and the game's server settles it. */
     const placeDeveloperBet = async (channel: string, request: any, details: any, signature: string) => {
       if (!published.has(details.game)) return decline(channel, request, details, 'This game is published nowhere');
       const hash = hashOperation(d, request).toLowerCase();
@@ -420,7 +420,6 @@ export async function gameWallet({
         ...(details.group ? { group: details.group } : {}),
         uname,
         discordUsername: null,
-        developer: developerKey.address.toLowerCase(),
         stake: String(request.amount),
         placedAt: Date.now(),
         status: 'open',
@@ -434,13 +433,13 @@ export async function gameWallet({
   };
   const refused = (status: number, code: string, message: string) =>
     Object.assign(new Error(message), { status, code });
-  /** One batch of settlements, as the casino takes it: paid whole from the developer's bank, or not at all. */
+  /** One batch of settlements, as the casino takes it: paid whole from the game's bank, or not at all. */
   const settleBatch = async (list: Settlement[]) => {
     const hashes = list.map(entry => entry.bet.toLowerCase());
     if (hashes.some(hash => !developerBets.has(hash))) throw refused(404, 'not-found', 'Unknown developer bet');
     const open = list.filter((_, i) => developerBets.get(hashes[i]!)!.status === 'open');
     const total = open.reduce((sum, entry) => sum + BigInt(entry.player) + BigInt(entry.casino), 0n);
-    if (total > bank) throw refused(409, 'bank-short', "The developer's bank cannot pay these settlements");
+    if (total > bank) throw refused(409, 'bank-short', "The game's bank cannot pay these settlements");
     bank -= total;
     for (const entry of open) {
       const message = { bet: entry.bet.toLowerCase(), player: String(entry.player), casino: String(entry.casino) };
@@ -454,9 +453,9 @@ export async function gameWallet({
     }
     return hashes.map(publicDeveloperBet);
   };
-  /** The seed of the developer's casino bet on a round, derived from its key as the developer kit derives it. */
+  /** The seed of the game's casino bet on a round, derived from its server's key as the developer kit derives it. */
   const seedOf = async (round: string) => keccak256(await developerKey.signMessage(getBytes(round)));
-  /** The developer's casino bet on its round, as the casino takes it: admitted against the virtual bankroll, half the
+  /** The game's casino bet on its round, as the casino takes it: admitted against the virtual bankroll, half the
    * bankroll, before the secret is read, or, betting nothing, a plain reveal. Either way the round is revealed once. */
   const stubCasinoBet = async ({ round: id, stake, chance, prize, group, meta }: BankCasinoBet) => {
     const round = rounds.get(id.toLowerCase());
@@ -487,8 +486,7 @@ export async function gameWallet({
     }
     const reveal = message.stake === '0' && message.chance === '0' && message.prize === '0',
       terms = betTerms(message.stake, message.chance, message.prize);
-    if (!reveal && terms.stake > bank)
-      throw refused(409, 'bank-short', "The developer's bank cannot pay this casino bet");
+    if (!reveal && terms.stake > bank) throw refused(409, 'bank-short', "The game's bank cannot pay this casino bet");
     let fee: bigint | null = null;
     if (!reveal)
       try {
@@ -513,7 +511,7 @@ export async function gameWallet({
     });
     return publicRound(round.id);
   };
-  /** The developer a game's server would create with its developer's key, against this stub casino. */
+  /** The developer a game's server would create with its key, against this stub casino. */
   const stubDeveloper: Developer = {
     virtualBankroll: async () => bankroll / 2n,
     async openRound() {
@@ -572,13 +570,13 @@ export async function gameWallet({
     storage,
     owner,
     player,
-    /** The developer the game's server would create: it opens rounds, places its casino bets and settles developer
-     * bets, with the developer's key. */
+    /** The developer the game's server would create: it opens the game's rounds, places its casino bets and settles
+     * its developer bets, with the developer's own key. */
     developer: stubDeveloper,
     /** The game's side of the bridge to this fixture's wallet. */
     bridge: bridgeTo(wallet),
     settlements: () => settlements,
-    /** What the developer's bank holds. */
+    /** What the game's bank holds. */
     bank: () => bank,
     /** A round's secret, which only the casino knows until it reveals the round. */
     secretOf: (round: string) => secrets.get(round.toLowerCase())!,

@@ -184,11 +184,11 @@ const KINDS: Record<
       `Bought ${exact(r.shares)} shares; you hold ${exact(r.holding)}. The casino signed a statement of your holding. Shares are its promise of a part of the bankroll, not protected money. ${balanceOf(r)}`,
   },
   bank: {
-    title: 'Put into your bank',
+    title: 'Put into a game’s bank',
     label: 'Sent',
     declined: 'Bank deposit declined',
     describe: r =>
-      `Your bank takes the stakes of your games’ developer bets and pays their settlements and your casino bets. The casino signed a statement of it. ${balanceOf(r)}`,
+      `Into the bank of ${r.name ?? 'your game'}, which takes half the commission of its casino bets and the stakes of its developer bets, and pays their settlements and its own casino bets. The casino signed a statement of it. ${balanceOf(r)}`,
   },
   withdrawal: { title: 'Withdrawn', label: 'Paid out', declined: 'Withdrawal declined', incoming: true },
   transfer: {
@@ -259,10 +259,10 @@ const KINDS: Record<
       `What a developer bet’s developer paid, checked by your wallet and collected into your balance. ${balanceOf(r)}`,
   },
   withdrawn: {
-    title: 'Taken from your bank',
+    title: 'Taken from a game’s bank',
     label: 'Received',
     incoming: true,
-    describe: r => `Taken from your bank and collected into your balance. ${balanceOf(r)}`,
+    describe: r => `Taken from the bank of ${r.name ?? 'your game'} and collected into your balance. ${balanceOf(r)}`,
   },
   redeem: {
     title: 'Shares redeemed',
@@ -275,12 +275,6 @@ const KINDS: Record<
     label: 'Received',
     incoming: true,
     describe: r => `Paid for redeemed bankroll shares. ${balanceOf(r)}`,
-  },
-  earnings: {
-    title: 'Developer earnings',
-    label: 'Received',
-    incoming: true,
-    describe: r => `Commission your games earned, collected into your balance. ${balanceOf(r)}`,
   },
   transaction: { title: 'Transaction' },
 };

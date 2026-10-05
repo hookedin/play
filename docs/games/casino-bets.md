@@ -73,7 +73,7 @@ The saved `id` is what finds the result after a lost reply or a reload ([lost re
 
 A game of more outcomes, such as a Plinko board or a slot, plays each step as one bet all the same: the page draws which
 bet to place, so that every outcome is reached as often as the rules say ([pricing and collapsing](collapsing-bets.md)).
-A game whose players share one draw walks a tree of its developer's casino bets instead
+A game whose players share one draw walks a tree of its own casino bets instead
 ([binary steps](developer-bets.md#shared-games-binary-steps)).
 
 ## Leave the casino an edge

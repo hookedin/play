@@ -1,7 +1,7 @@
 import type { Integer, Checkpoint, Operation, Quote } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress, hexlify, randomBytes, ZeroAddress, ZeroHash, id } from 'ethers';
-import type { Details, PlayerDeveloperBets, PublicDeveloperBet } from '../protocol/types.ts';
+import type { AccountGame, Details, PlayerDeveloperBets, PublicDeveloperBet } from '../protocol/types.ts';
 import {
   canonicalJSON,
   plain,
@@ -29,14 +29,13 @@ import {
   valueOf,
   hashRedeem,
   FUND_ID,
-  DEVELOPER_ID,
   FUND_TYPES,
   SHARE_TYPES,
   REDEEM_TYPES,
   SETTLEMENT_TYPES,
+  GAME_SERVER_TYPES,
   BANK_TYPES,
   BANK_WITHDRAW_TYPES,
-  BANK_ID,
   counterpartyPlayer,
   hashBankWithdraw,
   settleStep,
@@ -49,7 +48,7 @@ import { gameAmount, gameError, gameRef, META } from './bridge.ts';
 import { WalletTransactions, inbound } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
 /** Every operation this wallet signs: the kind it is signed as, what it is called, and whether it is the open game's. A
- * developer bet, a payment, an investment, a bank deposit and a transfer to another player are debits, a withdrawal
+ * developer bet, a payment, an investment, a deposit into a game's bank and a transfer to another player are debits, a withdrawal
  * names the address it pays, a lock-in goes into this account's own current channel, a payout or a transfer collected
  * is a credit, as is the network fee of a deposit the casino pays, and money deposited into the channel is taken in with
  * a deposit. */
@@ -63,7 +62,6 @@ export const OPERATIONS: Record<string, { kind: number; name: string; game?: boo
   withdrawal: { kind: KIND.withdrawal, name: 'withdrawal' },
   'lock-in': { kind: KIND.lockIn, name: 'lock-in' },
   divest: { kind: KIND.credit, name: 'bankroll payout' },
-  earnings: { kind: KIND.credit, name: 'earnings payout' },
   'developer-bet-payout': { kind: KIND.credit, name: 'developer bet payout' },
   withdrawn: { kind: KIND.credit, name: 'bank withdrawal' },
   'transfer-in': { kind: KIND.credit, name: 'transfer received' },
@@ -80,7 +78,7 @@ export interface CasinoBetInput {
   prize: Integer;
   group?: string;
 }
-/** A developer bet: its stake goes to the bank of the game's developer, who settles it on its word. Its meta is the
+/** A developer bet: its stake goes to the game's bank, and the game's server settles it on its developer's word. Its meta is the
  * game's own JSON, saying what the bet is. */
 export interface DeveloperBetInput {
   stake: Integer;
@@ -181,7 +179,8 @@ export class ChannelClient extends WalletTransactions {
     };
     // What the operation means, signed as its memo. A casino bet, a developer bet and a payment are always the open
     // game's, so which game that is has one source of truth: the session this wallet has open; the game may give
-    // them a group. An investment, a bank deposit, a transfer and a payout name what they pay into or collect from.
+    // them a group. An investment, a deposit into a game's bank, a transfer and a payout name what they pay into or
+    // collect from: a game's bank is named by the game's key.
     const details: Details = plain({
       // A deposit's fee is known by the hash of the deposit's transaction: the casino pays each once.
       id: kind === 'deposit-fee' ? input.transaction : id(operationId),
@@ -418,7 +417,12 @@ export class ChannelClient extends WalletTransactions {
     // An investment comes back with the casino's signed statement of the holding it bought.
     const invested = kind === 'invest' && !rejected ? this.adoptStatement(response.statement, op) : null,
       banked =
-        kind === 'bank' && !rejected ? this.bankStatement(response.statement, hashOperation(this.domain, op)) : null,
+        kind === 'bank' && !rejected
+          ? {
+              ...this.bankStatement(response.statement, hashOperation(this.domain, op), details.counterparty!),
+              name: c.pending.name,
+            }
+          : null,
       // A developer bet is known by the hash of the operation that placed it, and a withdrawal or a lock-in is a claim
       // under it.
       developerBet = kind === 'developer-bet' && !rejected ? hashOperation(this.domain, op).toLowerCase() : null,
@@ -455,7 +459,7 @@ export class ChannelClient extends WalletTransactions {
     await this.save(receipt, {
       channels: { ...this.channels, [c.opening.channelId]: c },
       ...(invested ? { fund: invested.fund } : {}),
-      ...(banked ? { bank: banked } : {}),
+      ...(banked ? { banks: { ...this.banks, [details.counterparty!]: banked } } : {}),
       // A developer bet is remembered until what its developer paid is collected.
       ...(developerBet
         ? {
@@ -486,21 +490,27 @@ export class ChannelClient extends WalletTransactions {
       game,
     );
   }
-  /** What a settled developer bet was paid: what its developer's signed settlement says, which is its developer's
-   * word. Throws if the casino describes another bet or the settlement is not the developer's, so the wallet signs
-   * nothing it cannot verify. */
+  /** What a settled developer bet was paid: what the settlement signed by its game's server says, which is its
+   * developer's word. The server is the developer's own key, or one the developer named for the game in a signed
+   * `GameServer`. Throws if the casino describes another bet or the settlement is not by a server the developer named,
+   * so the wallet signs nothing it cannot verify. */
   developerBetPaid(this: CasinoWallet, receipt: any, bet: PublicDeveloperBet) {
     const developer: string = receipt.game?.developer,
       hash = hashOperation(this.domain, receipt.proof.step.operation);
-    if (!same(bet.bet, hash) || BigInt(bet.stake) !== BigInt(receipt.stake) || !same(bet.developer, developer))
+    if (!same(bet.bet, hash) || BigInt(bet.stake) !== BigInt(receipt.stake) || !same(bet.game, receipt.game?.key))
       throw new Error('The casino describes another bet');
-    const settlement = bet.settlement!;
+    const settlement = bet.settlement!,
+      named = settlement?.server;
+    if (named) {
+      if (!same(named.message?.game, bet.game)) throw new Error('The server named is for another game');
+      assertSignature(this.domain, GAME_SERVER_TYPES, named.message, named.signature, developer);
+    }
     assertSignature(
       this.domain,
       SETTLEMENT_TYPES,
       { bet: hash, player: settlement?.player, casino: settlement?.casino },
       settlement?.signature,
-      developer,
+      named ? named.message.server : developer,
     );
     return { payout: BigInt(settlement.player), settlement: plain(settlement) };
   }
@@ -637,70 +647,87 @@ export class ChannelClient extends WalletTransactions {
     }
   }
 
-  // --- A developer's bank ------------------------------------------------------------------------
+  // --- The games this account publishes -----------------------------------------------------
 
-  /** Put money into this account's bank: a debit answered with the casino's signed statement of the balance. The bank
-   * takes the stakes of the developer bets on this developer's games, and pays their settlements and this developer's
-   * casino bets. */
-  async depositBank(this: CasinoWallet, amount: Integer, operationId: string = crypto.randomUUID()) {
-    return this.perform('bank', { amount, source: BANK_ID }, operationId);
+  /** Every game this account has published, taken down since or not, with its bank and the key its server signs with,
+   * as the casino has them now. */
+  async accountGames(this: CasinoWallet): Promise<AccountGame[]> {
+    return this.api('/api/account/games');
   }
-  /** A statement of this account's bank, for a deposit or withdrawal this wallet signed: the casino's
-   * signature on it, for this account, and caused by `cause`. The balance is the casino's to state: every
-   * developer bet, settlement and casino bet of this developer moves it. */
-  bankStatement(this: CasinoWallet, statement: any, cause: string) {
-    const held = this.bank;
+  /** Name the key a game's server signs with: from then on it alone settles the game's developer bets, opens its rounds
+   * and places its casino bets from its bank, and nothing else. This account's own address gives the game back to it.
+   * The casino keeps the signed `GameServer`, which players' wallets check settlements against. */
+  async setGameServer(this: CasinoWallet, game: string, server: string): Promise<AccountGame> {
+    this.requireService();
+    const message = { game: game.toLowerCase(), server: getAddress(server) };
+    return this.api('/api/account/games/server', {
+      message,
+      signature: await this.signer.signTypedData(this.domain, GAME_SERVER_TYPES, message),
+    });
+  }
+  /** Put money into one of this account's games' banks: a debit naming the game's key, answered with the casino's
+   * signed statement of the balance. The bank takes half the commission of the game's casino bets and the stakes of
+   * its developer bets, and pays their settlements and the game's own casino bets. */
+  async depositBank(
+    this: CasinoWallet,
+    game: { key: string; name: string },
+    amount: Integer,
+    operationId: string = crypto.randomUUID(),
+  ) {
+    return this.perform('bank', { amount, source: game.key, name: game.name }, operationId);
+  }
+  /** A statement of one of this account's games' banks, for a deposit or withdrawal this wallet signed: the casino's
+   * signature on it, for that game, and caused by `cause`. The balance is the casino's to state: the game's bets,
+   * settlements and casino bets move it. */
+  bankStatement(this: CasinoWallet, statement: any, cause: string, game: string) {
+    const held = this.banks[game.toLowerCase()] ?? {};
     assertSignature(this.domain, BANK_TYPES, statement?.message, statement?.signature, this.operator);
     const { message } = statement;
     if (
-      !same(message.developer, this.address) ||
+      !same(message.game, game) ||
       !same(message.cause, cause) ||
       Number(message.sequence) <= Number(held.statement?.message.sequence ?? 0)
     )
       throw new Error('The bank statement is not for what this wallet signed');
     return { ...held, statement: plain(statement) };
   }
-  /** This account's bank as the casino has it now. */
-  async bankBalance(this: CasinoWallet) {
-    const { balance, sequence } = await this.api('/api/account/bank');
-    return { balance: String(BigInt(balance)), sequence: Number(sequence) };
-  }
-  /** Take money out of this account's bank: any balance, at any time. The signed `BankWithdraw` is saved
-   * before it is sent, and what it takes out is owed to this account, collected into its balance. */
-  async withdrawBank(this: CasinoWallet, amount: Integer) {
+  /** Take money out of one of this account's games' banks: any balance, at any time. The signed `BankWithdraw` is
+   * saved before it is sent, and what it takes out is owed to this account, collected into its balance. */
+  async withdrawBank(this: CasinoWallet, game: { key: string; name: string }, amount: Integer) {
+    const key = game.key.toLowerCase();
     return this.exclusive(async () => {
       this.requireService();
-      const held = { ...this.bank };
+      const held = { ...this.banks[key], name: game.name };
       if (!held.withdrawing) {
-        const bank = await this.bankBalance();
-        if (BigInt(amount) <= 0n || BigInt(amount) > BigInt(bank.balance))
+        const bank = (await this.accountGames()).find(entry => same(entry.key, key));
+        if (!bank || BigInt(amount) <= 0n || BigInt(amount) > BigInt(bank.bank))
           throw new Error('Not that much is in the bank');
-        const message = {
-          developer: this.address,
-          amount: String(BigInt(amount)),
-          sequence: String(bank.sequence + 1),
-        };
+        const message = { game: key, amount: String(BigInt(amount)), sequence: String(bank.sequence + 1) };
         held.withdrawing = {
           message,
           signature: await this.signer.signTypedData(this.domain, BANK_WITHDRAW_TYPES, message),
         };
-        await this.save(undefined, { bank: held });
+        await this.save(undefined, { banks: { ...this.banks, [key]: held } });
       }
       const request = held.withdrawing;
       let statement;
       try {
-        ({ statement } = await this.api('/api/account/bank/withdraw', request));
+        ({ statement } = await this.api('/api/account/games/withdraw', request));
       } catch (error: any) {
         // Refused, so never taken: the next withdrawal is signed afresh.
         if (error.status === 409 || error.status === 400)
-          await this.save(undefined, { bank: { ...held, withdrawing: null } });
+          await this.save(undefined, { banks: { ...this.banks, [key]: { ...held, withdrawing: null } } });
         throw error;
       }
       await this.save(undefined, {
-        bank: {
-          ...this.bankStatement(statement, hashBankWithdraw(this.domain, request.message)),
-          withdrawing: null,
-          owed: [...(held.owed ?? []), String(request.message.amount)],
+        banks: {
+          ...this.banks,
+          [key]: {
+            ...this.bankStatement(statement, hashBankWithdraw(this.domain, request.message), key),
+            name: held.name,
+            withdrawing: null,
+            owed: [...(held.owed ?? []), String(request.message.amount)],
+          },
         },
       });
       return statement;
@@ -907,9 +934,9 @@ export class ChannelClient extends WalletTransactions {
     });
   }
 
-  /** Collect what the fund, the games this player develops, the developer bets they placed and other players' transfers
-   * owe them. A redemption is checked against this wallet's own share statement before it signs the credit, and a
-   * developer bet against its developer's settlement; commission and transfers are simply collected. */
+  /** Collect what the fund, the banks of the games this player develops, the developer bets they placed and other
+   * players' transfers owe them. A redemption or a withdrawal from a bank is signed for only as one of this wallet's own
+   * statements priced it, and a developer bet only as its server's settlement says; transfers are simply collected. */
   async collectPayouts(this: CasinoWallet) {
     // Money deposited into the channel goes into the balance first: a waiting casino is asked again next time.
     if (!this.busy) await this.takeDeposits().catch(() => {});
@@ -920,25 +947,6 @@ export class ChannelClient extends WalletTransactions {
     if (!Array.isArray(due) || due.length > MAX_PAYOUTS) throw new Error('Invalid payout list');
     for (const payout of due) {
       if (this.channelId !== channelId || this.busy || this.pending) break;
-      if (same(payout.source, DEVELOPER_ID)) {
-        // Commission the games this player develops have earned. The casino keeps the tally and this
-        // channel shows it; a credit needs no checking, so the wallet takes what is offered.
-        this.developerEarnings = { earned: String(payout.earned), collected: String(payout.collected) };
-        if (BigInt(payout.amount) > 0n) {
-          const receipt = await this.perform(
-            'earnings',
-            { amount: payout.amount, source: DEVELOPER_ID },
-            `earnings:${payout.collected}`,
-          );
-          collected.push(receipt);
-          // What it collected counts as collected from now on.
-          if (receipt.status === 'signed') {
-            this.developerEarnings = { earned: String(payout.earned), collected: String(payout.earned) };
-            this.render();
-          }
-        }
-        continue;
-      }
       const from = counterpartyPlayer(payout.source);
       if (from !== null) {
         // A transfer from another player, named as they went by when it was listed.
@@ -965,16 +973,25 @@ export class ChannelClient extends WalletTransactions {
         });
         continue;
       }
-      if (same(payout.source, BANK_ID)) {
-        // Money this account took out of its bank: signed for only as one of its own statements priced it.
-        const held = this.bank,
+      const game = String(payout.source).toLowerCase();
+      if (this.banks[game]) {
+        // Money this account took out of one of its games' banks: signed for only as one of its own statements priced
+        // it.
+        const held = this.banks[game],
           at = (held.owed ?? []).indexOf(String(payout.amount));
         if (at < 0) continue;
         collected.push(
-          await this.perform('withdrawn', { amount: payout.amount, source: BANK_ID }, `bank:${payout.index}`),
+          await this.perform(
+            'withdrawn',
+            { amount: payout.amount, source: game, name: held.name },
+            `bank:${payout.index}`,
+          ),
         );
         await this.exclusive(
-          () => this.save(undefined, { bank: { ...this.bank, owed: this.bank.owed!.toSpliced(at, 1) } }),
+          () =>
+            this.save(undefined, {
+              banks: { ...this.banks, [game]: { ...this.banks[game], owed: this.banks[game]!.owed!.toSpliced(at, 1) } },
+            }),
           { wait: true },
         );
       }

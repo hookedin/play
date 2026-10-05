@@ -96,7 +96,7 @@ developer bets under **Developer bets** until what each was paid has been collec
 
 | Status                    | Meaning                                                                       |
 | ------------------------- | ----------------------------------------------------------------------------- |
-| Waiting for the developer | Open: the stake is in the developer's bank, and the developer has not settled |
+| Waiting for the developer | Open: the stake is in the game's bank, and the developer has not settled |
 | Payout ready              | Settled, and the payout is not yet in your balance                            |
 | Payout collected          | The payout is in your balance                                                 |
 | Settled · no payout       | Settled for nothing: there is nothing to collect                              |

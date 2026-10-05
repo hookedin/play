@@ -19,7 +19,7 @@ export interface StepNode {
   hi: number;
 }
 export type Side = 'left' | 'right';
-/** One level's casino bet from the developer's bank: its stake pays `prize` when the round's outcome is below
+/** One level's casino bet from the game's bank: its stake pays `prize` when the round's outcome is below
  * `chance`, and that outcome is the one that takes the walk to `side`. */
 export interface StepBet {
   stake: bigint;
@@ -68,7 +68,7 @@ export function next(node: StepNode, side: Side, outcome: bigint): StepNode {
  * needs what is owed on it, a node whose children need the same cash needs that, and any other node the least cash
  * whose bet between its children the casino's rule admits. More cash is never less safe for the bankroll, and a stake
  * of the whole difference cannot lose it anything, so the search is a bisection. A bankroll of nothing admits no bet,
- * so against it every node needs the cash of its dearer child: the developer's bank carries the whole walk.
+ * so against it every node needs the cash of its dearer child: the game's bank carries the whole walk.
  */
 export function priceSteps(owed: readonly bigint[], bankroll: bigint): StepPlan {
   if (!owed.length || owed.some(amount => typeof amount !== 'bigint' || amount < 0n))

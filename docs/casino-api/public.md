@@ -6,7 +6,7 @@ sidebar:
 ---
 
 These routes need no authentication. They say what the casino runs, how it stands, and what it has recorded in public:
-players by their names, games by their keys, developers' rounds and developer bets by their hashes. Nothing here names
+players by their names, games by their keys, games' rounds and developer bets by their hashes. Nothing here names
 a player's address or channel.
 
 ## The deployment and its health
@@ -36,7 +36,7 @@ nothing else here on trust ([how it pins its deployment](../reference/deployment
 
 ### `GET /api/status`
 
-The casino's health, its books, what developers have earned, the last observed block and the commit it runs.
+The casino's health, its books, the last observed block and the commit it runs.
 
 | Response field      | Type           | Meaning                                                                                                                                 |
 | ------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,7 +53,6 @@ The casino's health, its books, what developers have earned, the last observed b
 | `queueDepth`        | number         | Requests waiting in the casino's queues                                                                                                 |
 | `block`             | object or null | The last confirmed block the casino observed, `{number, hash, timestamp}`                                                               |
 | The books           | strings        | Below                                                                                                                                   |
-| `developers`        | array          | `{developer, earned, collected, outstanding}` for each developer: the commission a developer has earned, collected and still to collect |
 | `commit`            | string or null | The source commit the casino runs, when its deployment names one                                                                        |
 
 The books. [Economics](../reference/economics.md#available-capital-and-concurrency) explains how they make the bankroll.
@@ -67,16 +66,15 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | `collateral`                       | The [collateral](../reference/contract.md#collateral) active and closing channels hold, which pays their winnings before house cash           |
 | `collateralSales`                  | What collateral has sold for, the contract's `collateralSales`: the bankroll's, as commission is                                              |
 | `claimLiabilities`                 | The unpaid winnings and protected amounts of claims: finalized closes' and withdrawals'                                                       |
-| `commissions`                      | Developer commission earned and not yet collected                                                                                             |
 | `escrow`                           | Payouts awarded and not yet collected                                                                                                         |
-| `banks`                            | Everything in developers' banks                                                                                                               |
+| `banks`                            | Everything in games' banks                                                                                                                    |
 | `withdrawals`                      | Withdrawals the casino has taken on, until the chain records them or their channel's close returns them                                       |
 | `houseFeesEarned`                  | The casino's own commission, in total                                                                                                         |
 | `reserved`                         | The worst cases of casino bets being decided, plus disputed closes' possible payouts above obligations already in the books                   |
 | `equity`                           | The bankroll before reservations: what fund shares are a claim on                                                                             |
 | `unreservedBankroll`               | `equity − reserved`; it can be negative                                                                                                       |
 | `bankroll`                         | `max(0, unreservedBankroll)`: the betting bankroll                                                                                            |
-| `virtualBankroll`                  | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a developer's casino bet is admitted against            |
+| `virtualBankroll`                  | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a game's casino bet is admitted against                 |
 | `withdrawableHouse`                | `max(0, cash − protectedFunds − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                     |
 
 `alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
@@ -135,10 +133,10 @@ entry in their profile, `{uname, discordUsername, name, url, key, developer, cre
 
 ### `GET /api/games/:key`
 
-A game's public record, by its [game key](../reference/signed-messages.md#game-keys): its settled bets, newest first,
-and their totals. A bet appears when it settles: a player's casino bet when the casino carries it out, a developer bet
-when its developer settles it, and a developer's own casino bet from its bank when the bankroll takes it. Declined bets
-and reveals do not appear. An unknown key answers with totals of zero and no bets.
+A game's public record, by its [game key](../reference/signed-messages.md#game-keys): what its bank holds, its settled
+bets, newest first, and their totals. A bet appears when it settles: a player's casino bet when the casino carries it
+out, a developer bet when the game's server settles it, and the game's own casino bet from its bank when the bankroll
+takes it. Declined bets and reveals do not appear. An unknown key answers with a bank and totals of zero and no bets.
 
 | Query   | Type   | Meaning                                                                 |
 | ------- | ------ | ----------------------------------------------------------------------- |
@@ -147,67 +145,67 @@ and reveals do not appear. An unknown key answers with totals of zero and no bet
 | Response field  | Type    | Meaning                                                                                    |
 | --------------- | ------- | ------------------------------------------------------------------------------------------ |
 | `key`           | bytes32 | The game, lowercase                                                                        |
+| `bank`          | string  | What the game's bank holds now: nothing for a game nobody published                        |
 | `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled              |
 | `totals`        | object  | `{bets, staked, paid, expected, priced, earned}`, below                                    |
 | `bets`          | array   | `{index, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
 
-The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. `bets` is a number,
+The totals are the players' bets: the game's own casino bets are listed, and add up to nothing here. `bets` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
 staked and paid, a round's steps each on its own, so only `paid − staked` is what the players came out with. `expected` is what the casino bets were expected to pay, times
 2^64 (the sum of their prizes times their chances), and `priced` is what those bets staked, so their return is
-`expected / (priced × 2^64)`. A developer bet has no odds and counts in neither. `earned` is what the game's
-developer earned from it in [commission](../games/publishing.md#earnings), its own casino bets included.
+`expected / (priced × 2^64)`. A developer bet has no odds and counts in neither. `earned` is what the game's bank took
+of their [commission](../games/publishing.md#earnings), its own casino bets' included.
 
 A bet's `index` is its place in the casino's signing history: the record that settled it times 1000, plus its place in
-that record, so a later bet has a higher one. `kind` is `casino`, `developer`, or `bank` for a developer's casino bet
-from its bank. Its player is their `uname` and `discordUsername`, a developer's casino bet its developer's. `stake` and
+that record, so a later bet has a higher one. `kind` is `casino`, `developer`, or `bank` for the game's casino bet from
+its bank. Its player is their `uname` and `discordUsername`, the game's casino bet its developer's. `stake` and
 `payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and `at` is when it settled.
 
 ## Rounds and developer bets
 
 ### `GET /api/rounds/:round`
 
-A developer's round, `keccak256(secret)`, for anyone to check what its casino bet revealed
-([rounds](../reference/signed-messages.md#rounds)). It is `open` until its developer's casino bet reveals it. A
-channel's own rounds are not shown here.
+A game's round, `keccak256(secret)`, for anyone to check what its casino bet revealed
+([rounds](../reference/signed-messages.md#rounds)). It is `open` until the game's casino bet reveals it. A channel's own
+rounds are not shown here.
 
-| Response field | Type    | Meaning                                                                                                                                                                                                                                                                                                                     |
-| -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`           | bytes32 | The round                                                                                                                                                                                                                                                                                                                   |
-| `developer`    | address | The developer that opened it                                                                                                                                                                                                                                                                                                |
-| `createdAt`    | number  | When the developer opened it                                                                                                                                                                                                                                                                                                |
-| `status`       | string  | `open` or `revealed`                                                                                                                                                                                                                                                                                                        |
-| `seed`         | bytes32 | Revealed: the seed the developer's casino bet brought                                                                                                                                                                                                                                                                       |
-| `secret`       | bytes32 | Revealed: the casino's secret                                                                                                                                                                                                                                                                                               |
-| `outcome`      | string  | Revealed: the 64-bit [outcome](../reference/signed-messages.md#the-outcome) of the seed and the secret, a decimal string                                                                                                                                                                                                    |
-| `casinoBet`    | object  | Revealed: `{game, stake, chance, prize, group, meta, signature, accepted, payout?}`, the developer's casino bet as it signed it (`signature` is its `BankCasinoBet`), whether the bankroll `accepted` it, and what it paid the developer's bank when accepted. A stake, chance and prize of `0` is a reveal, never accepted |
+| Response field | Type    | Meaning                                                                                                                                                                                                                                                                                                                   |
+| -------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | bytes32 | The round                                                                                                                                                                                                                                                                                                                 |
+| `game`         | bytes32 | The game it was opened for                                                                                                                                                                                                                                                                                                |
+| `createdAt`    | number  | When the game's server opened it                                                                                                                                                                                                                                                                                          |
+| `status`       | string  | `open` or `revealed`                                                                                                                                                                                                                                                                                                      |
+| `seed`         | bytes32 | Revealed: the seed the game's casino bet brought                                                                                                                                                                                                                                                                          |
+| `secret`       | bytes32 | Revealed: the casino's secret                                                                                                                                                                                                                                                                                             |
+| `outcome`      | string  | Revealed: the 64-bit [outcome](../reference/signed-messages.md#the-outcome) of the seed and the secret, a decimal string                                                                                                                                                                                                  |
+| `casinoBet`    | object  | Revealed: `{game, stake, chance, prize, group, meta, signature, accepted, payout?}`, the game's casino bet as its server signed it (`signature` is its `BankCasinoBet`), whether the bankroll `accepted` it, and what it paid the game's bank when accepted. A stake, chance and prize of `0` is a reveal, never accepted |
 
 ### `GET /api/developer-bets/:bet`
 
 One developer bet, by its hash: the hash of the operation that placed it.
 
-| Response field             | Type                   | Meaning                                                                                                                           |
-| -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `bet`                      | bytes32                | The bet's hash                                                                                                                    |
-| `game`                     | bytes32                | The game's key                                                                                                                    |
-| `group`                    | string                 | The group the game gave it, when it has one                                                                                       |
-| `stake`                    | string                 | What the player staked, paid into the developer's bank                                                                            |
-| `placedAt`                 | number                 | When the casino took it                                                                                                           |
-| `developer`                | address                | The game's developer when the bet was placed: its bank took the stake and its key settles the bet                                 |
-| `status`                   | string                 | `open` or `settled`                                                                                                               |
-| `meta`                     | object                 | The game's own JSON, as the player signed it                                                                                      |
-| `settlement`               | object                 | Settled: `{player, casino, signature}`, the developer's signed [`Settlement`](../reference/signed-messages.md#developer-messages) |
-| `settledAt`                | number                 | Settled: when                                                                                                                     |
-| `uname`, `discordUsername` | string, string or null | The player's names                                                                                                                |
+| Response field             | Type                   | Meaning                                                                                                                                                                                                                                                                                    |
+| -------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bet`                      | bytes32                | The bet's hash                                                                                                                                                                                                                                                                             |
+| `game`                     | bytes32                | The game's key                                                                                                                                                                                                                                                                             |
+| `group`                    | string                 | The group the game gave it, when it has one                                                                                                                                                                                                                                                |
+| `stake`                    | string                 | What the player staked, paid into the game's bank                                                                                                                                                                                                                                          |
+| `placedAt`                 | number                 | When the casino took it                                                                                                                                                                                                                                                                    |
+| `status`                   | string                 | `open` or `settled`                                                                                                                                                                                                                                                                        |
+| `meta`                     | object                 | The game's own JSON, as the player signed it                                                                                                                                                                                                                                               |
+| `settlement`               | object                 | Settled: `{player, casino, signature, server?}`, the [`Settlement`](../reference/signed-messages.md#developer-messages) the game's server signed, and `server`, the developer's signed `GameServer` naming that server as `{message, signature}`, unless the developer's own key signed it |
+| `settledAt`                | number                 | Settled: when                                                                                                                                                                                                                                                                              |
+| `uname`, `discordUsername` | string, string or null | The player's names                                                                                                                                                                                                                                                                         |
 
 ### `GET /api/developer-bets`
 
-A page of one game's developer bets, open or settled, as its developer reads them to settle: `{bets, cursor, more}`
+A page of one game's developer bets, open or settled, as its server reads them to settle: `{bets, cursor, more}`
 ([pages](index.md#pages)), each bet as [`GET /api/developer-bets/:bet`](#get-apideveloper-betsbet) shows it.
 
-The game's developer can `wait` for open bets, with [developer access](index.md#authentication): a page with none is
-held until a bet on the game is placed, the time is up, or another wait on the same game begins, and then read again.
-A game has one wait at a time, a developer at most 4, and the casino 128 ([budgets](index.md#budgets-and-queues)). Only a
+The game's server can `wait` for open bets, with [developer access](index.md#authentication): a page with none is held
+until a bet on the game is placed, the time is up, or another wait on the same game begins, and then read again. A game
+has one wait at a time, a server's key at most 4, and the casino 128 ([budgets](index.md#budgets-and-queues)). Only a
 published game is waited for: a server whose game is taken down reads its bets without waiting. A server follows its
 game's bets by waiting again with each page's `cursor`.
 
@@ -221,7 +219,7 @@ game's bets by waiting again with each page's `cursor`.
 | `wait`   | number  | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25          |
 
 `invalid` answers a missing or malformed key, status, cursor, limit or wait, and an open cursor the casino's records do
-not reach. `unauthorized` answers a wait without the access of the game's developer, and `busy` one too many.
+not reach. `unauthorized` answers a wait without the access of the published game's server, and `busy` one too many.
 
 ## Local development
 

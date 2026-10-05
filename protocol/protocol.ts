@@ -90,23 +90,28 @@ export const collateralPrice = (amount: bigint, rate: bigint) => (amount * rate 
 export const ACCESS_TYPES = {
   Access: fields('address player,uint256 expiresAt'),
 };
-/** A game's developer settles its game's developer bets, opens its rounds and places its casino bets from its bank,
- * and proves itself with its own key, as an account does on its channel. */
-export const DEVELOPER_ACCESS_TYPES = {
-  DeveloperAccess: fields('address developer,uint256 expiresAt'),
+/** A game's developer names the key its server signs with: `server` settles the game's developer bets, opens its rounds
+ * and places its casino bets from its bank, and nothing else. Until the developer names one, it is the developer's own
+ * key. The casino keeps the signed message, so a wallet checks a settlement against the developer's own signature. */
+export const GAME_SERVER_TYPES = {
+  GameServer: fields('bytes32 game,address server'),
 };
-/** A developer settles a developer bet on one of its games: `player` is what the player is paid and `casino` what the
- * casino is given, both from the developer's bank, which took the stake when the bet was placed. `bet` is the hash
- * of the operation that placed the developer bet, which signs its meta. */
+/** A game's server proves itself with its key, as an account does on its channel. */
+export const DEVELOPER_ACCESS_TYPES = {
+  DeveloperAccess: fields('address server,uint256 expiresAt'),
+};
+/** A game's server settles a developer bet on the game: `player` is what the player is paid and `casino` what the casino
+ * is given, both from the game's bank, which took the stake when the bet was placed. `bet` is the hash of the
+ * operation that placed the developer bet, which signs its meta. */
 export const SETTLEMENT_TYPES = {
   Settlement: fields('bytes32 bet,uint256 player,uint256 casino'),
 };
-/** A developer's casino bet from its bank, on one of its rounds: settled against the bankroll at once, it reveals the
- * round. Like every casino bet it signs the hash of the seed it brings, so only that seed settles it. `group` is the
- * label its game gives the bets that belong together, and `meta` the hash of its meta, the developer's own JSON,
- * which the casino keeps with the reveal and never reads: whatever the developer commits to there, it committed to
- * before the outcome was revealed. `game` is the one whose commission it earns. A stake, chance and prize of zero
- * bet nothing and only reveal the round. */
+/** A game's casino bet from its bank, on one of its rounds, signed by its server: settled against the bankroll at
+ * once, it reveals the round. Like every casino bet it signs the hash of the seed it brings, so only that seed settles
+ * it. `group` is the label the game gives the bets that belong together, and `meta` the hash of its meta, the
+ * developer's own JSON, which the casino keeps with the reveal and never reads: whatever the developer commits to
+ * there, it committed to before the outcome was revealed. A stake, chance and prize of zero bet nothing and only
+ * reveal the round. */
 export const BANK_CASINO_BET_TYPES = {
   BankCasinoBet: fields(
     'bytes32 round,bytes32 game,uint256 stake,uint64 chance,uint256 prize,string group,bytes32 seedHash,bytes32 meta',
@@ -166,11 +171,6 @@ export const REDEEM_TYPES = {
 };
 export const hashRedeem = (d: Domain, s: { holder: string; shares: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, REDEEM_TYPES, s);
-/** A developer's bank: the developer's money at the casino. Every developer bet on the developer's games pays its
- * stake into it, and it pays the settlements and the casino bets the developer's key signs. A deposit is a debit that
- * names it, from the developer's own channel, answered with a statement of the balance; money leaves it only by the
- * developer's own signed `BankWithdraw`, settlement or casino bet. */
-export const BANK_ID = id('HOOKEDIN/BANK');
 /** The characters a uname is written in: no `l`, `0`, `1` or `u`, so no two of them read alike. */
 export const UNAME_ALPHABET = '23456789abcdefghijkmnopqrstvwxyz';
 export const UNAME_LENGTH = 24;
@@ -182,16 +182,20 @@ const PLAYER = new RegExp(`^~[${UNAME_ALPHABET}]{${UNAME_LENGTH}}$`);
 /** The uname of the player a counterparty names, or null for any other counterparty. */
 export const counterpartyPlayer = (counterparty: unknown) =>
   typeof counterparty === 'string' && PLAYER.test(counterparty) ? counterparty.slice(1) : null;
-/** The casino signs the balance of a developer's bank after every deposit and withdrawal. `cause` is the hash of the
+/** A game's bank: the game's money at the casino. Half the commission of the casino bets in the game and the stake of
+ * every developer bet on it go in, and it pays the settlements and the casino bets the game's server signs. Its
+ * developer puts money in with a debit from their own channel that names the game's key as its counterparty, answered
+ * with a statement of the balance, and takes it out with a signed `BankWithdraw`, collected with a credit that names
+ * the game's key. The casino signs the balance after every deposit and withdrawal: `cause` is the hash of the
  * developer's signed deposit or `BankWithdraw`. */
 export const BANK_TYPES = {
-  BankStatement: fields('address developer,uint256 sequence,uint256 balance,bytes32 cause'),
+  BankStatement: fields('bytes32 game,uint256 sequence,uint256 balance,bytes32 cause'),
 };
-/** A developer takes money out of their bank. `sequence` is the statement it will produce, so it works once. */
+/** A game's developer takes money out of its bank. `sequence` is the statement it will produce, so it works once. */
 export const BANK_WITHDRAW_TYPES = {
-  BankWithdraw: fields('address developer,uint256 amount,uint256 sequence'),
+  BankWithdraw: fields('bytes32 game,uint256 amount,uint256 sequence'),
 };
-export const hashBankWithdraw = (d: Domain, s: { developer: string; amount: Integer; sequence: Integer }) =>
+export const hashBankWithdraw = (d: Domain, s: { game: string; amount: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, BANK_WITHDRAW_TYPES, s);
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
@@ -452,8 +456,8 @@ export const BOUNDS = {
   group: MAX_GROUP,
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
- * developer bet, whose meta alone says what it is) or what it pays into (an investment, a bank deposit or another
- * player); a credit what it collects from; a deposit, a withdrawal and a lock-in nothing but themselves, a withdrawal's
+ * developer bet, whose meta alone says what it is) or what it pays into (an investment, a game's bank, named by the
+ * game's key, or another player); a credit what it collects from; a deposit, a withdrawal and a lock-in nothing but themselves, a withdrawal's
  * recipient being in the operation. Only what names a game carries a group. Every field
  * is in one form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
@@ -523,7 +527,7 @@ export function outcome(seed: string, secret: string) {
 export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigint) =>
   value < BigInt(bet.chance) ? BigInt(bet.prize) : 0n;
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
- * the operation itself; a developer bet is a debit that pays its stake to its developer's bank; a deposit takes in
+ * the operation itself; a developer bet is a debit that pays its stake to its game's bank; a deposit takes in
  * money the player deposited into the channel on-chain; a withdrawal takes out what the contract owes its recipient,
  * and a lock-in what it puts into the account's current channel as deposits, each paying the casino its fee for
  * sending it. */
@@ -711,10 +715,6 @@ export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   }
   return { state };
 }
-/** A developer's commission. It accrues to the developer's address, the developer's own channel shows
- * what that address has earned and collected, and it is collected like redeemed shares: a credit that
- * names this as its counterparty, signed by the developer's account. */
-export const DEVELOPER_ID = id('HOOKEDIN/DEVELOPER');
 /** The network fee of a deposit this account's address sent into its channel, which the casino pays: a credit that names
  * this as its counterparty and the deposit's transaction hash as its ID, so each deposit's fee is paid once. */
 export const DEPOSIT_FEE_ID = id('HOOKEDIN/DEPOSIT_FEE');
@@ -730,6 +730,7 @@ export const PROTOCOL = id(
     QUOTE_TYPES,
     OFFER_TYPES,
     ACCESS_TYPES,
+    GAME_SERVER_TYPES,
     DEVELOPER_ACCESS_TYPES,
     SETTLEMENT_TYPES,
     BANK_CASINO_BET_TYPES,
@@ -744,8 +745,6 @@ export const PROTOCOL = id(
       outcome: OUTCOME_TAG,
       counterparties: {
         fund: FUND_ID,
-        bank: BANK_ID,
-        developer: DEVELOPER_ID,
         depositFee: DEPOSIT_FEE_ID,
         player: PLAYER.source,
       },

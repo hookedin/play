@@ -6,8 +6,8 @@ export interface GameIdentity {
   /** Made from its developer and the name they published it under; a game opened by its URL alone has the key of
    * nobody's game at that URL. */
   key: string;
-  /** The account that publishes it: it earns the game's commission, and its bank takes the game's developer bets,
-   * which it settles. The zero address for a game opened by its URL alone. */
+  /** The account that publishes it: the game's bank takes half its commission and its developer bets, and the
+   * developer names the key that settles them. The zero address for a game opened by its URL alone. */
   developer: string;
   /** The name its developer published it under. A game opened by its URL alone has none, and takes no developer
    * bets. */
@@ -48,8 +48,8 @@ export interface CasinoBetRequest {
    * leave it: the wallet keeps it out of the allowance it shows, as it does what the group won, until the group ends. */
   kept?: string;
 }
-/** A developer bet: a bet against the game's developer, whose bank takes the stake at once and who settles it when
- * they choose. `meta` is the game's own JSON, saying what the bet is, which the casino keeps and never reads. The
+/** A developer bet: a bet against the game's developer, whose game's bank takes the stake at once and whose server
+ * settles it when it chooses. `meta` is the game's own JSON, saying what the bet is, which the casino keeps and never reads. The
  * player trusts the developer to pay, and it is paid what the developer settles. */
 export interface DeveloperBetRequest {
   id: string;

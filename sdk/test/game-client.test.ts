@@ -200,7 +200,7 @@ test("a developer bet keeps its game's meta, is paid only what its developer sig
   assert.match(placed.bet!, /^0x[0-9a-f]{64}$/);
   assert.deepEqual(placed, { ...request, kind: 'developer-bet', status: 'open', bet: placed.bet });
   assert.equal(w.gameAllowance().allowance, '990');
-  assert.equal(f.bank(), 10n ** 12n + 10n, "the stake went into the developer's bank");
+  assert.equal(f.bank(), 10n ** 12n + 10n, "the stake went into the game's bank");
   assert.deepEqual(await w.gameDeveloperBet(request), placed, 'asking again while it is open');
   await assert.rejects(w.gameDeveloperBet({ ...request, stake: '20' }), /different intent/);
   await assert.rejects(w.gameDeveloperBet({ ...request, meta: { cashout: '3' } }), /different intent/);
@@ -235,14 +235,14 @@ test("a developer bet keeps its game's meta, is paid only what its developer sig
   await assert.rejects(w.gameDeveloperBet({ ...request, id: 'nobody' }), /published nowhere/);
 });
 
-test("settlements the developer's bank cannot pay are refused whole, and the bets wait", async () => {
+test("settlements the game's bank cannot pay are refused whole, and the bets wait", async () => {
   const f = await gameWallet({ bank: 5n }),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameAllowance('1000', true);
   const won = await w.gameDeveloperBet({ id: 'won', stake: '10', meta: {} }),
     lost = await w.gameDeveloperBet({ id: 'lost', stake: '10', meta: {} });
-  assert.equal(f.bank(), 25n, "both stakes went into the developer's bank");
+  assert.equal(f.bank(), 25n, "both stakes went into the game's bank");
   await assert.rejects(
     f.developer.settle([{ bet: won.bet!, player: 30n, casino: 0n }]),
     (error: any) => error.code === 'bank-short',

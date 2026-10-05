@@ -1909,6 +1909,32 @@ button.bet-row:hover {
 .game-actions .text-button {
   margin-left: auto;
 }
+/* A published game's bank and the key its server signs with, on the developer page. */
+.game-bank {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.game-bank .label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.game-bank strong {
+  font-variant-numeric: tabular-nums;
+}
+.game-bank code,
+.game-line-names code {
+  overflow-wrap: anywhere;
+}
+.game-line-names code {
+  color: #7d8494;
+  font-size: 11px;
+}
+.game-bank .field-row > input {
+  flex: 1;
+  min-width: 0;
+}
 
 /* What closed balances are still owed. */
 .claim-list {

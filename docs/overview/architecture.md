@@ -30,7 +30,7 @@ moves atomically with each step and no step waits on another. A player can walk 
 cash that step left them; nothing makes them finish a hand. A game built this way is a series of casino bets, each
 admitted and charged by itself, not a committed hand, and its prices follow from that.
 
-**A developer's solvency is outside HookedIn.** A developer's bank reserves nothing, and a settlement is paid from it
+**A developer's solvency is outside HookedIn.** A game's bank reserves nothing, and a settlement is paid from it
 only as far as it can pay. Whether a developer can pay what its developer bets are owed, and proving it, is between the
 developer and its players; the casino does not attempt it. Playing a developer's game trusts that developer: for its
 tables in any game, and with a developer bet for its payment and for whatever its scheme promises.
