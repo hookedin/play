@@ -1,5 +1,5 @@
 /** Plays a multi-step game as a sequence of casino bets through the wallet. It reaches `localStorage` only through its
- * default store and `window` only in `watch`, so it runs in Node too. */
+ * default store and `window` only in `watch`, and holds its round with `navigator.locks`, so it runs in Node too. */
 import { fraction, getNode, loadFundedGame, prepareAction } from './engine/index.ts';
 import type { FundingTable, GameGraph, GamePlan } from './engine/index.ts';
 import { compileGameAsync, landing, rngFromBytes } from './engine/engine.ts';
@@ -62,8 +62,6 @@ export class RoundClient {
   private plan: GamePlan | null = null;
   private planKey = '';
   private storageKey = '';
-  /** A step is settling. */
-  private busy = false;
   private readonly call: RoundBridge['call'];
   private readonly graph: (setup: any) => GameGraph;
   private readonly funding?: FundingTable;
@@ -122,15 +120,26 @@ export class RoundClient {
       return loadFundedGame(graph, this.funding, scale, admits);
     return compileGameAsync(graph, { admits, bankrollFloor, cashQuantum, initialCash: BigInt(setup.stake) });
   }
+  /** Every tab of the game shares its saved round, so each reads and writes it holding the game's lock: a step, from
+   * reading the round to saving where it led, is played in one tab at a time. `start` and `action` refuse while the
+   * lock is held, as when a button is pressed twice, here or in another tab; `restore` waits for it. */
+  private holding<T>(work: () => Promise<T>, ifAvailable = false): Promise<T> {
+    return navigator.locks.request(`hookedin:round:${this.name}`, { ifAvailable }, lock => {
+      if (!lock) throw new Error('Wait for the action under way');
+      return work();
+    });
+  }
   /** Reload the round from this origin's storage and apply any result the wallet settled meanwhile. */
-  async restore(): Promise<RoundState | null> {
-    await this.load();
-    // A reply may have been lost after the wallet settled; its receipt is retrievable by the step's own ID.
-    if (this.data?.pending && this.data.pending.ticket.kind !== 'noop') {
-      const receipt = await this.call('game.receipt', { id: this.data.pending.id });
-      if (receipt) await this.resolve(receipt);
-    }
-    return this.state();
+  restore(): Promise<RoundState | null> {
+    return this.holding(async () => {
+      await this.load();
+      // A reply may have been lost after the wallet settled; its receipt is retrievable by the step's own ID.
+      if (this.data?.pending && this.data.pending.ticket.kind !== 'noop') {
+        const receipt = await this.call('game.receipt', { id: this.data.pending.id });
+        if (receipt) await this.resolve(receipt);
+      }
+      return this.state();
+    });
   }
   /** Read the round as this origin's storage holds it. */
   private async load() {
@@ -206,7 +215,10 @@ export class RoundClient {
       void this.restore().then(listener, () => {});
     });
   }
-  async start(setup: { stake: string; [key: string]: unknown }) {
+  start(setup: { stake: string; [key: string]: unknown }) {
+    return this.holding(() => this.begin(setup), true);
+  }
+  private async begin(setup: { stake: string; [key: string]: unknown }) {
     await this.load();
     if (this.data?.pending) throw new Error('Recover the pending action first');
     await this.ensureAllowance(BigInt(setup.stake), BigInt(setup.stake));
@@ -259,15 +271,9 @@ export class RoundClient {
     this.planKey = JSON.stringify([this.data.setup, this.data.bankrollFloor, this.data.cashQuantum]);
     return this.state()!;
   }
-  async action(action: string) {
-    // One step at a time: a second press while a step runs would draw and place a bet of its own.
-    if (this.busy) throw new Error('Wait for the action under way');
-    this.busy = true;
-    try {
-      return await this.step(action);
-    } finally {
-      this.busy = false;
-    }
+  /** One step at a time: a second press while a step runs would draw and place a bet of its own. */
+  action(action: string) {
+    return this.holding(() => this.step(action), true);
   }
   /** With a step pending, `action` sends that step again under the ID it was saved with, and the wallet answers an
    * operation it has carried out with its receipt: the step is played once, and `action` resolves with where it led. */

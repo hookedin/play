@@ -818,6 +818,22 @@ test('a button pressed twice plays one step, and the second press bets nothing',
   assert.deepEqual([(first as PromiseFulfilledResult<any>).value.terminal, f.settlements()], [true, 1]);
 });
 
+test('two tabs pressing the same button play one step: the round they share is played in one tab at a time', async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity('tabs'));
+  await w.setGameAllowance('10000');
+  const graph = coin({ payout: () => 1900n }),
+    store = memoryStore(),
+    [a, b] = [0, 1].map(() => new RoundClient(bridgeTo(w), graph, undefined, { store }));
+  await a.start({ stake: '1000' });
+  await b.restore();
+  const [first, second] = await Promise.allSettled([a.action('roll'), b.action('roll')]);
+  assert.equal(first.status, 'fulfilled');
+  assert.match(String((second as PromiseRejectedResult).reason), /Wait for the action under way/);
+  assert.deepEqual([(await b.restore())!.events.length, f.settlements()], [1, 1]);
+});
+
 test("the stub developer pages a game's bets 100 at a time in the order they were placed, and waits for the next, as the casino does", async () => {
   const f = await gameWallet(),
     w = f.wallet;

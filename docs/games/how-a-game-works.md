@@ -184,8 +184,9 @@ is the page's path unless you pass one.
   balance: a resumed round asks for an allowance again.
 - Saved state stays in this browser and does not follow the player to another device; a round left unfinished leaves
   the player the cash it held.
-- Two tabs of one game share its origin storage. Read saved state again before every action; `RoundClient` does, and
-  its `watch(listener)` reloads the round when another tab writes it. The wallet lets one game per wallet hold an
+- Two tabs of one game share its origin storage. Read saved state again before every action, and hold a lock across
+  the tabs until its result is saved; `RoundClient` does both, and its `watch(listener)` reloads the round when another
+  tab writes it. The wallet lets one game per wallet hold an
   allowance at a time and keeps one pending operation per channel, so the money stays consistent whatever the tabs do.
 - A game with state beyond one round, such as a slot's bonus counter, applies each finished round once, by the round's
   `id`.

@@ -7,8 +7,8 @@ sidebar:
 
 `import { RoundClient } from '@hookedin/play/sdk/round';` plays a game of several steps, such as a hand of blackjack, as
 a sequence of casino bets priced by the [engine](engine.md): each step is one casino bet, a payment or nothing. The
-module is Node-safe: it reaches `localStorage` only through its default store and `window` only in `watch`, so a test
-runs it in Node with a store of its own. [Multi-step games](../games/multi-step-games.md) is the guide, and
+module is Node-safe: it reaches `localStorage` only through its default store and `window` only in `watch`, and holds
+its round with `navigator.locks`, which Node has too, so a test runs it in Node with a store of its own. [Multi-step games](../games/multi-step-games.md) is the guide, and
 [pricing and collapsing](../games/collapsing-bets.md) the method.
 
 ```ts
@@ -58,6 +58,11 @@ saved in another format or under other rules, a setup its rules refuse included:
 `action` removes it and throws
 `This round was started under rules this game does not play. What it held is in your balance.`
 
+**Tabs.** Every tab of a game shares its saved round, so `restore`, `start` and `action` each hold the lock
+`hookedin:round:<name>` from reading the round to saving where it led: a step is played in one tab at a time. `start`
+and `action` throw `Wait for the action under way` while the lock is held, in this page or another tab; `restore` waits
+for it.
+
 **Pricing.** `start` prices the graph against the virtual bankroll `wallet.info` reports. It reuses the saved round's
 plan when the setup is the same and the virtual bankroll still covers the plan's `conservativeBankroll`. With `funding`,
 when the stake is a whole multiple `k` of `funding.initialCash` and the virtual bankroll covers `k` times
@@ -73,13 +78,13 @@ Reads the saved round for this game and player, and applies any result the walle
 it asks `game.receipt` by the step's operation ID and applies the receipt it finds. It is the only method that looks a
 result up; `start` and `action` take the saved round as it stands. It resolves with the round's state, or `null` when
 none is saved, and throws for a round saved under other rules, for a receipt that does not match the saved step, and
-with the bridge's errors.
+with the bridge's errors. It waits while another tab of the game plays a step.
 
 #### `start`
 
 Starts a round at the graph's root with `setup.stake`, a decimal string of wei, as its cash; the setup goes to `graph`
 and is saved with the round. It throws `Recover the pending action first` while a step is pending, which `restore`
-resolves. It makes sure the game's allowance covers the stake, prices the graph, and saves the round under a fresh
+resolves, and `Wait for the action under way` while a `start` or `action` runs, here or in another tab. It makes sure the game's allowance covers the stake, prices the graph, and saves the round under a fresh
 `id`, replacing a saved unfinished round, whose cash is in the player's balance already. It places no bet; the first
 `action` does. It throws the pricing error above, `Allow this game more ETH to play, or deposit if your balance is empty.` when the player does not
 allow the game enough, and the bridge's errors.
@@ -91,16 +96,16 @@ only that step's action is accepted, and the step is sent again under its saved 
 operation it has carried out with its receipt, so a step whose reply was lost is played once. A finished round resolves
 with its state unchanged.
 
-| Throws                                                                                         | When                                                                                                   | The step afterwards                                                           |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `Wait for the action under way`                                                                | `action` is running already, as when a button is pressed twice                                         | The running action's                                                          |
-| `Start a round first`                                                                          | No round is saved                                                                                      | –                                                                             |
-| `Illegal game action`                                                                          | The node does not offer the action                                                                     | –                                                                             |
-| `Retry the pending action first`                                                               | Another step is pending                                                                                | Pending                                                                       |
-| A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The virtual bankroll `wallet.info` reports is below the planning floor or does not admit the bet drawn | –                                                                             |
-| `Allow this game more ETH to play, or deposit if your balance is empty.`                       | The player did not allow the game enough, or has nothing to allow                                      | –                                                                             |
-| The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                                           | Pending, under a fresh operation ID                                           |
-| The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                                                 | Pending, under the same operation ID, so sending it again is the same request |
+| Throws                                                                                         | When                                                                                                    | The step afterwards                                                           |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `Wait for the action under way`                                                                | A `start` or `action` is running, here or in another tab of the game, as when a button is pressed twice | The running action's                                                          |
+| `Start a round first`                                                                          | No round is saved                                                                                       | –                                                                             |
+| `Illegal game action`                                                                          | The node does not offer the action                                                                      | –                                                                             |
+| `Retry the pending action first`                                                               | Another step is pending                                                                                 | Pending                                                                       |
+| A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The virtual bankroll `wallet.info` reports is below the planning floor or does not admit the bet drawn  | –                                                                             |
+| `Allow this game more ETH to play, or deposit if your balance is empty.`                       | The player did not allow the game enough, or has nothing to allow                                       | –                                                                             |
+| The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                                            | Pending, under a fresh operation ID                                           |
+| The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                                                  | Pending, under the same operation ID, so sending it again is the same request |
 
 After an error, `restore()` gives the state to show: a pending step shows `pending: true`, with its action alone in
 `actions`.
