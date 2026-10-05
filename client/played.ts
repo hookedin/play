@@ -12,7 +12,7 @@ import {
   totalCards,
 } from './bets.ts';
 import type { BetRow } from './bets.ts';
-import { $, network, showSheet } from './page.ts';
+import { $, network, shortDate, showSheet } from './page.ts';
 import { navigate } from './routes.ts';
 import { historyBusy, task, wallet } from './sheet.ts';
 import { active, knownGames, loadGame } from './games.ts';
@@ -165,6 +165,17 @@ export function filterList(name: 'activity' | 'bet' | 'gamebets') {
           ? NO_BETS
           : 'Nobody has placed a bet in this game yet.';
 }
+/** A figure on a game's line: its label, its value, the value's class, and every digit of it on hover. */
+export type Figure = [label: string, value: string, className?: string, exact?: string];
+/** A game's figures, side by side, each value over its label. */
+export const gameFigures = (figures: Figure[]) =>
+  h(
+    'dl',
+    { className: 'game-figures' },
+    ...figures.map(([label, value, className = '', exact]) =>
+      h('div', null, h('dt', null, label), h('dd', { className, ...(exact ? { title: exact } : {}) }, value)),
+    ),
+  );
 /** One line per game: what this wallet staked in it, what came back, and what its bets were worth. */
 export function renderMyGames() {
   const all = ownBets(),
@@ -195,7 +206,7 @@ export function renderMyGames() {
         totals = betTotals(rows),
         expected = measuredReturn(totals.priced, totals.expected),
         known = key ? knownGames.get(key) : undefined;
-      const figures: [string, string, string?][] = [
+      const figures: Figure[] = [
         ['Bets', String(totals.bets)],
         ['Put in', `${formatAmount(totals.putIn)} METH`],
         ['Paid back', `${formatAmount(totals.putIn + totals.net)} METH`],
@@ -204,10 +215,10 @@ export function renderMyGames() {
       ];
       return h(
         'div',
-        { className: 'played-game' },
+        { className: 'game-line' },
         h(
           'div',
-          { className: 'played-heading' },
+          { className: 'game-line-heading' },
           h(
             'button',
             {
@@ -225,19 +236,12 @@ export function renderMyGames() {
             favourite ? '★' : '☆',
           ),
           h('h3', null, name),
-          h('span', { className: 'played-when' }, `Last played ${new Date(last).toLocaleDateString()}`),
+          h('span', { className: 'game-line-when' }, `Last played ${shortDate(last)}`),
         ),
-        h(
-          'dl',
-          { className: 'played-figures' },
-          ...figures.flatMap(([label, value, className]) => [
-            h('dt', null, label),
-            h('dd', { className: className ?? '' }, value),
-          ]),
-        ),
+        gameFigures(figures),
         h(
           'div',
-          { className: 'played-actions' },
+          { className: 'game-actions' },
           ...(known
             ? [
                 h(

@@ -80,7 +80,7 @@ game with a server deploys the same way, as one Worker that also answers `/api/`
 ## Publish it
 
 Publish from the wallet of the account that is to be the game's developer, and a game with a server from the account
-whose key the server holds. On **My games**, give the game's name and its URL; the wallet fetches nothing first.
+whose key the server holds. On **Developer**, `/developer`, give the game's name and its URL; the wallet fetches nothing first.
 Publishing needs an open balance, a profile holds 100 games, and the name and URL follow the rules of
 [`POST /api/account/games`](../casino-api/channels.md#post-apiaccountgames).
 
@@ -114,8 +114,9 @@ The casino keeps the tally for the publishing account's address, and a HookedIn 
 ([open the wallet](../wallet/getting-started.md#open-the-wallet)) collects it by itself, with a balance that plays, as a
 credit that account signs into its balance. Nobody at the casino approves or sends anything, nothing moves on-chain,
 and the bankroll does not change: money the casino owed you becomes your signed balance, which settles like any other
-([closing and claims](../wallet/closing-and-claims.md)). The wallet shows, under your balance, what your games have earned and how much
-of it is collected.
+([closing and claims](../wallet/closing-and-claims.md)). The wallet's **Developer** page shows what your games have
+earned and how much of it is collected, and beside each game its bets, what its players staked and came out with, its
+return and what it earned, from its [public record](../casino-api/public.md#get-apigameskey).
 
 Every developer's totals are public: [`GET /api/status`](../casino-api/public.md#get-apistatus) lists them under
 `developers`, with `earned`, `collected` and `outstanding`, and [hookedin.com/bankroll](https://hookedin.com/bankroll/)

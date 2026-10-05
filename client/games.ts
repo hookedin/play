@@ -244,10 +244,10 @@ export function gameURL(value: string) {
   return url;
 }
 /** How a game is named in the wallet: the name it is published under, in words. */
-const gameTitle = (name: string) => name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ');
+export const gameTitle = (name: string) => name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ');
 
 /** A game's icon: icon.svg beside its page, over the game's initial, which shows when it has none. */
-function gameIcon(url: string, name: string) {
+export function gameIcon(url: string, name: string) {
   const image = h('img', { src: new URL('icon.svg', url).href, alt: '', loading: 'lazy', decoding: 'async' });
   image.onerror = () => image.remove();
   const tile = h('span', { className: 'game-icon' }, image);

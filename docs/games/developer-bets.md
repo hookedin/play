@@ -23,7 +23,7 @@ wants the server to hold less publishes the game from an account of its own.
 
 Your **bank** is a balance at the casino. The stakes of your developer bets go in as they are placed; your settlements
 and your casino bets are paid from it, and an accepted casino bet's payout goes back in. Nothing in it is reserved.
-Put money in and take it out on the wallet's **My games** page, from the account's own balance. A batch of settlements
+Put money in and take it out on the wallet's **Developer** page, from the account's own balance. A batch of settlements
 the bank cannot pay in full is refused whole, with `bank-short`.
 
 ## Placing a bet from the page

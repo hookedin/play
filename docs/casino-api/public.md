@@ -148,14 +148,15 @@ and reveals do not appear. An unknown key answers with totals of zero and no bet
 | --------------- | ------- | ------------------------------------------------------------------------------------------ |
 | `key`           | bytes32 | The game, lowercase                                                                        |
 | `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled              |
-| `totals`        | object  | `{bets, staked, paid, expected, priced}`, below                                            |
+| `totals`        | object  | `{bets, staked, paid, expected, priced, earned}`, below                                    |
 | `bets`          | array   | `{index, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
 
 The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. `bets` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
 staked and paid, a round's steps each on its own, so only `paid − staked` is what the players came out with. `expected` is what the casino bets were expected to pay, times
 2^64 (the sum of their prizes times their chances), and `priced` is what those bets staked, so their return is
-`expected / (priced × 2^64)`. A developer bet has no odds and counts in neither.
+`expected / (priced × 2^64)`. A developer bet has no odds and counts in neither. `earned` is what the game's
+developer earned from it in [commission](../games/publishing.md#earnings), its own casino bets included.
 
 A bet's `index` is its place in the casino's signing history: the record that settled it times 1000, plus its place in
 that record, so a later bet has a higher one. `kind` is `casino`, `developer`, or `bank` for a developer's casino bet

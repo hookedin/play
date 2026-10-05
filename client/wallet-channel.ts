@@ -924,14 +924,19 @@ export class ChannelClient extends WalletTransactions {
         // Commission the games this player develops have earned. The casino keeps the tally and this
         // channel shows it; a credit needs no checking, so the wallet takes what is offered.
         this.developerEarnings = { earned: String(payout.earned), collected: String(payout.collected) };
-        if (BigInt(payout.amount) > 0n)
-          collected.push(
-            await this.perform(
-              'earnings',
-              { amount: payout.amount, source: DEVELOPER_ID },
-              `earnings:${payout.collected}`,
-            ),
+        if (BigInt(payout.amount) > 0n) {
+          const receipt = await this.perform(
+            'earnings',
+            { amount: payout.amount, source: DEVELOPER_ID },
+            `earnings:${payout.collected}`,
           );
+          collected.push(receipt);
+          // What it collected counts as collected from now on.
+          if (receipt.status === 'signed') {
+            this.developerEarnings = { earned: String(payout.earned), collected: String(payout.earned) };
+            this.render();
+          }
+        }
         continue;
       }
       const from = counterpartyPlayer(payout.source);

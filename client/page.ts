@@ -9,6 +9,9 @@ export const typedAmount = (text: string) => parseUnits(text, 12);
 /** How a player is written: a Discord username wears `@`, a uname wears `~`. */
 export const showName = (names: { uname?: string | null; discordUsername?: string | null } | null) =>
   names?.discordUsername ? '@' + names.discordUsername : names?.uname ? '~' + names.uname : '—';
+/** A day, as a page says when something began. */
+export const shortDate = (time: number) =>
+  new Date(time).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 // The launcher names the network, the casino and the deployment to trust in config.js.
 export const { network, casino: casinoURL, deployment } = config;
 

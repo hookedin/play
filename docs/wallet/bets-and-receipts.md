@@ -79,7 +79,7 @@ with `id-used`, so that it does not place the same bet again under another ID
 
 `/games/<key>` shows every settled bet anyone has placed in one game, as the casino recorded it, from
 [`GET /api/games/:key`](../casino-api/public.md#get-apigameskey); `key` is the game's
-[key](../reference/signed-messages.md#game-keys). **Every bet in it** on a game's line under My games opens it, and so
+[key](../reference/signed-messages.md#game-keys). **Every bet in it** on a game's line under My games or Developer opens it, and so
 does **Every bet in this game** in one of your bets. The page shows:
 
 - the totals, expected and paid back, as on My games;

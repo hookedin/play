@@ -1,14 +1,9 @@
-import { json } from '../protocol/protocol.ts';
-import { exact, h, signedAmount } from './activity.ts';
-import { formatAmount } from '../sdk/src/wire.ts';
-import { $, showName, toast, typedAmount } from './page.ts';
+import { h, signedAmount } from './activity.ts';
+import { $, shortDate, showName, toast } from './page.ts';
 import { navigate } from './routes.ts';
-import { act, lookUpPayee, openWallet, renderWallet, task, uiBusy, wallet } from './sheet.ts';
-import { gameURL, HOUSE, loadLibrary, profileCards } from './games.ts';
+import { act, lookUpPayee, openWallet, renderWallet, uiBusy, wallet } from './sheet.ts';
+import { HOUSE, profileCards } from './games.ts';
 
-const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
-/** How many games one profile holds. */
-const MAX_GAMES = 100;
 /** The page at a player's name: the name, and their profile once the casino answers, or `missing` when nobody goes by
  * it. */
 let shown: { name: string; profile: any; missing: boolean } | null = null;
@@ -32,8 +27,6 @@ async function watchVerify(code: { code: string; expires: number }, before: numb
 const ownPage = () =>
   Boolean(wallet.uname) &&
   (shown?.profile?.uname === wallet.uname || (Boolean(shown?.missing) && shown?.name === `~${wallet.uname}`));
-const shortDate = (time: number) =>
-  new Date(time).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
 /** Anybody's page: their names, what they have played, and the games they publish. */
 export async function openProfile(name: string, push = true) {
   const page: typeof shown = { name, profile: null, missing: false };
@@ -85,12 +78,9 @@ function drawProfile(profile: any) {
   $('profile-games-heading').classList.toggle('hidden', !profile.games.length);
   $('profile-games').replaceChildren(...profileCards(name, profile.games));
 }
-/** The lobby is loaded again whenever what this account publishes changes. */
-let libraryKey = '';
-/** The account's own names, in the top bar, its menu and its own page, and the games it publishes. */
+/** The account's own names, in the top bar, its menu and its own page. */
 export function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
-    open = wallet.playable && !wallet.recoveryOnly,
     // A name is the account's from the start, and so is its page: others see it once the casino has met the account.
     page = name ? `/${name}` : null;
   $('account-name').textContent = name ?? 'Account';
@@ -116,9 +106,6 @@ export function renderProfile() {
   }
   // Anybody else's page offers to transfer to them.
   $('profile-transfer').hidden = !shown?.profile || ownPage();
-  $<HTMLButtonElement>('publish-game').disabled = uiBusy || !open;
-  for (const id of ['bank-deposit', 'bank-withdraw'])
-    $<HTMLButtonElement>(id).disabled = uiBusy || !wallet.playable || Boolean(wallet.pending);
   // Your own page, while it shows, follows the name /verify gives you, or unlinking takes away.
   const own = wallet.profile;
   if (
@@ -149,43 +136,6 @@ export function renderProfile() {
   $<HTMLButtonElement>('verify-discord').disabled = uiBusy || !wallet.uname;
   $('unlink-discord').classList.toggle('hidden', !verified || Boolean(verifying));
   $<HTMLButtonElement>('unlink-discord').disabled = uiBusy;
-  const games = wallet.profile?.games ?? [];
-  $('profile-game-count').textContent = `${games.length}/${MAX_GAMES}`;
-  const key = json([name, games]);
-  if (libraryKey && libraryKey !== key) void loadLibrary();
-  libraryKey = key;
-  $('my-games').replaceChildren(
-    ...games.map(game =>
-      h(
-        'div',
-        { className: 'game-row' },
-        h('span', null, `${name}/${game.name} · ${game.url}`),
-        h(
-          'button',
-          {
-            type: 'button',
-            className: 'text-button',
-            title: `Take ${name}/${game.name} out of the lobby`,
-            disabled: uiBusy,
-            onclick: () =>
-              task(async () => {
-                await wallet.publishGame(game.name, null);
-                await loadLibrary();
-                toast(`${name}/${game.name} is taken down.`);
-              }),
-          },
-          'Take down',
-        ),
-      ),
-    ),
-  );
-}
-/** This account's bank as a developer, as the casino has it now. */
-export async function refreshBank() {
-  if (!wallet.channel?.registered) return void ($('bank-balance').textContent = '—');
-  const { balance } = await wallet.bankBalance();
-  $('bank-balance').textContent = `${formatAmount(balance, 0)} METH`;
-  $('bank-balance').title = `${exact(balance)} METH`;
 }
 
 // Another player's page opens Transfer to them.
@@ -213,33 +163,6 @@ act(
   () => wallet.unlinkDiscord(),
   () => `You go by ~${wallet.uname} again.`,
 );
-act('publish-game', async () => {
-  const name = $<HTMLInputElement>('game-name-input'),
-    url = $<HTMLInputElement>('game-url-input');
-  const published = name.value.trim();
-  if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-  await wallet.publishGame(published, gameURL(url.value.trim()).href);
-  name.value = url.value = '';
-  await loadLibrary();
-  toast(`Published at ${showName(wallet)}/${published}.`);
-});
-act('bank-deposit', async () => {
-  const amount = typedAmount($<HTMLInputElement>('bank-amount').value.trim());
-  if (amount <= 0n) throw new Error('Enter how much to put in your bank.');
-  const receipt = await wallet.depositBank(amount);
-  if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
-  $<HTMLInputElement>('bank-amount').value = '';
-  toast(`Put ${exact(amount)} METH in your bank.`);
-  await refreshBank();
-});
-act('bank-withdraw', async () => {
-  const amount = typedAmount($<HTMLInputElement>('bank-amount').value.trim());
-  await wallet.withdrawBank(amount);
-  $<HTMLInputElement>('bank-amount').value = '';
-  toast(`Took ${exact(amount)} METH out of your bank. It is on its way to your balance.`);
-  await wallet.collectPayouts();
-  await refreshBank();
-});
 $('menu-profile').addEventListener('click', event => {
   event.preventDefault();
   $('account-menu').hidePopover?.();

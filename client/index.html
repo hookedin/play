@@ -64,10 +64,11 @@
       <a href="/" data-page="library">Games</a>
       <a href="/wallet" data-wallet-tab="deposit">Wallet</a>
       <a href="/bets" data-page="bets">Bets</a>
+      <a href="/games" data-page="games">My games</a>
       <a href="/wallet/activity" data-wallet-tab="activity">Activity</a>
       <details>
         <summary>Developer and bankroll</summary>
-        <a href="/games" data-page="games">My games</a>
+        <a href="/developer" data-page="developer">Developer</a>
         <a href="/bankroll" data-page="bankroll">Bankroll</a>
       </details>
       <a href="/settings" data-wallet-tab="keys">Settings</a>
@@ -156,17 +157,64 @@
 
       <section id="page-games" class="page hidden">
         <h1>My games</h1>
-        <p class="muted">The games you played, from the bets you signed, and the games you publish.</p>
+        <p class="muted">The games you played, from the bets you signed.</p>
         <div id="games-totals" class="money"></div>
         <h2 class="section-title">Played <span id="played-count" class="count">0</span></h2>
-        <div id="played-games" class="played-list"></div>
+        <div id="played-games" class="game-lines"></div>
         <p id="played-empty" class="empty hidden">No bets yet. The games you play with ETH appear here.</p>
+      </section>
+
+      <section id="page-developer" class="page hidden">
+        <h1>Developer</h1>
+        <p class="muted">The games you publish, what they earn you, and the bank that takes their developer bets.</p>
+        <div class="money">
+          <div class="money-card">
+            <span class="label">Earned in commission</span>
+            <strong><span id="developer-earned">0</span> <small title="A millionth of an ETH">METH</small></strong>
+            <p id="developer-earned-note"></p>
+          </div>
+          <div class="money-card">
+            <span class="label">Your developer bank</span>
+            <strong><span id="bank-balance">—</span> <small title="A millionth of an ETH">METH</small></strong>
+            <p>
+              Your games' developer bets pay their stakes into it, and it pays their settlements and your own casino
+              bets. A settlement it cannot pay in full is refused. Take it out any time.
+            </p>
+            <div class="field-row">
+              <div class="amount-input">
+                <input
+                  id="bank-amount"
+                  type="text"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  placeholder="10000"
+                  aria-label="Amount"
+                /><span>METH</span>
+              </div>
+              <button id="bank-deposit" class="button" type="button">Put in</button
+              ><button id="bank-withdraw" class="button" type="button">Take out</button>
+            </div>
+          </div>
+        </div>
+        <h2 class="section-title">
+          Your games <span id="published-count" class="count" title="A profile holds 100 games">0/100</span>
+        </h2>
+        <div id="published-games" class="game-lines"></div>
+        <p id="published-empty" class="empty hidden">You publish no games yet. Publish one below.</p>
         <section class="card" aria-labelledby="publish-title">
           <h2 id="publish-title">Publish a game</h2>
           <p class="muted">
             A game you publish lives at your name, and anyone can play it with their own wallet. You earn half of each
-            casino bet's commission, your bank takes its developer bets, and your key settles them. Publishing needs an
-            open balance; taking a game down never does.
+            casino bet's commission, your bank takes its developer bets, and your key settles them. Publish the same
+            name with a new URL to move it: it keeps its record. Publishing needs an open balance; taking a game down
+            never does.
+            <a
+              class="text-button"
+              href="https://hookedin.com/docs/games/publishing/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >How to publish ↗</a
+            >
           </p>
           <div class="field-row">
             <input
@@ -183,29 +231,6 @@
               placeholder="https://your-game.example/"
               aria-label="Game URL"
             /><button id="publish-game" class="button" type="button">Publish</button>
-          </div>
-          <p class="muted"><span id="profile-game-count">0/100</span> published</p>
-          <div id="my-games" class="list"></div>
-        </section>
-        <section class="card" aria-labelledby="bank-title">
-          <h2 id="bank-title">Your developer bank <span id="bank-balance" class="count">—</span></h2>
-          <p class="muted">
-            Your games' developer bets pay their stakes into it, and it pays their settlements and your own casino bets.
-            A settlement it cannot pay in full is refused. Take it out any time.
-          </p>
-          <div class="field-row">
-            <div class="amount-input">
-              <input
-                id="bank-amount"
-                type="text"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="10000"
-                aria-label="Amount"
-              /><span>METH</span>
-            </div>
-            <button id="bank-deposit" class="button" type="button">Put in</button
-            ><button id="bank-withdraw" class="button" type="button">Take out</button>
           </div>
         </section>
       </section>
@@ -342,7 +367,6 @@
         <span class="label">Balance</span
         ><strong><span id="balance-amount">—</span> <small title="A millionth of an ETH">METH</small></strong>
         <span id="balance-note" class="muted">What games play with.</span>
-        <span id="developer-earnings" class="muted hidden"></span>
       </div>
       <p id="wallet-reason" class="help" hidden data-section="wallet"></p>
       <section id="claims" class="claims hidden" aria-labelledby="claims-title" data-section="wallet">

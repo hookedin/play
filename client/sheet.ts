@@ -35,6 +35,7 @@ import {
 import { inSettings, parseRoute, route, walletPath, walletRoute, type GameRoute, type WalletTab } from './routes.ts';
 import { abandonGame, active, closeGame, openGame, renderGameAccount } from './games.ts';
 import { renderProfile } from './profiles.ts';
+import { renderDeveloper } from './developer.ts';
 import { filterList, renderBets, renderMyGames } from './played.ts';
 import { renderFund } from './bankroll.ts';
 
@@ -362,6 +363,7 @@ let shownAccount: string | null = null;
 export function renderWallet() {
   renderFund();
   renderProfile();
+  renderDeveloper();
   $<HTMLButtonElement>('refresh-wallet').disabled = historyBusy || !wallet.address;
   if (!wallet.address) return;
   const state = wallet.publicState;
@@ -390,12 +392,6 @@ export function renderWallet() {
           : state.closingChannelId && !state.channelId
             ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
             : 'What games play with.';
-  const earnings = state.developerEarnings;
-  // The tally the casino keeps for this account, collected into its balance.
-  $('developer-earnings').classList.toggle('hidden', !BigInt(earnings?.earned || 0));
-  $('developer-earnings').textContent = earnings
-    ? `Your games have earned ${exact(earnings.earned)} METH in commission; ${exact(earnings.collected)} METH of it is collected into your balance.`
-    : '';
   $('wallet-address').textContent = wallet.address;
 
   // Deposit: ETH sent to the address goes into the balance by itself, unless something the player should decide on

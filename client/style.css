@@ -1813,22 +1813,47 @@ button.bet-row:hover {
   margin-top: 22px;
 }
 
-/* The games a player played, counted from the bets their wallet signed. */
-.played-list {
+/* A line per game: the games a player played, counted from the bets their wallet signed, and the games they publish,
+   from each one's public record. */
+.game-lines {
   display: grid;
   gap: 10px;
 }
-.played-game {
+.game-line {
   padding: 16px 18px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
 }
-.played-heading {
+.game-line-heading {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+.game-line-icon {
+  flex: none;
+  width: 52px;
+}
+.game-line-icon .game-icon {
+  border-radius: 14px;
+}
+.game-line-icon .game-icon::before {
+  font-size: 20px;
+}
+.game-line-names {
+  flex: 1 1 180px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+.game-line-names a {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.game-line-names a:hover {
+  color: var(--text);
 }
 .played-star {
   padding: 0;
@@ -1841,48 +1866,48 @@ button.bet-row:hover {
 .played-star[aria-pressed='false'] {
   color: #5c6373;
 }
-.played-when {
+.game-line-when {
   margin-left: auto;
   color: var(--muted);
   font-size: 11px;
 }
-.played-figures {
+.game-figures {
   display: grid;
   grid-template-columns: repeat(5, auto);
   justify-content: start;
-  gap: 3px 20px;
+  gap: 10px 20px;
   margin-top: 14px;
 }
-.played-figures dt {
-  grid-row: 2;
+/* Each value over its label. */
+.game-figures div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+}
+.game-figures dt {
   color: #7d8494;
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.played-figures dd {
-  grid-row: 1;
+.game-figures dd {
   font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
-.played-actions {
+.game-line-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.game-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: 14px;
 }
-#my-games .game-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  font-size: 13px;
-}
-#my-games .game-row span {
-  min-width: 0;
-  overflow-wrap: anywhere;
+.game-actions .text-button {
+  margin-left: auto;
 }
 
 /* What closed balances are still owed. */
@@ -2092,13 +2117,9 @@ body:has(#page-play:not(.hidden)) .footer {
   .bet-detail-figures {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .played-figures {
+  .game-figures {
     grid-template-columns: repeat(3, auto);
     gap: 10px 14px;
-  }
-  .played-figures dt,
-  .played-figures dd {
-    grid-row: auto;
   }
   .sheet {
     margin: auto auto 0;

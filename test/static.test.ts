@@ -84,6 +84,7 @@ test('wallet routes resolve to the client page without exposing other files', as
     '/wallet/activity',
     '/wallet/settings',
     '/games',
+    '/developer',
     '/bets',
     '/bankroll',
     '/games/dice',

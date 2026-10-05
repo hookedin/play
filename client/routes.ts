@@ -1,7 +1,8 @@
 import { $, toast } from './page.ts';
 import { wallet, showWallet } from './sheet.ts';
 import { active, closeGame, openGame, renderGameAccount } from './games.ts';
-import { openProfile, refreshBank } from './profiles.ts';
+import { openProfile } from './profiles.ts';
+import { refreshDeveloper } from './developer.ts';
 import { openGameRecord, renderBets, renderMyGames, setBetGame } from './played.ts';
 import { refreshFund } from './bankroll.ts';
 
@@ -12,6 +13,7 @@ export type GameRoute = { owner: string; name: string } | { url: string };
 const PAGES: Record<string, { path: string; title: string }> = {
   library: { path: '/', title: 'Games' },
   games: { path: '/games', title: 'My games' },
+  developer: { path: '/developer', title: 'Developer' },
   bets: { path: '/bets', title: 'Bets' },
   bankroll: { path: '/bankroll', title: 'Bankroll' },
 };
@@ -48,10 +50,8 @@ export function showPage(page: string) {
       ? 'HookedIn'
       : `${page === 'play' && active ? active.identity.name : page === 'profile' ? $('profile-name').textContent : (PAGES[page]?.title ?? page)} · HookedIn`;
   if (page === 'bets') renderBets();
-  if (page === 'games') {
-    renderMyGames();
-    void refreshBank().catch(() => {});
-  }
+  if (page === 'games') renderMyGames();
+  if (page === 'developer') refreshDeveloper();
   if (page === 'bankroll') void refreshFund();
   renderGameAccount();
 }
@@ -67,10 +67,10 @@ export function navigate(page: string, push = true, path = PAGES[page]!.path) {
   closeGame();
   if (push && location.pathname !== path) history.pushState(null, '', path);
 }
-/** Every page has a URL: `/`, `/games`, `/bets`, `/bankroll`, `/@<username>` or `/~<uname>` for a player, the same and
- * `/<game>` for a game they publish, `/games/<key>` for a game's public record, `/games/custom?url=<url>`, and
- * `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page, `/wallet[/<tab>]` and
- * `/settings[/<tab>]`. */
+/** Every page has a URL: `/`, `/games`, `/developer`, `/bets`, `/bankroll`, `/@<username>` or `/~<uname>` for a
+ * player, the same and `/<game>` for a game they publish, `/games/<key>` for a game's public record,
+ * `/games/custom?url=<url>`, and `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page,
+ * `/wallet[/<tab>]` and `/settings[/<tab>]`. */
 export function parseRoute(
   url: URL,
 ): string | GameRoute | { profile: string } | { record: string } | { wallet: WalletTab } | { unknown: string } {
