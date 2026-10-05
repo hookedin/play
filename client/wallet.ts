@@ -219,7 +219,9 @@ export class CasinoWallet extends GameSessions {
     /** When it last verified its Discord account. */
     discordVerified: number | null;
     stats: any;
-    games: { name: string; url: string; key: string; developer: string }[];
+    /** When the casino met it. */
+    createdAt: number;
+    games: { name: string; url: string; key: string; developer: string; createdAt: number }[];
   } | null;
   /** Whether ETH at this account's address goes into its balance. Off, it stays available for withdrawal and
    * transaction fees. */

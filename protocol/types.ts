@@ -256,6 +256,8 @@ export interface Submission {
 export interface Round {
   id: string;
   developer: string;
+  /** When the developer opened it, in Unix milliseconds. */
+  createdAt: number;
   /** `open` until the developer's casino bet on it reveals it. */
   status: 'open' | 'revealed';
   seed?: string;

@@ -62,8 +62,9 @@ function drawProfile(profile: any) {
   const name = showName(profile);
   document.title = `${name} · HookedIn`;
   $('profile-name').textContent = name;
-  // The uname a Discord username covers up, and when they last verified it.
+  // The uname a Discord username covers up, since when the casino has known them, and when they last verified it.
   const meta = profile.discordUsername ? ['~' + profile.uname] : [];
+  if (profile.createdAt) meta.push(`Joined ${shortDate(profile.createdAt)}`);
   if (profile.discordVerified) meta.push(`Verified on Discord ${shortDate(profile.discordVerified)}`);
   if (profile.unmet)
     meta.push('Others see your page from your first deposit, or once you verify your Discord account.');

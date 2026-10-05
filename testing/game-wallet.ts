@@ -189,7 +189,7 @@ export async function gameWallet({
     };
     return { message, signature: await owner.signTypedData(d, QUOTE_TYPES, message) };
   };
-  const rounds = new Map<string, { id: string; seed?: string; casinoBet?: DeveloperCasinoBet }>();
+  const rounds = new Map<string, { id: string; createdAt: number; seed?: string; casinoBet?: DeveloperCasinoBet }>();
   // Developer bets, what each settled bet owes this player until the wallet collects it, the order bets were placed and
   // settled in, and the developer's wait for the next bet.
   const developerBets = new Map<string, PublicDeveloperBet>(),
@@ -210,6 +210,7 @@ export async function gameWallet({
     return plain({
       id: round.id,
       developer: developerKey.address.toLowerCase(),
+      createdAt: round.createdAt,
       status: round.casinoBet ? ('revealed' as const) : ('open' as const),
       ...(round.casinoBet
         ? {
@@ -530,7 +531,7 @@ export async function gameWallet({
     virtualBankroll: async () => bankroll / 2n,
     async openRound() {
       const id = createRound();
-      rounds.set(id, { id });
+      rounds.set(id, { id, createdAt: Date.now() });
       return publicRound(id);
     },
     seedHash: async id => seedHash(await seedOf(id.toLowerCase())),
