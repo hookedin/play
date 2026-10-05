@@ -30,7 +30,7 @@ export interface BetRow {
   maxPayout?: bigint | null;
   /** This wallet's own name for the bet. A public row has none: it is known by `index` instead. */
   operation?: string;
-  /** A public row's number in the casino's record of every bet. */
+  /** A public row's place in the casino's signing history, which orders every settled bet. */
   index?: number;
   /** This wallet's own receipt, whole: the odds, the preimages and the signatures it kept. A
    * public row has none, because the casino's list is only what anyone may read. */

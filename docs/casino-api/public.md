@@ -124,7 +124,7 @@ One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
 | `uname`           | string         | The player's [uname](../reference/signed-messages.md#counterparties), derived from their address                                                                                                                                            |
 | `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                              |
 | `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                      |
-| `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), the steps of a round in a row counting once, and what their bets paid less what they staked, signed                                                                        |
+| `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), their bets in one game and group counting once, as the steps of a round, and what their bets paid less what they staked, signed                                            |
 | `games`           | array          | The games they publish, by name: `{name, url, key, developer}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys) and `developer` the player's address |
 
 ### `GET /api/players/:name/:game`
@@ -157,10 +157,10 @@ staked and paid, a round's steps each on its own, so only `paid − staked` is w
 2^64 (the sum of their prizes times their chances), and `priced` is what those bets staked, so their return is
 `expected / (priced × 2^64)`. A developer bet has no odds and counts in neither.
 
-A bet's `index` is its number in the casino's record of every settled bet. `kind` is `casino`, `developer`, or `bank`
-for a developer's casino bet from its bank. Its player is their `uname` and `discordUsername`, a developer's casino bet its
-developer's. `stake` and `payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and
-`at` is when it settled.
+A bet's `index` is its place in the casino's signing history: the record that settled it times 1000, plus its place in
+that record, so a later bet has a higher one. `kind` is `casino`, `developer`, or `bank` for a developer's casino bet
+from its bank. Its player is their `uname` and `discordUsername`, a developer's casino bet its developer's. `stake` and
+`payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and `at` is when it settled.
 
 ## Rounds and developer bets
 

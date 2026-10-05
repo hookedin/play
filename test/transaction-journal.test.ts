@@ -101,7 +101,7 @@ test('journal retries reject changed intent before confirmation or broadcast, in
   };
   let journal = new TransactionJournal({
     ...config,
-    initialState: { pending: { action: 'claim', raw, hash, updatedAt: Date.now(), attempts: [{ hash, raw }] } },
+    initialState: { pending: { action: 'claim', raw, hash, updatedAt: Date.now(), attempts: [hash] } },
   } as any);
   journal.save();
   journal = new TransactionJournal({ ...config, initialState: durable } as any);
@@ -256,7 +256,7 @@ test('a file journal stays bounded and keeps its pending transaction across a re
     journal.finish('confirmed');
   }
   assert.ok(fs.statSync(file).size < 1000);
-  const pending = { action: 'pending', raw: '0xretained', attempts: [{ hash: id('attempt') }] };
+  const pending = { action: 'pending', raw: '0xretained', attempts: [id('attempt')] };
   journal.adopt(pending as any);
   journal = new TransactionJournal({ file, chainId: 31337 } as any);
   assert.deepEqual(journal.state.pending, { ...pending, status: 'pending' });

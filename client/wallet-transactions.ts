@@ -624,7 +624,7 @@ export class WalletTransactions {
     this.lastChainCheck = 0;
     await this.assertNetwork();
     const options = this.transactionRecovery();
-    for (const hash of new Set([intent.hash, ...(intent.attempts || []).map((a: any) => a.hash)].filter(Boolean))) {
+    for (const hash of new Set([intent.hash, ...(intent.attempts ?? [])])) {
       const receipt = await confirmedReceipt(options, hash);
       if (receipt) return this.acceptTransaction(receipt);
     }
@@ -659,11 +659,11 @@ export class WalletTransactions {
         maxPriorityFeePerGas,
       };
       await this.assertNetwork();
-      intent.attempts ??= [{ hash: intent.hash, raw: intent.raw }];
+      intent.attempts ??= [intent.hash];
       intent.fees = plain({ gasLimit: request.gasLimit, maxFeePerGas, maxPriorityFeePerGas });
       const raw = await this.signer.signTransaction(request),
         hash = keccak256(raw);
-      intent.attempts.push({ hash, raw });
+      intent.attempts.push(hash);
       Object.assign(intent, { raw, hash });
       await this.save();
       await this.provider.broadcastTransaction(raw);

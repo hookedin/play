@@ -429,6 +429,13 @@ export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
 export const MAX_GROUP = 64;
+/** A group label: 1 to `MAX_GROUP` characters of well-formed text without a NUL, which no database column holds. */
+export const validGroup = (group: unknown): group is string =>
+  typeof group === 'string' &&
+  group.length > 0 &&
+  group.length <= MAX_GROUP &&
+  group.isWellFormed() &&
+  !group.includes('\0');
 /** The most a bet's meta takes, as canonical JSON. */
 export const MAX_META_BYTES = 4096;
 /** The most developer bets one request settles, and one page lists. */
@@ -462,7 +469,7 @@ export function checkDetails(kind: number, details: Details) {
     !bytes32Pattern.test(details.id) ||
     (game !== undefined && !named) ||
     (details.counterparty !== undefined && !counterparty) ||
-    (group !== undefined && (!named || typeof group !== 'string' || !group.length || group.length > MAX_GROUP)) ||
+    (group !== undefined && (!named || !validGroup(group))) ||
     (meta !== undefined && (!named || !validMeta(meta))) ||
     !(kind === KIND.casinoBet
       ? named && !counterparty && meta === undefined

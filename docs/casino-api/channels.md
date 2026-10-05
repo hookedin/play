@@ -40,7 +40,7 @@ Signs the casino's [quote](../reference/signed-messages.md#quotes) for the chann
 `{message, signature}`: the bet follows the channel's latest checkpoint and settles on the channel's round, the hash of
 a secret the casino keeps until a bet settles on it; the quote names the virtual bankroll the bet is admitted against,
 half the bankroll, and holds for a day. A checkpoint has one quote: asking again gives the same one until half its day
-is left, and a new one then, on the same round. The round is the same until a casino bet settles on it. Every reply of
+is left, and a new one then, on the same round, the checkpoint's own. Every reply of
 [`POST …/operations`](#post-apichannelsidoperations) that follows the channel's latest checkpoint brings its quote, so a
 wallet asks here only before a channel's first casino bet, after losing track, or when its quote has less than half its
 day left; it picks its seed once it has the round. The body is `{}`. `channel-closed` answers a channel that is not
@@ -292,7 +292,7 @@ rest.
 | Response field    | Type           | Meaning                                                                                                                                                                                                                                                                  |
 | ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `source`          | string         | `DEVELOPER_ID` for developer earnings; `FUND_ID` for redeemed shares; `BANK_ID` for a bank withdrawal; a developer bet's hash for what its settlement paid; `~` and the sender's uname for a transfer ([counterparties](../reference/signed-messages.md#counterparties)) |
-| `index`           | number         | Earnings and developer bets: 0. Redeemed shares: the number of the fund change. A bank withdrawal or a transfer: the index of the signing-history record that made it owed                                                                                               |
+| `index`           | number         | Earnings: 0. Anything else: the index of the signing-history record that made it owed                                                                                                                                                                                    |
 | `amount`          | string         | What is owed; for earnings, `earned − collected`, which may be `"0"`                                                                                                                                                                                                     |
 | `earned`          | string         | Earnings only: the commission the account has earned                                                                                                                                                                                                                     |
 | `collected`       | string         | Earnings only: what of it has been collected                                                                                                                                                                                                                             |

@@ -1,5 +1,5 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
-import { BOUNDS, MAX_GROUP, MAX_META_BYTES, validMeta } from '../protocol/protocol.ts';
+import { BOUNDS, MAX_GROUP, MAX_META_BYTES, validGroup, validMeta } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
 /** Every method a game may call. */
 export const METHODS = [
@@ -60,7 +60,6 @@ const object = (value: unknown) =>
   !Array.isArray(value) &&
   (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
-const validGroup = (group: unknown) => typeof group === 'string' && group.length > 0 && group.length <= MAX_GROUP;
 /** The stake is paid to enter, and the bet pays its prize when the round's outcome is below its chance. */
 function validateOdds(chance: unknown, prize: unknown) {
   if (gameAmount(prize) >= MAX_BALANCE) throw new Error('A prize is below 2^96.');
@@ -114,7 +113,7 @@ function validate(data: any) {
   } else if (data.method === 'game.allowance' || data.method === 'game.end') {
     if (!only(params, ['group'])) throw new Error('Unexpected game request field.');
     if (params.group === undefined ? data.method === 'game.end' : !validGroup(params.group))
-      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
+      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters, without a NUL.`);
   } else {
     const fields = {
       'game.casinoBet': ['id', 'stake', 'chance', 'prize', 'group', 'kept'],
@@ -126,7 +125,7 @@ function validate(data: any) {
     gameOperationKey(params.id);
     for (const field of ['stake', 'amount']) if (fields.includes(field)) gameAmount(params[field]);
     if (params.group !== undefined && !validGroup(params.group))
-      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters.`);
+      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters, without a NUL.`);
     // What stays with the group is the group's: a bet keeps nothing back outside one.
     if (params.kept !== undefined) {
       gameAmount(params.kept, false);

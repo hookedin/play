@@ -84,9 +84,9 @@ wallet does work of its own, such as its regular look at the chain, waits for it
 ## Amounts
 
 Every amount is a decimal string of whole wei, 10^-12 METH: digits only, no sign and no leading zeros, below 2^256. A
-stake, a prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters for
-operations that belong together, such as the steps of one hand: the player signs it, and the wallet and the game's
-public record show a group as one.
+stake, a prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters, without
+a NUL, for operations that belong together, such as the steps of one hand: the player signs it, and the wallet and the
+game's public record show a group as one.
 
 ## Groups and the allowance the player sees
 

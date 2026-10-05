@@ -8,7 +8,8 @@ export interface JournalEntry {
   status?: string;
   createdAt: number;
   updatedAt: number;
-  attempts: { hash: string; raw: string }[];
+  /** The hash of every signing of it: the first and each fee bump. Only `raw`, the latest, is ever broadcast. */
+  attempts: string[];
   receipt?: Pick<TransactionReceipt, 'hash' | 'blockHash' | 'blockNumber' | 'status'> | null;
 }
 interface JournalState {
@@ -169,8 +170,8 @@ export class TransactionJournal {
     await this.identity();
     const pending = this.state.pending;
     if (!pending) return null;
-    for (const attempt of pending.attempts || [pending]) {
-      const receipt = await this.confirmedReceipt(attempt.hash);
+    for (const hash of pending.attempts) {
+      const receipt = await this.confirmedReceipt(hash);
       if (receipt) return this.finish(receipt.status === 1 ? 'confirmed' : 'reverted', receipt);
     }
     const tx = Transaction.from(pending.raw);
@@ -221,7 +222,7 @@ export class TransactionJournal {
         updatedAt: this.now(),
         attempts: [],
       };
-      pending.attempts.push({ hash: pending.hash, raw });
+      pending.attempts.push(pending.hash);
       this.save();
     } else if (this.now() - pending.updatedAt >= this.replaceAfterMs) {
       const tx = Transaction.from(pending.raw),
@@ -245,7 +246,7 @@ export class TransactionJournal {
       };
       const raw = await this.signer.signTransaction(request);
       Object.assign(pending, { raw, hash: keccak256(raw), updatedAt: this.now() });
-      pending.attempts.push({ hash: pending.hash, raw });
+      pending.attempts.push(pending.hash);
       this.save();
     }
     // Persisted before all broadcasts, including replacement. A lost HTTP reply

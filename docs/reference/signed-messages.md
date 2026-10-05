@@ -208,7 +208,7 @@ memo = keccak256(utf8(canonicalJSON(details)))
 | -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`           | bytes32 | The hash of the operation's name: its [operation ID](#operation-ids)                                                                               |
 | `game`         | bytes32 | The [key](#game-keys) of the game that asked for a casino bet, a developer bet or a payment                                                        |
-| `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units                                                          |
+| `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units of well-formed text, without a NUL                       |
 | `counterparty` | string  | What a debit pays into or a credit collects from: a [counterparty ID](#counterparties), a developer bet's hash or another player, written `~uname` |
 | `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers                                                 |
 

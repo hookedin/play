@@ -204,18 +204,6 @@ export interface OnchainChannel {
   /** The part of `collateral` the dispute locked, until evidence settles the bet; 0 with none. */
   disputeHold: string;
 }
-/** A finalized channel's claim: its checkpoint and what it was owed are the channel's `closingHash` and
- * `closingBalance`, and `paid` what it has paid of that. */
-export interface OnchainClaim {
-  beneficiary: string;
-  /** Whom collecting pays: the account unless it named another, the contract itself for its own channel. */
-  recipient: string;
-  stateHash: string;
-  amount: string;
-  paid: string;
-  protectedRemaining: string;
-  winningsRemaining: string;
-}
 /** An executed step, or a rejection checkpoint above the request. A rejection with casinoSignature `0x` proposes
  * the checkpoint for the player to sign; the completed rejection carries both signatures in its evidence. */
 export interface OperationResponse {
@@ -296,40 +284,7 @@ export interface DeveloperCasinoBet {
   /** What it paid the developer's bank, once accepted. */
   payout?: string;
 }
-/** The bankroll fund: every share in issue, and how many of them are the house's own capital. */
-export interface FundState {
-  /** Fund changes applied so far; each signing-history fund record carries the next number. */
-  sequence: number;
-  totalShares: string;
-  houseShares: string;
-  /** Wei the owner withdrew beyond the house's own shares: a loss the other holders bore. */
-  overdrawn: string;
-}
 export interface SignedStatement {
   message: Record<string, any>;
   signature: string;
-}
-/** One investor's holding, keyed by player address so it outlives any one channel, with every `Redeem` the investor
- * signed and the statement it produced. */
-export interface FundHolder {
-  holder: string;
-  shares: string;
-  sequence: number;
-  statement: SignedStatement;
-  redeems: { request: SignedStatement; statement: SignedStatement }[];
-}
-/** The service projection of one channel. Everything financial here is replayable from the signing log. */
-export interface ChannelRow {
-  opening: Opening;
-  state: Checkpoint;
-  playerSignature: string;
-  casinoSignature: string;
-  acknowledged: boolean;
-  onchain: OnchainChannel | null;
-  claim?: OnchainClaim | null;
-  observedAt?: number;
-  observedBlock?: number;
-  lastResponse?: OperationResponse | null;
-  /** When the casino last signed for the channel, or registered it: how long it has been idle. */
-  activeAt?: number;
 }
