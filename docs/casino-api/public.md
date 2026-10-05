@@ -139,17 +139,16 @@ and their totals. A bet appears when it settles: a player's casino bet when the 
 when its developer settles it, and a developer's own casino bet from its bank when the bankroll takes it. Declined bets
 and reveals do not appear. An unknown key answers with totals of zero and no bets.
 
-| Query   | Type   | Meaning                                                                             |
-| ------- | ------ | ----------------------------------------------------------------------------------- |
-| `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players`             |
-| `group` | string | Only the bets of this group, matched exactly; the totals then cover the group alone |
+| Query   | Type   | Meaning                                                                 |
+| ------- | ------ | ----------------------------------------------------------------------- |
+| `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players` |
 
-| Response field  | Type    | Meaning                                                                                                               |
-| --------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
-| `key`           | bytes32 | The game, lowercase                                                                                                   |
-| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets, of the group if the request names one, are open and settled |
-| `totals`        | object  | `{bets, staked, paid, expected, priced}`, below                                                                       |
-| `bets`          | array   | `{index, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below                            |
+| Response field  | Type    | Meaning                                                                                    |
+| --------------- | ------- | ------------------------------------------------------------------------------------------ |
+| `key`           | bytes32 | The game, lowercase                                                                        |
+| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled              |
+| `totals`        | object  | `{bets, staked, paid, expected, priced}`, below                                            |
+| `bets`          | array   | `{index, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
 
 The totals are the players' bets: a developer's casino bets are listed, and add up to nothing here. `bets` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
