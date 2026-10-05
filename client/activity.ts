@@ -57,8 +57,8 @@ export const exact = (value: bigint | string | number) => formatAmount(value, 12
 /** A gain or a loss in METH, with its sign, as a list shows it. */
 export const signedAmount = (value: bigint) =>
   `${value < 0n ? '−' : '+'}${formatAmount(value < 0n ? -value : value)} METH`;
-/** JSON as the wallet shows it: a Copy JSON button with its status, above the text. */
-export function jsonBlock(text: string, title: string) {
+/** Text to copy as the wallet shows it, JSON unless said: a Copy button with its status, above the text. */
+export function copyBlock(text: string, title: string, what = 'JSON') {
   const status = h('span', { className: 'activity-copy-status', role: 'status' });
   const copy = async () => {
     try {
@@ -75,11 +75,11 @@ export function jsonBlock(text: string, title: string) {
       status,
       h(
         'button',
-        { type: 'button', className: 'text-button', ariaLabel: `Copy JSON: ${title}`, onclick: copy },
-        'Copy JSON',
+        { type: 'button', className: 'text-button', ariaLabel: `Copy ${what}: ${title}`, onclick: copy },
+        `Copy ${what}`,
       ),
     ),
-    h('pre', { className: 'activity-payload', tabIndex: 0, ariaLabel: `JSON: ${title}` }, text),
+    h('pre', { className: 'activity-payload', tabIndex: 0, ariaLabel: `${what}: ${title}` }, text),
   ];
 }
 
@@ -114,7 +114,7 @@ export function createActivityEntry(entry: ActivityEntry) {
         ...entry.facts.flatMap(([label, value]) => [h('dt', null, label), h('dd', null, value)]),
       ),
     );
-  body.append(...jsonBlock(entry.payload, entry.title));
+  body.append(...copyBlock(entry.payload, entry.title));
   return h('details', { className: `activity-entry tone-${entry.tone || 'neutral'}` }, summary, body);
 }
 
@@ -233,7 +233,6 @@ const KINDS: Record<
     describe: r =>
       `From ${r.name ?? r.details?.counterparty}, collected into your balance. Beyond your own deposits, your balance is paid out of the casino's bankroll, as winnings are. ${balanceOf(r)}`,
   },
-  'withdrawal-sent': { title: 'Withdrawal sent', label: 'No payment' },
   'close-started': {
     title: 'Close started',
     label: 'No payment',
@@ -372,7 +371,7 @@ export function receiptSummary(
         ? 'Returned with the close'
         : receipt.recorded
           ? 'Part waits for the bankroll'
-          : 'Waiting to be paid';
+          : 'Being sent';
     tone = receipt.paid ? 'positive' : receipt.returned ? 'neutral' : 'warning';
     amountLabel = receipt.paid ? (into ? 'Locked in' : 'Paid out') : receipt.returned ? 'In the claim' : 'To be paid';
     description = [
@@ -388,7 +387,7 @@ export function receiptSummary(
           ? 'It never became a claim, so the close returned it: it is part of what your closed balance is owed, under Waiting to be paid.'
           : receipt.recorded
             ? `The contract still owes ${exact(receipt.owed)} METH of it, paid as the bankroll has the cash: collect it under Waiting to be paid.`
-            : 'The contract makes it a claim under its ID and pays it, out of your deposits first and the bankroll for the rest, once the casino or you send it.',
+            : 'The contract makes it a claim under its ID and pays it, out of your deposits first and the bankroll for the rest, once the casino, or anyone, sends it.',
       `Balance ${exact(receipt.balance)} METH`,
     ]
       .filter(Boolean)

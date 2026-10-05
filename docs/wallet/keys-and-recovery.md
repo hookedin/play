@@ -93,9 +93,9 @@ replacement your account sent at the same nonce, and sends the exact saved trans
 
 When the casino does not answer, answers with errors, or reports another chain, contract, owner or protocol revision
 than the wallet's [pinned deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment), the wallet starts
-in **recovery mode**. Evidence export and import, closing without the casino, challenges, finishing a close, collecting
-and **Send it now** work, against the pinned contract through the pinned RPCs; play, deposits, withdrawals from the
-balance and locking in do not. Reload once the casino is back.
+in **recovery mode**. Evidence export and import, closing without the casino, challenges, finishing a close and
+collecting work, against the pinned contract through the pinned RPCs, and Activity still holds the transaction that sends
+a withdrawal; play, deposits, withdrawals from the balance and locking in do not. Reload once the casino is back.
 
 With your key file, recovery needs play.hookedin.com no more than the casino: the same wallet builds from a checkout of
 this repository, with Node 26 or later, and serves at http://127.0.0.1:4184, where you import it. A passkey works only

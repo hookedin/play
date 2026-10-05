@@ -523,15 +523,13 @@ export class WalletTransactions {
               ? 'collateral'
               : ['claim', 'claimTo', 'send'].includes(intent?.method)
                 ? 'withdrawal'
-                : intent?.method === 'withdraw'
-                  ? 'withdrawal-sent'
-                  : intent?.method === 'startClose'
-                    ? 'close-started'
-                    : intent?.method === 'dispute'
-                      ? 'bet-disputed'
-                      : intent?.method === 'finalizeClose'
-                        ? 'closure'
-                        : 'dispute',
+                : intent?.method === 'startClose'
+                  ? 'close-started'
+                  : intent?.method === 'dispute'
+                    ? 'bet-disputed'
+                    : intent?.method === 'finalizeClose'
+                      ? 'closure'
+                      : 'dispute',
       operationId: 'tx:' + receipt.hash,
       amount,
       ...(to && !same(to, this.address) ? { to } : {}),
@@ -804,21 +802,6 @@ export class WalletTransactions {
         BigInt(other.proof.base.index) === BigInt(index) &&
         BigInt(other.proof.base.sequence) < BigInt(sequence),
     );
-  }
-  /** Send a withdrawal the casino has not sent yet: this account sends its proof and pays the fee, and the contract
-   * makes it a claim and pays it. The casino sends each straight away too. */
-  async sendWithdrawal(this: CasinoWallet, operationId: string) {
-    const entry = this.history.find(record => record.operationId === operationId);
-    if (!entry?.withdrawal || entry.recorded || entry.returned)
-      throw new Error('That withdrawal is not waiting to be sent.');
-    if (!this.nextToRecord(entry)) throw new Error('Send the withdrawal you made before it first.');
-    const hash = await this.exclusive(async () => {
-      const tx = await this.sendTransaction('withdraw', [entry.proof]);
-      await this.waitTransaction(tx);
-      return tx.hash;
-    });
-    await this.refreshDetails();
-    return hash;
   }
   /** Where a withdrawal stands on-chain. Once sent it is recorded, as its channel's `claimed` shows, and its event names
    * the transaction that recorded it, looked for among recent blocks. What stays owed of it is a claim under its ID,

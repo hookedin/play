@@ -124,7 +124,7 @@ A withdrawal is **Withdrawal on its way** until the contract has paid it, and **
 What the contract recorded without the cash to pay it waits under **Waiting to be paid** in the wallet
 ([claims and collection](closing-and-claims.md#claims-and-collection)), and one nobody sent before its channel's close
 was final is **Withdrawal returned**: the close was owed it back. Each shows its **Withdrawal ID**, the hash of its
-operation, and once recorded the transaction that recorded it. One the casino has not sent offers **Send it now** once
-every earlier withdrawal from that balance is sent, and sends it from your account
-([fees and gas](closing-and-claims.md#fees-and-gas)). The wallet asks the contract how each withdrawal not yet paid or
+operation, and once recorded the transaction that recorded it. One the casino has not sent holds the transaction that
+sends it under **Send it yourself**, once every earlier withdrawal from that balance is sent: its data, to the contract,
+which anyone can send from any wallet, paying its gas. The wallet asks the contract how each withdrawal not yet paid or
 returned stands, and looks for the transaction that recorded it among the last 10,000 blocks.

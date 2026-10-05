@@ -122,7 +122,7 @@ test('a withdrawal reads as paid once paid, and one paying the contract as going
   const lockIn = { ...sent, kind: 'lock-in', to: contract },
     waiting = receiptSummary(lockIn, contract),
     locked = receiptSummary({ ...lockIn, recorded: true, paid: true, owed: '0' }, contract);
-  assert.deepEqual([waiting.title, waiting.status, waiting.tone], ['Locking in', 'Waiting to be paid', 'warning']);
+  assert.deepEqual([waiting.title, waiting.status, waiting.tone], ['Locking in', 'Being sent', 'warning']);
   assert.deepEqual(
     [locked.title, locked.status, locked.amountLabel, locked.tone],
     ['Balance locked in', 'In as deposits', 'Locked in', 'positive'],

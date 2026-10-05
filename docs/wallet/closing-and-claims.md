@@ -88,8 +88,9 @@ also declines a withdrawal to an address that would refuse a payment from the co
 gas the contract sends: _That address does not accept a payment from the contract_. Withdrawing everything leaves the
 channel active with an empty balance.
 
-The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent. One
-not sent yet offers **Send it now** in [Activity](bets-and-receipts.md#activity). A withdrawal can be sent until its
+The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent.
+Anyone can send one it has not, from any wallet: its entry in [Activity](bets-and-receipts.md#activity) holds the
+transaction under **Send it yourself**. A withdrawal can be sent until its
 channel's close is finished; one nobody sent by then comes back to you with the close, not to its address: what your
 deposits and collateral cover as its protected amount, and the rest as winnings.
 
@@ -195,7 +196,7 @@ the collection revert and leaves the claim whole: collect to another address.
 
 ## Fees and gas
 
-Depositing, closing, challenging, finishing a close, collecting and **Send it now** are transactions from your account.
+Depositing, closing, challenging, finishing a close and collecting are transactions from your account.
 The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 METH in total fees, and stops before signing when the
 network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins to the
 contract and pays their gas, and each pays the casino a fee for it out of your balance, set from the network's gas price

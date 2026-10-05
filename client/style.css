@@ -1583,6 +1583,28 @@ main:has(> #page-play:not(.hidden)) > .banner {
   overflow-wrap: anywhere;
   tab-size: 2;
 }
+/* Raw text folded away under a summary: a bet's whole receipt, the transaction that sends a withdrawal. */
+.raw-details {
+  margin-top: 18px;
+}
+.activity-facts .raw-details {
+  margin-top: 0;
+}
+.raw-details summary {
+  color: #b5a8e5;
+  font-size: 12px;
+  cursor: pointer;
+}
+.raw-details .activity-payload-heading {
+  padding: 10px 0 0;
+  border-top: 0;
+}
+.raw-details .activity-payload {
+  max-height: 300px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
 
 /* Bets: one line each, in a player's own list and a game's public record. */
 .bet-table {
@@ -1768,24 +1790,6 @@ button.bet-row:hover {
   margin-top: 5px;
   color: #7d8494;
   font-size: 11px;
-}
-.bet-detail-raw {
-  margin-top: 18px;
-}
-.bet-detail-raw summary {
-  color: #b5a8e5;
-  font-size: 12px;
-  cursor: pointer;
-}
-.bet-detail-raw .activity-payload-heading {
-  padding: 10px 0 0;
-  border-top: 0;
-}
-.bet-detail-raw .activity-payload {
-  max-height: 300px;
-  margin-top: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
 }
 .bet-detail-more {
   margin-top: 22px;

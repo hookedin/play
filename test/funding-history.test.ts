@@ -206,7 +206,7 @@ test('a withdrawal is read again when its recording is taken back, or the block 
     [true, undefined, { number: 16, hash: '0x16' }],
   );
 });
-test("the wallet sends a channel's withdrawals in the order they were made, as the contract records them", async () => {
+test("the wallet offers a channel's withdrawals to send in the order they were made, as the contract records them", () => {
   const wallet = new CasinoWallet({ network: 'local', storage: new MemoryStore() });
   const withdrawal = (operationId: string, index: string, sequence: string) => ({
     kind: 'withdrawal',
@@ -223,7 +223,6 @@ test("the wallet sends a channel's withdrawals in the order they were made, as t
     [first, second, elsewhere].map(entry => wallet.nextToRecord(entry)),
     [true, false, true],
   );
-  await assert.rejects(wallet.sendWithdrawal('bb'), /before it first/);
   wallet.history = [second, elsewhere, { ...first, recorded: true }];
   assert.equal(wallet.nextToRecord(second), true);
 });

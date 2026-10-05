@@ -1,6 +1,6 @@
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { betPayout, channelId, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
-import { activityJSON, exact, h, jsonBlock, percent, signedAmount, timeOf } from './activity.ts';
+import { activityJSON, copyBlock, exact, h, percent, signedAmount, timeOf } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 
 /**
@@ -438,9 +438,9 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     record.append(
       h(
         'details',
-        { className: 'bet-detail-raw' },
+        { className: 'raw-details' },
         h('summary', null, 'The whole receipt, as JSON'),
-        ...jsonBlock(activityJSON(receipt), 'the whole receipt'),
+        ...copyBlock(activityJSON(receipt), 'the whole receipt'),
       ),
     );
     body.append(record);

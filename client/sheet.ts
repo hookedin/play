@@ -9,6 +9,7 @@ import { BrowserStore } from './storage.ts';
 import { json, same, verifyEvidence, collateralPrice, channelId, STATUS, UNAME } from '../protocol/protocol.ts';
 import {
   activityJSON,
+  copyBlock,
   createActivityEntry,
   developerBetSummary,
   exact,
@@ -614,7 +615,14 @@ export function renderActivity() {
             ? ` Checked ${new Date(wallet.detailsObservedAt).toLocaleTimeString([], { hour12: false })}.`
             : '');
   $('history-status').classList.toggle('check-failed', Boolean(historyError || wallet.detailsError));
-  syncRows($('activity-list'), wallet.history, receipt => receipt.operationId, activityJSON, activityEntry);
+  // A withdrawal shows its transaction once the ones before it are recorded, which its own JSON does not say.
+  syncRows(
+    $('activity-list'),
+    wallet.history,
+    receipt => receipt.operationId,
+    receipt => activityJSON(receipt) + (receipt.withdrawal ? wallet.nextToRecord(receipt) : ''),
+    activityEntry,
+  );
   filterList('activity');
 }
 /** One receipt as Activity lists it, with the facts behind it. */
@@ -640,23 +648,25 @@ function activityEntry(receipt: any) {
       receipt.name === player ? player : `${receipt.name} (${player})`,
     ]);
   if (receipt.withdrawal) facts.push(['Withdrawal ID', receipt.withdrawal]);
-  // One the contract has not made a claim yet can be sent by this account too, as the casino does straight away: the
+  // One the contract has not made a claim yet, the casino sends straight away, and anyone can send from any wallet: the
   // oldest of its channel first, since the contract records them in order.
   if (receipt.withdrawal && !receipt.recorded && !receipt.returned && wallet.nextToRecord(receipt))
     facts.push([
-      'Payment',
+      'Send it yourself',
       h(
-        'button',
-        {
-          type: 'button',
-          className: 'button small',
-          onclick: () =>
-            task(async () => {
-              await wallet.sendWithdrawal(receipt.operationId);
-              toast('Sent: the contract has it.');
-            }),
-        },
-        'Send it now',
+        'details',
+        { className: 'raw-details' },
+        h('summary', null, 'Transaction data'),
+        h(
+          'p',
+          null,
+          `From any wallet to ${wallet.config.contractAddress}, with this data. Whoever sends it pays its gas.`,
+        ),
+        ...copyBlock(
+          wallet.contract.interface.encodeFunctionData('withdraw', [receipt.proof]),
+          presentation.title,
+          'data',
+        ),
       ),
     ]);
   if (receipt.fee !== undefined) facts.push(['Network fee', `${exact(receipt.fee)} METH`]);
