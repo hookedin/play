@@ -157,10 +157,9 @@ staked and paid, a round's steps each on its own, so only `paid − staked` is w
 of their [commission](../games/publishing.md#earnings), its own casino bets' included.
 
 The bets are the latest settled, newest first. A bet's `id` is a UUIDv7, the ID of the casino's record that placed it:
-it says when the bet was placed and nothing of how many bets there are. `kind` is `casino`, `developer`, or `bank` for
-the game's casino bet from its bank. Its player is their `uname` and `discordUsername`, the game's casino bet its
-developer's. `stake` and `payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and
-`at` is when it settled.
+it says when the bet was placed and nothing of how many bets there are. `kind` is `casino` or `developer`. Its player is
+their `uname` and `discordUsername`, both null for the game's own casino bet, from its bank. `stake` and `payout` are
+what it staked and paid, a casino bet's `chance` and `prize` are its odds, and `at` is when it settled.
 
 ## Rounds and developer bets
 

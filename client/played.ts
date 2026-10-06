@@ -292,12 +292,12 @@ export async function openGameRecord(key: string, push = true) {
     const record = await wallet.api(`/api/games/${key}?limit=200`);
     if (location.pathname !== path) return;
     const rows: BetRow[] = record.bets.map((bet: any) => {
-      const who = bet.discordUsername ? '@' + bet.discordUsername : bet.uname ? '~' + bet.uname : 'a player';
       return {
         at: Number(bet.at),
         game: name,
-        // A developer's casino bet from its bank is listed beside its players' bets, and counted in no total.
-        who: bet.kind === 'bank' ? `${who}'s bank` : who,
+        // The game's own casino bet, from its bank, has no player: it is listed beside its players' bets, and counted in
+        // no total.
+        who: bet.uname === null ? "the game's bank" : bet.discordUsername ? '@' + bet.discordUsername : '~' + bet.uname,
         ...(bet.group === undefined ? {} : { group: bet.group }),
         stake: BigInt(bet.stake),
         payout: BigInt(bet.payout),
