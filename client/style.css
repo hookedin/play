@@ -1992,31 +1992,43 @@ button.bet-row:hover {
 .game-actions .text-button {
   margin-left: auto;
 }
-/* A published game's bank and the key its server signs with, on the developer page. */
-.game-bank {
+/* A published game's bank, the key its server signs with and its name, on the developer page: each label and what it is
+   now beside the field that changes it. */
+.game-settings {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 34rem);
+  align-items: start;
+  gap: 18px 24px;
   margin-top: 16px;
-  padding-top: 14px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
-.game-bank .label {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+.game-setting-name {
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
 }
-.game-bank strong {
+.game-setting-name span {
+  color: #7d8494;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.game-setting-name strong,
+.game-setting-name code {
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
-.game-bank code,
-.game-line-names code {
-  overflow-wrap: anywhere;
+.game-setting-field .field-row {
+  margin-top: 0;
+}
+.game-setting-field .game-line-note {
+  margin-top: 6px;
 }
 .game-line-names code {
   color: #7d8494;
   font-size: 11px;
-}
-.game-bank .field-row > input {
-  flex: 1;
-  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* What closed balances are still owed. */
@@ -2100,6 +2112,13 @@ body:has(#page-play:not(.hidden)) .footer {
 @media (max-width: 720px) {
   h1 {
     font-size: 28px;
+  }
+  .game-settings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .game-setting-field + .game-setting-name {
+    margin-top: 10px;
   }
   .topbar {
     gap: 8px;

@@ -3,7 +3,7 @@ import { gameSlug, json, MAX_GAME_NAME, same, validGameName } from '../protocol/
 import { exact, h, percent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import { measuredReturn } from './bets.ts';
-import { $, shortDate, showName, toast, typedAmount } from './page.ts';
+import { $, short, shortDate, showName, toast, typedAmount } from './page.ts';
 import { gameFigures, openGameRecord, type Figure } from './played.ts';
 import { act, task, uiBusy, wallet } from './sheet.ts';
 import { gameIcon, gameURL, loadGame, loadLibrary } from './games.ts';
@@ -33,6 +33,17 @@ async function loadOwned() {
   owned = await wallet.accountGames();
   renderDeveloper();
 }
+/** One setting of a game on the developer page: its label and what it is now, beside the field that changes it, a
+ * note on what changing it does, and anything else it offers. */
+const setting = (label: string, value: Node | null, field: Node, note?: string, ...more: Node[]) => [
+  h('div', { className: 'game-setting-name' }, h('span', null, label), ...(value ? [value] : [])),
+  h(
+    'div',
+    { className: 'game-setting-field' },
+    field,
+    ...(note ? [h('p', { className: 'game-line-note' }, note, ...more.flatMap(node => [' ', node]))] : more),
+  ),
+];
 /** One of this account's games, taken down or not: where it lives, what its players staked and came out with, what
  * its bank holds, and the key its server signs with. */
 function ownGame(owner: string, game: AccountGame) {
@@ -84,7 +95,7 @@ function ownGame(owner: string, game: AccountGame) {
       type: 'text',
       autocomplete: 'off',
       spellcheck: false,
-      placeholder: '0x… the address your server signs with',
+      placeholder: '0x… your server’s address',
       ariaLabel: `Server key of ${game.name}`,
     }),
     rename = h('input', {
@@ -152,66 +163,49 @@ function ownGame(owner: string, game: AccountGame) {
     ...figures,
     h(
       'div',
-      { className: 'game-bank' },
-      h(
-        'p',
-        null,
-        h('span', { className: 'label' }, 'Its bank '),
+      { className: 'game-settings' },
+      ...setting(
+        'Bank',
         h('strong', { title: `${exact(bank)} METH` }, meth(bank)),
-      ),
-      h(
-        'p',
-        { className: 'game-line-note' },
-        'Half the commission of its casino bets and the stakes of its developer bets go in; its settlements and its ' +
-          'own casino bets come out. Take money out into your balance any time.',
-      ),
-      h(
-        'div',
-        { className: 'field-row' },
-        h('div', { className: 'amount-input' }, amount, h('span', null, 'METH')),
-        h('button', { type: 'button', className: 'button', disabled: busy, onclick: () => moveBank(true) }, 'Put in'),
         h(
-          'button',
-          { type: 'button', className: 'button', disabled: busy, onclick: () => moveBank(false) },
-          'Take out',
+          'div',
+          { className: 'field-row' },
+          h('div', { className: 'amount-input' }, amount, h('span', null, 'METH')),
+          h('button', { type: 'button', className: 'button', disabled: busy, onclick: () => moveBank(true) }, 'Put in'),
+          h(
+            'button',
+            { type: 'button', className: 'button', disabled: busy, onclick: () => moveBank(false) },
+            'Take out',
+          ),
         ),
       ),
-    ),
-    h(
-      'div',
-      { className: 'game-bank' },
-      h(
-        'p',
-        null,
-        h('span', { className: 'label' }, 'Its server signs with '),
-        own ? h('strong', null, 'your own key') : h('code', null, game.server),
-      ),
-      h(
-        'p',
-        { className: 'game-line-note' },
-        own
-          ? 'Name a key of its own for a server that settles its developer bets: that key spends the game’s bank and ' +
-              'nothing else, never your balance, your other games or where this one is served.'
-          : 'That key alone settles its developer bets, opens its rounds and places its casino bets from its bank.',
-      ),
-      h(
-        'div',
-        { className: 'field-row' },
-        server,
+      ...setting(
+        'Server key',
+        own ? h('strong', null, 'Your own key') : h('code', { title: game.server }, short(game.server)),
         h(
-          'button',
-          {
-            type: 'button',
-            className: 'button',
-            disabled: uiBusy,
-            onclick: () => {
-              const address = server.value.trim();
-              if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return toast('Enter the address your server signs with.', true);
-              nameServer(address);
+          'div',
+          { className: 'field-row' },
+          server,
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'button',
+              disabled: uiBusy,
+              onclick: () => {
+                const address = server.value.trim();
+                if (!/^0x[0-9a-fA-F]{40}$/.test(address))
+                  return toast('Enter the address your server signs with.', true);
+                nameServer(address);
+              },
             },
-          },
-          'Name server',
+            'Name server',
+          ),
         ),
+        own
+          ? 'A key of its own settles its developer bets and spends its bank, and nothing else: never your balance, ' +
+              'your other games or where the game is served.'
+          : 'That key alone settles its developer bets, opens its rounds and places its casino bets from its bank.',
         ...(own
           ? []
           : [
@@ -227,19 +221,10 @@ function ownGame(owner: string, game: AccountGame) {
               ),
             ]),
       ),
-    ),
-    ...(published
-      ? [
-          h(
-            'div',
-            { className: 'game-bank' },
-            h('p', null, h('span', { className: 'label' }, 'Its name '), h('strong', null, game.name)),
-            h(
-              'p',
-              { className: 'game-line-note' },
-              'Renamed, it keeps its ID, its bank, its server and its record. Its address follows the new name, and ' +
-                'the old one stops working.',
-            ),
+      ...(published
+        ? setting(
+            'Name',
+            null,
             h(
               'div',
               { className: 'field-row' },
@@ -263,9 +248,11 @@ function ownGame(owner: string, game: AccountGame) {
                 'Rename',
               ),
             ),
-          ),
-        ]
-      : []),
+            'Renamed, it keeps its ID, bank, server and record. Its address follows the new name, and the old one ' +
+              'stops working.',
+          )
+        : []),
+    ),
     h(
       'div',
       { className: 'game-actions' },
