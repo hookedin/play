@@ -376,7 +376,8 @@
         <button role="tab" type="button" data-tab="keys" aria-selected="false">Keys</button
         ><button role="tab" type="button" data-tab="deposits" aria-selected="false">Deposits</button
         ><button role="tab" type="button" data-tab="protection" aria-selected="false">Protection</button
-        ><button role="tab" type="button" data-tab="recovery" aria-selected="false">Recovery</button>
+        ><button role="tab" type="button" data-tab="recovery" aria-selected="false">Recovery</button
+        ><button role="tab" type="button" data-tab="advanced" aria-selected="false">Advanced</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
         <div id="deposit-save" class="boxed">
@@ -636,6 +637,42 @@
           </div>
           <label for="channel-import">Import a recovery bundle</label>
           <input id="channel-import" type="file" accept="application/json" />
+        </section>
+      </section>
+      <section class="tab-panel" data-panel="advanced" hidden>
+        <section class="setting">
+          <p class="muted">
+            Your balance as this browser holds it beside the casino's copy, for finding out why they differ. Comparing
+            reads the casino's copy and changes nothing.
+          </p>
+          <p id="state-verdict" class="help"></p>
+          <table id="state-comparison" class="state-comparison" hidden>
+            <thead>
+              <tr>
+                <th></th>
+                <th scope="col">This browser</th>
+                <th scope="col">The casino</th>
+              </tr>
+            </thead>
+            <tbody id="state-rows"></tbody>
+          </table>
+          <div class="actions">
+            <button id="compare-states" class="button small" type="button">Compare again</button
+            ><button id="take-casino-state" class="button small" type="button">Take up the casino's state</button>
+          </div>
+          <p class="muted">
+            Taking up the casino's state replaces this browser's state of your balance with it, and drops an operation
+            the casino has not answered. The casino's state carries your own signatures, so it is one you agreed to, but
+            it may be older than yours: export your recovery bundle first to keep your evidence.
+          </p>
+          <details class="raw-details">
+            <summary>This browser's record</summary>
+            <div id="wallet-record"></div>
+          </details>
+          <details class="raw-details">
+            <summary>The casino's record</summary>
+            <div id="casino-record"></div>
+          </details>
         </section>
       </section>
     </dialog>

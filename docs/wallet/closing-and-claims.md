@@ -42,7 +42,7 @@ and the price is never refunded.
 
 ## Recovery
 
-**Recovery**, at the foot of the wallet's Settings, shows the channel behind your balance and any older one whose close is
+**Recovery**, in the wallet's Settings, shows the channel behind your balance and any older one whose close is
 under way: the deposits and collateral the contract holds for it and the sequence of your latest evidence; for a closing
 one, the sequence the close proposes and, when it falls short of yours, how much less it holds and any challenge on its
 way, and the deadline; and when the wallet last read the chain. Its actions are the rest of this page and

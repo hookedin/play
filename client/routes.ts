@@ -29,6 +29,7 @@ const SHEET_TABS = {
   deposits: '/settings/deposits',
   protection: '/settings/protection',
   recovery: '/settings/recovery',
+  advanced: '/settings/advanced',
 };
 export type WalletTab = keyof typeof SHEET_TABS;
 export const walletPath = (tab: WalletTab) => SHEET_TABS[tab];

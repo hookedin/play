@@ -1345,6 +1345,29 @@ main:has(> #page-play:not(.hidden)) > .banner {
 .setting .figures {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+/* Advanced: the balance as this browser holds it beside the casino's copy, each row that differs marked. */
+.state-comparison {
+  width: 100%;
+  margin-top: 14px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.state-comparison th,
+.state-comparison td {
+  padding: 8px 10px 8px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.state-comparison th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.state-comparison tr.differs td {
+  color: var(--caution);
+}
 .address-send {
   margin-top: 12px;
 }

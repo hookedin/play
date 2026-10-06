@@ -14,6 +14,7 @@ import {
   hashOperation,
   withdrawalRecorded,
   verifyEvidence,
+  checkpointEvidence,
   quoteTerms,
   offerTerms,
   verifyOffer,
@@ -432,28 +433,33 @@ export class WalletTransactions {
     if (last && BigInt(reply.state.sequence) > BigInt(c.state.sequence)) return this.takeUp(reply.state, last);
     throw new Error('The casino holds another state of your balance than this browser: import your recovery bundle.');
   }
-  /** Take up the casino's later state of this account's channel, with the reply that signed it. The casino cannot make
-   * one up: its evidence carries this account's own signatures, and a declined operation's state moves no money. A saved
-   * operation below it is void, since it names an earlier state. */
+  /** Take up the casino's state of this account's channel, with the reply that signed it, or none at its base. The
+   * casino cannot make one up: its evidence carries this account's own signatures, and a declined operation's state
+   * moves no money. A saved operation is void, since it names another state. */
   async takeUp(this: CasinoWallet, state: Checkpoint, last: any) {
     const c = this.channel!,
-      rejected = last.status === 'rejected';
-    const proven = verifyEvidence({
+      rejected = last?.status === 'rejected';
+    const next = verifyEvidence({
       chainId: this.expectedChainId,
       casino: this.config.contractAddress,
       operator: this.operator,
-      evidence: last.evidence,
+      evidence: last?.evidence ?? checkpointEvidence(state),
     }).state;
-    const next = proven,
-      casinoSignature = rejected ? last.evidence.casinoSignature : last.evidence.step.casinoSignature;
     if (
       channelId(next.player, next.index) !== c.opening.channelId ||
       !same(hashState(this.domain, next), hashState(this.domain, state))
     )
       throw new Error("The casino's state of your balance differs from its evidence.");
-    const playerSignature = rejected
-      ? last.evidence.playerSignature
-      : await this.signer.signTypedData(this.domain, STATE_TYPES, next);
+    const casinoSignature = !last
+        ? '0x'
+        : rejected
+          ? last.evidence.casinoSignature
+          : last.evidence.step.casinoSignature,
+      playerSignature = !last
+        ? '0x'
+        : rejected
+          ? last.evidence.playerSignature
+          : await this.signer.signTypedData(this.domain, STATE_TYPES, next);
     this.channels[c.opening.channelId] = {
       ...c,
       state: next,
@@ -466,6 +472,37 @@ export class WalletTransactions {
     };
     this.missingChannel = null;
     await this.save();
+  }
+  /** What the casino holds of this account, as it answers the account itself: its channel's state with the reply that
+   * signed it, its bankroll shares and what it owes the account. Each part it did not give is its error. */
+  async casinoRecord(this: CasinoWallet) {
+    const ask = (path: string, body?: unknown) =>
+        this.api(path, body).catch((error: any) => ({ error: error.message })),
+      id = this.channel?.opening.channelId;
+    const [channel, fund, payouts] = await Promise.all([
+      id ? ask(`/api/channels/${id}/activate`, {}) : null,
+      ask('/api/account/fund'),
+      ask('/api/account/payouts'),
+    ]);
+    return { channel, fund, payouts };
+  }
+  /** Take up the casino's state of this account's channel whatever this browser holds: an earlier state, or another at
+   * the same sequence, which the wallet never takes up by itself, and a saved operation is dropped. `stateHash` names the
+   * state the player agreed to: one the casino has moved on from is refused. */
+  async takeUpCasinoState(this: CasinoWallet, stateHash: string) {
+    await this.exclusive(
+      async () => {
+        const c = this.channel;
+        if (!c || c.closing || this.transactionIntent)
+          throw new Error("Only an open balance with no transaction in flight takes up the casino's state.");
+        const reply = await this.api(`/api/channels/${c.opening.channelId}/activate`, {});
+        if (!same(hashState(this.domain, reply.state), stateHash))
+          throw new Error("The casino's state changed since you compared: compare again.");
+        await this.takeUp(reply.state, reply.lastResponse);
+        this.pendingError = null;
+      },
+      { wait: true },
+    );
   }
   /** A local casino sends this account's address demo ETH, and the sweep puts it into the balance. */
   async setupDemo(this: CasinoWallet) {

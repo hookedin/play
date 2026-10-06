@@ -17,8 +17,8 @@ deposit you [save your key](keys-and-recovery.md#your-key).
 contract still owes you, and four tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw`, **Transfer** at
 `/wallet/transfer` and **Activity** at `/wallet/activity`. **Settings**, in the account menu, opens the same way at
 `/settings`, with a tab for each thing it is for: **Keys** at `/settings`, **Deposits** at `/settings/deposits`,
-**Protection** at `/settings/protection` and **Recovery** at `/settings/recovery`. Each address opens its tab, over the
-library when it is a link. Closing it, or Back, brings the page under it back.
+**Protection** at `/settings/protection`, **Recovery** at `/settings/recovery` and **Advanced** at `/settings/advanced`.
+Each address opens its tab, over the library when it is a link. Closing it, or Back, brings the page under it back.
 
 The wallet, its games and hookedin.com count money in **METH**. **1 METH is a millionth of an ETH (0.000001 ETH)**,
 so **1 ETH = 1,000,000 METH** and 0.01 ETH = 10,000 METH. Amounts are cut off, never rounded: a balance in whole METH,

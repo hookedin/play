@@ -6,7 +6,16 @@ import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
 import { BrowserStore } from './storage.ts';
-import { json, same, verifyEvidence, collateralPrice, channelId, STATUS, UNAME } from '../protocol/protocol.ts';
+import {
+  json,
+  same,
+  verifyEvidence,
+  collateralPrice,
+  channelId,
+  hashState,
+  STATUS,
+  UNAME,
+} from '../protocol/protocol.ts';
 import {
   activityJSON,
   copyBlock,
@@ -260,6 +269,7 @@ export function showWallet(tab: WalletTab) {
   // is signed.
   if (['withdraw', 'recovery'].includes(tab) && wallet.channel) void wallet.quoteWithdrawalFee().catch(() => {});
   if (tab === 'activity') void refreshWallet();
+  if (tab === 'advanced') void compareStates();
   // The deposit address is checked for ETH every 20 seconds while it is shown.
   wallet.showDeposit(tab === 'deposit');
   renderWallet();
@@ -557,6 +567,7 @@ export function renderWallet() {
   if (walletTab === 'activity' && $<HTMLDialogElement>('wallet-dialog').open) renderActivity();
   renderClaims();
   renderRecovery();
+  if (walletTab === 'advanced' && $<HTMLDialogElement>('wallet-dialog').open) renderAdvanced();
   renderGameAccount();
 }
 /** A rate in millionths, as a percentage with no trailing zeros. */
@@ -810,6 +821,131 @@ function renderRecovery() {
   $<HTMLButtonElement>('channel-challenge').disabled = !state.needsChallenge || Date.now() / 1000 >= deadline || busy;
   $<HTMLButtonElement>('channel-finalize').disabled = !closing || Date.now() / 1000 < deadline || busy;
 }
+/** This browser's saved record of an account and the casino's, read together, and when. */
+type Comparison = { address: string; at: number; record: any; casino: any } | null;
+/** The comparison Advanced last read, and the one its table and records show. */
+let compared: Comparison = null,
+  drawn: Comparison = null,
+  comparing = false;
+/** Read this browser's saved record of the account and the casino's copy of it, together, for Advanced. */
+async function compareStates() {
+  const address = wallet.address;
+  if (!address || comparing) return;
+  comparing = true;
+  renderWallet();
+  try {
+    const [record, casino] = await Promise.all([wallet.storage.get(wallet.storageKey), wallet.casinoRecord()]);
+    if (wallet.address === address) compared = { address, at: Date.now(), record, casino };
+  } catch (error: any) {
+    toast(error.message, true);
+  } finally {
+    comparing = false;
+    renderWallet();
+  }
+}
+/** A checkpoint's hash, or none for what is not one. */
+function stateHash(state: any) {
+  try {
+    return hashState(wallet.domain, state);
+  } catch {
+    return null;
+  }
+}
+/** A checkpoint's figures, as Advanced lists them. */
+const stateFacts = (state: any) =>
+  stateHash(state)
+    ? [
+        String(state.sequence),
+        `${exact(state.balance)} METH`,
+        `${exact(state.deposited)} METH`,
+        `${exact(state.withdrawn)} METH`,
+        short(stateHash(state)),
+      ]
+    : Array(5).fill('—');
+/** Advanced: the balance as this browser holds it beside the casino's copy, how they differ, and both records whole. */
+function renderAdvanced() {
+  const shown = compared?.address === wallet.address ? compared : null,
+    mine = shown?.record?.channels?.[shown.record.channelId] ?? null,
+    theirs = shown?.casino.channel ?? null,
+    pending = mine?.pending,
+    a = mine && stateHash(mine.state),
+    b = theirs?.state && stateHash(theirs.state),
+    ahead = a && b ? BigInt(mine.state.sequence) - BigInt(theirs.state.sequence) : 0n,
+    operations = (n: bigint) => `${n} operation${n === 1n ? '' : 's'}`;
+  const verdict = !shown
+    ? comparing
+      ? 'Comparing with the casino…'
+      : ''
+    : !mine
+      ? 'No balance is open in this browser: there is nothing to compare.'
+      : !b
+        ? `The casino gave no state of your balance: ${theirs?.error ?? 'it holds none'}.`
+        : a === b
+          ? pending
+            ? `Both hold sequence ${mine.state.sequence}, and this browser has a saved operation the casino has not answered: Retry sends it again, and taking up the casino's state drops it.`
+            : `This browser and the casino hold the same state of your balance, at sequence ${mine.state.sequence}.`
+          : ahead < 0n
+            ? `The casino is ${operations(-ahead)} ahead of this browser: play on another device, or a reply this browser lost. This browser takes it up when it next opens, or now with Take up the casino's state.`
+            : ahead > 0n
+              ? `This browser is ${operations(ahead)} ahead of the casino, which does not hold them. Your recovery bundle proves them on-chain; taking up the casino's state gives them up.`
+              : `This browser and the casino hold different states at sequence ${mine.state.sequence}. Your recovery bundle proves this browser's on-chain.`;
+  $('state-verdict').textContent = shown
+    ? `${verdict} Compared at ${new Date(shown.at).toLocaleTimeString()}.`
+    : verdict;
+  $<HTMLButtonElement>('compare-states').disabled = comparing || !wallet.address;
+  // The current channel, open, with no transaction of its own in flight: the one the casino's state is taken up on.
+  $<HTMLButtonElement>('take-casino-state').disabled =
+    !b ||
+    (a === b && !pending) ||
+    shown!.record.channelId !== wallet.channelId ||
+    !closable() ||
+    Boolean(wallet.channel?.closing || wallet.transactionIntent) ||
+    comparing ||
+    uiBusy ||
+    wallet.busy;
+  // The table and the records are built once for each comparison, so text being read or selected in them stays.
+  if (shown === drawn) return;
+  drawn = shown;
+  $('state-comparison').hidden = !mine;
+  if (mine) {
+    const left = stateFacts(mine.state),
+      right = stateFacts(theirs?.state),
+      own = shown!.record.fund,
+      fund = shown!.casino.fund,
+      rows = ['Sequence', 'Balance', 'Taken in', 'Withdrawn', 'State hash'].map((label, i) => [
+        label,
+        left[i],
+        right[i],
+      ]);
+    rows.push(
+      [
+        'Unanswered operation',
+        pending ? `${OPERATIONS[pending.kind]?.name ?? pending.kind}, ${exact(pending.request.amount)} METH` : 'None',
+        'None',
+      ],
+      [
+        'Bankroll shares',
+        `${exact(own.shares)} (statement ${own.sequence})`,
+        fund?.statement
+          ? `${exact(fund.statement.message.shares)} (statement ${fund.statement.message.sequence})`
+          : (fund?.error ?? `${exact(0)} (statement 0)`),
+      ],
+    );
+    $('state-rows').replaceChildren(
+      ...rows.map(([label, l, r]) =>
+        h(
+          'tr',
+          { className: l === r ? '' : 'differs' },
+          h('th', { scope: 'row' }, label!),
+          h('td', null, l!),
+          h('td', null, r!),
+        ),
+      ),
+    );
+  }
+  $('wallet-record').replaceChildren(...(shown ? copyBlock(activityJSON(shown.record), "This browser's record") : []));
+  $('casino-record').replaceChildren(...(shown ? copyBlock(activityJSON(shown.casino), "The casino's record") : []));
+}
 let claimsShown = '';
 const claimRecipients = new Map<string, string>();
 /** What closed balances are still owed: shown only while something is. */
@@ -958,6 +1094,26 @@ function downloadEvidence(report: any) {
 act('export-evidence', async () => downloadEvidence(await wallet.exportEvidence()));
 for (const id of ['start-close', 'channel-start-close'])
   act(id, () => wallet.startClose(), 'Close started. It can be challenged for 7 days; keep watching until it is done.');
+$('compare-states').addEventListener('click', () => void compareStates());
+act('take-casino-state', async () => {
+  const { record, casino } = compared!,
+    mine = record.channels[record.channelId],
+    theirs = casino.channel.state;
+  const warning = [
+    "Take up the casino's state of your balance? It replaces the state this browser holds.",
+    `Your balance goes from ${exact(mine.state.balance)} METH at sequence ${mine.state.sequence} to ${exact(theirs.balance)} METH at sequence ${theirs.sequence}.`,
+    mine.pending
+      ? `The saved ${OPERATIONS[mine.pending.kind]?.name ?? mine.pending.kind} of ${exact(mine.pending.request.amount)} METH is dropped${wallet.disputable() ? ', and with it your right to dispute it on-chain' : ''}.`
+      : '',
+    'This browser keeps none of its own state of the balance: export your recovery bundle first to keep its evidence.',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+  if (!confirm(warning)) return;
+  await wallet.takeUpCasinoState(stateHash(theirs)!);
+  toast(`Took up the casino's state: ${exact(theirs.balance)} METH at sequence ${theirs.sequence}.`);
+  void compareStates();
+});
 act('recover-wallet', () => wallet.recover(), 'The saved operation is finished. Reopen its game to carry on.');
 act(
   'speed-up-transaction',

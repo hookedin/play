@@ -1,6 +1,6 @@
 ---
 title: Keys and recovery
-description: Your key and its passkey, another device, recovery bundles, lost replies, the casino's history, recovery mode and the watchtower.
+description: Your key and its passkey, another device, recovery bundles, lost replies, comparing with the casino, the casino's history, recovery mode and the watchtower.
 sidebar:
   order: 4
 ---
@@ -88,6 +88,20 @@ casino again at its next check.
 The same banner covers an on-chain transaction that has not confirmed. **Retry** looks for its outcome, including a
 replacement your account sent at the same nonce, and sends the exact saved transaction again when the network has none.
 **Speed up** sends it again with a higher fee, within the wallet's [caps](closing-and-claims.md#fees-and-gas).
+
+## Comparing with the casino
+
+**Advanced**, the last tab of Settings at `/settings/advanced`, shows your balance as this browser holds it beside the
+casino's copy: the sequence, the balance, what it has taken in and withdrawn, the state's hash, an operation the casino
+has not answered and your bankroll shares, with each row that differs marked and a line saying how they differ. Below
+them are both records whole, as JSON to copy: this browser's saved record of the account, and what the casino answers
+the account with for its channel, its shares and what it owes it. Comparing changes nothing.
+
+**Take up the casino's state** replaces this browser's state of your balance with the casino's, whatever it is: an
+earlier one, or another at the same sequence, which the wallet never takes up by itself. An operation the casino has not
+answered is dropped with it. A warning says first what your balance becomes and what is dropped. The casino's state must
+carry your own signatures, as any state the wallet takes up does, so it is one you agreed to; an earlier one gives up
+what came after it. Export your [recovery bundle](#recovery-bundles) first: importing it puts a later state back.
 
 ## The casino's history
 
