@@ -1,7 +1,6 @@
 import type { TypedDataField } from 'ethers';
 import type {
   Details,
-  GameName,
   Domain,
   Opening,
   Checkpoint,
@@ -13,6 +12,7 @@ import type {
   Json,
   Quote,
   CollateralOffer,
+  OnchainChannel,
 } from './types.ts';
 import {
   AbiCoder,
@@ -135,6 +135,28 @@ export const channelId = (player: string, index: Integer) =>
 /** A channel's status on-chain: an account's current channel is active from the start, with nothing to open, and
  * takes play and money until its close starts. */
 export const STATUS = { active: 0, closing: 1, finalized: 2 } as const;
+/** The fields of the contract's `Channel`, as `channels()` returns it and `ChannelChanged` carries it. */
+export const CHANNEL_FIELDS = [
+  'deposited',
+  'principal',
+  'collateral',
+  'claimed',
+  'status',
+  'deadline',
+  'closingSequence',
+  'closingHash',
+  'closingBalance',
+  'disputedPrize',
+  'disputeHold',
+] as const;
+/** A channel as the contract holds it, every number a decimal string. */
+export const onchainChannel = (c: any): OnchainChannel =>
+  Object.fromEntries(CHANNEL_FIELDS.map(field => [field, String(c[field])])) as unknown as OnchainChannel;
+/** A channel the contract never changed: active, and holding nothing. */
+export const UNTOUCHED_CHANNEL = onchainChannel({
+  ...Object.fromEntries(CHANNEL_FIELDS.map(field => [field, 0])),
+  closingHash: ZeroHash,
+});
 /** Whether a channel's balance plays: the channel active, and every deposit the balance took in held on-chain. One a
  * reorganisation took back waits for the money to land again: a close nets out what the chain does not hold, so a bet
  * on it would risk nothing. */
@@ -197,6 +219,13 @@ export const BANK_WITHDRAW_TYPES = {
 };
 export const hashBankWithdraw = (d: Domain, s: { game: string; amount: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, BANK_WITHDRAW_TYPES, s);
+/** Where the casino's signing history ended when it signed: its last record's ID and that record's digest, which
+ * commits to every record before it. Every answer on a channel carries the latest the casino signed, and a wallet keeps
+ * the newest it holds and checks it against the casino's history again and again: a history rewritten up to that record
+ * cannot give it back. */
+export const HEAD_TYPES = {
+  HistoryHead: fields('string record,bytes32 digest'),
+};
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
 export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
   if (BigInt(amount) <= 0n) throw new Error('Invalid investment');
@@ -424,22 +453,24 @@ export const disputedStep = (operation: Operation, authorization: string, seed: 
   secret: ZeroHash,
   casinoSignature: '0x',
 });
-/** A game's key: the one value its bets, its commission and its public record are kept under, made from its
- * developer and the name they publish it under, so it is the same wherever the game is served. A game opened by
- * its URL alone has the key of the zero address and that URL. */
-export const gameKey = ({ developer, name }: GameName) =>
-  keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'string'], [developer, name]));
+/** The key of a game opened by its URL alone, which nobody publishes: the hash of that URL. A published game's key is
+ * the one the casino gave it when it was first published, which stays its own whatever it is renamed or moved to. */
+export const urlGameKey = (url: string) => keccak256(AbiCoder.defaultAbiCoder().encode(['string'], [url]));
 export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
 export const MAX_GROUP = 64;
-/** A group label: 1 to `MAX_GROUP` characters of well-formed text without a NUL, which no database column holds. */
+/** Whether every string in a JSON value, its keys too, is well-formed text without a NUL: all a database holds, so the
+ * casino refuses anything else before it can reach a record. */
+export const validText = (value: unknown): boolean =>
+  typeof value === 'string'
+    ? value.isWellFormed() && !value.includes('\0')
+    : value === null ||
+      typeof value !== 'object' ||
+      Object.entries(value).every(([key, item]) => validText(key) && validText(item));
+/** A group label: 1 to `MAX_GROUP` characters of well-formed text without a NUL. */
 export const validGroup = (group: unknown): group is string =>
-  typeof group === 'string' &&
-  group.length > 0 &&
-  group.length <= MAX_GROUP &&
-  group.isWellFormed() &&
-  !group.includes('\0');
+  typeof group === 'string' && group.length > 0 && group.length <= MAX_GROUP && validText(group);
 /** The most a bet's meta takes, as canonical JSON. */
 export const MAX_META_BYTES = 4096;
 /** The most developer bets one request settles, and one page lists. */
@@ -500,9 +531,10 @@ export function validBet(stake: unknown, chance: unknown, prize: unknown) {
   );
 }
 /** Meta in its one form, a developer bet's and a developer's casino bet's alike: a JSON object of up to
- * `MAX_META_BYTES` of canonical JSON, whose numbers are whole. The casino keeps it and never reads it. */
+ * `MAX_META_BYTES` of canonical JSON, whose numbers are whole and whose text is well-formed, without a NUL. The casino
+ * keeps it and never reads it. */
 export function validMeta(meta: unknown): meta is Record<string, unknown> {
-  if (meta === null || typeof meta !== 'object' || Array.isArray(meta)) return false;
+  if (meta === null || typeof meta !== 'object' || Array.isArray(meta) || !validText(meta)) return false;
   try {
     return toUtf8Bytes(canonicalJSON(meta)).length <= MAX_META_BYTES;
   } catch {
@@ -739,6 +771,7 @@ export const PROTOCOL = id(
     REDEEM_TYPES,
     BANK_TYPES,
     BANK_WITHDRAW_TYPES,
+    HEAD_TYPES,
   ]) +
     canonicalJSON({
       kinds: KIND,

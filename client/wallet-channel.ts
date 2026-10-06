@@ -456,8 +456,10 @@ export class ChannelClient extends WalletTransactions {
       createdAt: new Date().toISOString(),
     });
     c.pending = null;
+    const head = this.newerHead(response.head);
     await this.save(receipt, {
       channels: { ...this.channels, [c.opening.channelId]: c },
+      ...(head ? { head } : {}),
       ...(invested ? { fund: invested.fund } : {}),
       ...(banked ? { banks: { ...this.banks, [details.counterparty!]: banked } } : {}),
       // A developer bet is remembered until what its developer paid is collected.

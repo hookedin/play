@@ -12,7 +12,6 @@ import {
   rejectionCheckpoint,
   canonicalJSON,
   memo,
-  gameKey,
   outcome,
   betPayout,
   roundId,
@@ -33,7 +32,6 @@ export function buildVectors() {
     chainId: 31337n,
     casino: '0x1111111111111111111111111111111111111111',
     player: '0x2222222222222222222222222222222222222222',
-    developer: '0x4444444444444444444444444444444444444444',
     // Where a withdrawal pays: any address the player names.
     recipient: '0x5555555555555555555555555555555555555555',
     // Whom a transfer pays: another player, by their uname.
@@ -82,7 +80,8 @@ export function buildVectors() {
       nextHash: hashState(d, next),
     };
   };
-  const game = gameKey({ developer: identity.developer, name: 'roulette' });
+  // A published game's key, as the casino gave it when the game was first published.
+  const game = id('a published game');
   // A deposit, taking into the balance the money deposited into the channel on-chain.
   const opened = apply(base, { kind: KIND.deposit, amount: 1_000_000_000n }, { id: `0x${'81'.repeat(32)}` });
   // A casino bet on red: twice the stake on 18 of the 37 pockets. The round's secret is the first of these whose

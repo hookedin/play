@@ -1,6 +1,6 @@
 import { ZeroAddress } from 'ethers';
 import { withLock } from './storage.ts';
-import { gameKey } from '../protocol/protocol.ts';
+import { urlGameKey } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { exact, h } from './activity.ts';
 import { formatAmount, MICRO_ETH } from '../sdk/src/wire.ts';
@@ -267,7 +267,7 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
   );
   const identity: GameIdentity = {
     url: entry.href,
-    key: published?.key ?? gameKey({ developer: ZeroAddress, name: entry.href }),
+    key: published?.key ?? urlGameKey(entry.href),
     developer: published?.developer ?? ZeroAddress,
     ...(slug === undefined ? {} : { slug }),
     name: slug === undefined ? entry.host : gameTitle(slug),

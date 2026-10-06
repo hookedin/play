@@ -74,8 +74,8 @@ const receipt = await HookedIn.developerBet({
 
 `meta` is your game's own JSON object, saying what the bet is: a pick and its odds, a layout of chips, a cash-out made
 while a round runs. The player signs it; the casino keeps it with the bet and never reads it; your server reads it and
-settles the bet by it. It takes at most `bounds.meta` bytes as canonical JSON, 4,096, and its numbers are safe
-integers: write odds as whole hundredths (`210`) or as a string (`'2.10'`).
+settles the bet by it. It takes at most `bounds.meta` bytes as canonical JSON, 4,096, and its numbers are safe integers:
+write odds as whole hundredths (`210`) or as a string (`'2.10'`). Its text is well-formed, without a NUL.
 
 Meta is what the player signed, not what you offered: check it against your offer before you pay it. For a page to
 prove to your server that a bet is its own, it puts the hash of a secret it keeps in the meta.

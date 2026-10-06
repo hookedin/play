@@ -22,11 +22,12 @@ any deposit while it owes the account something, such as a [transfer](#post-apic
 casino knows is returned with no chain read. The body is `{}`: the token names the account, and the chain which of its
 channels is current. Registering a channel counts against [budgets](index.md#budgets-and-queues) of its own.
 
-| Response field             | Type                   | Meaning                                                                                                                                 |
-| -------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`, `discordUsername` | string, string or null | The player's names                                                                                                                      |
-| `state`                    | Checkpoint             | The latest checkpoint                                                                                                                   |
-| `lastResponse`             | object or null         | The reply that signed `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `quote`; `null` at the base |
+| Response field             | Type                   | Meaning                                                                                                                                           |
+| -------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`, `discordUsername` | string, string or null | The player's names                                                                                                                                |
+| `state`                    | Checkpoint             | The latest checkpoint                                                                                                                             |
+| `lastResponse`             | object or null         | The reply that signed `state`, as [`POST …/operations`](#post-apichannelsidoperations) recorded it, without `quote` or `head`; `null` at the base |
+| `head`                     | object or null         | The casino's latest [history head](../reference/signed-messages.md#history-heads), `{message, signature}`; `null` before its history has a record |
 
 `refused` answers a `:id` that is not the account's current channel ("Channel is not the account's current one"), one the confirmed chain holds no deposit for while
 the casino owes its account nothing ("Channel holds no deposit, and its account is owed nothing"), and a chain that
@@ -114,6 +115,7 @@ the `withdrawn` of the checkpoint the withdrawal follows. The casino takes it on
 | `used`            | boolean    | A game's operation declined because its player carried it out on another channel: `true`                                                                                  |
 | `carried`         | object     | A covered casino bet declined as `used`: `{base, operation, authorization, details}`, the operation the account signed on the other channel and the checkpoint it follows |
 | `quote`           | object     | The quote for the channel's next casino bet, which follows `state`, when `state` is the channel's latest checkpoint; not recorded                                         |
+| `head`            | object     | The casino's latest [history head](../reference/signed-messages.md#history-heads), `{message, signature}`, which the wallet keeps; not recorded                           |
 
 A casino bet, and its signed result:
 
@@ -341,12 +343,12 @@ shares worth nothing, and an amount the bankroll cannot release yet.
 
 ### The account's games
 
-A game is its developer's: the account that publishes it moves it, takes it down, names the key its server signs with
-and takes money out of its bank. A game's bank holds its money at the casino: half the commission of its casino bets and
-the stakes of its developer bets go in, and its settlements and its own casino bets are paid from it
-([game bank messages](../reference/signed-messages.md#game-bank-messages)). Nothing in it is reserved. Only the developer
-puts money in, with an [operation](#post-apichannelsidoperations) naming the game's key, and only the developer takes it
-out. A game taken down keeps its URL, its bank, its server and its record.
+A game is its developer's: the account that publishes it renames it, moves it, takes it down, names the key its server
+signs with and takes money out of its bank. A game's bank holds its money at the casino: half the commission of its
+casino bets and the stakes of its developer bets go in, and its settlements and its own casino bets are paid from it
+([game bank messages](../reference/signed-messages.md#game-bank-messages)). Nothing in it is reserved. Only the
+developer puts money in, with an [operation](#post-apichannelsidoperations) naming the game's key, and only the
+developer takes it out. A game taken down keeps its URL, its bank, its server and its record.
 
 ### `GET /api/account/games`
 
@@ -359,14 +361,23 @@ differ from the statement's balance.
 
 ### `POST /api/account/games`
 
-Publishes a game under the account, or takes it down: `{name, url}`. The account becomes the game's developer, and the
-game's key is [`gameKey(player, name)`](../reference/signed-messages.md#game-keys). Publishing a name again with another
-URL moves the game, and publishing one taken down brings it back: either way it keeps its key, its bank, its server and
-its record. A player's profile is public: [`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is
-this route's reply. Publishing needs a balance that plays; taking a game down, with a `null` `url`, works whatever the
-account holds. [The game's URL](../games/publishing.md#the-games-url) gives the rules for `name` and `url`. `invalid`
-answers a name or URL those rules do not allow, `channel-closed` an account with no balance that plays ("Publish games
-from a balance that plays"), and `too-many` a profile that already publishes 100 games.
+Publishes a game under the account, renames or moves one of its games, or takes one down.
+
+| Body field | Type           | Meaning                                                                                                                                                                                   |
+| ---------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | string         | The name it goes by in the account's profile: 1 to 32 of `a-z`, `0-9` and `-`, starting with a letter or digit                                                                            |
+| `url`      | string or null | [The game's URL](../games/publishing.md#the-games-url): `https:`, or `http:` on a local host, at most 300 characters, with no user name, password or fragment; `null` takes the game down |
+| `game`     | bytes32        | Optional: the [key](../reference/signed-messages.md#game-keys) of one of the account's games                                                                                              |
+
+Without `game`, `name` says which game: a name the account has published before, taken down since or not, is that game,
+and any other a new one, with a random key the casino gives it, whose developer the account becomes. With `game`, it is
+that game, under `name`. A game keeps its key, its bank, its server and its record under any name and at any URL, and
+publishing one taken down brings it back. A player's profile is public:
+[`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is this route's reply. Publishing needs a
+balance that plays; taking a game down works whatever the account holds. `invalid` answers a name or URL those rules do
+not allow and a `game` that is not one of the account's ("This is another developer's game"), `refused` a name another
+of the account's games goes by, `channel-closed` an account with no balance that plays ("Publish games from a balance
+that plays"), and `too-many` a profile that already publishes 100 games.
 
 ### `POST /api/account/games/server`
 

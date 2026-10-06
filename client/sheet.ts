@@ -507,6 +507,8 @@ export function renderWallet() {
         : `Your deposit address holds ${formatAmount(atAddress)} METH. Check the full address before confirming.`;
   $('address-send-help').classList.toggle('check-failed', typed && Boolean(send.error));
 
+  $('history-banner').textContent = wallet.historyAlert ?? '';
+  $('history-banner').classList.toggle('hidden', !wallet.historyAlert);
   $('pending-banner').classList.toggle(
     'hidden',
     !((wallet.pending && !inbound(wallet.pending.kind)) || wallet.transactionIntent) || busy,

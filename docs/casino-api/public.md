@@ -1,13 +1,13 @@
 ---
 title: Public endpoints
-description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the bankroll fund, players, games' records, rounds, developer bets and demo ETH on a local stack.
+description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the signing history, the bankroll fund, players, games' records, rounds, developer bets and demo ETH on a local stack.
 sidebar:
   order: 1
 ---
 
 These routes need no authentication. They say what the casino runs, how it stands, and what it has recorded in public:
-players by their names, games by their keys, games' rounds and developer bets by their hashes. Nothing here names
-a player's address or channel.
+players by their names, games by their keys, games' rounds and developer bets by their hashes, and the records of its
+signing history by their IDs. Nothing here names a player's address or channel.
 
 ## The deployment and its health
 
@@ -93,6 +93,15 @@ What a withdrawal or a lock-in pays the casino for sending it to the contract, `
 150,000 gas (`WITHDRAWAL_GAS`), about what sending one costs, at the network's gas price, which the casino reads and
 holds for a minute. The casino declines an operation whose `fee` is below what it pays
 ([operations](channels.md#post-apichannelsidoperations)). `paused` answers while the gas price cannot be read.
+
+## The signing history
+
+### `GET /api/history/:id`
+
+One record of the casino's signing history, `{id, digest}`: its ID, a UUIDv7, and its digest, which commits to every
+record before it. A [history head](../reference/signed-messages.md#history-heads) the casino signed names a record and
+its digest; while this route gives that digest for it, the history up to that record is the one the casino signed.
+`invalid` answers an ID that is not a lowercase UUIDv7, and `not-found` one the history does not hold.
 
 ## The bankroll fund
 

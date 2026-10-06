@@ -1,4 +1,4 @@
-import { Wallet, ZeroHash, getBytes, hexlify, keccak256, randomBytes } from 'ethers';
+import { Wallet, ZeroHash, getBytes, hexlify, id, keccak256, randomBytes } from 'ethers';
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
 import { validateRequest } from '../client/bridge.ts';
@@ -14,7 +14,6 @@ import {
   deriveState,
   roundId,
   seedHash,
-  gameKey,
   hashJSON,
   hashOperation,
   outcome,
@@ -188,7 +187,9 @@ export async function gameWallet({
   // A casino derives a player's uname from their address with a key of its own; a stub only has to
   // give each wallet one of the right shape, so a game keys its storage by a real name.
   const uname = hexlify(randomBytes(12)).slice(2).replaceAll('0', 'z').replaceAll('1', 'y');
-  const game = { name: 'test', key: gameKey({ developer: developerKey.address, name: 'test' }).toLowerCase() };
+  // A casino gives a game its key when it is first published; the stub gives each name one.
+  const keyOf = (name: string) => id(`stub game ${name}`);
+  const game = { name: 'test', key: keyOf('test') };
   // The games this fixture's developer publishes, by key: only a published game takes developer bets.
   const published = new Set([game.key]);
   const publicRound = (id: string): Round => {
@@ -599,7 +600,7 @@ export async function gameWallet({
     /** A game as its developer published it: the game this fixture's developer serves is `test`. `declared` is
      * anything else about it. Every game named here is published. */
     identity: (name = game.name, declared: Partial<GameIdentity> = {}): GameIdentity => {
-      const key = gameKey({ developer: developerKey.address, name });
+      const key = keyOf(name);
       published.add(key.toLowerCase());
       return {
         name,

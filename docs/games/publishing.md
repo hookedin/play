@@ -6,8 +6,8 @@ sidebar:
 ---
 
 A game is plain static files, hosted wherever you like, and known by its URL. It becomes yours in public when you
-publish it: its name in your profile at the casino, pointing at its URL. The name and your address make the game's key,
-which stays the same wherever the files are served.
+publish it: its name in your profile at the casino, pointing at its URL. The casino gives it a key as you first publish
+it, which stays the game's under any name and wherever the files are served.
 
 ## Build
 
@@ -49,9 +49,9 @@ no user name or password, and never on its own origin. Anyone can play it by tha
 in the library or at `https://play.hookedin.com/games/custom?url=<encoded game URL>`; a link grants no spending
 authority.
 
-A game opened by its URL alone is published by nobody: its key is made from the zero address and its URL
-([game keys](../reference/signed-messages.md#game-keys)), so it is a different game from any you publish, nobody earns
-its commission, and it takes no developer bets.
+A game opened by its URL alone is published by nobody: its key is the hash of its URL ([game
+keys](../reference/signed-messages.md#game-keys)), so it is a different game from any you publish, nobody earns its
+commission, and it takes no developer bets.
 
 ### The icon
 
@@ -84,11 +84,13 @@ game's name and its URL; the wallet fetches nothing first.
 Publishing needs an open balance, a profile holds 100 games, and the name and URL follow the rules of
 [`POST /api/account/games`](../casino-api/channels.md#post-apiaccountgames).
 
-The game is then at `https://play.hookedin.com/@<username>/<name>`, by your Discord username, or
-`/~<uname>/<name>` for an account that verified no Discord account ([your name](../wallet/getting-started.md#your-name)), for anyone with a wallet, and on your profile. Its key,
-`keccak256(abi.encode(developer, name))`, does not change with its URL: to move a game, publish the same name with the
-new URL, and it keeps its bets, its players' receipts, its bank and its public record. Taking it down takes it out of
-your profile and keeps the rest: publishing it again brings it back.
+The game is then at `https://play.hookedin.com/@<username>/<name>`, by your Discord username, or `/~<uname>/<name>` for
+an account that verified no Discord account ([your name](../wallet/getting-started.md#your-name)), for anyone with a
+wallet, and on your profile. Its key does not change with its name or its URL: to move a game, publish the same name
+with the new URL, and to rename it, use **Rename** beside it on **Developer**, after which its old address stops
+working. Either way it keeps its bets, its players' receipts, its bank and its public record. Another name published is
+another game, with a key of its own. Taking it down takes it out of your profile and keeps the rest: publishing it again
+brings it back.
 
 A game with a server gets a key of its own for it. Make a key for the server, keep it there alone, and give its address
 beside the game on **Developer**, as its server key

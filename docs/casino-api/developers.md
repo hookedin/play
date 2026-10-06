@@ -39,16 +39,16 @@ the prize when the round's outcome is below the chance, and takes half the bet's
 the game; it is listed in the game's public record, in its group. Declined, no money moves. A stake, chance and prize of
 zero bet nothing: they only reveal the round, with no bank check and no admission, and `accepted` is false.
 
-| Body field  | Type    | Meaning                                                                                                                                                 |
-| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `game`      | bytes32 | The key of the published game whose round it is and whose bank pays its stake                                                                           |
-| `stake`     | string  | Decimal, 1 to 2^96 − 1, without leading zeros; `0` to reveal                                                                                            |
-| `chance`    | string  | Decimal: how many of the 2^64 outcomes win, 1 to 2^64 − 1; `0` to reveal                                                                                |
-| `prize`     | string  | Decimal: what the bet pays when it wins, 1 to 2^96 − 1; `0` to reveal                                                                                   |
-| `group`     | string  | 1 to 64 characters: the label the game gives the bets that belong together                                                                              |
-| `meta`      | object  | The game's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers. The casino keeps it with the reveal and never reads it     |
-| `seed`      | bytes32 | The bet's seed                                                                                                                                          |
-| `signature` | string  | The server's EIP-712 `BankCasinoBet` over `{round, game, stake, chance, prize, group, seedHash: keccak256(seed), meta: keccak256(canonicalJSON(meta))}` |
+| Body field  | Type    | Meaning                                                                                                                                                                                          |
+| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `game`      | bytes32 | The key of the published game whose round it is and whose bank pays its stake                                                                                                                    |
+| `stake`     | string  | Decimal, 1 to 2^96 − 1, without leading zeros; `0` to reveal                                                                                                                                     |
+| `chance`    | string  | Decimal: how many of the 2^64 outcomes win, 1 to 2^64 − 1; `0` to reveal                                                                                                                         |
+| `prize`     | string  | Decimal: what the bet pays when it wins, 1 to 2^96 − 1; `0` to reveal                                                                                                                            |
+| `group`     | string  | 1 to 64 characters: the label the game gives the bets that belong together                                                                                                                       |
+| `meta`      | object  | The game's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers and whose text is well-formed, without a NUL. The casino keeps it with the reveal and never reads it |
+| `seed`      | bytes32 | The bet's seed                                                                                                                                                                                   |
+| `signature` | string  | The server's EIP-712 `BankCasinoBet` over `{round, game, stake, chance, prize, group, seedHash: keccak256(seed), meta: keccak256(canonicalJSON(meta))}`                                          |
 
 ```json title="Request"
 {

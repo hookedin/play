@@ -4,7 +4,7 @@ import { getAddress, id, ZeroAddress } from 'ethers';
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
 import { gameRef } from '../client/bridge.ts';
-import { channelId, gameKey } from '../protocol/protocol.ts';
+import { channelId } from '../protocol/protocol.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 
 const deferred = <T = void>() => Promise.withResolvers<T>();
@@ -15,7 +15,7 @@ const testGame = (name = 'test-game'): GameIdentity => ({
   slug: name,
   url: `https://${name}.example/`,
   developer: DEVELOPER,
-  key: gameKey({ developer: DEVELOPER, name }).toLowerCase(),
+  key: id(`published ${name}`),
 });
 
 test('an operation waits for its own background observation and overlapping refreshes share one read', async () => {

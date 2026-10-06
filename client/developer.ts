@@ -87,6 +87,13 @@ function ownGame(owner: string, game: AccountGame) {
       placeholder: '0x… the address your server signs with',
       ariaLabel: `Server key of ${title}`,
     }),
+    rename = h('input', {
+      type: 'text',
+      autocomplete: 'off',
+      spellcheck: false,
+      placeholder: game.name,
+      ariaLabel: `New name for ${title}`,
+    }),
     busy = uiBusy || !wallet.playable || Boolean(wallet.pending);
   const moveBank = (into: boolean) =>
     task(async () => {
@@ -221,6 +228,44 @@ function ownGame(owner: string, game: AccountGame) {
             ]),
       ),
     ),
+    ...(published
+      ? [
+          h(
+            'div',
+            { className: 'game-bank' },
+            h('p', null, h('span', { className: 'label' }, 'Its name '), h('strong', null, `${owner}/${game.name}`)),
+            h(
+              'p',
+              { className: 'game-line-note' },
+              'Renamed, it keeps its key, its bank, its server and its record, and its old address stops working.',
+            ),
+            h(
+              'div',
+              { className: 'field-row' },
+              rename,
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'button',
+                  disabled: busy,
+                  onclick: () =>
+                    task(async () => {
+                      const name = rename.value.trim();
+                      if (!GAME_NAME.test(name))
+                        throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
+                      await wallet.publishGame(name, game.url, game.key);
+                      await loadLibrary();
+                      await loadOwned();
+                      toast(`${owner}/${game.name} goes by ${owner}/${name} now.`);
+                    }),
+                },
+                'Rename',
+              ),
+            ),
+          ),
+        ]
+      : []),
     h(
       'div',
       { className: 'game-actions' },

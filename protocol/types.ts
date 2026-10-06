@@ -33,12 +33,6 @@ export interface Checkpoint {
   /** How much the balance has paid out in withdrawals and lock-ins. A close adds what did not become a claim. */
   withdrawn: Integer;
 }
-/** What a game's key is made from: its developer, the account that publishes it, and the name they publish it
- * under; or, for a game opened by its URL alone, the zero address and that URL. */
-export interface GameName {
-  developer: string;
-  name: string;
-}
 /** What an operation means to the wallet and the casino, beside what the contract settles. The operation
  * signs only its hash, `memo`; the request carries it whole, and both sides keep it with the evidence. */
 export interface Details {
@@ -194,6 +188,8 @@ export interface Deployment {
   operator: string;
   rpcUrl?: string;
   witnessRpcUrl?: string;
+  /** The block the contract was deployed in, where the casino's chain log starts. */
+  block?: number;
 }
 /** On-chain channel storage as the service and wallet project it (decimal strings). */
 export interface OnchainChannel {
@@ -242,6 +238,8 @@ export interface OperationResponse {
   /** An investment's response carries the casino's signed statement of the holding, and a deposit into a game's
    * bank the statement of the bank. */
   statement?: SignedStatement;
+  /** The casino's latest signed `HistoryHead`: where its signing history ended, which the wallet keeps and checks. */
+  head?: SignedStatement;
 }
 /** An operation an account signed, with what it means and the checkpoint it follows, which names its channel: the
  * proof that a game's operation was carried out elsewhere. */

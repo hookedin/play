@@ -158,18 +158,21 @@ contract HookedInCasino {
     mapping(address => uint256) public channelIndex;
     /// The owner's collateral offers bought, each once, by the hash the owner signed.
     mapping(bytes32 => bool) public offersBought;
-    event ChannelDeposit(address indexed player, uint256 indexed index, uint256 amount, uint256 deposited);
+    // A channel as it stands after every change to it, and the contract's sums after every change to them: all an
+    // observer needs to follow the contract from its events alone.
+    event ChannelChanged(address indexed player, uint256 indexed index, Channel channel);
+    event TotalsChanged(uint256 protectedFunds, uint256 unpaidWinnings, uint256 collateralSales);
+    event ChannelDeposit(address indexed player, uint256 indexed index, uint256 amount);
     event CollateralBought(
         address indexed player, uint256 indexed index, bytes32 indexed offer, uint256 amount, uint256 price
     );
     event Withdrawal(
         bytes32 indexed withdrawalId, address indexed player, uint256 indexed index, address recipient, uint256 amount
     );
-    event CloseStarted(address indexed player, uint256 indexed index, uint256 sequence, bytes32 stateHash, uint256 deadline);
-    event CloseChallenged(address indexed player, uint256 indexed index, uint256 sequence, bytes32 stateHash);
-    // The close's new deadline, and the evidence the dispute brought: all the casino needs to settle the bet at its
-    // sequence.
-    event BetDisputed(address indexed player, uint256 indexed index, uint256 deadline, Evidence evidence);
+    event CloseStarted(address indexed player, uint256 indexed index);
+    event CloseChallenged(address indexed player, uint256 indexed index);
+    // The evidence the dispute brought: all the casino needs to settle the bet at its sequence.
+    event BetDisputed(address indexed player, uint256 indexed index, Evidence evidence);
     event CloseFinalized(
         address indexed player,
         uint256 indexed index,
@@ -246,6 +249,14 @@ contract HookedInCasino {
         return keccak256(abi.encode(player, index));
     }
 
+    function _changed(address player, uint256 index) private {
+        emit ChannelChanged(player, index, channels[player][index]);
+    }
+
+    function _totals() private {
+        emit TotalsChanged(protectedFunds, unpaidWinnings, collateralSales);
+    }
+
     // The account's current channel, active: the one after the last whose close started, which takes play and money.
     function _current(address player, uint256 index) private view returns (Channel storage c) {
         c = channels[player][index];
@@ -257,6 +268,7 @@ contract HookedInCasino {
     function deposit(address player) external payable nonReentrant {
         if (player == address(0) || player == address(this) || msg.value == 0) revert InvalidTerms();
         _deposit(player, msg.value);
+        _totals();
     }
 
     // An account's current channel is never closing: a close that starts moves the account to its next one.
@@ -267,7 +279,8 @@ contract HookedInCasino {
         c.deposited += amount;
         c.principal += amount;
         protectedFunds += amount;
-        emit ChannelDeposit(player, index, amount, c.deposited);
+        emit ChannelDeposit(player, index, amount);
+        _changed(player, index);
     }
 
     function fundBankroll() external payable nonReentrant {
@@ -311,6 +324,8 @@ contract HookedInCasino {
         protectedFunds += amount;
         collateralSales += msg.value;
         emit CollateralBought(player, index, offer, amount, msg.value);
+        _changed(player, index);
+        _totals();
     }
 
     // Anyone may have a withdrawal or a lock-in recorded: an operation the account signed, followed by the checkpoint the
@@ -350,11 +365,13 @@ contract HookedInCasino {
         // A lock-in is paid into the account's current channel.
         address recipient = lockIn ? address(this) : op.recipient;
         emit Withdrawal(id, s.player, s.index, recipient, op.amount);
+        _changed(s.player, s.index);
         uint256 reached = _reached(queuedWinnings, winnings);
         if (_send(id, s.player, recipient, protectedAmount, reached)) (protectedAmount, winnings) = (0, winnings - reached);
         if (protectedAmount + winnings != 0) {
             claims[id] = Claim(s.player, recipient, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
         }
+        _totals();
     }
 
     // The checkpoint a step leads to from its base, and the hash of its operation. Every field an operation kind does not
@@ -489,7 +506,8 @@ contract HookedInCasino {
         c.closingSequence = s.sequence;
         c.closingHash = hashState(s);
         c.closingBalance = _owed(s);
-        emit CloseStarted(s.player, s.index, s.sequence, c.closingHash, c.deadline);
+        emit CloseStarted(s.player, s.index);
+        _changed(s.player, s.index);
     }
 
     function challengeClose(Evidence calldata evidence) external nonReentrant {
@@ -518,7 +536,9 @@ contract HookedInCasino {
             protectedFunds -= hold - kept;
         }
         c.disputeHold = 0;
-        emit CloseChallenged(s.player, s.index, s.sequence, c.closingHash);
+        emit CloseChallenged(s.player, s.index);
+        _changed(s.player, s.index);
+        _totals();
     }
 
     // A casino bet the casino has not settled, which its quote covers: anyone disputes it before the quote expires, which
@@ -558,7 +578,9 @@ contract HookedInCasino {
         c.collateral += hold;
         c.disputeHold += hold;
         protectedFunds += hold;
-        emit BetDisputed(s.player, s.index, c.deadline, evidence);
+        emit BetDisputed(s.player, s.index, evidence);
+        _changed(s.player, s.index);
+        _totals();
     }
 
     // Finalization only establishes debt, owed to the player; collection is an independent transaction.
@@ -583,6 +605,8 @@ contract HookedInCasino {
                 Claim(player, player, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
         }
         emit CloseFinalized(player, index, stateHash, balance, protectedAmount, winnings);
+        _changed(player, index);
+        _totals();
     }
 
     /// What collecting a claim pays now: its protected amount, and as much of its winnings as house cash reaches.
@@ -623,6 +647,7 @@ contract HookedInCasino {
         uint256 winnings = _reached(k.queueEnd, k.winningsRemaining);
         (k.protectedRemaining, k.winningsRemaining) = (0, k.winningsRemaining - winnings);
         if (!_send(id, k.beneficiary, k.recipient, protectedAmount, winnings)) revert TransferFailed();
+        _totals();
     }
 
     // Pays a claim's protected amount and winnings: into its beneficiary's current channel when the recipient is this contract,

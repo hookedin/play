@@ -1,6 +1,6 @@
 ---
 title: Keys and recovery
-description: Your key and its passkey, another device, recovery bundles, lost replies, recovery mode and the watchtower.
+description: Your key and its passkey, another device, recovery bundles, lost replies, the casino's history, recovery mode and the watchtower.
 sidebar:
   order: 4
 ---
@@ -88,6 +88,16 @@ casino again at its next check.
 The same banner covers an on-chain transaction that has not confirmed. **Retry** looks for its outcome, including a
 replacement your account sent at the same nonce, and sends the exact saved transaction again when the network has none.
 **Speed up** sends it again with a higher fee, within the wallet's [caps](closing-and-claims.md#fees-and-gas).
+
+## The casino's history
+
+The casino records everything it decides in its signing history, each record committing to every record before it, and
+every reply on your channel brings its signature of where that history ends, a [history
+head](../reference/signed-messages.md#history-heads). The wallet keeps the newest, and on every check, every 10 minutes
+and when you press ↻, asks the casino for that record
+([`GET /api/history/:id`](../casino-api/public.md#get-apihistoryid)). When the record is missing or not as signed, the
+casino has rewritten its history, and a banner says so: "The casino rewrote its history: the record … it signed is
+missing or changed. Keep this browser's wallet, which holds the casino's signature."
 
 ## Recovery mode
 

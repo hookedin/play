@@ -18,6 +18,9 @@ import {
 } from '../testing/contract.ts';
 import {
   baseState,
+  channelId,
+  onchainChannel,
+  UNTOUCHED_CHANNEL,
   checkpointEvidence,
   hashOperation,
   hashState,
@@ -85,12 +88,28 @@ async function invariants(env: any, f: any, withdrawals: string[] = []) {
     debt += claim.winningsRemaining;
     owes(claim, collectable);
   }
-  const [p, unpaid, cash, withdrawal] = await Promise.all([
+  const [p, unpaid, sales, cash, withdrawal, logs] = await Promise.all([
     f.contract.protectedFunds(),
     f.contract.unpaidWinnings(),
+    f.contract.collateralSales(),
     env.provider.getBalance(await f.contract.getAddress()),
     f.contract.withdrawableHouse(),
+    f.contract.queryFilter('*'),
   ]);
+  // The contract's events alone say all of it: every channel as its last `ChannelChanged` left it, one with none still
+  // empty, and the sums as the last `TotalsChanged` did.
+  const events = logs.map((log: any) => f.contract.interface.parseLog(log)),
+    changed = new Map(
+      events
+        .filter((e: any) => e?.name === 'ChannelChanged')
+        .map((e: any) => [channelId(e.args.player, e.args.index), onchainChannel(e.args.channel)]),
+    ),
+    totals = events.findLast((e: any) => e?.name === 'TotalsChanged')?.args;
+  for (const [key, c] of channels) assert.deepEqual(changed.get(key) ?? UNTOUCHED_CHANNEL, onchainChannel(c));
+  assert.deepEqual(
+    [totals?.protectedFunds ?? 0n, totals?.unpaidWinnings ?? 0n, totals?.collateralSales ?? 0n],
+    [p, unpaid, sales],
+  );
   assert.equal(p, principal);
   assert.equal(unpaid, debt);
   assert.ok(cash >= principal);

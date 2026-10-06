@@ -74,8 +74,9 @@ with it. The round's `casinoBet.accepted` says whether the bankroll took it; eit
 it again after a lost reply is the same bet and gets the same answer; a different casino bet on a revealed round is
 refused with `round-revealed`, and one the bank cannot pay with `bank-short`. It throws an `Error` with `status` 400 and
 code `invalid` before sending when `meta` is not a JSON object of up to 4,096 bytes of canonical JSON with whole
-numbers, and an `Error` when the reply is not this bet's reveal: the secret must hash to the round, the seed and the
-signature must be this bet's, and the outcome must be their [`outcome`](outcome.md#outcome).
+numbers and well-formed text without a NUL, and an `Error` when the reply is not this bet's reveal: the secret must hash
+to the round, the seed and the signature must be this bet's, and the outcome must be their
+[`outcome`](outcome.md#outcome).
 
 #### `reveal`
 

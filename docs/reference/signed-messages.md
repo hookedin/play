@@ -1,6 +1,6 @@
 ---
 title: Signed messages
-description: The EIP-712 domain, the thirteen signed structures, the IDs and hashes built from them, and the test vectors that fix them.
+description: The EIP-712 domain, the fifteen signed structures, the IDs and hashes built from them, and the test vectors that fix them.
 sidebar:
   order: 2
 ---
@@ -52,6 +52,7 @@ withdrawal's or a lock-in's ID, a rejection's `transitionHash`, a statement's `c
 | `Redeem`          | `address holder`, `uint256 shares`, `uint256 sequence`                                                                                                                                   | The holder                                       | Casino                   |
 | `BankStatement`   | `bytes32 game`, `uint256 sequence`, `uint256 balance`, `bytes32 cause`                                                                                                                   | The casino                                       | Wallet                   |
 | `BankWithdraw`    | `bytes32 game`, `uint256 amount`, `uint256 sequence`                                                                                                                                     | The developer                                    | Casino                   |
+| `HistoryHead`     | `string record`, `bytes32 digest`                                                                                                                                                        | The casino                                       | Wallet                   |
 
 The _account_ is the `player` a channel's checkpoints name, which signs everything on it. The _casino_ is the contract's `owner`, which
 [`GET /api/config`](../casino-api/public.md#get-apiconfig) reports as `operator`. The _developer_ is the account that
@@ -212,7 +213,7 @@ memo = keccak256(utf8(canonicalJSON(details)))
 | `game`         | bytes32 | The [key](#game-keys) of the game that asked for a casino bet, a developer bet or a payment                                                                      |
 | `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units of well-formed text, without a NUL                                     |
 | `counterparty` | string  | What a debit pays into or a credit collects from: a [counterparty ID](#counterparties), a game's key, a developer bet's hash or another player, written `~uname` |
-| `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers                                                               |
+| `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers and whose text is well-formed, without a NUL                  |
 
 No other key is allowed. `id` and `game` are `0x` followed by 64 lowercase hex digits, and so is `counterparty`, unless
 it names a player: `~` and their 24-character uname. `group` and `meta` appear only beside `game`. A withdrawal's
@@ -264,10 +265,10 @@ What the casino checks for each, and what it answers, is under
 The developer bet in the [test vectors](#test-vectors) signs these details, in canonical JSON:
 
 ```text
-{"game":"0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d","group":"spin-1","id":"0x8383838383838383838383838383838383838383838383838383838383838383","meta":{"chips":{"17":"20000000","9":"10000000","red":"30000000"}}}
+{"game":"0x61db0a0a1690559504c321e414639219e12477b8ee858b13e875c5ad2105c093","group":"spin-1","id":"0x8383838383838383838383838383838383838383838383838383838383838383","meta":{"chips":{"17":"20000000","9":"10000000","red":"30000000"}}}
 ```
 
-Their keccak-256 is its `memo`, `0x88456920b0dce4c103868f21a4ecdcad753a3d3bfa56f2cdfb16a7a2c9d0b370`. The keys sort as
+Their keccak-256 is its `memo`, `0xbf074ecb75fe088a06364794008f50eea32ff7a73704793c70c5d8a9f0f1757a`. The keys sort as
 strings, so `"17"` comes before `"9"`.
 
 ### Operation IDs
@@ -301,16 +302,19 @@ The other fixed tag is `HOOKEDIN/OUTCOME` (`0xede2fdd26760847d3c92bb2ebf4da0fdbd
 
 ### Game keys
 
+A game is known by its key, 32 bytes. A published game's is random: the casino gives it when its developer first
+publishes the game, and the game keeps it under any name and at any URL
+([`POST /api/account/games`](../casino-api/channels.md#post-apiaccountgames)). A game opened by its
+[URL](../games/publishing.md#the-games-url) alone, which nobody publishes, has the key of that URL as the URL parser
+normalises it:
+
 ```text
-gameKey = keccak256(abi.encode(address developer, string name))
+urlGameKey = keccak256(abi.encode(string url))
 ```
 
-`developer` is the account that publishes the game and `name` the name it is published under (1 to 32 of `a-z`, `0-9`
-and `-`, starting with a letter or digit). A game opened by its [URL](../games/publishing.md#the-games-url) alone takes
-the zero address as `developer` and, as `name`, its URL as the URL parser normalises it, so no published game shares its
-key; it has no bank, and takes no developer bets. The key is lowercase hex in details and in the API.
-The vectors' game, developer `0x4444444444444444444444444444444444444444` and name `roulette`, has the key
-`0x3ecebe6e27b57578960be6f32d017dd0aaa0de75c35a7208a74206db2dab2c5d`.
+It has no bank, and takes no developer bets. The key is lowercase hex in details and in the API. The vectors' game is a
+published one whose key is `keccak256("a published game")`,
+`0x61db0a0a1690559504c321e414639219e12477b8ee858b13e875c5ad2105c093`.
 
 ### Rounds
 
@@ -405,10 +409,11 @@ casino is given, both from the game's bank and each below 2^128.
 
 `BankCasinoBet(round, game, stake, chance, prize, group, seedHash, meta)` is a game's casino bet from its bank, on a
 round of its own, signed by its server. `game` is the game's key; `stake`, `chance` and `prize` are as for any casino
-bet; `group` is the label the game gives the bets that belong together, 1 to 64 UTF-16 code units; `seedHash` is
-`keccak256(seed)` of the seed the request brings; `meta` is `keccak256(utf8(canonicalJSON(meta)))` of the game's own
-JSON, which the casino keeps with the reveal and never reads. A stake, chance and prize all zero is a _reveal_: it bets nothing and only reveals the round, and is signed,
-grouped and kept like any other.
+bet; `group` is the label the game gives the bets that belong together, 1 to 64 UTF-16 code units of well-formed text,
+without a NUL; `seedHash` is `keccak256(seed)` of the seed the request brings; `meta` is
+`keccak256(utf8(canonicalJSON(meta)))` of the game's own JSON, which the casino keeps with the reveal and never reads. A
+stake, chance and prize all zero is a _reveal_: it bets nothing and only reveals the round, and is signed, grouped and
+kept like any other.
 
 ### Bankroll fund messages
 
@@ -439,6 +444,23 @@ bets and their settlements move the balance without a statement.
 `BankWithdraw(game, amount, sequence)` takes money out of a game's bank. The game's developer signs it and sends it
 with its account's token, and `sequence` is the number of the statement it will produce, so it works once.
 
+### History heads
+
+`HistoryHead(record, digest)` is the casino's statement of where its signing history, the record of everything it
+decides, ended when it signed:
+
+| Field    | Type    | Meaning                                                              |
+| -------- | ------- | -------------------------------------------------------------------- |
+| `record` | string  | The ID of the history's last committed record, a UUIDv7 in lowercase |
+| `digest` | bytes32 | That record's digest, which commits to every record before it        |
+
+The casino signs one at most once a second. Every reply to an operation on a channel, and
+[activation](../casino-api/channels.md#post-apichannelsidactivate)'s, carries the latest as `head`,
+`{message, signature}`. [`GET /api/history/:id`](../casino-api/public.md#get-apihistoryid) gives any record's digest, so
+whoever holds a head checks that the history still holds its record as signed, and so every record before it. The wallet
+keeps the newest head it holds and checks it again on every check ([the casino's
+history](../wallet/keys-and-recovery.md#the-casinos-history)).
+
 ## Bounds and the protocol revision
 
 | Bound                                                                                           | Value                                          |
@@ -455,7 +477,7 @@ The first three are `BOUNDS`, which `GET /api/config` reports as `bounds`:
 `{"outcomeSpace": "18446744073709551616", "meta": 4096, "group": 64}`.
 
 `PROTOCOL` fixes everything a wallet and the casino must agree on. It is the keccak-256 of the UTF-8 bytes of the
-fourteen EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
+fifteen EIP-712 `encodeType` strings, in the order of [the structures table](#structures), concatenated, followed by the
 canonical JSON of the rules they apply alike. An `encodeType` string is a structure's name and its fields, as in
 `Access(address player,uint256 expiresAt)`. The rules:
 
@@ -494,15 +516,16 @@ the hashing and pricing rules in numbers.
 | `cases`                         | Four casino bets at a bankroll of `10000000000`, each with `risk`: `{maxFee, fee, liability}`                                                                                                                                                      |
 | `warning`                       | Text saying these seeds are public                                                                                                                                                                                                                 |
 
-The operations are a deposit of `1000000000` that takes in money deposited into the channel; a casino bet on red in
-the developer's game `roulette`, a stake of `100000000` that pays `200000000` on 18 of 37 pockets (a chance of
-`18 × floor(2^64 / 37)`, the seed `0x7272…72`, and as its secret the first `keccak256("HOOKEDIN/VECTOR/SECRET/<n>")`
-whose outcome wins); a developer bet in the same game, with a group and a layout of chips as its meta; the credit that
-collects what the developer paid for it, naming its `hash` as the counterparty; a deposit of `500000000`; a credit of
-`5000000`, that deposit's network fee, which the casino pays, naming `DEPOSIT_FEE_ID`, whose `id` stands for the deposit
-transaction's hash; a withdrawal of `700000000` to `identity.recipient` with a fee of `1000000`; a lock-in of
-`100000000` with the same fee; and a transfer of `50000000` to `identity.friend`, a debit naming `~` and the friend's
-uname, leaving a balance of `813000000` and `withdrawn` at `800000000`.
+The operations are a deposit of `1000000000` that takes in money deposited into the channel; a casino bet on red in a
+published game, whose key is `keccak256("a published game")`, a stake of `100000000` that pays `200000000` on 18 of 37
+pockets (a chance of `18 × floor(2^64 / 37)`, the seed `0x7272…72`, and as its secret the first
+`keccak256("HOOKEDIN/VECTOR/SECRET/<n>")` whose outcome wins); a developer bet in the same game, with a group and a
+layout of chips as its meta; the credit that collects what the developer paid for it, naming its `hash` as the
+counterparty; a deposit of `500000000`; a credit of `5000000`, that deposit's network fee, which the casino pays, naming
+`DEPOSIT_FEE_ID`, whose `id` stands for the deposit transaction's hash; a withdrawal of `700000000` to
+`identity.recipient` with a fee of `1000000`; a lock-in of `100000000` with the same fee; and a transfer of `50000000`
+to `identity.friend`, a debit naming `~` and the friend's uname, leaving a balance of `813000000` and `withdrawn` at
+`800000000`.
 
 An implementation built from this page reproduces the file with the domain of `identity`: both protocol hashes; the
 channel's [ID](#channel-ids), the [base](#the-base) and `baseHash`; each operation's `canonical` details, their

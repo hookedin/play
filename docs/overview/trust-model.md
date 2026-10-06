@@ -89,8 +89,10 @@ below.
   for a channel position, which the contract does not check: a casino that also signed a withdrawal it declined could
   have that recorded, and the withdrawals you made after it then only come back to you with the close. It settles on
   each round's secret at most once; a round whose secret was lost settles nothing, so a covered bet on it, disputed, is
-  paid as won. A persistence failure stops all further signing, and play pauses while its view of the chain is stale or
-  while it reconciles after a restart or a reorg. It runs the exact protocol revision it pins from this repository.
+  paid as won. Every reply on a channel brings its signature of where that record ends, which the wallet holds it to, so
+  a record rewritten up to there shows ([the casino's history](../wallet/keys-and-recovery.md#the-casinos-history)). A
+  persistence failure stops all further signing, and play pauses while its view of the chain is stale or while it
+  reconciles after a restart or a reorg. It runs the exact protocol revision it pins from this repository.
 - **Watching channels.** It closes a channel nobody has played on for 7 days
   ([idle channels](../wallet/closing-and-claims.md#idle-channels)), challenges stale closes of the channels it knows and
   settles the casino bets disputed on them, in its own interest: its watcher does not protect you against the casino.
@@ -186,6 +188,8 @@ The wallet checks:
 - developer settlements and the developer's naming of the key that signed them, share statements, bank statements and
   the fund's quote, by their signatures and what they refer to;
 - whether the contract has recorded each withdrawal, by its ID, and what it still owes of it;
+- the casino's history, against the newest [head](../reference/signed-messages.md#history-heads) of it the casino
+  signed;
 - game URLs and every bridge request.
 
 It takes on the casino's word: commission, the virtual bankroll a quote names, the withdrawal fee up to [the wallet's

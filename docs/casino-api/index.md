@@ -22,7 +22,8 @@ or event stream: clients poll, and a developer's server [waits](public.md#get-ap
 
 A request body is JSON of at most 1,000,000 bytes. The casino does not read `Content-Type`. Every `POST` needs a body
 that parses as JSON, even where the route reads nothing from it (send `{}`). A route reads the body fields it lists and
-ignores others.
+ignores others. Every string in a body, each key and each value, must be well-formed text without a NUL: a body with any
+other is refused with `400` `invalid` ("Text must be well-formed, without a NUL").
 
 Every reply is JSON, errors included, with these headers:
 
@@ -50,7 +51,7 @@ casino holds at most 512 connections at once.
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Amounts                                                 | Decimal strings of wei: `"1000000000000000"` is 1,000 METH                                                                                                                                                      |
 | Hashes and IDs                                          | `0x` followed by 64 lowercase hex digits. Path parameters also take upper-case hex, except a channel's `:id`, which must be lowercase                                                                           |
-| Records and bets                                        | A UUIDv7 in lowercase, which says when the casino made the record: a game record's bet `id`, a payout's `record`, a cursor                                                                                      |
+| Records and bets                                        | A UUIDv7 in lowercase, which says when the casino made the record: a game record's bet `id`, a payout's `record`, a cursor, a history head's `record`                                                           |
 | Addresses                                               | Checksummed in openings, profiles, statements, `contractAddress`, `operator`, a casino bet's `developer` and a game's `server`                                                                                  |
 | Times in milliseconds since the Unix epoch              | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                      |
 | Times in Unix seconds                                   | `expiresAt`, the fund's `at`, the observed block's `timestamp` and a channel's on-chain `deadline`                                                                                                              |
@@ -126,7 +127,8 @@ of at most 4 games at once, and the casino holds at most 128 waits; one more ans
 
 ## Pauses
 
-The casino stops signing while its chain observation fails or is more than 60 seconds old;
+The casino stops signing while its chain observation fails or is more than 60 seconds old, and after a start or a
+reorganisation of the chain, until it has read the contract's latest logs again (`reconciling`);
 [`GET /api/status`](public.md#get-apistatus) shows why, in `status`, `stale` and `observationError`. Meanwhile every
 `POST` answers `503` `paused`, except demo ETH, a uname, the activation of a channel the casino knows and an exact retry
 of a recorded operation; so do `GET /api/fund`, `GET /api/developer-bets`, `GET /api/account/payouts` and
@@ -139,14 +141,14 @@ answers `503` `paused`.
 
 A refusal is `{"error": "…", "code": "…"}`: the text is for people, and the code is what a client acts on. Beside the
 codes each route names, any request can be answered `rate-limited`, or `paused` ([pauses](#pauses)); a `POST`,
-`too-large`, or `refused` when its body is not JSON; a channel or server route, `unauthorized` first; and a route
-that waits its turn, `busy`.
+`too-large`, `refused` when its body is not JSON, or `invalid` when it holds text that is not well-formed or holds a
+NUL; a channel or server route, `unauthorized` first; and a route that waits its turn, `busy`.
 
 | Code                 | Status | Meaning                                                                                                                                                                                                                                                                                                               |
 | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code                                                                        |
+| `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names, or the body holds text that is not well-formed or holds a NUL. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code         |
 | `unauthorized`       | 401    | The token is missing, expired, too far ahead, wrongly signed or another account's, the channel is unknown, or a key that is not a game's server asks for the game's rounds, casino bets, settlements or a wait for its bets                                                                                           |
-| `not-found`          | 404    | No such path, name, game, round or developer bet, an account that verified no Discord account, or no demo ETH or Discord server here                                                                                                                                                                                  |
+| `not-found`          | 404    | No such path, name, game, round, developer bet or history record, an account that verified no Discord account, or no demo ETH or Discord server here                                                                                                                                                                  |
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                                                                                    |
 | `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                                                                                       |
 | `channel-closed`     | 409    | The channel is closing or closed                                                                                                                                                                                                                                                                                      |

@@ -38,16 +38,17 @@ A wallet release carries its configuration as `config.js`, built from
 [config/production.json](../../config/production.json); a local launcher serves its own. `config.js` is part of the
 release and holds nothing secret.
 
-| Field                        | Type    | Meaning                                              |
-| ---------------------------- | ------- | ---------------------------------------------------- |
-| `network`                    | string  | `sepolia` or `local`: the chain the wallet requires  |
-| `casino`                     | string  | The casino API's base URL                            |
-| `deployment`                 | object  | The pinned deployment                                |
-| `deployment.chainId`         | string  | The chain ID, a decimal string                       |
-| `deployment.contractAddress` | address | The HookedInCasino contract                          |
-| `deployment.operator`        | address | The contract's `owner`, the casino's signing address |
-| `deployment.rpcUrl`          | string  | The primary RPC                                      |
-| `deployment.witnessRpcUrl`   | string  | A second RPC on another host; required on Sepolia    |
+| Field                        | Type    | Meaning                                                                      |
+| ---------------------------- | ------- | ---------------------------------------------------------------------------- |
+| `network`                    | string  | `sepolia` or `local`: the chain the wallet requires                          |
+| `casino`                     | string  | The casino API's base URL                                                    |
+| `deployment`                 | object  | The pinned deployment                                                        |
+| `deployment.chainId`         | string  | The chain ID, a decimal string                                               |
+| `deployment.contractAddress` | address | The HookedInCasino contract                                                  |
+| `deployment.operator`        | address | The contract's `owner`, the casino's signing address                         |
+| `deployment.block`           | number  | The block the contract was deployed in, from which the casino reads its logs |
+| `deployment.rpcUrl`          | string  | The primary RPC                                                              |
+| `deployment.witnessRpcUrl`   | string  | A second RPC on another host; required on Sepolia                            |
 
 On start the wallet:
 
@@ -66,9 +67,9 @@ build without one takes the casino's word for its contract. The checks are in
 
 ## Where the current addresses are
 
-- [config/production.json](../../config/production.json): the contract, its owner and the RPCs the production wallet
-  pins, and the casino's URL. The casino service runs the deployment this file names and refuses a signing key that is
-  not its operator, so the casino and the wallet release that pins it cannot disagree.
+- [config/production.json](../../config/production.json): the contract, the block it was deployed in, its owner and the
+  RPCs the production wallet pins, and the casino's URL. The casino service runs the deployment this file names and
+  refuses a signing key that is not its operator, so the casino and the wallet release that pins it cannot disagree.
 - [catalog.json](../../catalog.json): the house developer, `developer`, the account that publishes the house games as
   `@hookedin`, and `games`, each game's name and [URL](../games/publishing.md#the-games-url). The casino publishes
   these in `@hookedin`'s profile as it starts.

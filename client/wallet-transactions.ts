@@ -405,10 +405,13 @@ export class WalletTransactions {
    * it holds. A channel still at its base is taken up there. A later state is the reply to this wallet's saved
    * operation, which it lost, or play on this account from another device or before this browser's data was lost. */
   async activate(this: CasinoWallet) {
-    const c = this.channel!;
     if (this.recoveryOnly) return;
-    const reply = await this.api(`/api/channels/${c.opening.channelId}/activate`, {});
+    const reply = await this.api(`/api/channels/${this.channel!.opening.channelId}/activate`, {}),
+      head = this.newerHead(reply.head);
     this.noteNames(reply);
+    // Saving reloads the wallet's channels, so the channel is read after.
+    if (head) await this.save(undefined, { head });
+    const c = this.channel!;
     if (same(hashState(this.domain, reply.state), hashState(this.domain, c.state))) {
       if (c.registered) return;
       this.missingChannel = null;

@@ -83,9 +83,9 @@ wallet does work of its own, such as its regular look at the chain, waits for it
 ## Amounts
 
 Every amount is a decimal string of whole wei, 10^-12 METH: digits only, no sign and no leading zeros, below 2^256. A
-stake, a prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters, without
-a NUL, for operations that belong together, such as the steps of one hand: the player signs it, and the wallet and the
-game's public record show a group as one.
+stake, a prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters of
+well-formed text, without a NUL, for operations that belong together, such as the steps of one hand: the player signs
+it, and the wallet and the game's public record show a group as one.
 
 ## Groups and the allowance the player sees
 
@@ -211,7 +211,7 @@ the player has allowed them, a developer bet is refused with `developer-bets-not
 | `group` | `string`       | Optional: the group the bet belongs to, such as a match or a spin                                                                      |
 
 `meta` is a plain object of JSON values whose canonical JSON, keys sorted and no spaces, takes at most 4,096 bytes of
-UTF-8. Its numbers are whole, so odds of 2.1 go as the string `"2.1"`.
+UTF-8. Its numbers are whole, so odds of 2.1 go as the string `"2.1"`, and its text is well-formed, without a NUL.
 
 The result is the bet's receipt at once: `open`, with `bet`, the hash that names it at the casino and to the developer,
 or `rejected` when the casino did not take it. The same request again returns the receipt as it stands. Once the

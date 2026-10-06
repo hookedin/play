@@ -755,9 +755,9 @@ test("a casino bet its quote covers is disputed by anyone, closing with it: won 
   const house = await f.contract.withdrawableHouse();
   // Anyone sends it for the account, a watchtower among them.
   const tx = await (await f.contract.connect(stranger).dispute(bet.evidence, bet.terms)).wait();
-  const event = tx.logs
-    .map((log: any) => f.contract.interface.parseLog(log))
-    .find((e: any) => e?.name === 'BetDisputed');
+  const events = tx.logs.map((log: any) => f.contract.interface.parseLog(log)),
+    event = events.find((e: any) => e?.name === 'BetDisputed'),
+    changed = events.find((e: any) => e?.name === 'ChannelChanged');
   const brought = event.args.evidence.toObject(true);
   assert.equal(hashOperation(f.d, brought.step.operation), hashOperation(f.d, bet.op));
   assert.deepEqual(
@@ -780,7 +780,10 @@ test("a casino bet its quote covers is disputed by anyone, closing with it: won 
     [1n, sequence, hashState(f.d, won), 1096n, 196n],
   );
   const disputedUntil = c.deadline;
-  assert.deepEqual([disputedUntil, event.args.deadline], [BigInt((await now(env)) + 7 * 86400), disputedUntil]);
+  assert.deepEqual(
+    [disputedUntil, changed.args.channel.deadline],
+    [BigInt((await now(env)) + 7 * 86400), disputedUntil],
+  );
   assert.deepEqual([c.collateral, c.disputeHold, await f.contract.withdrawableHouse()], [96n, 96n, house - 96n]);
   assert.equal(await f.contract.channelIndex(a.address), 1n);
   // Nothing older settles it, nor another bet the account disputes at its sequence: only the casino's result there.

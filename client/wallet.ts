@@ -9,6 +9,7 @@ import type {
   PlayerDeveloperBet,
   Quote,
   CollateralOffer,
+  SignedStatement,
 } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { GameSession } from '../protocol/game-types.ts';
@@ -37,6 +38,9 @@ import {
   disputedStep,
   STATUS,
   playsOn,
+  assertSignature,
+  HEAD_TYPES,
+  onchainChannel,
 } from '../protocol/protocol.ts';
 import {
   ChainObserver,
@@ -96,20 +100,6 @@ export const HISTORICAL_CHANNEL_BATCH = 16;
  * seconds while the page shows the deposit address. An operation signs only on a check at most `CHECK_EVERY` old. */
 export const CHECK_EVERY = 600_000,
   DEPOSIT_CHECK_EVERY = 20_000;
-/** What the wallet keeps of an on-chain channel record. */
-const CHANNEL_FIELDS = [
-  'deposited',
-  'principal',
-  'collateral',
-  'claimed',
-  'status',
-  'deadline',
-  'closingSequence',
-  'closingHash',
-  'closingBalance',
-  'disputedPrize',
-  'disputeHold',
-];
 const networks: Record<string, { id: bigint; name: string; stake: string }> = {
   sepolia: { id: 11155111n, name: 'Sepolia', stake: '1000000000000' },
   local: { id: 31337n, name: 'Anvil test chain', stake: '1000000000000000' },
@@ -151,6 +141,10 @@ export class CasinoWallet extends GameSessions {
   /** Where the feed of this account's settled developer bets was read up to. */
   declare developerBetCursor: string;
   declare developerBetError: string | null;
+  /** The newest head of the casino's signing history it signed that this wallet holds, which every check holds the
+   * history to, and what that check found when the history has lost or changed it. */
+  declare head: SignedStatement | null;
+  declare historyAlert: string | null;
   /** What the last attempt to send the pending operation it names ran into: a casino that refuses an operation
    * refuses it the same way on every retry. */
   pendingError: { operationId: string; message: string; code?: string } | null = null;
@@ -273,6 +267,7 @@ export class CasinoWallet extends GameSessions {
       profile: null,
       busy: false,
       depositShown: false,
+      historyAlert: null,
     });
     this.hydrate(undefined);
   }
@@ -368,6 +363,33 @@ export class CasinoWallet extends GameSessions {
     await this.refresh();
     await this.sweep().catch(error => console.error('Adding ETH to your balance failed', error));
     await this.collectPayouts();
+    await this.checkHistory().catch(error => console.error('Checking the casino history failed', error));
+  }
+  /** A head of the casino's signing history, if the casino signed it and it is newer than the one this wallet holds;
+   * none otherwise. */
+  newerHead(head: any): SignedStatement | null {
+    try {
+      if (this.head && String(head.message.record) <= String(this.head.message.record)) return null;
+      assertSignature(this.domain, HEAD_TYPES, head.message, head.signature, this.operator);
+      return plain({ message: head.message, signature: head.signature });
+    } catch {
+      return null;
+    }
+  }
+  /** Hold the casino's history to the newest head of it the casino signed that this wallet holds: the record it signed
+   * must still be there, with the digest it signed, which commits to every record before it. */
+  async checkHistory() {
+    if (!this.head) return;
+    const { record, digest } = this.head.message;
+    const link = await this.api(`/api/history/${record}`).catch((error: any) => {
+      if (error.status === 404) return null;
+      throw error;
+    });
+    this.historyAlert =
+      link && same(link.digest, digest)
+        ? null
+        : `The casino rewrote its history: the record ${record} it signed is missing or changed. Keep this browser's wallet, which holds the casino's signature.`;
+    this.render();
   }
   /** The page shows the deposit address, or stops showing it. */
   showDeposit(shown: boolean) {
@@ -457,6 +479,7 @@ export class CasinoWallet extends GameSessions {
       banks: saved?.banks || {},
       autoDeposit: saved?.autoDeposit ?? true,
       atAddress: saved?.atAddress ?? null,
+      head: saved?.head ?? null,
     });
   }
   get channel(): WalletChannel | null {
@@ -548,6 +571,7 @@ export class CasinoWallet extends GameSessions {
         banks: this.banks,
         autoDeposit: this.autoDeposit,
         atAddress: this.atAddress,
+        head: this.head,
         ...changes,
         revision,
       });
@@ -626,13 +650,17 @@ export class CasinoWallet extends GameSessions {
     return profile;
   }
   /**
-   * Publish a game under this account, its developer, or, with no URL, take it out of the profile. Publishing
-   * claims a public name and asks for a balance that plays; taking your own game down only has to be you, so a
-   * developer who has closed their channel can still withdraw a game that turned out to be broken.
+   * Publish a game under this account, its developer: a new one, or with its `key` one of its games again, under
+   * another name or at another URL; or, with no URL, take it out of the profile. Publishing claims a public name and
+   * asks for a balance that plays; taking your own game down only has to be you, so a developer who has closed their
+   * channel can still withdraw a game that turned out to be broken. Returns the account's profile, each game with the
+   * key the casino gave it.
    */
-  async publishGame(this: CasinoWallet, name: string, url: string | null) {
+  async publishGame(this: CasinoWallet, name: string, url: string | null, key?: string) {
     if (url && !this.playable) throw new Error('Open a balance to publish games');
-    return this.takeProfile(await this.api('/api/account/games', { name: name.trim(), url }));
+    return this.takeProfile(
+      await this.api('/api/account/games', { name: name.trim(), url, ...(key ? { game: key } : {}) }),
+    );
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
    * checkpoint took in: those this browser made, from their proofs, and any made on another device, whose proof is not
@@ -769,7 +797,7 @@ export class CasinoWallet extends GameSessions {
   async observeChannels(openings: Opening[], block: ChainBlock): Promise<[string, any, any][]> {
     return mapBounded(openings, async ({ channelId: key, player, index }) => {
       const value = await this.observer.contractRead(this.reader, 'channels', [player, index], block);
-      const onchain = plain(Object.fromEntries(CHANNEL_FIELDS.map(field => [field, value[field]])));
+      const onchain = onchainChannel(value);
       let claim = null;
       if (Number(value.status) === STATUS.finalized) {
         const [terms, collectable] = await Promise.all([
