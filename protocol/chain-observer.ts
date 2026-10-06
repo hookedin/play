@@ -34,7 +34,8 @@ export function createRpcProvider(url: string, chainId: Integer | undefined = un
 }
 
 export const blockReference = (block: Pick<ChainBlock, 'hash'>) => ({ blockHash: block.hash, requireCanonical: true });
-async function readContract(
+/** One of the contract's view functions, read at `block`. */
+export async function readContract(
   provider: JsonRpcProvider,
   contract: Contract,
   method: string,
