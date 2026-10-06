@@ -309,7 +309,7 @@ export async function openGameRecord(key: string, push = true) {
     const totals = record.totals;
     $('gamebets-totals').replaceChildren(
       ...totalCards({
-        bets: Number(totals.bets),
+        bets: Number(totals.plays),
         staked: BigInt(totals.staked),
         paid: BigInt(totals.paid),
         expected: BigInt(totals.expected),

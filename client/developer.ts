@@ -55,7 +55,7 @@ function ownGame(owner: string, game: AccountGame) {
       earned = BigInt(totals.earned),
       { open, settled } = record.developerBets;
     const rows: Figure[] = [
-      ['Bets', Number(totals.bets).toLocaleString('en-US')],
+      ['Bets', Number(totals.plays).toLocaleString('en-US')],
       ['Staked', meth(staked), '', `${exact(staked)} METH`],
       ["Players' result", signedAmount(result), tone(result), `${exact(result < 0n ? -result : result)} METH`],
       ['Expected return', expected === null ? '—' : percent(expected)],

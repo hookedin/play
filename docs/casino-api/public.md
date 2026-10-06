@@ -141,15 +141,15 @@ takes it. Declined bets and reveals do not appear. An unknown key answers with a
 | ------- | ------ | ----------------------------------------------------------------------- |
 | `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players` |
 
-| Response field  | Type    | Meaning                                                                                 |
-| --------------- | ------- | --------------------------------------------------------------------------------------- |
-| `key`           | bytes32 | The game, lowercase                                                                     |
-| `bank`          | string  | What the game's bank holds now: nothing for a game nobody published                     |
-| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled           |
-| `totals`        | object  | `{bets, staked, paid, expected, priced, earned}`, below                                 |
-| `bets`          | array   | `{id, kind, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
+| Response field  | Type    | Meaning                                                                                       |
+| --------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `key`           | bytes32 | The game, lowercase                                                                           |
+| `bank`          | string  | What the game's bank holds now: nothing for a game nobody published                           |
+| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled                 |
+| `totals`        | object  | `{plays, staked, paid, expected, priced, earned}`, below                                      |
+| `bets`          | array   | `{id, kind, bet?, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
 
-The totals are the players' bets: the game's own casino bets are listed, and add up to nothing here. `bets` is a number,
+The totals are the players' bets: the game's own casino bets are listed, and add up to nothing here. `plays` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
 staked and paid, a round's steps each on its own, so only `paid − staked` is what the players came out with. `expected` is what the casino bets were expected to pay, times
 2^64 (the sum of their prizes times their chances), and `priced` is what those bets staked, so their return is
@@ -157,9 +157,10 @@ staked and paid, a round's steps each on its own, so only `paid − staked` is w
 of their [commission](../games/publishing.md#earnings), its own casino bets' included.
 
 The bets are the latest settled, newest first. A bet's `id` is a UUIDv7, the ID of the casino's record that placed it:
-it says when the bet was placed and nothing of how many bets there are. `kind` is `casino` or `developer`. Its player is
-their `uname` and `discordUsername`, both null for the game's own casino bet, from its bank. `stake` and `payout` are
-what it staked and paid, a casino bet's `chance` and `prize` are its odds, and `at` is when it settled.
+it says when the bet was placed and nothing of how many bets there are. `kind` is `casino` or `developer`, and a
+developer bet is its hash too, `bet`, which [`GET /api/developer-bets/:bet`](#get-apideveloper-betsbet) reads. Its
+player is their `uname` and `discordUsername`, both null for the game's own casino bet, from its bank. `stake` and
+`payout` are what it staked and paid, a casino bet's `chance` and `prize` are its odds, and `at` is when it settled.
 
 ## Rounds and developer bets
 
