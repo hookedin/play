@@ -6,7 +6,7 @@ sidebar:
 ---
 
 These routes need no authentication. They say what the casino runs, how it stands, and what it has recorded in public:
-players by their names, games by their keys, games' rounds and developer bets by their hashes, and the records of its
+players by their names, games by their IDs, games' rounds and developer bets by their hashes, and the records of its
 signing history by their IDs. Nothing here names a player's address or channel.
 
 ## The deployment and its health
@@ -125,38 +125,39 @@ other values are clamped, and one that is not a number counts as 1.
 
 One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
 
-| Response field    | Type           | Meaning                                                                                                                                                                                                                                                                                   |
-| ----------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`           | string         | The player's [uname](../reference/signed-messages.md#counterparties), derived from their address                                                                                                                                                                                          |
-| `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                                                                            |
-| `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                                                                    |
-| `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), their bets in one game and group counting once, as the steps of a round, and what their bets paid less what they staked, signed                                                                                          |
-| `createdAt`       | number         | When the casino met them: their first channel's registration, their Discord username or their first published game                                                                                                                                                                        |
-| `games`           | array          | The games they publish, by name: `{name, url, key, developer, createdAt}`, where `url` is the [game's URL](../games/publishing.md#the-games-url), `key` the [game key](../reference/signed-messages.md#game-keys), `developer` the player's address and `createdAt` when it was published |
+| Response field    | Type           | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`           | string         | The player's [uname](../reference/signed-messages.md#counterparties), derived from their address                                                                                                                                                                                                                                                                                                                          |
+| `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                                                                                                                                                                                                            |
+| `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                                                                                                                                                                                                    |
+| `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), their bets in one game and group counting once, as the steps of a round, and what their bets paid less what they staked, signed                                                                                                                                                                                                                          |
+| `createdAt`       | number         | When the casino met them: their first channel's registration, their Discord username or their first published game                                                                                                                                                                                                                                                                                                        |
+| `games`           | array          | The games they publish, by slug: `{id, name, slug, url, developer, createdAt}`, where `id` is the [game's ID](../reference/signed-messages.md#game-ids), `name` the name it is published under, `slug` its address in the profile ([slugs](channels.md#post-apiaccountgames)), `url` the [game's URL](../games/publishing.md#the-games-url), `developer` the player's address and `createdAt` when it was first published |
 
-### `GET /api/players/:name/:game`
+### `GET /api/players/:name/:slug`
 
-A game a player publishes, which `@username/game` or `~uname/game` opens in the wallet: the player's names and the game's
-entry in their profile, `{uname, discordUsername, name, url, key, developer, createdAt}`. `:game` is the name it is published under.
+A game a player publishes, which `@username/slug` or `~uname/slug` opens in the wallet: the player's names and the game's
+entry in their profile, `{uname, discordUsername, id, name, slug, url, developer, createdAt}`.
 
-### `GET /api/games/:key`
+### `GET /api/games/:id`
 
-A game's public record, by its [game key](../reference/signed-messages.md#game-keys): what its bank holds, its settled
+A game's public record, by its [ID](../reference/signed-messages.md#game-ids): what its bank holds, its settled
 bets, newest first, and their totals. A bet appears when it settles: a player's casino bet when the casino carries it
 out, a developer bet when the game's server settles it, and the game's own casino bet from its bank when the bankroll
-takes it. Declined bets and reveals do not appear. An unknown key answers with a bank and totals of zero and no bets.
+takes it. Declined bets and reveals do not appear. An unknown ID answers with a bank and totals of zero and no bets, and
+one that is not a game ID with `invalid`.
 
 | Query   | Type   | Meaning                                                                 |
 | ------- | ------ | ----------------------------------------------------------------------- |
 | `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players` |
 
-| Response field  | Type    | Meaning                                                                                       |
-| --------------- | ------- | --------------------------------------------------------------------------------------------- |
-| `key`           | bytes32 | The game, lowercase                                                                           |
-| `bank`          | string  | What the game's bank holds now: nothing for a game nobody published                           |
-| `developerBets` | object  | `{open, settled}`: how many of the game's developer bets are open and settled                 |
-| `totals`        | object  | `{plays, staked, paid, expected, priced, earned}`, below                                      |
-| `bets`          | array   | `{id, kind, bet?, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
+| Response field  | Type   | Meaning                                                                                       |
+| --------------- | ------ | --------------------------------------------------------------------------------------------- |
+| `id`            | string | The game's ID                                                                                 |
+| `bank`          | string | What the game's bank holds now: nothing for a game nobody published                           |
+| `developerBets` | object | `{open, settled}`: how many of the game's developer bets are open and settled                 |
+| `totals`        | object | `{plays, staked, paid, expected, priced, earned}`, below                                      |
+| `bets`          | array  | `{id, kind, bet?, uname, discordUsername, group?, stake, chance?, prize?, payout, at}`, below |
 
 The totals are the players' bets: the game's own casino bets are listed, and add up to nothing here. `plays` is a number,
 the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
@@ -182,7 +183,7 @@ rounds are not shown here.
 | Response field | Type    | Meaning                                                                                                                                                                                                                                                                                                                   |
 | -------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`           | bytes32 | The round                                                                                                                                                                                                                                                                                                                 |
-| `game`         | bytes32 | The game it was opened for                                                                                                                                                                                                                                                                                                |
+| `game`         | string  | The ID of the game it was opened for                                                                                                                                                                                                                                                                                      |
 | `createdAt`    | number  | When the game's server opened it                                                                                                                                                                                                                                                                                          |
 | `status`       | string  | `open` or `revealed`                                                                                                                                                                                                                                                                                                      |
 | `seed`         | bytes32 | Revealed: the seed the game's casino bet brought                                                                                                                                                                                                                                                                          |
@@ -197,7 +198,7 @@ One developer bet, by its hash: the hash of the operation that placed it.
 | Response field             | Type                   | Meaning                                                                                                                                                                                                                                                                                    |
 | -------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `bet`                      | bytes32                | The bet's hash                                                                                                                                                                                                                                                                             |
-| `game`                     | bytes32                | The game's key                                                                                                                                                                                                                                                                             |
+| `game`                     | string                 | The game's ID                                                                                                                                                                                                                                                                              |
 | `group`                    | string                 | The group the game gave it, when it has one                                                                                                                                                                                                                                                |
 | `stake`                    | string                 | What the player staked, paid into the game's bank                                                                                                                                                                                                                                          |
 | `placedAt`                 | number                 | When the casino took it                                                                                                                                                                                                                                                                    |
@@ -218,16 +219,16 @@ has one wait at a time, a server's key at most 4, and the casino 128 ([budgets](
 published game is waited for: a server whose game is taken down reads its bets without waiting. A server follows its
 game's bets by waiting again with each page's `cursor`.
 
-| Query    | Type    | Meaning                                                                                |
-| -------- | ------- | -------------------------------------------------------------------------------------- |
-| `game`   | bytes32 | The game's key; required                                                               |
-| `status` | string  | `open` (the default) or `settled`                                                      |
-| `group`  | string  | Only the bets of this group, matched exactly                                           |
-| `after`  | string  | The `cursor` of the previous page: the ID of its last bet                              |
-| `limit`  | number  | How many, a whole number from 1 to 256; default 100                                    |
-| `wait`   | number  | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25 |
+| Query    | Type   | Meaning                                                                                |
+| -------- | ------ | -------------------------------------------------------------------------------------- |
+| `game`   | string | The game's ID; required                                                                |
+| `status` | string | `open` (the default) or `settled`                                                      |
+| `group`  | string | Only the bets of this group, matched exactly                                           |
+| `after`  | string | The `cursor` of the previous page: the ID of its last bet                              |
+| `limit`  | number | How many, a whole number from 1 to 256; default 100                                    |
+| `wait`   | number | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25 |
 
-`invalid` answers a missing or malformed key, status, cursor, limit or wait, and a cursor that names no bet, or for
+`invalid` answers a missing or malformed game ID, status, cursor, limit or wait, and a cursor that names no bet, or for
 settled bets no settled bet. `unauthorized` answers a wait without the access of the published game's server, and `busy` one too many.
 
 ## Local development

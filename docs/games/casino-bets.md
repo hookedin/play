@@ -104,7 +104,7 @@ not cover comes back `rejected`.
 No game states what it pays back ([measured return](../wallet/bets-and-receipts.md#measured-return)). The wallet works
 out the exact return of every casino bet from its terms before it signs, `prize × chance / (2^64 × stake)`, and the
 casino publishes the same figure for every casino bet in your game
-([`GET /api/games/:key`](../casino-api/public.md#get-apigameskey)). [`betReturn(bet)`](../sdk/admits.md#betreturn) is
+([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)). [`betReturn(bet)`](../sdk/admits.md#betreturn) is
 that computation, in millionths of the stake. A game whose steps are collapsed is measured by the bets it places, which
 pay back less than the game does ([what is given up](collapsing-bets.md#what-is-given-up)).
 

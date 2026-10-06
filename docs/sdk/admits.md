@@ -55,7 +55,7 @@ assessBet({ bankroll: 10n ** 12n, bet }); // { bankroll: 1000000000000n, maxFee:
 
 A bet's return in millionths of its stake, rounded to the nearest: `prize × chance / (stake × 2^64)`. It is the return
 the wallet shows for every casino bet it signs, and the casino publishes the same for every casino bet of a game
-([`GET /api/games/:key`](../casino-api/public.md#get-apigameskey)). A chance is whole outcomes and a prize whole units,
+([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)). A chance is whole outcomes and a prize whole units,
 so a bet returns a little off its arithmetic, and far less at dust stakes: a game's tests prove its floor
 ([proving a game's floor](../games/testing.md#proving-a-games-floor)). It measures one bet on its own stake, which for a
 collapsed step is less than the step's return ([what is given up](../games/collapsing-bets.md#what-is-given-up)).

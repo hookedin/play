@@ -1,20 +1,21 @@
 import type { AccountGame } from '../protocol/types.ts';
-import { json, same } from '../protocol/protocol.ts';
+import { gameSlug, json, MAX_GAME_NAME, same, validGameName } from '../protocol/protocol.ts';
 import { exact, h, percent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import { measuredReturn } from './bets.ts';
 import { $, shortDate, showName, toast, typedAmount } from './page.ts';
 import { gameFigures, openGameRecord, type Figure } from './played.ts';
 import { act, task, uiBusy, wallet } from './sheet.ts';
-import { gameIcon, gameTitle, gameURL, loadGame, loadLibrary } from './games.ts';
+import { gameIcon, gameURL, loadGame, loadLibrary } from './games.ts';
 
-const GAME_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
+/** Why a name is not one a game can be published under. */
+const NAME_RULE = `A game name is 1 to ${MAX_GAME_NAME} characters, at least one of them a letter from A to Z or a digit.`;
 /** How many games one profile holds. */
 const MAX_GAMES = 100;
 /** Every game this account has published, with its bank and its server, as the casino last answered: null until it
  * has. */
 let owned: AccountGame[] | null = null;
-/** Each game's public record by its key, as the casino last answered: null while it is asked, `{error}` when it did
+/** Each game's public record by its ID, as the casino last answered: null while it is asked, `{error}` when it did
  * not answer. */
 const records = new Map<string, any>();
 /** How many times the page has opened: each asks for the records again, and drops answers to the times before. */
@@ -35,16 +36,15 @@ async function loadOwned() {
 /** One of this account's games, taken down or not: where it lives, what its players staked and came out with, what
  * its bank holds, and the key its server signs with. */
 function ownGame(owner: string, game: AccountGame) {
-  const title = gameTitle(game.name),
-    route = { owner, name: game.name },
-    path = `/${owner}/${game.name}`,
-    record = records.get(game.key.toLowerCase()),
+  const route = { owner, slug: game.slug },
+    path = `/${owner}/${game.slug}`,
+    record = records.get(game.id),
     bank = BigInt(game.bank),
     own = same(game.server, wallet.address),
     published = game.takenDownAt === null,
     play = (event: Event) => {
       event.preventDefault();
-      if (published) task(() => loadGame(game.url, route, true, { key: game.key, developer: wallet.address }));
+      if (published) task(() => loadGame(game.url, route, true, { ...game, developer: wallet.address }));
     };
   let figures: Node[];
   if (record?.totals) {
@@ -78,21 +78,21 @@ function ownGame(owner: string, game: AccountGame) {
       inputMode: 'decimal',
       autocomplete: 'off',
       placeholder: '10000',
-      ariaLabel: `Amount for the bank of ${title}`,
+      ariaLabel: `Amount for the bank of ${game.name}`,
     }),
     server = h('input', {
       type: 'text',
       autocomplete: 'off',
       spellcheck: false,
       placeholder: '0x… the address your server signs with',
-      ariaLabel: `Server key of ${title}`,
+      ariaLabel: `Server key of ${game.name}`,
     }),
     rename = h('input', {
       type: 'text',
       autocomplete: 'off',
       spellcheck: false,
       placeholder: game.name,
-      ariaLabel: `New name for ${title}`,
+      ariaLabel: `New name for ${game.name}`,
     }),
     busy = uiBusy || !wallet.playable || Boolean(wallet.pending);
   const moveBank = (into: boolean) =>
@@ -102,21 +102,21 @@ function ownGame(owner: string, game: AccountGame) {
       if (into) {
         const receipt = await wallet.depositBank(game, value);
         if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
-        toast(`Put ${exact(value)} METH in the bank of ${title}.`);
+        toast(`Put ${exact(value)} METH in the bank of ${game.name}.`);
       } else {
         await wallet.withdrawBank(game, value);
-        toast(`Took ${exact(value)} METH out of the bank of ${title}. It is on its way to your balance.`);
+        toast(`Took ${exact(value)} METH out of the bank of ${game.name}. It is on its way to your balance.`);
         await wallet.collectPayouts();
       }
       await loadOwned();
     });
   const nameServer = (address: string) =>
     task(async () => {
-      await wallet.setGameServer(game.key, address);
+      await wallet.setGameServer(game.id, address);
       toast(
         same(address, wallet.address)
-          ? `${title} is run with your own key again.`
-          : `${title}'s server signs with ${address} from now on.`,
+          ? `${game.name} is run with your own key again.`
+          : `${game.name}'s server signs with ${address} from now on.`,
       );
       await loadOwned();
     });
@@ -128,20 +128,20 @@ function ownGame(owner: string, game: AccountGame) {
       { className: 'game-line-heading' },
       h(
         'a',
-        { className: 'game-line-icon', href: path, onclick: play, ariaLabel: `Play ${title}` },
-        gameIcon(game.url, title),
+        { className: 'game-line-icon', href: path, onclick: play, ariaLabel: `Play ${game.name}` },
+        gameIcon(game.url, game.name),
       ),
       h(
         'div',
         { className: 'game-line-names' },
-        h('h3', null, title),
+        h('h3', null, game.name),
         ...(published ? [h('a', { href: path, onclick: play }, `${location.host}${path}`)] : []),
         h(
           'a',
           { href: game.url, target: '_blank', rel: 'noopener noreferrer' },
           `${published ? 'Served' : 'Last served'} from ${game.url} ↗`,
         ),
-        h('code', { title: 'The game’s key: your server names the game by it' }, game.key),
+        h('code', { title: 'The game’s ID: your server names the game by it' }, game.id),
       ),
       h(
         'span',
@@ -233,11 +233,12 @@ function ownGame(owner: string, game: AccountGame) {
           h(
             'div',
             { className: 'game-bank' },
-            h('p', null, h('span', { className: 'label' }, 'Its name '), h('strong', null, `${owner}/${game.name}`)),
+            h('p', null, h('span', { className: 'label' }, 'Its name '), h('strong', null, game.name)),
             h(
               'p',
               { className: 'game-line-note' },
-              'Renamed, it keeps its key, its bank, its server and its record, and its old address stops working.',
+              'Renamed, it keeps its ID, its bank, its server and its record. Its address follows the new name, and ' +
+                'the old one stops working.',
             ),
             h(
               'div',
@@ -252,12 +253,11 @@ function ownGame(owner: string, game: AccountGame) {
                   onclick: () =>
                     task(async () => {
                       const name = rename.value.trim();
-                      if (!GAME_NAME.test(name))
-                        throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
-                      await wallet.publishGame(name, game.url, game.key);
+                      if (!validGameName(name)) throw new Error(NAME_RULE);
+                      await wallet.publishGame(name, game.url, game.id);
                       await loadLibrary();
                       await loadOwned();
-                      toast(`${owner}/${game.name} goes by ${owner}/${name} now.`);
+                      toast(`${game.name} is ${name} now, at ${owner}/${gameSlug(name)}.`);
                     }),
                 },
                 'Rename',
@@ -276,21 +276,21 @@ function ownGame(owner: string, game: AccountGame) {
             {
               type: 'button',
               className: 'button small primary',
-              title: `Publish ${owner}/${game.name} again at ${game.url}, with its bank and its record.`,
+              title: `Publish ${game.name} again at ${game.url}, with its bank and its record.`,
               disabled: uiBusy || !wallet.playable || wallet.recoveryOnly,
               onclick: () =>
                 task(async () => {
                   await wallet.publishGame(game.name, game.url);
                   await loadLibrary();
                   await loadOwned();
-                  toast(`${owner}/${game.name} is published again.`);
+                  toast(`${game.name} is published again, at ${owner}/${game.slug}.`);
                 }),
             },
             'Publish again',
           ),
       h(
         'button',
-        { type: 'button', className: 'button small', onclick: () => void openGameRecord(game.key.toLowerCase()) },
+        { type: 'button', className: 'button small', onclick: () => void openGameRecord(game.id) },
         'Every bet in it ↗',
       ),
       ...(published
@@ -300,14 +300,14 @@ function ownGame(owner: string, game: AccountGame) {
               {
                 type: 'button',
                 className: 'text-button',
-                title: `Take ${owner}/${game.name} out of the lobby. It keeps its bank and its record, and publishing it again brings it back.`,
+                title: `Take ${game.name} out of the lobby. It keeps its bank and its record, and publishing it again brings it back.`,
                 disabled: uiBusy,
                 onclick: () =>
                   task(async () => {
                     await wallet.publishGame(game.name, null);
                     await loadLibrary();
                     await loadOwned();
-                    toast(`${owner}/${game.name} is taken down.`);
+                    toast(`${game.name} is taken down.`);
                   }),
               },
               'Take down',
@@ -337,7 +337,7 @@ export function renderDeveloper() {
   // A game's record is asked for while the page shows, once, and again each time the page opens.
   if (!$('page-developer').classList.contains('hidden'))
     for (const game of games) {
-      const id = game.key.toLowerCase();
+      const { id } = game;
       if (records.has(id)) continue;
       const asked = opened;
       records.set(id, null);
@@ -353,7 +353,7 @@ export function renderDeveloper() {
   const shown = json([
     key,
     games,
-    games.map(game => records.get(game.key.toLowerCase()) ?? null),
+    games.map(game => records.get(game.id) ?? null),
     uiBusy,
     wallet.playable,
     Boolean(wallet.pending),
@@ -371,14 +371,26 @@ export function refreshDeveloper() {
   void loadOwned().catch(() => {});
 }
 
+/** The address a game published under the name typed gets, or why that name is not one. */
+function renderGameAddress() {
+  const name = $<HTMLInputElement>('game-name-input').value.trim(),
+    valid = validGameName(name);
+  $('game-address').hidden = !name;
+  $('game-address').textContent = valid
+    ? `It lives at ${location.host}/${showName(wallet)}/${gameSlug(name)}.`
+    : NAME_RULE;
+  $('game-address').classList.toggle('check-failed', !valid);
+}
+$('game-name-input').addEventListener('input', renderGameAddress);
 act('publish-game', async () => {
   const name = $<HTMLInputElement>('game-name-input'),
     url = $<HTMLInputElement>('game-url-input');
   const published = name.value.trim();
-  if (!GAME_NAME.test(published)) throw new Error('A game name is 1 to 32 lowercase letters, digits or hyphens.');
+  if (!validGameName(published)) throw new Error(NAME_RULE);
   await wallet.publishGame(published, gameURL(url.value.trim()).href);
   name.value = url.value = '';
+  renderGameAddress();
   await loadLibrary();
   await loadOwned();
-  toast(`Published at ${showName(wallet)}/${published}.`);
+  toast(`Published ${published} at ${showName(wallet)}/${gameSlug(published)}.`);
 });

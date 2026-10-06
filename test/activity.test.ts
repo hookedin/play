@@ -8,7 +8,7 @@ const contract = '0x4444444444444444444444444444444444444444';
 test('a developer bet shows its result apart from its collection, and a zero payout as settled', () => {
   const bet: PlayerDeveloperBet = {
     bet: '0x' + '1'.repeat(64),
-    game: '0x' + '2'.repeat(64),
+    game: '0199a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b',
     status: 'open',
     stake: '10',
     collected: false,

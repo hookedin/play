@@ -1,3 +1,4 @@
+import { GAME_ID } from '../protocol/protocol.ts';
 import { $, toast } from './page.ts';
 import { wallet, showWallet } from './sheet.ts';
 import { active, closeGame, openGame, renderGameAccount } from './games.ts';
@@ -6,9 +7,9 @@ import { refreshDeveloper } from './developer.ts';
 import { openGameRecord, renderBets, renderMyGames, setBetGame } from './played.ts';
 import { refreshFund } from './bankroll.ts';
 
-/** A published game is `@username/name` or `~uname/name`: its owner, written as they are written, and
- * the name it has in their profile. Any other game is linkable by its URL alone. */
-export type GameRoute = { owner: string; name: string } | { url: string };
+/** A published game is `@username/<slug>` or `~uname/<slug>`: its owner, written as they are written, and
+ * the slug of the name it has in their profile. Any other game is linkable by its URL alone. */
+export type GameRoute = { owner: string; slug: string } | { url: string };
 /** The pages with a path of their own, and what they are called. */
 const PAGES: Record<string, { path: string; title: string }> = {
   library: { path: '/', title: 'Games' },
@@ -38,7 +39,7 @@ export function walletRoute() {
   return typeof target === 'object' && 'wallet' in target ? target.wallet : null;
 }
 export const gamePath = (route: GameRoute) =>
-  'url' in route ? `/games/custom?url=${encodeURIComponent(route.url)}` : `/${route.owner}/${route.name}`;
+  'url' in route ? `/games/custom?url=${encodeURIComponent(route.url)}` : `/${route.owner}/${route.slug}`;
 /** Show a section; the URL is the caller's responsibility. */
 export function showPage(page: string) {
   for (const section of document.querySelectorAll<HTMLElement>('.page'))
@@ -58,7 +59,7 @@ export function showPage(page: string) {
 export function navigate(page: string, push = true, path = PAGES[page]!.path) {
   // The bets page shows the game its path names, or every game.
   if (page === 'bets') setBetGame(new URL(path, location.origin).searchParams.get('game')?.toLowerCase() ?? '');
-  if (wallet.busy && active && wallet.pending?.game?.key === active.identity.key) {
+  if (wallet.busy && active && wallet.pending?.game?.id === active.identity.id) {
     if (!push) history.pushState(null, '', active.path);
     return toast('Wait for the current operation to finish before leaving the game.', true);
   }
@@ -68,8 +69,8 @@ export function navigate(page: string, push = true, path = PAGES[page]!.path) {
   if (push && location.pathname !== path) history.pushState(null, '', path);
 }
 /** Every page has a URL: `/`, `/games`, `/developer`, `/bets`, `/bankroll`, `/@<username>` or `/~<uname>` for a
- * player, the same and `/<game>` for a game they publish, `/games/<key>` for a game's public record,
- * `/games/custom?url=<url>`, and `/bets?game=<key>` for the bets of one game; and the wallet or Settings over a page,
+ * player, the same and `/<slug>` for a game they publish, `/games/<id>` for a game's public record,
+ * `/games/custom?url=<url>`, and `/bets?game=<id>` for the bets of one game; and the wallet or Settings over a page,
  * `/wallet[/<tab>]` and `/settings[/<tab>]`. */
 export function parseRoute(
   url: URL,
@@ -82,11 +83,11 @@ export function parseRoute(
   } catch {}
   const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === pathname);
   if (tab) return { wallet: tab };
-  const named = /^\/([~@][A-Za-z0-9_.]{1,32})(?:\/([a-z0-9][a-z0-9-]{0,31}))?$/.exec(pathname);
-  if (named) return named[2] ? { owner: named[1]!, name: named[2] } : { profile: named[1]! };
+  const named = /^\/([~@][A-Za-z0-9_.]{1,32})(?:\/([a-z0-9][a-z0-9-]*))?$/.exec(pathname);
+  if (named) return named[2] ? { owner: named[1]!, slug: named[2] } : { profile: named[1]! };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
-  const record = /^\/games\/(0x[0-9a-fA-F]{64})$/.exec(pathname);
-  if (record) return { record: record[1]!.toLowerCase() };
+  const record = /^\/games\/(.+)$/.exec(pathname)?.[1]!.toLowerCase();
+  if (record && GAME_ID.test(record)) return { record };
   return Object.entries(PAGES).find(([, page]) => page.path === pathname)?.[0] ?? { unknown: pathname };
 }
 export async function route(push = false) {

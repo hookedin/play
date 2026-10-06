@@ -16,7 +16,7 @@ it put at risk, payout, result and return. **At risk** is what a casino bet stak
 game shows when the game keeps part of it back ([what is given up](../games/collapsing-bets.md#what-is-given-up)); a
 payment shows what it paid the house, and pays nothing back. It is read from the receipts the wallet keeps
 ([Activity](#activity)); rejected requests, and payments outside a group, are not listed. Choose a game to see its bets
-alone, at `/bets?game=<key>`. While you play, the game's name in the top bar opens **Your bets in** the game, over it,
+alone, at `/bets?game=<id>`. While you play, the game's name in the top bar opens **Your bets in** the game, over it,
 and **Everyone's bets in** it, its [public record](#a-games-public-record).
 
 Opening a casino bet shows everything its receipt holds: where the round's outcome landed against the bet's chance; the
@@ -77,10 +77,10 @@ with `id-used`, so that it does not place the same bet again under another ID
 
 ## A game's public record
 
-`/games/<key>` shows every settled bet anyone has placed in one game, as the casino recorded it, from
-[`GET /api/games/:key`](../casino-api/public.md#get-apigameskey); `key` is the game's
-[key](../reference/signed-messages.md#game-keys). **Every bet in it** on a game's line under My games or Developer opens it, and so
-does **Every bet in this game** in one of your bets. The page shows:
+`/games/<id>` shows every settled bet anyone has placed in one game, as the casino recorded it, from
+[`GET /api/games/:id`](../casino-api/public.md#get-apigamesid), by the game's [ID](../reference/signed-messages.md#game-ids).
+**Every bet in it** on a game's line under My games or Developer opens it, and so does **Every bet in this game** in one
+of your bets. The page shows:
 
 - the totals, expected and paid back, as on My games;
 - how many of the game's developer bets are open, and how many its developer has settled;

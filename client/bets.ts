@@ -13,8 +13,8 @@ export interface BetRow {
   at: number;
   /** The game the bet was placed in, named as it named itself. */
   game: string;
-  /** The game's key, made from its developer and the name it is published under, when the reader knows it. */
-  key?: string | null;
+  /** The game's ID, when the reader knows it. */
+  gameId?: string | null;
   /** Who placed it, on a public list. This wallet's own rows leave it out. */
   who?: string | null;
   /** The label the game gave it, such as a hand or a match. */
@@ -183,7 +183,7 @@ export function groupRows(rows: readonly BetRow[]): BetRow[][] {
   const groups = new Map<string, BetRow[]>(),
     order: BetRow[][] = [];
   for (const row of rows) {
-    const key = row.group === undefined ? null : JSON.stringify([row.key ?? row.game, row.who ?? null, row.group]);
+    const key = row.group === undefined ? null : JSON.stringify([row.gameId ?? row.game, row.who ?? null, row.group]);
     const known = key === null ? undefined : groups.get(key);
     if (known) known.unshift(row);
     else {
@@ -425,7 +425,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Channel', hex(base && channelId(base.player, base.index))],
         ['Sequence', base ? String(BigInt(base.sequence) + 1n) : '—'],
         ['Game', receipt.game?.name ?? '—'],
-        ['Game key', hex(receipt.details?.game)],
+        ['Game ID', hex(receipt.details?.game)],
         ['Memo, the hash of the details above', hex(op.memo)],
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
         ['Balance after it settled', `${exact(receipt.balance ?? 0)} METH`],
@@ -448,7 +448,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     body.append(record);
   }
 
-  if (onGame && row.key)
+  if (onGame && row.gameId)
     body.append(
       h(
         'button',

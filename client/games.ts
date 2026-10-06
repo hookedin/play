@@ -1,6 +1,6 @@
 import { ZeroAddress } from 'ethers';
 import { withLock } from './storage.ts';
-import { urlGameKey } from '../protocol/protocol.ts';
+import { urlGameId } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
 import { exact, h } from './activity.ts';
 import { formatAmount, MICRO_ETH } from '../sdk/src/wire.ts';
@@ -27,8 +27,9 @@ interface ActiveGame {
   /** Whether the game has said it places developer bets: its allowance dialog asks the player about them too. */
   developerBets: boolean;
 }
-/** What a profile records of a game it publishes: its key, and its developer, the account that publishes it. */
-export type Published = { key: string; developer: string };
+/** What a profile records of a game it publishes: its ID, its developer, the account that publishes it, and the name
+ * it is published under, with the slug that name makes. */
+export type Published = { id: string; developer: string; name: string; slug: string };
 export let active: ActiveGame | null = null;
 /** The casino's own profile, its account on X: the games it ships with are published there. */
 export const HOUSE = 'hookedin';
@@ -71,7 +72,7 @@ export const openGame = (target: GameRoute, push = false) =>
   task(async () => {
     if ('url' in target) await loadGame(target.url, target, push);
     else {
-      const published = await wallet.api(`/api/players/${target.owner}/${target.name}`);
+      const published = await wallet.api(`/api/players/${target.owner}/${target.slug}`);
       if (!published.url) throw new Error('This game is not published at that name.');
       await loadGame(published.url, target, push, published);
     }
@@ -238,9 +239,6 @@ export function gameURL(value: string) {
   if (url.origin === location.origin) throw new Error('Games cannot be served from the wallet’s own origin.');
   return url;
 }
-/** How a game is named in the wallet: the name it is published under, in words. */
-export const gameTitle = (name: string) => name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ');
-
 /** A game's icon: icon.svg beside its page, over the game's initial, which shows when it has none. */
 export function gameIcon(url: string, name: string) {
   const image = h('img', { src: new URL('icon.svg', url).href, alt: '', loading: 'lazy', decoding: 'async' });
@@ -253,11 +251,11 @@ export function gameIcon(url: string, name: string) {
 export const startup = Promise.withResolvers<void>();
 /** Games opened by an early click wait here, so their session opens against the started wallet. */
 const walletStarted = startup.promise;
-/** Open a game. A published one comes with what its profile records: its key, and its developer, the account that
- * publishes it. A game opened by its URL alone is nobody's: it has the key of that URL, and takes no developer bets. */
+/** Open a game. A published one comes with what its profile records: its ID, its developer, the account that
+ * publishes it, and its name. A game opened by its URL alone is nobody's: it has the ID of that URL, goes by the URL's
+ * host, and takes no developer bets. */
 export async function loadGame(url: string, gameRoute: GameRoute, push = true, published?: Published) {
   const entry = gameURL(url);
-  const slug = 'url' in gameRoute ? undefined : gameRoute.name;
   closeGame();
   const frame = h('iframe', { referrerPolicy: 'no-referrer' });
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -265,13 +263,9 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     'allow',
     "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-read 'none'; clipboard-write 'none'; payment 'none'; fullscreen 'none'",
   );
-  const identity: GameIdentity = {
-    url: entry.href,
-    key: published?.key ?? urlGameKey(entry.href),
-    developer: published?.developer ?? ZeroAddress,
-    ...(slug === undefined ? {} : { slug }),
-    name: slug === undefined ? entry.host : gameTitle(slug),
-  };
+  const identity: GameIdentity = published
+    ? { url: entry.href, id: published.id, developer: published.developer, slug: published.slug, name: published.name }
+    : { url: entry.href, id: urlGameId(entry.href), developer: ZeroAddress, name: entry.host };
   frame.title = `${identity.name}, a sandboxed game`;
   // A game bound to a channel closes with it; a game opened without one adopts the first channel the wallet takes up.
   const isCurrent = () =>
@@ -349,23 +343,22 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
   );
   $('game-my-bets').textContent = `Your bets in ${identity.name}`;
   $('game-all-bets').textContent = `Everyone's bets in ${identity.name}`;
-  $<HTMLAnchorElement>('game-all-bets').href = `/games/${identity.key.toLowerCase()}`;
+  $<HTMLAnchorElement>('game-all-bets').href = `/games/${identity.id}`;
   showPage('play');
   if (push && location.pathname + location.search !== path) history.pushState(null, '', path);
   renderGameAccount();
 }
 
-/** Games this wallet can reopen, by their key: whatever the lobby showed.
- * A bet's receipt carries only the game's key and the name it went by, so this is what turns a
+/** Games this wallet can reopen, by their ID: whatever the lobby showed.
+ * A bet's receipt carries only the game's ID and the name it went by, so this is what turns a
  * line of history back into something to play. */
-export const knownGames = new Map<string, Published & { route: GameRoute; url: string; name: string }>();
-/** One card for a published game: its icon and the name it is published under. */
-function gameCard(route: { owner: string; name: string }, game: Published & { name: string; url: string }) {
-  const name = gameTitle(game.name),
-    key = game.key.toLowerCase();
-  // A bet's receipt names its game only by this key, so remembering the card is what lets a line of
+export const knownGames = new Map<string, Published & { route: GameRoute; url: string }>();
+/** One card for a published game: its icon, the name it is published under and its address. */
+function gameCard(owner: string, game: Published & { url: string }) {
+  const route = { owner, slug: game.slug };
+  // A bet's receipt names its game only by this ID, so remembering the card is what lets a line of
   // history be opened again, and its public record found.
-  knownGames.set(key, { route, ...game, name });
+  knownGames.set(game.id, { ...game, route });
   return h(
     'a',
     {
@@ -376,14 +369,14 @@ function gameCard(route: { owner: string; name: string }, game: Published & { na
         task(() => loadGame(game.url, route, true, game));
       },
     },
-    gameIcon(game.url, name),
-    h('h3', null, name),
-    h('span', { className: 'catalog-link' }, `${route.owner}/${route.name}`),
+    gameIcon(game.url, game.name),
+    h('h3', null, game.name),
+    h('span', { className: 'catalog-link' }, `${owner}/${game.slug}`),
   );
 }
 /** Every game a profile publishes, as cards. */
-export const profileCards = (owner: string, games: (Published & { name: string; url: string })[]) =>
-  games.map(game => gameCard({ owner, name: game.name }, game));
+export const profileCards = (owner: string, games: (Published & { url: string })[]) =>
+  games.map(game => gameCard(owner, game));
 /** The lobby is what `@hookedin` publishes, and whatever this account publishes itself. It needs nothing of the
  * wallet but the casino's address, so it shows before the wallet has started. */
 export async function loadLibrary() {

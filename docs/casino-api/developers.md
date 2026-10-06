@@ -23,7 +23,7 @@ walks through the order of requests. The signed structures are on
 Opens a round for a published game's own casino bet, and answers it as
 [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it, `open`. Every call opens another. The casino picks
 the round's secret and keeps it until the game's casino bet on the round reveals it; a round it never bets on stays
-open. The body is `{game}`, the game's key. `invalid` answers a game nobody publishes, and `unauthorized` a key that is
+open. The body is `{game}`, the game's ID. `invalid` answers a game nobody publishes, and `unauthorized` a key that is
 not the game's server.
 
 ### `POST /api/rounds/:round/casino-bet`
@@ -41,7 +41,7 @@ zero bet nothing: they only reveal the round, with no bank check and no admissio
 
 | Body field  | Type    | Meaning                                                                                                                                                                                          |
 | ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `game`      | bytes32 | The key of the published game whose round it is and whose bank pays its stake                                                                                                                    |
+| `game`      | string  | The ID of the published game whose round it is and whose bank pays its stake                                                                                                                     |
 | `stake`     | string  | Decimal, 1 to 2^96 − 1, without leading zeros; `0` to reveal                                                                                                                                     |
 | `chance`    | string  | Decimal: how many of the 2^64 outcomes win, 1 to 2^64 − 1; `0` to reveal                                                                                                                         |
 | `prize`     | string  | Decimal: what the bet pays when it wins, 1 to 2^96 − 1; `0` to reveal                                                                                                                            |
@@ -52,7 +52,7 @@ zero bet nothing: they only reveal the round, with no bank check and no admissio
 
 ```json title="Request"
 {
-  "game": "0xeb732f80dafa3b2486cbd58bd5a73193b64273db4fdb48cae8b887f582fc6cf3",
+  "game": "0199b8c4-5d2e-7a31-9f60-2c4e8b1d7a93",
   "stake": "1000000000000000",
   "chance": "8974091711534376461",
   "prize": "2000000000000000",

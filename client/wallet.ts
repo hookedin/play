@@ -84,8 +84,10 @@ export interface WalletChannel {
 }
 /** The game an operation belongs to, saved with the pending request so a reload can attribute its receipt. */
 export interface GameIntent {
-  key: string;
+  /** The game's ID. */
   id: string;
+  /** The game's own name for the operation, by which it asks for the receipt. */
+  operation: string;
   /** The game's own name, so a receipt still says where the money went long after the game is closed. */
   name: string;
   /** The game's developer, whose bank takes its developer bets and whose key signs their settlements. */
@@ -148,7 +150,7 @@ export class CasinoWallet extends GameSessions {
   /** What the last attempt to send the pending operation it names ran into: a casino that refuses an operation
    * refuses it the same way on every retry. */
   pendingError: { operationId: string; message: string; code?: string } | null = null;
-  /** The banks of this account's games that it has put money into or taken money out of, by the game's key: the game's
+  /** The banks of this account's games that it has put money into or taken money out of, by the game's ID: the game's
    * name, the casino's statement for the latest deposit or withdrawal, a withdrawal signed and not yet answered, and
    * withdrawn money not yet collected. */
   declare banks: Record<
@@ -218,7 +220,7 @@ export class CasinoWallet extends GameSessions {
     stats: any;
     /** When the casino met it. */
     createdAt: number;
-    games: { name: string; url: string; key: string; developer: string; createdAt: number }[];
+    games: { id: string; name: string; slug: string; url: string; developer: string; createdAt: number }[];
   } | null;
   /** Whether ETH at this account's address goes into its balance. Off, it stays available for withdrawal and
    * transaction fees. */
@@ -650,16 +652,16 @@ export class CasinoWallet extends GameSessions {
     return profile;
   }
   /**
-   * Publish a game under this account, its developer: a new one, or with its `key` one of its games again, under
+   * Publish a game under this account, its developer: a new one, or with its `id` one of its games again, under
    * another name or at another URL; or, with no URL, take it out of the profile. Publishing claims a public name and
    * asks for a balance that plays; taking your own game down only has to be you, so a developer who has closed their
    * channel can still withdraw a game that turned out to be broken. Returns the account's profile, each game with the
-   * key the casino gave it.
+   * ID the casino gave it.
    */
-  async publishGame(this: CasinoWallet, name: string, url: string | null, key?: string) {
+  async publishGame(this: CasinoWallet, name: string, url: string | null, id?: string) {
     if (url && !this.playable) throw new Error('Open a balance to publish games');
     return this.takeProfile(
-      await this.api('/api/account/games', { name: name.trim(), url, ...(key ? { game: key } : {}) }),
+      await this.api('/api/account/games', { name: name.trim(), url, ...(id ? { game: id } : {}) }),
     );
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its

@@ -1,23 +1,22 @@
-/** What the wallet knows about a game: where it is served, its key, its developer, and, for this tab only, an
+/** What the wallet knows about a game: where it is served, its ID, its developer, and, for this tab only, an
  * allowance. */
 export interface GameIdentity {
   /** The page the wallet frames: a game is its URL. */
   url: string;
-  /** Made from its developer and the name they published it under; a game opened by its URL alone has the key of
-   * nobody's game at that URL. */
-  key: string;
+  /** Its ID (protocol.ts `GAME_ID`): the one the casino gave it when it was first published, or for a game opened by its
+   * URL alone, its URL's. */
+  id: string;
   /** The account that publishes it: the game's bank takes half its commission and its developer bets, and the
    * developer names the key that settles them. The zero address for a game opened by its URL alone. */
   developer: string;
-  /** The name its developer published it under. A game opened by its URL alone has none, and takes no developer
-   * bets. */
+  /** Its address on its developer's profile, `@username/<slug>`, made from the name they published it under. A game
+   * opened by its URL alone has none, and takes no developer bets. */
   slug?: string;
-  /** What the wallet calls it. */
+  /** What the wallet calls it: the name its developer published it under, or its URL's host. */
   name: string;
 }
 /** The open game in this tab. Never persisted: closing the tab or leaving the game releases the allowance. */
 export interface GameSession {
-  key: string;
   identity: GameIdentity;
   /** Decimal wei the game may still risk: its allowance, as the player sees and sets it. */
   allowance: string;

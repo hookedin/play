@@ -48,7 +48,7 @@ const receipt = await HookedIn.developerBet({
 
 `show` is your page's own.
 
-- The wallet signs a debit carrying the game's key, the group and the meta, and sends it to the casino itself; your
+- The wallet signs a debit carrying the game's ID, the group and the meta, and sends it to the casino itself; your
   server never touches it. The reply comes at once: `open`, with `bet`, the hash that names the bet at the casino and
   to your server, or `rejected`.
 - A developer bet is final: there is no taking it back, no deadline and no refund. It stays open until you settle it,
@@ -90,7 +90,7 @@ developers sign, with `protocol-mismatch`.
 import { createDeveloper } from '@hookedin/play/sdk/developer';
 import type { PublicDeveloperBet } from '@hookedin/play/sdk/developer';
 
-// The game's server key, and the game's key, which the Developer page shows beside the game.
+// The game's server key, and the game's ID, which the Developer page shows beside the game.
 const developer = await createDeveloper({
   casinoURL: 'https://casino.hookedin.com',
   key: process.env.SERVER_KEY!,
@@ -329,5 +329,5 @@ A game with a server ships page and server as one Cloudflare Worker: `dist/` as 
 Roulette's Durable Object follows the game's bets while a page watches, and sends every page the table as it changes,
 as server-sent events.
 [Roulette's repository](https://github.com/hookedin/game-roulette) is a GitHub template with all of this in place: its
-`wrangler.jsonc` names the casino and the game's key, and its README sets `SERVER_KEY`, the key you name as the game's
-server, as a secret. Developer bets need the game published ([publishing](publishing.md#publish-it)).
+`wrangler.jsonc` names the casino and the game's ID, as `GAME`, and its README sets `SERVER_KEY`, the key you name as
+the game's server, as a secret. Developer bets need the game published ([publishing](publishing.md#publish-it)).

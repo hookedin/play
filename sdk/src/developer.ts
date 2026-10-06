@@ -101,7 +101,7 @@ export async function createDeveloper({
   casinoURL: string;
   /** The private key of the game's server: the key its developer named, or the developer's own. */
   key: string;
-  /** The game's key, which the Developer page shows: made from its developer and the name it is published under. */
+  /** The game's ID, which the Developer page shows. */
   game: string;
 }): Promise<Developer> {
   const signer = new Wallet(key),

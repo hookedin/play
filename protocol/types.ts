@@ -38,11 +38,11 @@ export interface Checkpoint {
 export interface Details {
   /** The wallet's name for the operation, as a hash: an exact retry is the same operation. */
   id: string;
-  /** The key of the game that asked for a casino bet, a developer bet or a payment. */
+  /** The ID of the game that asked for a casino bet, a developer bet or a payment. */
   game?: string;
   /** A label the game gives its bets and payments, such as a hand or a match, to show and find them together. */
   group?: string;
-  /** What a debit pays into or a credit collects from: the bankroll fund, a game's bank, named by the game's key, a
+  /** What a debit pays into or a credit collects from: the bankroll fund, a game's bank, named by the game's ID, a
    * settled developer bet, a deposit's network fee, or another player, written `~uname`: a debit that pays a player
    * names them, and the credit that collects it the player it came from. A game's payment pays the bankroll and names
    * nothing. */
@@ -55,7 +55,7 @@ export interface Details {
 /** A developer bet, as anyone may read it by its hash (the hash of the operation that placed it). */
 export interface PublicDeveloperBet {
   bet: string;
-  /** The game's key. */
+  /** The game's ID. */
   game: string;
   group?: string;
   uname: string | null;
@@ -74,8 +74,9 @@ export interface PublicDeveloperBet {
  * when it was taken down (null while it is published), the address its server signs with, and its bank with the
  * casino's latest statement of it. */
 export interface AccountGame {
-  key: string;
+  id: string;
   name: string;
+  slug: string;
   url: string;
   takenDownAt: number | null;
   server: string;
@@ -88,7 +89,7 @@ export interface AccountGame {
  * a channel. */
 export interface PlayerDeveloperBet {
   bet: string;
-  /** The game's key. */
+  /** The game's ID. */
   game: string;
   group?: string;
   status: 'open' | 'settled';
@@ -266,7 +267,7 @@ export interface Submission {
  * which may bet nothing and only reveal the round. */
 export interface Round {
   id: string;
-  /** The key of the game it was opened for. */
+  /** The ID of the game it was opened for. */
   game: string;
   /** When the game's server opened it, in Unix milliseconds. */
   createdAt: number;

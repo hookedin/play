@@ -94,7 +94,7 @@ export const ACCESS_TYPES = {
  * and places its casino bets from its bank, and nothing else. Until the developer names one, it is the developer's own
  * key. The casino keeps the signed message, so a wallet checks a settlement against the developer's own signature. */
 export const GAME_SERVER_TYPES = {
-  GameServer: fields('bytes32 game,address server'),
+  GameServer: fields('string game,address server'),
 };
 /** A game's server proves itself with its key, as an account does on its channel. */
 export const DEVELOPER_ACCESS_TYPES = {
@@ -114,7 +114,7 @@ export const SETTLEMENT_TYPES = {
  * reveal the round. */
 export const BANK_CASINO_BET_TYPES = {
   BankCasinoBet: fields(
-    'bytes32 round,bytes32 game,uint256 stake,uint64 chance,uint256 prize,string group,bytes32 seedHash,bytes32 meta',
+    'bytes32 round,string game,uint256 stake,uint64 chance,uint256 prize,string group,bytes32 seedHash,bytes32 meta',
   ),
 };
 /** The `authorization` header carrying a signed `Access` or `DeveloperAccess` message. */
@@ -206,16 +206,16 @@ export const counterpartyPlayer = (counterparty: unknown) =>
   typeof counterparty === 'string' && PLAYER.test(counterparty) ? counterparty.slice(1) : null;
 /** A game's bank: the game's money at the casino. Half the commission of the casino bets in the game and the stake of
  * every developer bet on it go in, and it pays the settlements and the casino bets the game's server signs. Its
- * developer puts money in with a debit from their own channel that names the game's key as its counterparty, answered
+ * developer puts money in with a debit from their own channel that names the game's ID as its counterparty, answered
  * with a statement of the balance, and takes it out with a signed `BankWithdraw`, collected with a credit that names
- * the game's key. The casino signs the balance after every deposit and withdrawal: `cause` is the hash of the
+ * the game's ID. The casino signs the balance after every deposit and withdrawal: `cause` is the hash of the
  * developer's signed deposit or `BankWithdraw`. */
 export const BANK_TYPES = {
-  BankStatement: fields('bytes32 game,uint256 sequence,uint256 balance,bytes32 cause'),
+  BankStatement: fields('string game,uint256 sequence,uint256 balance,bytes32 cause'),
 };
 /** A game's developer takes money out of its bank. `sequence` is the statement it will produce, so it works once. */
 export const BANK_WITHDRAW_TYPES = {
-  BankWithdraw: fields('bytes32 game,uint256 amount,uint256 sequence'),
+  BankWithdraw: fields('string game,uint256 amount,uint256 sequence'),
 };
 export const hashBankWithdraw = (d: Domain, s: { game: string; amount: Integer; sequence: Integer }) =>
   TypedDataEncoder.hash(d, BANK_WITHDRAW_TYPES, s);
@@ -453,9 +453,41 @@ export const disputedStep = (operation: Operation, authorization: string, seed: 
   secret: ZeroHash,
   casinoSignature: '0x',
 });
-/** The key of a game opened by its URL alone, which nobody publishes: the hash of that URL. A published game's key is
- * the one the casino gave it when it was first published, which stays its own whatever it is renamed or moved to. */
-export const urlGameKey = (url: string) => keccak256(AbiCoder.defaultAbiCoder().encode(['string'], [url]));
+/** A game's ID, a UUID: a published game's is the UUIDv7 of the record that first published it, its own whatever it is
+ * renamed or moved to, and a game opened by its URL alone, which nobody publishes, has its URL's (`urlGameId`). */
+export const GAME_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[78][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+/** The ID of a game opened by its URL alone: a UUIDv8 of the first 16 bytes of the hash of the URL. */
+export function urlGameId(url: string) {
+  const hex = keccak256(toUtf8Bytes(url)).slice(2, 34),
+    variant = ((parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20)}`;
+}
+/** The longest name a game is published under. */
+export const MAX_GAME_NAME = 32;
+/** The part of a game's address its name makes, `@username/<slug>`: the name's letters and digits, lowercase and
+ * without their accents, each run of anything else one hyphen. */
+export const gameSlug = (name: string) =>
+  name
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+/** A name a game is published under, such as `Super Dice`: 1 to `MAX_GAME_NAME` characters of well-formed text, no
+ * control character among them and no space at either end, whose slug has a letter or a digit and at most
+ * `MAX_GAME_NAME` characters too. */
+export function validGameName(name: unknown): name is string {
+  if (typeof name !== 'string') return false;
+  const slug = gameSlug(name);
+  return (
+    name.length <= MAX_GAME_NAME &&
+    name === name.trim() &&
+    validText(name) &&
+    !/\p{Cc}/u.test(name) &&
+    slug !== '' &&
+    slug.length <= MAX_GAME_NAME
+  );
+}
 export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
 /** The longest group label a bet or a payment carries. */
@@ -488,16 +520,18 @@ export const BOUNDS = {
 };
 /** The one shape details have for each kind: a casino bet names its game; a debit its game (a payment, or a
  * developer bet, whose meta alone says what it is) or what it pays into (an investment, a game's bank, named by the
- * game's key, or another player); a credit what it collects from; a deposit, a withdrawal and a lock-in nothing but themselves, a withdrawal's
+ * game's ID, or another player); a credit what it collects from; a deposit, a withdrawal and a lock-in nothing but themselves, a withdrawal's
  * recipient being in the operation. Only what names a game carries a group. Every field
  * is in one form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
   const { game, group, meta } = details ?? {},
     keys = details && typeof details === 'object' ? Object.keys(details) : [];
-  const named = typeof game === 'string' && bytes32Pattern.test(game);
+  const named = typeof game === 'string' && GAME_ID.test(game);
   const counterparty =
     typeof details?.counterparty === 'string' &&
-    (bytes32Pattern.test(details.counterparty) || counterpartyPlayer(details.counterparty) !== null);
+    (bytes32Pattern.test(details.counterparty) ||
+      GAME_ID.test(details.counterparty) ||
+      counterpartyPlayer(details.counterparty) !== null);
   if (
     !keys.every(key => ['id', 'game', 'group', 'counterparty', 'meta'].includes(key)) ||
     typeof details.id !== 'string' ||

@@ -70,11 +70,11 @@ you choose.
 The library at `/` lists the games `@hookedin` publishes and the games your own account publishes, each by its
 [icon](../games/publishing.md#the-icon); **Open a game by its URL** opens any other.
 
-| URL                       | Opens                                                  |
-| ------------------------- | ------------------------------------------------------ |
-| `/@username/game`         | The game published as `game` by the player `@username` |
-| `/~uname/game`            | The same, for a player named by their uname            |
-| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game    |
+| URL                       | Opens                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `/@username/super-dice`   | The game the player `@username` publishes as `Super Dice`, at the [slug](../games/publishing.md#publish-it) its name makes |
+| `/~uname/super-dice`      | The same, for a player named by their uname                                                                                |
+| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game                                                                        |
 
 A published game's developer is the account that published it: it earns half of each casino bet's commission in the
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps

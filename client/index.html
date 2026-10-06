@@ -210,7 +210,7 @@
               type="text"
               maxlength="32"
               autocomplete="off"
-              placeholder="game-name"
+              placeholder="Game name"
               aria-label="Game name"
             /><input
               id="game-url-input"
@@ -220,6 +220,7 @@
               aria-label="Game URL"
             /><button id="publish-game" class="button" type="button">Publish</button>
           </div>
+          <p id="game-address" class="help" role="status" hidden></p>
         </section>
       </section>
 
@@ -277,7 +278,7 @@
         <div class="page-head">
           <div>
             <h1 id="gamebets-name">Game</h1>
-            <p id="gamebets-key" class="handle mono"></p>
+            <p id="gamebets-id" class="handle mono"></p>
             <p class="muted">Every bet anyone placed in this game, as the casino recorded it.</p>
           </div>
           <button id="gamebets-play" class="button primary hidden" type="button">Play</button>

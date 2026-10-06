@@ -404,7 +404,7 @@ test('validation accepts only plain parameter records and bounded exact terms', 
 });
 
 test('a debit that names a game and carries meta is a developer bet, and nothing else carries meta', () => {
-  const game = '0x' + '1'.repeat(64),
+  const game = '0199a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b',
     fund = '0x' + '2'.repeat(64),
     id = '0x' + '3'.repeat(64),
     meta = { pick: 'home' };
@@ -439,7 +439,7 @@ test('a transfer is a debit naming the player it pays and collected with a credi
   for (const [kind, details] of [
     [KIND.debit, { id, counterparty: '~' + uname.toUpperCase() }],
     [KIND.debit, { id, counterparty: '@bob' }],
-    [KIND.debit, { id, game: '0x' + '1'.repeat(64), counterparty: '~' + uname }],
+    [KIND.debit, { id, game: '0199a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b', counterparty: '~' + uname }],
     [KIND.deposit, { id, counterparty: '~' + uname }],
     [KIND.withdrawal, { id, counterparty: '~' + uname }],
     [KIND.lockIn, { id, counterparty: '~' + uname }],

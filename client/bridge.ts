@@ -1,5 +1,5 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
-import { BOUNDS, MAX_GROUP, MAX_META_BYTES, validGroup, validMeta } from '../protocol/protocol.ts';
+import { BOUNDS, GAME_ID, MAX_GROUP, MAX_META_BYTES, validGroup, validMeta } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
 /** Every method a game may call. */
 export const METHODS = [
@@ -28,12 +28,12 @@ const IMMEDIATE = new Set([
 ]);
 /** Requests a game may have waiting for their turn. */
 const MAX_QUEUE = 32;
-/** The game an operation is for, as a bet or a payment signs it: its key, which stays the same wherever the game
+/** The game an operation is for, as a bet or a payment signs it: its ID, which stays the same wherever the game
  * is served. */
 export function gameRef(identity: GameIdentity): string {
   if (!['http:', 'https:'].includes(new URL(identity.url).protocol)) throw new Error('Game URLs must use HTTP(S)');
-  if (!/^0x[0-9a-f]{64}$/.test(identity.key)) throw new Error('A game key is a lowercase 32-byte hash');
-  return identity.key;
+  if (!GAME_ID.test(identity.id)) throw new Error('A game ID is a lowercase UUID');
+  return identity.id;
 }
 /** An amount a game names, in wei: a decimal string below 2^256, above zero unless `positive` is false. */
 export function gameAmount(value: unknown, positive = true) {

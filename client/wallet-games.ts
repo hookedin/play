@@ -59,7 +59,6 @@ export class GameSessions extends ChannelClient {
    * an allowance. */
   openGame(this: CasinoWallet, identity: GameIdentity) {
     this.game = {
-      key: identity.key,
       identity: { ...identity, developer: getAddress(identity.developer) },
       allowance: '0',
       allowed: '0',
@@ -83,7 +82,7 @@ export class GameSessions extends ChannelClient {
     const game = this.requireGame();
     return {
       allowance: String(BigInt(game.allowance) + BigInt((group && game.table[group]) || 0)),
-      pending: this.pending?.game?.key === game.key,
+      pending: this.pending?.game?.id === game.identity.id,
       developerBets: game.developerBets,
     };
   }
@@ -153,7 +152,7 @@ export class GameSessions extends ChannelClient {
    * so a retry after a new channel finds the operation instead of repeating it. */
   gameOperationId(this: CasinoWallet, id: string) {
     gameOperationKey(id);
-    return `game:${this.requireGame().key}:${id}`;
+    return `game:${this.requireGame().identity.id}:${id}`;
   }
   /** The receipt of one of the open game's operations, answered at once. For an open developer bet, the wallet also
    * asks the casino about it: once its developer has settled it, the wallet collects what it was paid and pushes
@@ -168,13 +167,13 @@ export class GameSessions extends ChannelClient {
       );
     return answer;
   }
-  /** Which game asks, as its receipts remember it: its key, its own name for the operation, what it calls itself
+  /** Which game asks, as its receipts remember it: its ID, its own name for the operation, what it calls itself
    * and its developer. */
-  gameIntent(this: CasinoWallet, id: string, group?: string, kept?: string): GameIntent {
+  gameIntent(this: CasinoWallet, operation: string, group?: string, kept?: string): GameIntent {
     const game = this.requireGame();
     return {
-      key: game.key,
-      id,
+      id: game.identity.id,
+      operation,
       name: game.identity.name,
       developer: game.identity.developer,
       ...(group ? { group } : {}),

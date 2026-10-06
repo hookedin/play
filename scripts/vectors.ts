@@ -80,8 +80,8 @@ export function buildVectors() {
       nextHash: hashState(d, next),
     };
   };
-  // A published game's key, as the casino gave it when the game was first published.
-  const game = id('a published game');
+  // A published game's ID, the UUIDv7 the casino gave it when the game was first published.
+  const game = '0199a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b';
   // A deposit, taking into the balance the money deposited into the channel on-chain.
   const opened = apply(base, { kind: KIND.deposit, amount: 1_000_000_000n }, { id: `0x${'81'.repeat(32)}` });
   // A casino bet on red: twice the stake on 18 of the 37 pockets. The round's secret is the first of these whose

@@ -26,11 +26,11 @@ const seedHash = await developer.seedHash(round.id); // commit to both before an
 
 ### `createDeveloper`
 
-| Parameter   | Meaning                                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------------------------ |
-| `casinoURL` | The casino's base URL, without a trailing slash: `https://casino.hookedin.com`, or `http://127.0.0.1:4183` locally |
-| `key`       | The private key of the game's server, hex: the key its developer named, or the developer's own                     |
-| `game`      | The game's key, which the wallet's **Developer** page shows beside the game                                        |
+| Parameter   | Meaning                                                                                                                |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `casinoURL` | The casino's base URL, without a trailing slash: `https://casino.hookedin.com`, or `http://127.0.0.1:4183` locally     |
+| `key`       | The private key of the game's server, hex: the key its developer named, or the developer's own                         |
+| `game`      | The game's [ID](../reference/signed-messages.md#game-ids), which the wallet's **Developer** page shows beside the game |
 
 It reads [`GET /api/config`](../casino-api/public.md#get-apiconfig) and throws an `Error` with code `protocol-mismatch`
 when the casino's `developerProtocol` is not the one this kit signs for: the casino speaks another revision of what a
@@ -132,7 +132,7 @@ A developer bet as anyone may read it by its hash.
 | Field                      | Meaning                                                                                                                                                                          |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bet`                      | The bet's hash: the hash of the operation that placed it, which signs its meta                                                                                                   |
-| `game`, `group`            | The game's key, and the group the page gave the bet                                                                                                                              |
+| `game`, `group`            | The game's ID, and the group the page gave the bet                                                                                                                               |
 | `uname`, `discordUsername` | The player's names                                                                                                                                                               |
 | `stake`                    | The stake, a decimal string of wei                                                                                                                                               |
 | `placedAt`                 | When the casino took it, in milliseconds since the Unix epoch                                                                                                                    |

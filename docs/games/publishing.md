@@ -6,8 +6,8 @@ sidebar:
 ---
 
 A game is plain static files, hosted wherever you like, and known by its URL. It becomes yours in public when you
-publish it: its name in your profile at the casino, pointing at its URL. The casino gives it a key as you first publish
-it, which stays the game's under any name and wherever the files are served.
+publish it: a name in your profile at the casino, such as `Super Dice`, pointing at its URL. It gets an ID as you first
+publish it, which stays the game's under any name and wherever the files are served.
 
 ## Build
 
@@ -49,8 +49,8 @@ no user name or password, and never on its own origin. Anyone can play it by tha
 in the library or at `https://play.hookedin.com/games/custom?url=<encoded game URL>`; a link grants no spending
 authority.
 
-A game opened by its URL alone is published by nobody: its key is the hash of its URL ([game
-keys](../reference/signed-messages.md#game-keys)), so it is a different game from any you publish, nobody earns its
+A game opened by its URL alone is published by nobody: its ID is made from its URL ([game
+IDs](../reference/signed-messages.md#game-ids)), so it is a different game from any you publish, nobody earns its
 commission, and it takes no developer bets.
 
 ### The icon
@@ -80,17 +80,21 @@ game with a server deploys the same way, as one Worker that also answers `/api/`
 ## Publish it
 
 Publish from the wallet of the account that is to be the game's developer. On **Developer**, `/developer`, give the
-game's name and its URL; the wallet fetches nothing first.
-Publishing needs an open balance, a profile holds 100 games, and the name and URL follow the rules of
+game's name and its URL; the wallet shows the address the name makes, and fetches nothing first. A name is 1 to 32
+characters, at least one of them a letter from A to Z or a digit. Publishing needs an open balance, a profile holds 100
+games, and the name and URL follow the rules of
 [`POST /api/account/games`](../casino-api/channels.md#post-apiaccountgames).
 
-The game is then at `https://play.hookedin.com/@<username>/<name>`, by your Discord username, or `/~<uname>/<name>` for
+The game is then at `https://play.hookedin.com/@<username>/<slug>`, by your Discord username, or `/~<uname>/<slug>` for
 an account that verified no Discord account ([your name](../wallet/getting-started.md#your-name)), for anyone with a
-wallet, and on your profile. Its key does not change with its name or its URL: to move a game, publish the same name
-with the new URL, and to rename it, use **Rename** beside it on **Developer**, after which its old address stops
-working. Either way it keeps its bets, its players' receipts, its bank and its public record. Another name published is
-another game, with a key of its own. Taking it down takes it out of your profile and keeps the rest: publishing it again
-brings it back.
+wallet, and on your profile. The slug is made from the name: `Super Dice` is at `@<username>/super-dice`, accents
+dropped, in lowercase, each run of anything but a letter or a digit one hyphen. Two of your games never share a slug.
+
+A game's ID does not change with its name or its URL: to move a game, publish the same name with the new URL, and to
+rename it, use **Rename** beside it on **Developer**, after which its address follows the new name and the old one stops
+working. Either way it keeps its bets, its players' receipts, its bank and its public record. A name with another slug
+is another game, with an ID of its own. Taking it down takes it out of your profile and keeps the rest: publishing it
+again brings it back.
 
 A game with a server gets a key of its own for it. Make a key for the server, keep it there alone, and give its address
 beside the game on **Developer**, as its server key
@@ -121,7 +125,7 @@ and split in half between the game's bank and the casino: a
   ([the casino's share](developer-bets.md#the-casinos-share)); its stake goes into the same bank.
 
 The wallet's **Developer** page shows each game's bank, and beside it the game's bets, what its players staked and came
-out with, its return and what commission it took, from its [public record](../casino-api/public.md#get-apigameskey).
+out with, its return and what commission it took, from its [public record](../casino-api/public.md#get-apigamesid).
 **Take out** moves money from a game's bank into your balance: your wallet signs a `BankWithdraw`, the casino owes you
 the amount at once, and the wallet collects it with a credit naming the game
 ([`POST /api/account/games/withdraw`](../casino-api/channels.md#post-apiaccountgameswithdraw)). Nobody at the casino

@@ -1,12 +1,12 @@
 {
   "developer": "0xcD0C778307e7D3Da6D3D23440285050f911840d4",
   "games": {
-    "samson": "https://samson-game.hookedin.com/",
-    "plinko": "https://plinko-game.hookedin.com/",
-    "dice": "https://dice-game.hookedin.com/",
-    "blackjack": "https://blackjack-game.hookedin.com/",
-    "mines": "https://mines-game.hookedin.com/",
-    "roulette": "https://roulette-game.hookedin.com/",
-    "crash": "https://crash-game.hookedin.com/"
+    "Samson": "https://samson-game.hookedin.com/",
+    "Plinko": "https://plinko-game.hookedin.com/",
+    "Dice": "https://dice-game.hookedin.com/",
+    "Blackjack": "https://blackjack-game.hookedin.com/",
+    "Mines": "https://mines-game.hookedin.com/",
+    "Roulette": "https://roulette-game.hookedin.com/",
+    "Crash": "https://crash-game.hookedin.com/"
   }
 }
