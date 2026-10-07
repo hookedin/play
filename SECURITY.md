@@ -2,7 +2,7 @@
 
 ## Status
 
-HookedIn is a prototype running on the Sepolia testnet. Mainnet is unsupported. No third-party security audit has taken place; the tests in this repository establish software behaviour only. Contracts, signed messages and storage formats may change without migration, and prototype deployments are disposable. Do not use it with funds you cannot afford to lose.
+HookedIn is in [open beta](docs/index.md#open-beta) on the Sepolia testnet. Mainnet is unsupported. No third-party security audit has taken place; the tests in this repository establish software behaviour only. Contracts, signed messages and storage formats may change without migration, and beta deployments are disposable. Do not use it with funds you cannot afford to lose.
 
 ## Reporting a vulnerability
 

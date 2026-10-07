@@ -25,10 +25,11 @@ cd my-game
 npm install
 ```
 
-The template depends on `@hookedin/play` at its `main` branch ([packages and imports](../sdk/index.md)). `src/` is the
-game: `index.html`, `style.css`, [`icon.svg`](publishing.md#the-icon) and `game.ts`, here the probe. `test/` places
-casino and developer bets through the real wallet ([testing](testing.md)), and the workflow deploys the game
-([publishing](publishing.md)). There is nothing to configure: the account that publishes the game is its developer.
+The template depends on `@hookedin/play` at its `main` branch ([packages and imports](../sdk/index.md)), which changes
+without notice during the [open beta](../index.md#open-beta). `src/` is the game: `index.html`, `style.css`,
+[`icon.svg`](publishing.md#the-icon) and `game.ts`, here the probe. `test/` places casino and developer bets through the
+real wallet ([testing](testing.md)), and the workflow deploys the game ([publishing](publishing.md)). There is nothing
+to configure: the account that publishes the game is its developer.
 
 ## Run it
 

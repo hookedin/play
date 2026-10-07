@@ -7,9 +7,11 @@ workflows and the documents should be as maintainable and elegant as feasible: t
 speculative abstraction, no option nobody asked for. When two designs work, take the one with less in it. Added
 complexity needs a concrete requirement, and an explanation of why nothing simpler meets it.
 
-## 2. This is pre-release. Compatibility does not exist
+## 2. This is an open beta. Compatibility does not exist
 
-Nothing here has been released, so there is nothing to stay compatible with. Ever.
+HookedIn is in open beta on Sepolia, with test ETH only. Players and game developers are told that a reset can start
+balances, history and names over, and that the SDK, the game bridge and the casino API change without notice, so there
+is nothing to stay compatible with. Ever.
 
 - Never worry about backward compatibility: no shims, no fallbacks, no reserved fields, no deprecation
   paths. Change contracts, signed structures, APIs, schemas, storage and formats freely.
@@ -20,9 +22,8 @@ Nothing here has been released, so there is nothing to stay compatible with. Eve
   out or point at it.
 - Deployments and their data are disposable. A fresh deployment is always an acceptable answer.
 
-When making changes to keep the production server the same, you can do manual migrations. As in, migratations that
-don't leave any cruft in the code. e.g. If there is a new field added, it's fine to just add it in production with
-some backfilled data.
+To keep production's data through a change, migrate it by hand and leave no cruft in the code: a new field, for
+example, is added in production with backfilled data.
 
 ## 3. Clean up immediately
 

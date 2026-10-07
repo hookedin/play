@@ -9,6 +9,16 @@ result and saves the evidence before it shows you anything. The contract pays ou
 first and the casino's bankroll for the rest, and settles your channel without the casino if you close it alone.
 HookedIn runs on Sepolia (chain 11155111).
 
+## Open beta
+
+HookedIn is in open beta: anyone can play, deposit, withdraw and publish a game, with Sepolia's test ETH, which is free
+and worth nothing. While it lasts, a reset can start balances, history and names over ([changing the
+contract](reference/deployment.md#changing-the-contract)), and the SDK, the game bridge and the casino API change
+without notice: a game that installs `@hookedin/play` from `main` takes each change when it next installs. Tell us what
+breaks in the [HookedIn Discord](https://discord.gg/C38EkHr7sG) or a [GitHub
+issue](https://github.com/hookedin/play/issues), and report a vulnerability privately, as [SECURITY.md](../SECURITY.md)
+says.
+
 ## The parts
 
 | Part       | What it does                                                                                                                                                         | Where it lives                                                  |

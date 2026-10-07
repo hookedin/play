@@ -24,10 +24,11 @@ The wallet, its games and hookedin.com count money in **METH**. **1 METH is a mi
 so **1 ETH = 1,000,000 METH** and 0.01 ETH = 10,000 METH. Amounts are cut off, never rounded: a balance in whole METH,
 and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every digit on hover or in full.
 
-This deployment uses **test ETH only**, on Sepolia. Send it nothing else: it accepts no other asset or network, and
-offers no fiat conversion or card purchase. The game library works at once; everything with ETH waits until the wallet
-has checked the casino's contract on-chain, and a banner says so if that check fails
-([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
+This deployment uses **test ETH only**, on Sepolia, and is in [open beta](../index.md#open-beta): a reset can start
+balances, history and names over. Send it nothing else: it accepts no other asset or network, and offers no fiat
+conversion or card purchase. The game library works at once; everything with ETH waits until the wallet has checked the
+casino's contract on-chain, and a banner says so if that check fails ([how the wallet pins its
+deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
 **Backup and keys**, under **Keys** in Settings, keeps every key this browser made or imported, and **Import a private key** makes one
 your account. A game you have open opens again under the account you switch to. **Start over** deletes them all and
