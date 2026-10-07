@@ -665,7 +665,10 @@ main:has(> #page-play:not(.hidden)) {
 .section-title {
   margin: 32px 0 14px;
 }
-/* A player's page: their bets in a line, and on your own, your Discord username. */
+/* A player's page: on your own, a word that the name is yours; their bets in a line; and your Discord username. */
+#profile-yours {
+  margin-bottom: 6px;
+}
 .profile-stats {
   font-size: 15px;
   font-variant-numeric: tabular-nums;
@@ -1287,6 +1290,14 @@ main:has(> #page-play:not(.hidden)) > .banner {
   white-space: nowrap;
 }
 .chip:hover {
+  background: var(--raised);
+}
+/* Activity's filters: one kind of event, or all of them. */
+#activity-filters .chip {
+  padding: 0 14px;
+}
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
   background: var(--raised);
 }
 .chip .avatar,

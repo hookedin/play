@@ -300,6 +300,7 @@
       <section id="page-profile" class="page hidden">
         <div class="page-head">
           <div>
+            <p id="profile-yours" class="eyebrow" hidden>Your username</p>
             <h1 id="profile-name"></h1>
             <p id="profile-meta" class="muted"></p>
           </div>
@@ -484,6 +485,12 @@
           <p id="developer-bets-status" class="muted" role="status"></p>
           <div id="wallet-developer-bets" class="list"></div>
         </section>
+        <div id="activity-filters" class="chips" role="group" aria-label="Show">
+          <button class="chip" type="button" value="" aria-pressed="true">All</button
+          ><button class="chip" type="button" value="bets" aria-pressed="false">Bets</button
+          ><button class="chip" type="button" value="deposits" aria-pressed="false">Deposits</button
+          ><button class="chip" type="button" value="withdrawals" aria-pressed="false">Withdrawals</button>
+        </div>
         <div class="toolbar">
           <input
             id="activity-search"

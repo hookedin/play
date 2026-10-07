@@ -116,8 +116,11 @@ balance (**Added to your balance**, whoever deposited it), the network fees of d
 paid**), bets, payments, rejections, bankroll and bank movements, transfers to and from other players (**Transferred**
 and **Transfer received**, naming the other player), withdrawals and lock-ins, closes, challenges and collections, each with its operation ID or its transaction and the raw JSON
 behind it.
-The wallet keeps the latest 100 receipts, and beyond them every receipt still to be settled: a developer bet still open,
-and a withdrawal or lock-in not yet paid or returned.
+**Bets**, **Deposits** and **Withdrawals** above the list show one kind at a time: bets, payments and developer bet
+payouts; ETH received at your address, deposits, what they added to your balance and their network fees; withdrawals,
+lock-ins, closes and challenges. **All** shows every receipt, transfers and the bankroll's and banks' movements among
+them. The wallet keeps the latest 100 receipts, and beyond them every receipt still to be settled: a developer bet still
+open, and a withdrawal or lock-in not yet paid or returned.
 
 A withdrawal is **Withdrawal on its way** until the contract has paid it, and **Withdrawn** after; a lock-in is
 **Locking in**, then **Balance locked in**. Its **Network fee** is what your balance paid the casino for sending it.

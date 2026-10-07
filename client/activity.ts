@@ -4,8 +4,12 @@ import { returnParts } from '../protocol/risk.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
+/** Activity's filters beside All: the value of each one's button. */
+type Filter = 'bets' | 'deposits' | 'withdrawals';
 interface ActivityEntry {
   title: string;
+  /** Which of Activity's filters shows it, beside All. */
+  filter?: Filter;
   timestamp: string;
   status?: string;
   tone?: Tone;
@@ -115,7 +119,9 @@ export function createActivityEntry(entry: ActivityEntry) {
       ),
     );
   body.append(...copyBlock(entry.payload, entry.title));
-  return h('details', { className: `activity-entry tone-${entry.tone || 'neutral'}` }, summary, body);
+  const node = h('details', { className: `activity-entry tone-${entry.tone || 'neutral'}` }, summary, body);
+  if (entry.filter) node.dataset.filter = entry.filter;
+  return node;
 }
 
 /** What a developer bet asks of the player, said as plainly as the docs say it. */
@@ -160,17 +166,20 @@ const KINDS: Record<
     incoming?: boolean;
     describe?: (receipt: any) => string;
     notice?: string;
+    filter?: Filter;
   }
 > = {
-  'casino-bet': { title: 'Casino bet', declined: 'Casino bet rejected' },
+  'casino-bet': { title: 'Casino bet', declined: 'Casino bet rejected', filter: 'bets' },
   'developer-bet': {
     title: 'Developer bet placed',
+    filter: 'bets',
     label: 'Sent',
     declined: 'Developer bet rejected',
     describe: r => `Placed with the game’s developer. ${DEVELOPER_BET} ${balanceOf(r)}`,
   },
   payment: {
     title: 'Game payment',
+    filter: 'bets',
     label: 'Sent',
     declined: 'Payment rejected',
     describe: r =>
@@ -190,7 +199,13 @@ const KINDS: Record<
     describe: r =>
       `Into the bank of ${r.name ?? 'your game'}, which takes half the commission of its casino bets and the stakes of its developer bets, and pays their settlements and its own casino bets. The casino signed a statement of it. ${balanceOf(r)}`,
   },
-  withdrawal: { title: 'Withdrawn', label: 'Paid out', declined: 'Withdrawal declined', incoming: true },
+  withdrawal: {
+    title: 'Withdrawn',
+    label: 'Paid out',
+    declined: 'Withdrawal declined',
+    incoming: true,
+    filter: 'withdrawals',
+  },
   transfer: {
     title: 'Transferred',
     label: 'Sent',
@@ -198,23 +213,26 @@ const KINDS: Record<
     describe: r =>
       `To ${r.name ?? r.details?.counterparty}, off-chain: their wallet collects it into their balance, and nothing about it goes on-chain. ${balanceOf(r)}`,
   },
-  'lock-in': { title: 'Balance locked in', declined: 'Lock-in declined' },
+  'lock-in': { title: 'Balance locked in', declined: 'Lock-in declined', filter: 'withdrawals' },
   'deposit-fee': {
     title: 'Network fee paid',
     label: 'Received',
     incoming: true,
+    filter: 'deposits',
     describe: r =>
       `The network fee your deposit ${r.details?.id ?? ''} kept back, which the casino paid into your balance. ${balanceOf(r)}`,
   },
   received: {
     title: 'Received at your address',
+    filter: 'deposits',
     describe: () =>
       'ETH sent to your deposit address, as your wallet found it there. It goes into your balance by itself unless that is off in Settings.',
   },
-  deposit: { title: 'Deposited', label: 'Deposited' },
+  deposit: { title: 'Deposited', label: 'Deposited', filter: 'deposits' },
   'taken-in': {
     title: 'Added to your balance',
     label: 'Added',
+    filter: 'deposits',
     describe: r =>
       `What was deposited into your channel, signed into your balance once the casino had seen it confirmed: from your address, a lock-in or anyone's deposit. ${balanceOf(r)}`,
   },
@@ -236,25 +254,29 @@ const KINDS: Record<
   'close-started': {
     title: 'Close started',
     label: 'No payment',
+    filter: 'withdrawals',
     notice: 'A close without the casino can be challenged for 7 days. Then finish it under Settings → Recovery.',
   },
   'bet-disputed': {
     title: 'Bet disputed',
     label: 'No payment',
+    filter: 'withdrawals',
     notice:
       'The casino has 7 days to settle the disputed bet on-chain; if it does not, the bet counts as won. Then finish the close under Settings → Recovery.',
   },
   closure: {
     title: 'Balance closed',
     label: 'Claim recorded',
+    filter: 'withdrawals',
     notice:
       'A close without the casino records what the balance is owed. Collect it under Wallet → Waiting to be paid.',
   },
-  dispute: { title: 'Close challenged', label: 'No payment' },
+  dispute: { title: 'Close challenged', label: 'No payment', filter: 'withdrawals' },
   'developer-bet-payout': {
     title: 'Developer bet payout',
     label: 'Received',
     incoming: true,
+    filter: 'bets',
     describe: r =>
       `What a developer bet’s developer paid, checked by your wallet and collected into your balance. ${balanceOf(r)}`,
   },
@@ -283,11 +305,12 @@ const KINDS: Record<
 export function receiptSummary(
   receipt: any,
   contract: string,
-): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice'> {
+): Pick<ActivityEntry, 'title' | 'status' | 'tone' | 'amount' | 'amountLabel' | 'description' | 'notice' | 'filter'> {
   const kind = KINDS[receipt.kind];
   if (receipt.status === 'rejected')
     return {
       title: kind?.declined ?? receipt.kind,
+      filter: kind?.filter,
       status: receipt.kind === 'invest' ? 'No shares bought' : 'Nothing paid',
       tone: 'neutral',
       amount: `0 METH`,
@@ -391,5 +414,5 @@ export function receiptSummary(
     receipt.status === 'orphaned'
       ? 'This transaction is no longer confirmed. Refresh to check for re-inclusion, or retry it from your deposit address with the saved transaction details.'
       : kind?.notice;
-  return { title, status, tone, amount, amountLabel, description, notice };
+  return { title, status, tone, amount, amountLabel, description, notice, filter: kind?.filter };
 }

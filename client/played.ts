@@ -85,6 +85,8 @@ let shownBets = '\u0000',
 const NO_BETS = 'No bets yet. Play a game with ETH, and your bets show here.';
 /** The game the bets page shows, by its ID, as `/bets?game=<id>` names it; every game when empty. */
 let betGame = '';
+/** The kind of event Activity shows, by its filter button's value: bets, deposits or withdrawals; every kind when empty. */
+let activityKind = '';
 export function setBetGame(id: string) {
   betGame = id;
 }
@@ -138,19 +140,23 @@ function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
 export function filterList(name: 'activity' | 'bet' | 'gamebets') {
   const terms = $<HTMLInputElement>(`${name}-search`).value.trim().toLowerCase().split(/\s+/).filter(Boolean),
     events = name === 'activity',
-    game = name === 'bet' ? betGame : '';
+    game = name === 'bet' ? betGame : '',
+    kind = events ? activityKind : '';
   let visible = 0,
     total = 0;
   for (const row of $(`${name}-list`).children as HTMLCollectionOf<HTMLElement>) {
     const text = `${row.textContent} ${row.dataset.search ?? ''}`.toLowerCase(),
-      matches = (!game || row.dataset.game === game) && terms.every(term => text.includes(term));
+      matches =
+        (!game || row.dataset.game === game) &&
+        (!kind || row.dataset.filter === kind) &&
+        terms.every(term => text.includes(term));
     // A round's row counts once, as the player played it.
     row.classList.toggle('hidden', !matches);
     total++;
     if (matches) visible++;
   }
   $(`${name}-visible-count`).textContent =
-    `${terms.length || game ? `${visible} / ` : ''}${total} ${events ? 'event' : 'bet'}${total === 1 ? '' : 's'}`;
+    `${terms.length || game || kind ? `${visible} / ` : ''}${total} ${events ? 'event' : 'bet'}${total === 1 ? '' : 's'}`;
   const empty = $(`${name}-empty`);
   empty.classList.toggle('hidden', visible !== 0);
   empty.textContent = terms.length
@@ -158,7 +164,9 @@ export function filterList(name: 'activity' | 'bet' | 'gamebets') {
       ? 'No matching events. Try a method, amount, operation ID or transaction hash.'
       : 'No bet matches that. Try a game, an amount, a bet number or an operation ID.'
     : events
-      ? 'No activity yet. Events will appear here as you use the wallet and games.'
+      ? kind
+        ? `No ${kind} yet.`
+        : 'No activity yet. Events will appear here as you use the wallet and games.'
       : game
         ? 'No bets in this game yet.'
         : name === 'bet'
@@ -337,6 +345,12 @@ export async function openGameRecord(id: string, push = true) {
 
 for (const name of ['activity', 'bet', 'gamebets'] as const)
   $(`${name}-search`).addEventListener('input', () => filterList(name));
+for (const button of $('activity-filters').children as HTMLCollectionOf<HTMLButtonElement>)
+  button.addEventListener('click', () => {
+    activityKind = button.value;
+    for (const other of $('activity-filters').children) other.setAttribute('aria-pressed', String(other === button));
+    filterList('activity');
+  });
 $<HTMLSelectElement>('bet-game').addEventListener('change', () => {
   betGame = $<HTMLSelectElement>('bet-game').value;
   history.replaceState(null, '', betsPath());

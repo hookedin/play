@@ -104,7 +104,8 @@ export function renderProfile() {
       }),
     );
   }
-  // Anybody else's page offers to transfer to them.
+  // Your own page says the name is yours; anybody else's offers to transfer to them.
+  $('profile-yours').hidden = !ownPage();
   $('profile-transfer').hidden = !shown?.profile || ownPage();
   // Your own page, while it shows, follows the name /verify gives you, or unlinking takes away.
   const own = wallet.profile;
