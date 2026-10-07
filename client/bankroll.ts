@@ -36,13 +36,15 @@ export function renderFund() {
       ? `The casino's owner has withdrawn ${formatAmount(f.overdrawn)} METH more than its own shares covered. Holders bore that loss.`
       : f?.owed?.length
         ? 'Money from shares you sold is on its way to your balance.'
-        : !f
-          ? 'The casino is not reporting its bankroll right now.'
-          : shares
-            ? `You hold ${exact(shares)} shares under the casino's signed statement number ${wallet.fund.sequence}.`
-            : open
-              ? ''
-              : 'Deposit into your balance to buy shares.';
+        : wallet.guest
+          ? 'Create your wallet, then deposit into your balance, to buy shares.'
+          : !f
+            ? 'The casino is not reporting its bankroll right now.'
+            : shares
+              ? `You hold ${exact(shares)} shares under the casino's signed statement number ${wallet.fund.sequence}.`
+              : open
+                ? ''
+                : 'Deposit into your balance to buy shares.';
   $<HTMLButtonElement>('invest').disabled = uiBusy || !open || !f;
   for (const id of ['divest', 'divest-all']) $<HTMLButtonElement>(id).disabled = uiBusy || !open || !f || !shares;
 }

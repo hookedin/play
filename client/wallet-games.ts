@@ -129,10 +129,12 @@ export class GameSessions extends ChannelClient {
    * channel and device played it: the game's operations the casino carried out, each a receipt this wallet checked
    * against the evidence the account and the casino signed, and the groups the game ended with meta. */
   async gameHistory(this: CasinoWallet, after = '', limit = 50): Promise<GameHistory> {
-    const identity = this.requireGame().identity,
-      page: AccountHistory = await this.api(
-        `/api/account/game-history?game=${identity.id}&after=${encodeURIComponent(after)}&limit=${limit}`,
-      );
+    const identity = this.requireGame().identity;
+    // A guest has no account, and so no history.
+    if (!this.signer) return { entries: [], cursor: after, more: false };
+    const page: AccountHistory = await this.api(
+      `/api/account/game-history?game=${identity.id}&after=${encodeURIComponent(after)}&limit=${limit}`,
+    );
     return {
       entries: page.entries.map(entry => {
         if (entry.type === 'operation') return { ...receiptView(this.pastReceipt(entry, identity)), at: entry.at };

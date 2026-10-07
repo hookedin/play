@@ -87,7 +87,8 @@ export function renderGameAccount() {
     game = active ? wallet.game : null,
     allowance = BigInt(game?.allowance ?? 0),
     balance = BigInt(wallet.publicState?.balance || 0) - wallet.inPlay(),
-    unset = Boolean(game) && !allowance;
+    unset = Boolean(game) && !allowance,
+    guest = Boolean(wallet.guest);
   $('game-title').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('hidden', !game);
   $('game-allowance').classList.toggle('unset', unset);
@@ -96,14 +97,15 @@ export function renderGameAccount() {
   $('game-allowance-amount').replaceChildren(
     ...(allowance
       ? [formatAmount(allowance, 0), h('small', null, methLabel())]
-      : [allowable() ? 'Set allowance' : 'Deposit']),
+      : [guest ? 'Create wallet' : allowable() ? 'Set allowance' : 'Deposit']),
   );
   $('game-allowance-amount').title = allowance ? `${exact(allowance)} METH` : '';
   $('wallet-button-amount').replaceChildren(formatAmount(balance, 0), h('small', null, methLabel()));
   $('wallet-button-amount').title = `${exact(balance)} METH`;
   $('wallet-button-amount').classList.toggle('hidden', !wallet.publicState?.address || allowance > 0n);
-  $('wallet-button-label').textContent = playable && balance > 0n ? 'Wallet' : 'Deposit';
-  $('hero-deposit').classList.toggle('hidden', playable || !wallet.address);
+  $('wallet-button-label').textContent = guest ? 'Create wallet' : playable && balance > 0n ? 'Wallet' : 'Deposit';
+  $('hero-deposit').textContent = guest ? 'Create your wallet' : 'Deposit ETH';
+  $('hero-deposit').classList.toggle('hidden', playable || !(guest || wallet.address));
   if (!active || !game) return;
   // A game opened before a channel adopts the first one; a game bound to a channel closes with it.
   if (active.channelId === null && wallet.channelId) active.channelId = wallet.channelId;
@@ -199,7 +201,10 @@ let allowingDeveloperBets = false;
 function openAllowanceDialog() {
   if (!active || !wallet.game) return;
   if (allowable() === 0n && BigInt(wallet.game.allowance) === 0n) {
-    openWallet('deposit', `${active.identity.name} plays with ETH from your balance. Deposit some to play.`);
+    openWallet(
+      'deposit',
+      `${active.identity.name} plays with ETH from your balance. ${wallet.guest ? 'Create your wallet, then deposit' : 'Deposit some'} to play.`,
+    );
     return;
   }
   const dialog = $<HTMLDialogElement>('allowance-dialog');

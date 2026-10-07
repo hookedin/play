@@ -178,7 +178,7 @@ export class CasinoWallet extends GameSessions {
   declare verified: Promise<unknown>;
   /** The deployment check, then the current account's first chain observation and casino reconciliation. */
   declare synced: Promise<void>;
-  /** Every account this browser holds a key for. */
+  /** Every account this browser holds a key for, once the wallet has started. */
   declare savedAddresses: string[];
   /** This account's key: it signs everything on the account's channel, its address receives deposits, and a close
    * pays it. */
@@ -273,6 +273,10 @@ export class CasinoWallet extends GameSessions {
     });
     this.hydrate(undefined);
   }
+  /** A started wallet with no account in this browser: its player has not created one or signed in. */
+  get guest() {
+    return this.savedAddresses?.length === 0;
+  }
   /** A local Anvil casino, which sends a wallet demo ETH: the casino says so, and it is refused anywhere else. */
   get isLocalDevelopment() {
     return this.network === 'local' && this.config?.isLocalDevelopment === true;
@@ -338,8 +342,10 @@ export class CasinoWallet extends GameSessions {
       expected: trusted,
     });
     this.verified.catch(() => {});
-    const saved = await saveAccounts(this.storage, this.expectedChainId, { create: true });
-    await this.useKey(saved.accounts[saved.selected!], { select: false });
+    // A browser holding no account is a guest's, until the player creates one or signs in.
+    const saved = await readAccounts(this.storage, this.expectedChainId);
+    this.savedAddresses = Object.keys(saved.accounts);
+    if (saved.selected) await this.useKey(saved.accounts[saved.selected], { select: false });
     this.schedule();
     return this;
   }
@@ -358,6 +364,7 @@ export class CasinoWallet extends GameSessions {
   }
   /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
   async check() {
+    if (!this.signer) return;
     // Asked again if the casino did not answer, and first while no balance plays: what waits for the account registers
     // its channel before any deposit.
     if (!this.profile || !this.playable)
@@ -1026,6 +1033,7 @@ export class CasinoWallet extends GameSessions {
     if (path !== '/api/config') this.requireService();
     const headers: Record<string, string> = { 'content-type': 'application/json' };
     if (/^\/api\/(channels|account)\//.test(path)) {
+      if (!this.signer) throw new Error('Create your wallet, or sign in, first.');
       const now = Math.floor(Date.now() / 1000),
         { address, signer } = this;
       let token = this.tokens.get(address);

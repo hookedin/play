@@ -11,32 +11,38 @@ key. Your own copy of that state, your evidence, is what lets you settle when th
 
 ## Your key
 
-The wallet keeps your key in this browser. Before your first deposit, or once another player's transfer gives you a
-balance, which the wallet then reminds you of under it, save it, under **Save your wallet** on the Deposit tab or
-**Backup and keys** under **Keys** in Settings:
+The wallet holds no account until you make one: your first visit is a guest's, who can open games but holds no
+balance and has no name. **Create wallet** in the top bar, or anything that needs an account, offers:
 
-- **Save with a passkey** makes a passkey for play.hookedin.com, which your device or password manager keeps and syncs
-  to your other devices as it does any passkey. The account's key is the passkey's secret for the wallet, its
-  [PRF](https://w3c.github.io/webauthn/#prf-extension) output, which never leaves the browser: **Sign in with a
-  passkey** gives the same key wherever the passkey is. Each passkey you make is an account of its own. A passkey works
-  only at play.hookedin.com, and only on devices whose passkeys support PRF; the wallet says when they do not.
-- **Save a key file** downloads `hookedin-<address>.txt`, which holds the key itself. **Import a private key**, under
-  Backup and keys in Settings, opens it in any copy of the wallet, including one you [build yourself](#recovery-mode). Anyone
-  who has the file can take everything the account holds.
+- **Create with a passkey** makes a passkey for play.hookedin.com, which your device or password manager keeps and
+  syncs to your other devices as it does any passkey. The account's key is the passkey's secret for the wallet, its
+  [PRF](https://w3c.github.io/webauthn/#prf-extension) output, which never leaves the browser. Each passkey you make is
+  an account of its own, so if you made one before, sign in with it instead. The password manager lists it by the day
+  you made it, and then, where the browser lets the wallet say it, by the name the account goes by here.
+- **Sign in with a passkey** opens the account of a passkey you made before: the same key, wherever the passkey is.
+- **Create a key file** makes an account whose key is in the file it downloads, `hookedin-<address>.txt`. **Import a
+  private key** opens an account from its key in any copy of the wallet, including one you
+  [build yourself](#recovery-mode). Anyone who has the file can take everything the account holds.
 
-**Show this wallet's private key** shows the key of the account in use. Nobody can recover a lost key for you.
+A passkey works only at play.hookedin.com, and only on devices whose passkeys support PRF; the wallet says when they
+do not. The wallet keeps the key of the account in use in this browser, so it signs your bets without asking.
+Deleting the passkey, or losing the key file, loses the account and everything it holds: nobody can recover a key for
+you.
+
+**Backup and keys**, under **Keys** in Settings, has **Save a key file**, a second copy of the key of the account in
+use, and **Show this wallet's private key**. It lists every account this browser holds a key for, and **Sign in with a
+passkey** or **Import a private key** there switches to another.
 
 **Start over**, under Backup and keys, deletes everything the wallet keeps in this browser, in every tab: the key of every
-account saved here, with its evidence, receipts, activity and game allowances. The wallet then opens a new, empty
-account. It warns you first, and says how much the account in use holds. An account whose key is saved nowhere else is
-lost with everything it holds; a passkey stays on your device, and **Sign in with a passkey** opens its account again.
+account saved here, with its evidence, receipts, activity and game allowances, and leaves the wallet with no account. It
+warns you first, and says how much the account in use holds. **Sign in with a passkey** opens a passkey's account
+again; an account you hold only as a key file needs that file.
 
 ## On another device
 
-Sign in with your passkey, from the account menu or the Deposit tab, or import your key, and the wallet takes up your
-balance from the casino: the latest state it holds of your channel, with the reply that signed it. The wallet checks
-that its evidence carries your own signatures and the casino's, and signs the state itself; a declined operation's state
-moves no money. [Bankroll shares](bankroll-fund.md#the-statements-your-wallet-checks) follow the same way.
+Sign in with your passkey, or import your key, and the wallet takes up your balance from the casino: the latest state
+it holds of your channel, with the reply that signed it. The wallet checks that its evidence carries your own
+signatures and the casino's, and signs the state itself; a declined operation's state moves no money. [Bankroll shares](bankroll-fund.md#the-statements-your-wallet-checks) follow the same way.
 
 What stays in the browser it happened in: receipts and activity, [game allowances](getting-started.md#games-and-their-allowances),
 each game's saved state, the payout of a developer bet placed there, whose receipt is its proof, and a withdrawal the

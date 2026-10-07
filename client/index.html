@@ -65,6 +65,9 @@
       <a id="menu-profile" class="menu-head">
         <strong id="menu-name">Your account</strong><span id="menu-uname" class="handle"></span>
       </a>
+      <button id="menu-sign-in" class="text-button" type="button" data-key="sign-in" hidden>
+        Sign in with a passkey
+      </button>
       <a href="/" data-page="library">Games</a>
       <a href="/wallet" data-wallet-tab="deposit">Wallet</a>
       <a href="/bets" data-page="bets">Bets</a>
@@ -75,7 +78,6 @@
       <a href="/bankroll" data-page="bankroll">Bankroll</a>
       <a href="/settings" data-wallet-tab="keys">Settings</a>
       <a href="mailto:support@hookedin.com">Contact support</a>
-      <button id="menu-sign-in" class="text-button" type="button" data-key="sign-in">Sign in with a passkey</button>
     </div>
 
     <main>
@@ -398,32 +400,18 @@
         ><button role="tab" type="button" data-tab="advanced" aria-selected="false">Advanced</button>
       </div>
       <section class="tab-panel" data-panel="deposit">
-        <div id="deposit-save" class="boxed">
-          <strong>Save your wallet</strong>
-          <p>
-            Your wallet is a key in this browser. Save it with a passkey to open it on any of your devices, even if this
-            browser forgets it.
-          </p>
-          <button class="button primary full" type="button" data-key="create">Save with a passkey</button>
-          <div class="actions">
-            <button class="text-button" type="button" data-key="sign-in">I have a passkey</button
-            ><button class="text-button" type="button" data-key="file">Save a key file instead</button>
-          </div>
+        <label id="deposit-instructions" for="wallet-address"></label>
+        <div class="address">
+          <code id="wallet-address">Connecting…</code
+          ><button id="copy-address" class="button small" type="button" disabled>Copy</button>
         </div>
-        <div id="deposit-ready" hidden>
-          <label id="deposit-instructions" for="wallet-address"></label>
-          <div class="address">
-            <code id="wallet-address">Connecting…</code
-            ><button id="copy-address" class="button small" type="button" disabled>Copy</button>
-          </div>
-          <img id="deposit-qr" class="deposit-qr" width="180" height="180" alt="ETH deposit address QR code" />
-          <a id="deposit-link" class="text-button">Open in an Ethereum wallet</a>
-          <p id="deposit-status" role="status"></p>
-          <button id="add-to-balance" class="button primary full hidden" type="button">Add to balance</button>
-          <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
-          <p id="deposit-fee" class="help" role="status"></p>
-          <button id="estimate-deposit-fee" class="text-button" type="button">Estimate network fee</button>
-        </div>
+        <img id="deposit-qr" class="deposit-qr" width="180" height="180" alt="ETH deposit address QR code" />
+        <a id="deposit-link" class="text-button">Open in an Ethereum wallet</a>
+        <p id="deposit-status" role="status"></p>
+        <button id="add-to-balance" class="button primary full hidden" type="button">Add to balance</button>
+        <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
+        <p id="deposit-fee" class="help" role="status"></p>
+        <button id="estimate-deposit-fee" class="text-button" type="button">Estimate network fee</button>
         <p class="help">
           Only send test ETH on the named network. Other assets or networks are not supported. HookedIn is in open beta,
           and a reset can start balances over. Your balance counts it in METH. 1 METH is a millionth of an ETH (0.000001
@@ -519,24 +507,33 @@
       </section>
       <section class="tab-panel" data-panel="keys" hidden>
         <section class="setting" aria-labelledby="keys-title">
-          <h3 id="keys-title">Backup and keys</h3>
-          <p id="key-status" class="muted"></p>
-          <div class="actions">
-            <button class="button small" type="button" data-key="create">Save with a passkey</button
+          <h3 id="keys-title">
+            <span class="guest-only">Create your wallet</span><span class="account-only">Backup and keys</span>
+          </h3>
+          <p class="muted guest-only">
+            Your wallet is a passkey, which your device or password manager keeps and syncs to your other devices. Each
+            passkey is a wallet of its own: if you made one before, sign in with it.
+          </p>
+          <p class="muted account-only">
+            Sign in with its passkey, or import its key, to open this account on another device.
+          </p>
+          <div class="actions key-actions">
+            <button class="button primary guest-only" type="button" data-key="create">Create with a passkey</button
             ><button class="button small" type="button" data-key="sign-in">Sign in with a passkey</button
-            ><button class="button small" type="button" data-key="file">Save a key file</button>
+            ><button class="text-button guest-only" type="button" data-key="file">No passkey? Create a key file</button
+            ><button class="button small account-only" type="button" data-key="file">Save a key file</button>
           </div>
           <p class="muted">
-            A passkey opens this account only on this site. A key file opens it in any copy of this wallet, even one you
-            run yourself.
+            A passkey works only on this site. A key file works in any copy of this wallet, even one you run yourself,
+            and anyone who has it can take everything its account holds.
           </p>
-          <button id="export-key" class="text-button" type="button">Show this wallet's private key</button>
+          <button id="export-key" class="text-button account-only" type="button">Show this wallet's private key</button>
           <textarea id="exported-key" class="key-field hidden" readonly aria-label="Private key"></textarea>
-          <p class="muted">
+          <p class="muted account-only">
             Anyone who sees this key can take everything this wallet holds. Never paste it into a site or a message.
           </p>
-          <label for="saved-wallets">Accounts saved in this browser</label>
-          <div class="field-row">
+          <label for="saved-wallets" class="account-only">Accounts saved in this browser</label>
+          <div class="field-row account-only">
             <select id="saved-wallets"></select
             ><button id="select-saved-wallet" class="button" type="button">Switch</button>
           </div>
@@ -550,11 +547,10 @@
               Import
             </button>
           </div>
-          <p class="muted">Save the key of every account you fund.</p>
-          <button id="start-over" class="text-button" type="button">Start over</button>
-          <p class="muted">
-            Deletes every account and record this wallet keeps in this browser, in every tab, and opens a new, empty
-            account.
+          <button id="start-over" class="text-button account-only" type="button">Start over</button>
+          <p class="muted account-only">
+            Deletes every account and record this wallet keeps in this browser, in every tab. A passkey's account opens
+            again when you sign in with it; an account you hold only as a key file needs that file.
           </p>
         </section>
       </section>

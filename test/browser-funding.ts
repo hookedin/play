@@ -22,21 +22,17 @@ try {
   };
   await storage.put(key + ':' + role + ':ready', true);
   await waitFor(':' + peer + ':ready');
-  const saved = await saveAccounts(storage, key, { create: true });
-  await storage.put(key + ':' + role + ':address', saved.selected);
-  const other = await waitFor(':' + peer + ':address');
-  if (other !== saved.selected) throw new Error('Concurrent tabs selected different accounts');
-  const durable = await readAccounts(storage, key);
-  if (Object.keys(durable.accounts).length !== 1 || !durable.accounts[other]) throw new Error('Key was not retained');
-  await storage.put(key + ':' + role + ':selection-checked', true);
-  await waitFor(':' + peer + ':selection-checked');
+  // Both tabs import an account at once: the browser keeps both, and both use whichever came first.
   const imported = Wallet.createRandom();
   await saveAccounts(storage, key, { privateKeys: [imported.privateKey] });
   await storage.put(key + ':' + role + ':imported', true);
   await waitFor(':' + peer + ':imported');
-  const accounts = (await readAccounts(storage, key)).accounts;
-  if (Object.keys(accounts).length !== 3 || accounts[imported.address] !== imported.privateKey)
+  const saved = await readAccounts(storage, key);
+  if (Object.keys(saved.accounts).length !== 2 || saved.accounts[imported.address] !== imported.privateKey)
     throw new Error('Concurrent key import lost an account');
+  await storage.put(key + ':' + role + ':selected', saved.selected);
+  if ((await waitFor(':' + peer + ':selected')) !== saved.selected)
+    throw new Error('Concurrent tabs selected different accounts');
   // Also exercise cross-tab atomicity without relying on Web Locks.
   for (let i = 0; i < 20; i++) await storage.update(key + ':counter', n => (n || 0) + 1);
   await storage.put(key + ':' + role + ':done', true);
@@ -47,10 +43,8 @@ try {
     {
       passed: true,
       role,
-      simultaneousSelection: true,
-      durableAccounts: 1,
+      accounts: 2,
       atomicUpdates: updates,
-      imports: 2,
       browser: navigator.userAgent,
     },
     null,

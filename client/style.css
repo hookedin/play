@@ -1431,6 +1431,22 @@ main:has(> #page-play:not(.hidden)) > .banner {
   margin-top: 10px;
   font-size: 12px;
 }
+/* A guest, with no account in this browser, sees how to create one or sign in, and nothing that needs an account. */
+#wallet-dialog:not(.guest) .guest-only,
+#wallet-dialog.guest .account-only,
+#wallet-dialog.guest :is(.refresh, .sheet-balance, .claims, .tabs) {
+  display: none;
+}
+#wallet-dialog.guest .key-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+#wallet-dialog.guest .key-actions .button {
+  align-self: stretch;
+  height: 42px;
+  margin-top: 0;
+  font-size: 13px;
+}
 .bet-round-summary {
   margin-bottom: 12px;
   font-size: 14px;
@@ -2274,12 +2290,12 @@ body:has(#page-play:not(.hidden)) .footer {
     padding-left: 8px;
     padding-right: 8px;
   }
-  .wallet-button {
-    padding: 7px;
-    gap: 5px;
-  }
   .wallet-button-amount {
+    padding: 0 8px;
     font-size: 12px;
+  }
+  .wallet-button-label {
+    padding: 0 10px;
   }
 }
 

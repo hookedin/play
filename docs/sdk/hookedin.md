@@ -121,7 +121,7 @@ settled by its developer and collected by the wallet, and returns a function tha
 #### `storageScope`
 
 A storage key for this page, chain and player, from a `wallet.info` result: `hookedin:<pathname>:<chainId>:<uname>`,
-with `chain` for a missing chain and `anonymous` for a missing uname, in lower case. It keys on the uname, so taking or
+with `chain` for a missing chain and `anonymous` for a guest's missing uname, in lower case. It keys on the uname, so taking or
 dropping a Discord username keeps what the player had ([storage](../games/how-a-game-works.md#storage)).
 
 ```ts

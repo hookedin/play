@@ -77,8 +77,10 @@ export function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
     // A name is the account's from the start, and so is its page.
     page = name ? `/${name}` : null;
-  // The top bar names a player who chose a name, a Discord username; a uname, made up for them, waits in the menu.
-  $('account-name').textContent = wallet.discordUsername ? showName(wallet) : 'Account';
+  // The top bar names a player who chose a name, a Discord username; a uname, made up for them, waits in the menu. A
+  // guest, with no account here, signs in there.
+  $('account-name').textContent = wallet.guest ? 'Sign in' : wallet.discordUsername ? showName(wallet) : 'Account';
+  $('menu-profile').hidden = Boolean(wallet.guest);
   $('menu-name').textContent = name ?? 'Your account';
   // The uname is always there; when a Discord username covers it up, it is shown underneath.
   const uname = wallet.discordUsername && wallet.uname ? '~' + wallet.uname : '';

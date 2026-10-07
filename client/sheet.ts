@@ -1,7 +1,8 @@
 import qrcode from 'qrcode-generator';
 import { CasinoWallet } from './wallet.ts';
 import { inUnit, typedIn, validateWithdrawal, type Unit } from './withdrawal.ts';
-import { passkeyKey } from './passkey.ts';
+import { Wallet } from 'ethers';
+import { namePasskey, passkeyAccount } from './passkey.ts';
 import { gameReceipt } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
@@ -169,13 +170,7 @@ const addressSendRequest = () =>
   });
 let safetyAccount = '',
   depositURI = '';
-/** Whether the player has this account's key outside this browser: a passkey, a key file or their own import. */
-const savedSetting = () => `hookedin:saved:${wallet.address.toLowerCase()}`;
-function markSaved() {
-  localStorage.setItem(savedSetting(), '1');
-  renderWallet();
-}
-/** The deposit address, and whether this account's key is saved outside this browser. */
+/** The deposit address, and what a deposit of what it holds would cost. */
 function renderSafety() {
   if (safetyAccount !== wallet.storageKey) {
     safetyAccount = wallet.storageKey;
@@ -186,14 +181,6 @@ function renderSafety() {
       $<HTMLInputElement>(id).value = '';
     payee = null;
   }
-  const saved = localStorage.getItem(savedSetting()) !== null;
-  $('deposit-save').hidden = saved;
-  $('deposit-ready').hidden = !saved;
-  $('key-status').textContent = saved
-    ? 'Saved. Sign in with your passkey, or import your key, to open this account on another device.'
-    : "This account's key is only in this browser. Save it with a passkey or a key file before you deposit.";
-  for (const button of document.querySelectorAll<HTMLElement>('[data-key="create"], #menu-sign-in'))
-    button.hidden = saved;
   const uri = `ethereum:${wallet.address}@${wallet.expectedChainId}`;
   if (uri !== depositURI) {
     depositURI = uri;
@@ -258,8 +245,7 @@ export function showWallet(tab: WalletTab) {
   document.title = `${section} · HookedIn`;
   for (const button of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-tab]'))
     button.setAttribute('aria-selected', String(button.dataset.tab === tab));
-  for (const panel of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-panel]'))
-    panel.hidden = panel.dataset.panel !== tab;
+  showPanel();
   const dialog = $<HTMLDialogElement>('wallet-dialog');
   showSheet(dialog);
   // On a phone the tabs scroll sideways: the one shown is never cut off.
@@ -273,6 +259,12 @@ export function showWallet(tab: WalletTab) {
   // The deposit address is checked for ETH every 20 seconds while it is shown.
   wallet.showDeposit(tab === 'deposit');
   renderWallet();
+}
+/** The tab's panel, or for a guest, who has no account in this browser yet, how to create one or sign in. */
+function showPanel() {
+  const shown = wallet.guest ? 'keys' : walletTab;
+  for (const panel of document.querySelectorAll<HTMLElement>('#wallet-dialog [data-panel]'))
+    panel.hidden = panel.dataset.panel !== shown;
 }
 /** Once money has moved, the wallet has done its work. */
 function funded(message: string) {
@@ -408,8 +400,11 @@ export function renderWallet() {
   renderFund();
   renderProfile();
   renderDeveloper();
+  $('wallet-dialog').classList.toggle('guest', Boolean(wallet.guest));
+  $('menu-sign-in').hidden = !wallet.guest;
+  showPanel();
   $<HTMLButtonElement>('refresh-wallet').disabled = historyBusy || !wallet.address;
-  if (!wallet.address) return;
+  if (!wallet.address) return renderGameAccount();
   const state = wallet.publicState;
   if (active?.channelId && active.channelId !== wallet.channelId) abandonGame();
   const busy = uiBusy || wallet.busy;
@@ -425,17 +420,13 @@ export function renderWallet() {
   renderCollateral();
   renderSafety();
   const inPlay = wallet.inPlay();
-  // A balance can come before any deposit, from another player's transfer: its key is the account, saved or not.
-  $('balance-note').textContent =
-    balance && localStorage.getItem(savedSetting()) === null
-      ? "This balance's key is only in this browser: save your wallet under Keys in Settings, or the balance is lost with it."
-      : inPlay
-        ? `${formatAmount(inPlay)} METH of it is in play in ${active?.identity.name}: it joins the game's allowance once the game has shown how its round ended.`
-        : arriving
-          ? `${formatAmount(arriving)} METH of it is on its way into your balance.`
-          : state.closingChannelId && !state.channelId
-            ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
-            : 'What games play with.';
+  $('balance-note').textContent = inPlay
+    ? `${formatAmount(inPlay)} METH of it is in play in ${active?.identity.name}: it joins the game's allowance once the game has shown how its round ended.`
+    : arriving
+      ? `${formatAmount(arriving)} METH of it is on its way into your balance.`
+      : state.closingChannelId && !state.channelId
+        ? 'Your last balance is closing: finish the close under Settings → Recovery once its deadline passes, and collect it. A deposit opens your next balance.'
+        : 'What games play with.';
   $('wallet-address').textContent = wallet.address;
 
   // Deposit: ETH sent to the address goes into the balance by itself, unless something the player should decide on
@@ -1245,7 +1236,6 @@ act(
     closeGame();
     await wallet.importKey($<HTMLInputElement>('import-key').value);
     $<HTMLInputElement>('import-key').value = '';
-    markSaved();
   },
   'Account imported.',
 );
@@ -1257,14 +1247,14 @@ act(
   },
   'Switched account.',
 );
-/** Delete everything the wallet keeps in this browser, in every tab, and load it again, which opens a new account. */
+/** Delete everything the wallet keeps in this browser, in every tab, and load it again, with no account. */
 act('start-over', async () => {
   const accounts = wallet.savedAddresses?.length ?? 0,
     held = BigInt(wallet.publicState.balance || 0) + BigInt(wallet.publicState.nativeBalance || 0);
   const warning = [
-    'Start over? This deletes everything this wallet keeps in this browser and opens a new, empty account.',
+    'Start over? This deletes everything this wallet keeps in this browser, and leaves it with no account.',
     `It deletes the private key of ${accounts > 1 ? `all ${accounts} accounts` : 'the account'} saved here, with their evidence, receipts, activity and game allowances.${held ? ` This account holds ${formatAmount(held)} METH.` : ''}`,
-    `${wallet.address && localStorage.getItem(savedSetting()) === null ? 'This account’s key is saved nowhere else. ' : ''}An account whose key you have not saved with a passkey or a key file is lost for good, with all its money. A passkey stays on your device, and signing in with it opens its account again.`,
+    'A passkey’s account opens again when you sign in with it. An account you hold only as a key file is lost for good, with all its money, without that file.',
     'This cannot be undone.',
   ].join('\n\n');
   if (!confirm(warning)) return;
@@ -1277,23 +1267,37 @@ act('start-over', async () => {
 $('import-key').addEventListener('keydown', event => {
   if (event.key === 'Enter') $('import-wallet').click();
 });
-// The account is saved with a passkey, whose secret is its key, or as the key itself in a file.
+// An account is a passkey's, whose secret is its key, or a key file's, which holds the key itself. With an account
+// open, a key file is a copy of its key.
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
   button.addEventListener('click', async () => {
     $('account-menu').hidePopover?.();
     const how = button.dataset.key,
-      playing = how === 'file' ? null : (active?.path ?? null);
+      copy = how === 'file' && !wallet.guest,
+      playing = copy ? null : (active?.path ?? null);
     await task(async () => {
-      if (how === 'file') {
+      if (copy) {
         download(`hookedin-${wallet.address}.txt`, wallet.exportKey() + '\n', 'text/plain');
-        markSaved();
         return toast('Key file saved. Anyone who has it can take everything this account holds: keep it private.');
       }
-      const key = await passkeyKey(how === 'create');
+      const passkey = how === 'file' ? null : await passkeyAccount(how === 'create'),
+        key = passkey?.key ?? Wallet.createRandom().privateKey;
+      if (!passkey) download(`hookedin-${new Wallet(key).address}.txt`, key + '\n', 'text/plain');
       closeGame();
       await wallet.importKey(key);
-      markSaved();
-      toast(how === 'create' ? 'Your wallet is saved with your passkey.' : 'Signed in with your passkey.');
+      // Its password manager lists the passkey by the name its account goes by here, once the casino has said it.
+      if (passkey)
+        void wallet.synced.then(
+          () => wallet.uname && namePasskey(passkey.user, showName(wallet)),
+          () => {},
+        );
+      toast(
+        how === 'sign-in'
+          ? 'Signed in with your passkey.'
+          : passkey
+            ? 'Your wallet is made. Sign in with its passkey on your other devices.'
+            : 'Your wallet is made, and its key file saved. Anyone who has the file can take everything it holds: keep it private.',
+      );
     });
     // A game open under the account it replaced opens again under this one, under the wallet if that is open.
     if (playing && !active) void openGame(parseRoute(new URL(playing, location.origin)) as GameRoute);

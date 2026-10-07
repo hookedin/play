@@ -9,15 +9,16 @@ The wallet at https://play.hookedin.com holds your keys and your money, and ever
 first bet takes four steps:
 
 1. Open https://play.hookedin.com and pick a game.
-2. Press **Deposit** in the top bar, save your wallet, and send Sepolia ETH to the address it shows.
+2. Press **Create wallet** in the top bar, create it with a passkey, and send Sepolia ETH to the address it shows.
 3. Press **Set allowance** in the top bar and allow the game part of your balance.
 4. Play. **Wallet**, in the top bar, withdraws what is left to any address.
 
 ## Open the wallet
 
-On your first visit the wallet makes your **account**: an Ethereum key in this browser, which signs everything you do
-with your money. Its address is your **deposit address**. Nothing needs setting up to open games; before your first
-deposit you [save your key](keys-and-recovery.md#your-key).
+Your first visit is a guest's: games open, and nothing needs setting up. **Create wallet** in the top bar makes your
+**account**: an Ethereum key, held by a passkey or a key file, which signs everything you do with your money
+([your key](keys-and-recovery.md#your-key)). Its address is your **deposit address**. **Sign in**, beside it, opens
+the account of a passkey you made before.
 
 **Wallet** in the top bar opens the wallet over the page you are on, a game going on under it: your balance, what the
 contract still owes you, and four tabs, **Deposit** at `/wallet`, **Withdraw** at `/wallet/withdraw`, **Transfer** at
@@ -38,18 +39,19 @@ conversion or card purchase. The game library works at once; everything with ETH
 casino's contract on-chain, and a banner says so if that check fails ([how the wallet pins its
 deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
-**Backup and keys**, under **Keys** in Settings, keeps every key this browser made or imported, and **Import a private key** makes one
-your account. A game you have open opens again under the account you switch to. **Start over** deletes them all and
-opens a new account ([your key](keys-and-recovery.md#your-key)).
+**Backup and keys**, under **Keys** in Settings, keeps the key of every account this browser created, signed in to or
+imported, and **Import a private key** makes one your account. A game you have open opens again under the account you
+switch to. **Start over** deletes them all and leaves the wallet with no account
+([your key](keys-and-recovery.md#your-key)).
 
 ## Deposit
 
-Before the Deposit tab shows your deposit address, it asks you to save your wallet: **Save with a passkey**, **I have
-a passkey** to open the account of one you made before, or **Save a key file instead**
-([your key](keys-and-recovery.md#your-key)). A passkey's account takes over from the one this browser made, and a game
-you have open opens again under it.
+Until you have an account, the wallet offers to create one instead of the Deposit tab: **Create with a passkey**,
+**Sign in with a passkey** to open the account of one you made before, or **Create a key file**
+([your key](keys-and-recovery.md#your-key)). A game you have open opens again under the account, and the Deposit tab
+shows its address.
 
-Then send Sepolia ETH to the address, or have another player withdraw some to it. While the Deposit tab
+Send Sepolia ETH to the address, or have another player withdraw some to it. While the Deposit tab
 is open and the page visible, the wallet checks the address every 20 seconds and adds what arrives to your balance;
 otherwise it checks every 10 minutes, or at once when you press ↻ beside the wallet's title. ETH too small to cover its
 fee waits for more.
@@ -176,7 +178,8 @@ account](../casino-api/channels.md#verifying-a-discord-account)).
 `/@username` or `/~uname` is a player's public page: their names, how many bets they have played with what they won or
 lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Your page is there from the start: others find you by your name, and can transfer to you, before your first deposit.
-The top bar shows your Discord username once you have one, and **Account** until then. Your name, at the top of the
+The top bar shows your Discord username once you have one, **Account** until then, and **Sign in** while you have no
+account. Your name, at the top of the
 account menu, opens your own page, with your Discord username. Anyone can read it, from
 [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list of players is at
 https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the game's developer.

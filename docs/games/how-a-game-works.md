@@ -171,8 +171,8 @@ hookedin:<page path>:<chainId>:<uname>
 ```
 
 It keys on the uname, which is the player's for good; never key by the Discord username, which the player can change. Every
-account has its uname as soon as the wallet loads it, before any deposit, and the wallet loads the page again when the
-player switches accounts. `RoundClient` saves its round under `hookedin:round:<name>:<chainId>:<uname>`, where `name`
+account has its uname as soon as the wallet loads it, before any deposit; a guest, who has no account yet, has none, and
+the wallet loads the page again when the guest creates one or signs in, and when the player switches accounts. `RoundClient` saves its round under `hookedin:round:<name>:<chainId>:<uname>`, where `name`
 is the page's path unless you pass one.
 
 ## History

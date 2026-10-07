@@ -115,7 +115,7 @@ verify is availability and liquidity.
   the close** when the casino closes short of it. Its recovery bundle carries it, so a
   [watchtower](../wallet/keys-and-recovery.md#the-watchtower) disputes it for you. The dispute must be mined before the
   quote expires.
-- **Keep your key, and your evidence.** Your key is your account: save it with a passkey or a key file. Your latest
+- **Keep your key, and your evidence.** Your key is your account, and its passkey or key file is the only copy outside this browser. Your latest
   signed state is your proof. The wallet keeps it, and on another device takes up the casino's copy, which is the
   casino's word; export recovery bundles to settle without trusting it
   ([keys and recovery](../wallet/keys-and-recovery.md)).

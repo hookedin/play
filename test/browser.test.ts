@@ -74,7 +74,7 @@ test.after(async () => {
   server.close();
 });
 
-test('storage and locks hold in a real browser, and two tabs choose one key', async () => {
+test('storage and locks hold in a real browser, and two tabs keep both keys they import', async () => {
   const base = `http://127.0.0.1:${port}`;
   const context = await browser.newContext();
 
@@ -91,10 +91,8 @@ test('storage and locks hold in a real browser, and two tabs choose one key', as
     const funding = await result(tab);
     assert.equal(funding.passed, true, funding.error);
     assert.equal(funding.role, 'ab'[i]);
-    assert.equal(funding.simultaneousSelection, true);
-    assert.equal(funding.durableAccounts, 1);
+    assert.equal(funding.accounts, 2);
     assert.equal(funding.atomicUpdates, 40);
-    assert.equal(funding.imports, 2);
   }
 });
 
@@ -118,14 +116,16 @@ async function passkeyPage() {
     },
   });
   await tab.goto(`http://localhost:${port}/__test-passkey`);
-  await tab.waitForFunction(() => 'passkeyKey' in window);
-  return (create: boolean) => tab.evaluate(create => (window as any).passkeyKey(create), create);
+  await tab.waitForFunction(() => 'passkeyAccount' in window);
+  return (create: boolean): Promise<{ key: string; user: number[] }> =>
+    tab.evaluate(create => (window as any).passkeyAccount(create), create);
 }
 
 test('a passkey holds one account key, and another passkey another', async () => {
-  const key = await passkeyPage();
-  const made = await key(true);
-  assert.match(made, /^0x[0-9a-f]{64}$/);
-  assert.equal(await key(false), made, 'signing in gives the key the passkey was made with');
-  assert.notEqual(await key(true), made);
+  const account = await passkeyPage();
+  await assert.rejects(account(false), /No passkey was used/, 'a device with no passkey says so, in words');
+  const made = await account(true);
+  assert.match(made.key, /^0x[0-9a-f]{64}$/);
+  assert.deepEqual(await account(false), made, 'signing in gives the key and the user the passkey was made with');
+  assert.notEqual((await account(true)).key, made.key);
 });
