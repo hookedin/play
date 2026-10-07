@@ -312,6 +312,33 @@ collecting and stays `false`.
 `invalid` answers a missing status, a malformed limit, or a cursor that names no bet, or for settled bets no settled
 bet.
 
+### `GET /api/account/game-history`
+
+The account's history of a game, across all its channels, newest first: `{entries, cursor, more}`
+([pages](index.md#pages)). An entry is one of two kinds, each with `at`, when the casino made the record, in
+milliseconds:
+
+- `{type: "operation", at, details, evidence, bet?}`: an operation of the game the casino carried out, a casino bet, a
+  payment or a developer bet, with its [details](../reference/signed-messages.md#details-and-memo) and the evidence of
+  its result, the checkpoint it follows and its step, which the wallet checks; and for a developer bet, `bet`, the bet as
+  [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) shows it. A declined operation is not listed.
+- `{type: "end", at, group, meta}`: a group the game ended with meta, its own JSON saying how the group went.
+
+| Query   | Type   | Meaning                                                                   |
+| ------- | ------ | ------------------------------------------------------------------------- |
+| `game`  | string | The [game's ID](../reference/signed-messages.md#game-ids); required       |
+| `after` | string | The `cursor` of the previous page: the ID of the record its last entry is |
+| `limit` | number | How many, a whole number from 1 to 100; default 50                        |
+
+`invalid` answers a game that is not a game ID, a malformed cursor or limit.
+
+### `POST /api/account/game-history`
+
+A group the account's game ended, with `meta`, the game's own JSON saying how the group went, which the casino keeps and
+never reads: `{game, group, meta}`, the game's ID, the group and the meta, a plain object of JSON values with the bounds
+of a developer bet's. A group ends once: the same meta again changes nothing, and other meta is refused with
+`id-conflict`. The reply is `{}`. `invalid` answers a malformed body, and `not-found` an account the casino has not met.
+
 ### The bankroll fund
 
 [The bankroll fund](../wallet/bankroll-fund.md) explains investing, which is an

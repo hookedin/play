@@ -6,13 +6,14 @@ import { compileGameAsync, landing, rngFromBytes } from './engine/engine.ts';
 import type { CashClass } from './engine/transition.ts';
 import { admits } from './admits.ts';
 import { formatAmount, playerScope } from './wire.ts';
+import type { GameHistory } from '../../protocol/game-types.ts';
 export interface RoundEvent {
   action: string;
   label?: string;
 }
 export interface RoundState {
   /** Unique per started round, so a game can apply a finished round to its own state exactly once; also the group of
-   * the round's bets, which the game ends with `HookedIn.end(id)` once the player has seen how the round ended. */
+   * the round's bets, which the game ends with `end(state)` once the player has seen how the round ended. */
   id: string;
   /** What `start` was given: the stake, and whatever else the game's graph is built from. */
   setup: { stake: string; [key: string]: unknown };
@@ -25,6 +26,17 @@ export interface RoundState {
   events: RoundEvent[];
   pending: boolean;
   settlement: any;
+}
+/** A round the game ended with `RoundClient.end`, as `past` reads it back: its state when the player saw how it ended,
+ * which the page draws as it did then. */
+export interface PastRound extends Pick<
+  RoundState,
+  'id' | 'setup' | 'nodeId' | 'cash' | 'contributed' | 'events' | 'settlement'
+> {
+  /** When it ended, in milliseconds. */
+  at: number;
+  /** What the page added with `end`. */
+  extra?: Record<string, unknown>;
 }
 /** What the helper needs from the SDK: its requests. */
 export interface RoundBridge {
@@ -199,6 +211,48 @@ export class RoundClient {
   async checkAllowance(required: bigint, group?: string) {
     const { allowance } = await this.call('game.allowance', group === undefined ? {} : { group });
     if (BigInt(allowance) < required) throw new Error('Not enough allowance for this bet. Set it in the top bar.');
+  }
+  /** The player has seen how `state`'s round ended: what it won joins the allowance the wallet shows, and the casino
+   * keeps the round in the player's history of the game, as the meta of its group, for `past` to read back on any
+   * device: its setup, where it ended, the steps it took and how its last step settled, with `extra`, anything else the
+   * page draws it with. Meta the wallet refuses, longer than its bounds allow or with numbers that are not whole, is
+   * left out, and the round ends all the same. */
+  async end(state: RoundState, extra?: Record<string, unknown>): Promise<null> {
+    const meta = plain({
+      schema: SCHEMA,
+      rules: await this.rules(state.setup),
+      setup: state.setup,
+      nodeId: state.nodeId,
+      cash: state.cash,
+      contributed: state.contributed,
+      events: state.events,
+      settlement: state.settlement,
+      ...(extra === undefined ? {} : { extra }),
+    });
+    try {
+      return await this.call('game.end', { group: state.id, meta });
+    } catch (error: any) {
+      if (error?.code !== 'invalid-request') throw error;
+      return this.call('game.end', { group: state.id });
+    }
+  }
+  /** A page of the rounds this game ended with `end`, newest first, from the player's history of the game: pass
+   * `cursor` back as `after` for older ones while `more` is true. A round played under rules this page does not play is
+   * left out, since the page could not draw it, and so is everything else the history holds. */
+  async past(page: { after?: string; limit?: number } = {}) {
+    const history: GameHistory = await this.call('game.history', page),
+      rounds: PastRound[] = [];
+    for (const entry of history.entries) {
+      if (entry.kind !== 'end' || entry.meta.schema !== SCHEMA) continue;
+      // The round as `end` kept it, under the rules it was played by.
+      const { schema: _, rules: played, ...round } = entry.meta as any;
+      let rules = null;
+      try {
+        rules = await this.rules(round.setup);
+      } catch {}
+      if (rules === played) rounds.push({ ...round, id: entry.group, at: entry.at });
+    }
+    return { rounds, cursor: history.cursor, more: history.more };
   }
   /** Another tab of this game changed the round: reload it and tell the caller. Browser only. */
   watch(listener: () => void) {

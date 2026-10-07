@@ -305,9 +305,10 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
       }
       if (method === 'wallet.round') return wallet.gameRound(params.id);
       if (method === 'game.receipt') return wallet.gameReceipt(params.id);
+      if (method === 'game.history') return wallet.gameHistory(params.after, params.limit);
       if (method === 'game.allowance') return wallet.gameAllowance(params.group);
       if (method === 'game.end') {
-        wallet.gameEnd(params.group);
+        await wallet.gameEnd(params.group, params.meta);
         return null;
       }
       // Its allowance dialog asks about developer bets from now on; only a published game has a developer to bet

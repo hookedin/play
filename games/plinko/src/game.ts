@@ -10,6 +10,8 @@ import { mountBoard } from './board.ts';
 const AUTO = [0, 10, 50, 100];
 /** Taps ahead of the wallet wait here; more would only hide how many balls are still to come. */
 const QUEUE = 20;
+/** Balls the ticker shows. */
+const TICKER = 9;
 const drops = new DropClient(HookedIn);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -131,6 +133,14 @@ function celebrate(hundredths: number) {
   $('flash').classList.remove('hidden');
   setTimeout(() => $('flash').classList.add('hidden'), 900);
 }
+/** What a ball paid, in the ticker of recent balls: a new one on top, and an earlier one below what is there. */
+function tick(hundredths: number, newest: boolean) {
+  const chip = Object.assign(document.createElement('span'), { className: 'chip', textContent: times(hundredths) });
+  chip.dataset.tier = hundredths >= 500 ? 'hot' : hundredths >= 100 ? 'warm' : 'cold';
+  if (newest) $('ticker').prepend(chip);
+  else $('ticker').append(chip);
+  while ($('ticker').children.length > TICKER) $('ticker').lastElementChild!.remove();
+}
 /** The ball falls after the money has settled; its winnings join the allowance the wallet shows when it lands. */
 function fly(landed: Landed) {
   if (landed.rows !== rows || landed.risk !== risk) setBoard(landed.rows, landed.risk);
@@ -138,7 +148,7 @@ function fly(landed: Landed) {
     bucket = landed.turns.filter(Boolean).length,
     hundredths = multipliers(landed.rows, landed.risk)[bucket];
   void board.launch(landed.turns, fast).then(() => {
-    void HookedIn.end(landed.group).catch(() => {});
+    void drops.end(landed).catch(() => {});
     stats = {
       balls: stats.balls + 1,
       best: Math.max(stats.best, hundredths),
@@ -147,10 +157,7 @@ function fly(landed: Landed) {
     // Only wins rise off the board; the centre would otherwise be a blur of small numbers.
     if (hundredths > 100) board.pop(bucket, times(hundredths), hundredths >= 500);
     celebrate(hundredths);
-    const chip = Object.assign(document.createElement('span'), { className: 'chip', textContent: times(hundredths) });
-    chip.dataset.tier = hundredths >= 500 ? 'hot' : hundredths >= 100 ? 'warm' : 'cold';
-    $('ticker').prepend(chip);
-    while ($('ticker').children.length > 9) $('ticker').lastElementChild!.remove();
+    tick(hundredths, true);
     message(
       `${times(hundredths)}: ${HookedIn.formatAmount(payout)} METH back from a ${HookedIn.formatAmount(landed.stake)} METH ball.`,
     );
@@ -211,6 +218,10 @@ async function recover() {
       stakeInput.value = HookedIn.exactAmount(drops.pending.stake);
       message('A ball is still waiting. Drop to finish it.');
     }
+    // The player's earlier balls, from any device of theirs. A history the wallet cannot read leaves the ticker to this
+    // visit's balls.
+    for (const past of await drops.past(2 * TICKER).catch(() => []))
+      tick(multipliers(past.rows, past.risk)[past.turns.filter(Boolean).length], false);
   } catch (error: any) {
     message(error.message, true);
   } finally {

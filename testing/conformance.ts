@@ -3,8 +3,8 @@
  * `game-wallet.ts` and the casino service runs them against itself, so the stub a game is tested with behaves as the
  * casino does wherever a game depends on it: a lost reply, a new channel, a wallet that lost its receipts, a casino
  * bet the bankroll cannot back, a developer bet on its developer's word, a game's server that restarts, a casino bet
- * of the game's the bankroll declines, a round revealed without a bet, and a game whose rules changed under a saved
- * round.
+ * of the game's the bankroll declines, a round revealed without a bet, a game's history read on another device, and a
+ * game whose rules changed under a saved round.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,6 +56,8 @@ const flip = (hundredths: bigint) => (setup: any) => ({
     { id: 'tails', kind: 'terminal' as const, payout: 0n },
   ],
 });
+/** A receipt as the game's history lists it: without the game's own ID. */
+const withoutId = ({ id: _, ...receipt }: GameReceipt) => receipt;
 /** The next receipt the wallet pushes for operation `id`. */
 const pushed = (bridge: TestBridge, id: string) =>
   new Promise<GameReceipt>(resolve => {
@@ -221,6 +223,75 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     );
     // A game reads it through its player's wallet as the casino shows it to anyone.
     assert.deepEqual(await x.bridge.call('wallet.round', { id: round.id }), revealed);
+  });
+
+  test(`${name}: a game's history is its player's on any device: its operations, checked, and the groups it ended with meta`, async t => {
+    const x = await open(t),
+      developer = await x.developer(),
+      bet = withoutId(await x.bridge.call('game.casinoBet', { id: 'h-bet', ...x.within, group: 'hand' }));
+    await x.bridge.call('game.end', { group: 'hand', meta: { cards: ['K', '7'] } });
+    const paid = withoutId(await x.bridge.call('game.payment', { id: 'h-paid', amount: x.within.stake })),
+      placed = withoutId(
+        await x.bridge.call('game.developerBet', { id: 'h-placed', stake: x.within.stake, meta: { pick: 'home' } }),
+      );
+    await developer.settle([{ bet: placed.bet!, player: BigInt(x.within.stake), casino: 0n }]);
+    assert.equal((await x.bridge.call('game.casinoBet', { id: 'h-declined', ...x.beyond })).status, 'rejected');
+    // The same meta again ends nothing new; other meta is refused.
+    assert.equal(await x.bridge.call('game.end', { group: 'hand', meta: { cards: ['K', '7'] } }), null);
+    await assert.rejects(
+      x.bridge.call('game.end', { group: 'hand', meta: { cards: ['A'] } }),
+      (error: any) => error.code === 'id-conflict',
+    );
+    // Another device of the player's, without the receipts this one kept, reads it whole, a page at a time.
+    const y = await x.forget(),
+      first = await y.bridge.call('game.history', { limit: 2 }),
+      rest = await y.bridge.call('game.history', { after: first.cursor });
+    assert.deepEqual([first.more, rest.more], [true, false]);
+    const entries = [...first.entries, ...rest.entries],
+      at = entries.map(entry => entry.at);
+    assert.ok(
+      at.every((time, i) => typeof time === 'number' && (i === 0 || time <= at[i - 1]!)),
+      'newest first',
+    );
+    assert.deepEqual(
+      entries.map(({ at: _, ...entry }) => entry),
+      [
+        { ...placed, status: 'settled', payout: x.within.stake },
+        paid,
+        { kind: 'end', group: 'hand', meta: { cards: ['K', '7'] } },
+        bet,
+      ],
+      "its operations as their receipts said, a developer bet as its developer settled it, and the group's meta",
+    );
+  });
+
+  test(`${name}: a round it ended is read back for the page to draw it, on any device`, async t => {
+    const x = await open(t),
+      stake = x.within.stake,
+      round = new RoundClient(x.bridge, flip(190n), undefined, { store: memoryStore(), name: 'past' });
+    await round.start({ stake });
+    const state = await round.action('flip');
+    assert.equal(await round.end(state, { coin: 'gold' }), null);
+    const y = await x.forget(),
+      other = new RoundClient(y.bridge, flip(190n), undefined, { store: memoryStore(), name: 'past' }),
+      { rounds } = await other.past();
+    assert.deepEqual(
+      rounds.map(({ at: _, ...past }) => past),
+      [
+        {
+          id: state.id,
+          setup: state.setup,
+          nodeId: state.nodeId,
+          cash: state.cash,
+          contributed: state.contributed,
+          events: state.events,
+          settlement: state.settlement,
+          extra: { coin: 'gold' },
+        },
+      ],
+    );
+    const changed = new RoundClient(y.bridge, flip(180n), undefined, { store: memoryStore(), name: 'past' });
+    assert.deepEqual((await changed.past()).rounds, [], 'a round under other rules is left out');
   });
 
   test(`${name}: a round saved under rules the game does not play is let go once, and the next one plays`, async t => {

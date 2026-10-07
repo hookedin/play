@@ -73,12 +73,12 @@ deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [b
 
 ## Queueing
 
-`wallet.hello`, `wallet.round`, `game.receipt`, `game.allowance`, `game.placesDeveloperBets` and `game.end` are
-answered at once, also while a bet is open, and so is `wallet.info`, except that it waits until the wallet has first
-heard from the casino. `game.casinoBet`, `game.developerBet` and `game.payment` sign something, so they take their
-turn one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`. A request whose
-turn comes while the player is doing something in the wallet is refused with `busy` too; one whose turn comes while the
-wallet does work of its own, such as its regular look at the chain, waits for it.
+`wallet.hello`, `wallet.round`, `game.receipt`, `game.history`, `game.allowance`, `game.placesDeveloperBets` and
+`game.end` are answered at once, also while a bet is open, and so is `wallet.info`, except that it waits until the
+wallet has first heard from the casino. `game.casinoBet`, `game.developerBet` and `game.payment` sign something, so
+they take their turn one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`.
+A request whose turn comes while the player is doing something in the wallet is refused with `busy` too; one whose turn
+comes while the wallet does work of its own, such as its regular look at the chain, waits for it.
 
 ## Amounts
 
@@ -153,6 +153,62 @@ The result is the operation's [receipt](#receipt), or `null` when this wallet ha
 it is still pending ([`game.allowance`](#gameallowance)'s `pending` says so), or this wallet has lost its record. For an
 open developer bet the wallet also asks the casino about it; once its developer has settled it, the wallet collects
 what it pays and pushes the settled receipt as a [`game.receipt`](#gamereceipt-1) event.
+
+### `game.history`
+
+The player's history of the game, newest first, as the casino keeps it for their account, from whichever channel and
+device they played on. Answered at once.
+
+| Param   | Type     | Meaning                                                                    |
+| ------- | -------- | -------------------------------------------------------------------------- |
+| `after` | `string` | Optional: the `cursor` of the page before, for the entries older than it   |
+| `limit` | `number` | Optional: how many entries, a whole number from 1 to 100; 50 when left out |
+
+The result is `{ entries, cursor, more }`: pass `cursor` back as `after` while `more` is `true`. An entry is one of two
+kinds:
+
+- An operation of the game the casino carried out: a casino bet or a payment, `settled`, or a developer bet, `open` or
+  `settled`. It is the operation's [receipt](#receipt) without `id`, since the casino keeps the game's ID for an
+  operation only as a hash, and with `at`, when the casino recorded it, in milliseconds. The wallet checks each against
+  the evidence the casino kept, as it checks a reply: the account signed the operation, both checkpoints are signed,
+  its details name this game, a casino bet's outcome comes from its seed and its round's secret, and a developer bet's
+  payout is the settlement its developer's server signed. A page with one that fails is refused with `failed`. A
+  declined operation changed nothing and is not listed.
+- `{ kind: "end", group, meta, at }`: a group the game ended with the `meta` it gave [`game.end`](#gameend). The casino
+  keeps the meta as the wallet sent it, and the wallet passes it on.
+
+A game draws its past plays from these: a group's operations and its meta, or an operation alone.
+[`RoundClient`](../sdk/round.md#past) reads back the rounds it ended.
+
+```json title="Reply"
+{
+  "hookedin": true,
+  "id": 9,
+  "result": {
+    "entries": [
+      {
+        "kind": "end",
+        "group": "session-3",
+        "meta": { "flips": ["heads"] },
+        "at": 1791331200000
+      },
+      {
+        "kind": "casino-bet",
+        "status": "settled",
+        "stake": "1000000000000",
+        "chance": "9223372036854775808",
+        "prize": "1980000000000",
+        "group": "session-3",
+        "outcome": "4417924718259038112",
+        "payout": "1980000000000",
+        "at": 1791331199000
+      }
+    ],
+    "cursor": "019a0f3c-2b40-7c11-9e3a-5d1f7a0b8c42",
+    "more": false
+  }
+}
+```
 
 ### `game.casinoBet`
 
@@ -298,12 +354,18 @@ What the game may stake now. Answered at once.
 ### `game.end`
 
 The player has seen how a group ended: what its bets won joins the allowance the wallet shows, as
-[groups](#groups-and-the-allowance-the-player-sees) describes. Answered at once with `null`, also for a group that holds
-nothing.
+[groups](#groups-and-the-allowance-the-player-sees) describes. Answered with `null`, also for a group that holds
+nothing: at once, or with `meta`, once the casino has kept it.
 
-| Param   | Type     | Meaning   |
-| ------- | -------- | --------- |
-| `group` | `string` | The group |
+| Param   | Type     | Meaning                                                                                             |
+| ------- | -------- | --------------------------------------------------------------------------------------------------- |
+| `group` | `string` | The group                                                                                           |
+| `meta`  | object   | Optional: the game's own JSON saying how the group went, which [`game.history`](#gamehistory) lists |
+
+`meta` is a plain object of JSON values with the bounds of a developer bet's, which the casino keeps in the player's
+history of the game. A group ends with meta once: the same meta again is answered as before, and other meta is refused
+with `id-conflict`. When the casino cannot be reached the answer is `failed`, and the group
+has ended all the same: sending the request again keeps its meta.
 
 ## Events
 
@@ -389,7 +451,7 @@ A refusal is `{ code, message }`. The wallet's codes:
 | `insufficient-allowance`     | The stake or amount exceeds the game's allowance and what its group holds                                                                               | Shows the message, which tells the player to set the allowance in the top bar; the same request can go again once they have                                                                                                                                |
 | `developer-bets-not-allowed` | The player has not allowed the game's developer bets                                                                                                    | Shows the message, which tells the player to allow them in the top bar, after `game.placesDeveloperBets`                                                                                                                                                   |
 | `pending-operation`          | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the wallet finishes a deposit it is taking in by itself, and the player recovers anything else from the wallet's banner. When `game.allowance`'s `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |
-| `id-conflict`                | The ID is bound to other terms or another game, or a pending request under it differs                                                                   | Sends the terms saved with the ID, or a fresh ID for a fresh operation                                                                                                                                                                                     |
+| `id-conflict`                | The ID is bound to other terms or another game, or a pending request under it differs; or the group ended with other meta                               | Sends the terms saved with the ID, or a fresh ID for a fresh operation; a group keeps the meta it ended with                                                                                                                                               |
 | `id-used`                    | The operation was carried out on another channel, and this wallet has no receipt of it                                                                  | Does not place it again under another ID without asking the player                                                                                                                                                                                         |
 | `game-closed`                | The game is not the open one: the player left it, or closed it while its request waited                                                                 | Stops: the page is leaving                                                                                                                                                                                                                                 |
 | `failed`                     | Anything else, such as a casino that did not answer or chain observations that are out of date                                                          | Sends the same request again under the same ID: nothing proves it was not signed, and the wallet resumes it if it was                                                                                                                                      |

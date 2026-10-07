@@ -131,3 +131,24 @@ test('every bet this game can place pays back at least the floor it is built to'
       for (const risk of RISKS)
         assert.ok(worstReturn(plan(rows, risk, stake, 10n ** 9n * stake)) >= FLOOR, `${rows} ${risk} below the floor`);
 });
+
+test('a landed ball ended is read back from the history on its own board and the path it fell, newest first', async () => {
+  const f = await gameWallet({ bankroll: 10n ** 15n }),
+    w = f.wallet;
+  w.openGame(f.identity('plinko'));
+  await w.setGameAllowance('200000');
+  const client = new DropClient(f.bridge, { store: memoryStore(), name: 'plinko' }),
+    landed = [];
+  for (const [rows, risk] of [
+    [8, 'low'],
+    [16, 'high'],
+    [12, 'medium'],
+  ] as const) {
+    const ball = await client.drop({ rows, risk, stake: '1000' });
+    await client.end(ball);
+    landed.unshift(ball);
+  }
+  // On another device, with nothing saved.
+  const other = new DropClient(f.bridge, { store: memoryStore(), name: 'plinko' });
+  assert.deepEqual(await other.past(50), landed);
+});

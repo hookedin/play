@@ -28,6 +28,8 @@ import {
   MAX_META_BYTES,
   MAX_PAYOUTS,
   validMeta,
+  validGroup,
+  canonicalJSON,
   assertSignature,
   covers,
   QUOTE_TYPES,
@@ -69,9 +71,10 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
       if (method === 'wallet.info') return wallet.gameInfo();
       if (method === 'wallet.round') return wallet.gameRound(checked.id);
       if (method === 'game.receipt') return wallet.gameReceipt(checked.id);
+      if (method === 'game.history') return wallet.gameHistory(checked.after, checked.limit);
       if (method === 'game.allowance') return wallet.gameAllowance(checked.group);
       if (method === 'game.end') {
-        wallet.gameEnd(checked.group);
+        await wallet.gameEnd(checked.group, checked.meta);
         return null;
       }
       if (method === 'game.placesDeveloperBets') return null;
@@ -214,6 +217,42 @@ export async function gameWallet({
     });
   };
   const publicDeveloperBet = (hash: string) => plain(developerBets.get(hash)!);
+  /** The player's history of each game, oldest first, as the casino keeps it: each game operation it carried out, with
+   * the developer bet it placed if it placed one, and each group a game ended with meta. */
+  const history: ({ id: string; at: number; game: string } & (
+    | { type: 'operation'; details: any; evidence: any; hash?: string }
+    | { type: 'end'; group: string; meta: Record<string, unknown> }
+  ))[] = [];
+  /** A page of the player's history of `game`, newest first, older than the entry `after` names. */
+  const historyPage = (game: string, after: string, limit: number) => {
+    const all = history.filter(entry => entry.game === game).reverse(),
+      from = after ? all.findIndex(entry => entry.id === after) + 1 : 0,
+      page = all.slice(from, from + limit);
+    return plain({
+      entries: page.map(entry =>
+        entry.type === 'end'
+          ? { type: 'end', at: entry.at, group: entry.group, meta: entry.meta }
+          : {
+              type: 'operation',
+              at: entry.at,
+              details: entry.details,
+              evidence: entry.evidence,
+              ...(entry.hash ? { bet: publicDeveloperBet(entry.hash) } : {}),
+            },
+      ),
+      cursor: page.at(-1)?.id ?? after,
+      more: all.length > from + limit,
+    });
+  };
+  /** A game ends a group with meta once: the same meta again changes nothing, and other meta is refused. */
+  const endGroup = ({ game, group, meta }: any) => {
+    if (!validGroup(group) || !validMeta(meta)) throw refused(400, 'invalid', 'A malformed end of a group');
+    const ended = history.find(entry => entry.type === 'end' && entry.game === game && entry.group === group);
+    if (ended?.type === 'end' && canonicalJSON(ended.meta) !== canonicalJSON(meta))
+      throw refused(409, 'id-conflict', 'This group ended with other meta');
+    if (!ended) history.push({ id: crypto.randomUUID(), at: Date.now(), type: 'end', game, group, meta: plain(meta) });
+    return {};
+  };
   /** A page of developer bets, as the casino's feeds give them: open ones in the order they were placed, settled ones
    * in the order they settled. */
   const page = (bets: PublicDeveloperBet[], settled: boolean, after: string, limit: number) => {
@@ -272,6 +311,14 @@ export async function gameWallet({
           more,
         });
       }
+      if (list.pathname === '/api/account/game-history')
+        return body === undefined
+          ? historyPage(
+              list.searchParams.get('game')!,
+              list.searchParams.get('after') ?? '',
+              Number(list.searchParams.get('limit') ?? 50),
+            )
+          : endGroup(body);
       if (path.endsWith('/payouts'))
         return [...owed]
           .slice(0, MAX_PAYOUTS)
@@ -361,7 +408,18 @@ export async function gameWallet({
         quote: await quoteFor(channel, next),
       });
       responses.set(`${channel}:${details.id}`, response);
-      if (details.game) carried.set(details.id, channel);
+      if (details.game) {
+        carried.set(details.id, channel);
+        history.push({
+          id: crypto.randomUUID(),
+          at: Date.now(),
+          game: details.game,
+          type: 'operation',
+          details,
+          evidence: response.evidence,
+          ...(details.meta ? { hash: hashOperation(d, request).toLowerCase() } : {}),
+        });
+      }
       settlements++;
       return response;
     };

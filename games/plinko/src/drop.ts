@@ -4,7 +4,7 @@
  * table: the page asks for a drop, and a drop saved before a reload lands after it, once.
  */
 import { RoundClient } from '@hookedin/play/sdk/round';
-import type { RoundBridge, RoundState, RoundStore } from '@hookedin/play/sdk/round';
+import type { PastRound, RoundBridge, RoundState, RoundStore } from '@hookedin/play/sdk/round';
 import { seededRandom } from '@hookedin/play/sdk/engine';
 import { bucketOf, dropGraph, path } from './tables.ts';
 import type { Risk, Rows } from './tables.ts';
@@ -16,7 +16,7 @@ export interface DropConfig {
   stake: string;
 }
 export interface Landed extends DropConfig {
-  /** The drop's round, the group of its bet: the page ends it once the ball has landed. */
+  /** The drop's round, the group of its bet: the page ends it with `end` once the ball has landed. */
   group: string;
   payout: string;
   /** The ball's turns, true for right; their sum is the bucket. */
@@ -32,6 +32,8 @@ export class DropClient {
   private readonly round: RoundClient;
   private readonly store: RoundStore;
   private readonly name: string;
+  /** The rounds of the balls landed and not yet ended, by group. */
+  private readonly landed = new Map<string, RoundState>();
   constructor(
     bridge: RoundBridge,
     {
@@ -62,19 +64,36 @@ export class DropClient {
     if (!saved?.pending) await this.round.start({ ...config });
     return this.land(await this.round.action('drop'))!;
   }
-  /** A finished drop's ball, once: the bucket its bet reached, and a path into it drawn from the settled result. */
+  /** The ball has landed on the page: what it won joins the allowance the wallet shows, and the drop the player's
+   * history, with its board and the path it fell. */
+  end(landed: Landed) {
+    const state = this.landed.get(landed.group)!;
+    this.landed.delete(landed.group);
+    return this.round.end(state);
+  }
+  /** The player's earlier drops, newest first, from their history on any device, each on its own board and the path
+   * it fell. A history of `limit` entries holds at most half as many drops: each is a bet and the end of its group. */
+  async past(limit: number): Promise<Landed[]> {
+    return (await this.round.past({ limit })).rounds.map(round => drawn(round));
+  }
+  /** A finished drop's ball, once. */
   private land(state: RoundState): Landed | null {
     const shown = `hookedin:drop:shown:${this.name}`;
     if (this.store.get(shown) === state.id) return null;
     this.store.set(shown, state.id);
-    const { rows, risk, stake } = state.setup as unknown as DropConfig;
-    return {
-      group: state.id,
-      rows,
-      risk,
-      stake,
-      payout: state.cash,
-      turns: path(rows, bucketOf(state.nodeId), seededRandom(BigInt(state.settlement.draw))),
-    };
+    this.landed.set(state.id, state);
+    return drawn(state);
   }
+}
+/** A drop's ball: the bucket its bet reached, and a path into it drawn from the settled result. */
+function drawn(state: RoundState | PastRound): Landed {
+  const { rows, risk, stake } = state.setup as unknown as DropConfig;
+  return {
+    group: state.id,
+    rows,
+    risk,
+    stake,
+    payout: state.cash,
+    turns: path(rows, bucketOf(state.nodeId), seededRandom(BigInt(state.settlement.draw))),
+  };
 }

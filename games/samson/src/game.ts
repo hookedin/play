@@ -370,7 +370,7 @@ async function spin() {
     await stopping;
     moving = false;
     await present(view, key, stake);
-    if (session.terminal) await HookedIn.end(session.id);
+    if (session.terminal) await round.end(session);
     if (outcomeOf(key).bonus && machine.name === 'base') {
       auto = 0;
       if (await offer(stake, false)) rolling = true;
@@ -392,7 +392,7 @@ async function spin() {
     celebrate(null);
     try {
       session = await round.restore();
-      if (session?.terminal) await HookedIn.end(session.id);
+      if (session?.terminal) await round.end(session);
     } catch {}
     message(error.message, true);
   } finally {

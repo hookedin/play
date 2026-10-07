@@ -105,6 +105,17 @@ export interface PlayerDeveloperBets {
   cursor: string;
   more: boolean;
 }
+/** One entry of an account's history of a game, as the casino keeps it: an operation of the game it carried out, with
+ * the details and evidence the wallet checks it by and the developer bet it placed, if it placed one; or a group the
+ * game ended with meta. `at` is when the casino made the record. */
+export type AccountHistoryEntry =
+  | { type: 'operation'; at: number; details: Details; evidence: Evidence; bet?: PublicDeveloperBet }
+  | { type: 'end'; at: number; group: string; meta: Record<string, unknown> };
+export interface AccountHistory {
+  entries: AccountHistoryEntry[];
+  cursor: string;
+  more: boolean;
+}
 export interface Operation {
   /** The hash of the checkpoint it follows, which names its channel and its place. */
   previousStateHash: string;

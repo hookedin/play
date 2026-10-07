@@ -7,6 +7,7 @@ export const METHODS = [
   'wallet.info',
   'wallet.round',
   'game.receipt',
+  'game.history',
   'game.casinoBet',
   'game.developerBet',
   'game.payment',
@@ -22,6 +23,7 @@ const IMMEDIATE = new Set([
   'wallet.info',
   'wallet.round',
   'game.receipt',
+  'game.history',
   'game.allowance',
   'game.placesDeveloperBets',
   'game.end',
@@ -50,8 +52,8 @@ export function gameOperationKey(value: unknown): asserts value is string {
 /** An error a game can act on: `code` is stable, the message is for people. */
 export const gameError = (code: string, message: string) => Object.assign(new Error(message), { code });
 const invalid = (message: string) => gameError('invalid-request', message);
-/** What a developer bet's meta must be, as the protocol checks it before anything is signed. */
-export const META = `A developer bet's meta is a JSON object of up to ${MAX_META_BYTES} bytes, whose numbers are whole.`;
+/** What meta must be, a developer bet's or an ended group's, as the protocol checks it. */
+export const META = `Meta is a JSON object of up to ${MAX_META_BYTES} bytes, whose numbers are whole.`;
 /** A code is the wallet's own or the casino's; anything else, such as a library's, is a plain failure. */
 const errorCode = (error: any) =>
   typeof error?.code === 'string' && /^[a-z][a-z-]{0,39}$/.test(error.code) ? error.code : 'failed';
@@ -104,10 +106,18 @@ function validate(data: any) {
   } else if (data.method === 'wallet.round') {
     if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.id))
       throw new Error('A round is named by its 32-byte hash, as 0x and 64 hex digits.');
+  } else if (data.method === 'game.history') {
+    if (!only(params, ['after', 'limit'])) throw new Error('Unexpected game request field.');
+    if (params.after !== undefined && (typeof params.after !== 'string' || !/^([0-9a-f-]{36})?$/.test(params.after)))
+      throw new Error('A history cursor is one the wallet gave.');
+    if (params.limit !== undefined && !(Number.isSafeInteger(params.limit) && params.limit >= 1 && params.limit <= 100))
+      throw new Error('A history page holds 1 to 100 entries.');
   } else if (data.method === 'game.allowance' || data.method === 'game.end') {
-    if (!only(params, ['group'])) throw new Error('Unexpected game request field.');
+    if (!only(params, data.method === 'game.end' ? ['group', 'meta'] : ['group']))
+      throw new Error('Unexpected game request field.');
     if (params.group === undefined ? data.method === 'game.end' : !validGroup(params.group))
       throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters, without a NUL.`);
+    if (params.meta !== undefined && !validMeta(params.meta)) throw new Error(META);
   } else {
     const fields = {
       'game.casinoBet': ['id', 'stake', 'chance', 'prize', 'group', 'kept'],

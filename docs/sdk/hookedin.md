@@ -82,7 +82,21 @@ resolves with `null`, and nothing opens: a game never asks the player for anythi
 [`game.end`](../reference/bridge.md#gameend): the player has seen how `group` ended, so what its bets won joins the
 allowance the wallet shows. Call it once the result is on the page, such as when a ball lands: until then the wallet's
 figures give nothing away, and stand still while a round is played
-([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)).
+([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)). `end(group, meta)` also keeps `meta`, your
+own JSON saying how the group went, in the player's history of your game, which `history` lists; a
+[`RoundClient`](round.md#end) round ends with its state as its meta.
+
+#### `history`
+
+[`game.history`](../reference/bridge.md#gamehistory), a [`GameHistory`](#gamehistory): a page of the player's history
+of your game, newest first, from whichever channel and device they played it on. `history({ after, limit })` reads the
+page older than the `cursor` of the one before.
+
+```ts
+const { entries } = await HookedIn.history({ limit: 20 });
+// Each past roll, as its receipt said.
+for (const entry of entries) if (entry.kind === 'casino-bet') showRoll(entry.outcome!, entry.payout!);
+```
 
 #### `receipt`
 
@@ -209,3 +223,18 @@ The parameters of [`game.developerBet`](../reference/bridge.md#gamedeveloperbet)
 
 What a game learns about an operation, under its own `id`: how it ended, never the signed evidence
 ([receipt](../reference/bridge.md#receipt)).
+
+### `GameHistory`
+
+`{ entries, cursor, more }`, what [`game.history`](../reference/bridge.md#gamehistory) answers: a page of
+[`PastOperation`](#pastoperation) and [`EndedGroup`](#endedgroup) entries, newest first. Pass `cursor` back as `after` while
+`more` is `true`.
+
+### `PastOperation`
+
+An earlier operation of the game, on any channel or device of the player's: its [`GameReceipt`](#gamereceipt) as the
+wallet checked it, without `id`, and `at`, when the casino recorded it, in milliseconds.
+
+### `EndedGroup`
+
+`{ kind: 'end', group, meta, at }`: a group the game ended with the `meta` it gave `end`.

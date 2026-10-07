@@ -80,6 +80,25 @@ export interface GameReceipt {
   payout?: string;
   reason?: string;
 }
+/** One of the game's earlier operations, on any channel or device of the player's: its receipt as the wallet checked
+ * it, without the game's own ID, which the casino keeps only as a hash, and `at`, when the casino recorded it, in
+ * milliseconds. Only what the casino carried out is listed: a casino bet or a payment `settled`, a developer bet `open`
+ * or `settled`. */
+export type PastOperation = Omit<GameReceipt, 'id' | 'reason'> & { at: number };
+/** A group the game ended with `meta`, its own JSON saying how the group went, through `game.end`. */
+export interface EndedGroup {
+  kind: 'end';
+  group: string;
+  meta: Record<string, unknown>;
+  at: number;
+}
+/** A page of the game's history for its player, newest first: pass `cursor` back as `after` for older entries while
+ * `more` is true. */
+export interface GameHistory {
+  entries: (PastOperation | EndedGroup)[];
+  cursor: string;
+  more: boolean;
+}
 /** What the game may stake, whether an operation awaits recovery, and whether it may place developer bets. */
 export interface GameAllowance {
   allowance: string;

@@ -2,14 +2,25 @@ import type {
   DeveloperBetRequest,
   CasinoBetRequest,
   GameAllowance,
+  GameHistory,
   GameIdentity,
   GameReceipt,
   GameSession,
 } from '../protocol/game-types.ts';
-import type { Round } from '../protocol/types.ts';
+import type { AccountHistory, AccountHistoryEntry, Round } from '../protocol/types.ts';
 import type { CasinoWallet, GameIntent } from './wallet.ts';
 import { getAddress } from 'ethers';
-import { BOUNDS } from '../protocol/protocol.ts';
+import {
+  BOUNDS,
+  KIND,
+  betPayout,
+  hashOperation,
+  outcome,
+  same,
+  validGroup,
+  validMeta,
+  verifyEvidence,
+} from '../protocol/protocol.ts';
 import { gameAmount, gameError, gameOperationKey } from './bridge.ts';
 import { ChannelClient } from './wallet-channel.ts';
 
@@ -23,6 +34,10 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
       'id-used',
       'This operation was carried out on another channel, and its result is not in this wallet',
     );
+  return { id, ...receiptView(receipt) } as GameReceipt;
+};
+/** How an operation ended, as a receipt says it to a game under whichever name. */
+const receiptView = (receipt: any) => {
   // A developer bet is open until the wallet has collected what its developer paid.
   const op = receipt.request ?? receipt.proof.step.operation,
     kind: GameReceipt['kind'] = receipt.kind,
@@ -33,7 +48,6 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
           ? 'open'
           : 'settled';
   return {
-    id,
     kind,
     status,
     ...(kind !== 'payment' ? { stake: op.amount } : {}),
@@ -45,7 +59,7 @@ export const gameReceipt = (id: string, receipt: any): GameReceipt => {
     ...(receipt.outcome === undefined ? {} : { outcome: receipt.outcome }),
     ...(receipt.payout === undefined ? {} : { payout: receipt.payout }),
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
-  } as GameReceipt;
+  };
 };
 
 /**
@@ -99,14 +113,74 @@ export class GameSessions extends ChannelClient {
   inPlay(this: CasinoWallet) {
     return Object.values(this.game?.table ?? {}).reduce((sum, amount) => sum + BigInt(amount), 0n);
   }
-  /** The open game has shown how a group ended: what the group won joins its allowance. */
-  gameEnd(this: CasinoWallet, group: string) {
+  /** The open game has shown how a group ended: what the group won joins its allowance. With `meta`, the game's own
+   * JSON saying how the group went, the casino keeps it in the player's history of the game. */
+  async gameEnd(this: CasinoWallet, group: string, meta?: Record<string, unknown>) {
     const game = this.requireGame(),
       { [group]: won, ...rest } = game.table;
-    if (won === undefined) return;
-    game.table = rest;
-    game.allowance = String(BigInt(game.allowance) + BigInt(won));
-    this.render();
+    if (won !== undefined) {
+      game.table = rest;
+      game.allowance = String(BigInt(game.allowance) + BigInt(won));
+      this.render();
+    }
+    if (meta) await this.api('/api/account/game-history', { game: game.identity.id, group, meta });
+  }
+  /** A page of the open game's history for its player, newest first, as the casino keeps it for the account, whichever
+   * channel and device played it: the game's operations the casino carried out, each a receipt this wallet checked
+   * against the evidence the account and the casino signed, and the groups the game ended with meta. */
+  async gameHistory(this: CasinoWallet, after = '', limit = 50): Promise<GameHistory> {
+    const identity = this.requireGame().identity,
+      page: AccountHistory = await this.api(
+        `/api/account/game-history?game=${identity.id}&after=${encodeURIComponent(after)}&limit=${limit}`,
+      );
+    return {
+      entries: page.entries.map(entry => {
+        if (entry.type === 'operation') return { ...receiptView(this.pastReceipt(entry, identity)), at: entry.at };
+        if (!validGroup(entry.group) || !validMeta(entry.meta))
+          throw new Error('The casino lists a group ended with malformed meta');
+        return { kind: 'end', group: entry.group, meta: entry.meta, at: entry.at };
+      }) as GameHistory['entries'],
+      cursor: page.cursor,
+      more: page.more,
+    };
+  }
+  /** An operation of a game as the casino kept it, checked as a reply is: the account signed the operation and the
+   * checkpoint it follows, the casino signed both checkpoints, the details are the ones the operation signed and name
+   * the game, and a casino bet's outcome is the one its seed and its round's secret make. A developer bet's payout is
+   * what its settlement says, signed by a server its developer named. */
+  pastReceipt(this: CasinoWallet, entry: Extract<AccountHistoryEntry, { type: 'operation' }>, identity: GameIdentity) {
+    const { details, evidence } = entry,
+      op = evidence.step.operation,
+      kind = Number(op.kind);
+    verifyEvidence({
+      chainId: this.expectedChainId,
+      casino: this.config.contractAddress,
+      operator: this.operator,
+      evidence,
+      details,
+    });
+    if (
+      !same(evidence.base.player, this.address) ||
+      details.game !== identity.id ||
+      (kind !== KIND.casinoBet && kind !== KIND.debit)
+    )
+      throw new Error("The casino lists an operation of another account or game as this game's");
+    const receipt = { status: 'signed', proof: evidence, details };
+    if (kind === KIND.casinoBet) {
+      const { value } = outcome(evidence.step.seed, evidence.step.secret);
+      return { ...receipt, kind: 'casino-bet', outcome: String(value), payout: String(betPayout(op, value)) };
+    }
+    if (!details.meta) return { ...receipt, kind: 'payment' };
+    const bet = {
+      ...receipt,
+      kind: 'developer-bet',
+      bet: hashOperation(this.domain, op).toLowerCase(),
+      stake: String(op.amount),
+      game: { id: identity.id, developer: identity.developer },
+    };
+    return entry.bet?.status === 'settled'
+      ? { ...bet, payout: String(this.developerBetPaid(bet, entry.bet).payout) }
+      : bet;
   }
   /** An operation of the open game settled, `spent` taken and `won` paid, with `kept` of its group's cash staying out
    * of it: a bet in a group takes what it stakes and keeps from what the group holds first, and leaves what it kept

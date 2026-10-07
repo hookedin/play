@@ -70,7 +70,8 @@ the game's bank holds before any developer bet pays its stake in: 10^12 wei each
 The wallet methods a test calls are `openGame(identity)`, `setGameAllowance(amount, developerBets?)` (a decimal string
 of wei, as the player sets it in the wallet's dialog, and `true` to allow developer bets too, which a game needs before
 its first developer bet), `gameAllowance(group?)` (what [`game.allowance`](../reference/bridge.md#gameallowance)
-answers), `gameEnd(group)`, `inPlay()` (what the open game's groups hold), `closeGame()`, `balance()` (the channel's
+answers), `gameEnd(group, meta?)`, `gameHistory(after?, limit?)` (what [`game.history`](../reference/bridge.md#gamehistory)
+answers), `inPlay()` (what the open game's groups hold), `closeGame()`, `balance()` (the channel's
 signed balance, a bigint) and `playableBalance()` (that balance less what a pending operation commits), from [client/wallet-games.ts](../../client/wallet-games.ts) and
 [client/wallet-channel.ts](../../client/wallet-channel.ts).
 
@@ -84,6 +85,9 @@ What the stub holds a game to:
 - Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`.
 - The game's casino bet names a group, is admitted against the virtual bankroll and reveals its round, once: the same bet again
   gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
+- The player's history of each game is kept as the casino keeps it: every game operation the stub carried out and
+  every group a game ended with meta, newest first, on any wallet of the player's, `reload()` and `forget()`
+  included. A group ends with meta once: other meta is refused with `id-conflict`.
 - `developer.bets()` pages as the casino does, 100 bets at a time, open ones in the order they were placed: page with
   `after` and `more`, and the size never matters. With `wait`, a page with no open bets is held until the next bet is
   placed or the time is up, and the stub refuses what the casino refuses: a wait outside 1 to 25 seconds or on settled
@@ -183,6 +187,8 @@ service runs it against itself, so the stub behaves as the casino does wherever 
 6. A game's server that restarts places the same casino bet, on the seed it published before the bet.
 7. A game's casino bet the bankroll declines reveals its round and moves no money.
 8. A round revealed without a bet shows its outcome in its group and moves no money.
-9. A round saved under rules the game does not play is let go once, and the next one plays.
+9. A game's history is its player's on any device: its operations, checked, and the groups it ended with meta.
+10. A round it ended is read back for the page to draw it, on any device.
+11. A round saved under rules the game does not play is let go once, and the next one plays.
 
 The suite is not part of the package's exports. It runs in play's `npm test`, on every push.

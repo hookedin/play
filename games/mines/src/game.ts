@@ -149,7 +149,7 @@ async function pick(tile: number) {
   const state = await round.action('reveal');
   show(state, tile);
   if (state.nodeId === 'mines:loss') {
-    await HookedIn.end(state.id);
+    await round.end(state, { gems, mine });
     return `A mine. You lost ${amount(state.contributed)}.`;
   }
   const { mines: m, picks } = setupOf(state),
@@ -162,8 +162,9 @@ async function pick(tile: number) {
 async function cashOut() {
   const state = await round.action('cash-out');
   show(state);
-  // The round is over on the board: what it won joins the allowance the wallet shows.
-  await HookedIn.end(state.id);
+  // The round is over on the board: what it won joins the allowance the wallet shows, and the board, with the tiles
+  // its gems were found on, the player's history.
+  await round.end(state, { gems, mine });
   return `You cashed out ${amount(state.cash)}.`;
 }
 

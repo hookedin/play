@@ -77,12 +77,14 @@ async function play(action: string) {
   if (!state || state.terminal) state = await round.start({ stake: HookedIn.parseAmount('100') });
   state = await round.action(action); // 'flip' or 'take'
   render(state); // state.nodeId, state.cash, state.actions, state.events
-  if (state.terminal) await HookedIn.end(state.id); // the round is over on the page
+  if (state.terminal) await round.end(state); // the round is over on the page
 }
 round.watch(() => render(round.state())); // another tab moved the round
+// The player's past rounds, from any device of theirs, drawn as they were played.
+for (const past of (await round.past({ limit: 10 })).rounds) renderPast(past);
 ```
 
-`render` and `message` are your page's own.
+`render`, `renderPast` and `message` are your page's own.
 
 - `restore()` loads the player's saved round and resolves a step whose reply was lost. Call it on startup.
 - `start(setup)` starts a round. `setup.stake` is the stake in wei, and any other field is yours for the graph
@@ -95,8 +97,10 @@ round.watch(() => render(round.state())); // another tab moved the round
   reload.
 - Each step's bet is in the round's group, `state.id`, so the allowance in the wallet's top bar drops by the stake on
   the first step and then stands still, while the round's cash stays with the round.
-  [`HookedIn.end(state.id)`](../sdk/hookedin.md#end), once the page has shown how the round ended, adds what it paid
-  ([groups](how-a-game-works.md#groups)).
+  [`end(state)`](../sdk/round.md#end), once the page has shown how the round ended, adds what it paid
+  ([groups](how-a-game-works.md#groups)) and keeps the round in the player's history.
+- [`past()`](../sdk/round.md#past) reads back the rounds the game ended, newest first, on any device of the player's:
+  each with the state it ended in, which the page draws as it did then.
 
 ## One step is one bet
 

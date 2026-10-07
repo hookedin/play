@@ -1,6 +1,6 @@
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
-import type { RoundState } from '@hookedin/play/sdk/round';
+import type { PastRound, RoundState } from '@hookedin/play/sdk/round';
 import { CHANCE_MAX, CHANCE_MIN, diceGraph, winPayout } from './rules.ts';
 
 /** What Auto cycles through: the rolls one press plays, where 0 is a single roll. */
@@ -23,8 +23,10 @@ let session: RoundState | null = null,
   auto = 0,
   // Rolls to go in this run of Auto, the one under way included.
   left = 0,
-  // The round last added to the history.
+  // The round last shown.
   shown = '';
+/** The rounds in the history strip, by ID. */
+const listed = new Set<string>();
 const chance = () => Number(slider.value);
 const percent = (bps: number) => (bps / 100).toFixed(2);
 function message(value: string, error = false) {
@@ -71,10 +73,25 @@ function render() {
   $('die').classList.toggle('rolling', running);
 }
 /** A finished roll: the verified outcome read on a 0–100 scale, where under the win chance wins. */
+const rollOf = (state: RoundState | PastRound) => ({
+  value: Number((BigInt(state.settlement.outcome) * 10000n) >> 64n) / 100,
+  won: state.nodeId === 'dice:win',
+});
+const rolled = (state: RoundState | PastRound | null) => /^[0-9]+$/.test(String(state?.settlement?.outcome));
+/** A roll in the history strip, once: a new one on top, and one read from the player's history below what is there. */
+function list(state: RoundState | PastRound, newest: boolean) {
+  if (!rolled(state) || listed.has(state.id)) return;
+  listed.add(state.id);
+  const { value, won } = rollOf(state),
+    past = Object.assign(document.createElement('li'), { textContent: value.toFixed(2) });
+  past.dataset.won = String(won);
+  if (newest) $('history').prepend(past);
+  else $('history').append(past);
+  while ($('history').children.length > HISTORY) $('history').lastElementChild!.remove();
+}
 function show(state: RoundState) {
-  if (!/^[0-9]+$/.test(String(state.settlement?.outcome))) return;
-  const value = Number((BigInt(state.settlement.outcome) * 10000n) >> 64n) / 100,
-    won = state.nodeId === 'dice:win',
+  if (!rolled(state)) return;
+  const { value, won } = rollOf(state),
     net = BigInt(state.cash) - BigInt(state.contributed);
   $('roll').textContent = value.toFixed(2);
   $('roll').dataset.won = String(won);
@@ -88,10 +105,7 @@ function show(state: RoundState) {
   shown = state.id;
   // A roll can settle at once; the die still tumbles for it.
   if (!reducedMotion) $('die').animate([{ rotate: '-200deg', scale: 0.85 }, {}], { duration: 300, easing: 'ease-out' });
-  const past = Object.assign(document.createElement('li'), { textContent: value.toFixed(2) });
-  past.dataset.won = String(won);
-  $('history').prepend(past);
-  while ($('history').children.length > HISTORY) $('history').lastElementChild!.remove();
+  list(state, true);
 }
 /** One roll: a new round, or the one left open. False once the player has been told why it failed. */
 async function roll() {
@@ -101,8 +115,8 @@ async function roll() {
       session = await round.start({ stake: HookedIn.parseAmount(stakeInput.value), chanceBps: chance() });
     if (!session.terminal) session = await round.action('roll');
     show(session);
-    // The roll is on the page: what it won joins the allowance the wallet shows.
-    await HookedIn.end(session.id);
+    // The roll is on the page: what it won joins the allowance the wallet shows, and the roll the player's history.
+    await round.end(session);
     return true;
   } catch (error: any) {
     try {
@@ -154,6 +168,10 @@ async function recover() {
       if (session?.terminal) show(session);
       render();
     });
+    // The player's earlier rolls, from any device of theirs: a dice round is one bet and the end of its group. A
+    // history the wallet cannot read leaves the strip to this visit's rolls.
+    const earlier = await round.past({ limit: 2 * HISTORY }).catch(() => null);
+    for (const past of earlier?.rounds ?? []) list(past, false);
   } catch (error: any) {
     message(error.message, true);
   } finally {

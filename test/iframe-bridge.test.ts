@@ -394,8 +394,16 @@ test('validation accepts only plain parameter records and bounded exact terms', 
     { meta: { pick: undefined } },
     { meta: { note: 'x'.repeat(4096) } },
   ])
-    assert.throws(() => validateRequest(onWord(bad)), /meta is a JSON object/);
+    assert.throws(() => validateRequest(onWord(bad)), /Meta is a JSON object/);
   assert.deepEqual(validateRequest(onWord({ meta: { odds: '1.5', n: 3 } })).params.meta, { odds: '1.5', n: 3 });
+  // A group ends with meta held to the same rule, and a history is read a page of 1 to 100 entries at a time.
+  const ended = (meta: unknown) => request(1, 'game.end', { group: 'hand-1', meta });
+  assert.deepEqual(validateRequest(ended({ cards: ['K', '7'] })).params.meta, { cards: ['K', '7'] });
+  for (const meta of ['K', null, { odds: 1.5 }]) assert.throws(() => validateRequest(ended(meta)), /Meta is a JSON/);
+  const page = (params: any) => request(1, 'game.history', params);
+  assert.deepEqual(validateRequest(page({ after: '', limit: 100 })).params, { after: '', limit: 100 });
+  for (const bad of [{ limit: 0 }, { limit: 101 }, { limit: '5' }, { after: 7 }, { after: 'x' }, { game: 'other' }])
+    assert.throws(() => validateRequest(page(bad)));
   assert.equal(validateRequest(onWord({ group: 'match-9' })).params.group, 'match-9');
   for (const group of ['', 'x'.repeat(65), 7]) assert.throws(() => validateRequest(bet({ group })), /group/);
   assert.throws(() => validateRequest(request(1, 'game.enter', { id: 'hand-1', stake: '10' })), /not available/);

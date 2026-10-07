@@ -876,3 +876,31 @@ test("the stub developer pages a game's bets 100 at a time in the order they wer
   for (const query of [{ wait: 26 }, { wait: 0.5 }, { status: 'settled' as const, wait: 1 }, { after: next! }])
     await assert.rejects(f.developer.bets(query), /Wait 1 to 25 seconds|cursor/);
 });
+
+test("a game's history is checked against the evidence the casino kept: whatever it changes, the page is refused", async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity());
+  await w.setGameAllowance('1000');
+  await f.bridge.call('game.casinoBet', terms('kept'));
+  w.openGame(f.identity('other'));
+  await w.setGameAllowance('1000');
+  await f.bridge.call('game.casinoBet', terms('elsewhere'));
+  assert.equal((await f.bridge.call('game.history')).entries.length, 1, "only the open game's");
+  const api = w.api.bind(w),
+    // The other game's operation, as the casino keeps it: genuine, but not this game's.
+    [elsewhere] = ((await api(`/api/account/game-history?game=${f.identity('test').id}`)) as any).entries,
+    doctored = (change: (entry: any) => void, refusal = /./) => {
+      w.api = async (path, body) => {
+        const page: any = await api(path, body);
+        if (path.startsWith('/api/account/game-history')) change(page.entries[0]);
+        return page;
+      };
+      return assert.rejects(f.bridge.call('game.history'), refusal);
+    };
+  // Another outcome, another group, another account's operation, or another game's.
+  await doctored(entry => (entry.evidence.step.secret = id('another secret')));
+  await doctored(entry => (entry.details.group = 'another group'));
+  await doctored(entry => (entry.evidence.base.player = ZeroAddress));
+  await doctored(entry => Object.assign(entry, structuredClone(elsewhere)), /another account or game/);
+});

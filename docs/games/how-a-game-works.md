@@ -68,8 +68,8 @@ The figure in the top bar must not give a result away before the page shows it, 
 what a bet in a group wins stays with its group, out of the allowance and balance the player sees, until the page
 calls [`HookedIn.end(group)`](../sdk/hookedin.md#end); only the group's own bets stake it meanwhile. Give every bet a
 group, and end it once the result is on the page: when the ball lands, the reels stop or the round is over.
-`RoundClient` puts each step in its round's group; end it with `HookedIn.end(state.id)`. A multi-step round then moves
-the figure twice: down by the stake on its first step, and up by what it paid when it ends
+`RoundClient` puts each step in its round's group; end it with [`round.end(state)`](../sdk/round.md#end). A multi-step
+round then moves the figure twice: down by the stake on its first step, and up by what it paid when it ends
 ([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)).
 
 ## The bridge
@@ -90,9 +90,10 @@ const { allowance, pending } = await HookedIn.allowance(); // what the game may 
 
 Players read and type amounts in **METH**: **1 METH is a millionth of an ETH (0.000001 ETH), or 10^12 wei**.
 Amounts on the bridge are decimal strings of whole wei: `HookedIn.parseAmount('1000')`, 1,000 METH, is
-`'1000000000000000'`, and `formatAmount` reads one back. [`wallet.info`](../reference/bridge.md#walletinfo) is all a game learns of the player:
-their uname, theirs for good, the Discord username they go by today, the virtual bankroll of the casino's latest quote and a
-recommended stake. The player's address, channel and balances never cross the bridge.
+`'1000000000000000'`, and `formatAmount` reads one back. [`wallet.info`](../reference/bridge.md#walletinfo) is all a game learns of the player
+beside their own plays of it ([history](#history)): their uname, theirs for good, the Discord username they go by
+today, the virtual bankroll of the casino's latest quote and a recommended stake. The player's address, channel and
+balances never cross the bridge.
 
 ## Operation IDs
 
@@ -172,6 +173,16 @@ It keys on the uname, which is the player's for good; never key by the Discord u
 account has its uname as soon as the wallet loads it, before any deposit, and the wallet loads the page again when the
 player switches accounts. `RoundClient` saves its round under `hookedin:round:<name>:<chainId>:<uname>`, where `name`
 is the page's path unless you pass one.
+
+## History
+
+[`HookedIn.history()`](../sdk/hookedin.md#history) reads the player's history of your game, newest first, from whichever
+channel and device they played it on: each operation the casino carried out, as the receipt the wallet checked, and
+each group you ended with meta. A receipt says what was bet and what it paid, not what your page drew from it: plinko's
+rows, blackjack's cards, the tiles a mines player picked. So end each group with meta, your own JSON saying how it went,
+[`HookedIn.end(group, meta)`](../sdk/hookedin.md#end), and draw past plays from it. `RoundClient` does it for a round:
+[`end(state)`](../sdk/round.md#end) keeps the state the round ended in, and [`past()`](../sdk/round.md#past) reads it
+back. A play that sends nothing to the casino, such as a step that places no bet, is only in your meta.
 
 ## Reloads and tabs
 

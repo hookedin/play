@@ -23,6 +23,7 @@ await round.restore();
 let state = await round.start({ stake: HookedIn.parseAmount('1') });
 state = await round.action('reveal'); // state.actions lists what is legal next
 if (state.actions.includes('cash-out')) state = await round.action('cash-out');
+await round.end(state); // once the page has shown how it ended: kept in the player's history, which round.past() reads
 ```
 
 ## The helper
@@ -40,9 +41,9 @@ if (state.actions.includes('cash-out')) state = await round.action('cash-out');
 | `name`    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
 
 Each step is at most one operation, whose group is the round's `id`: what the steps win stays with the round, out of
-the allowance the wallet shows, until the game calls [`HookedIn.end(state.id)`](hookedin.md#end) once the player has
-seen how the round ended. The round refuses a step when what the round may stake, the allowance and what it holds, is
-short of what the step needs; otherwise it draws the step's branch with the page's own randomness
+the allowance the wallet shows, until the game calls [`end(state)`](#end) once the player has seen how the round ended.
+The round refuses a step when what the round may stake, the allowance and what it holds, is short of what the step
+needs; otherwise it draws the step's branch with the page's own randomness
 ([`prepareAction`](engine.md#prepareaction)) and saves it with a fresh operation ID before it sends anything, and then
 sends a bet as one `game.casinoBet`, a payment as `game.payment`, or nothing, each with what it `kept` of the round's
 cash: the cash of the lower class a bet goes between, or what a payment leaves, so the round's whole stake leaves the
@@ -111,6 +112,31 @@ with its state unchanged.
 After an error, `restore()` gives the state to show: a pending step shows `pending: true`, with its action alone in
 `actions`.
 
+#### `end`
+
+`end(state, extra?)`: the player has seen how `state`'s round ended. It calls
+[`game.end`](../reference/bridge.md#gameend) for the round's group, so what the round won joins the allowance the wallet
+shows, with the round as the group's meta, which the casino keeps in the player's history of the game: its format and
+the hash of its rules, its `setup`, `nodeId`, `cash`, `contributed`, `events` and `settlement`, and `extra`, anything
+else the page draws the round with, such as the tiles a player picked. Call it with the state the page has just shown,
+even after the next round has started. Meta the wallet refuses, larger than the [bounds](../reference/bridge.md#bounds)
+allow or with numbers that are not whole, is left out, and the round ends without it. It resolves with `null`, and
+throws the bridge's errors: with `failed` the round has ended all the same, and calling `end` again keeps its meta.
+
+#### `past`
+
+`past({ after, limit })` reads a page of the player's history of the game with
+[`game.history`](../reference/bridge.md#gamehistory) and resolves with `{ rounds, cursor, more }`: the rounds this game
+ended with `end`, newest first, each a [`PastRound`](#pastround), from any device of the player's. A round played under
+rules this page does not play is left out, since it could not be drawn here, and so is everything else in the
+history. Pass `cursor` back as `after` for older rounds while `more` is `true`; a page holds every entry of the history,
+so it can hold fewer rounds than `limit`.
+
+```ts
+const { rounds } = await round.past({ limit: 20 });
+for (const past of rounds) drawResult(past); // with the code that drew it when it was played
+```
+
 #### `state`
 
 The round as last read, without asking the wallet: `null` before the first `restore` or `start`, and when no round is
@@ -155,6 +181,12 @@ decimal string, to show the result with, such as which reel stops or which path 
 outcome for a bet, apart from which state the step reached, and by the page for a step without one.
 [`seededRandom(BigInt(draw))`](engine.md#seededrandom) reads it. A declined step's `settlement` is
 `{ kind: 'rejected', reason }`.
+
+### `PastRound`
+
+A round the game ended with [`end`](#end), as [`past`](#past) reads it back: its `id`, `setup`, `nodeId`, `cash`,
+`contributed`, `events` and `settlement` as its [`RoundState`](#roundstate) had them, `at`, when it ended, in
+milliseconds, and `extra`, what the page added to it.
 
 ### `RoundEvent`
 

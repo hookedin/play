@@ -96,9 +96,10 @@ the meantime.
 
 ## Pages
 
-The developer bet lists return `{bets, cursor, more}`. Pass `cursor` back as `after` while `more` is `true`. Open bets
-come in the order they were placed and settled bets in the order they settled; each cursor is the ID of the page's last
-bet, or after an empty page the cursor it was given, so it survives restarts. An open cursor goes on to the bets placed
+The developer bet lists return `{bets, cursor, more}`, and an account's history of a game `{entries, cursor, more}`.
+Pass `cursor` back as `after` while `more` is `true`. Open bets come in the order they were placed, settled bets in the
+order they settled and a history newest first; each cursor is the ID of the page's last bet or entry, or after an empty
+page the cursor it was given, so it survives restarts. An open cursor goes on to the bets placed
 since, leaving out those settled meanwhile, so a server that follows it sees each bet once; start from the beginning to
 read every bet open now, and after `invalid`, which answers a cursor that names no bet the casino placed, as after a
 restore of its database. A settled cursor misses none: save it and resume from it, even after an empty page. `GET /api/players` and `GET /api/games/:id` take a
@@ -152,7 +153,7 @@ NUL; a channel or server route, `unauthorized` first; and a route that waits its
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                                                                                    |
 | `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                                                                                       |
 | `channel-closed`     | 409    | The channel is closing or closed                                                                                                                                                                                                                                                                                      |
-| `id-conflict`        | 409    | The operation ID is bound to another operation                                                                                                                                                                                                                                                                        |
+| `id-conflict`        | 409    | The operation ID is bound to another operation, or the group ended with other meta                                                                                                                                                                                                                                    |
 | `not-due`            | 409    | A credit for money the casino does not owe or pay                                                                                                                                                                                                                                                                     |
 | `unconfirmed`        | 409    | A deposit operation for money the casino has not seen confirmed on-chain yet, or a deposit's network fee before the casino sees its transaction; the same request can go again later. A deposit's fee before the balance has taken its deposit in is refused the same way, and can go only once the take-in is signed |
 | `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                                                                                             |

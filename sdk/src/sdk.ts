@@ -1,8 +1,22 @@
 /** HookedIn game bridge. This script runs inside a sandboxed iframe that keeps the game host's origin. */
-import type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
+import type {
+  CasinoBetRequest,
+  DeveloperBetRequest,
+  GameAllowance,
+  GameHistory,
+  GameReceipt,
+} from '../../protocol/game-types.ts';
 import type { Round } from '../../protocol/types.ts';
 import { exactAmount, formatAmount, parseAmount, playerScope, wholeStake } from './wire.ts';
-export type { CasinoBetRequest, DeveloperBetRequest, GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
+export type {
+  CasinoBetRequest,
+  DeveloperBetRequest,
+  GameAllowance,
+  GameHistory,
+  GameReceipt,
+  EndedGroup,
+  PastOperation,
+} from '../../protocol/game-types.ts';
 
 /** Every bound a bet is held to, as the wallet reports them. They are part of the protocol revision the wallet
  * and its casino share, so read them rather than carrying copies of your own. */
@@ -116,8 +130,14 @@ export const HookedIn = Object.freeze({
   placesDeveloperBets: (): Promise<null> => call('game.placesDeveloperBets'),
   /** The player has seen how `group` ended. Until then, what its bets won stays out of the allowance and the balance
    * the wallet shows, so they never give a result away before the game does; and the group's own bets may stake it.
-   * A stake leaves them when it is bet. Leaving the game ends every group. */
-  end: (group: string): Promise<null> => call('game.end', { group }),
+   * A stake leaves them when it is bet. Leaving the game ends every group. With `meta`, your own JSON saying how the
+   * group went, the casino keeps it in the player's history of your game, once per group, and `history` lists it. */
+  end: (group: string, meta?: Record<string, unknown>): Promise<null> =>
+    call('game.end', meta === undefined ? { group } : { group, meta }),
+  /** The player's history of your game, newest first, from any channel or device of theirs: your operations the casino
+   * carried out, as receipts the wallet checked, without your own IDs, and the groups you ended with meta. Pass the
+   * page's `cursor` back as `after` for older entries while `more` is true. */
+  history: (page: { after?: string; limit?: number } = {}): Promise<GameHistory> => call('game.history', { ...page }),
   /** The receipt of an earlier operation by your own `id`, or `null` if this wallet has none. For an open developer
    * bet the wallet also asks the casino: once its developer has settled it, the wallet collects it and `onReceipt`
    * hears. */
