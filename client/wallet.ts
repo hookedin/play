@@ -358,9 +358,9 @@ export class CasinoWallet extends GameSessions {
   }
   /** Check the chain and the casino now: ETH at the address goes into the balance, and what is owed is collected. */
   async check() {
-    // Asked again if the casino did not answer, or had no profile to give before it registered the account's channel,
-    // and first while no balance plays: what waits for the account registers its channel before any deposit.
-    if (!this.uname || (this.channel?.registered && !this.profile) || !this.playable)
+    // Asked again if the casino did not answer, and first while no balance plays: what waits for the account registers
+    // its channel before any deposit.
+    if (!this.profile || !this.playable)
       await this.lookUpNames().catch(error => console.error('Looking up your name failed', error));
     await this.refresh();
     await this.sweep().catch(error => console.error('Adding ETH to your balance failed', error));
@@ -596,16 +596,17 @@ export class CasinoWallet extends GameSessions {
   accountRequest(this: CasinoWallet, action: string) {
     return this.api(`/api/account/${action}`, {});
   }
-  /** Ask the casino for this account's uname: a uname is the account's before its first deposit. Its profile comes
-   * with it once it has one, and whether it registers the account's channel before any deposit. A profile already here
-   * came from a later reply, and stays. */
+  /** Ask the casino for this account's uname, with its profile: a uname is the account's before its first deposit,
+   * and asking is how the casino meets an account that has none, so others find it by its name. Whether the casino
+   * registers the account's channel before any deposit comes with it. A profile already here came from a later reply,
+   * and stays. */
   async lookUpNames(this: CasinoWallet) {
     if (this.recoveryOnly) return;
     const address = this.address;
     const { uname, profile, registers } = await this.accountRequest('uname');
     if (this.address !== address || typeof uname !== 'string') return;
     this.registers = registers === true;
-    if (!this.profile) Object.assign(this, { uname, discordUsername: profile?.discordUsername ?? null, profile });
+    if (!this.profile) Object.assign(this, { uname, discordUsername: profile.discordUsername, profile });
     this.render();
   }
   /** Every channel reply carries both names its player answers to, and a registered channel means the casino has met
@@ -638,7 +639,7 @@ export class CasinoWallet extends GameSessions {
   async refreshOwnProfile(this: CasinoWallet) {
     const address = this.address,
       { profile } = await this.accountRequest('uname');
-    if (this.address === address && profile) this.takeProfile(profile);
+    if (this.address === address) this.takeProfile(profile);
     return this.profile;
   }
   /** Give up the Discord account this account verified: it is shown by its uname again. */

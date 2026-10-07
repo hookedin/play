@@ -268,16 +268,17 @@ account with no balance asks too. Its uname and Discord routes count against the
 
 ### `POST /api/account/uname`
 
-The account's uname, told to the account alone: the token proves it holds the account's key, so an account has its
-uname before its first deposit. The wallet asks as soon as it loads an account. Asking records nothing, and this route
-tells nobody the uname of an address without that address's signature: the casino derives unames with a key it keeps
-secret. The body is `{}`.
+The account's uname, told to the account alone: the token proves it holds the account's key, so an account has its uname
+before its first deposit. The wallet asks as soon as it loads an account. The first time an account asks, unless the
+casino met it before, the casino meets it: from then on its uname finds its [profile](public.md#get-apiplayersname), and
+a [transfer](#post-apichannelsidoperations) to it is owed to it. This route tells nobody the uname of an address without
+that address's signature: the casino derives unames with a key it keeps secret. The body is `{}`.
 
-| Response field | Type           | Meaning                                                                                                                                                     |
-| -------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uname`        | string         | The account's uname                                                                                                                                         |
-| `profile`      | object or null | Its own profile, once the casino has met the account; `null` before                                                                                         |
-| `registers`    | boolean        | Whether the casino registers the account's current channel before the chain holds a deposit for it: it owes the account something, or registered it already |
+| Response field | Type    | Meaning                                                                                                                                                     |
+| -------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uname`        | string  | The account's uname                                                                                                                                         |
+| `profile`      | object  | Its own profile                                                                                                                                             |
+| `registers`    | boolean | Whether the casino registers the account's current channel before the chain holds a deposit for it: it owes the account something, or registered it already |
 
 An account's own profile is its [public profile](public.md#get-apiplayersname). Unlinking a Discord account and
 publishing a game answer with it too.

@@ -118,8 +118,8 @@ apart ([your name](../wallet/getting-started.md#your-name)): two that read alike
 
 ### `GET /api/players`
 
-Every player's [profile](#get-apiplayersname), the most played first. `limit` is how many, 1 to 500 and 100 by default;
-other values are clamped, and one that is not a number counts as 1.
+The [profile](#get-apiplayersname) of every player who has played or publishes a game, the most played first. `limit` is
+how many, 1 to 500 and 100 by default; other values are clamped, and one that is not a number counts as 1.
 
 ### `GET /api/players/:name`
 
@@ -131,7 +131,7 @@ One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
 | `discordUsername` | string or null | The username of the Discord account that verified them; `null` when none did. The house's, `hookedin`, is the casino's to give                                                                                                                                                                                                                                                                                            |
 | `discordVerified` | number or null | When they last verified their Discord account; `null` when none did, and for the house                                                                                                                                                                                                                                                                                                                                    |
 | `stats`           | object         | `{plays, net}`: how many bets of theirs have settled (a number), their bets in one game and group counting once, as the steps of a round, and what their bets paid less what they staked, signed                                                                                                                                                                                                                          |
-| `createdAt`       | number         | When the casino met them: their first channel's registration, their Discord username or their first published game                                                                                                                                                                                                                                                                                                        |
+| `createdAt`       | number         | When the casino met them: as their wallet first asked for [their uname](channels.md#post-apiaccountuname), or as anything else of theirs first reached it                                                                                                                                                                                                                                                                 |
 | `games`           | array          | The games they publish, by slug: `{id, name, slug, url, developer, createdAt}`, where `id` is the [game's ID](../reference/signed-messages.md#game-ids), `name` the name it is published under, `slug` its address in the profile ([slugs](channels.md#post-apiaccountgames)), `url` the [game's URL](../games/publishing.md#the-games-url), `developer` the player's address and `createdAt` when it was first published |
 
 ### `GET /api/players/:name/:slug`

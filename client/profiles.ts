@@ -4,9 +4,8 @@ import { navigate } from './routes.ts';
 import { act, lookUpPayee, openWallet, renderWallet, uiBusy, wallet } from './sheet.ts';
 import { HOUSE, profileCards } from './games.ts';
 
-/** The page at a player's name: the name, and their profile once the casino answers, or `missing` when nobody goes by
- * it. */
-let shown: { name: string; profile: any; missing: boolean } | null = null;
+/** The page at a player's name: their profile once the casino answers. */
+let shown: { profile: any } | null = null;
 /** The code Settings shows to run /verify with in the HookedIn Discord, while it lasts. */
 let verifying: { code: string; expires: number } | null = null;
 /** Ask the casino every few seconds, while the code lasts, whether its member ran /verify with it: the account then goes
@@ -24,12 +23,10 @@ async function watchVerify(code: { code: string; expires: number }, before: numb
   renderWallet();
 }
 /** Whether the page shown is this account's own. */
-const ownPage = () =>
-  Boolean(wallet.uname) &&
-  (shown?.profile?.uname === wallet.uname || (Boolean(shown?.missing) && shown?.name === `~${wallet.uname}`));
+const ownPage = () => Boolean(wallet.uname) && shown?.profile?.uname === wallet.uname;
 /** Anybody's page: their names, what they have played, and the games they publish. */
 export async function openProfile(name: string, push = true) {
-  const page: typeof shown = { name, profile: null, missing: false };
+  const page: typeof shown = { profile: null };
   shown = page;
   $('profile-name').textContent = name;
   $('profile-meta').textContent = '';
@@ -44,13 +41,12 @@ export async function openProfile(name: string, push = true) {
     drawProfile((page.profile = profile));
   } catch (error: any) {
     if (shown !== page) return;
-    page.missing = error.code === 'not-found';
-    $('profile-meta').textContent = page.missing ? 'Nobody goes by that name.' : error.message;
+    $('profile-meta').textContent = error.code === 'not-found' ? 'Nobody goes by that name.' : error.message;
     $('profile-stats').textContent = '';
   }
   renderWallet();
 }
-/** A player's profile, as anybody sees it, or your own before the casino has met you (`unmet`). */
+/** A player's profile, as anybody sees it. */
 function drawProfile(profile: any) {
   const name = showName(profile);
   document.title = `${name} · HookedIn`;
@@ -59,8 +55,6 @@ function drawProfile(profile: any) {
   const meta = profile.discordUsername ? ['~' + profile.uname] : [];
   if (profile.createdAt) meta.push(`Joined ${shortDate(profile.createdAt)}`);
   if (profile.discordVerified) meta.push(`Verified on Discord ${shortDate(profile.discordVerified)}`);
-  if (profile.unmet)
-    meta.push('Others see your page from your first deposit, or once you verify your Discord account.');
   $('profile-meta').textContent = meta.join(' · ');
   const plays = profile.stats.plays,
     net = BigInt(profile.stats.net);
@@ -81,7 +75,7 @@ function drawProfile(profile: any) {
 /** The account's own names, in the top bar, its menu and its own page. */
 export function renderProfile() {
   const name = wallet.uname ? showName(wallet) : null,
-    // A name is the account's from the start, and so is its page: others see it once the casino has met the account.
+    // A name is the account's from the start, and so is its page.
     page = name ? `/${name}` : null;
   $('account-name').textContent = name ?? 'Account';
   $('menu-name').textContent = name ?? 'Your account';
@@ -90,20 +84,6 @@ export function renderProfile() {
   $('menu-uname').textContent = uname;
   if (page) $<HTMLAnchorElement>('menu-profile').href = page;
   else $('menu-profile').removeAttribute('href');
-  // Your own page: the way to your name, and before the casino has met you, the page itself.
-  if (shown?.missing && ownPage()) {
-    shown.missing = false;
-    drawProfile(
-      (shown.profile = {
-        uname: wallet.uname,
-        discordUsername: null,
-        discordVerified: null,
-        stats: { plays: 0, net: '0' },
-        games: [],
-        unmet: true,
-      }),
-    );
-  }
   // Your own page says the name is yours; anybody else's offers to transfer to them.
   $('profile-yours').hidden = !ownPage();
   $('profile-transfer').hidden = !shown?.profile || ownPage();
