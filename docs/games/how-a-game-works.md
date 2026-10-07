@@ -46,7 +46,8 @@ verified winnings.
 - A game starts with an allowance of zero, and the wallet's own dialog is the only grant. Only the player opens it,
   from **Set allowance** in the wallet's top bar, and every word in it is the wallet's. A game never asks: nothing
   opens over it, and a bet or payment the allowance does not cover is refused with `insufficient-allowance`, whose
-  message tells the player to set it in the top bar. Show that message, or your own, before anything is drawn.
+  message tells the player to set it, or deposit, in the top bar. Show that message, or your own, before anything is
+  drawn.
 - Developer bets are allowed apart: the dialog warns that the game's developer takes their stakes and decides what
   they pay. A game that places them says so as its page loads, with `HookedIn.placesDeveloperBets()`, and the dialog
   then asks about them too. Casino bets need no more than the allowance, since the wallet checks their odds and their

@@ -2282,3 +2282,10 @@ body:has(#page-play:not(.hidden)) .footer {
     font-size: 12px;
   }
 }
+
+/* METH, where it labels an amount: its title says what a METH is, on hover. */
+abbr[title] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}

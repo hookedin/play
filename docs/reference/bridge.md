@@ -36,7 +36,10 @@ The wallet answers each request once, with the same `id` and either `result` or 
 {
   "hookedin": true,
   "id": 8,
-  "error": { "code": "insufficient-allowance", "message": "Not enough allowance for this bet. Set it in the top bar." }
+  "error": {
+    "code": "insufficient-allowance",
+    "message": "Not enough allowance for this bet. Set one, or deposit, in the top bar."
+  }
 }
 ```
 

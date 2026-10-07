@@ -5,7 +5,13 @@ sidebar:
   order: 1
 ---
 
-The wallet at https://play.hookedin.com holds your keys and your money, and every game is played inside it.
+The wallet at https://play.hookedin.com holds your keys and your money, and every game is played inside it. Your
+first bet takes four steps:
+
+1. Open https://play.hookedin.com and pick a game.
+2. Press **Deposit** in the top bar, save your wallet, and send Sepolia ETH to the address it shows.
+3. Press **Set allowance** in the top bar and allow the game part of your balance.
+4. Play. **Wallet**, in the top bar, withdraws what is left to any address.
 
 ## Open the wallet
 
@@ -22,7 +28,9 @@ Each address opens its tab, over the library when it is a link. Closing it, or B
 
 The wallet, its games and hookedin.com count money in **METH**. **1 METH is a millionth of an ETH (0.000001 ETH)**,
 so **1 ETH = 1,000,000 METH** and 0.01 ETH = 10,000 METH. Amounts are cut off, never rounded: a balance in whole METH,
-and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every digit on hover or in full.
+and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every digit on hover or in full. Every METH
+that labels an amount says what it is on hover, and the wallet's balance says it outright. The name is a joke, and a
+deliberate one: HookedIn, hooked in METH.
 
 This deployment uses **test ETH only**, on Sepolia, and is in [open beta](../index.md#open-beta): a reset can start
 balances, history and names over. Send it nothing else: it accepts no other asset or network, and offers no fiat
@@ -71,20 +79,21 @@ you choose.
 The library at `/` lists the games `@hookedin` publishes and the games your own account publishes, each by its
 [icon](../games/publishing.md#the-icon); **Open a game by its URL** opens any other.
 
-| URL                       | Opens                                                                                                                      |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `/@username/super-dice`   | The game the player `@username` publishes as `Super Dice`, at the [slug](../games/publishing.md#publish-it) its name makes |
-| `/~uname/super-dice`      | The same, for a player named by their uname                                                                                |
-| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game                                                                        |
+| URL                       | Opens                                                                                                                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/@username/super-dice`   | The game the player `@username` publishes as `Super Dice`, at the [slug](../games/publishing.md#publish-it) its name makes; its name, `/@username/Super Dice`, opens it too |
+| `/~uname/super-dice`      | The same, for a player named by their uname                                                                                                                                 |
+| `/games/custom?url=<url>` | The game whose page is at `<url>`, as nobody's game                                                                                                                         |
 
 A published game's developer is the account that published it: it earns half of each casino bet's commission in the
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
 all of its commission, and it takes no developer bets.
 
 A game opens with nothing to play with, and nothing opens over it: a bet it has no allowance for is refused, and the
-game says to set one in the top bar. While the game is open, the top bar names it and shows its allowance in place of
-your balance; until you set one, **Set allowance** is all it offers. It opens the wallet's own dialog, where every word
-is the wallet's; when your balance has nothing to allow, it opens the Deposit tab instead. Once you have allowed the
+game says to set one, or deposit, in the top bar. While the game is open, the top bar names it and shows its allowance
+in place of your balance; until you set one, **Set allowance** is all it offers, and it opens the wallet's own dialog,
+where every word is the wallet's. While your balance has nothing to allow, it reads **Deposit** and opens the Deposit
+tab instead. Once you have allowed the
 game something, the dialog adds up the visit: what you allowed, what you took back, what the game won or lost, and
 what is left. The allowance caps what the game may risk, and moves no money:
 
@@ -167,7 +176,8 @@ account](../casino-api/channels.md#verifying-a-discord-account)).
 `/@username` or `/~uname` is a player's public page: their names, how many bets they have played with what they won or
 lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
 Your page is there from the start: others find you by your name, and can transfer to you, before your first deposit.
-Your name, at the top of the account menu, opens your own page, with your Discord username. Anyone can read it, from
+The top bar shows your Discord username once you have one, and **Account** until then. Your name, at the top of the
+account menu, opens your own page, with your Discord username. Anyone can read it, from
 [`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list of players is at
 https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the game's developer.
 

@@ -580,7 +580,7 @@ test('the round helper refuses what the allowance does not cover, which only the
   const graph = coin({ action: 'double', additionalCash: 1000n, payout: () => 3000n });
   const round = new RoundClient(bridgeTo(w), graph, undefined, { store: memoryStore() });
   await assert.rejects(round.start({ stake: '1000' }), {
-    message: 'Not enough allowance for this bet. Set it in the top bar.',
+    message: 'Not enough allowance for this bet. Set one, or deposit, in the top bar.',
   });
   // The player sets the allowance in the wallet's top bar.
   await w.setGameAllowance('1000');

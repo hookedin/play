@@ -206,7 +206,10 @@ export class ChannelClient extends WalletTransactions {
         if (this.game?.identity.id !== game.id) throw gameError('game-closed', 'The game is no longer open');
         // The game shows these to the player, who sets the allowance in the wallet's top bar.
         if (debit + BigInt(game.kept ?? 0) > BigInt(this.gameAllowance(game.group).allowance))
-          throw gameError('insufficient-allowance', 'Not enough allowance for this bet. Set it in the top bar.');
+          throw gameError(
+            'insufficient-allowance',
+            'Not enough allowance for this bet. Set one, or deposit, in the top bar.',
+          );
         if (kind === 'developer-bet' && !this.game.developerBets)
           throw gameError('developer-bets-not-allowed', 'Allow developer bets with the allowance in the top bar.');
       } else if (debit > this.availableBalance())

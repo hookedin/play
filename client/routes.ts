@@ -1,4 +1,4 @@
-import { GAME_ID } from '../protocol/protocol.ts';
+import { GAME_ID, gameSlug } from '../protocol/protocol.ts';
 import { $, toast } from './page.ts';
 import { wallet, showWallet } from './sheet.ts';
 import { active, closeGame, openGame, renderGameAccount } from './games.ts';
@@ -84,8 +84,11 @@ export function parseRoute(
   } catch {}
   const tab = (Object.keys(SHEET_TABS) as WalletTab[]).find(tab => SHEET_TABS[tab] === pathname);
   if (tab) return { wallet: tab };
-  const named = /^\/([~@][A-Za-z0-9_.]{1,32})(?:\/([a-z0-9][a-z0-9-]*))?$/.exec(pathname);
-  if (named) return named[2] ? { owner: named[1]!, slug: named[2] } : { profile: named[1]! };
+  const named = /^\/([~@][A-Za-z0-9_.]{1,32})(?:\/([^/]+))?$/.exec(pathname);
+  if (named && !named[2]) return { profile: named[1]! };
+  // A game's name reads as the slug it makes: `/@bob/Super Dice` is `/@bob/super-dice`.
+  const slug = named?.[2] && gameSlug(named[2]);
+  if (slug) return { owner: named[1]!, slug };
   if (pathname === '/games/custom') return { url: url.searchParams.get('url') || '' };
   const record = /^\/games\/(.+)$/.exec(pathname)?.[1]!.toLowerCase();
   if (record && GAME_ID.test(record)) return { record };
@@ -105,6 +108,8 @@ export async function route(push = false) {
   }
   if ('profile' in target) return void openProfile(target.profile, push);
   if ('record' in target) return void openGameRecord(target.record, push);
+  // The address says the slug, whatever spelling of the name led here.
+  if ('slug' in target) history.replaceState(null, '', gamePath(target));
   if (active && active.path === gamePath(target)) return showPage('play');
   if (!(await openGame(target, push))) {
     showPage('library');

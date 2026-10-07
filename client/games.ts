@@ -2,7 +2,7 @@ import { ZeroAddress } from 'ethers';
 import { withLock } from './storage.ts';
 import { urlGameId } from '../protocol/protocol.ts';
 import { attachGameBridge, gameError } from './bridge.ts';
-import { exact, h } from './activity.ts';
+import { exact, h, methLabel } from './activity.ts';
 import { formatAmount, MICRO_ETH } from '../sdk/src/wire.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
 import { $, showName, toast } from './page.ts';
@@ -79,9 +79,9 @@ export const openGame = (target: GameRoute, push = false) =>
     return true;
   });
 /** The top bar: the open game, by the wallet's name for it, and its allowance, which takes the balance's place, so the
- * bar shows one amount. Until the allowance is set, setting it is all the bar offers, deposit or none: the only way a
- * game gets money to play with, where its refusals point. What the game's groups have won and it has not shown yet is
- * in none of these. */
+ * bar shows one amount. Until the allowance is set, setting it is all the bar offers, and with nothing in the balance to
+ * allow, depositing: the only ways a game gets money to play with, where its refusals point. What the game's groups
+ * have won and it has not shown yet is in none of these. */
 export function renderGameAccount() {
   const playable = wallet.playable,
     game = active ? wallet.game : null,
@@ -95,14 +95,11 @@ export function renderGameAccount() {
   // Balances read in whole METH, cut off, with every digit on hover.
   $('game-allowance-amount').replaceChildren(
     ...(allowance
-      ? [formatAmount(allowance, 0), h('small', { title: 'A millionth of an ETH' }, 'METH')]
-      : ['Set allowance']),
+      ? [formatAmount(allowance, 0), h('small', null, methLabel())]
+      : [allowable() ? 'Set allowance' : 'Deposit']),
   );
   $('game-allowance-amount').title = allowance ? `${exact(allowance)} METH` : '';
-  $('wallet-button-amount').replaceChildren(
-    formatAmount(balance, 0),
-    h('small', { title: 'A millionth of an ETH' }, 'METH'),
-  );
+  $('wallet-button-amount').replaceChildren(formatAmount(balance, 0), h('small', null, methLabel()));
   $('wallet-button-amount').title = `${exact(balance)} METH`;
   $('wallet-button-amount').classList.toggle('hidden', !wallet.publicState?.address || allowance > 0n);
   $('wallet-button-label').textContent = playable && balance > 0n ? 'Wallet' : 'Deposit';

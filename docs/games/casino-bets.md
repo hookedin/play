@@ -51,7 +51,8 @@ const key = `${HookedIn.storageScope(await HookedIn.info())}:flip`;
 async function flip(stake: bigint) {
   // The game may risk only its allowance, which the player sets in the wallet's top bar.
   const { allowance } = await HookedIn.allowance();
-  if (BigInt(allowance) < stake) throw new Error('Not enough allowance for this bet. Set it in the top bar.');
+  if (BigInt(allowance) < stake)
+    throw new Error('Not enough allowance for this bet. Set one, or deposit, in the top bar.');
   // Name the operation and save it before the wallet signs anything.
   const id = crypto.randomUUID();
   localStorage.setItem(key, JSON.stringify({ id, stake: String(stake) }));

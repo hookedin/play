@@ -210,7 +210,8 @@ export class RoundClient {
    * only the player sets, in the wallet's top bar. */
   async checkAllowance(required: bigint, group?: string) {
     const { allowance } = await this.call('game.allowance', group === undefined ? {} : { group });
-    if (BigInt(allowance) < required) throw new Error('Not enough allowance for this bet. Set it in the top bar.');
+    if (BigInt(allowance) < required)
+      throw new Error('Not enough allowance for this bet. Set one, or deposit, in the top bar.');
   }
   /** The player has seen how `state`'s round ended: what it won joins the allowance the wallet shows, and the casino
    * keeps the round in the player's history of the game, as the meta of its group, for `past` to read back on any

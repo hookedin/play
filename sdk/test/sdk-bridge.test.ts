@@ -33,7 +33,10 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     deliver(parent, {
       hookedin: true,
       id: posted.at(-1).id,
-      error: { code: 'insufficient-allowance', message: 'Not enough allowance for this bet. Set it in the top bar.' },
+      error: {
+        code: 'insufficient-allowance',
+        message: 'Not enough allowance for this bet. Set one, or deposit, in the top bar.',
+      },
     });
     await assert.rejects(
       refused,

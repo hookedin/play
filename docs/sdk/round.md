@@ -88,8 +88,8 @@ and is saved with the round. It throws `Recover the pending action first` while 
 resolves, and `Wait for the action under way` while a `start` or `action` runs, here or in another tab. It checks
 that the game's allowance covers the stake, prices the graph, and saves the round under a fresh `id`, replacing a saved
 unfinished round, whose cash is in the player's balance already. It places no bet; the first `action` does. It throws
-the pricing error above, `Not enough allowance for this bet. Set it in the top bar.` when the allowance does not cover
-the stake, and the bridge's errors.
+the pricing error above, `Not enough allowance for this bet. Set one, or deposit, in the top bar.` when the allowance
+does not cover the stake, and the bridge's errors.
 
 #### `action`
 
@@ -105,7 +105,7 @@ with its state unchanged.
 | `Illegal game action`                                                                          | The node does not offer the action                                                                      | –                                                                             |
 | `Retry the pending action first`                                                               | Another step is pending                                                                                 | Pending                                                                       |
 | A `RangeError` from [`prepareAction`](engine.md#prepareaction)                                 | The virtual bankroll `wallet.info` reports is below the planning floor or does not admit the bet drawn  | –                                                                             |
-| `Not enough allowance for this bet. Set it in the top bar.`                                    | The allowance does not cover the step, checked before anything is drawn                                 | –                                                                             |
+| `Not enough allowance for this bet. Set one, or deposit, in the top bar.`                      | The allowance does not cover the step, checked before anything is drawn                                 | –                                                                             |
 | The receipt's `reason`, or `The casino declined this step; retry this action or stop the game` | The casino declined the step                                                                            | Pending, under a fresh operation ID                                           |
 | The bridge's [error](../reference/bridge.md#errors)                                            | The step's request failed or timed out                                                                  | Pending, under the same operation ID, so sending it again is the same request |
 
@@ -150,8 +150,8 @@ removed.
 
 #### `checkAllowance`
 
-`checkAllowance(required, group?)` throws `Not enough allowance for this bet. Set it in the top bar.` unless the game
-may stake `required`, or with `group`, unless a bet in that group may
+`checkAllowance(required, group?)` throws `Not enough allowance for this bet. Set one, or deposit, in the top bar.`
+unless the game may stake `required`, or with `group`, unless a bet in that group may
 ([`game.allowance`](../reference/bridge.md#gameallowance)). Only the player sets the allowance, in the wallet's top bar.
 `start` and `action` call it; a page calls it before something of its own, such as reels that spin before a resumed
 step.

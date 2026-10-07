@@ -299,6 +299,10 @@ main > :first-child {
     transition: none !important;
   }
 }
+/* The unit an amount is in: its title says what a METH is, on hover. */
 :root [data-asset] {
   white-space: nowrap;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }

@@ -5,6 +5,8 @@
 const DECIMALS = 12;
 /** A METH, in wei. */
 export const MICRO_ETH = 10n ** BigInt(DECIMALS);
+/** What METH means, said wherever a page labels an amount with it: the title the label shows on hover. */
+export const METH_TITLE = 'A millionth of an ETH: 1 METH = 0.000001 ETH';
 
 /** What the player typed, a whole number of METH, as wei: every stake a player chooses is whole METH. */
 export function parseAmount(value: string) {

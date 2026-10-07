@@ -1,7 +1,7 @@
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
 import { plain, same } from '../protocol/protocol.ts';
 import { returnParts } from '../protocol/risk.ts';
-import { formatAmount } from '../sdk/src/wire.ts';
+import { formatAmount, METH_TITLE } from '../sdk/src/wire.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
 /** Activity's filters beside All: the value of each one's button. */
@@ -58,6 +58,8 @@ export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10
 /** Every digit of an amount in METH, thousands grouped. A list shows `formatAmount`'s, cut off at a gwei; a bet or an
  * event opened in full has this one. */
 export const exact = (value: bigint | string | number) => formatAmount(value, 12);
+/** METH, labelling an amount: what it means shows on hover. */
+export const methLabel = () => h('abbr', { title: METH_TITLE }, 'METH');
 /** A gain or a loss in METH, with its sign, as a list shows it. */
 export const signedAmount = (value: bigint) =>
   `${value < 0n ? '−' : '+'}${formatAmount(value < 0n ? -value : value)} METH`;

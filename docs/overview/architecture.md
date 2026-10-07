@@ -30,6 +30,10 @@ moves atomically with each step and no step waits on another. A player can walk 
 cash that step left them; nothing makes them finish a hand. A game built this way is a series of casino bets, each
 admitted and charged by itself, not a committed hand, and its prices follow from that.
 
+**The unit is METH, a millionth of an ETH, and the name is a joke on purpose.** Sepolia's stakes are a few METH, so
+every amount a player types is a whole number. HookedIn, hooked in METH: the pun is meant. Every METH that labels an
+amount says what it is on hover, and the wallet's balance says it outright.
+
 **A developer's solvency is outside HookedIn.** A game's bank reserves nothing, and a settlement is paid from it
 only as far as it can pay. Whether a developer can pay what its developer bets are owed, and proving it, is between the
 developer and its players; the casino does not attempt it. Playing a developer's game trusts that developer: for its

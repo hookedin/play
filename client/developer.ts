@@ -1,6 +1,6 @@
 import type { AccountGame } from '../protocol/types.ts';
 import { gameSlug, json, MAX_GAME_NAME, same, validGameName } from '../protocol/protocol.ts';
-import { exact, h, percent, signedAmount } from './activity.ts';
+import { exact, h, methLabel, percent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import { measuredReturn } from './bets.ts';
 import { $, short, shortDate, showName, toast, typedAmount } from './page.ts';
@@ -170,7 +170,7 @@ function ownGame(owner: string, game: AccountGame) {
         h(
           'div',
           { className: 'field-row' },
-          h('div', { className: 'amount-input' }, amount, h('span', null, 'METH')),
+          h('div', { className: 'amount-input' }, amount, h('span', null, methLabel())),
           h('button', { type: 'button', className: 'button', disabled: busy, onclick: () => moveBank(true) }, 'Put in'),
           h(
             'button',

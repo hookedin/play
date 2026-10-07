@@ -42,6 +42,6 @@ is. See [the architecture](docs/overview/architecture.md).
 ## Settled decisions
 
 [The architecture](docs/overview/architecture.md#settled-trade-offs) records trade-offs made on purpose: how commission
-is set, a multi-step game as a sequence of casino bets a player can walk away from, and a developer's solvency left to
-the trust of its players. They are decisions, not open questions. Explain them where it helps; do not propose changing
-them.
+is set, a multi-step game as a sequence of casino bets a player can walk away from, METH as the unit with its pun meant,
+and a developer's solvency left to the trust of its players. They are decisions, not open questions. Explain them where
+it helps; do not propose changing them.

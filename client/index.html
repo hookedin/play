@@ -9,6 +9,11 @@
       content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self' http: https:; frame-src http: https:; img-src 'self' data: http: https:; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>HookedIn</title>
+    <meta name="description" content="Casino games on Sepolia test ETH, in a wallet that checks every bet." />
+    <meta property="og:title" content="HookedIn" />
+    <meta property="og:description" content="Casino games on Sepolia test ETH, in a wallet that checks every bet." />
+    <meta property="og:image" content="https://play.hookedin.com/brand/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/brand/hookedin-mark.svg" />
     <link rel="stylesheet" href="/style.css" />
     <script type="module" src="/main.js"></script>
@@ -171,7 +176,10 @@
         <div class="money">
           <div class="money-card">
             <span class="label">In your games' banks</span>
-            <strong><span id="developer-banks">—</span> <small title="A millionth of an ETH">METH</small></strong>
+            <strong
+              ><span id="developer-banks">—</span>
+              <small><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></small></strong
+            >
             <p>
               Each game's bank pays its own settlements and casino bets, and nothing in it is reserved: what is in it is
               yours to take out.
@@ -235,7 +243,9 @@
         <dl class="figures">
           <div>
             <dt>Your shares are worth</dt>
-            <dd><span id="fund-value">—</span> METH</dd>
+            <dd>
+              <span id="fund-value">—</span> <abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr>
+            </dd>
           </div>
           <div>
             <dt>Share price</dt>
@@ -243,7 +253,9 @@
           </div>
           <div>
             <dt>Bankroll</dt>
-            <dd><span id="fund-equity">—</span> METH</dd>
+            <dd>
+              <span id="fund-equity">—</span> <abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr>
+            </dd>
           </div>
           <div>
             <dt>The house's own part</dt>
@@ -255,7 +267,9 @@
           <section class="card">
             <label for="invest-amount">Buy shares with</label>
             <div class="amount-input">
-              <input id="invest-amount" type="text" inputmode="decimal" value="10000" /><span>METH</span>
+              <input id="invest-amount" type="text" inputmode="decimal" value="10000" /><span
+                ><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></span
+              >
             </div>
             <button id="invest" class="button full" type="button" disabled>Buy shares</button>
           </section>
@@ -265,7 +279,9 @@
               ><button id="divest-all" class="text-button" type="button" disabled>All</button>
             </div>
             <div class="amount-input">
-              <input id="divest-amount" type="text" inputmode="decimal" /><span>METH</span>
+              <input id="divest-amount" type="text" inputmode="decimal" /><span
+                ><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></span
+              >
             </div>
             <button id="divest" class="button full" type="button" disabled>Sell shares</button>
           </section>
@@ -352,8 +368,11 @@
         ><button class="close" type="button" data-close aria-label="Close">×</button>
       </div>
       <div class="money-card balance sheet-balance" data-section="wallet">
-        <span class="label">Balance</span
-        ><strong><span id="balance-amount">—</span> <small title="A millionth of an ETH">METH</small></strong>
+        <span class="label">Balance · 1 METH = 0.000001 ETH</span
+        ><strong
+          ><span id="balance-amount">—</span>
+          <small><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></small></strong
+        >
         <span id="balance-note" class="muted">What games play with.</span>
       </div>
       <p id="wallet-reason" class="help" hidden data-section="wallet"></p>
@@ -428,7 +447,7 @@
               placeholder="Enter an amount"
               spellcheck="false"
             /><select id="withdraw-unit" aria-label="Unit">
-              <option>METH</option>
+              <option title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</option>
               <option>ETH</option>
             </select>
           </div>
@@ -460,7 +479,7 @@
               autocomplete="off"
               placeholder="Enter an amount"
               spellcheck="false"
-            /><span>METH</span>
+            /><span><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></span>
           </div>
           <button id="transfer-max" class="text-button" type="button">Max</button>
           <button id="transfer" class="button primary full" type="button">Transfer</button>
@@ -580,15 +599,23 @@
           <dl class="figures">
             <div>
               <dt>Your deposits</dt>
-              <dd><span id="held-deposits">—</span> METH</dd>
+              <dd>
+                <span id="held-deposits">—</span> <abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr>
+              </dd>
             </div>
             <div>
               <dt>Collateral</dt>
-              <dd><span id="collateral-amount">—</span> METH</dd>
+              <dd>
+                <span id="collateral-amount">—</span>
+                <abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr>
+              </dd>
             </div>
             <div>
               <dt>Protected</dt>
-              <dd><span id="protected-amount">—</span> METH</dd>
+              <dd>
+                <span id="protected-amount">—</span>
+                <abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr>
+              </dd>
             </div>
             <div>
               <dt>Collateral costs</dt>
@@ -605,7 +632,7 @@
                 autocomplete="off"
                 placeholder="10000"
                 aria-label="Collateral to buy"
-              /><span>METH</span>
+              /><span><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></span>
             </div>
             <button id="buy-collateral" class="button" type="button">Buy collateral</button>
           </div>
@@ -715,7 +742,7 @@
         </div>
         <div class="amount-input">
           <input id="allowance-amount" inputmode="numeric" autocomplete="off" aria-describedby="allowance-help" /><span
-            >METH</span
+            ><abbr title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</abbr></span
           >
         </div>
         <input
