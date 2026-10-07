@@ -155,13 +155,12 @@ edits.
 
 #### `wholeStake`
 
-`wholeStake(wei, units = 1n)`: the stake a player can choose at or below `wei`, in wei: whole METH, a multiple of
-`units` of them, and at least that. A page halves a stake with it, and a game whose bets are halved again, as
-blackjack's insurance is, keeps its stakes even with `units` 2.
+`wholeStake(wei)`: the stake a player can choose at or below `wei`, in wei: whole METH, and at least one. A page halves
+a stake with it.
 
 ```ts
 HookedIn.wholeStake(1500000000000n); // 1000000000000n, 1 METH
-HookedIn.wholeStake(1n, 2n); // 2000000000000n, 2 METH
+HookedIn.wholeStake(1n); // 1000000000000n, 1 METH
 ```
 
 #### `initializeGame`

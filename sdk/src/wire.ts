@@ -15,11 +15,10 @@ export function parseAmount(value: string) {
   return wei.toString();
 }
 
-/** The stake a player can choose at or below `wei`: whole METH, a multiple of `units` of them, and at least that. */
-export function wholeStake(wei: bigint | string, units = 1n) {
-  const step = units * MICRO_ETH,
-    whole = BigInt(wei) - (BigInt(wei) % step);
-  return whole > 0n ? whole : step;
+/** The stake a player can choose at or below `wei`: whole METH, and at least one. */
+export function wholeStake(wei: bigint | string) {
+  const whole = BigInt(wei) - (BigInt(wei) % MICRO_ETH);
+  return whole > 0n ? whole : MICRO_ETH;
 }
 
 /** Wei as the player reads them, in METH: thousands grouped, cut off (never rounded) at `places` decimals, a gwei by

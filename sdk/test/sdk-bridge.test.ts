@@ -25,11 +25,9 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     assert.equal(HookedIn.formatAmount('1', 0), '<1');
     assert.equal(HookedIn.exactAmount('1234567891999999999999'), '1234567891.999999999999');
     assert.throws(() => HookedIn.parseAmount('0'), /greater than zero/);
-    // A stake halved stays whole METH, at least one, or a multiple of two for a game that halves it again.
+    // A stake halved stays whole METH, at least one.
     assert.equal(HookedIn.wholeStake(1500000000000n), 1000000000000n);
     assert.equal(HookedIn.wholeStake(500000000000n), 1000000000000n);
-    assert.equal(HookedIn.wholeStake(5000000000000n, 2n), 4000000000000n);
-    assert.equal(HookedIn.wholeStake(1n, 2n), 2000000000000n);
     // A refusal carries a code the game can act on.
     const refused = HookedIn.call('game.casinoBet');
     deliver(parent, {
