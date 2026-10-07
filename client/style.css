@@ -625,11 +625,11 @@ label {
 .menu-head .handle:empty {
   display: none;
 }
-.account-menu details {
-  padding: 8px 12px;
-}
-.account-menu details a {
-  padding-left: 0;
+/* What a player uses most, above what they use now and then. */
+.account-menu hr {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
 }
 .account-menu > button {
   margin: 8px 12px;
