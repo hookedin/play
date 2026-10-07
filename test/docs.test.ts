@@ -119,3 +119,10 @@ test('every relative link reaches a file, and every anchor a heading', () => {
   }
   assert.deepEqual(broken, []);
 });
+
+test('every Etherscan link to a contract is to the one config/production.json pins', () => {
+  const { contractAddress } = JSON.parse(read('config/production.json')).deployment;
+  for (const file of markdown())
+    for (const [, address] of read(file).matchAll(/etherscan\.io\/address\/(0x[0-9a-fA-F]{40})/g))
+      assert.equal(address, contractAddress, file);
+});

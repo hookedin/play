@@ -2,6 +2,8 @@
 
 The public half of [HookedIn](https://hookedin.com): the wallet served at <https://play.hookedin.com>, the settlement contract, the protocol code the wallet and the casino share, the game SDK, the house's games, and the documentation, which <https://hookedin.com/docs> renders from [docs/](docs/). Everything a player has to trust is here; the casino service is private, and the wallet never takes its word for anything it can check.
 
+**The contract** that holds every deposit is [verified on Etherscan](https://sepolia.etherscan.io/address/0xEB64058cc50cE278A8c738FD0a603C797BaC0204#code): the source shown there is [contracts/HookedInCasino.sol](contracts/HookedInCasino.sol).
+
 ## Documentation
 
 | Read                                                                                         | To                                                                  |

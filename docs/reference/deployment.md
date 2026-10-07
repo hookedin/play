@@ -7,7 +7,9 @@ sidebar:
 
 A deployment is one HookedInCasino contract on one chain, the casino service that signs for it, the wallet release
 that pins it, and the games. The current contract is named in [config/production.json](../../config/production.json),
-and https://hookedin.com/bankroll/ shows it live.
+its source is
+[verified on Etherscan](https://sepolia.etherscan.io/address/0xEB64058cc50cE278A8c738FD0a603C797BaC0204#code), and
+https://hookedin.com/bankroll/ shows it live.
 
 ## Chains
 
@@ -84,7 +86,8 @@ Everything a player has to trust is in this repository, so a release can be rebu
 **The contract.** After `npm ci`, `npm run compile` compiles [contracts/](../../contracts/) with solc 0.8.37, the
 optimizer at 200 runs, the IR pipeline, the Cancun EVM and no metadata hash, and fails if the runtime differs from the
 pin in `client/contract-artifact.ts`. It writes the compiler input and output to `build/compile-input.json` and
-`build/contracts.json`. With no metadata hash in the bytecode, the pin moves only when the compiled code does, never for
+`build/contracts.json`. Etherscan compiled the same input, with the contract its only source, to the code at the
+contract's address. With no metadata hash in the bytecode, the pin moves only when the compiled code does, never for
 a comment or a name. `npm run release:artifact` rewrites the pin; maintainers run it after reviewing a contract change.
 
 **The served wallet.** `npm run build` compiles the contract, checks the pin, and writes the wallet to `dist/`:
