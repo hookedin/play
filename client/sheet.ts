@@ -197,7 +197,7 @@ function renderSafety() {
   $('deposit-fee').textContent =
     fee > 0n
       ? `Address balance ${exact(held)} METH. Estimated maximum network fee ${exact(fee)} METH. Up to ${exact(whole + paid)} METH can be added now${paid ? ': the casino pays the network fee' : ''}. The final fee is recorded in Activity.`
-      : 'The network fee is estimated when ETH arrives. Small deposits may not cover that fee.';
+      : '';
 }
 
 /** One user action at a time. A background poll holding the wallet finishes first. */
@@ -285,7 +285,7 @@ const sendBlocked = ({ open, ready, closing }: SendState, verb: string) =>
     : closing
       ? 'Your balance is closing: once its 7-day window ends, finish the close under Settings → Recovery and collect it.'
       : !open
-        ? 'No balance is open: your first deposit opens one.'
+        ? `Nothing to ${verb.toLowerCase()} yet: deposit some ETH first.`
         : wallet.recoveryOnly
           ? 'The casino is unavailable: close without it under Settings → Recovery.'
           : inbound(wallet.pending?.kind)
@@ -450,10 +450,12 @@ export function renderWallet() {
                   ? `Your balance is closing: ETH sent here waits until you choose what to do with it.${held}`
                   : !wallet.autoDeposit
                     ? `ETH sent here stays at this address: adding it to your balance by itself is off in Settings.${held}`
-                    : `Waiting for ETH. Deposits are added after network confirmation.${wallet.config.depositFeeLimit == null ? ' The network fee of adding them comes out of them.' : ' The casino pays the network fee of adding them, as far as its daily budget goes.'}`;
+                    : `Waiting for ETH. It joins your balance after network confirmation${wallet.config.depositFeeLimit == null ? ', less the network fee of adding it' : ', and the casino pays the network fee of adding it, within a daily budget'}.`;
   if ($('deposit-status').textContent !== depositStatus) $('deposit-status').textContent = depositStatus;
   const addable = (wallet.forceClosed || !wallet.autoDeposit) && !wallet.recoveryOnly && !closing && atAddress > 0n;
   $('add-to-balance').classList.toggle('hidden', !addable);
+  // What adding it costs shows beside the button that adds it.
+  $('deposit-fee').hidden = $('estimate-deposit-fee').hidden = !addable;
   $<HTMLButtonElement>('add-to-balance').disabled = busy || !ready;
   $<HTMLButtonElement>('copy-address').disabled = !ready;
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);

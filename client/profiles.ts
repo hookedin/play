@@ -81,6 +81,7 @@ export function renderProfile() {
   // guest, with no account here, signs in there.
   $('account-name').textContent = wallet.guest ? 'Sign in' : wallet.discordUsername ? showName(wallet) : 'Account';
   $('menu-profile').hidden = Boolean(wallet.guest);
+  $('account-button').classList.toggle('guest', Boolean(wallet.guest));
   $('menu-name').textContent = name ?? 'Your account';
   // The uname is always there; when a Discord username covers it up, it is shown underneath.
   const uname = wallet.discordUsername && wallet.uname ? '~' + wallet.uname : '';

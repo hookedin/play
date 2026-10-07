@@ -1,5 +1,5 @@
 import { json } from '../protocol/protocol.ts';
-import { h, percent, signedAmount } from './activity.ts';
+import { h, shortPercent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import {
   betDetail,
@@ -219,7 +219,7 @@ export function renderMyGames() {
         ['Put in', `${formatAmount(totals.putIn)} METH`],
         ['Paid back', `${formatAmount(totals.putIn + totals.net)} METH`],
         ['Your result', signedAmount(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
-        ['Return of your bets', expected === null ? '—' : percent(expected)],
+        ['Return of your bets', expected === null ? '—' : shortPercent(expected)],
       ];
       return h(
         'div',

@@ -35,9 +35,10 @@ return          = expected payout / stake
 ```
 
 The wallet works it out from the chance and prize it signs, before signing, and never from anything a game says. It
-shows the return in millionths of the stake, rounded to the nearest, as a percentage with four decimals: a hundredth of
-a basis point. The coin flip in [how it works](../overview/how-it-works.md#casino-bets) returns 98.0000%. A developer
-bet has no odds, and so no return.
+works the return out in millionths of the stake, rounded to the nearest. A bet opened in full shows it as a percentage
+with four decimals, a hundredth of a basis point; lists cut it to two and drop trailing zeros. The coin flip in
+[how it works](../overview/how-it-works.md#casino-bets) returns 98.0000%, which a list shows as 98%. A developer bet has
+no odds, and so no return.
 
 **My games**, `/games`, adds up your bets, overall and game by game, two ways:
 

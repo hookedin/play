@@ -55,6 +55,8 @@ export function timeOf(at: string | number, className: string, short = false) {
 }
 /** A share in millionths, as a percentage with four decimals. */
 export const percent = (parts: bigint) => `${parts / 10000n}.${String(parts % 10000n).padStart(4, '0')}%`;
+/** A rate as a list shows it: cut to two decimals, with no trailing zeros. A bet opened in full has `percent`'s. */
+export const shortPercent = (parts: bigint) => percent(parts - (parts % 100n)).replace(/\.?0+%$/, '%');
 /** Every digit of an amount in METH, thousands grouped. A list shows `formatAmount`'s, cut off at a gwei; a bet or an
  * event opened in full has this one. */
 export const exact = (value: bigint | string | number) => formatAmount(value, 12);

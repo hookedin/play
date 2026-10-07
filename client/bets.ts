@@ -1,6 +1,6 @@
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { betPayout, channelId, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
-import { activityJSON, copyBlock, exact, h, percent, signedAmount, timeOf } from './activity.ts';
+import { activityJSON, copyBlock, exact, h, percent, shortPercent, signedAmount, timeOf } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 
 /**
@@ -122,14 +122,14 @@ export function totalCards(totals: BetTotals) {
       h(
         'div',
         { className: 'large-amount' },
-        h('span', null, expected === null ? '—' : percent(expected)),
+        h('span', null, expected === null ? '—' : shortPercent(expected)),
         h('small', null, 'EXPECTED'),
       ),
       h(
         'p',
         null,
         `What these bets' own odds were worth${totals.priced < totals.staked ? ', where a bet had them: a developer bet has none' : ''}. ` +
-          `They paid back ${realised === null ? '—' : percent(realised)}.`,
+          `They paid back ${realised === null ? '—' : shortPercent(realised)}.`,
       ),
       h('p', { className: `bet-net ${totals.net < 0n ? 'negative' : 'positive'}` }, signedAmount(totals.net)),
     ),
@@ -163,7 +163,7 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
     figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} METH`),
     figure(
       'Return of this bet',
-      row.expected === null ? '—' : percent(returnParts(row.stake, row.expected)),
+      row.expected === null ? '—' : shortPercent(returnParts(row.stake, row.expected)),
       'bet-return',
     ),
   );
@@ -430,7 +430,10 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         ['Expected payout, out of 2⁶⁴ stakes', hex(receipt.expectedPayout)],
         ['Balance after it settled', `${exact(receipt.balance ?? 0)} METH`],
         receipt.commission && BigInt(receipt.commission) > 0n
-          ? ['The game’s commission', `${exact(receipt.commission)} METH`]
+          ? [
+              'The game’s commission',
+              h('span', { title: `${exact(receipt.commission)} METH` }, `${formatAmount(receipt.commission)} METH`),
+            ]
           : null,
         ['The state it moved from', hex(op.previousStateHash)],
         ['Your signature on it', hex(step.authorization)],

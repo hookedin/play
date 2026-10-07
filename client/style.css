@@ -1395,6 +1395,7 @@ main:has(> #page-play:not(.hidden)) > .banner {
   letter-spacing: 0.12em;
 }
 #deposit-status {
+  margin-top: 8px;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -2155,6 +2156,13 @@ body:has(#page-play:not(.hidden)) .footer {
   .game-title {
     margin-right: auto;
     padding-left: 10px;
+  }
+  /* A guest's button says Sign in, as it does on a wide screen. */
+  .account-button.guest {
+    padding: 0 10px 0 5px;
+  }
+  .account-button.guest .account-name {
+    display: inline;
   }
   .account-button {
     padding: 0 5px;

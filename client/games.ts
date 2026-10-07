@@ -104,8 +104,10 @@ export function renderGameAccount() {
   $('wallet-button-amount').title = `${exact(balance)} METH`;
   $('wallet-button-amount').classList.toggle('hidden', !wallet.publicState?.address || allowance > 0n);
   $('wallet-button-label').textContent = guest ? 'Create wallet' : playable && balance > 0n ? 'Wallet' : 'Deposit';
+  // The lobby's banner offers the way in, and goes once the player has a balance to play.
+  $('hero').classList.toggle('hidden', playable);
   $('hero-deposit').textContent = guest ? 'Create your wallet' : 'Deposit ETH';
-  $('hero-deposit').classList.toggle('hidden', playable || !(guest || wallet.address));
+  $('hero-deposit').classList.toggle('hidden', !(guest || wallet.address));
   if (!active || !game) return;
   // A game opened before a channel adopts the first one; a game bound to a channel closes with it.
   if (active.channelId === null && wallet.channelId) active.channelId = wallet.channelId;
