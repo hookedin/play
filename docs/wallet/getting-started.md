@@ -127,12 +127,11 @@ much can be withdrawn now, and your balance is as it was. A withdrawal needs the
 
 ## Transfer
 
-**Transfer**, in the wallet, gives part of your balance to another player. Choose who it goes to: one of the players
-you last transferred to or received from, a tap each, or anyone by their Discord username, such as `@bob`, their uname,
-such as `~3byt9ocwnnzaxanmiz3stocj`, or a link to their page. **Transfer METH** on another player's page opens it with
-their name filled in. The wallet shows who the name belongs to, and the uname it signs: a Discord username can pass to
-another member, a uname never does. Then enter an amount in METH or choose **Max**. It is how you give a friend METH to
-play with.
+**Transfer**, in the wallet, gives part of your balance to another player. Choose who it goes to by their Discord
+username, such as `@bob`, their uname, such as `~3byt9ocwnnzaxanmiz3stocj`, or a link to their page. **Transfer METH**
+on another player's page opens it with their name filled in. The wallet shows who the name belongs to, and the uname it
+signs: a Discord username can pass to another member, a uname never does. Then enter an amount in METH or choose
+**Max**. It is how you give a friend METH to play with.
 
 A transfer is off-chain: a debit your account signs, naming their uname, which costs no fee and names neither of your
 addresses anywhere, on-chain or to each other. The casino owes it to them until their wallet collects it into their
