@@ -102,8 +102,8 @@ order they settled and a history newest first; each cursor is the ID of the page
 page the cursor it was given, so it survives restarts. An open cursor goes on to the bets placed
 since, leaving out those settled meanwhile, so a server that follows it sees each bet once; start from the beginning to
 read every bet open now, and after `invalid`, which answers a cursor that names no bet the casino placed, as after a
-restore of its database. A settled cursor misses none: save it and resume from it, even after an empty page. `GET /api/players` and `GET /api/games/:id` take a
-`limit` and have no cursor.
+restore of its database. A settled cursor misses none: save it and resume from it, even after an empty page.
+`GET /api/games/:id` takes a `limit` and has no cursor.
 
 ## Budgets and queues
 

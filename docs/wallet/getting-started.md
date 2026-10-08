@@ -176,13 +176,12 @@ to your uname. Your uname stays yours either way, and both names find you ([veri
 account](../casino-api/channels.md#verifying-a-discord-account)).
 
 `/@username` or `/~uname` is a player's public page: their names, how many bets they have played with what they won or
-lost, and the games they publish ([publishing](../games/publishing.md#publish-it)).
-Your page is there from the start: others find you by your name, and can transfer to you, before your first deposit.
-The top bar shows your Discord username once you have one, **Account** until then, and **Sign in** while you have no
-account. Your name, at the top of the
-account menu, opens your own page, with your Discord username. Anyone can read it, from
-[`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname), and the casino's list of players is at
-https://hookedin.com/players/. Publishing a game makes your address public: your page names it as the game's developer.
+lost, and the games they publish ([publishing](../games/publishing.md#publish-it)). Your page is there from the start:
+others find you by your name, and can transfer to you, before your first deposit. The top bar shows your Discord
+username once you have one, **Account** until then, and **Sign in** while you have no account. Your name, at the top of
+the account menu, opens your own page, with your Discord username. Anyone can read it, from
+[`GET /api/players/:name`](../casino-api/public.md#get-apiplayersname). Publishing a game makes your address public:
+your page names it as the game's developer.
 
 ## Help
 

@@ -116,11 +116,6 @@ The bankroll fund's state, signed by the casino: a quote it can be held to. The 
 A player is public by their names alone, a `~uname` and a Discord username, `@username`, compared as names are told
 apart ([your name](../wallet/getting-started.md#your-name)): two that read alike are one name.
 
-### `GET /api/players`
-
-The [profile](#get-apiplayersname) of every player who has played or publishes a game, the most played first. `limit` is
-how many, 1 to 500 and 100 by default; other values are clamped, and one that is not a number counts as 1.
-
 ### `GET /api/players/:name`
 
 One player's profile; `:name` is `~` and a uname or `@` and a Discord username.
@@ -147,9 +142,9 @@ out, a developer bet when the game's server settles it, and the game's own casin
 takes it. Declined bets and reveals do not appear. An unknown ID answers with a bank and totals of zero and no bets, and
 one that is not a game ID with `invalid`.
 
-| Query   | Type   | Meaning                                                                 |
-| ------- | ------ | ----------------------------------------------------------------------- |
-| `limit` | number | How many bets, 1 to 500; default 100, clamped as for `GET /api/players` |
+| Query   | Type   | Meaning                                                                                                        |
+| ------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `limit` | number | How many bets, 1 to 500 and 100 by default; other values are clamped, and one that is not a number counts as 1 |
 
 | Response field  | Type   | Meaning                                                                                       |
 | --------------- | ------ | --------------------------------------------------------------------------------------------- |
