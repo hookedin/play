@@ -15,6 +15,10 @@ contract HookedInCasino {
     // prize and quoted virtual bankroll: no realistic number of claims can overflow the uint256 aggregate debt and block
     // a finalization or a withdrawal, and a disputed bet's Kelly condition fits in 256 bits.
     uint256 public constant MAX_BALANCE = 1 << 96;
+    // The gas a withdrawal's payment is sent with as it is recorded, so its recipient cannot spend what recording needs. It
+    // defers a payment, never blocks it: one a recipient needs more for stays a claim, and collecting a claim sends it
+    // all the gas its caller gives. Creating a new account is the sender's to pay, beside it.
+    uint256 private constant PAYMENT_GAS = 100000;
     uint8 private constant STATUS_ACTIVE = 0;
     uint8 private constant STATUS_CLOSING = 1;
     uint8 private constant STATUS_FINALIZED = 2;
@@ -367,7 +371,9 @@ contract HookedInCasino {
         emit Withdrawal(id, s.player, s.index, recipient, op.amount);
         _changed(s.player, s.index);
         uint256 reached = _reached(queuedWinnings, winnings);
-        if (_send(id, s.player, recipient, protectedAmount, reached)) (protectedAmount, winnings) = (0, winnings - reached);
+        if (_send(id, s.player, recipient, protectedAmount, reached, PAYMENT_GAS)) {
+            (protectedAmount, winnings) = (0, winnings - reached);
+        }
         if (protectedAmount + winnings != 0) {
             claims[id] = Claim(s.player, recipient, protectedAmount, winnings, winnings != 0 ? queuedWinnings : 0);
         }
@@ -640,23 +646,28 @@ contract HookedInCasino {
 
     // Collecting pays what is covered of a claim: only the covered front of the queue collects, and what it collects
     // leaves the cash covering the rest as it was, so a recipient that refuses payment keeps its share without holding up
-    // the claims behind it. A refused collection reverts.
+    // the claims behind it. Its caller pays for it, so the payment is sent all the gas it gives. A refused collection
+    // reverts.
     function _pay(bytes32 id) private {
         Claim storage k = claims[id];
         uint256 protectedAmount = k.protectedRemaining;
         uint256 winnings = _reached(k.queueEnd, k.winningsRemaining);
         (k.protectedRemaining, k.winningsRemaining) = (0, k.winningsRemaining - winnings);
-        if (!_send(id, k.beneficiary, k.recipient, protectedAmount, winnings)) revert TransferFailed();
+        if (!_send(id, k.beneficiary, k.recipient, protectedAmount, winnings, gasleft())) revert TransferFailed();
         _totals();
     }
 
     // Pays a claim's protected amount and winnings: into its beneficiary's current channel when the recipient is this contract,
-    // and otherwise sent with 100,000 gas, whatever the recipient returns left uncopied so it costs the sender nothing.
-    // Says whether the recipient took it; a refusal leaves all of it owed.
-    function _send(bytes32 id, address beneficiary, address recipient, uint256 protectedAmount, uint256 winnings)
-        private
-        returns (bool ok)
-    {
+    // and otherwise sent with at most `gasAllowed`, whatever the recipient returns left uncopied so it costs the sender
+    // nothing. Says whether the recipient took it; a refusal leaves all of it owed.
+    function _send(
+        bytes32 id,
+        address beneficiary,
+        address recipient,
+        uint256 protectedAmount,
+        uint256 winnings,
+        uint256 gasAllowed
+    ) private returns (bool ok) {
         uint256 amount = protectedAmount + winnings;
         if (amount == 0) return true;
         protectedFunds -= protectedAmount;
@@ -666,7 +677,7 @@ contract HookedInCasino {
             ok = true;
         } else {
             assembly ("memory-safe") {
-                ok := call(100000, recipient, amount, 0, 0, 0, 0)
+                ok := call(gasAllowed, recipient, amount, 0, 0, 0, 0)
             }
         }
         if (ok) emit ClaimPayment(id, recipient, amount);

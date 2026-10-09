@@ -84,8 +84,9 @@ The casino takes a withdrawal on only when the contract can pay all of it now: o
 taken in and the collateral that the withdrawals it owes from it leave, and house cash that no claim counts on, less
 what the withdrawals it owes will take from it. A withdrawal your deposits and collateral cover needs no house cash. It
 declines the rest like any declined debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It
-also declines a withdrawal to an address that would refuse a payment from the contract, which it tries first with the
-gas the contract sends: _That address does not accept a payment from the contract_. Withdrawing everything leaves the
+also declines a withdrawal to a contract that would refuse a payment from the contract, or needs more gas to take it
+than the contract gives a payment as it records a withdrawal: _That address does not accept a payment from the
+contract_. An address without code, new or not, takes any payment. Withdrawing everything leaves the
 channel active with an empty balance.
 
 The casino sends each withdrawal it takes on at once, so the contract normally pays all of it the moment it is sent.
@@ -190,9 +191,9 @@ what can be collected now:
 - **Export evidence**, beside a closed balance's claim, saves the recovery bundle of its channel.
 
 A claim collects what of its winnings house cash covers, however far back it waits, and can be collected again as more
-cash arrives; the owner can never withdraw a protected amount or unpaid winnings. A recipient that rejects the payment,
-or needs more gas to accept it than [the contract sends](../reference/contract.md#functions-that-change-state), makes
-the collection revert and leaves the claim whole: collect to another address.
+cash arrives; the owner can never withdraw a protected amount or unpaid winnings. Collecting sends the payment all the
+gas the collection gives it. A recipient that rejects the payment makes the collection revert and leaves the claim
+whole: collect to another address.
 
 ## Fees and gas
 
@@ -201,8 +202,8 @@ The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 METH in total
 network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins to the
 contract and pays their gas, and each pays the casino a fee for it out of your balance, set from the network's gas price
 ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
-tab opens and again before signing, and signs none above 300,000 gas at the gas price it reads itself, or above the fee
-it showed you. A deposit's fee comes out of what it deposits, and the casino pays it into your balance when it is small
+tab opens and again before signing, and signs none above 350,000 gas and what creating an account costs, at the gas
+price and the price of an account it reads itself, or above the fee it showed you. A deposit's fee comes out of what it deposits, and the casino pays it into your balance when it is small
 ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where the wallet
 keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes into your
 balance while the channel is active. Starting **Close without the casino** turns that off, so ETH sent for its fee stays

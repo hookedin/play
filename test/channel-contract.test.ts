@@ -465,6 +465,29 @@ test('a close nets out what a checkpoint took in that the chain does not hold, s
   assert.equal((await channelAt(f, ch.opening)).closingBalance, 1300n);
 });
 
+test('a recipient that needs more gas than recording gives its payment is paid by collecting the claim, with all the gas sent', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
+    heavy: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.owner).deploy(
+      f.contract.target,
+    );
+  await heavy.waitForDeployment();
+  await (await heavy.setMode(6)).wait();
+  const ch = await open(f, env.wallets[1], 1000n),
+    out = await step(f, ch, 5, 500n, { recipient: String(heavy.target) }),
+    id = hashOperation(f.d, out.evidence.step.operation);
+  // Recording gives the payment too little for it: all of it stays owed, to the same recipient.
+  await (await f.contract.withdraw(out.evidence)).wait();
+  assert.equal((await f.contract.claims(id)).protectedRemaining, 500n);
+  assert.equal(await env.provider.getBalance(String(heavy.target)), 0n);
+  // Anyone collects it there, sending it all the gas they give.
+  await (await f.contract.connect(env.wallets[2]).claim(id)).wait();
+  assert.equal(await env.provider.getBalance(String(heavy.target)), 500n);
+  assert.equal((await f.contract.claims(id)).protectedRemaining, 0n);
+});
+
 test('a recipient pays for what it returns, and a close owed nothing, or with no winnings, stores only what it needs', async t => {
   const env = await anvil();
   t.after(() => env.close());

@@ -47,7 +47,9 @@ The wallet, the settlement contract, the shared protocol, the game SDK and the h
 advertise correct and testable. Preserve explicitly accepted trust assumptions and manual responsibilities; do not
 expand the protocol merely to offer stronger guarantees. Reuse existing state, validation and recovery paths. A change
 to the contract's compiled code is a new deployment; once a release holds money that matters, the contract stays as it
-is. See [the architecture](docs/overview/architecture.md).
+is. The chain reprices gas as it likes, so a gas figure in the contract may only defer a payment, never block it, and
+gas figures off-chain come from live estimates wherever a wrong one would break something rather than cost a little.
+See [the architecture](docs/overview/architecture.md).
 
 ## Settled decisions
 

@@ -5,6 +5,7 @@ interface RecoveryContext {
   observer?: ChainObserver;
   confirmations?: number;
 }
+import { hexlify, randomBytes } from 'ethers';
 import { same } from './protocol.ts';
 import { blockReference, requireCanonicalBlock } from './chain-observer.ts';
 
@@ -32,6 +33,11 @@ async function nonceAt(context: RecoveryContext, address: string, block: ChainBl
 /** The gas limit to send for `estimate`: an estimate holds only for the block it was made against, and in a later block
  * block.timestamp alone can make the same call cost more, as rewriting a close's deadline does. */
 export const gasLimitFor = (estimate: bigint) => (estimate * 120n + 99n) / 100n;
+
+/** What creating an account costs now, beside the 21,000 gas every transaction pays, as the chain prices it: what paying
+ * a new address costs whoever sends a withdrawal, beside what paying one in use does. `from` holds ETH to send. */
+export const accountGas = async (provider: JsonRpcProvider, from: string) =>
+  (await provider.estimateGas({ from, to: hexlify(randomBytes(20)), value: 1n })) - 21_000n;
 
 /** What the casino pays of a deposit's network fee: what its transaction kept back, its gas limit at its fee cap, but no
  * more than the rule a wallet prices its transactions by allows: the gas limit for an estimate of the gas it used, which
