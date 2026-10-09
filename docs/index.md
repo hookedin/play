@@ -38,6 +38,7 @@ with its saved evidence a player can close a channel and collect what it is owed
 ## Where to start
 
 - **To play**, open the wallet: [Getting started](wallet/getting-started.md).
+- **To play with zero trust**, run your own wallet and games: [Play with zero trust](overview/zero-trust.md).
 - **To build a game**, start from the template: [Quick start](games/quick-start.md).
 - **To integrate with the casino**, read the [Casino API](casino-api/index.md).
 - **To check the protocol**, read [how it works](overview/how-it-works.md), the [trust model](overview/trust-model.md),

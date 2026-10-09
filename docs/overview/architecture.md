@@ -2,7 +2,7 @@
 title: Architecture
 description: The design principle, and the trade-offs made on purpose.
 sidebar:
-  order: 3
+  order: 4
 ---
 
 HookedIn is one immutable contract, one casino that signs, a wallet that checks everything it can, and games in

@@ -6,10 +6,12 @@ sidebar:
 ---
 
 The contract protects what it owes: your deposits, the collateral locked into your channel and your recorded winnings,
-from everyone, the owner included. Everything else depends on the casino: house cash and winnings not yet recorded. You
-protect a win by recording it, with a withdrawal or a lock-in, or before you win it by buying collateral, keep your
-evidence and watch your channel. A game, its developer and a bankroll fund share each carry trust of their own, set out
-below.
+from everyone, the owner included, while your key is yours alone. Everything else depends on the casino: house cash,
+winnings not yet recorded and the wallet play.hookedin.com serves, which holds your key unless you [build your
+own](../wallet/keys-and-recovery.md#your-own-build). You protect a win by recording it, with a withdrawal or a lock-in,
+or before you win it by buying collateral, keep your evidence and watch your channel. A game, its developer and a
+bankroll fund share each carry trust of their own, set out below. To trust the casino with none of it,
+[play with zero trust](zero-trust.md).
 
 ## What the contract enforces
 
@@ -54,6 +56,11 @@ below.
 - **One operator signs and holds the bankroll.** The account that deployed the contract is its owner and the only
   settlement signer. It controls the house bankroll, including through signed winning balances for accounts it controls:
   the bankroll is trusted to it, not protected from it.
+- **Serving the wallet.** play.hookedin.com serves the wallet, which holds your key: a wallet served to take it could
+  take everything your account holds, deposits included. It publishes each commit to this repository's `main` that
+  passes its tests, which anyone can [rebuild and compare](../reference/deployment.md#verify-a-release), but your
+  browser runs whatever it is sent. [Your own build](../wallet/keys-and-recovery.md#your-own-build), with a key you
+  never use at play.hookedin.com, needs no such trust.
 - **Paying winnings.** What your balance holds above your deposits and collateral, your winnings, is an unsecured claim
   on the shared bankroll: a withdrawal's winnings and a close's wait in the queue for house cash. Neither replenishment nor a payout
   deadline is guaranteed, and the ETH visible in the contract does not prove that every signed balance is covered. This
@@ -102,7 +109,7 @@ below.
 These are an operator's promises, but for settling a covered casino bet, which the contract enforces. The wallet is
 built not to need them: it verifies every signature, preimage and balance change itself, keeps the evidence, can send a
 withdrawal to the contract without the casino and can settle on-chain alone, by closing and by disputing. What it cannot
-verify is availability and liquidity.
+verify is availability, liquidity and the code play.hookedin.com serves.
 
 ## What you do yourself
 

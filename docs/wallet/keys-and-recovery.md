@@ -1,6 +1,6 @@
 ---
 title: Keys and recovery
-description: Your key and its passkey, another device, recovery bundles, lost replies, comparing with the casino, the casino's history, recovery mode and the watchtower.
+description: Your key and its passkey, your own build, another device, recovery bundles, lost replies, comparing with the casino, the casino's history, recovery mode and the watchtower.
 sidebar:
   order: 4
 ---
@@ -22,7 +22,7 @@ balance and has no name. **Create wallet** in the top bar, or anything that need
 - **Sign in with a passkey** opens the account of a passkey you made before: the same key, wherever the passkey is.
 - **Create a key file** makes an account whose key is in the file it downloads, `hookedin-<address>.txt`. **Import a
   private key** opens an account from its key in any copy of the wallet, including one you
-  [build yourself](#recovery-mode). Anyone who has the file can take everything the account holds.
+  [build yourself](#your-own-build). Anyone who has the file can take everything the account holds.
 
 A passkey works only at play.hookedin.com, and only on devices whose passkeys support PRF; the wallet says when they
 do not. The wallet keeps the key of the account in use in this browser, so it signs your bets without asking.
@@ -37,6 +37,25 @@ passkey** or **Import a private key** there switches to another.
 account saved here, with its evidence, receipts, activity and game allowances, and leaves the wallet with no account. It
 warns you first, and says how much the account in use holds. **Sign in with a passkey** opens a passkey's account
 again; an account you hold only as a key file needs that file.
+
+## Your own build
+
+play.hookedin.com serves the wallet, and the wallet holds your key, so you trust whoever publishes it not to serve one
+that takes it ([trust model](../overview/trust-model.md#what-you-trust-the-casino-for)). To trust no one with your key,
+build the wallet from this repository and run it yourself, with Node 26 or later:
+
+```sh
+git clone https://github.com/hookedin/play
+cd play
+npm ci
+npm run dev
+```
+
+It serves the wallet play.hookedin.com serves, on the same deployment, at http://127.0.0.1:4184, and runs the commit you
+checked out, which you can read, until you pull another. Its accounts and evidence are its own, apart from
+play.hookedin.com's. Create a key file in it, and never use that key at play.hookedin.com: a passkey works only there,
+and any key used there is held by whatever wallet it serves at the time. It is the first step to
+[playing with zero trust](../overview/zero-trust.md).
 
 ## On another device
 
@@ -127,16 +146,8 @@ in **recovery mode**. Evidence export and import, closing without the casino, ch
 collecting work, against the pinned contract through the pinned RPCs, and Activity still holds the transaction that sends
 a withdrawal; play, deposits, withdrawals from the balance and locking in do not. Reload once the casino is back.
 
-With your key file, recovery needs play.hookedin.com no more than the casino: the same wallet builds from a checkout of
-this repository, with Node 26 or later, and serves at http://127.0.0.1:4184, where you import it. A passkey works only
-at play.hookedin.com.
-
-```sh
-git clone https://github.com/hookedin/play
-cd play
-npm ci
-npm run dev
-```
+With your key file, recovery needs play.hookedin.com no more than the casino: [your own build](#your-own-build)
+recovers the same way, once you import the key. A passkey works only at play.hookedin.com.
 
 ## The watchtower
 
