@@ -45,7 +45,7 @@ is left, and a new one then, on the same round, the checkpoint's own. Every repl
 [`POST …/operations`](#post-apichannelsidoperations) that follows the channel's latest checkpoint brings its quote, so a
 wallet asks here only before a channel's first casino bet, after losing track, or when its quote has less than half its
 day left; it picks its seed once it has the round. The body is `{}`. `channel-closed` answers a channel that is not
-active.
+active, or not its account's current one.
 
 ### `POST /api/channels/:id/operations`
 
@@ -241,10 +241,11 @@ debit's unknown counterparty, a withdrawal whose `recipient` is not an address, 
 nonzero `recipient` on any other operation, a lock-in's among them ("Only a withdrawal names a recipient, never nobody
 and never the contract"); with `409`, details that break
 [the details rules](../reference/signed-messages.md#details-and-memo). `unacknowledged` answers a missing or wrong
-acknowledgment, `channel-closed` a channel that is not active, and `id-conflict`, `not-due` and `unconfirmed` what the
-table says. `refused` answers a bad signature or acknowledgment signature, an operation that does not follow the
-latest checkpoint of `:id`, an amount above the balance (less its fee, for a withdrawal or a
-lock-in), a nonzero `fee` on any other operation, and a casino bet whose chance or prize breaks the rules.
+acknowledgment, `channel-closed` a channel that is not active or not its account's current one, and `id-conflict`,
+`not-due` and `unconfirmed` what the table says. `refused` answers a bad signature or acknowledgment signature, an
+operation that does not follow the latest checkpoint of `:id`, an amount above the balance (less its fee, for a
+withdrawal or a lock-in), a nonzero `fee` on any other operation, and a casino bet whose chance or prize breaks the
+rules.
 
 ## Collateral
 
@@ -257,7 +258,7 @@ as `{message, signature}`: `amount` of house cash locked into the channel for `p
 as a decimal string, below 2^96 (`400` `invalid` otherwise). The casino offers no more than the house cash no claim or
 withdrawal it owes counts on, and refuses more ("At most … ETH of collateral is on offer now"). An offer reserves
 nothing: what is bought first is locked, and one bought once that cash has gone reverts. `channel-closed` answers a
-channel that is not active.
+channel that is not active, or not its account's current one.
 
 ## The account
 
