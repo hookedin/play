@@ -123,7 +123,7 @@ A casino bet, and its signed result:
 {
   "request": {
     "previousStateHash": "0xadf17ffce9d913ead9d4822afcba1d2215b42b1389e1da90b0fde64b2949c840",
-    "kind": 1,
+    "kind": "1",
     "amount": "1000000000000000",
     "recipient": "0x0000000000000000000000000000000000000000",
     "fee": "0",
@@ -186,7 +186,7 @@ A casino bet, and its signed result:
     "step": {
       "operation": {
         "previousStateHash": "0xadf17ffce9d913ead9d4822afcba1d2215b42b1389e1da90b0fde64b2949c840",
-        "kind": 1,
+        "kind": "1",
         "amount": "1000000000000000",
         "recipient": "0x0000000000000000000000000000000000000000",
         "fee": "0",
@@ -392,11 +392,11 @@ between statements, so `bank` can differ from the statement's balance.
 
 Publishes a game under the account, renames or moves one of its games, or takes one down.
 
-| Body field | Type           | Meaning                                                                                                                                                                                   |
-| ---------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`     | string         | The name it goes by, such as `Super Dice`: 1 to 32 characters of well-formed text, without a control character or a space at either end, with a Latin letter or a digit for its slug      |
-| `url`      | string or null | [The game's URL](../games/publishing.md#the-games-url): `https:`, or `http:` on a local host, at most 300 characters, with no user name, password or fragment; `null` takes the game down |
-| `game`     | string         | Optional: the [ID](../reference/signed-messages.md#game-ids) of one of the account's games                                                                                                |
+| Body field | Type           | Meaning                                                                                                                                                                                                                                                                   |
+| ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`     | string         | The name it goes by, such as `Super Dice`: 1 to 32 printable characters (no control, format, private-use or unassigned character), no space at either end, with a Latin letter or a digit for its slug                                                                    |
+| `url`      | string or null | [The game's URL](../games/publishing.md#the-games-url): `https:`, or `http:` on a local host, at most 300 characters, written as `URL` writes it (`https://example.com/`, not `https://EXAMPLE.com`), with no user name, password or fragment; `null` takes the game down |
+| `game`     | string         | Optional: the [ID](../reference/signed-messages.md#game-ids) of one of the account's games                                                                                                                                                                                |
 
 A game's _slug_, its address in the account's profile (`@username/super-dice`, `~uname/super-dice`), is made from its
 name: accents dropped, lowercase, each run of anything but `a-z` and `0-9` one hyphen, and no hyphen at either end.

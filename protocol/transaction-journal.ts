@@ -1,6 +1,6 @@
 import type { JsonRpcProvider, Signer, TransactionRequest, TransactionReceipt } from 'ethers';
 import type { ChainObserver } from './chain-observer.ts';
-import type { Integer } from './types.ts';
+import type { Whole } from './types.ts';
 export interface JournalEntry {
   action: string;
   raw: string;
@@ -23,7 +23,7 @@ export interface JournalOptions {
   signer: Signer;
   provider: JsonRpcProvider;
   observer?: ChainObserver;
-  chainId: Integer;
+  chainId: Whole;
   confirmations?: number;
   now?: () => number;
   replaceAfterMs?: number;
@@ -227,7 +227,7 @@ export class TransactionJournal {
     } else if (this.now() - pending.updatedAt >= this.replaceAfterMs) {
       const tx = Transaction.from(pending.raw),
         fees = await this.provider.getFeeData();
-      const bump = (n: Integer | null) => (BigInt(n!) * 9n + 7n) / 8n + 1n;
+      const bump = (n: bigint | null) => (BigInt(n!) * 9n + 7n) / 8n + 1n;
       const fee = bump(tx.maxFeePerGas ?? tx.gasPrice);
       const market = (fees.maxFeePerGas ?? fees.gasPrice)!;
       const nextFee = fee > market ? fee : market;

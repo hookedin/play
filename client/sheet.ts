@@ -1,5 +1,5 @@
 import qrcode from 'qrcode-generator';
-import { CasinoWallet } from './wallet.ts';
+import { CasinoWallet, answersTo } from './wallet.ts';
 import { inUnit, typedIn, validateWithdrawal, type Unit } from './withdrawal.ts';
 import { Wallet } from 'ethers';
 import { namePasskey, passkeyAccount } from './passkey.ts';
@@ -150,7 +150,9 @@ export function lookUpPayee() {
   if (asked && !asked.error)
     lookingUp = setTimeout(async () => {
       try {
-        asked.profile = await wallet.api(`/api/players/${name}`);
+        const profile = await wallet.api(`/api/players/${name}`);
+        if (!answersTo(profile, name)) throw new Error(`The casino answered with a player who does not go by ${name}.`);
+        asked.profile = profile;
       } catch (error: any) {
         asked.error = error.code === 'not-found' ? `Nobody goes by ${name}.` : error.message;
       }
@@ -204,8 +206,8 @@ function renderSafety() {
 export async function task(callback: () => unknown | Promise<unknown>) {
   if (uiBusy) return toast('Wait for the current wallet operation to finish.', true);
   uiBusy = true;
-  renderWallet();
   try {
+    renderWallet();
     await wallet.actionDone;
     return await callback();
   } catch (error: any) {

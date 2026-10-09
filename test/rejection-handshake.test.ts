@@ -38,7 +38,7 @@ test('a rejection is agreed durably before completion, and a lost completion sur
   assert.equal(await restored.balance(), BigInt(base.balance));
   assert.deepEqual(
     verifyEvidence({
-      chainId: restored.expectedChainId,
+      chainId: String(restored.expectedChainId),
       casino: restored.config.contractAddress,
       operator: restored.operator,
       evidence: receipt.proof,
@@ -59,6 +59,7 @@ test('a covered casino bet signs no rejection proposal', async () => {
     assert.equal(body.rejectionSignature, undefined);
     return {
       status: 'rejected',
+      reason: 'No quote of the casino covers this casino bet',
       request: body.request,
       state: rejectionCheckpoint(w.domain, w.channel!.state, body.request),
       casinoSignature: '0x',
@@ -105,6 +106,7 @@ test('a result after an agreed rejection is refused, so the signed rejection can
     if (!path.endsWith('/operations') || ++requests !== 1) return response;
     return {
       status: 'rejected',
+      reason: 'Declined',
       request: body.request,
       state: rejectionCheckpoint(w.domain, base, body.request),
       casinoSignature: '0x',

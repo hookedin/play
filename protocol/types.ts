@@ -1,7 +1,10 @@
-import type { BigNumberish, TypedDataDomain } from 'ethers';
+import type { TypedDataDomain } from 'ethers';
 
-/** Wire integers may arrive from JSON or ethers; arithmetic always uses bigint. */
-export type Integer = BigNumberish;
+/** A whole number on the wire and in whatever is signed or kept: a decimal string, in its one form (protocol.ts
+ * `decimal`). Arithmetic uses bigint. */
+export type Integer = string;
+/** A whole number as code holds one: a bigint, a safe integer, or a decimal string as it came. */
+export type Whole = bigint | number | Integer;
 export type Domain = TypedDataDomain;
 export type Json<T> = 0 extends 1 & T
   ? any

@@ -1,17 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('the game SDK greets the wallet, accepts only parent-window replies, sends its typed methods and numbers its requests upwards', async () => {
+/** HookedIn's wallet, the origin its replies come from. */
+const WALLET = 'https://play.hookedin.com';
+/** Until the requests a call makes wait for have gone out. */
+const sent = () => new Promise(resolve => setImmediate(resolve));
+
+test('the game SDK greets the wallet, hears only the wallet that answered, sends its typed methods to it and numbers its requests upwards', async () => {
   const posted: any[] = [],
+    targets: string[] = [],
     listeners: ((event: any) => void)[] = [];
-  const parent = { postMessage: (message: any) => posted.push(message) };
+  const parent = {
+    postMessage: (message: any, target: string) => {
+      posted.push(message);
+      targets.push(target);
+    },
+  };
   (globalThis as any).window = { parent, addEventListener: (_: string, fn: any) => listeners.push(fn) };
   try {
     const { HookedIn, HookedInError } = await import('../src/sdk.ts');
-    const deliver = (source: unknown, data: any) => listeners.forEach(listener => listener({ source, data }));
-    // The page greets the wallet as it loads.
+    const deliver = (source: unknown, data: any, origin = WALLET) =>
+      listeners.forEach(listener => listener({ source, data, origin }));
+    // The page greets whatever frames it as it loads, and only a wallet's answer counts: HookedIn's, or one at a
+    // loopback address on the player's own computer.
     assert.deepEqual([...posted], [{ hookedin: true, id: 1, method: 'wallet.hello', params: {} }]);
     const hello = { bounds: { outcomeSpace: String(1n << 64n), meta: 4096, group: 64 } };
+    deliver(parent, { hookedin: true, id: 1, result: { forged: true } }, 'https://play.hookedin.com.example');
     deliver(parent, { hookedin: true, id: 1, result: hello });
     assert.deepEqual(await HookedIn.hello(), hello);
     // Amounts are METH, counted in wei: shown grouped and cut off at a gwei, typed as whole METH.
@@ -30,6 +44,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     assert.equal(HookedIn.wholeStake(500000000000n), 1000000000000n);
     // A refusal carries a code the game can act on.
     const refused = HookedIn.call('game.casinoBet');
+    await sent();
     deliver(parent, {
       hookedin: true,
       id: posted.at(-1).id,
@@ -44,13 +59,18 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
         error instanceof HookedInError && error.code === 'insufficient-allowance' && /top bar/.test(error.message),
     );
     const reply = HookedIn.info();
+    await sent();
     const { id, method } = posted.at(-1);
     assert.equal(method, 'wallet.info');
-    for (const [source, result] of [
-      [{}, 'forged'],
-      [parent, 'real'],
+    // Only the parent window, at the origin of the wallet that answered the greeting: not another frame, not another
+    // origin, not even another wallet's.
+    for (const [source, result, origin] of [
+      [{}, 'forged', WALLET],
+      [parent, 'forged', 'https://evil.example'],
+      [parent, 'forged', 'http://127.0.0.1:4184'],
+      [parent, 'real', WALLET],
     ] as const)
-      listeners.forEach(listener => listener({ source, data: { hookedin: true, id, result } }));
+      deliver(source, { hookedin: true, id, result }, origin);
     assert.equal(await reply, 'real');
     // The allowance is read, the whole of it or what one group may stake; a game says it places developer bets; and
     // a group the player has seen ends.
@@ -60,6 +80,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
       HookedIn.placesDeveloperBets(),
       HookedIn.end('hand-1'),
     ];
+    await sent();
     assert.deepEqual(
       posted.slice(-4).map(({ method, params }) => ({ method, params })),
       [
@@ -74,6 +95,7 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     // Typed methods send their bridge method, and every envelope ID is a safe integer above the last.
     const bet = { id: 'coin', stake: '5', chance: '9', prize: '10', group: 'hand-1' };
     const calls = [HookedIn.casinoBet(bet), HookedIn.developerBet({ id: 'seat', stake: '5', meta: { seat: 2 } })];
+    await sent();
     assert.deepEqual(
       posted.slice(-2).map(({ method, params }) => ({ method, params })),
       [
@@ -95,6 +117,8 @@ test('the game SDK greets the wallet, accepts only parent-window replies, sends 
     assert.deepEqual(heard, [{ id: 'seat', status: 'settled' }]);
     const ids = posted.map(message => message.id);
     assert.ok(ids.every((id, i) => Number.isSafeInteger(id) && id > (ids[i - 1] ?? 0)));
+    // The greeting went to whatever frames the page, and every request after it to the wallet that answered it alone.
+    assert.deepEqual(targets, ['*', ...targets.slice(1).map(() => WALLET)]);
   } finally {
     delete (globalThis as any).window;
   }
@@ -118,7 +142,8 @@ test('allowance() refuses outside a frame as call does, a greeting that failed i
     assert.equal(posted.length, 0);
     // In a wallet's frame, a greeting the wallet refused is forgotten, and the next call asks again.
     page.parent = parent;
-    const deliver = (data: any) => listeners.forEach(listener => listener({ source: parent, data }));
+    const deliver = (data: any) =>
+      listeners.forEach(listener => listener({ source: parent, data, origin: 'http://localhost:4184' }));
     const refusedGreeting = HookedIn.hello();
     deliver({ hookedin: true, id: posted.at(-1).id, error: { code: 'game-closed', message: 'No game is open' } });
     await assert.rejects(refusedGreeting, refused('game-closed'));

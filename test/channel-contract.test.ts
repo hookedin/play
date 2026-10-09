@@ -54,7 +54,7 @@ test('a channel is its account and index: active from the start with nothing to 
     [, a, b, c] = env.wallets;
   // Someone else's deposit goes into the account's current channel; the account's own adds to the same one.
   const ch = await fund(f, a, 500n, b);
-  assert.deepEqual([ch.opening.channelId, await f.contract.channelIndex(a.address)], [channelId(a.address, 0), 0n]);
+  assert.deepEqual([ch.opening.channelId, await f.contract.channelIndex(a.address)], [channelId(a.address, 0n), 0n]);
   await (await f.contract.connect(a).deposit(a.address, { value: 300n })).wait();
   const onchain = await channelAt(f, ch.opening);
   assert.deepEqual([onchain.status, onchain.deposited, onchain.principal], [0n, 800n, 800n]);
@@ -92,7 +92,7 @@ test('a channel is its account and index: active from the start with nothing to 
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.opening.player, ch.opening.index)).wait();
   assert.equal((await claimOf(f, ch.opening)).protectedRemaining, 800n);
-  assert.equal(next.opening.channelId, channelId(a.address, 1));
+  assert.equal(next.opening.channelId, channelId(a.address, 1n));
   await assert.rejects(f.contract.connect(a).startClose.staticCall(taken.evidence));
   const cross = structuredClone(taken.evidence);
   cross.base.index = '1';
@@ -1103,6 +1103,48 @@ test('offline evidence and the contract enforce the same checkpoint amount bound
       }
     }
   }
+});
+
+test('evidence is taken in the one form it was signed in, though the contract reads other spellings alike', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    ch = await open(f, env.wallets[1], 1n),
+    state = { ...ch.state, balance: '100' },
+    signed = async (base: any) =>
+      checkpointEvidence(
+        base,
+        await ch.player.signTypedData(f.d, STATE_TYPES, base),
+        await f.owner.signTypedData(f.d, STATE_TYPES, base),
+      ),
+    bundle = (evidence: any) => ({
+      chainId: env.chainId,
+      casino: String(f.contract.target),
+      operator: f.owner.address,
+      evidence,
+    });
+  const evidence = await signed(state);
+  assert.equal(verifyEvidence(bundle(evidence)).state.balance, '100');
+  // Each is the same checkpoint to ethers and to the contract, so the signatures on it hold: none is kept.
+  for (const base of [
+    { ...state, balance: '0x64' },
+    { ...state, balance: '0100' },
+    { ...state, sequence: ' ' + state.sequence },
+    { ...state, player: state.player.toLowerCase() },
+    { ...state, previousStateHash: '0x' + state.previousStateHash.slice(2).toUpperCase() },
+    { ...state, note: 'riding along' },
+  ])
+    assert.throws(() => verifyEvidence(bundle({ ...evidence, base })), /one form/);
+  for (const step of [
+    { ...evidence.step, operation: { ...evidence.step.operation, kind: 0 } },
+    { ...evidence.step, seed: '0X' + evidence.step.seed.slice(2) },
+    { ...evidence.step, note: 'riding along' },
+  ])
+    assert.throws(() => verifyEvidence(bundle({ ...evidence, step })));
+  assert.throws(
+    () => verifyEvidence(bundle({ ...evidence, casinoSignature: '0X' + evidence.casinoSignature.slice(2) })),
+    /Invalid signature/,
+  );
 });
 
 test('the winnings queue pays in finalization order, and any claim collects what house cash reaches at once', async t => {

@@ -95,7 +95,9 @@ export class GameSessions extends ChannelClient {
   gameAllowance(this: CasinoWallet, group?: string): GameAllowance {
     const game = this.requireGame();
     return {
-      allowance: String(BigInt(game.allowance) + BigInt((group && game.table[group]) || 0)),
+      allowance: String(
+        BigInt(game.allowance) + BigInt((group && Object.hasOwn(game.table, group) && game.table[group]) || 0),
+      ),
       pending: this.pending?.game?.id === game.identity.id,
       developerBets: game.developerBets,
     };
@@ -118,7 +120,7 @@ export class GameSessions extends ChannelClient {
   async gameEnd(this: CasinoWallet, group: string, meta?: Record<string, unknown>) {
     const game = this.requireGame(),
       { [group]: won, ...rest } = game.table;
-    if (won !== undefined) {
+    if (Object.hasOwn(game.table, group)) {
       game.table = rest;
       game.allowance = String(BigInt(game.allowance) + BigInt(won));
       this.render();
@@ -155,7 +157,7 @@ export class GameSessions extends ChannelClient {
       op = evidence.step.operation,
       kind = Number(op.kind);
     verifyEvidence({
-      chainId: this.expectedChainId,
+      chainId: String(this.expectedChainId),
       casino: this.config.contractAddress,
       operator: this.operator,
       evidence,
@@ -190,7 +192,7 @@ export class GameSessions extends ChannelClient {
    * from and pays into the allowance at once. */
   gameSettled(this: CasinoWallet, spent: bigint, won: bigint, group?: string, kept = 0n) {
     const game = this.game!,
-      held = BigInt((group && game.table[group]) || 0n),
+      held = BigInt((group && Object.hasOwn(game.table, group) && game.table[group]) || 0n),
       needed = spent + (group ? kept : 0n),
       drawn = needed < held ? needed : held,
       allowance = BigInt(game.allowance) - (needed - drawn) + (group ? 0n : won);
@@ -222,7 +224,7 @@ export class GameSessions extends ChannelClient {
    * draw checks the rounds its developer walked it with here, since its page talks to nobody but its own origin. */
   gameRound(this: CasinoWallet, id: string): Promise<Round> {
     this.requireGame();
-    return this.api(`/api/rounds/${id.toLowerCase()}`);
+    return this.api(`/api/rounds/${id}`);
   }
   /** A game's name for an operation, for its player: the same in every channel they open, and apart for each game,
    * so a retry after a new channel finds the operation instead of repeating it. */

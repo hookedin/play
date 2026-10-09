@@ -112,7 +112,7 @@ test('payment retries reject changed amounts and explicit receipt lookup needs n
 });
 
 /** The account's first channel, the one these observations are of. */
-const ACTIVE = channelId(ZeroAddress, 0);
+const ACTIVE = channelId(ZeroAddress, 0n);
 function observingWallet(storage = new MemoryStore()) {
   const wallet = new CasinoWallet({ network: 'local', storage });
   wallet.openGame(testGame());

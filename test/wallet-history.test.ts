@@ -15,7 +15,7 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
   wallet.assertNetwork = async () => {};
   // The account's channels, each after a close started on the one before: the last is closing, and the account's
   // current channel is the next, with nothing on-chain.
-  const keys = Array.from({ length: 513 }, (_, i) => channelId(ZeroAddress, i));
+  const keys = Array.from({ length: 513 }, (_, i) => channelId(ZeroAddress, BigInt(i)));
   keys.forEach(
     (key, i) =>
       (wallet.channels[key] = {

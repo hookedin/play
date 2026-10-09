@@ -207,13 +207,13 @@ reads it. A request carries the details whole beside the signed operation, and b
 memo = keccak256(utf8(canonicalJSON(details)))
 ```
 
-| Field          | Type    | Meaning                                                                                                                                                         |
-| -------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`           | bytes32 | The hash of the operation's name: its [operation ID](#operation-ids)                                                                                            |
-| `game`         | string  | The [ID](#game-ids) of the game that asked for a casino bet, a developer bet or a payment                                                                       |
-| `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units of well-formed text, without a NUL                                    |
-| `counterparty` | string  | What a debit pays into or a credit collects from: a [counterparty ID](#counterparties), a game's ID, a developer bet's hash or another player, written `~uname` |
-| `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers and whose text is well-formed, without a NUL                 |
+| Field          | Type    | Meaning                                                                                                                                                              |
+| -------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | bytes32 | The hash of the operation's name: its [operation ID](#operation-ids)                                                                                                 |
+| `game`         | string  | The [ID](#game-ids) of the game that asked for a casino bet, a developer bet or a payment                                                                            |
+| `group`        | string  | A label the game gives its bets and payments, such as one hand: 1 to 64 UTF-16 code units of printable text: no control, format, private-use or unassigned character |
+| `counterparty` | string  | What a debit pays into or a credit collects from: a [counterparty ID](#counterparties), a game's ID, a developer bet's hash or another player, written `~uname`      |
+| `meta`         | object  | A developer bet's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers and whose text is well-formed, without a NUL                      |
 
 No other key is allowed. `id` is `0x` followed by 64 lowercase hex digits and `game` a [game ID](#game-ids), and
 `counterparty` is one of the two, unless it names a player: `~` and their 24-character uname. `group` and `meta` appear
@@ -376,7 +376,7 @@ asks for one with [`POST /api/channels/:id/collateral`](../casino-api/channels.m
 
 `Access(player, expiresAt)` and `DeveloperAccess(server, expiresAt)` authenticate API requests: an account's token
 serves for every one of its channels, and a server's for every game whose server it is. `expiresAt` is a
-time in Unix seconds, a JSON number or a decimal string. A token is the header value
+time in Unix seconds, a decimal string. A token is the header value
 
 ```text
 HookedIn <base64url(utf8(JSON {"message": <message>, "signature": "0x…"}))>
@@ -389,7 +389,7 @@ with base64url as in RFC 4648 §5, without padding. The token of the captured
 {
   "message": {
     "player": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-    "expiresAt": 1791130425
+    "expiresAt": "1791130425"
   },
   "signature": "0x672f82109ab9714f55564ae91ebee535aa54a5fe6fa938f3542e0e7874ed22d204cb946ceded6d09ebb267034aa2cb589678dd14485c105cc4248c9006ef541e1b"
 }

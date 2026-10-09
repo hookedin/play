@@ -41,6 +41,13 @@ import {
   assertSignature,
   HEAD_TYPES,
   onchainChannel,
+  decimal,
+  fold,
+  DISCORD_USERNAME,
+  UNAME,
+  RECORD_ID,
+  canonical,
+  only,
 } from '../protocol/protocol.ts';
 import {
   ChainObserver,
@@ -112,6 +119,18 @@ const networks: Record<string, { id: bigint; name: string; stake: string }> = {
  * (`wallet-channel.ts`) and the open game's allowance (`wallet-games.ts`). This file owns
  * configuration, durable state, locking, observation and the casino API transport.
  */
+/** Whether `names` are a player's in their one form: a uname, and a Discord username or none. */
+export const validNames = (names: any) =>
+  typeof names?.uname === 'string' &&
+  UNAME.test(names.uname) &&
+  (names.discordUsername === null ||
+    (typeof names.discordUsername === 'string' && DISCORD_USERNAME.test(names.discordUsername)));
+/** Whether the player `profile` describes answers to `name`, `~uname` or `@username`, as the casino reads names. */
+export const answersTo = (profile: any, name: string) =>
+  validNames(profile) &&
+  (name.startsWith('~')
+    ? profile.uname === fold(name.slice(1))
+    : profile.discordUsername !== null && fold(profile.discordUsername) === fold(name.slice(1)));
 export class CasinoWallet extends GameSessions {
   declare casinoURL: string;
   declare network: string;
@@ -299,6 +318,15 @@ export class CasinoWallet extends GameSessions {
         `Casino RPC must be on ${this.networkName} (chain ${this.expectedChainId}). No transaction was signed.`,
       );
   }
+  /** Whether `url` is a page the wallet may send a player to: https, or http on a local development network. */
+  link(url: unknown) {
+    try {
+      const { protocol } = new URL(url as string);
+      return typeof url === 'string' && (protocol === 'https:' || (protocol === 'http:' && this.network === 'local'));
+    } catch {
+      return false;
+    }
+  }
   /** Start on the deployment this wallet was built to trust. A casino that differs from it, or does not answer, leaves
    * the wallet in recovery mode. */
   async start() {
@@ -314,6 +342,14 @@ export class CasinoWallet extends GameSessions {
         !same(advertised.operator, trusted.operator)
       )
         throw new Error('Casino configuration differs from the trusted network, deployment or protocol');
+      // What the wallet reads of the rest, each in its one form.
+      if (
+        !decimal(advertised.collateralRate) ||
+        !decimal(advertised.depositFeeLimit) ||
+        typeof advertised.isLocalDevelopment !== 'boolean' ||
+        (advertised.discord !== null && !this.link(advertised.discord))
+      )
+        throw new Error('Casino configuration is not in its one form');
     } catch (error: any) {
       serviceError = error.message;
     }
@@ -378,7 +414,13 @@ export class CasinoWallet extends GameSessions {
    * none otherwise. */
   newerHead(head: any): SignedStatement | null {
     try {
-      if (this.head && String(head.message.record) <= String(this.head.message.record)) return null;
+      if (
+        !only(head, ['message', 'signature']) ||
+        !canonical(HEAD_TYPES, head.message) ||
+        !RECORD_ID.test(head.message.record)
+      )
+        return null;
+      if (this.head && head.message.record <= this.head.message.record) return null;
       assertSignature(this.domain, HEAD_TYPES, head.message, head.signature, this.operator);
       return plain({ message: head.message, signature: head.signature });
     } catch {
@@ -611,7 +653,9 @@ export class CasinoWallet extends GameSessions {
     if (this.recoveryOnly) return;
     const address = this.address;
     const { uname, profile, registers } = await this.accountRequest('uname');
-    if (this.address !== address || typeof uname !== 'string') return;
+    if (this.address !== address) return;
+    if (!validNames(profile) || profile.uname !== uname)
+      throw new Error('The casino named this account in another form');
     this.registers = registers === true;
     if (!this.profile) Object.assign(this, { uname, discordUsername: profile.discordUsername, profile });
     this.render();
@@ -619,8 +663,8 @@ export class CasinoWallet extends GameSessions {
   /** Every channel reply carries both names its player answers to, and a registered channel means the casino has met
    * the account, so its public profile exists. */
   noteNames(this: CasinoWallet, reply: { uname?: unknown; discordUsername?: unknown }) {
-    if (typeof reply?.uname !== 'string') return;
-    const discordUsername = typeof reply.discordUsername === 'string' ? reply.discordUsername : null;
+    const discordUsername = reply?.discordUsername ?? null;
+    if (!validNames({ uname: reply?.uname, discordUsername })) return;
     if (reply.uname === this.uname && discordUsername === this.discordUsername && this.profile) return;
     Object.assign(this, { uname: reply.uname, discordUsername, profile: null });
     this.render();
@@ -630,7 +674,7 @@ export class CasinoWallet extends GameSessions {
   async refreshProfile(this: CasinoWallet) {
     if (!this.uname) return null;
     const profile = await this.api(`/api/players/~${this.uname}`);
-    if (profile?.uname === this.uname) {
+    if (validNames(profile) && profile.uname === this.uname) {
       this.profile = profile;
       this.discordUsername = profile.discordUsername;
       this.render();
@@ -655,6 +699,7 @@ export class CasinoWallet extends GameSessions {
   }
   /** This account's profile as the casino answers the account itself with it, and the names it shows. */
   takeProfile(this: CasinoWallet, profile: any) {
+    if (!validNames(profile)) throw new Error('The casino named this account in another form');
     Object.assign(this, { profile, uname: profile.uname, discordUsername: profile.discordUsername });
     this.render();
     return profile;
@@ -1000,8 +1045,8 @@ export class CasinoWallet extends GameSessions {
     this.actionDone = new Promise<void>(resolve => {
       finish = resolve;
     });
-    this.render();
     try {
+      this.render();
       // Do not mistake this instance's background observation for another tab.
       // busy is already set, so no new local refresh can enter while we wait.
       await this.refreshing?.catch(() => {});
@@ -1039,9 +1084,9 @@ export class CasinoWallet extends GameSessions {
       let token = this.tokens.get(address);
       // A token is signed for a minute and used while it has twenty seconds left, room for a slow request.
       if (!token || token.expiresAt - now < 20) {
-        const message = { player: address, expiresAt: now + 60 };
+        const message = { player: address, expiresAt: String(now + 60) };
         token = {
-          expiresAt: message.expiresAt,
+          expiresAt: now + 60,
           header: authorization(message, await signer.signTypedData(this.domain, ACCESS_TYPES, message)),
         };
         this.tokens.set(address, token);

@@ -135,20 +135,25 @@ async function follow(take: (bets: PublicDeveloperBet[]) => Promise<void>, runni
 ## Settling
 
 ```ts
-/** The odds you offer, in hundredths of the stake. */
-const OFFER: Record<string, number> = { home: 210, draw: 330, away: 380 };
+/** The odds you offer on each pick, in hundredths of the stake. */
+const OFFER = new Map([
+  ['home', 210],
+  ['draw', 330],
+  ['away', 380],
+]);
 
-/** The match ended: pay every bet on it. A bet on an offer you did not make gets its stake back. */
+/** The match ended: pay every bet on it. A bet whose meta is not exactly a pick and the odds you offer on it gets its
+ * stake back: a player writes their own meta, so take it in one form only. */
 async function settleMatch(group: string, result: string) {
   const bets = (await openBets()).filter(bet => bet.group === group);
   await developer.settle(
     bets.map(bet => {
-      const odds = OFFER[String(bet.meta.pick)],
-        offered = odds !== undefined && bet.meta.odds === odds;
+      const { pick, odds, ...more } = bet.meta,
+        offered = typeof pick === 'string' && OFFER.get(pick) === odds && Object.keys(more).length === 0;
       if (!offered) return { bet: bet.bet, player: BigInt(bet.stake), casino: 0n };
       return {
         bet: bet.bet,
-        player: bet.meta.pick === result ? (BigInt(bet.stake) * BigInt(odds)) / 100n : 0n,
+        player: pick === result ? (BigInt(bet.stake) * BigInt(odds as number)) / 100n : 0n,
         // About half of what the bet is expected to earn you: 2% of a 4% margin.
         casino: BigInt(bet.stake) / 50n,
       };

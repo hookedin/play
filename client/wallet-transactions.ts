@@ -1,5 +1,5 @@
 import type { TransactionReceipt, TransactionResponse, TransactionRequest } from 'ethers';
-import type { Checkpoint, Integer } from '../protocol/types.ts';
+import type { Checkpoint, Integer, Whole } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet } from './wallet.ts';
 import { exact } from './activity.ts';
@@ -20,6 +20,7 @@ import {
   verifyOffer,
   STATE_TYPES,
   DEPOSIT_FEE_ID,
+  decimal,
 } from '../protocol/protocol.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import {
@@ -189,7 +190,7 @@ export class WalletTransactions {
   /** Move money from this account's address into its channel: the contract opens the channel with the account's first
    * deposit, and the balance takes the money in once the casino has seen it confirmed. With no amount, everything the
    * address holds. */
-  async deposit(this: CasinoWallet, amount?: Integer) {
+  async deposit(this: CasinoWallet, amount?: Whole) {
     await this.exclusive(async () => {
       if (amount !== undefined) return this.depositLocked(amount);
       const { amount: all, overrides } = await this.depositable();
@@ -277,7 +278,7 @@ export class WalletTransactions {
   }
   /** A deposit into this account's channel, under the wallet's lock. While it runs, `depositing` says what it adds: a
    * deposit of everything the address holds (`whole`), priced in `fees`, with its network fee the casino pays. */
-  async depositLocked(this: CasinoWallet, amount: Integer, fees: Record<string, any> = {}, whole = false) {
+  async depositLocked(this: CasinoWallet, amount: Whole, fees: Record<string, any> = {}, whole = false) {
     if (BigInt(amount) <= 0n || BigInt(amount) >= 1n << 256n)
       throw new Error('Deposit must be a positive uint256 amount');
     if (this.missingChannel)
@@ -354,7 +355,7 @@ export class WalletTransactions {
   /** Sign and send money coming into the balance. A deposit's fee the casino does not pay, because it pays no more today
    * or answered it at a state this wallet has since taken up from another device, is refused when asked again, for
    * good: its deposit asks no more. */
-  async takeIn(this: CasinoWallet, kind: string, amount: Integer, transaction: string, operationId: string) {
+  async takeIn(this: CasinoWallet, kind: string, amount: Whole, transaction: string, operationId: string) {
     try {
       const fee = kind === 'deposit-fee' ? { transaction, source: DEPOSIT_FEE_ID } : {};
       return await this.perform(kind, { amount, ...fee }, operationId);
@@ -440,7 +441,7 @@ export class WalletTransactions {
     const c = this.channel!,
       rejected = last?.status === 'rejected';
     const next = verifyEvidence({
-      chainId: this.expectedChainId,
+      chainId: String(this.expectedChainId),
       casino: this.config.contractAddress,
       operator: this.operator,
       evidence: last?.evidence ?? checkpointEvidence(state),
@@ -724,7 +725,7 @@ export class WalletTransactions {
    * signature after it, which the casino does straight away: it pays the address what the deposits the balance has
    * taken in and house cash cover, and the rest as house cash arrives. One the casino cannot pay now is declined, with
    * why. */
-  async withdraw(this: CasinoWallet, to: string, amount?: Integer) {
+  async withdraw(this: CasinoWallet, to: string, amount?: Whole) {
     const recipient = this.recipient(to),
       c = this.channel;
     if (!c || !this.playable) throw new Error('No balance is open to withdraw from.');
@@ -747,7 +748,7 @@ export class WalletTransactions {
   /** Transfer `amount` of the balance to another player, as their public profile names them: a debit that names their
    * uname, which their wallet collects into their balance, deposit or none. Nothing goes on-chain, so it
    * costs no fee and tells nobody either account's address; it is the casino's to pay until they collect it. */
-  async transfer(this: CasinoWallet, to: { uname: string; discordUsername: string | null }, amount: Integer) {
+  async transfer(this: CasinoWallet, to: { uname: string; discordUsername: string | null }, amount: Whole) {
     const c = this.channel,
       value = BigInt(amount),
       balance = BigInt(c?.state.balance || 0);
@@ -794,7 +795,7 @@ export class WalletTransactions {
    * balance, up to `MOST_WITHDRAWAL_GAS` at the gas price the wallet reads itself. */
   async quoteWithdrawalFee(this: CasinoWallet) {
     const [{ fee }, { gasPrice }] = await Promise.all([this.api('/api/withdrawal-fee'), this.provider.getFeeData()]);
-    if (!/^(0|[1-9][0-9]{0,28})$/.test(fee)) throw new Error('The casino sent no valid withdrawal fee');
+    if (!decimal(fee)) throw new Error('The casino sent no valid withdrawal fee');
     if (gasPrice == null || BigInt(fee) > MOST_WITHDRAWAL_GAS * gasPrice)
       throw new Error(`The casino asks a withdrawal fee of ${exact(BigInt(fee))} METH, more than sending one costs.`);
     this.withdrawalFee = BigInt(fee);

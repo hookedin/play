@@ -9,6 +9,7 @@ import type {
   Evidence,
   EvidenceBundle,
   Integer,
+  Whole,
   Json,
   Quote,
   CollateralOffer,
@@ -20,6 +21,7 @@ import {
   verifyTypedData,
   getAddress,
   id,
+  isAddress,
   keccak256,
   ZeroHash,
   ZeroAddress,
@@ -120,7 +122,7 @@ export const BANK_CASINO_BET_TYPES = {
 /** The `authorization` header carrying a signed `Access` or `DeveloperAccess` message. */
 export const authorization = (message: unknown, signature: string) =>
   'HookedIn ' + btoa(json({ message, signature })).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
-export const domain = (chainId: Integer, casino: string) => ({
+export const domain = (chainId: Whole, casino: string) => ({
   name: 'HookedIn',
   version: '1',
   chainId: String(chainId),
@@ -130,7 +132,7 @@ export const hashState = (d: Domain, s: Checkpoint) => TypedDataEncoder.hash(d, 
 export const hashOperation = (d: Domain, s: Operation) => TypedDataEncoder.hash(d, OP_TYPES, s);
 /** The key a channel goes by off-chain, and the ID of its close's claim on-chain: an account's first channel has
  * `index` 0, and each one whose close started is followed by the next. Nothing signs it. */
-export const channelId = (player: string, index: Integer) =>
+export const channelId = (player: string, index: Whole) =>
   keccak256(AbiCoder.defaultAbiCoder().encode(['address', 'uint256'], [player, index]));
 /** A channel's status on-chain: an account's current channel is active from the start, with nothing to open, and
  * takes play and money until its close starts. */
@@ -160,12 +162,10 @@ export const UNTOUCHED_CHANNEL = onchainChannel({
 /** Whether a channel's balance plays: the channel active, and every deposit the balance took in held on-chain. One a
  * reorganisation took back waits for the money to land again: a close nets out what the chain does not hold, so a bet
  * on it would risk nothing. */
-export const playsOn = (
-  onchain: { status: Integer; deposited: Integer } | null | undefined,
-  state: { deposited: Integer },
-) => !!onchain && Number(onchain.status) === STATUS.active && BigInt(state.deposited) <= BigInt(onchain.deposited);
+export const playsOn = (onchain: { status: Whole; deposited: Whole } | null | undefined, state: { deposited: Whole }) =>
+  !!onchain && Number(onchain.status) === STATUS.active && BigInt(state.deposited) <= BigInt(onchain.deposited);
 /** Wire terms as exact integers: a stake, the bet's chance out of 2^64 and the prize it pays. */
-export const betTerms = (stake: Integer, chance: Integer, prize: Integer) => ({
+export const betTerms = (stake: Whole, chance: Whole, prize: Whole) => ({
   stake: BigInt(stake),
   chance: BigInt(chance),
   prize: BigInt(prize),
@@ -198,6 +198,11 @@ export const UNAME_ALPHABET = '23456789abcdefghijkmnopqrstvwxyz';
 export const UNAME_LENGTH = 24;
 /** A player's uname, which the casino derives from their address. */
 export const UNAME = new RegExp(`^[${UNAME_ALPHABET}]{${UNAME_LENGTH}}$`);
+/** A Discord username: 2 to 32 lowercase letters, digits, underscores or periods. */
+export const DISCORD_USERNAME = /^[a-z0-9_.]{2,32}$/;
+/** Case, `l`/`1`/`i` and `0`/`o` are not differences: the form names are compared and found by, so nobody can pass for
+ * somebody else with a lookalike. */
+export const fold = (name: string) => name.toLowerCase().replaceAll('l', 'i').replaceAll('1', 'i').replaceAll('0', 'o');
 /** Another player as a counterparty: their uname, written `~uname`. A debit that pays another player names them, and
  * the credit that player collects it with names the player it came from. */
 const PLAYER = new RegExp(`^~[${UNAME_ALPHABET}]{${UNAME_LENGTH}}$`);
@@ -227,14 +232,14 @@ export const HEAD_TYPES = {
   HistoryHead: fields('string record,bytes32 digest'),
 };
 /** Shares bought by `amount` when the fund holds `equity` for `totalShares`. The first shares cost one wei each. */
-export function sharesFor(amount: Integer, equity: Integer, totalShares: Integer) {
+export function sharesFor(amount: Whole, equity: Whole, totalShares: Whole) {
   if (BigInt(amount) <= 0n) throw new Error('Invalid investment');
   if (BigInt(totalShares) === 0n) return BigInt(amount);
   if (BigInt(equity) <= 0n) throw new Error('The bankroll is not open to investment');
   return (BigInt(amount) * BigInt(totalShares)) / BigInt(equity);
 }
 /** What `shares` are worth when the fund holds `equity` for `totalShares`, rounded down. */
-export function valueOf(shares: Integer, equity: Integer, totalShares: Integer) {
+export function valueOf(shares: Whole, equity: Whole, totalShares: Whole) {
   if (BigInt(shares) < 0n || BigInt(shares) > BigInt(totalShares)) throw new Error('Invalid shares');
   return BigInt(totalShares) === 0n || BigInt(equity) <= 0n
     ? 0n
@@ -248,12 +253,13 @@ export function verifyShareStatement(
   operator: string,
   expected: {
     holder: string;
-    previous: { sequence: Integer; shares: Integer };
+    previous: { sequence: Whole; shares: Whole };
     cause: string;
-    amount?: Integer;
-    burned?: Integer;
+    amount?: Whole;
+    burned?: Whole;
   },
 ) {
+  if (!canonical(SHARE_TYPES, message)) throw new Error('The share statement is not in its one form');
   assertSignature(d, SHARE_TYPES, message, signature, operator);
   if (
     !same(message.holder, expected.holder) ||
@@ -276,8 +282,15 @@ export function verifyShareStatement(
     throw new Error('Share statement does not match the redemption');
   return burned;
 }
-/** A signature in the one form the contract recovers: 65 bytes, v 27 or 28. ethers recovers a compact one or a v of 0
- * or 1 as well, and each side keeps the other's signatures as they came, as its evidence. */
+/** The largest `s` the contract recovers a signature with: half the curve's order. */
+const MAX_S = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0n;
+/** A signature in the one form the contract recovers, in lowercase: 65 bytes, an `s` of at most half the curve's order
+ * and a v of 27 or 28. ethers recovers a compact one, an `s` above that or a v of 0 or 1 as well, and each side keeps
+ * the other's signatures as they came, as its evidence. */
+export const validSignature = (signature: unknown): signature is string =>
+  typeof signature === 'string' &&
+  /^0x[0-9a-f]{128}1[bc]$/.test(signature) &&
+  BigInt('0x' + signature.slice(66, 130)) <= MAX_S;
 export function assertSignature(
   d: Domain,
   types: Record<string, TypedDataField[]>,
@@ -285,11 +298,11 @@ export function assertSignature(
   signature: string,
   expected: string,
 ) {
-  if (!/^0x[0-9a-f]{128}1[bc]$/i.test(signature) || !same(verifyTypedData(d, types, message, signature), expected))
+  if (!validSignature(signature) || !same(verifyTypedData(d, types, message, signature), expected))
     throw new Error('Invalid signature');
 }
 /** The checkpoint a channel starts from: all zero but its account and index. The contract takes it with no signature. */
-export function baseState(player: string, index: Integer): Checkpoint {
+export function baseState(player: string, index: Whole): Checkpoint {
   return {
     player: getAddress(player),
     index: String(index),
@@ -310,18 +323,14 @@ const unsignedBase = (d: Domain, evidence: Evidence) =>
  * not taken in yet, and what it withdrew that is not yet a claim, less what the channel's claims took
  * (`claimed`) that it did not withdraw and what it took in that the chain does not hold; never below nothing. The
  * contract works it out the same way. */
-export function owed(
-  state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
-  deposited: Integer,
-  claimed: Integer,
-) {
+export function owed(state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>, deposited: Whole, claimed: Whole) {
   const due = BigInt(state.balance) + BigInt(deposited) + BigInt(state.withdrawn),
     taken = BigInt(state.deposited) + BigInt(claimed);
   return due > taken ? due - taken : 0n;
 }
 /** The deposits of `principal`, those a channel still holds, that the contract pays a withdrawal out of when its
  * checkpoint took in `deposited` of the channel's `deposited`: a deposit it did not take in stays the channel's. */
-export function depositsTakenIn(channel: { deposited: Integer }, principal: bigint, deposited: Integer) {
+export function depositsTakenIn(channel: { deposited: Whole }, principal: bigint, deposited: Whole) {
   const deposits = principal + BigInt(deposited) - BigInt(channel.deposited);
   return deposits < 0n ? 0n : deposits > principal ? principal : deposits;
 }
@@ -331,8 +340,8 @@ export function depositsTakenIn(channel: { deposited: Integer }, principal: bigi
  * back into the account's current channel as deposits, which this leaves out: no checkpoint before it took
  * them in. */
 export function recordWithdrawals(
-  channel: { deposited: Integer; principal: Integer; collateral: Integer },
-  withdrawals: { amount: Integer; deposited: Integer }[],
+  channel: { deposited: Whole; principal: Whole; collateral: Whole },
+  withdrawals: { amount: Whole; deposited: Whole }[],
 ) {
   let principal = BigInt(channel.principal),
     collateral = BigInt(channel.collateral),
@@ -355,8 +364,8 @@ export function recordWithdrawals(
  * close is owed only once they land again; `spare` is what more it could win and have protected. */
 export function protection(
   state: Pick<Checkpoint, 'balance' | 'deposited' | 'withdrawn'>,
-  channel: { deposited: Integer; principal: Integer; collateral: Integer },
-  withdrawals: { amount: Integer; deposited: Integer }[],
+  channel: { deposited: Whole; principal: Whole; collateral: Whole },
+  withdrawals: { amount: Whole; deposited: Whole }[],
 ) {
   const left = recordWithdrawals(channel, withdrawals),
     held = left.principal + left.collateral,
@@ -377,38 +386,51 @@ export function protection(
 /** Whether the contract has recorded the withdrawal `evidence` proves: it records a channel's withdrawals in the order
  * they were signed, so once the channel's `claimed` has passed the `withdrawn` of the checkpoint the withdrawal
  * follows. What stays owed of it is a claim under its ID; one paid in full at once leaves none. */
-export const withdrawalRecorded = (claimed: Integer, evidence: Evidence) =>
+export const withdrawalRecorded = (claimed: Whole, evidence: Evidence) =>
   BigInt(claimed) > BigInt(evidence.base.withdrawn);
-export function operation(d: Domain, base: Checkpoint, values: Partial<Operation>) {
-  return plain({
+/** The operation that follows `base`, in its one form (`canonical`): zero but for `values`. */
+export function operation(d: Domain, base: Checkpoint, values: Partial<Record<keyof Operation, Whole>>): Operation {
+  const op: Record<string, any> = {
     previousStateHash: hashState(d, base),
     kind: 0,
     amount: 0,
     recipient: ZeroAddress,
     fee: 0,
-    chance: 0n,
-    prize: 0n,
+    chance: 0,
+    prize: 0,
     round: ZeroHash,
     seedHash: ZeroHash,
     memo: ZeroHash,
     ...values,
-  });
+  };
+  return Object.fromEntries(
+    OP_TYPES.Operation.map(({ name, type }) => [
+      name,
+      type === 'address' ? getAddress(op[name]) : type === 'bytes32' ? op[name].toLowerCase() : decimalOf(op[name]),
+    ]),
+  ) as unknown as Operation;
 }
 /** A quote the casino signed for the casino bet that follows `state`. */
 export function verifyQuote(d: Domain, quote: Quote, state: Checkpoint, operator: string) {
-  assertSignature(d, QUOTE_TYPES, quote?.message, quote?.signature, operator);
+  if (!only(quote, ['message', 'signature']) || !canonical(QUOTE_TYPES, quote.message))
+    throw new Error('The quote is not in its one form');
+  assertSignature(d, QUOTE_TYPES, quote.message, quote.signature, operator);
   const { previousStateHash, round, virtualBankroll } = quote.message;
-  if (!same(previousStateHash, hashState(d, state)) || same(round, ZeroHash) || BigInt(virtualBankroll) >= MAX_BALANCE)
+  if (previousStateHash !== hashState(d, state) || round === ZeroHash || BigInt(virtualBankroll) >= MAX_BALANCE)
     throw new Error('The quote is not for this checkpoint');
   return quote;
 }
-/** Whether `quote` covers the casino bet `op` at `now`, in seconds: it names the bet's checkpoint and round, has not
- * expired, and its virtual bankroll admits the bet's terms. The contract checks the same when the bet is disputed. */
+/** Whether `quote` covers the casino bet `op` at `now`, in seconds: both in their one form, it names the bet's
+ * checkpoint and round, has not expired, and its virtual bankroll, below the protocol's maximum, admits the bet's
+ * terms. The contract checks the same when the bet is disputed. */
 export const covers = (quote: Quote, op: Operation, now: number) =>
-  Number(op.kind) === KIND.casinoBet &&
-  same(quote.message.previousStateHash, op.previousStateHash) &&
-  same(quote.message.round, op.round) &&
+  canonical(QUOTE_TYPES, quote?.message) &&
+  canonical(OP_TYPES, op) &&
+  op.kind === String(KIND.casinoBet) &&
+  quote.message.previousStateHash === op.previousStateHash &&
+  quote.message.round === op.round &&
   BigInt(quote.message.expiresAt) >= BigInt(now) &&
+  BigInt(quote.message.virtualBankroll) < MAX_BALANCE &&
   admits(BigInt(quote.message.virtualBankroll), betTerms(op.amount, op.chance, op.prize));
 /** A collateral offer the casino signed for `amount` on the channel `opening` names, at the price its `rate` gives. */
 export function verifyOffer(
@@ -419,7 +441,9 @@ export function verifyOffer(
   rate: bigint,
   operator: string,
 ) {
-  assertSignature(d, OFFER_TYPES, offer?.message, offer?.signature, operator);
+  if (!only(offer, ['message', 'signature']) || !canonical(OFFER_TYPES, offer.message))
+    throw new Error('The offer is not in its one form');
+  assertSignature(d, OFFER_TYPES, offer.message, offer.signature, operator);
   const { message } = offer;
   if (
     !same(message.player, opening.player) ||
@@ -456,6 +480,8 @@ export const disputedStep = (operation: Operation, authorization: string, seed: 
 /** A game's ID, a UUID: a published game's is the UUIDv7 of the record that first published it, its own whatever it is
  * renamed or moved to, and a game opened by its URL alone, which nobody publishes, has its URL's (`urlGameId`). */
 export const GAME_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[78][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+/** A signing-history record's ID, a UUIDv7, which is the ID of the bet it placed too. */
+export const RECORD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 /** The ID of a game opened by its URL alone: a UUIDv8 of the first 16 bytes of the hash of the URL. */
 export function urlGameId(url: string) {
   const hex = keccak256(toUtf8Bytes(url)).slice(2, 34),
@@ -473,20 +499,12 @@ export const gameSlug = (name: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
-/** A name a game is published under, such as `Super Dice`: 1 to `MAX_GAME_NAME` characters of well-formed text, no
- * control character among them and no space at either end, whose slug has a letter or a digit and at most
- * `MAX_GAME_NAME` characters too. */
+/** A name a game is published under, such as `Super Dice`: 1 to `MAX_GAME_NAME` printable characters, no space at
+ * either end, whose slug has a letter or a digit and at most `MAX_GAME_NAME` characters too. */
 export function validGameName(name: unknown): name is string {
-  if (typeof name !== 'string') return false;
+  if (!printable(name)) return false;
   const slug = gameSlug(name);
-  return (
-    name.length <= MAX_GAME_NAME &&
-    name === name.trim() &&
-    validText(name) &&
-    !/\p{Cc}/u.test(name) &&
-    slug !== '' &&
-    slug.length <= MAX_GAME_NAME
-  );
+  return name.length <= MAX_GAME_NAME && name === name.trim() && slug !== '' && slug.length <= MAX_GAME_NAME;
 }
 export const memo = (details: Details) => hashJSON(details);
 const bytes32Pattern = /^0x[0-9a-f]{64}$/;
@@ -500,9 +518,12 @@ export const validText = (value: unknown): boolean =>
     : value === null ||
       typeof value !== 'object' ||
       Object.entries(value).every(([key, item]) => validText(key) && validText(item));
-/** A group label: 1 to `MAX_GROUP` characters of well-formed text without a NUL. */
+/** Text as everyone sees it: no control, format, private-use or unassigned character, nor half a surrogate pair, any
+ * of which could hide or reorder what it shows. */
+export const printable = (text: unknown): text is string => typeof text === 'string' && !/\p{C}/u.test(text);
+/** A group label: 1 to `MAX_GROUP` printable characters. */
 export const validGroup = (group: unknown): group is string =>
-  typeof group === 'string' && group.length > 0 && group.length <= MAX_GROUP && validText(group);
+  printable(group) && group.length > 0 && group.length <= MAX_GROUP;
 /** The most a bet's meta takes, as canonical JSON. */
 export const MAX_META_BYTES = 4096;
 /** The most developer bets one request settles, and one page lists. */
@@ -524,8 +545,7 @@ export const BOUNDS = {
  * recipient being in the operation. Only what names a game carries a group. Every field
  * is in one form, so one meaning has one memo. */
 export function checkDetails(kind: number, details: Details) {
-  const { game, group, meta } = details ?? {},
-    keys = details && typeof details === 'object' ? Object.keys(details) : [];
+  const { game, group, meta } = details ?? {};
   const named = typeof game === 'string' && GAME_ID.test(game);
   const counterparty =
     typeof details?.counterparty === 'string' &&
@@ -533,9 +553,8 @@ export function checkDetails(kind: number, details: Details) {
       GAME_ID.test(details.counterparty) ||
       counterpartyPlayer(details.counterparty) !== null);
   if (
-    !keys.every(key => ['id', 'game', 'group', 'counterparty', 'meta'].includes(key)) ||
-    typeof details.id !== 'string' ||
-    !bytes32Pattern.test(details.id) ||
+    !only(details, ['id', 'game', 'group', 'counterparty', 'meta']) ||
+    !validHash(details.id) ||
     (game !== undefined && !named) ||
     (details.counterparty !== undefined && !counterparty) ||
     (group !== undefined && (!named || !validGroup(group))) ||
@@ -550,7 +569,49 @@ export function checkDetails(kind: number, details: Details) {
   )
     throw Object.assign(new Error('Invalid operation details'), { code: 'invalid' });
 }
-const decimal = (value: unknown) => typeof value === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(value);
+/** Whether `value` is a JSON object with no field but `fields`. */
+export const only = (value: unknown, fields: string[]): value is Record<string, any> =>
+  value !== null &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  Object.keys(value).every(key => fields.includes(key));
+/** A whole number in its one form: a decimal string, without a sign, a space or a leading zero. */
+export const decimal = (value: unknown): value is string =>
+  typeof value === 'string' && /^(0|[1-9][0-9]{0,77})$/.test(value);
+/** A whole number the code holding it gives as a bigint, a safe integer or a decimal string, in its one form: nothing
+ * else is taken for one, whatever it could be read as. */
+export function decimalOf(value: unknown): string {
+  if ((typeof value === 'bigint' && value >= 0n) || (Number.isSafeInteger(value) && (value as number) >= 0))
+    return String(value);
+  if (decimal(value)) return value;
+  throw new RangeError('Not a whole number');
+}
+/** An address in its one form: checksummed. */
+export const checksummed = (value: unknown): value is string =>
+  typeof value === 'string' && isAddress(value) && getAddress(value) === value;
+/** A hash in its one form: 32 bytes of lowercase hex. */
+export const validHash = (value: unknown): value is string => typeof value === 'string' && bytes32Pattern.test(value);
+/** Whether `message` is a message of `types`' one struct in its one form: exactly its fields, each uint a decimal
+ * string within its width, each bytes32 a hash, each address checksummed and each string well-formed text. ethers signs
+ * many spellings of one value alike, so two spellings of one message never both pass, and what is signed is what is
+ * kept. */
+export function canonical(types: Record<string, TypedDataField[]>, message: unknown): boolean {
+  const [fields] = Object.values(types) as [TypedDataField[]];
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) return false;
+  const value = message as Record<string, unknown>;
+  return (
+    Object.keys(value).length === fields.length &&
+    fields.every(({ name, type }) => {
+      if (!Object.hasOwn(value, name)) return false;
+      const field = value[name],
+        width = /^uint(\d+)$/.exec(type)?.[1];
+      if (type === 'address') return checksummed(field);
+      if (type === 'bytes32') return validHash(field);
+      if (type === 'string') return typeof field === 'string' && validText(field);
+      return width !== undefined && decimal(field) && BigInt(field) < 1n << BigInt(width);
+    })
+  );
+}
 /** A casino bet's terms in their one form: decimal strings, a stake and a prize below 2^96 and a chance of 1 to
  * 2^64 − 1 outcomes. */
 export function validBet(stake: unknown, chance: unknown, prize: unknown) {
@@ -590,7 +651,7 @@ export function outcome(seed: string, secret: string) {
 }
 /** What a casino bet pays on an outcome: its prize when the outcome is below its chance, and nothing otherwise. The
  * stake was paid to enter. */
-export const betPayout = (bet: { chance: Integer; prize: Integer }, value: bigint) =>
+export const betPayout = (bet: { chance: Whole; prize: Whole }, value: bigint) =>
   value < BigInt(bet.chance) ? BigInt(bet.prize) : 0n;
 /** What an operation does to the balance. Every signed operation names one of these. A casino bet settles in
  * the operation itself; a developer bet is a debit that pays its stake to its game's bank; a deposit takes in
@@ -607,6 +668,8 @@ export const KIND = {
   lockIn: 6,
 } as const;
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
+  if (!canonical(OP_TYPES, op) || !validHash(secret) || !validHash(seed))
+    throw new Error('Operation is not in its one form');
   if (!same(hashState(d, base), op.previousStateHash)) throw new Error('Operation is not next in this channel');
   const next = {
     ...base,
@@ -688,8 +751,9 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
  * consuming entropy or money. */
 export function rejectionCheckpoint(d: Domain, base: Checkpoint, op: Operation): Checkpoint {
   if (
+    !canonical(OP_TYPES, op) ||
     ![KIND.casinoBet, KIND.debit, KIND.withdrawal, KIND.lockIn].includes(Number(op.kind) as 1) ||
-    !same(op.previousStateHash, hashState(d, base))
+    op.previousStateHash !== hashState(d, base)
   )
     throw new Error('Rejection must identify the next casino bet, debit, withdrawal or lock-in');
   return {
@@ -713,12 +777,12 @@ export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner
 const emptyStep = (): Step => ({
   operation: {
     previousStateHash: ZeroHash,
-    kind: 0,
-    amount: 0,
+    kind: '0',
+    amount: '0',
     recipient: ZeroAddress,
-    fee: 0,
-    chance: 0,
-    prize: 0,
+    fee: '0',
+    chance: '0',
+    prize: '0',
     round: ZeroHash,
     seedHash: ZeroHash,
     memo: ZeroHash,
@@ -728,12 +792,8 @@ const emptyStep = (): Step => ({
   secret: ZeroHash,
   casinoSignature: '0x',
 });
-const isEmptyStep = (d: Domain, step: Step) =>
-  step.authorization === '0x' &&
-  step.casinoSignature === '0x' &&
-  same(step.secret, ZeroHash) &&
-  same(step.seed, ZeroHash) &&
-  same(hashOperation(d, step.operation), hashOperation(d, emptyStep().operation));
+/** Whether `step` is the empty step, in its one form. */
+const isEmptyStep = (step: Step) => canonicalJSON(step) === canonicalJSON(emptyStep());
 export function checkpointEvidence(state: Checkpoint, playerSignature = '0x', casinoSignature = '0x'): Evidence {
   return { base: state, playerSignature, casinoSignature, step: emptyStep() };
 }
@@ -742,38 +802,52 @@ export function checkpointEvidence(state: Checkpoint, playerSignature = '0x', ca
 export function verifyEvidence(bundle: EvidenceBundle): { state: Checkpoint } {
   const d = domain(bundle.chainId, bundle.casino),
     { operator, evidence } = bundle,
-    player = evidence.base.player;
-  if (!/^0x[0-9a-fA-F]{40}$/.test(player) || same(player, ZeroAddress)) throw new Error('Evidence names no account');
+    base = evidence?.base;
+  // Everything in its one form, as it was signed: what is kept is what was signed.
+  if (
+    !only(evidence, ['base', 'playerSignature', 'casinoSignature', 'step']) ||
+    !canonical(STATE_TYPES, base) ||
+    base.player === ZeroAddress
+  )
+    throw new Error('Evidence names no account, or is not in its one form');
+  const player = base.player;
   // The channel's base needs no signature.
   if (!unsignedBase(d, evidence)) {
-    assertSignature(d, STATE_TYPES, evidence.base, evidence.playerSignature, player);
-    assertSignature(d, STATE_TYPES, evidence.base, evidence.casinoSignature, operator);
+    assertSignature(d, STATE_TYPES, base, evidence.playerSignature, player);
+    assertSignature(d, STATE_TYPES, base, evidence.casinoSignature, operator);
   }
-  // A checkpoint-only proof carries the canonical empty step: one meaning, one encoding.
-  if (!Number(evidence.step.operation.kind) && !isEmptyStep(d, evidence.step))
+  // A checkpoint-only proof carries the empty step: one meaning, one encoding.
+  const empty = evidence.step?.operation?.kind === '0';
+  if (
+    !only(evidence.step, ['operation', 'authorization', 'seed', 'secret', 'casinoSignature']) ||
+    (empty && !isEmptyStep(evidence.step))
+  )
     throw new Error('Checkpoint evidence must carry an empty step');
-  const state = Number(evidence.step.operation.kind)
-    ? verifyStep(d, evidence.base, evidence.step, player, operator)
-    : evidence.base;
+  const state = empty ? base : verifyStep(d, base, evidence.step, player, operator);
   if ([state.balance, state.deposited, state.withdrawn].some(amount => BigInt(amount) >= MAX_BALANCE))
     throw new Error('Balance exceeds the protocol maximum');
   // The details beside a step say what it meant, and are only as good as the memo it signed.
-  if (bundle.details !== undefined && !same(memo(bundle.details), evidence.step.operation.memo))
+  if (bundle.details !== undefined && memo(bundle.details) !== evidence.step.operation.memo)
     throw new Error('Details differ from the operation they describe');
   // A casino bet the casino has not settled follows the checkpoint itself: the account signed it with its seed, on the
   // casino's quote for that checkpoint and its round.
   if (bundle.dispute !== undefined) {
-    const { step, quote } = bundle.dispute,
-      op = step.operation;
+    const { step, quote } = bundle.dispute ?? {},
+      op = step?.operation;
     if (
-      Number(evidence.step.operation.kind) ||
-      Number(op.kind) !== KIND.casinoBet ||
-      !same(op.previousStateHash, hashState(d, state)) ||
-      !same(seedHash(step.seed), op.seedHash) ||
-      !same(step.secret, ZeroHash) ||
+      !empty ||
+      !only(step, ['operation', 'authorization', 'seed', 'secret', 'casinoSignature']) ||
+      !canonical(OP_TYPES, op) ||
+      !only(quote, ['message', 'signature']) ||
+      !canonical(QUOTE_TYPES, quote.message) ||
+      op.kind !== String(KIND.casinoBet) ||
+      op.previousStateHash !== hashState(d, state) ||
+      !validHash(step.seed) ||
+      seedHash(step.seed) !== op.seedHash ||
+      step.secret !== ZeroHash ||
       step.casinoSignature !== '0x' ||
-      !same(quote.message.previousStateHash, op.previousStateHash) ||
-      !same(quote.message.round, op.round)
+      quote.message.previousStateHash !== op.previousStateHash ||
+      quote.message.round !== op.round
     )
       throw new Error('The disputed bet does not follow the checkpoint');
     assertSignature(d, OP_TYPES, op, step.authorization, player);

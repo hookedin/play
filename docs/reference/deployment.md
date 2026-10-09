@@ -8,7 +8,7 @@ sidebar:
 A deployment is one HookedInCasino contract on one chain, the casino service that signs for it, the wallet release
 that pins it, and the games. The current contract is named in [config/production.json](../../config/production.json),
 its source is
-[verified on Etherscan](https://sepolia.etherscan.io/address/0xEB64058cc50cE278A8c738FD0a603C797BaC0204#code), and
+[verified on Etherscan](https://sepolia.etherscan.io/address/0x47fA99655cB6F4B55760C7Cc26bb867186DB2e25#code), and
 https://hookedin.com/bankroll/ shows it live.
 
 ## Chains

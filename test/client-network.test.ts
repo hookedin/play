@@ -161,7 +161,7 @@ test('a pending nonce or a failing estimate blocks signing', async () => {
 
 test('every transaction the account sends, a close too, needs its fee at the address', async () => {
   const { wallet, state } = fixture(),
-    key = channelId(ZeroAddress, 0);
+    key = channelId(ZeroAddress, 0n);
   wallet.channels[key] = {} as any;
   const close = [{ base: { player: ZeroAddress, index: '0' } }];
   state.balance = 60000n * state.maxFee - 1n;

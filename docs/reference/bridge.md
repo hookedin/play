@@ -12,7 +12,8 @@ checks and answers. The wallet's side is [client/bridge.ts](../../client/bridge.
 
 ## Envelopes
 
-A request is a plain object with these keys and no others, posted to `window.parent` with the target origin `'*'`:
+A request is a plain object with these keys and no others, posted to `window.parent`: the greeting with the target
+origin `'*'`, and every request after it to the [origin](#origins) of the wallet that answered it:
 
 ```js
 window.parent.postMessage({ hookedin: true, id: 1, method: 'wallet.hello', params: {} }, '*');
@@ -63,7 +64,13 @@ with `id-conflict`. [How a game works](../games/how-a-game-works.md) shows how a
 The wallet frames the game's page, at its [URL](../games/publishing.md#the-games-url), and that page's origin is the
 game's. It accepts a message only from that frame's window and that origin, and posts every reply and event to that
 origin alone: a frame that has navigated to another origin is not the game, and hears nothing. It answers only the open
-game. A game accepts only messages whose `source` is `window.parent`, as the SDK does.
+game.
+
+A game accepts a message only from `window.parent`, at a wallet's origin: HookedIn's, `https://play.hookedin.com`, or a
+wallet the player runs on their own computer, at `http://localhost`, `http://127.0.0.1` or `http://[::1]` on any port.
+Once a wallet has answered its greeting, it hears that origin alone and posts every request to it. A page anywhere
+else that frames the game is no wallet: the game neither hears it nor sends it anything but the greeting. The SDK does
+all of this.
 
 When the frame loads a page, a reload included, the wallet forgets the page before it as soon as the new page greets
 it: its queued requests are dropped, and replies to its requests are not sent. An operation the wallet already signed
@@ -86,8 +93,8 @@ comes while the wallet does work of its own, such as its regular look at the cha
 ## Amounts
 
 Every amount is a decimal string of whole wei, 10^-12 METH: digits only, no sign and no leading zeros, below 2^256. A
-stake, a prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 characters of
-well-formed text, without a NUL, for operations that belong together, such as the steps of one hand: the player signs
+stake, a prize and an amount are above zero. A `group`, on a bet or a payment, is a label of 1 to 64 printable characters (no
+control, format, private-use or unassigned character) for operations that belong together, such as the steps of one hand: the player signs
 it, and the wallet and the game's public record show a group as one.
 
 ## Groups and the allowance the player sees
@@ -135,9 +142,9 @@ that name.
 A game's round, as the casino shows it to anyone at
 [`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), read through the wallet. Answered at once.
 
-| Param | Type          | Meaning                           |
-| ----- | ------------- | --------------------------------- |
-| `id`  | `bytes32` hex | The round, `0x` and 64 hex digits |
+| Param | Type          | Meaning                                     |
+| ----- | ------------- | ------------------------------------------- |
+| `id`  | `bytes32` hex | The round, `0x` and 64 lowercase hex digits |
 
 The result is the casino's reply as it came: `{ id, game, createdAt, status }`, and once the game's casino bet has
 revealed the round, its `seed`, `secret`, `outcome` and `casinoBet`. The wallet checks none of it. A game whose players

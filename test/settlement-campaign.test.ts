@@ -367,8 +367,8 @@ test('the wallet requires its pinned runtime and signing domain', async t => {
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env);
-  const observer = new ChainObserver({ provider: env.provider, chainId: 31337 });
-  const args = { observer, provider: env.provider, address: f.contract.target, chainId: 31337 };
+  const observer = new ChainObserver({ provider: env.provider, chainId: 31337n });
+  const args = { observer, provider: env.provider, address: f.contract.target, chainId: 31337n };
   assert.equal((await verifyDeployment(args)).operator, f.owner.address);
   const ch = await channel(f, env.wallets[1]);
   const changed = { ...ch.state, sequence: '2', balance: '200' };

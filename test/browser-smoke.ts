@@ -17,21 +17,21 @@ try {
     throw new Error('State and receipt diverged');
   const player = Wallet.createRandom(),
     casino = Wallet.createRandom().address,
-    id = channelId(player.address, 0);
+    id = channelId(player.address, 0n);
   const tab = () =>
     Object.assign(new CasinoWallet({ network: 'local', storage }), {
       storageKey: prefix + ':wallet',
       address: player.address,
       signer: player,
       config: { contractAddress: casino, operator: Wallet.createRandom().address },
-      domain: domain(31337, casino),
+      domain: domain(31337n, casino),
       render: () => {},
       refresh: async () => {},
     });
   const writer = tab();
   writer.channels[id] = {
     opening: { channelId: id, player: player.address, index: '0' },
-    state: plain(baseState(player.address, 0)),
+    state: plain(baseState(player.address, 0n)),
     playerSignature: '0x',
     casinoSignature: '0x',
     onchain: { status: '0' },

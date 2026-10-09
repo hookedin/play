@@ -60,7 +60,8 @@ export async function anvil(chainId = 31337) {
     ).connect(provider),
   );
   return {
-    chainId,
+    // As the wire writes it.
+    chainId: String(chainId),
     provider,
     wallets,
     url: 'http://127.0.0.1:' + port,
@@ -86,7 +87,7 @@ export function openingFor(player: string, index: any = 0) {
   return { channelId: channelId(player, index), player, index: String(index) };
 }
 export async function accessFor(d: any, signer: any) {
-  const message = { player: signer.address, expiresAt: Math.floor(Date.now() / 1000) + 120 };
+  const message = { player: signer.address, expiresAt: String(Math.floor(Date.now() / 1000) + 120) };
   return { message, signature: await signer.signTypedData(d, ACCESS_TYPES, message) };
 }
 /** A casino bet's odds: it pays `prize` when the round's outcome falls below `chance`. */

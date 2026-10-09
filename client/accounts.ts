@@ -1,5 +1,5 @@
 import type { Store } from './storage.ts';
-import type { Integer } from '../protocol/types.ts';
+import type { Whole } from '../protocol/types.ts';
 import { Wallet } from 'ethers';
 import { withLock } from './storage.ts';
 /** The keys this browser holds, by address, and the one in use. */
@@ -8,7 +8,7 @@ export interface SavedAccounts {
   accounts: Record<string, string>;
 }
 
-const keyFor = (chainId: Integer) => `accounts:${chainId}`;
+const keyFor = (chainId: Whole) => `accounts:${chainId}`;
 
 function add(accounts: Record<string, string>, privateKey: string) {
   const wallet = new Wallet(privateKey);
@@ -19,7 +19,7 @@ function add(accounts: Record<string, string>, privateKey: string) {
 /** Keep the keys of the accounts the player created, signed in to or imported, and which one is in use. */
 export async function saveAccounts(
   storage: Store,
-  chainId: Integer,
+  chainId: Whole,
   { privateKeys = [], select = false }: { privateKeys?: string[]; select?: boolean } = {},
 ): Promise<SavedAccounts> {
   return withLock(`hookedin:accounts:${chainId}`, true, async () => {
@@ -37,6 +37,6 @@ export async function saveAccounts(
   });
 }
 
-export async function readAccounts(storage: Store, chainId: Integer): Promise<SavedAccounts> {
+export async function readAccounts(storage: Store, chainId: Whole): Promise<SavedAccounts> {
   return (await storage.get(keyFor(chainId))) || { selected: null, accounts: {} };
 }

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { id, TypedDataEncoder, ZeroHash } from 'ethers';
-import type { Checkpoint, Details, Operation } from '../protocol/types.ts';
+import type { Checkpoint, Details } from '../protocol/types.ts';
 import {
   domain,
   channelId,
@@ -56,13 +56,13 @@ export function buildVectors() {
   ].map(bet => priced(10_000_000_000n, bet));
   const d = domain(identity.chainId, identity.casino);
   // The player's first channel, at its base, with the key it goes by off-chain.
-  const channel = { channelId: channelId(identity.player, 0), player: identity.player, index: '0' },
+  const channel = { channelId: channelId(identity.player, '0'), player: identity.player, index: '0' },
     base = baseState(channel.player, channel.index);
   // An operation on the checkpoint before it: its details, whose canonical JSON its memo hashes, the operation and its
   // hash, and the checkpoint it leads to with the seed and secret it settles with, zero but for a casino bet.
   const apply = (
     base: Checkpoint,
-    values: Partial<Operation>,
+    values: Parameters<typeof operation>[2],
     details: Details,
     seed = ZeroHash,
     secret = ZeroHash,

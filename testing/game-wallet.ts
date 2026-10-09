@@ -36,6 +36,7 @@ import {
   QUOTE_PERIOD,
   gameSlug,
   urlGameId,
+  decimalOf,
 } from '../protocol/protocol.ts';
 import { assessBet, betReturn, RETURN_SCALE } from '../protocol/risk.ts';
 import type { GameIdentity, GameReceipt } from '../protocol/game-types.ts';
@@ -120,6 +121,11 @@ export function worstReturn(plan: GamePlan) {
  * takes. `bankroll` is what it covers casino bets with, and admits them against half of, as the casino's quotes do;
  * `bank` is what the game's bank holds before any developer bet pays its stake into it.
  */
+/** A record's ID as the casino makes one, a UUIDv7: when it was made, then randomness. */
+const recordId = () => {
+  const hex = Date.now().toString(16).padStart(12, '0') + crypto.randomUUID().replaceAll('-', '').slice(12);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7${hex.slice(13, 16)}-${((parseInt(hex[16]!, 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+};
 export async function gameWallet({
   bankroll: capital = 10n ** 12n,
   bank: funds = 10n ** 12n,
@@ -130,12 +136,16 @@ export async function gameWallet({
     player = Wallet.createRandom(),
     developerKey = Wallet.createRandom();
   const casino = Wallet.createRandom().address,
-    d = domain(31337, casino);
+    d = domain(31337n, casino);
   let bankroll = capital,
     bank = funds;
   /** The player's channel number `index`, with `deposit` taken into its balance and jointly signed. */
   const openChannel = async (deposit = 1000000n, index = 0) => {
-    const opening = { channelId: channelId(player.address, index), player: player.address, index: String(index) },
+    const opening = {
+        channelId: channelId(player.address, String(index)),
+        player: player.address,
+        index: String(index),
+      },
       base = baseState(opening.player, opening.index),
       state = {
         ...base,
@@ -250,7 +260,7 @@ export async function gameWallet({
     const ended = history.find(entry => entry.type === 'end' && entry.game === game && entry.group === group);
     if (ended?.type === 'end' && canonicalJSON(ended.meta) !== canonicalJSON(meta))
       throw refused(409, 'id-conflict', 'This group ended with other meta');
-    if (!ended) history.push({ id: crypto.randomUUID(), at: Date.now(), type: 'end', game, group, meta: plain(meta) });
+    if (!ended) history.push({ id: recordId(), at: Date.now(), type: 'end', game, group, meta: plain(meta) });
     return {};
   };
   /** A page of developer bets, as the casino's feeds give them: open ones in the order they were placed, settled ones
@@ -285,7 +295,7 @@ export async function gameWallet({
     wallet.api = async (path, body) => {
       const channelQuote = /^\/api\/channels\/(0x[0-9a-f]{64})\/quote$/.exec(path);
       if (channelQuote) return { quote: await quoteFor(channelQuote[1]!, wallet.channels[channelQuote[1]!]!.state) };
-      const round = /^\/api\/rounds\/(0x[0-9a-fA-F]{64})$/.exec(path);
+      const round = /^\/api\/rounds\/(0x[0-9a-f]{64})$/.exec(path);
       if (round) return publicRound(round[1]!);
       const developerBet = /^\/api\/developer-bets\/(0x[0-9a-f]{64})$/.exec(path);
       if (developerBet) return publicDeveloperBet(developerBet[1]!);
@@ -411,7 +421,7 @@ export async function gameWallet({
       if (details.game) {
         carried.set(details.id, channel);
         history.push({
-          id: crypto.randomUUID(),
+          id: recordId(),
           at: Date.now(),
           game: details.game,
           type: 'operation',
@@ -434,7 +444,7 @@ export async function gameWallet({
       quote: any,
       elsewhere: boolean,
     ) => {
-      const round = String(request.round).toLowerCase(),
+      const round = request.round,
         used = 'This operation was carried out on another channel';
       let covered = own.get(channel) === round;
       try {
@@ -485,7 +495,7 @@ export async function gameWallet({
         meta: details.meta,
       });
       placed.set(hash, placed.size + 1);
-      ids.set(hash, crypto.randomUUID());
+      ids.set(hash, recordId());
       waiting();
       return settle(channel, request, details, signature, ZeroHash, ZeroHash, 0n);
     };
@@ -495,17 +505,21 @@ export async function gameWallet({
     Object.assign(new Error(message), { status, code });
   /** One batch of settlements, as the casino takes it: paid whole from the game's bank, or not at all. */
   const settleBatch = async (list: Settlement[]) => {
-    const hashes = list.map(entry => entry.bet.toLowerCase());
+    const hashes = list.map(entry => entry.bet);
     if (hashes.some(hash => !developerBets.has(hash))) throw refused(404, 'not-found', 'Unknown developer bet');
     const open = list.filter((_, i) => developerBets.get(hashes[i]!)!.status === 'open');
     const total = open.reduce((sum, entry) => sum + BigInt(entry.player) + BigInt(entry.casino), 0n);
     if (total > bank) throw refused(409, 'bank-short', "The game's bank cannot pay these settlements");
     bank -= total;
     for (const entry of open) {
-      const message = { bet: entry.bet.toLowerCase(), player: String(entry.player), casino: String(entry.casino) };
+      const message = { bet: entry.bet, player: decimalOf(entry.player), casino: decimalOf(entry.casino) };
       Object.assign(developerBets.get(message.bet)!, {
         status: 'settled',
-        settlement: { ...message, signature: await developerKey.signTypedData(d, SETTLEMENT_TYPES, message) },
+        settlement: {
+          player: message.player,
+          casino: message.casino,
+          signature: await developerKey.signTypedData(d, SETTLEMENT_TYPES, message),
+        },
         settledAt: Date.now(),
       });
       if (BigInt(message.player)) owed.set(message.bet, BigInt(message.player));
@@ -528,9 +542,9 @@ export async function gameWallet({
       message = {
         round: round.id,
         game: game.id,
-        stake: String(stake),
-        chance: String(chance),
-        prize: String(prize),
+        stake: decimalOf(stake),
+        chance: decimalOf(chance),
+        prize: decimalOf(prize),
         group,
       };
     const signature = await developerKey.signTypedData(d, BANK_CASINO_BET_TYPES, {

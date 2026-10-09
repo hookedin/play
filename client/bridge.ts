@@ -1,5 +1,5 @@
 import type { GameIdentity } from '../protocol/game-types.ts';
-import { BOUNDS, GAME_ID, MAX_GROUP, MAX_META_BYTES, validGroup, validMeta } from '../protocol/protocol.ts';
+import { BOUNDS, GAME_ID, MAX_GROUP, MAX_META_BYTES, decimal, validGroup, validMeta } from '../protocol/protocol.ts';
 import { MAX_BALANCE } from '../protocol/risk.ts';
 /** Every method a game may call. */
 export const METHODS = [
@@ -39,7 +39,7 @@ export function gameRef(identity: GameIdentity): string {
 }
 /** An amount a game names, in wei: a decimal string below 2^256, above zero unless `positive` is false. */
 export function gameAmount(value: unknown, positive = true) {
-  if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,77})$/.test(value)) throw new Error('Use decimal wei amounts');
+  if (!decimal(value)) throw new Error('Use decimal wei amounts');
   const n = BigInt(value);
   if (n >= 1n << 256n || (positive && n === 0n)) throw new Error('Amount is outside the supported range');
   return n;
@@ -104,8 +104,8 @@ function validate(data: any) {
   if (['wallet.hello', 'wallet.info', 'game.placesDeveloperBets'].includes(data.method)) {
     if (Object.keys(params).length) throw new Error('This method takes no parameters.');
   } else if (data.method === 'wallet.round') {
-    if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(params.id))
-      throw new Error('A round is named by its 32-byte hash, as 0x and 64 hex digits.');
+    if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-f]{64}$/.test(params.id))
+      throw new Error('A round is named by its 32-byte hash, as 0x and 64 lowercase hex digits.');
   } else if (data.method === 'game.history') {
     if (!only(params, ['after', 'limit'])) throw new Error('Unexpected game request field.');
     if (params.after !== undefined && (typeof params.after !== 'string' || !/^([0-9a-f-]{36})?$/.test(params.after)))
@@ -116,7 +116,7 @@ function validate(data: any) {
     if (!only(params, data.method === 'game.end' ? ['group', 'meta'] : ['group']))
       throw new Error('Unexpected game request field.');
     if (params.group === undefined ? data.method === 'game.end' : !validGroup(params.group))
-      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters, without a NUL.`);
+      throw new Error(`A group is a label of 1 to ${MAX_GROUP} printable characters.`);
     if (params.meta !== undefined && !validMeta(params.meta)) throw new Error(META);
   } else {
     const fields = {
@@ -129,7 +129,7 @@ function validate(data: any) {
     gameOperationKey(params.id);
     for (const field of ['stake', 'amount']) if (fields.includes(field)) gameAmount(params[field]);
     if (params.group !== undefined && !validGroup(params.group))
-      throw new Error(`A group is a label of 1 to ${MAX_GROUP} characters, without a NUL.`);
+      throw new Error(`A group is a label of 1 to ${MAX_GROUP} printable characters.`);
     // What stays with the group is the group's: a bet keeps nothing back outside one.
     if (params.kept !== undefined) {
       gameAmount(params.kept, false);

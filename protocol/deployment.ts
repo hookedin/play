@@ -1,6 +1,6 @@
 import type { JsonRpcProvider } from 'ethers';
 import type { ChainObserver } from './chain-observer.ts';
-import type { Deployment, Integer } from './types.ts';
+import type { Deployment, Whole } from './types.ts';
 import { Contract, getAddress } from 'ethers';
 import artifact from '../client/contract-artifact.ts';
 import { same } from './protocol.ts';
@@ -25,7 +25,7 @@ export async function verifyDeployment({
   observer: ChainObserver;
   provider: JsonRpcProvider;
   address: string;
-  chainId: Integer;
+  chainId: Whole;
   expected?: Deployment | null;
 }) {
   address = getAddress(address);

@@ -32,6 +32,7 @@ import {
   MAX_DEVELOPER_BETS,
   MAX_META_BYTES,
   validMeta,
+  decimalOf,
 } from '../../protocol/protocol.ts';
 import type { PublicDeveloperBet, Round } from '../../protocol/types.ts';
 
@@ -126,7 +127,7 @@ export async function createDeveloper({
   const d = domain(config.chainId, config.contractAddress);
   /** A request only the game's server may make: signed with its key, good for a minute. */
   const asServer = async (path: string, body?: unknown) => {
-    const message = { server: signer.address, expiresAt: Math.floor(Date.now() / 1000) + 60 };
+    const message = { server: signer.address, expiresAt: String(Math.floor(Date.now() / 1000) + 60) };
     return api(path, body, {
       authorization: authorization(message, await signer.signTypedData(d, DEVELOPER_ACCESS_TYPES, message)),
     });
@@ -143,9 +144,9 @@ export async function createDeveloper({
     const bet = {
         round: round.toLowerCase(),
         game,
-        stake: String(stake),
-        chance: String(chance),
-        prize: String(prize),
+        stake: decimalOf(stake),
+        chance: decimalOf(chance),
+        prize: decimalOf(prize),
         group,
       },
       seed = await seedOf(bet.round),
@@ -183,7 +184,7 @@ export async function createDeveloper({
       for (let i = 0; i < settlements.length; i += MAX_DEVELOPER_BETS) {
         const signed = await Promise.all(
           settlements.slice(i, i + MAX_DEVELOPER_BETS).map(async ({ bet, player, casino }) => {
-            const message = { bet, player: String(player), casino: String(casino) };
+            const message = { bet, player: decimalOf(player), casino: decimalOf(casino) };
             return { ...message, signature: await signer.signTypedData(d, SETTLEMENT_TYPES, message) };
           }),
         );

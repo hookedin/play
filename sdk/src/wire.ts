@@ -27,6 +27,13 @@ export function wholeStake(wei: bigint | string) {
  * default, or whole METH with none, as a balance reads, without trailing zeros. A positive amount too small for that
  * reads `<0.001`, or `<1`. */
 export function formatAmount(value: string | number | bigint, places = 3) {
+  // An amount in its one form, a bigint, a safe integer or a decimal string; anything else shows as none.
+  if (
+    typeof value === 'string'
+      ? !/^-?(0|[1-9][0-9]*)$/.test(value)
+      : typeof value !== 'bigint' && !Number.isSafeInteger(value)
+  )
+    return '—';
   try {
     const wei = BigInt(value),
       sign = wei < 0n ? '-' : '',

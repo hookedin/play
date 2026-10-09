@@ -1,10 +1,10 @@
 import type { Block, Contract, TransactionReceipt } from 'ethers';
-import type { Integer } from './types.ts';
+import type { Whole } from './types.ts';
 export type ChainBlock = Pick<Block, 'number' | 'hash' | 'timestamp'>;
 interface ObserverOptions {
   provider: JsonRpcProvider;
   witnessProvider?: JsonRpcProvider;
-  chainId: Integer;
+  chainId: Whole;
   finality?: number;
   now?: () => number;
   maxAgeMs?: number;
@@ -24,7 +24,7 @@ const MAX_STALL_MS = 60000;
 /** Bound the transport itself: a late response cannot resume a failed read. Given the chain it serves, the provider
  * skips its own detection round trip; every observation checks the chain ID anyway. Each call is a request of its own:
  * every RPC answers those, while public ones cap what a batch may cost (Tenderly's refuses six contract calls in one). */
-export function createRpcProvider(url: string, chainId: Integer | undefined = undefined) {
+export function createRpcProvider(url: string, chainId: Whole | undefined = undefined) {
   const request = new FetchRequest(url);
   request.timeout = RPC_TIMEOUT_MS;
   const options = { cacheTimeout: -1, batchMaxCount: 1 };

@@ -84,7 +84,7 @@ test('every call is a request of its own, which an RPC that refuses batches answ
     );
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const provider = createRpcProvider('http://127.0.0.1:' + (server.address()! as any).port, 31337);
+  const provider = createRpcProvider('http://127.0.0.1:' + (server.address()! as any).port, 31337n);
   t.after(async () => {
     provider.destroy();
     server.closeAllConnections();

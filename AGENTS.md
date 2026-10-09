@@ -31,6 +31,16 @@ Any opportunity to clean something up is taken at once, in the same change: dead
 path, a name that lies, a needless option, a file nothing uses. Do it even when it means redeploying, breaking
 something that depended on the mess, or touching several repositories. Leaving it for later is the wrong call.
 
+## 4. Be strict in what you accept
+
+Validation errs on the side of too strict, never of too flexible: the casino, the contract, the protocol, the wallet's
+checks of what the casino sends and every game's server take each value in exactly one form, and refuse anything else
+before it is signed, recorded, stored, compared or shown. A whole number is a decimal string, a hash lowercase hex, an
+address checksummed, a signature the one form the contract recovers, a message exactly its fields, text printable, a
+size bounded. What came in is never read leniently, trimmed, lowercased or parsed into something it might mean and then
+used: it is refused. Only what a person types is read generously, where they type it, and it leaves in its one form.
+Loosen a check when something real needs it, and only as far as it needs.
+
 ## This repository
 
 The wallet, the settlement contract, the shared protocol, the game SDK and the house's games. Keep the guarantees we

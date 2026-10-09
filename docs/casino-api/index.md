@@ -21,9 +21,10 @@ or event stream: clients poll, and a developer's server [waits](public.md#get-ap
 ## Requests and replies
 
 A request body is JSON of at most 1,000,000 bytes. The casino does not read `Content-Type`. Every `POST` needs a body
-that parses as JSON, even where the route reads nothing from it (send `{}`). A route reads the body fields it lists and
-ignores others. Every string in a body, each key and each value, must be well-formed text without a NUL: a body with any
-other is refused with `400` `invalid` ("Text must be well-formed, without a NUL").
+that parses as JSON, even where the route reads nothing from it (send `{}`), and holds the fields its route lists and no
+others. Every string in a body, each key and each value, must be well-formed text without a NUL. The casino takes every
+value in the one form [Values](#values) gives it and refuses anything else with `400` `invalid`, whatever it could be
+read as: a body that does not parse, an unknown field, `"0x64"` or `" 100"` for an amount, an upper-case hash.
 
 Every reply is JSON, errors included, with these headers:
 
@@ -47,16 +48,16 @@ casino holds at most 512 connections at once.
 
 ## Values
 
-| Value                                                   | On the wire                                                                                                                                                                                                     |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Amounts                                                 | Decimal strings of wei: `"1000000000000000"` is 1,000 METH                                                                                                                                                      |
-| Hashes and IDs                                          | `0x` followed by 64 lowercase hex digits. Path parameters also take upper-case hex, except a channel's `:id`, which must be lowercase                                                                           |
-| Records and bets                                        | A UUIDv7 in lowercase, which says when the casino made the record: a game record's bet `id`, a payout's `record`, a cursor, a history head's `record`                                                           |
-| Addresses                                               | Checksummed in openings, profiles, statements, `contractAddress`, `operator`, a casino bet's `developer` and a game's `server`                                                                                  |
-| Times in milliseconds since the Unix epoch              | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                      |
-| Times in Unix seconds                                   | `expiresAt`, the fund's `at`, the observed block's `timestamp` and a channel's on-chain `deadline`                                                                                                              |
-| Counts, indexes and the `sequence` of a holding or bank | JSON numbers                                                                                                                                                                                                    |
-| Signed messages                                         | As signed: every `uint256` a decimal string, except an operation's `kind` and a token's `expiresAt`, which the wallet writes as numbers, and the zeros of an empty step, such as a rejection's evidence carries |
+| Value                                                   | On the wire                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Amounts                                                 | Decimal strings of wei: `"1000000000000000"` is 1,000 METH                                                                                                                                                                                                                                                      |
+| Hashes and IDs                                          | `0x` followed by 64 lowercase hex digits, path parameters included                                                                                                                                                                                                                                              |
+| Records and bets                                        | A UUIDv7 in lowercase, which says when the casino made the record: a game record's bet `id`, a payout's `record`, a cursor, a history head's `record`                                                                                                                                                           |
+| Addresses                                               | Checksummed, in whatever the casino takes and answers                                                                                                                                                                                                                                                           |
+| Times in milliseconds since the Unix epoch              | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                                                                                                                      |
+| Times in Unix seconds                                   | `expiresAt`, the fund's `at`, the observed block's `timestamp` and a channel's on-chain `deadline`                                                                                                                                                                                                              |
+| Counts, indexes and the `sequence` of a holding or bank | JSON numbers                                                                                                                                                                                                                                                                                                    |
+| Signed messages                                         | Exactly their fields, each in one form: every `uint` a decimal string without a sign, a space or a leading zero, every hash and signature lowercase, every address checksummed. A signature is 65 bytes with an `s` of at most half the curve's order and a `v` of 27 or 28, the one form the contract recovers |
 
 ## Authentication
 
@@ -142,8 +143,9 @@ answers `503` `paused`.
 
 A refusal is `{"error": "…", "code": "…"}`: the text is for people, and the code is what a client acts on. Beside the
 codes each route names, any request can be answered `rate-limited`, or `paused` ([pauses](#pauses)); a `POST`,
-`too-large`, `refused` when its body is not JSON, or `invalid` when it holds text that is not well-formed or holds a
-NUL; a channel or server route, `unauthorized` first; and a route that waits its turn, `busy`.
+`too-large`, or `invalid` when its body is not JSON or holds text that is not well-formed or holds a NUL; a channel or
+server route, `unauthorized` first; and a route that waits its turn, `busy`. A failure that is not the casino's own
+refusal, such as a database's, is answered `refused` with the text "Refused" and nothing of what failed.
 
 | Code                 | Status | Meaning                                                                                                                                                                                                                                                                                                               |
 | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -159,7 +161,7 @@ NUL; a channel or server route, `unauthorized` first; and a route that waits its
 | `round-revealed`     | 409    | Another casino bet has revealed the round                                                                                                                                                                                                                                                                             |
 | `bank-short`         | 409    | The game's bank cannot pay the stake, or the whole batch of settlements                                                                                                                                                                                                                                               |
 | `too-many`           | 409    | The profile already publishes 100 games                                                                                                                                                                                                                                                                               |
-| `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a body that is not JSON, a chain read that failed                                                                                                                                              |
+| `refused`            | 409    | Anything else the casino considered and declined: a bad signature, an operation that is not next, a balance too small, a chain read that failed                                                                                                                                                                       |
 | `too-large`          | 413    | The body is over 1,000,000 bytes                                                                                                                                                                                                                                                                                      |
 | `rate-limited`       | 429    | A request budget is spent; retry in the next window                                                                                                                                                                                                                                                                   |
 | `busy`               | 429    | A queue is full, four channel registrations are in progress, or a wait for developer bets is one too many                                                                                                                                                                                                             |

@@ -59,8 +59,17 @@ const pending = new Map<
   { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
 >();
 const receiptListeners = new Set<(receipt: GameReceipt) => void>();
+/** HookedIn's wallet. */
+const WALLET = 'https://play.hookedin.com';
+/** Whether a page at `origin` is a wallet: HookedIn's, or one the player runs on their own computer, at a loopback
+ * address. A page that frames the game anywhere else is none, and the game neither hears it nor tells it anything. */
+const walletOrigin = (origin: string) =>
+  origin === WALLET || /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?$/.test(origin);
+/** The wallet that answered the game's greeting: from then on the one the game hears and tells anything. */
+let wallet: string | null = null;
 window.addEventListener('message', event => {
-  if (event.source !== window.parent) return;
+  if (event.source !== window.parent || !walletOrigin(event.origin) || (wallet !== null && event.origin !== wallet))
+    return;
   const message = event.data;
   if (!message || message.hookedin !== true) return;
   // A developer bet's developer has settled it, and the wallet has checked and collected what it was paid.
@@ -73,6 +82,7 @@ window.addEventListener('message', event => {
   if (!request) return;
   clearTimeout(request.timer);
   pending.delete(message.id);
+  wallet ??= event.origin;
   if (message.error)
     request.reject(new HookedInError(String(message.error.code ?? 'failed'), String(message.error.message ?? '')));
   else if (Object.prototype.hasOwnProperty.call(message, 'result')) request.resolve(message.result);
@@ -82,7 +92,7 @@ window.addEventListener('message', event => {
 /** How long the page waits for the wallet's reply. */
 const timeout = 180000;
 const timedOut = () => new HookedInError('timeout', 'The wallet did not respond. Check the client, then reconnect.');
-const call = (method: string, params: Record<string, unknown> = {}) =>
+const send = (method: string, params: Record<string, unknown>) =>
   new Promise<any>((resolve, reject) => {
     if (window.parent === window) {
       reject(new HookedInError('no-wallet', 'Open this game in the HookedIn client to connect your wallet.'));
@@ -94,17 +104,23 @@ const call = (method: string, params: Record<string, unknown> = {}) =>
       reject(timedOut());
     }, timeout);
     pending.set(id, { resolve, reject, timer });
-    window.parent.postMessage({ hookedin: true, id, method, params }, '*');
+    // Only the greeting goes out before a wallet has answered, and it says nothing.
+    window.parent.postMessage({ hookedin: true, id, method, params }, wallet ?? '*');
   });
 
 /** The page's first message, which starts it at the wallet: every bound the wallet holds a bet to. A greeting that
  * failed is forgotten, so the next call asks again. */
 let greeting: Promise<{ bounds: WalletBounds }> | null = null;
 const hello = (): Promise<{ bounds: WalletBounds }> =>
-  (greeting ??= call('wallet.hello').catch(error => {
+  (greeting ??= send('wallet.hello', {}).catch(error => {
     greeting = null;
     throw error;
   }));
+/** A request to the wallet that answered the game's greeting. */
+const call = async (method: string, params: Record<string, unknown> = {}) => {
+  if (method !== 'wallet.hello') await hello();
+  return send(method, params);
+};
 if (window.parent !== window) hello().catch(() => {});
 
 /** Scope game storage to this page and to the player: games sharing a host and accounts sharing a browser must not
