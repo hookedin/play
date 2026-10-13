@@ -53,8 +53,10 @@ verified winnings.
   they pay. A game that places them says so as its page loads, with `HookedIn.placesDeveloperBets()`, and the dialog
   then asks about them too. Casino bets need no more than the allowance, since the wallet checks their odds and their
   results itself.
-- `HookedIn.allowance()` reads it, with `pending` and `developerBets`. Every bet and payment must fit it. Stakes and
-  payments lower it as they are made; verified winnings raise it, a group's once the game has ended the group.
+- `HookedIn.allowance()` reads it, with `pending` and `developerBets`, and `HookedIn.onAllowance` hears whenever any
+  of it changes, as when the player sets it after a refusal: take the refusal down then. Every bet and payment must fit
+  it. Stakes and payments lower it as they are made; verified winnings raise it, a group's once the game has ended the
+  group.
 - The wallet's top bar names the game, by the name it is published under, and shows its allowance beside the player's
   balance. The dialog adds the visit up: what the player allowed, took back, and won or lost, and what is left. A page
   shows no header, allowance or balance of its own: only the game.

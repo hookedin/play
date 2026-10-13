@@ -4,7 +4,7 @@ import { getNode, loadFundedGame, prepareAction, resolveTransition } from './eng
 import type { FundingTable, GameGraph, GamePlan } from './engine/index.ts';
 import { compileGameAsync, rngFromBytes } from './engine/engine.ts';
 import { admits } from './admits.ts';
-import { NOT_ENOUGH_ALLOWANCE, formatAmount, playerScope } from './wire.ts';
+import { HookedInError, NOT_ENOUGH_ALLOWANCE, formatAmount, playerScope } from './wire.ts';
 import { json, plain } from '../../protocol/protocol.ts';
 import * as read from '../../protocol/read.ts';
 import type { GameHistory } from '../../protocol/game-types.ts';
@@ -294,7 +294,7 @@ export class RoundClient {
    * only the player sets, in the wallet's top bar. */
   async checkAllowance(required: bigint, group?: string) {
     const { allowance } = await this.call('game.allowance', group === undefined ? {} : { group });
-    if (allowance < required) throw new Error(NOT_ENOUGH_ALLOWANCE);
+    if (allowance < required) throw new HookedInError('insufficient-allowance', NOT_ENOUGH_ALLOWANCE);
   }
   /** The player has seen how `state`'s round ended: what it won joins the allowance the wallet shows, and the casino
    * keeps the round in the player's history of the game, as the meta of its group, for `past` to read back on any

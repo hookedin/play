@@ -43,7 +43,7 @@ import {
 } from '../protocol/protocol.ts';
 import * as read from '../protocol/read.ts';
 import { assessBet, betReturn, RETURN_SCALE } from '../protocol/risk.ts';
-import type { GameIdentity, GameReceipt } from '../protocol/game-types.ts';
+import type { GameAllowance, GameIdentity, GameReceipt } from '../protocol/game-types.ts';
 import type { Details, DeveloperCasinoBet, Operation, PublicDeveloperBet, Quote, Round } from '../protocol/types.ts';
 import type { BankCasinoBet, Developer, Settlement } from '../sdk/src/developer.ts';
 import type { GamePlan } from '../sdk/src/engine/index.ts';
@@ -54,19 +54,27 @@ export interface TestBridge {
   call(method: string, params?: any): Promise<any>;
   /** Called with every receipt the wallet pushes: a developer bet its developer settled, once collected. */
   onReceipt(listener: (receipt: GameReceipt) => void): () => void;
+  /** Called with what the game may stake whenever it changes, as the wallet pushes it. */
+  onAllowance(listener: (allowance: GameAllowance) => void): () => void;
 }
 
 /** A game's side of the bridge to any wallet: requests go through the checks the wallet's bridge makes, and every
- * receipt the wallet pushes reaches the listeners. */
-const pushes = new WeakMap<CasinoWallet, Set<(receipt: GameReceipt) => void>>();
+ * receipt and allowance the wallet pushes reaches the listeners. */
+const pushes = new WeakMap<
+  CasinoWallet,
+  { receipts: Set<(receipt: GameReceipt) => void>; allowances: Set<(allowance: GameAllowance) => void> }
+>();
 export function bridgeTo(wallet: CasinoWallet): TestBridge {
   let listeners = pushes.get(wallet),
     sent = 0;
   if (!listeners) {
-    const heard = (listeners = new Set());
+    const heard = (listeners = { receipts: new Set(), allowances: new Set() });
     pushes.set(wallet, heard);
     wallet.onGameReceipt = (game, receipt) => {
-      for (const listener of heard) listener(gameReceipt(game.operation, receipt));
+      for (const listener of heard.receipts) listener(gameReceipt(game.operation, receipt));
+    };
+    wallet.onGameAllowance = (_, allowance) => {
+      for (const listener of heard.allowances) listener({ ...allowance });
     };
   }
   return {
@@ -92,8 +100,12 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
       return wallet.gamePayment(checked);
     },
     onReceipt(listener) {
-      listeners!.add(listener);
-      return () => void listeners!.delete(listener);
+      listeners!.receipts.add(listener);
+      return () => void listeners!.receipts.delete(listener);
+    },
+    onAllowance(listener) {
+      listeners!.allowances.add(listener);
+      return () => void listeners!.allowances.delete(listener);
     },
   };
 }

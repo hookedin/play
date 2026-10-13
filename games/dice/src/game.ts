@@ -223,4 +223,8 @@ document.addEventListener('keydown', event => {
 });
 odds();
 render();
+// A refusal for want of allowance goes once the player changes the allowance in the top bar.
+HookedIn.onAllowance(() => {
+  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message('');
+});
 void recover();

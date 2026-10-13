@@ -597,4 +597,8 @@ reels.show(MACHINES.base, IDLE);
 renderMute();
 paytable();
 render();
+// A refusal for want of allowance goes once the player changes the allowance in the top bar.
+HookedIn.onAllowance(() => {
+  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message('');
+});
 void recover();

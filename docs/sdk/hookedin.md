@@ -71,7 +71,7 @@ bigints, without checking it: check it as [checking a round](outcome.md#checking
 #### `allowance`
 
 [`game.allowance`](../reference/bridge.md#gameallowance), a [`GameAllowance`](#gameallowance): what the game may stake
-now, or with `group`, what a bet in that group may stake.
+now, or with `group`, what a bet in that group may stake. `onAllowance` hears whenever it changes.
 
 #### `placesDeveloperBets`
 
@@ -130,6 +130,19 @@ once the developer has settled it and the wallet has collected what it pays, `on
 Calls a listener with every [`game.receipt`](../reference/bridge.md#gamereceipt-1) push, a developer bet of this game
 settled by its developer and collected by the wallet, and returns a function that stops it.
 
+#### `onAllowance`
+
+Calls a listener with every [`game.allowance`](../reference/bridge.md#gameallowance-1) push, a
+[`GameAllowance`](#gameallowance): what `allowance()` answers without a group, whenever any of it changes while the page
+is open, whatever changed it. It returns a function that stops it. A page that shows a refusal for want of allowance
+takes it down once the player has changed the allowance:
+
+```ts
+HookedIn.onAllowance(() => {
+  if (status.textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) status.textContent = '';
+});
+```
+
 #### `storageScope`
 
 A storage key for this page, chain and player, from a `wallet.info` result: `hookedin:<pathname>:<chainId>:<uname>`,
@@ -147,9 +160,16 @@ A METH in wei, `10n ** 12n`. **1 METH is a millionth of an ETH (0.000001 ETH); 1
 
 #### `NOT_ENOUGH_ALLOWANCE`
 
-The message the wallet and `RoundClient` refuse a bet with when the allowance does not cover it:
+The message the wallet and `RoundClient` refuse a bet with, under `insufficient-allowance`, when the allowance does not
+cover it:
 `Not enough allowance for this bet: it is what you let this game play with. Set it in the top bar, creating a wallet or depositing first if it asks.`
 A page that checks the allowance itself says the same.
+
+#### `NO_DEVELOPER_BETS`
+
+The message the wallet refuses a developer bet with, under `developer-bets-not-allowed`, while the player has not
+allowed them: `Allow developer bets with the allowance in the top bar.` A page that checks `developerBets` itself says
+the same.
 
 #### `parseAmount`
 
@@ -198,7 +218,8 @@ it meanwhile. It resolves with the player's `wallet.info` as `wallet`, and `scop
 
 A refusal a game can act on. `code` is stable and the message is for people; `name` is `'HookedInError'`. The codes are
 the wallet's, the casino's passed through, and the SDK's own `no-wallet` and `timeout`: the
-[bridge's error table](../reference/bridge.md#errors) says what each means and what a game does.
+[bridge's error table](../reference/bridge.md#errors) says what each means and what a game does. `RoundClient` refuses
+with it too, as the wallet would.
 
 ```ts
 import { HookedIn, HookedInError } from '@hookedin/play/sdk/sdk';

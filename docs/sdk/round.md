@@ -90,8 +90,8 @@ and is saved with the round. It throws `Recover the pending action first` while 
 resolves, and `Wait for the action under way` while a `start` or `action` runs. It checks
 that the game's allowance covers the stake, prices the graph, and saves the round under a fresh `id`, replacing a saved
 unfinished round, whose cash is in the player's balance already. It places no bet; the first `action` does. It throws
-the pricing error above, [`HookedIn.NOT_ENOUGH_ALLOWANCE`](hookedin.md#not_enough_allowance) when the allowance
-does not cover the stake, and the bridge's errors.
+the pricing error above, `insufficient-allowance` with [`HookedIn.NOT_ENOUGH_ALLOWANCE`](hookedin.md#not_enough_allowance)
+when the allowance does not cover the stake, and the bridge's errors.
 
 #### `action`
 
@@ -147,8 +147,9 @@ saved.
 
 #### `checkAllowance`
 
-`checkAllowance(required, group?)` throws [`HookedIn.NOT_ENOUGH_ALLOWANCE`](hookedin.md#not_enough_allowance)
-unless the game may stake `required`, or with `group`, unless a bet in that group may
+`checkAllowance(required, group?)` throws a [`HookedInError`](hookedin.md#hookedinerror) `insufficient-allowance`,
+with the message [`HookedIn.NOT_ENOUGH_ALLOWANCE`](hookedin.md#not_enough_allowance), unless the game may stake
+`required`, or with `group`, unless a bet in that group may
 ([`game.allowance`](../reference/bridge.md#gameallowance)). Only the player sets the allowance, in the wallet's top bar.
 `start` and `action` call it; a page calls it before something of its own, such as reels that spin before a resumed
 step.

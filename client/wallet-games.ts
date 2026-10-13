@@ -105,6 +105,8 @@ const receiptView = (receipt: Partial<Receipt>) => {
  */
 export class GameSessions extends ChannelClient {
   game: GameSession | null = null;
+  /** What a game was last told it may stake, and the session it was told in. */
+  told: { game: GameSession; allowance: GameAllowance } | null = null;
   /** A game opens with nothing to play with, every time: only the player's own word in the wallet's dialog gives it
    * an allowance. */
   openGame(this: CasinoWallet, identity: GameIdentity) {
@@ -135,6 +137,17 @@ export class GameSessions extends ChannelClient {
       pending: this.pending?.game?.id === game.identity.id,
       developerBets: game.developerBets,
     };
+  }
+  /** Tell the open game what `game.allowance` answers, without a group, whenever any of it changes: every change the
+   * wallet makes ends in `render`, which calls this, so the game hears of each, whatever made it. */
+  tellAllowance(this: CasinoWallet) {
+    const game = this.game;
+    if (!game) return;
+    const allowance = this.gameAllowance(),
+      told = this.told?.game === game ? this.told.allowance : null;
+    if (told && (['allowance', 'pending', 'developerBets'] as const).every(key => told[key] === allowance[key])) return;
+    this.told = { game, allowance };
+    this.onGameAllowance(game.identity, allowance);
   }
   /** The open game's visit so far: what the player allowed it, what they took back, what its bets won or lost, and
    * the allowance left. What its groups hold counts as staked until the game has shown how they ended. */

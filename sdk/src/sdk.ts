@@ -7,7 +7,18 @@ import type {
   GameReceipt,
 } from '../../protocol/game-types.ts';
 import type { Round } from '../../protocol/types.ts';
-import { METH, NOT_ENOUGH_ALLOWANCE, exactAmount, formatAmount, parseAmount, playerScope, wholeStake } from './wire.ts';
+import {
+  HookedInError,
+  METH,
+  NOT_ENOUGH_ALLOWANCE,
+  NO_DEVELOPER_BETS,
+  exactAmount,
+  formatAmount,
+  parseAmount,
+  playerScope,
+  wholeStake,
+} from './wire.ts';
+export { HookedInError };
 export type {
   CasinoBetRequest,
   DeveloperBetRequest,
@@ -48,17 +59,6 @@ export interface WalletInfo {
   virtualBankroll: bigint;
   recommendedStake: bigint;
 }
-/** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
- * `invalid-request`, `unknown-method`, `busy`, `insufficient-allowance`, `pending-operation`, `id-conflict`, `id-used`,
- * `game-closed` and `failed`; a refusal by the casino carries the casino's code. */
-export class HookedInError extends Error {
-  code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = 'HookedInError';
-    this.code = code;
-  }
-}
 
 let nextId = 0;
 const pending = new Map<
@@ -66,6 +66,7 @@ const pending = new Map<
   { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
 >();
 const receiptListeners = new Set<(receipt: GameReceipt) => void>();
+const allowanceListeners = new Set<(allowance: GameAllowance) => void>();
 /** HookedIn's wallet. */
 const WALLET = 'https://play.hookedin.com';
 /** Whether a page at `origin` is a wallet: HookedIn's, or one the player runs on their own computer, at a loopback
@@ -82,6 +83,12 @@ window.addEventListener('message', event => {
   // A developer bet's developer has settled it, and the wallet has checked and collected what it was paid.
   if (message.event === 'game.receipt') {
     for (const listener of receiptListeners) listener(message.receipt);
+    return;
+  }
+  // What the game may stake has changed, whatever changed it.
+  if (message.event === 'game.allowance') {
+    const { allowance, pending, developerBets } = message;
+    for (const listener of allowanceListeners) listener({ allowance, pending, developerBets });
     return;
   }
   if (typeof message.id !== 'number') return;
@@ -146,8 +153,19 @@ export const HookedIn = Object.freeze({
   round: (id: string): Promise<Round> => call('wallet.round', { id }),
   /** What the game may stake now, whether an operation awaits recovery, and whether it may place developer bets. With
    * `group`, what a bet of that group may stake: the allowance and what the group has won and not shown yet. Only the
-   * player sets it, in the wallet's top bar, and a bet it does not cover is refused with `insufficient-allowance`. */
+   * player sets it, in the wallet's top bar, and a bet it does not cover is refused with `insufficient-allowance`;
+   * `onAllowance` hears whenever it changes. */
   allowance: (group?: string): Promise<GameAllowance> => call('game.allowance', group === undefined ? {} : { group }),
+  /** Called with what `allowance()` answers, without a group, whenever any of it changes while the page is open:
+   * the player sets the allowance or allows developer bets, a bet or a payment settles, a group ends, a withdrawal
+   * leaves less in the balance, an operation of the game starts or finishes. Returns a function that stops
+   * listening. */
+  onAllowance(listener: (allowance: GameAllowance) => void) {
+    allowanceListeners.add(listener);
+    return () => {
+      allowanceListeners.delete(listener);
+    };
+  },
   /** Say, as the page loads, that the game places developer bets: the allowance dialog the player opens from the
    * wallet's top bar then asks them to allow developer bets too, with the wallet's warning. Nothing opens. */
   placesDeveloperBets: (): Promise<null> => call('game.placesDeveloperBets'),
@@ -195,6 +213,7 @@ export const HookedIn = Object.freeze({
   /** A METH, in wei. */
   METH,
   NOT_ENOUGH_ALLOWANCE,
+  NO_DEVELOPER_BETS,
   parseAmount,
   formatAmount,
   exactAmount,

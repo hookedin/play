@@ -62,7 +62,8 @@ const receipt = await HookedIn.developerBet({
   and the allowance dialog the player opens from the wallet's top bar asks about them too
   ([the allowance](how-a-game-works.md#the-allowance)). It warns that you take the stakes and decide what they pay,
   which neither the casino nor the wallet can check. Until the player allows them, a developer bet is refused with
-  `developer-bets-not-allowed`, and `HookedIn.allowance()` says `developerBets: false`.
+  `developer-bets-not-allowed`, whose message is [`HookedIn.NO_DEVELOPER_BETS`](../sdk/hookedin.md#no_developer_bets),
+  `HookedIn.allowance()` says `developerBets: false`, and `HookedIn.onAllowance` hears when the player allows them.
 - Once your server settles a bet, the wallet checks the settlement against the server key you named, and your signed
   naming of it, and collects what it pays into the player's balance.
   While the game is open, it adds that to the bet's group, which joins the allowance once the page ends the group with

@@ -65,7 +65,7 @@ import {
 import { admits, describeBet } from '../protocol/risk.ts';
 import { splitStep } from '../sdk/src/engine/transition.ts';
 import { gameError, gameRef, META } from './bridge.ts';
-import { NOT_ENOUGH_ALLOWANCE } from '../sdk/src/wire.ts';
+import { NOT_ENOUGH_ALLOWANCE, NO_DEVELOPER_BETS } from '../sdk/src/wire.ts';
 import { WalletTransactions, inbound } from './wallet-transactions.ts';
 const random = () => hexlify(randomBytes(32));
 /** The longest reason the wallet takes from the casino for declining an operation. */
@@ -313,7 +313,7 @@ export class ChannelClient extends WalletTransactions {
         if (debit + (game.kept ?? 0n) > this.gameAllowance(game.group).allowance)
           throw gameError('insufficient-allowance', NOT_ENOUGH_ALLOWANCE);
         if (kind === 'developer-bet' && !this.game.developerBets)
-          throw gameError('developer-bets-not-allowed', 'Allow developer bets with the allowance in the top bar.');
+          throw gameError('developer-bets-not-allowed', NO_DEVELOPER_BETS);
       } else if (debit > this.availableBalance())
         throw new Error("Debit exceeds your balance less the game's allowance");
       if (kind === 'casino-bet' && !step)

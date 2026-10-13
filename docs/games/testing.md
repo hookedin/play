@@ -102,14 +102,15 @@ What the stub holds a game to:
 `bridgeTo(wallet)` is a game's side of the bridge to any wallet, such as one `reload()` returns. Every request goes
 through the checks the wallet's bridge makes, with an envelope ID above the last, and on to the wallet's own methods.
 The test sets the allowance with `setGameAllowance`, as the player does in the wallet's top bar. Every receipt the
-wallet pushes reaches the `onReceipt` listeners of every bridge to that wallet. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
+wallet pushes reaches the `onReceipt` listeners of every bridge to that wallet, and every change of what the game may
+stake its `onAllowance` listeners. It leaves out what only a wallet page does: the queue, the player's dialog and the `busy`
 refusal.
 
 ### `TestBridge`
 
 What `bridgeTo` returns, and what [`RoundClient`](../sdk/round.md#roundbridge) and a game's own client take: `call`
-sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, and `onReceipt` hears pushed receipts and returns a
-function that stops the listener.
+sends a request as [`HookedIn.call`](../sdk/hookedin.md#call) does, `onReceipt` hears pushed receipts and
+`onAllowance` pushed allowances, each returning a function that stops the listener.
 
 ## Testing a multi-step game
 

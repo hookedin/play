@@ -17,7 +17,7 @@ import type {
   SignedStatement,
 } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
-import type { GameSession } from '../protocol/game-types.ts';
+import type { GameAllowance, GameIdentity, GameSession } from '../protocol/game-types.ts';
 import { Contract, Wallet, getAddress } from 'ethers';
 import * as read from '../protocol/read.ts';
 import {
@@ -72,6 +72,8 @@ export interface WalletOptions {
   onProgress?: (message: string) => void;
   /** A game's bet that settled later was collected: the receipt it now has, for the game that placed it. */
   onGameReceipt?: (game: GameIntent, receipt: Receipt) => void;
+  /** What the open game may stake has changed: what `game.allowance` answers it now, without a group. */
+  onGameAllowance?: (game: GameIdentity, allowance: GameAllowance) => void;
   storage?: Store;
   trustedDeployment?: Deployment | null;
 }
@@ -271,6 +273,7 @@ export class CasinoWallet extends GameSessions {
   declare onChange: (wallet: CasinoWallet) => void;
   declare onProgress: (message: string) => void;
   declare onGameReceipt: (game: GameIntent, receipt: Receipt) => void;
+  declare onGameAllowance: (game: GameIdentity, allowance: GameAllowance) => void;
   declare storage: Store;
   declare trustedDeployment: Deployment | null;
   declare publicState: Partial<PublicState>;
@@ -387,6 +390,7 @@ export class CasinoWallet extends GameSessions {
     onChange = () => {},
     onProgress = () => {},
     onGameReceipt = () => {},
+    onGameAllowance = () => {},
     storage = new BrowserStore(),
     trustedDeployment = null,
   }: WalletOptions = {}) {
@@ -402,6 +406,7 @@ export class CasinoWallet extends GameSessions {
       onChange,
       onProgress,
       onGameReceipt,
+      onGameAllowance,
       storage,
       trustedDeployment,
       publicState: {},
@@ -926,6 +931,7 @@ export class CasinoWallet extends GameSessions {
       ],
     };
     this.publicState = state;
+    this.tellAllowance();
     this.onChange(this);
     return state;
   }

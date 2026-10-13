@@ -161,7 +161,9 @@ function validate(data: any) {
 }
 
 /** The game keeps its host's origin, so the wallet answers only that origin and listens to nothing else
- * in the frame: a frame that navigated elsewhere is no longer the game the player opened. */
+ * in the frame: a frame that navigated elsewhere is no longer the game the player opened. `push` tells the page that
+ * greeted the wallet something unasked; a page that has not greeted it yet hears nothing, and asks for what it needs
+ * once it has. */
 export function attachGameBridge({
   iframe,
   origin,
@@ -185,11 +187,12 @@ export function attachGameBridge({
   let last = -1,
     waiting = 0,
     turn: Promise<unknown> = Promise.resolve(),
-    page = 0;
-  const reply = (id: number, payload: Record<string, unknown>) => {
-    if (isCurrent() && iframe.contentWindow)
-      iframe.contentWindow.postMessage({ hookedin: true, id, ...payload }, origin);
+    page = 0,
+    greeted = -1;
+  const post = (message: Record<string, unknown>) => {
+    if (isCurrent() && iframe.contentWindow) iframe.contentWindow.postMessage({ hookedin: true, ...message }, origin);
   };
+  const reply = (id: number, payload: Record<string, unknown>) => post({ id, ...payload });
   const fail = (id: number, error: any) =>
     reply(id, {
       error: {
@@ -222,6 +225,7 @@ export function attachGameBridge({
       waiting = 0;
     }
     last = request.id;
+    if (request.method === 'wallet.hello') greeted = page;
     const asked = page;
     if (IMMEDIATE.has(request.method)) return answer(request, asked);
     // Whatever signs takes its turn, in the order the game asked.
@@ -236,8 +240,13 @@ export function attachGameBridge({
     }));
   };
   target.addEventListener('message', listener);
-  return () => {
-    page++;
-    target.removeEventListener('message', listener);
+  return {
+    dispose() {
+      page++;
+      target.removeEventListener('message', listener);
+    },
+    push(event: string, fields: Record<string, unknown>) {
+      if (greeted === page) post({ event, ...fields });
+    },
   };
 }

@@ -127,6 +127,22 @@ test('the game SDK greets the wallet, hears only the wallet that answered, sends
     deaf();
     deliver(parent, { hookedin: true, event: 'game.receipt', receipt: { id: 'later', status: 'settled' } });
     assert.deepEqual(heard, [{ id: 'seat', status: 'settled' }]);
+    // So does what the game may stake, whenever it changes, from the wallet that answered the greeting alone.
+    const allowances: any[] = [],
+      changed = (allowance: bigint) => ({
+        hookedin: true,
+        event: 'game.allowance',
+        allowance,
+        pending: false,
+        developerBets: true,
+      });
+    const unheard = HookedIn.onAllowance(allowance => allowances.push(allowance));
+    deliver(parent, changed(5n), 'http://localhost:4184');
+    deliver({}, changed(6n));
+    deliver(parent, changed(7n));
+    unheard();
+    deliver(parent, changed(8n));
+    assert.deepEqual(allowances, [{ allowance: 7n, pending: false, developerBets: true }]);
     const ids = posted.map(message => message.id);
     assert.ok(ids.every((id, i) => Number.isSafeInteger(id) && id > (ids[i - 1] ?? 0)));
     // The greeting went to whatever frames the page, and every request after it to the wallet that answered it alone.

@@ -73,9 +73,10 @@ export const wallet = new CasinoWallet({
   },
   // A developer bet's receipt reaches the game that placed it as soon as the wallet has collected what it was paid.
   onGameReceipt: (game, receipt) => {
-    if (!active || active.identity.id !== game.id || !active.frame.contentWindow || !active.loaded) return;
-    const message = { hookedin: true, event: 'game.receipt', receipt: gameReceipt(game.operation, receipt) };
-    active.frame.contentWindow.postMessage(message, new URL(active.identity.url).origin);
+    if (active?.identity.id === game.id) active.push('game.receipt', { receipt: gameReceipt(game.operation, receipt) });
+  },
+  onGameAllowance: (game, allowance) => {
+    if (active?.identity.id === game.id) active.push('game.allowance', { ...allowance });
   },
 });
 

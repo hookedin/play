@@ -16,7 +16,7 @@ import {
 import { admits, OUTCOME_SPACE } from '../../protocol/risk.ts';
 import { splitStep } from '../src/engine/transition.ts';
 import { RoundClient } from '../src/round.ts';
-import type { GameReceipt } from '../../protocol/game-types.ts';
+import type { GameAllowance, GameReceipt } from '../../protocol/game-types.ts';
 import { createMines, fraction } from '../src/engine/index.ts';
 import { coin } from './coin.ts';
 
@@ -384,6 +384,44 @@ test('a game places developer bets only once the player allows them, and only a 
   // A game opened by its URL alone has no developer to bet against.
   w.openGame(f.identity('unpublished', { developer: ZeroAddress }));
   await assert.rejects(w.setGameAllowance(100n, true), /Only a published game/);
+});
+
+test('the game hears what it may stake whenever any of it changes, whatever changed it, once each time', async () => {
+  const f = await gameWallet(),
+    w = f.wallet,
+    heard: GameAllowance[] = [],
+    last = () => heard.at(-1)!;
+  w.openGame(f.identity());
+  f.bridge.onAllowance(allowance => heard.push(allowance));
+  await w.setGameAllowance(1000n);
+  assert.deepEqual(heard, [{ allowance: 1000n, pending: false, developerBets: false }]);
+  // Nothing changed, so there is nothing to hear.
+  w.render();
+  assert.equal(heard.length, 1);
+  await w.setGameAllowance(1000n, true);
+  assert.deepEqual(heard.slice(1), [{ allowance: 1000n, pending: false, developerBets: true }]);
+  // A bet is pending while it is under way, and leaves the allowance its result makes.
+  heard.length = 0;
+  const bet = await w.gameCasinoBet(terms());
+  assert.deepEqual(heard, [
+    { allowance: 1000n, pending: true, developerBets: true },
+    { allowance: 1000n - 10n + bet.payout!, pending: false, developerBets: true },
+  ]);
+  // A step in a group takes its cash out of the allowance, and the group's ending gives back what it holds.
+  const before = last().allowance,
+    step = await w.gameCasinoBet(terms('step', { group: 'round' }));
+  assert.equal(last().allowance, before - 10n);
+  await w.gameEnd('round');
+  assert.equal(last().allowance, before - 10n + step.payout!);
+  // Taking all of it back takes developer bets with it.
+  await w.setGameAllowance(0n);
+  assert.deepEqual(last(), { allowance: 0n, pending: false, developerBets: false });
+  // A closed game hears nothing more, and one opened again hears what it starts with.
+  const count = heard.length;
+  w.closeGame();
+  assert.equal(heard.length, count);
+  w.openGame(f.identity());
+  assert.deepEqual(heard.slice(count), [{ allowance: 0n, pending: false, developerBets: false }]);
 });
 
 test('verified gains and losses move the allowance; exact retries by ID never charge twice', async () => {
@@ -812,7 +850,10 @@ test('the round helper refuses what the allowance does not cover, which only the
   w.openGame(f.identity('shortfall'));
   const graph = coin({ action: 'double', additionalCash: 1000n, payout: () => 3000n });
   const round = new RoundClient(bridgeTo(w), graph, undefined, { store: memoryStore() });
+  // Refused as the wallet refuses it, with the code a game acts on.
   await assert.rejects(round.start({ stake: 1000n }), {
+    name: 'HookedInError',
+    code: 'insufficient-allowance',
     message:
       'Not enough allowance for this bet: it is what you let this game play with. Set it in the top bar, creating a wallet or depositing first if it asks.',
   });

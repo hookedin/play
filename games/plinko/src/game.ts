@@ -267,4 +267,10 @@ $('mute').addEventListener('click', () => {
 setBoard(rows, risk);
 renderMute();
 render();
+// A refusal for want of allowance goes once the player changes the allowance in the top bar, and the page's opening
+// words come back.
+const opening = $('status').textContent!.trim();
+HookedIn.onAllowance(() => {
+  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message(opening);
+});
 void recover();

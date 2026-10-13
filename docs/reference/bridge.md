@@ -408,7 +408,8 @@ none. Taking the whole allowance back takes back developer bets with it.
 
 ### `game.allowance`
 
-What the game may stake now. Answered at once.
+What the game may stake now. Answered at once; the [`game.allowance`](#gameallowance-1) event tells the game whenever it
+changes.
 
 | Param   | Type     | Meaning                                                                                            |
 | ------- | -------- | -------------------------------------------------------------------------------------------------- |
@@ -446,16 +447,32 @@ has ended all the same: sending the request again keeps its meta.
 
 ## Events
 
-The wallet sends this unasked, with `event` in place of an envelope ID, to the game's origin.
+The wallet sends these unasked, with `event` in place of an envelope ID, to the game's origin, while the game is open:
+only to a page that has greeted it with [`wallet.hello`](#wallethello). A page asks for what it needs once it has.
 
 ### `game.receipt`
 
 A developer bet this game placed has been settled by its developer and collected by the wallet. The wallet looks for
 settled bets every 10 minutes while its tab is visible, and at once when the game asks [`game.receipt`](#gamereceipt)
-about an open one; it sends the event while the game is open.
+about an open one.
 
 It carries `receipt`, the bet's [receipt](#receipt) as `game.developerBet` answered it, now `settled` and with its
 `payout`.
+
+### `game.allowance`
+
+What the game may stake has changed. The wallet sends it whenever any of what [`game.allowance`](#gameallowance)
+answers without a group changes, whatever changed it: the player setting the allowance or allowing developer bets, a bet
+or a payment settling or declined, a group ending, a developer bet collected, a withdrawal, a transfer or a lock-in
+leaving less in the balance, or an operation of the game starting or finishing. It can arrive before the reply to the
+request that changed it. What a group holds changes only by the game's own requests and `game.receipt`, so the event
+leaves it out.
+
+It carries `allowance`, `pending` and `developerBets`, as `game.allowance` answers them without a group.
+
+```js title="Event"
+{ "hookedin": true, "event": "game.allowance", "allowance": 5980000000000n, "pending": false, "developerBets": false }
+```
 
 ## Receipt
 
@@ -533,8 +550,8 @@ A refusal is `{ code, message }`. The wallet's codes:
 | `invalid-request`            | The envelope or its parameters break a rule on this page, the envelope ID did not rise, or the request asks a developer bet of a game published nowhere | Fixes the request: sent again unchanged, it fails again                                                                                                                                                                                                    |
 | `unknown-method`             | The wallet offers no such method                                                                                                                        | Keeps to the methods on this page                                                                                                                                                                                                                          |
 | `busy`                       | The player is doing something in the wallet, or 32 requests already wait                                                                                | Sends the same request again shortly                                                                                                                                                                                                                       |
-| `insufficient-allowance`     | The step's cash or the amount exceeds the game's allowance and what its group holds                                                                     | Shows the message, which tells the player to set the allowance in the top bar; the same request can go again once they have                                                                                                                                |
-| `developer-bets-not-allowed` | The player has not allowed the game's developer bets                                                                                                    | Shows the message, which tells the player to allow them in the top bar, after `game.placesDeveloperBets`                                                                                                                                                   |
+| `insufficient-allowance`     | The step's cash or the amount exceeds the game's allowance and what its group holds                                                                     | Shows the message, which tells the player to set the allowance in the top bar, until the [`game.allowance`](#gameallowance-1) event says they changed it; the same request can go again once they have                                                     |
+| `developer-bets-not-allowed` | The player has not allowed the game's developer bets                                                                                                    | Shows the message, which tells the player to allow them in the top bar, after `game.placesDeveloperBets`, until the `game.allowance` event says they changed it                                                                                            |
 | `pending-operation`          | A signed operation under another ID awaits recovery in the wallet                                                                                       | Waits: the wallet finishes a deposit it is taking in by itself, and the player recovers anything else from the wallet's banner. When `game.allowance`'s `pending` is `true` the operation is this game's, and sending it again under its own ID resumes it |
 | `id-conflict`                | The ID is bound to other terms or another game, or a pending request under it differs; or the group ended with other meta                               | Sends the terms saved with the ID, or a fresh ID for a fresh operation; a group keeps the meta it ended with                                                                                                                                               |
 | `id-used`                    | The operation was carried out on another channel, and this wallet has no receipt of it                                                                  | Does not place it again under another ID without asking the player                                                                                                                                                                                         |

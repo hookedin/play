@@ -23,8 +23,8 @@ interface ActiveGame {
   path: string;
   frame: HTMLIFrameElement;
   dispose: () => void;
-  /** Whether the game's page has loaded, so the wallet's receipts have somewhere to go. */
-  loaded: boolean;
+  /** Tell the game's page something unasked, once it has greeted the wallet. */
+  push: (event: string, fields: Record<string, unknown>) => void;
   /** Whether the game has said it places developer bets: its allowance dialog asks the player about them too. */
   developerBets: boolean;
 }
@@ -103,7 +103,6 @@ export function renderGameAccount() {
   if (active.channelId === null && wallet.channelId) active.channelId = wallet.channelId;
   if (active.uname !== undefined && wallet.uname !== active.uname) {
     active.uname = undefined;
-    active.loaded = false;
     // In place of its history entry: Back still leaves the game, and a close of the wallet over it comes back to it.
     active.frame.contentWindow?.location.replace(active.frame.src);
   }
@@ -267,16 +266,15 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     path,
     frame,
     dispose: () => {},
-    loaded: false,
+    push: () => {},
     developerBets: false,
   };
   frame.addEventListener('load', () => {
     if (!isCurrent()) return;
-    active!.loaded = true;
     // The game's own keys, such as Space to play, work without a click into it first.
     if (!document.querySelector('dialog[open]')) frame.focus();
   });
-  active.dispose = attachGameBridge({
+  ({ dispose: active.dispose, push: active.push } = attachGameBridge({
     iframe: frame,
     origin: entry.origin,
     isCurrent,
@@ -318,7 +316,7 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
       return wallet.gamePayment(params);
     },
     onError: message => toast(message, true),
-  });
+  }));
   frame.src = entry.href;
   // The game's icon stands in for it until its page has loaded.
   const loading = h(

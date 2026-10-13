@@ -37,7 +37,7 @@ function harness(onRequest: (...args: any[]) => any = async () => ({ cash: '100'
   const errors: any[] = [];
   const child = { postMessage: (message: any, destination: any) => replies.push({ message, destination }) };
   let current = true;
-  const detach = attachGameBridge({
+  const { dispose: detach, push } = attachGameBridge({
     iframe: { contentWindow: child } as any,
     origin: ORIGIN,
     target,
@@ -55,6 +55,7 @@ function harness(onRequest: (...args: any[]) => any = async () => ({ cash: '100'
     errors,
     child,
     detach,
+    push,
     setCurrent: (value: any) => {
       current = value;
     },
@@ -215,6 +216,33 @@ test('detaching a bridge removes its listener and prevents further dispatch', as
   await bridge.send(request());
   assert.equal(bridge.calls.length, 0);
   assert.equal(bridge.replies.length, 0);
+});
+
+test('the wallet tells only a page that greeted it, at the game origin, while its game is open', async () => {
+  const bridge = harness(async () => ({ bounds: {} })),
+    pushed = () => bridge.replies.filter(reply => 'event' in reply.message);
+  // A page that has not greeted the wallet yet asks for what it needs once it has.
+  bridge.push('game.allowance', { allowance: 5n, pending: false, developerBets: false });
+  await bridge.send(request(1));
+  assert.deepEqual(pushed(), []);
+  await bridge.send(request(2, 'wallet.hello'));
+  bridge.push('game.allowance', { allowance: 5n, pending: false, developerBets: false });
+  assert.deepEqual(pushed(), [
+    {
+      message: { hookedin: true, event: 'game.allowance', allowance: 5n, pending: false, developerBets: false },
+      destination: ORIGIN,
+    },
+  ]);
+  // The frame loaded the page afresh, and it greeted the wallet in turn.
+  await bridge.send(request(1, 'wallet.hello'));
+  bridge.push('game.allowance', { allowance: 6n, pending: false, developerBets: false });
+  assert.equal(pushed().length, 2);
+  bridge.setCurrent(false);
+  bridge.push('game.allowance', { allowance: 7n, pending: false, developerBets: false });
+  bridge.setCurrent(true);
+  bridge.detach();
+  bridge.push('game.allowance', { allowance: 8n, pending: false, developerBets: false });
+  assert.equal(pushed().length, 2);
 });
 
 test('requests still waiting their turn when their game closes never reach the wallet', async () => {
