@@ -530,6 +530,9 @@ export const MAX_META_BYTES = 4096;
 export const MAX_DEVELOPER_BETS = 256;
 /** The most payouts one reply lists. A wallet collects them, and the next reply lists the rest. */
 export const MAX_PAYOUTS = 256;
+/** The most redemptions one holding reply lists: those after the sequence a wallet names, oldest first. A wallet takes
+ * them up, and asks after the last for the rest. */
+export const MAX_REDEEMS = 256;
 /** The most results a game's step has; the most pairs of an amount below the step's cash and one above it, or with none
  * above it, of an amount below it and the highest, that the wallet splits it into, each one or two casino bets; the
  * bound below its results' total weight; and the longest label of a result. */

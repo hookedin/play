@@ -4,6 +4,7 @@ import type { Checkpoint, OperationResponse, SignedStatement } from '../protocol
 import * as read from '../protocol/read.ts';
 import {
   GAME_ID,
+  MAX_REDEEMS,
   REDEEM_TYPES,
   SHARE_TYPES,
   counterpartyPlayer,
@@ -107,10 +108,8 @@ export interface Redeem {
   shares: bigint;
   sequence: bigint;
 }
-/** The most redemptions a holding lists: every one the account signed. */
-const MAX_REDEEMS = 10_000;
 /** This account's holding in the fund, as `GET /api/account/fund` gives it: the casino's latest statement of it, and
- * every `Redeem` the account signed with the statement it produced. */
+ * the `Redeem`s the account signed after the sequence the wallet named, each with the statement it produced. */
 export const holding = read.object<{
   statement: SignedStatement | null;
   redeems: { request: { message: Redeem; signature: string }; statement: SignedStatement }[];

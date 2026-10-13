@@ -480,7 +480,7 @@ export class WalletTransactions {
       id = this.channel?.opening.channelId;
     const [channel, fund, payouts] = await Promise.all([
       id ? ask(readers.channel, `/api/channels/${id}/activate`, {}) : null,
-      ask(readers.holding, '/api/account/fund'),
+      ask(readers.holding, `/api/account/fund?after=${this.fund.sequence}`),
       ask(read.list(readers.payout, MAX_PAYOUTS), '/api/account/payouts'),
     ]);
     return { channel, fund, payouts };

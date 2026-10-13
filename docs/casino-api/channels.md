@@ -357,9 +357,11 @@ A holding belongs to the account, so it outlives any one channel.
 
 ### `GET /api/account/fund`
 
-The account's holding: `{statement, redeems}`, the casino's latest `ShareStatement` of it (`null` before any), and every
-`Redeem` the account signed, each as `{request: {message, signature}, statement}` with the statement it produced. A
-wallet that missed statements takes the latest up with them ([bankroll fund](../wallet/bankroll-fund.md)).
+The account's holding: `{statement, redeems}`, the casino's latest `ShareStatement` of it (`null` before any), and the
+`Redeem`s the account signed whose statements come after the sequence `after` names (0 unless given), oldest first and
+at most 256 (`MAX_REDEEMS`), each as `{request: {message, signature}, statement}` with the statement it produced. A
+wallet that missed statements takes them up, a page at a time, asking after the last statement it took
+([bankroll fund](../wallet/bankroll-fund.md)). `invalid` answers an `after` that is not a whole number.
 
 ### `POST /api/account/fund/redeem`
 
