@@ -535,41 +535,43 @@ export class CasinoWallet extends GameSessions {
     await this.collectPayouts();
     await this.checkHistory().catch(error => console.error('Checking the casino history failed', error));
   }
-  /** Keep a head of the casino's signing history for the next check, if the casino signed it and it is newer than any
-   * this wallet has. */
+  /** Keep a head of the casino's signing history for the next check, if the casino signed it, it is newer than the one
+   * this wallet holds and none waits for the check yet: a newer head never takes the place of one not yet checked. */
   offerHead(head: SignedStatement | null | undefined) {
     try {
-      if (!head || !RECORD_ID.test(head.message.record)) return;
-      const newest = this.nextHead ?? this.head;
-      if (newest && head.message.record <= newest.message.record) return;
+      if (this.nextHead || !head || !RECORD_ID.test(head.message.record)) return;
+      if (this.head && head.message.record <= this.head.message.record) return;
       assertSignature(this.domain, HEAD_TYPES, head.message, head.signature, this.operator);
       this.nextHead = head;
     } catch {}
   }
   /** Hold the casino's history to the newest head of it the casino signed that this wallet holds: the record it signed
-   * must still be there, with the digest it signed, which commits to every record before it. Only then does a newer
-   * head take its place, so a history that lost the held head cannot hide that behind a newer one. */
+   * must still be there, with the digest it signed, which commits to every record before it. Only then does the head
+   * waiting for the check take its place, and it is checked the same way at once, so a history that lost a head cannot
+   * hide that behind a newer one. */
   async checkHistory() {
-    if (this.head) {
-      const { record, digest } = this.head.message;
-      const link = await this.api(`/api/history/${record}`).then(
-        read.object<{ id: string; digest: string }>({ id: read.recordId, digest: read.hash }),
-        (error: any) => {
-          if (error.status === 404) return null;
-          throw error;
-        },
-      );
-      this.historyAlert =
-        link && link.id === record && link.digest === digest
-          ? null
-          : `The casino rewrote its history: the record ${record} it signed is missing or changed. Keep this browser's wallet, which holds the casino's signature.`;
-      this.render();
-      if (this.historyAlert) return;
+    for (;;) {
+      if (this.head) {
+        const { record, digest } = this.head.message;
+        const link = await this.api(`/api/history/${record}`).then(
+          read.object<{ id: string; digest: string }>({ id: read.recordId, digest: read.hash }),
+          (error: any) => {
+            if (error.status === 404) return null;
+            throw error;
+          },
+        );
+        this.historyAlert =
+          link && link.id === record && link.digest === digest
+            ? null
+            : `The casino rewrote its history: the record ${record} it signed is missing or changed. Keep this browser's wallet, which holds the casino's signature.`;
+        this.render();
+        if (this.historyAlert) return;
+      }
+      if (!this.nextHead) return;
+      this.head = this.nextHead;
+      this.nextHead = null;
+      await this.save();
     }
-    if (!this.nextHead) return;
-    this.head = this.nextHead;
-    this.nextHead = null;
-    await this.save();
   }
   /** The page shows the deposit address, or stops showing it. */
   showDeposit(shown: boolean) {
