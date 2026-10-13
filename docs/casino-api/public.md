@@ -76,6 +76,7 @@ The books. [Economics](../reference/economics.md#available-capital-and-concurren
 | `bankroll`                         | `max(0, unreservedBankroll + reserve)`: the betting bankroll                                                                                                                                                 |
 | `virtualBankroll`                  | `bankroll / 2`, rounded down: what the casino's quotes admit casino bets against, and a game's casino bet is admitted against                                                                                |
 | `withdrawableHouse`                | `max(0, cash − protectedFunds − unpaidWinnings)`, as the contract's `withdrawableHouse()`                                                                                                                    |
+| `payoutAllowance`                  | House cash the contract pays as winnings now, as its `payoutAllowance()`: it refills each day to the payout limit the treasury sets                                                                          |
 
 `alerts` lists `{severity, reason, remaining?, detail?}`: `severity` is `warning` or `critical`, `remaining` the seconds
 left before a close's deadline, and `reason` one of `stale-close` (a channel is closing on an older checkpoint than the
