@@ -2,7 +2,7 @@
 
 ## Status
 
-HookedIn is in [open beta](docs/index.md#open-beta) on Ethereum mainnet. A reset can start history and names over on a new contract, while players take their balances out of the old one on-chain, and contracts, signed messages and storage formats change without migration. Do not use it with funds you cannot afford to lose.
+HookedIn is in [open beta](docs/index.md#open-beta) on Ethereum mainnet. The contract stays as it is, and what a wallet signed and saved stays enough to close its channel and collect what it is owed; the SDK, the game bridge and the casino API change without notice. Do not use it with funds you cannot afford to lose.
 
 ## Reporting a vulnerability
 

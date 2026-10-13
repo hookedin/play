@@ -32,9 +32,9 @@ still refuse to play with you, but it cannot take a wei of what it owes you.
    which a game's developer settles from its bank and can keep by never settling; crash and roulette play only those.
    Transfers between players and [bankroll fund](../wallet/bankroll-fund.md) shares are the casino's promise too.
 5. **Keep watch.**
-   - Open your wallet at least every 7 days, or run the
-     [watchtower](../wallet/keys-and-recovery.md#the-watchtower): a close on an older state becomes final when nobody
-     challenges it within 7 days.
+   - Open your wallet at least every 3 days, or run the
+     [watchtower](../wallet/keys-and-recovery.md#the-watchtower): a close on an older state becomes final unless a
+     challenge is mined within 7 days of its start, and it can start just after you look.
    - Keep ETH at your deposit address for the fees of closing, challenging and disputing.
    - When the casino leaves a casino bet unanswered, dispute it with **Close without the casino** before its quote
      expires, within a day. The watchtower does it from your recovery bundle.

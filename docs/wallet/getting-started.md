@@ -33,8 +33,7 @@ and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every dig
 that labels an amount says what it is on hover, and the wallet's balance says it outright. The name is a joke, and a
 deliberate one: HookedIn, hooked in METH.
 
-This deployment uses **ETH on Ethereum mainnet only** and is in [open beta](../index.md#open-beta): a reset can start
-history and names over on a new contract, while you take your balance out of the old one on-chain. Send it nothing
+This deployment uses **ETH on Ethereum mainnet only** and is in [open beta](../index.md#open-beta). Send it nothing
 else: it accepts no other asset or network, and offers no fiat conversion or card purchase. The game library works at
 once; everything with ETH waits until the wallet has checked the casino's contract on-chain, and a banner says so if
 that check fails ([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).

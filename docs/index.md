@@ -11,10 +11,10 @@ HookedIn runs on Ethereum mainnet (chain 1).
 
 ## Open beta
 
-HookedIn is in open beta on Ethereum mainnet: anyone can play, deposit, withdraw and publish a game, with ETH. While it
-lasts, a reset can start history and names over on a new contract, while players take their balances out of the old one
-on-chain ([changing the contract](reference/deployment.md#changing-the-contract)), and the SDK, the game bridge and the
-casino API change without notice: a game that installs `@hookedin/play` from `main` takes each change when it next
+HookedIn is in open beta on Ethereum mainnet: anyone can play, deposit, withdraw and publish a game, with ETH. The
+contract stays as it is, and what your wallet signed and saved stays enough to close your channel and collect what you
+are owed from it ([changing the contract](reference/deployment.md#changing-the-contract)). The SDK, the game bridge and
+the casino API change without notice: a game that installs `@hookedin/play` from `main` takes each change when it next
 installs. Tell us what breaks in the [HookedIn Discord](https://discord.gg/C38EkHr7sG) or a [GitHub
 issue](https://github.com/hookedin/play/issues), and report a vulnerability privately, as [SECURITY.md](../SECURITY.md)
 says.
