@@ -41,10 +41,9 @@
     "qrcode-generator": "2.0.4",
     "solc": "0.8.37",
     "typescript": "7.0.2",
-    "wrangler": "4.135.0"
+    "wrangler": "4.149.0"
   },
   "overrides": {
-    "tmp": "0.2.7",
-    "undici": "7.29.1"
+    "tmp": "0.2.7"
   }
 }
