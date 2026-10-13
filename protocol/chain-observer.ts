@@ -34,14 +34,19 @@ export function createRpcProvider(url: string, chainId: bigint | undefined = und
     chainId === undefined
       ? new JsonRpcProvider(request, undefined, options)
       : new JsonRpcProvider(request, Network.from(chainId), { ...options, staticNetwork: true });
-  // Every fee it suggests tips at least MIN_PRIORITY_FEE, and its cap rises by as much.
+  // Every fee it suggests tips at least MIN_PRIORITY_FEE, and its cap and its gas price, what a fee priced for a
+  // transaction pays per gas, rise by as much.
   const feeData = provider.getFeeData.bind(provider);
   provider.getFeeData = async () => {
     const fees = await feeData();
     if (fees.maxFeePerGas == null || fees.maxPriorityFeePerGas == null || fees.maxPriorityFeePerGas >= MIN_PRIORITY_FEE)
       return fees;
     const raise = MIN_PRIORITY_FEE - fees.maxPriorityFeePerGas;
-    return new FeeData(fees.gasPrice, fees.maxFeePerGas + raise, MIN_PRIORITY_FEE);
+    return new FeeData(
+      fees.gasPrice == null ? null : fees.gasPrice + raise,
+      fees.maxFeePerGas + raise,
+      MIN_PRIORITY_FEE,
+    );
   };
   return provider;
 }

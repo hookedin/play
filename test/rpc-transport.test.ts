@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { ZeroAddress } from 'ethers';
-import { createRpcProvider, RPC_TIMEOUT_MS } from '../protocol/chain-observer.ts';
+import { createRpcProvider, MIN_PRIORITY_FEE, RPC_TIMEOUT_MS } from '../protocol/chain-observer.ts';
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
+import { anvil } from '../testing/contract.ts';
 
 test('stalled RPC transport releases wallet actions and a late response cannot commit', async t => {
   let delayed, entered: any;
@@ -93,4 +94,29 @@ test('every call is a request of its own, which an RPC that refuses batches answ
   const calls = Array.from({ length: 8 }, () => provider.send('eth_call', [{ to: ZeroAddress, data: '0x' }, 'latest']));
   assert.deepEqual(await Promise.all(calls), Array(8).fill('0x1'));
   assert.equal(bodies.filter(body => Array.isArray(body)).length, 0);
+});
+
+test('a fee priced at the gas price pays what a transaction tipping the least tip costs', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const baseFee = 60_000_000n;
+  await env.provider.send('anvil_setNextBlockBaseFeePerGas', ['0x' + baseFee.toString(16)]);
+  await env.provider.send('evm_mine', []);
+  const provider = createRpcProvider(env.url, 31337n);
+  t.after(() => provider.destroy());
+  // Mainnet's RPCs suggest no tip, and a gas price of about the base fee.
+  const send = provider.send.bind(provider);
+  provider.send = (method, params) =>
+    method === 'eth_gasPrice'
+      ? Promise.resolve('0x' + baseFee.toString(16))
+      : method === 'eth_maxPriorityFeePerGas'
+        ? Promise.resolve('0x0')
+        : send(method, params);
+  const fees = await provider.getFeeData();
+  assert.equal(fees.maxPriorityFeePerGas, MIN_PRIORITY_FEE);
+  assert.equal(fees.gasPrice, baseFee + MIN_PRIORITY_FEE);
+  const sent = await env.wallets[1].connect(provider).sendTransaction({ to: env.wallets[2].address, value: 1n }),
+    receipt = (await sent.wait())!;
+  assert.equal(sent.maxPriorityFeePerGas, MIN_PRIORITY_FEE);
+  assert.ok(receipt.gasPrice <= fees.gasPrice!, 'it pays no more a gas than the gas price says');
 });

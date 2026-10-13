@@ -203,8 +203,8 @@ The wallet caps each at 2,000,000 gas, 200 gwei per gas and 50,000 METH in total
 network's estimate is higher; the casino cannot raise these caps. The casino sends withdrawals and lock-ins to the
 contract and pays their gas, and each pays the casino a fee for it out of your balance, set from the network's gas price
 ([`GET /api/withdrawal-fee`](../casino-api/public.md#get-apiwithdrawal-fee)). The wallet asks for it when the Withdraw
-tab opens and again before signing, and signs none above 350,000 gas and what creating an account costs, at the gas
-price and the price of an account it reads itself, or above the fee it showed you. A deposit's fee comes out of what it deposits, and the casino pays it into your balance when it is small
+tab opens and again before signing, and signs none above 350,000 gas at the gas price it reads itself, or above the
+fee it showed you. A deposit's fee comes out of what it deposits, and the casino pays it into your balance when it is small
 ([deposit](getting-started.md#deposit)). Every other transaction needs its fee at your deposit address, where the wallet
 keeps nothing back: with **Add ETH that arrives at my deposit address to my balance** on, what arrives goes into your
 balance while the channel is active. Starting **Close without the casino** turns that off, so ETH sent for its fee stays

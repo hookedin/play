@@ -32,7 +32,6 @@ import {
   gasLimitFor,
   replacementFees,
   sameTransactionIntent,
-  accountGas,
 } from '../protocol/transaction-recovery.ts';
 /** What the wallet signs by itself as money comes into the balance: a deposit taken in, and its network fee the casino
  * pays. It goes before anything else the player signs. */
@@ -47,8 +46,8 @@ export const addressReceipt = (amount: bigint, createdAt: string): Receipt => ({
   status: 'confirmed',
   createdAt,
 });
-/** The most gas a withdrawal fee may pay for, beside creating its recipient's account, which the wallet prices itself:
- * about half again what recording a withdrawal costs. The wallet signs no fee above it at the gas price it reads. */
+/** The most gas a withdrawal fee may pay for: about half again what recording a withdrawal costs. The wallet signs no
+ * fee above it at the gas price it reads. */
 const MOST_WITHDRAWAL_GAS = 350_000n;
 /** Everything that signs or recovers an on-chain transaction: deposits, withdrawals, closes, claims,
  * challenges, fee caps, nonce recovery and confirmed-receipt bookkeeping. The wallet
@@ -789,15 +788,13 @@ export class WalletTransactions {
     return left > 0n ? left : 0n;
   }
   /** Ask the casino what sending a withdrawal or a lock-in to the contract costs now: the fee it pays out of the
-   * balance, up to `MOST_WITHDRAWAL_GAS` and creating an account, at the gas price and the price of an account the
-   * wallet reads itself. */
+   * balance, up to `MOST_WITHDRAWAL_GAS` at the gas price the wallet reads itself. */
   async quoteWithdrawalFee(this: CasinoWallet) {
-    const [{ fee }, { gasPrice }, account] = await Promise.all([
+    const [{ fee }, { gasPrice }] = await Promise.all([
       this.api('/api/withdrawal-fee').then(read.object({ fee: read.whole })),
       this.provider.getFeeData(),
-      accountGas(this.provider, this.config.contractAddress),
     ]);
-    if (gasPrice == null || fee > (MOST_WITHDRAWAL_GAS + account) * gasPrice)
+    if (gasPrice == null || fee > MOST_WITHDRAWAL_GAS * gasPrice)
       throw new Error(`The casino asks a withdrawal fee of ${exact(fee)} METH, more than sending one costs.`);
     this.withdrawalFee = fee;
     this.render();
