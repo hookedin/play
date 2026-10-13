@@ -81,3 +81,6 @@ them.
 
 Legal and regulatory review (licensing, where HookedIn may be offered, checks of who players are) is out of scope for
 the project: do not raise it, plan for it or count it as a blocker.
+
+Production's database runs without high availability, by the owner's choice: one zonal Cloud SQL instance with
+point-in-time recovery and backups, whose lost disk ends the deployment. Do not propose a standby or a replica.
