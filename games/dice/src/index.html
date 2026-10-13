@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>HookedIn Dice</title>
+    <link rel="icon" type="image/svg+xml" href="./brand/hookedin-mark.svg" />
+    <link rel="stylesheet" href="./shared.css" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <section class="stage" aria-label="Dice">
+        <ol class="history" id="history" aria-label="Last rolls"></ol>
+        <div class="result" role="status" aria-live="polite">
+          <div class="die" id="die" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div>
+            <strong class="roll" id="roll">–</strong>
+            <div class="result-note" id="result-note">Roll under 49.50 to win</div>
+          </div>
+        </div>
+        <div class="track">
+          <div class="rail" id="rail"></div>
+          <div class="pin" id="pin" hidden></div>
+          <input type="range" id="chance" min="0" max="10000" step="50" value="4950" aria-label="Win chance" />
+        </div>
+        <div class="scale" aria-hidden="true">
+          <span>0</span><span>25</span><span>50</span><span>75</span><span>100</span>
+        </div>
+        <div class="odds">
+          <div class="odd">
+            <label class="field-label" for="chance-text">Win chance</label>
+            <div class="odd-box">
+              <input id="chance-text" inputmode="decimal" value="49.50" autocomplete="off" /><span>%</span>
+            </div>
+          </div>
+          <div class="odd">
+            <div class="field-label">Multiplier</div>
+            <div class="odd-box"><strong id="multiplier">2.0000</strong><span>×</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="controls" aria-label="Bet controls">
+        <div class="field stake-field">
+          <div class="stake-heading">
+            <label for="stake">Stake</label
+            ><button class="quick" id="half" type="button" aria-label="Halve the stake">½</button
+            ><button class="quick" id="double" type="button" aria-label="Double the stake">2×</button>
+          </div>
+          <div class="input-wrap">
+            <input id="stake" inputmode="numeric" value="1" autocomplete="off" aria-label="Stake in METH" /><span
+              data-asset
+              title="A millionth of an ETH: 1 METH = 0.000001 ETH"
+              >METH</span
+            >
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-label">Profit on win</div>
+          <div class="readout">
+            <strong id="profit">–</strong
+            ><span data-asset title="A millionth of an ETH: 1 METH = 0.000001 ETH">METH</span>
+          </div>
+        </div>
+        <div class="play">
+          <button class="primary" id="play" type="button" aria-keyshortcuts="Space" disabled>Connecting wallet…</button>
+          <button class="tool" id="auto" type="button" aria-pressed="false">Auto</button>
+        </div>
+      </section>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <footer class="foot">
+        <details class="rules">
+          <summary>How to play</summary>
+          <p>
+            Set your win chance, from 10% to 90%, with the slider or by typing it, choose a stake and roll. The roll is
+            a number from 0 to 100: under your win chance wins. A win pays the stake times the multiplier, which is 99
+            divided by the win chance; a loss pays nothing. Space rolls.
+          </p>
+          <p>
+            Auto rolls 10, 50 or 100 times at the same stake and odds; press Stop to end it early. Your wallet checks
+            each roll, and your bet history keeps what each one paid. <strong>Verify your last bet</strong>, under the
+            game's name in the wallet's top bar, or any roll in the strip at the top, shows how its seed and the
+            casino's secret made it, with a link to check it on a page apart from the wallet.
+          </p>
+        </details>
+      </footer>
+    </main>
+    <script type="module" src="./game.js" crossorigin="anonymous"></script>
+  </body>
+</html>

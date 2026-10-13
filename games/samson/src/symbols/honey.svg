@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+<radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffb020" stop-opacity="0.55"/><stop offset="0.6" stop-color="#ffb020" stop-opacity="0.18"/><stop offset="1" stop-color="#ffb020" stop-opacity="0"/></radialGradient><linearGradient id="cellA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd75a"/><stop offset="1" stop-color="#f08c0c"/></linearGradient><linearGradient id="cellB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc23a"/><stop offset="1" stop-color="#d87208"/></linearGradient><linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a3cc8"/><stop offset="1" stop-color="#3c1474"/></linearGradient></defs>
+
+<circle cx="80" cy="72" r="78" fill="url(#glow)"/>
+<g filter="url(#shadow)">
+<polygon points="98.2,76.5 80.0,87.0 61.8,76.5 61.8,55.5 80.0,45.0 98.2,55.5" fill="url(#cellA)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="92.1,72.0 80.0,79.0 67.9,72.0 67.9,58.0 80.0,51.0 92.1,58.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<polygon points="60.1,76.5 41.9,87.0 23.7,76.5 23.7,55.5 41.9,45.0 60.1,55.5" fill="url(#cellB)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="54.0,72.0 41.9,79.0 29.8,72.0 29.8,58.0 41.9,51.0 54.0,58.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<polygon points="136.3,76.5 118.1,87.0 99.9,76.5 99.9,55.5 118.1,45.0 136.3,55.5" fill="url(#cellA)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="130.2,72.0 118.1,79.0 106.0,72.0 106.0,58.0 118.1,51.0 130.2,58.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<polygon points="79.1,43.5 60.9,54.0 42.8,43.5 42.8,22.5 60.9,12.0 79.1,22.5" fill="url(#cellB)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="73.1,39.0 60.9,46.0 48.8,39.0 48.8,25.0 60.9,18.0 73.1,25.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<polygon points="117.2,43.5 99.1,54.0 80.9,43.5 80.9,22.5 99.1,12.0 117.2,22.5" fill="url(#cellA)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="111.2,39.0 99.1,46.0 86.9,39.0 86.9,25.0 99.1,18.0 111.2,25.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<polygon points="79.1,109.5 60.9,120.0 42.8,109.5 42.8,88.5 60.9,78.0 79.1,88.5" fill="url(#cellB)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="73.1,105.0 60.9,112.0 48.8,105.0 48.8,91.0 60.9,84.0 73.1,91.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<polygon points="117.2,109.5 99.1,120.0 80.9,109.5 80.9,88.5 99.1,78.0 117.2,88.5" fill="url(#cellA)" stroke="#6b3a06" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="111.2,105.0 99.1,112.0 86.9,105.0 86.9,91.0 99.1,84.0 111.2,91.0" fill="none" stroke="#fff2b0" stroke-width="1.6" opacity="0.55"/>
+<path d="M52 104 C52 116 58 120 58 128 C58 134 50 134 50 128 C50 122 46 116 46 106Z" fill="#ffb81c" stroke="#6b3a06" stroke-width="2"/>
+<path d="M98 108 C98 118 103 121 103 127 C103 132 96 132 96 127 C96 122 93 117 93 108Z" fill="#ffb81c" stroke="#6b3a06" stroke-width="2"/>
+<ellipse cx="72" cy="58" rx="6" ry="3.5" fill="#fff" opacity="0.7" transform="rotate(-30 72 58)"/>
+</g>
+<g filter="url(#shadow)">
+<path d="M10 120 L150 120 L142 136 L150 152 L10 152 L18 136Z" fill="url(#ribbon)" stroke="#ffe08a" stroke-width="2" stroke-linejoin="round"/>
+<text x="80" y="144.5" font-family="'Arial Black', Impact, 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="23" letter-spacing="2.5" text-anchor="middle" fill="#ffe9a0" stroke="#2a1604" stroke-width="1">BONUS</text>
+</g>
+</svg>

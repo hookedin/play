@@ -1,0 +1,72 @@
+# Every push tests everything: the contract, the wallet, the SDK and every game. A push to main is the release: it
+# publishes dist/ as the Worker named in wrangler.jsonc, and each games/<id> as the Worker named in its own, then
+# releases everything built on play, each on play's newest main: the casino, the site and the four game repositories.
+# Settings (repository → Settings → Secrets and variables → Actions):
+#   secret   CLOUDFLARE_API_TOKEN    a Cloudflare API token made from the "Edit Cloudflare Workers" template
+#   variable CLOUDFLARE_ACCOUNT_ID   the Cloudflare account ID
+#   secret   RELEASE_TOKEN           a fine-grained token with Actions read and write on those six repositories
+# The tests run the dependencies' code, so they hold no secret. Only the release job, on main, holds the tokens: it
+# installs without install scripts, runs no test, and builds again what the tests passed.
+# Without CLOUDFLARE_API_TOKEN main does not publish, and without RELEASE_TOKEN it does not release the rest.
+name: Deploy
+on: [push, workflow_dispatch]
+# One release at a time: a later push waits for the one before it, so they publish in order.
+concurrency: deploy-${{ github.ref }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      # The contract tests run against a local Anvil chain.
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm test
+  release:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # Whether the tokens are set, not the tokens: only the step that uses one is given it.
+      PUBLISH: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      RELEASE: ${{ secrets.RELEASE_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # No npm cache: the test job, which runs the dependencies' code, writes it.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+      - run: npm ci --ignore-scripts
+      # The commit and lockfile the tests built, built again: dist/ and every games/<id>/dist.
+      - run: npm run build
+      - name: Publish to Cloudflare
+        if: env.PUBLISH == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler deploy
+          for game in games/*/; do (cd "$game" && npx wrangler deploy); done
+      - name: Release everything built on play
+        if: env.RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          for workflow in caserver/release.yml website/deploy.yml game-roulette/deploy.yml game-crash/deploy.yml \
+            game-blackjack/deploy.yml game-template/deploy.yml; do
+            gh workflow run "${workflow#*/}" --repo "hookedin/${workflow%%/*}" --ref main
+          done

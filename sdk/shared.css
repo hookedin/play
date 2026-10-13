@@ -1,0 +1,308 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+  color: #f4f5f4;
+  background: #101617;
+  --muted: #8b9b9a;
+  --accent: #c5ef91;
+  --line: rgba(222, 243, 231, 0.12);
+  --panel: #192022;
+  --dark: #101617;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+button,
+input {
+  touch-action: manipulation;
+}
+button {
+  border: 0;
+}
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 28px 32px 24px;
+}
+/* The wallet's top bar names the game and shows its allowance: the page starts with the game itself. */
+main > :first-child {
+  margin-top: 0;
+}
+.stage {
+  position: relative;
+  min-height: 290px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.stage:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 20%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 65%);
+}
+.controls {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  gap: 14px;
+  align-items: end;
+}
+.field > label,
+.stake-heading > label,
+.field-label {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.3px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+.stake-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.stake-heading > label {
+  flex: 1;
+  margin: 0;
+}
+.stake-heading > button {
+  flex: none;
+  min-width: 44px;
+}
+.stake-field {
+  min-width: 0;
+}
+.input-wrap {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 13px;
+  gap: 8px;
+}
+.input-wrap input {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  font-size: 14px;
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.input-wrap span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.primary {
+  height: 48px;
+  border-radius: 8px;
+  color: #14201b;
+  background: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  transition:
+    filter 0.2s,
+    transform 0.2s;
+  padding: 0 20px;
+}
+.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.secondary {
+  height: 48px;
+  padding: 0 20px;
+  background: var(--panel);
+  color: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.secondary:hover:not(:disabled) {
+  background: #26302e;
+}
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px;
+  background: var(--panel);
+}
+.readout strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+  font-size: 16px;
+  letter-spacing: -0.4px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.readout span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.status {
+  min-height: 45px;
+  padding-top: 15px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.status[data-error='true'] {
+  color: #ffa9a2;
+}
+.status strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+.foot {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+  margin-top: 6px;
+  gap: 16px;
+}
+/* The game's own switches, such as sound, beside its rules. */
+.foot-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rules {
+  max-width: 440px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.8;
+}
+.rules summary {
+  cursor: pointer;
+  color: #c9d2d0;
+  list-style: none;
+  text-align: right;
+}
+.rules summary:after {
+  content: ' +';
+  color: var(--accent);
+  margin-left: 4px;
+}
+.rules[open] summary:after {
+  content: ' −';
+}
+.rules p {
+  margin: 8px 0;
+}
+/* Toggles the richer games share. */
+.tool {
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: #dfe7e3;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.tool:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.tool[aria-pressed='true'] {
+  color: #141a10;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+#mute[aria-pressed='true'] {
+  color: var(--muted);
+  background: var(--panel);
+  border-color: var(--line);
+}
+.hidden {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  main {
+    padding: 14px 14px 20px;
+  }
+  .controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .controls > .primary:last-child {
+    grid-column: 1/-1;
+  }
+  /* A phone zooms into any field under 16px when it takes focus. */
+  input {
+    font-size: 16px !important;
+  }
+  .stage {
+    margin: 12px 0;
+    min-height: 200px;
+  }
+  .foot {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+/* The unit an amount is in: its title says what a METH is, on hover. */
+:root [data-asset] {
+  white-space: nowrap;
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}

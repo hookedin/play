@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+*.log
+.DS_Store
+.private/
+.env
+.env.*
+*.pem
+*.key
+*.tgz
+.wrangler/
+.dev.vars

@@ -1,0 +1,2307 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+  color: var(--text);
+  background: var(--bg);
+  --bg: #0b0e15;
+  --panel: #121722;
+  --raised: #181e2b;
+  --line: #252b39;
+  --line-strong: #343b4d;
+  --text: #edf0f5;
+  --muted: #8a91a0;
+  --accent: #a68cff;
+  --accent-ink: #150f26;
+  --positive: #6de3a4;
+  --negative: #ef7d95;
+  --caution: #f0c35e;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 12px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+h1,
+h2,
+h3,
+p,
+ul,
+dl,
+dd {
+  margin: 0;
+}
+h1 {
+  font-size: 34px;
+  line-height: 1.1;
+  letter-spacing: -1.2px;
+  font-weight: 640;
+  overflow-wrap: anywhere;
+}
+h2 {
+  font-size: 17px;
+  letter-spacing: -0.3px;
+  font-weight: 600;
+}
+h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+.hidden,
+[hidden] {
+  display: none !important;
+}
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.handle {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+}
+.positive {
+  color: var(--positive);
+}
+.negative {
+  color: var(--negative);
+}
+.check-failed {
+  color: var(--negative) !important;
+}
+
+/* Buttons and fields. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    filter 0.15s;
+}
+.button:hover:not(:disabled) {
+  border-color: #4a5268;
+  background: #1f2636;
+}
+.button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.button.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.button.small {
+  height: 34px;
+  padding: 0 13px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.button.full {
+  width: 100%;
+}
+.text-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #c3b4ff;
+  font-size: 13px;
+  font-weight: 550;
+}
+.text-button:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e121b;
+  outline: none;
+}
+select {
+  appearance: none;
+  padding-right: 34px;
+  background: #0e121b
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a91a0' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 13px center;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #a68cff1f;
+}
+input::placeholder {
+  color: #5c6373;
+}
+input[type='file'] {
+  padding: 9px;
+  font-size: 12px;
+  color: var(--muted);
+}
+input[type='file']::file-selector-button {
+  margin-right: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.check input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+label {
+  display: block;
+  margin: 18px 0 8px;
+  color: #b4bac7;
+  font-size: 12px;
+  font-weight: 550;
+}
+.label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+.label-row label {
+  margin: 0;
+}
+.label-row .text-button {
+  font-size: 12px;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.field-row > .button {
+  flex: none;
+  height: auto;
+}
+.amount-input {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e121b;
+}
+.amount-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #a68cff1f;
+}
+.amount-input input {
+  border: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.amount-input input:focus-visible {
+  outline: none;
+}
+.amount-input span {
+  padding-right: 14px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* A unit the player chooses, in place of the one an amount is always in. */
+.amount-input select {
+  flex: none;
+  width: 6.5em;
+  padding-right: 28px;
+  padding-left: 10px;
+  border: 0;
+  background-color: transparent;
+  background-position: right 12px center;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.help {
+  min-height: 20px;
+  margin: 10px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.slider {
+  width: 100%;
+  margin: 14px 0 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+.scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+}
+.key-field {
+  margin-top: 10px;
+  min-height: 60px;
+  font-family: var(--mono);
+  font-size: 12px;
+  resize: none;
+}
+
+/* The top bar: the way home, the open game, the money and the account. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  background: #0b0e15e8;
+  backdrop-filter: blur(12px);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-right: auto;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.wallet-button {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 13px;
+  font-weight: 600;
+}
+.wallet-button-amount {
+  padding: 0 12px;
+  font-variant-numeric: tabular-nums;
+}
+.wallet-button-amount small {
+  margin-left: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.wallet-button-label {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.wallet-button:hover .wallet-button-label {
+  filter: brightness(1.08);
+}
+/* The open game, by the wallet's name for it, and its allowance beside the wallet. It takes the room the brand leaves. */
+.brand:has(+ .game-title:not(.hidden)) {
+  margin-right: 14px;
+}
+.game-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  margin-right: auto;
+  padding: 4px 8px 4px 14px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: inherit;
+}
+/* The menu under the game's name, which holds its proofs and its bets, says it is one. */
+.game-title::after {
+  content: '';
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23edf0f5' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat center;
+}
+.game-title:hover strong {
+  color: #cfc2ff;
+}
+/* Under the game's name: its bets, the player's own and everyone's. */
+.game-title {
+  anchor-name: --game-title;
+}
+.account-menu.game-menu {
+  inset: auto;
+  width: auto;
+  min-width: 220px;
+  margin-top: 8px;
+  position-anchor: --game-title;
+  position-area: bottom span-right;
+}
+.account-menu.game-menu > button {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+.account-menu.game-menu > button:hover {
+  background: var(--raised);
+}
+.account-menu.game-menu .next-round code {
+  margin-left: 4px;
+  color: #cdd3e2;
+  font:
+    12px var(--mono),
+    monospace;
+}
+.account-menu.game-menu .next-round small {
+  display: block;
+  color: #9ba7bd;
+  font-size: 12px;
+}
+.game-title .game-icon {
+  flex: none;
+  width: 28px;
+  border-radius: 8px;
+}
+.game-title .game-icon::before {
+  font-size: 13px;
+}
+.game-title strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.game-title .handle {
+  white-space: nowrap;
+}
+.game-allowance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.game-allowance:hover {
+  background: var(--raised);
+}
+.game-allowance > small {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.game-allowance > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+.game-allowance > span small {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.game-allowance.unset {
+  flex-direction: row;
+  align-items: center;
+  padding: 0 14px;
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.game-allowance.unset:hover {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.game-allowance.unset > small {
+  display: none;
+}
+.account-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  height: 38px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+}
+.account-button:hover {
+  background: var(--raised);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: #2a2346;
+  color: #cfc2ff;
+  font-size: 13px;
+}
+.account-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-menu {
+  inset: 64px 16px auto auto;
+  /* Wide enough for the account's name on one line. */
+  width: max-content;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: #151a26;
+  color: var(--text);
+  box-shadow: 0 24px 60px #000b;
+}
+.account-menu a {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.account-menu a:hover {
+  background: var(--raised);
+}
+.account-menu .menu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 8px 8px 0 0;
+}
+.menu-head > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-head .handle:empty {
+  display: none;
+}
+/* What a player uses most, above what they use now and then. */
+.account-menu hr {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.account-menu > button {
+  display: block;
+  margin: 8px 12px;
+}
+
+/* Pages. */
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 56px;
+}
+main:has(> #page-play:not(.hidden)) {
+  max-width: none;
+  padding: 0;
+}
+.page > h1 + .muted {
+  margin-top: 8px;
+  max-width: 680px;
+}
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.page-head .muted {
+  margin-top: 8px;
+  max-width: 680px;
+}
+.section-title {
+  margin: 32px 0 14px;
+}
+/* A player's page: on your own, a word that the name is yours; their bets in a line; and your Discord username. */
+#profile-yours {
+  margin-bottom: 6px;
+}
+.profile-stats {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.profile-card {
+  max-width: 520px;
+  margin-top: 24px;
+}
+.steps {
+  margin: 10px 0;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.steps li + li {
+  margin-top: 4px;
+}
+.card {
+  margin-top: 16px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.card > .muted {
+  margin-top: 6px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.actions.end {
+  justify-content: flex-end;
+}
+.two-up {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.two-up .card label {
+  margin-top: 0;
+}
+.two-up .card .label-row {
+  margin-top: 0;
+}
+.two-up .button {
+  margin-top: 12px;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 18px 0 14px;
+}
+.toolbar input {
+  flex: 1;
+}
+.toolbar select {
+  flex: none;
+  width: auto;
+  max-width: 40%;
+}
+.toolbar > .muted {
+  flex: none;
+  font-size: 12px;
+}
+.list {
+  display: grid;
+  gap: 8px;
+}
+.empty {
+  padding: 30px 20px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+}
+.notice {
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-left: 2px solid var(--caution);
+  border-radius: 0 8px 8px 0;
+  background: #f0c35e0d;
+  color: #d9c9a0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0 8px;
+}
+.figures > div {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.figures dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.figures dd {
+  margin-top: 6px;
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Money: the balance, what games play with. */
+.money {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.money-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  min-width: 0;
+}
+.money-card.balance {
+  border-color: #3b3363;
+  background: linear-gradient(135deg, #1a1630, var(--panel));
+}
+.money-card .label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.money-card strong,
+.large-amount {
+  font-size: 30px;
+  font-weight: 640;
+  letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.money-card small,
+.large-amount small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.large-amount small {
+  margin-left: 6px;
+}
+.money-card > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* Banners, the notice of what the wallet is doing, and toasts. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 20px;
+  padding: 13px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.banner.warning {
+  border-color: #6b5327;
+  background: #211b10;
+  color: #f1d9a4;
+}
+.banner > span {
+  flex: 1 1 280px;
+}
+main:has(> #page-play:not(.hidden)) > .banner {
+  margin: 12px 16px;
+}
+/* Popovers, so that they show above an open dialog. */
+.operation-status {
+  position: fixed;
+  inset: auto auto 24px 50%;
+  margin: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #171d2a;
+  box-shadow: 0 16px 40px #0009;
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.operation-status:popover-open {
+  display: flex;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.toast {
+  position: fixed;
+  inset: auto 20px 20px auto;
+  margin: 0;
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 13px 16px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--positive);
+  border-radius: 10px;
+  background: #171d2a;
+  box-shadow: 0 16px 40px #0009;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.toast.error {
+  border-left-color: var(--negative);
+}
+
+/* Another tab has the wallet: this one shows only that, and the way to take it. */
+#elsewhere,
+body.elsewhere :is(.topbar > :not(.brand), main > :not(#elsewhere)) {
+  display: none;
+}
+body.elsewhere #elsewhere {
+  display: flex;
+}
+
+/* The lobby. */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 30px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    radial-gradient(ellipse at 85% 50%, #a68cff26, transparent 60%), linear-gradient(135deg, #151a28, #0f131c);
+  overflow: hidden;
+}
+.hero h1 {
+  font-size: 40px;
+}
+.hero h1 span {
+  color: var(--accent);
+}
+.hero p {
+  max-width: 460px;
+  margin-top: 12px;
+  color: #b4bac7;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.hero .button {
+  margin-top: 18px;
+}
+.hero-art {
+  position: relative;
+  flex: none;
+  width: 180px;
+  height: 130px;
+}
+.orbit {
+  position: absolute;
+  inset: 8px 0;
+  border: 1px solid #a68cff3d;
+  border-radius: 50%;
+  transform: rotate(-14deg);
+}
+.hero-die {
+  position: absolute;
+  top: 22px;
+  left: 50px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  width: 84px;
+  height: 84px;
+  padding: 15px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #c1b0ff, #7f63e8);
+  box-shadow:
+    0 14px 0 #4f3b9b,
+    0 24px 44px #0008;
+  transform: rotate(-10deg);
+  animation: float 5s ease-in-out infinite;
+}
+.hero-die i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #231a46;
+  place-self: center;
+}
+.hero-die i:nth-child(1) {
+  grid-area: 1 / 1;
+}
+.hero-die i:nth-child(2) {
+  grid-area: 1 / 3;
+}
+.hero-die i:nth-child(3) {
+  grid-area: 2 / 2;
+}
+.hero-die i:nth-child(4) {
+  grid-area: 3 / 1;
+}
+.hero-die i:nth-child(5) {
+  grid-area: 3 / 3;
+}
+@keyframes float {
+  50% {
+    transform: rotate(-4deg) translateY(-6px);
+  }
+}
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+.game-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.game-card .game-icon {
+  transition:
+    transform 0.18s,
+    box-shadow 0.18s;
+}
+.game-card:hover .game-icon {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px #0009;
+}
+.game-card h3 {
+  margin-top: 10px;
+}
+.catalog-link {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.game-card.skeleton {
+  aspect-ratio: 1;
+  border-radius: 22px;
+  background: linear-gradient(100deg, var(--panel) 40%, var(--raised) 50%, var(--panel) 60%) 0 0 / 300% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -150% 0;
+  }
+}
+.game-icon {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--raised);
+}
+.game-icon::before {
+  content: attr(data-initial);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #6f7686;
+  font-size: 34px;
+  font-weight: 700;
+}
+.game-icon img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.custom-game {
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.custom-game summary {
+  width: fit-content;
+  color: #c3b4ff;
+  cursor: pointer;
+}
+.custom-game .field-row {
+  max-width: 560px;
+}
+.trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 28px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.trust li::before {
+  content: '✓';
+  margin-right: 7px;
+  color: var(--positive);
+}
+.trust li:last-child {
+  margin-left: auto;
+}
+.trust li:last-child::before {
+  content: none;
+}
+
+/* A game: its frame, under the top bar. */
+#page-play {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 60px);
+}
+.game-viewport {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+.game-viewport iframe {
+  flex: 1;
+  width: 100%;
+  min-height: calc(100vh - 60px);
+  border: 0;
+  background: transparent;
+}
+.game-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+.game-loading .game-icon {
+  width: 112px;
+}
+
+/* Dialogs. */
+/* While a toast shows, a sheet's end clears it: what the toast covers scrolls out from under it. */
+.sheet {
+  width: min(480px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 20px 22px calc(22px + var(--toast-room, 0px));
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: #141925;
+  color: var(--text);
+  box-shadow: 0 30px 80px #000c;
+}
+.sheet.wide {
+  width: min(780px, calc(100vw - 24px));
+}
+/* The wallet: held at the top, so its tabs stay where they are whatever a tab shows, and in reach however far it
+ * scrolls. */
+.wallet-sheet {
+  width: min(620px, calc(100vw - 24px));
+  max-height: calc(100dvh - 64px);
+  margin-top: 40px;
+  padding-top: 0;
+}
+.wallet-sheet .sheet-head {
+  padding-top: 20px;
+}
+/* One sheet, two places: the wallet's money, and Settings. */
+#wallet-dialog[data-section='settings'] [data-section='wallet'],
+#wallet-dialog[data-section='wallet'] [data-section='settings'] {
+  display: none;
+}
+.wallet-sheet .tabs {
+  position: sticky;
+  top: 10px;
+  z-index: 1;
+  box-shadow: 0 0 0 10px #141925;
+}
+.sheet::backdrop {
+  background: #04060bcc;
+  backdrop-filter: blur(3px);
+}
+.sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.sheet-head h2 {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.sheet-head .eyebrow {
+  margin-bottom: 6px;
+}
+.close,
+.refresh {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px 0 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+}
+/* Refresh sits beside Close, both to the right of the title. */
+.refresh {
+  margin: -4px -10px 0 auto;
+}
+.close:hover,
+.refresh:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 18px 0 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+.tabs button {
+  flex: 1 0 auto;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  white-space: nowrap;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.tabs button[aria-selected='true'] {
+  background: var(--raised);
+  color: var(--text);
+}
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+}
+/* The wallet dialog: the balance, the address ETH comes in at and what happens to it, the way out and the rest. */
+.sheet-balance {
+  margin-top: 14px;
+  padding: 12px 14px;
+  gap: 2px;
+}
+.sheet-balance strong {
+  font-size: 22px;
+}
+.address {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 10px 10px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e121b;
+}
+.address code {
+  flex: 1;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.send-form {
+  display: contents;
+}
+/* Activity's filters: one kind of event, or all of them. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.chip {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.chip:hover {
+  background: var(--raised);
+}
+.chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--raised);
+}
+.payee {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #0e121b;
+}
+.payee .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 700;
+}
+.payee div {
+  min-width: 0;
+}
+.payee strong,
+.payee small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.payee small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.claims {
+  margin-top: 14px;
+}
+.claims > .muted {
+  margin-top: 6px;
+}
+.setting {
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+.setting:first-child {
+  border-top: 0;
+}
+.setting > .muted,
+.setting > .help {
+  margin-top: 8px;
+}
+.setting .figures {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+/* Advanced: the balance as this browser holds it beside the casino's copy, each row that differs marked. */
+.state-comparison {
+  width: 100%;
+  margin-top: 14px;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.state-comparison th,
+.state-comparison td {
+  padding: 8px 10px 8px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.state-comparison th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.state-comparison tr.differs td {
+  color: var(--caution);
+}
+.address-send {
+  margin-top: 12px;
+}
+.address-send summary {
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.address-send > .muted {
+  margin-top: 8px;
+}
+/* What a member types in the HookedIn Discord: the command in the accent, then the code they fill in. */
+.command {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.command var {
+  font-style: normal;
+  color: var(--text);
+}
+/* Read off the screen and typed, so large and spaced. */
+.address .command {
+  padding: 0;
+  background: none;
+  font-size: 20px;
+}
+#verify-code {
+  letter-spacing: 0.12em;
+}
+#deposit-status {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+#add-to-balance {
+  margin-top: 12px;
+}
+.deposit-qr {
+  display: block;
+  margin: 16px auto;
+  image-rendering: pixelated;
+  background: white;
+  border: 8px solid white;
+  border-radius: 8px;
+}
+.boxed {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.boxed + .boxed {
+  margin-top: 12px;
+}
+.boxed p {
+  margin: 10px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.tab-panel .button.full {
+  margin-top: 16px;
+}
+.tab-panel .text-button,
+.tab-panel .button.small {
+  align-self: flex-start;
+  margin-top: 10px;
+  font-size: 12px;
+}
+/* A guest, with no account in this browser, sees how to create one or sign in, and nothing that needs an account. */
+#wallet-dialog:not(.guest) .guest-only,
+#wallet-dialog.guest .account-only,
+#wallet-dialog.guest :is(.refresh, .sheet-balance, .claims, .tabs) {
+  display: none;
+}
+#wallet-dialog.guest .key-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+#wallet-dialog.guest .key-actions .button {
+  align-self: stretch;
+  height: 42px;
+  margin-top: 0;
+  font-size: 13px;
+}
+.bet-round-summary {
+  margin-bottom: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.permissions {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.permissions li {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+}
+.permissions strong {
+  display: block;
+  color: var(--text);
+}
+.permissions .caution {
+  border-color: #6b5327;
+  background: #211b10;
+  color: #f1d9a4;
+}
+.permissions .caution strong {
+  color: var(--caution);
+}
+#allowance-who {
+  margin-top: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+/* How the visit stands: what the player allowed, took back, and won or lost, and what is left. */
+.figures.visit {
+  grid-template-columns: none;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+.figures.visit > div {
+  padding: 10px 12px;
+}
+.figures.visit dd {
+  margin-top: 4px;
+  font-size: 15px;
+}
+.terms {
+  margin-top: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.terms summary {
+  color: #b5a8e5;
+  cursor: pointer;
+}
+.terms ul {
+  margin-top: 8px;
+  padding-left: 18px;
+}
+.terms li + li {
+  margin-top: 4px;
+}
+.sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.sheet-foot .text-button {
+  font-size: 12px;
+}
+
+/* Activity: every receipt, with the JSON behind it. */
+.activity-entry {
+  --event-color: #bdb3d6;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.activity-entry.tone-positive {
+  --event-color: var(--positive);
+}
+.activity-entry.tone-negative {
+  --event-color: var(--negative);
+}
+.activity-entry.tone-warning {
+  --event-color: #e1c18b;
+}
+.activity-summary {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(90px, auto);
+  align-items: center;
+  gap: 14px;
+  padding: 15px 18px;
+  list-style: none;
+}
+.activity-summary::-webkit-details-marker {
+  display: none;
+}
+.activity-summary::before {
+  content: '·';
+  color: var(--muted);
+}
+.activity-entry > summary {
+  cursor: pointer;
+}
+.activity-entry > summary::before {
+  content: '▸';
+}
+.activity-entry[open] > summary::before {
+  content: '▾';
+}
+.activity-entry > summary:hover {
+  background: var(--raised);
+}
+.activity-content {
+  min-width: 0;
+}
+.activity-title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.activity-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.activity-badge {
+  padding: 2px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  color: var(--event-color);
+  font-size: 10px;
+}
+.activity-description {
+  margin-top: 5px;
+  color: #9ba5b7;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.activity-time {
+  display: block;
+  margin-top: 5px;
+  color: #7c8496;
+  font:
+    11px/1.6 var(--mono),
+    monospace;
+  font-variant-numeric: tabular-nums;
+}
+.activity-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: 260px;
+  text-align: right;
+}
+.activity-value {
+  color: var(--event-color);
+  font:
+    13px/1.5 var(--mono),
+    monospace;
+  overflow-wrap: anywhere;
+}
+.activity-amount-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+.activity-body {
+  border-top: 1px solid var(--line);
+  background: #0e131c;
+}
+.activity-notice {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  color: #ddc18f;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.activity-facts {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px 18px;
+  padding: 16px 18px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.activity-facts dt {
+  color: var(--muted);
+}
+.activity-facts dd {
+  font-family: var(--mono);
+  color: #b7c3d6;
+  overflow-wrap: anywhere;
+}
+.activity-facts a {
+  color: #c7b3f0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.activity-payload-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+.activity-payload-heading .text-button {
+  margin-left: auto;
+  font-size: 12px;
+}
+.activity-copy-status {
+  color: var(--positive);
+  font-size: 11px;
+}
+.activity-payload {
+  max-height: 380px;
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  background: #0a0f18;
+  color: #b8c6db;
+  font:
+    11px/1.7 var(--mono),
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+/* Raw text folded away under a summary: a bet's whole receipt, the transaction that sends a withdrawal. */
+.raw-details {
+  margin-top: 18px;
+}
+.activity-facts .raw-details {
+  margin-top: 0;
+}
+.raw-details summary {
+  color: #b5a8e5;
+  font-size: 12px;
+  cursor: pointer;
+}
+.raw-details .activity-payload-heading {
+  padding: 10px 0 0;
+  border-top: 0;
+}
+.raw-details .activity-payload {
+  max-height: 300px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* Bets: one line each, in a player's own list and a game's public record. */
+.bet-table {
+  display: grid;
+  gap: 6px;
+}
+.bet-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  text-align: left;
+}
+button.bet-row:hover {
+  border-color: #3b3752;
+  background: var(--raised);
+}
+.bet-row.tone-positive {
+  border-left-color: var(--positive);
+}
+.bet-row.tone-negative {
+  border-left-color: var(--negative);
+}
+.bet-group {
+  grid-column: span 2;
+}
+.bet-group .bet-figure-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bet-game {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+  min-width: 0;
+}
+.bet-game-name {
+  flex-basis: 100%;
+  font-size: 14px;
+  font-weight: 600;
+}
+.bet-who,
+.bet-time {
+  color: var(--muted);
+  font-size: 11px;
+}
+.bet-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.bet-figure-value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.bet-figure-label {
+  color: #7d8494;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.bet-return .bet-figure-value {
+  color: #c6b6ff;
+}
+.bet-figure.positive .bet-figure-value,
+.bet-net.positive {
+  color: var(--positive);
+}
+.bet-figure.negative .bet-figure-value,
+.bet-net.negative {
+  color: var(--negative);
+}
+.bet-net {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.bet-detail-when {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.bet-detail {
+  margin-top: 14px;
+}
+.bet-detail-figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.bet-detail-section {
+  margin-top: 22px;
+}
+.bet-detail-section h3 {
+  font-size: 13px;
+}
+.bet-detail-note {
+  margin-top: 6px;
+  color: #9ba7bd;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.bet-detail-hex {
+  color: #cdd3e2;
+  font:
+    11px/1.6 var(--mono),
+    monospace;
+  overflow-wrap: anywhere;
+}
+.bet-detail-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr);
+  gap: 0 16px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.bet-detail-facts dt,
+.bet-detail-facts dd {
+  min-width: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.bet-detail-facts dt {
+  color: #7d8494;
+}
+.bet-detail-facts dd {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.bet-detail-derived {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.bet-step-list {
+  margin-top: 8px;
+  padding-left: 2.2em;
+  color: #cdd3e2;
+  font-size: 12px;
+  line-height: 1.8;
+  font-variant-numeric: tabular-nums;
+}
+.bet-step-list .drawn {
+  color: var(--positive);
+  font-weight: 600;
+}
+.bet-detail-check.ok {
+  color: var(--positive);
+}
+.bet-detail-check.bad {
+  color: var(--negative);
+}
+.bet-space {
+  position: relative;
+  height: 12px;
+  margin-top: 14px;
+  border-radius: 3px;
+  background: var(--raised);
+}
+.bet-space-band {
+  position: absolute;
+  inset: 0 auto 0 0;
+  min-width: 2px;
+  border-radius: 3px;
+  background: #4a4470;
+}
+.bet-space.hit .bet-space-band {
+  background: var(--accent);
+}
+.bet-space-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--positive);
+}
+.bet-space-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: #7d8494;
+  font-size: 11px;
+}
+.bet-detail-more {
+  margin-top: 22px;
+}
+
+/* A line per game: the games a player played, counted from the bets their wallet signed, and the games they publish,
+   from each one's public record. */
+.game-lines {
+  display: grid;
+  gap: 10px;
+}
+.game-line {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.game-line-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.game-line-icon {
+  flex: none;
+  width: 52px;
+}
+.game-line-icon .game-icon {
+  border-radius: 14px;
+}
+.game-line-icon .game-icon::before {
+  font-size: 20px;
+}
+.game-line-names {
+  flex: 1 1 180px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+.game-line-names a {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.game-line-names a:hover {
+  color: var(--text);
+}
+.played-star {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #e0c56a;
+  font-size: 17px;
+  line-height: 1;
+}
+.played-star[aria-pressed='false'] {
+  color: #5c6373;
+}
+.game-line-when {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.game-figures {
+  display: grid;
+  grid-template-columns: repeat(5, auto);
+  justify-content: start;
+  gap: 10px 20px;
+  margin-top: 14px;
+}
+/* Each value over its label. */
+.game-figures div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+}
+.game-figures dt {
+  color: #7d8494;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.game-figures dd {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.game-line-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.game-actions .text-button {
+  margin-left: auto;
+}
+/* A published game's bank, the key its server signs with and its name, on the developer page: each label and what it is
+   now beside the field that changes it. */
+.game-settings {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 34rem);
+  align-items: start;
+  gap: 18px 24px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.game-setting-name {
+  display: grid;
+  gap: 4px;
+  padding-top: 2px;
+}
+.game-setting-name span {
+  color: #7d8494;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.game-setting-name strong,
+.game-setting-name code {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.game-setting-field .field-row {
+  margin-top: 0;
+}
+.game-setting-field .game-line-note {
+  margin-top: 6px;
+}
+.game-line-names code {
+  color: #7d8494;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* What closed balances are still owed. */
+.claim-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.claim-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.claim-row p {
+  flex: 1 1 100%;
+  color: #b4bac7;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.claim-row input {
+  flex: 1 1 220px;
+  width: auto;
+}
+.fold summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  list-style: none;
+  cursor: pointer;
+}
+.fold summary::-webkit-details-marker {
+  display: none;
+}
+.fold summary h3::after {
+  content: ' +';
+  color: var(--accent);
+}
+.fold[open] summary h3::after {
+  content: ' −';
+}
+.fold[open] summary {
+  margin-bottom: 14px;
+}
+.fold > p + p {
+  margin-top: 8px;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+.footer span {
+  margin-right: auto;
+}
+.footer a:hover {
+  color: var(--text);
+}
+body:has(#page-play:not(.hidden)) .footer {
+  display: none;
+}
+
+/* A phone: one row of top bar, the game directly under a one-line strip, everything else stacked. */
+@media (max-width: 1100px) {
+  /* Playing, the game's name and its money come before the brand's word and the publisher. */
+  .topbar:has(.game-title:not(.hidden)) .brand span,
+  .game-title .handle {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  h1 {
+    font-size: 28px;
+  }
+  .game-settings {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .game-setting-field + .game-setting-name {
+    margin-top: 10px;
+  }
+  .topbar {
+    gap: 8px;
+    height: 56px;
+    padding: 0 12px;
+  }
+  .brand span,
+  .account-name,
+  .game-title .handle,
+  .game-title .game-icon,
+  /* Playing, a phone has room for one amount: the game's allowance. */
+  .game-allowance:not(.hidden) + .wallet-button .wallet-button-amount {
+    display: none;
+  }
+  .brand:has(+ .game-title:not(.hidden)) {
+    margin-right: 0;
+  }
+  .game-title {
+    padding-left: 10px;
+  }
+  /* A guest's button says Sign in, as it does on a wide screen. */
+  .account-button.guest {
+    padding: 0 10px 0 5px;
+  }
+  .account-button.guest .account-name {
+    display: inline;
+  }
+  .account-button {
+    padding: 0 5px;
+  }
+  .account-menu {
+    inset: 60px 8px auto auto;
+    max-width: calc(100vw - 16px);
+  }
+  main {
+    padding: 20px 14px 40px;
+  }
+  .hero {
+    padding: 20px;
+  }
+  .hero h1 {
+    font-size: 30px;
+  }
+  .hero-art {
+    display: none;
+  }
+  .game-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+  }
+  .game-card h3 {
+    font-size: 13px;
+  }
+  .catalog-link {
+    display: none;
+  }
+  .trust li:last-child {
+    margin-left: 0;
+  }
+  #page-play {
+    min-height: calc(100vh - 56px);
+  }
+  .game-viewport iframe {
+    min-height: calc(100dvh - 56px);
+  }
+  .page-head {
+    flex-direction: column;
+  }
+  .toolbar {
+    flex-wrap: wrap;
+  }
+  .toolbar input {
+    flex-basis: 100%;
+  }
+  .figures {
+    grid-template-columns: 1fr 1fr;
+  }
+  .two-up {
+    grid-template-columns: 1fr;
+  }
+  .field-row {
+    flex-wrap: wrap;
+  }
+  .field-row > input,
+  .field-row > .amount-input,
+  .field-row > select {
+    flex-basis: 100%;
+  }
+  .field-row > .button {
+    flex: 1;
+    height: 42px;
+  }
+  .money-card strong {
+    font-size: 26px;
+  }
+  .activity-summary {
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px;
+  }
+  .activity-amount {
+    grid-column: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    max-width: none;
+    text-align: left;
+  }
+  .activity-facts {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 14px;
+  }
+  .activity-facts dd {
+    margin-bottom: 8px;
+  }
+  .bet-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bet-game {
+    grid-column: 1 / -1;
+  }
+  .bet-detail-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .game-figures {
+    grid-template-columns: repeat(3, auto);
+    gap: 10px 14px;
+  }
+  .sheet {
+    margin: auto auto 0;
+    width: 100vw;
+    max-width: none;
+    border-radius: 16px 16px 0 0;
+  }
+  .wallet-sheet {
+    height: calc(100dvh - 24px);
+    max-height: none;
+  }
+  .operation-status {
+    bottom: 16px;
+    max-width: calc(100vw - 32px);
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar {
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .wallet-button-amount {
+    padding: 0 8px;
+    font-size: 12px;
+  }
+  .wallet-button-label {
+    padding: 0 10px;
+  }
+}
+
+/* METH, where it labels an amount: its title says what a METH is, on hover. */
+abbr[title] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}

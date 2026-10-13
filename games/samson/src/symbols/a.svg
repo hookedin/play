@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.55"/></filter>
+<linearGradient id="ink" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8f7a"/><stop offset="1" stop-color="#c0281c"/></linearGradient></defs>
+
+<g font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="128" text-anchor="middle">
+<text x="80" y="128" fill="#07090b" opacity="0.6" transform="translate(0 6)">A</text>
+<text x="80" y="128" fill="url(#ink)" stroke="#f3dc9a" stroke-width="3.5" stroke-linejoin="round" paint-order="stroke">A</text>
+<text x="80" y="128" fill="none" stroke="#fff" stroke-width="1" opacity="0.35" transform="translate(-1.5 -1.5)">A</text>
+</g>
+</svg>

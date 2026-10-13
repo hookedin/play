@@ -1,0 +1,25 @@
+# Security
+
+## Status
+
+HookedIn is in [open beta](docs/index.md#open-beta) on Ethereum mainnet. A reset can start history and names over on a new contract, while players take their balances out of the old one on-chain, and contracts, signed messages and storage formats change without migration. Do not use it with funds you cannot afford to lose.
+
+## Reporting a vulnerability
+
+Report privately through GitHub's private vulnerability reporting: open <https://github.com/hookedin/play/security/advisories/new>, or choose **Report a vulnerability** under the repository's **Security** tab. Please do not open a public issue or pull request for a suspected vulnerability, and do not test against other people's channels or funds.
+
+A useful report says which component and revision is affected, what an attacker gains, and how to reproduce it, ideally as a failing test against a local Anvil deployment (`npm test` shows how those are set up).
+
+## Scope
+
+- The settlement contract, [contracts/HookedInCasino.sol](contracts/HookedInCasino.sol): loss or freezing of protected principal, a withdrawal paid twice or out of cash a claim is owed, bypassing the challenge window, replay of evidence, incorrect winnings allocation, unauthorized withdrawals, house cash paid beyond the payout limit.
+- The wallet, [client/](client/): key exposure, accepting a result, rejection, payout or share statement it should refuse, losing or downgrading saved evidence, escaping the game iframe boundary, signing something other than what is shown.
+- The shared protocol and the watchtower, [protocol/](protocol/) and [scripts/](scripts/): disagreement between the TypeScript and contract derivations, errors in the risk rule, the watchtower failing to challenge with valid evidence or to dispute a casino bet its bundle holds.
+- The game SDK and the house's games, [sdk/](sdk/) and [games/](games/): step pricing that disagrees with the risk rule, a game losing its saved round, a developer's server giving away the seed of its casino bet before it places it.
+- The build: anything that makes the published `dist/`, or a game's, differ from what these sources produce.
+
+The casino service, the website and the games other developers publish are separate codebases. If you find a problem in the running casino service, report it here privately as well.
+
+## Not vulnerabilities
+
+The trust assumptions stated in [the trust model](docs/overview/trust-model.md) are accepted design choices; reports that restate them are welcome as design feedback in a public issue.

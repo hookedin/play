@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Check a HookedIn bet</title>
+    <meta
+      name="description"
+      content="Work out a HookedIn casino bet again from its seed and secret, apart from the wallet: one page, no dependencies, which also works saved and opened offline."
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --text: #e7eaf1;
+        --muted: #9ba7bd;
+        --line: #2c3342;
+        --field: #161b25;
+        --good: #4cc79a;
+        --bad: #ff8a80;
+        --bg: #0c0f16;
+      }
+      body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.6 system-ui,
+          sans-serif;
+      }
+      h1 {
+        font-size: 24px;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 28px 0 8px;
+      }
+      p,
+      li {
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        margin-top: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      input,
+      textarea {
+        box-sizing: border-box;
+        width: 100%;
+        margin-top: 4px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--field);
+        color: var(--text);
+        font:
+          13px/1.5 ui-monospace,
+          monospace;
+      }
+      textarea {
+        min-height: 64px;
+        resize: vertical;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+        gap: 0 16px;
+        margin: 0;
+        font-size: 14px;
+      }
+      dt,
+      dd {
+        margin: 0;
+        padding: 8px 0;
+        border-top: 1px solid var(--line);
+        overflow-wrap: anywhere;
+      }
+      dt {
+        color: var(--muted);
+      }
+      .ok {
+        color: var(--good);
+      }
+      .bad {
+        color: var(--bad);
+      }
+      code,
+      pre {
+        font:
+          13px/1.6 ui-monospace,
+          monospace;
+      }
+      pre {
+        overflow-x: auto;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--field);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Check a HookedIn bet</h1>
+    <p>
+      This page works a casino bet out again from what its receipt keeps, with nothing but the arithmetic below: no
+      wallet, no server and no library. Save it and open it offline if you like. A bet's
+      <strong>Check it yourself</strong> link fills it in after <code>#</code>, which a browser never sends to a server.
+    </p>
+
+    <form id="fields">
+      <label>Your seed <input name="seed" spellcheck="false" autocomplete="off" /></label>
+      <label>The seed hash your bet signed <input name="seedHash" spellcheck="false" autocomplete="off" /></label>
+      <label>The casino's secret <input name="secret" spellcheck="false" autocomplete="off" /></label>
+      <label>The round your bet signed <input name="round" spellcheck="false" autocomplete="off" /></label>
+      <label>The bet's chance, in outcomes out of 2<sup>64</sup> <input name="chance" autocomplete="off" /></label>
+      <label>The bet's prize, in wei <input name="prize" autocomplete="off" /></label>
+      <label>What the game's step held, in wei <input name="cash" autocomplete="off" /></label>
+      <label
+        >The step's results, each <code>weight:cash</code>, the cash in wei, separated by commas
+        <textarea name="results" spellcheck="false"></textarea>
+      </label>
+      <label
+        >The ways your wallet split them into, each <code>weight:stake:chance:prize</code>, or <code>weight</code> for
+        no bet, separated by commas <textarea name="branches" spellcheck="false"></textarea>
+      </label>
+    </form>
+
+    <h2>What it works out</h2>
+    <dl id="results"></dl>
+
+    <h2>How</h2>
+    <ul>
+      <li>
+        The casino fixed its <strong>round</strong> as <code>keccak256(secret)</code> before your wallet picked its
+        seed, and your bet signed <code>keccak256(seed)</code> before the secret was out.
+      </li>
+      <li>
+        The <strong>outcome</strong> is the lowest 64 bits of
+        <code>keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret))</code>, and the <strong>roll</strong>
+        is the outcome as a share of 2<sup>64</sup>, on a scale of 0 to 100. The bet pays its prize when the outcome is
+        below its chance.
+      </li>
+      <li>
+        A game's <strong>step</strong> is a table of results, each with a weight and the cash it leaves you. Your wallet
+        splits it into ways, each a casino bet or none, that reach every amount exactly as often as the table says, and
+        draws one from the seed before it signs: a number below the ways' total weight, read big-endian from as many
+        bytes as it needs of <code>keccak256(abi.encode(keccak256("HOOKEDIN/BRANCH"), seed, i))</code> for i = 0, 1, 2,
+        …, the first byte cut to the bits it needs, and read again from the next bytes until it is below the total. The
+        way drawn is the first whose running total of weights is above it.
+      </li>
+      <li>
+        Once the way has left you an amount, your wallet draws the <strong>result</strong> among those that leave it, in
+        the same way from <code>keccak256(abi.encode(keccak256("HOOKEDIN/RESULT"), seed, i))</code>, by their weights.
+        The next 64-bit number from those bytes is what the game shows the result with.
+      </li>
+    </ul>
+    <p>The same in one line with Foundry's <code>cast</code>, for the outcome:</p>
+    <pre>
+cast to-dec 0x$(cast keccak $(cast abi-encode "f(bytes32,bytes32,bytes32)" $(cast keccak "HOOKEDIN/OUTCOME") $SEED $SECRET) | cut -c 51-)</pre>
+    <p>
+      Python's <code>hashlib.sha3_256</code> is a different hash, not keccak256: it gives another answer. HookedIn's
+      contract settles a disputed bet with this same keccak256 computation.
+      <a href="https://hookedin.com/docs/wallet/bets-and-receipts/#check-a-bet-yourself">What a check proves</a>.
+    </p>
+
+    <script>
+      // keccak256, as Ethereum uses it: Keccak-f[1600] on 64-bit lanes, rate 136 bytes, padding 0x01 … 0x80.
+      var MASK = (1n << 64n) - 1n;
+      var ROUND_CONSTANTS = [
+        0x0000000000000001n,
+        0x0000000000008082n,
+        0x800000000000808an,
+        0x8000000080008000n,
+        0x000000000000808bn,
+        0x0000000080000001n,
+        0x8000000080008081n,
+        0x8000000000008009n,
+        0x000000000000008an,
+        0x0000000000000088n,
+        0x0000000080008009n,
+        0x000000008000000an,
+        0x000000008000808bn,
+        0x800000000000008bn,
+        0x8000000000008089n,
+        0x8000000000008003n,
+        0x8000000000008002n,
+        0x8000000000000080n,
+        0x000000000000800an,
+        0x800000008000000an,
+        0x8000000080008081n,
+        0x8000000000008080n,
+        0x0000000080000001n,
+        0x8000000080008008n,
+      ];
+      // ROTATIONS[x][y], the rotation of lane (x, y).
+      var ROTATIONS = [
+        [0, 36, 3, 41, 18],
+        [1, 44, 10, 45, 2],
+        [62, 6, 43, 15, 61],
+        [28, 55, 25, 21, 56],
+        [27, 20, 39, 8, 14],
+      ];
+      function rotate(lane, n) {
+        return n === 0 ? lane : ((lane << BigInt(n)) | (lane >> BigInt(64 - n))) & MASK;
+      }
+      // The state is 25 lanes, lane (x, y) at x + 5y.
+      function permute(a) {
+        for (var round = 0; round < 24; round++) {
+          var c = [0, 1, 2, 3, 4].map(function (x) {
+            return a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20];
+          });
+          for (var x = 0; x < 5; x++) {
+            var d = c[(x + 4) % 5] ^ rotate(c[(x + 1) % 5], 1);
+            for (var y = 0; y < 5; y++) a[x + 5 * y] ^= d;
+          }
+          var b = [];
+          for (var x = 0; x < 5; x++)
+            for (var y = 0; y < 5; y++) b[y + 5 * ((2 * x + 3 * y) % 5)] = rotate(a[x + 5 * y], ROTATIONS[x][y]);
+          for (var x = 0; x < 5; x++)
+            for (var y = 0; y < 5; y++)
+              a[x + 5 * y] = b[x + 5 * y] ^ (~b[((x + 1) % 5) + 5 * y] & MASK & b[((x + 2) % 5) + 5 * y]);
+          a[0] ^= ROUND_CONSTANTS[round];
+        }
+      }
+      function keccak256(bytes) {
+        var rate = 136,
+          padded = new Uint8Array(Math.floor(bytes.length / rate) * rate + rate);
+        padded.set(bytes);
+        padded[bytes.length] ^= 0x01;
+        padded[padded.length - 1] ^= 0x80;
+        var a = new Array(25).fill(0n);
+        for (var offset = 0; offset < padded.length; offset += rate) {
+          for (var i = 0; i < rate / 8; i++) {
+            var lane = 0n;
+            for (var k = 7; k >= 0; k--) lane = (lane << 8n) | BigInt(padded[offset + 8 * i + k]);
+            a[i] ^= lane;
+          }
+          permute(a);
+        }
+        var out = new Uint8Array(32);
+        for (var i = 0; i < 4; i++)
+          for (var k = 0; k < 8; k++) out[8 * i + k] = Number((a[i] >> BigInt(8 * k)) & 0xffn);
+        return out;
+      }
+
+      // 32-byte words, as abi.encode lays out bytes32 and uint256 values.
+      function hex(bytes) {
+        return (
+          '0x' +
+          Array.from(bytes, function (byte) {
+            return byte.toString(16).padStart(2, '0');
+          }).join('')
+        );
+      }
+      function word(value) {
+        return BigInt(value).toString(16).padStart(64, '0');
+      }
+      function bytesOf(hexWords) {
+        var bytes = new Uint8Array(hexWords.length / 2);
+        for (var i = 0; i < bytes.length; i++) bytes[i] = parseInt(hexWords.slice(2 * i, 2 * i + 2), 16);
+        return bytes;
+      }
+      function hashWords(values) {
+        return hex(keccak256(bytesOf(values.map(word).join(''))));
+      }
+      function tag(text) {
+        return hex(keccak256(new TextEncoder().encode(text)));
+      }
+      var SPACE = 1n << 64n;
+
+      /** keccak256 of a bytes32 value: a round of its secret, a seed hash of its seed. */
+      function hashOf(value) {
+        return hashWords([value]);
+      }
+      /** The round's outcome: the lowest 64 bits of keccak256(abi.encode(keccak256("HOOKEDIN/OUTCOME"), seed, secret)). */
+      function outcome(seed, secret) {
+        return BigInt(hashWords([tag('HOOKEDIN/OUTCOME'), seed, secret])) & (SPACE - 1n);
+      }
+      /** Numbers below a limit, drawn from a seed under a tag. */
+      function stream(text, seed) {
+        var block = 0n,
+          bytes = new Uint8Array(0),
+          offset = 0,
+          tagged = tag(text);
+        function byte() {
+          if (offset === bytes.length) {
+            bytes = bytesOf(hashWords([tagged, seed, block++]).slice(2));
+            offset = 0;
+          }
+          return bytes[offset++];
+        }
+        return function (limit) {
+          if (limit === 1n) return 0n;
+          var bits = (limit - 1n).toString(2).length,
+            length = Math.ceil(bits / 8);
+          for (;;) {
+            var value = BigInt(byte() & (0xff >>> (length * 8 - bits)));
+            for (var i = 1; i < length; i++) value = (value << 8n) | BigInt(byte());
+            if (value < limit) return value;
+          }
+        };
+      }
+      /** One of these weights, from a number below their total: the first whose running total is above it. */
+      function pick(below, weights) {
+        var value = below(
+            weights.reduce(function (sum, weight) {
+              return sum + weight;
+            }, 0n),
+          ),
+          index = 0;
+        while (value >= weights[index]) value -= weights[index++];
+        return index;
+      }
+      /** The way a seed draws among ways of these weights. */
+      function drawStep(seed, weights) {
+        return pick(stream('HOOKEDIN/BRANCH', seed), weights);
+      }
+      /** The result a seed draws among the results, each [weight, cash], that leave `cash`, and the 64-bit number drawn
+       * after it. */
+      function landStep(seed, results, cash) {
+        var below = stream('HOOKEDIN/RESULT', seed),
+          landed = [];
+        results.forEach(function (result, i) {
+          if (result[1] === cash) landed.push(i);
+        });
+        if (!landed.length) return null;
+        var result =
+          landed[
+            pick(
+              below,
+              landed.map(function (i) {
+                return results[i][0];
+              }),
+            )
+          ];
+        return { result: result, draw: below(SPACE) };
+      }
+      /** Whether ways, each [weight] or [weight, stake, chance, prize], reach every amount the results leave exactly as
+       * often as their weights say, at `cash`. */
+      function realizes(cash, results, branches) {
+        var offered = new Map(),
+          reached = new Map();
+        function add(map, amount, n) {
+          map.set(amount, (map.get(amount) || 0n) + n);
+        }
+        results.forEach(function (result) {
+          add(offered, result[1], result[0]);
+        });
+        branches.forEach(function (way) {
+          if (way.length === 1) return add(reached, cash, way[0] * SPACE);
+          add(reached, cash - way[1] + way[3], way[0] * way[2]);
+          add(reached, cash - way[1], way[0] * (SPACE - way[2]));
+        });
+        var weight = 0n,
+          ways = 0n;
+        results.forEach(function (result) {
+          weight += result[0];
+        });
+        branches.forEach(function (way) {
+          ways += way[0] * SPACE;
+        });
+        return Array.from(new Set(Array.from(offered.keys()).concat(Array.from(reached.keys())))).every(
+          function (amount) {
+            return (reached.get(amount) || 0n) * weight === (offered.get(amount) || 0n) * ways;
+          },
+        );
+      }
+      /** A share of 2^64 on a scale of 0 to 100, to `places` decimals, cut down or rounded to the nearest. */
+      function onScale(value, places, nearest) {
+        var scaled = value * 10n ** BigInt(places + 2) + (nearest ? SPACE / 2n : 0n),
+          whole = scaled / SPACE,
+          unit = 10n ** BigInt(places);
+        return { whole: whole, text: whole / unit + '.' + String(whole % unit).padStart(places, '0') };
+      }
+      /** The roll and the line it wins under, with as many decimals as it takes to compare as the outcome does. */
+      function roll(value, chance) {
+        for (var places = 2; ; places++) {
+          var rolled = onScale(value, places, false),
+            under = onScale(chance, places, true);
+          if (rolled.whole < under.whole === value < chance || places === 20)
+            return { rolled: rolled.text, under: under.text };
+        }
+      }
+
+      if (typeof document !== 'undefined') {
+        var form = document.getElementById('fields'),
+          results = document.getElementById('results');
+        // What a person types is read generously: spaces around it and the case of hex digits do not matter.
+        function field(name) {
+          return form.elements[name].value.trim().toLowerCase();
+        }
+        function bytes32(name) {
+          var value = field(name);
+          return /^0x[0-9a-f]{64}$/.test(value) ? value : null;
+        }
+        function whole(name) {
+          var value = field(name).replace(/[\s,_]/g, '');
+          return /^\d+$/.test(value) ? BigInt(value) : null;
+        }
+        function show(rows) {
+          results.replaceChildren();
+          rows.forEach(function (row) {
+            var dt = document.createElement('dt'),
+              dd = document.createElement('dd');
+            dt.textContent = row[0];
+            dd.textContent = row[1];
+            if (row[2] !== undefined) dd.className = row[2] ? 'ok' : 'bad';
+            results.append(dt, dd);
+          });
+        }
+        function check() {
+          var rows = [],
+            seed = bytes32('seed'),
+            secret = bytes32('secret');
+          if (!seed) return show([['Your seed', 'Type it as 0x and 64 hex digits.']]);
+          var seedHash = bytes32('seedHash'),
+            round = bytes32('round');
+          if (seedHash) {
+            var mine = hashOf(seed);
+            rows.push([
+              'keccak256 of your seed',
+              mine + (mine === seedHash ? ' ✓ the hash your bet signed' : ' ✗ not the hash your bet signed'),
+              mine === seedHash,
+            ]);
+          }
+          if (secret) {
+            if (round) {
+              var theirs = hashOf(secret);
+              rows.push([
+                'keccak256 of the secret',
+                theirs + (theirs === round ? ' ✓ the round your bet named' : ' ✗ not the round your bet named'),
+                theirs === round,
+              ]);
+            }
+            var value = outcome(seed, secret);
+            rows.push(['The outcome', value + ' · 0x' + value.toString(16)]);
+            var chance = whole('chance'),
+              prize = whole('prize');
+            if (chance !== null && chance > 0n && chance < SPACE) {
+              var landed = roll(value, chance),
+                won = value < chance;
+              rows.push([
+                'The roll',
+                landed.rolled + (won ? ' wins: it is under ' : ' loses: it is not under ') + landed.under,
+                undefined,
+              ]);
+              if (prize !== null) rows.push(['It pays', (won ? prize : 0n) + ' wei']);
+            }
+          }
+          // Numbers separated by commas, each of `sizes` parts joined by colons, or null for anything else.
+          function list(name, sizes) {
+            var text = field(name);
+            if (!text) return [];
+            var items = text.split(',').map(function (item) {
+              var parts = item.split(':').map(function (part) {
+                return part.trim().replace(/_/g, '');
+              });
+              return sizes.indexOf(parts.length) >= 0 &&
+                parts.every(function (part) {
+                  return /^\d+$/.test(part);
+                })
+                ? parts.map(BigInt)
+                : null;
+            });
+            return items.every(function (item) {
+              return item && item[0] > 0n;
+            })
+              ? items
+              : null;
+          }
+          var cash = whole('cash'),
+            table = list('results', [2]),
+            branches = list('branches', [1, 4]);
+          if (!table || !branches)
+            rows.push([
+              'The step',
+              'Type each result as weight:cash, and each way as weight:stake:chance:prize, or weight, separated by commas.',
+              false,
+            ]);
+          else if (cash !== null && table.length && branches.length) {
+            var weight = table.reduce(function (sum, result) {
+                return sum + result[0];
+              }, 0n),
+              returned = table.reduce(function (sum, result) {
+                return sum + result[0] * result[1];
+              }, 0n),
+              exact = realizes(cash, table, branches);
+            rows.push([
+              'The table',
+              table.length +
+                ' results, returning ' +
+                onScale((returned * SPACE) / (weight * cash), 4, true).text +
+                '% of what the step held',
+            ]);
+            rows.push([
+              'The ways',
+              exact ? '✓ they pay each amount exactly as often as the table' : '✗ not as the table says',
+              exact,
+            ]);
+            var way =
+                branches[
+                  drawStep(
+                    seed,
+                    branches.map(function (branch) {
+                      return branch[0];
+                    }),
+                  )
+                ],
+              number = branches.indexOf(way) + 1,
+              chance = whole('chance'),
+              prize = whole('prize'),
+              signed = way.length === 4 ? way[2] === chance && way[3] === prize : chance === null;
+            rows.push([
+              'The way your seed draws',
+              'Way ' +
+                number +
+                ' of ' +
+                branches.length +
+                ': ' +
+                (way.length === 4
+                  ? 'stakes ' +
+                    way[1] +
+                    ' wei, keeps ' +
+                    (cash - way[1]) +
+                    ' wei, pays ' +
+                    way[3] +
+                    ' wei under ' +
+                    roll(0n, way[2]).under
+                  : 'no bet: it keeps the step’s cash') +
+                (signed ? ' ✓ the bet your wallet signed' : ' ✗ not the bet your wallet signed'),
+              signed,
+            ]);
+            var left =
+              way.length === 1 ? cash : secret ? cash - way[1] + (outcome(seed, secret) < way[2] ? way[3] : 0n) : null;
+            if (left !== null) {
+              var land = landStep(seed, table, left);
+              rows.push([
+                'The result your seed draws',
+                land
+                  ? 'Result ' +
+                    (land.result + 1) +
+                    ' of ' +
+                    table.length +
+                    ', which leaves ' +
+                    left +
+                    ' wei, shown with ' +
+                    land.draw
+                  : '✗ no result leaves ' + left + ' wei',
+                land ? undefined : false,
+              ]);
+            }
+          }
+          show(rows);
+        }
+        var given = new URLSearchParams(location.hash.slice(1));
+        given.forEach(function (value, name) {
+          if (form.elements[name]) form.elements[name].value = value;
+        });
+        form.addEventListener('input', check);
+        check();
+      }
+    </script>
+  </body>
+</html>

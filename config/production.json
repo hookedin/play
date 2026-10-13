@@ -1,0 +1,12 @@
+{
+  "network": "mainnet",
+  "casino": "https://casino.hookedin.com",
+  "deployment": {
+    "chainId": "1",
+    "contractAddress": "0x4F1008A8617dfb0353B1cd03C398066C55f83b7C",
+    "block": 26180684,
+    "operator": "0x606Aa6d6359C1c57Ba2BE1CB6Aa1a410c702B450",
+    "rpcUrl": "https://ethereum-rpc.publicnode.com",
+    "witnessRpcUrl": "https://mainnet.gateway.tenderly.co"
+  }
+}

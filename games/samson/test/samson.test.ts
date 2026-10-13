@@ -1,0 +1,191 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { add, compileGame, fraction, multiply } from '@hookedin/play/sdk/engine';
+import type { Rational } from '@hookedin/play/sdk/engine';
+import { admits } from '@hookedin/play/sdk/admits';
+import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
+import { RoundClient } from '@hookedin/play/sdk/round';
+import {
+  BONUS_SPINS,
+  MACHINES,
+  distribution,
+  evaluate,
+  nodeOutcome,
+  outcomeOf,
+  payoutStakes,
+  sampleStops,
+  slotGraph,
+} from '../src/math.ts';
+import type { Machine } from '../src/math.ts';
+
+const keyOf = (machine: Machine, stops: number[]) => {
+  const result = evaluate(machine, stops);
+  return (result.win?.pay ?? 0) * 2 + Number(result.bonus);
+};
+/** Every stop combination, evaluated one window at a time: the rule the fast counter must reproduce. */
+function bruteForce(machine: Machine) {
+  const counts = new Map<number, number[][]>();
+  const visit = (stops: number[]) => {
+    if (stops.length < 5) {
+      for (let stop = 0; stop < machine.strips[stops.length].length; stop++) visit([...stops, stop]);
+      return;
+    }
+    const key = keyOf(machine, stops);
+    counts.set(key, [...(counts.get(key) ?? []), stops]);
+  };
+  visit([]);
+  return counts;
+}
+// Short strips with stacks, every wild multiplier and scatters, so all rules interact.
+const small: Machine = {
+  name: 'bonus',
+  strips: ['LLAKHQJL', 'L2AKQJLA', 'LHAK3QLL', 'LAK2QJAL', 'LLAHKQJ'],
+};
+
+test('the grouped counter agrees with evaluating every window, outcome by outcome', () => {
+  const brute = bruteForce(small),
+    { counts, total } = distribution(small);
+  assert.equal(total, 8 * 8 * 8 * 8 * 7);
+  assert.deepEqual(
+    new Map([...counts].sort(([a], [b]) => a - b)),
+    new Map([...brute].map(([key, stops]) => [key, stops.length] as const).sort(([a], [b]) => a - b)),
+  );
+  assert.ok([...counts.keys()].some(key => outcomeOf(key).bonus && outcomeOf(key).pay > 0));
+});
+
+test('stops are drawn uniformly from exactly the combinations that pay the settled outcome', () => {
+  const brute = bruteForce(small);
+  for (const [key, combinations] of brute) {
+    // Feeding every index once must return every matching combination once.
+    const drawn = combinations.map((_, index) =>
+      sampleStops(small, key, upper => {
+        assert.equal(upper, BigInt(combinations.length));
+        return BigInt(index);
+      }).join(),
+    );
+    assert.deepEqual(new Set(drawn), new Set(combinations.map(stops => stops.join())), `outcome ${key}`);
+  }
+  assert.throws(() => sampleStops(small, 7 * 2, () => 0n), /cannot produce/);
+});
+
+test('the published machines return what the paytable states, exactly', () => {
+  const expected = {
+    base: { rtp: [490253039n, 509358726n], top: 1152 },
+    bonus: { rtp: [3735679n, 3881115n], top: 6912 },
+  };
+  for (const machine of Object.values(MACHINES)) {
+    const { counts, total } = distribution(machine);
+    assert.equal(
+      [...counts.values()].reduce((sum, ways) => sum + ways, 0),
+      total,
+    );
+    const returned = [...counts].reduce((sum, [key, ways]) => sum + BigInt(ways) * BigInt(payoutStakes(key)), 0n);
+    const [n, d] = expected[machine.name].rtp;
+    assert.equal(returned * d, n * BigInt(total), `${machine.name} return to player`);
+    assert.equal(Math.max(...[...counts.keys()].map(payoutStakes)), expected[machine.name].top);
+    // Pricing one casino bet costs about the cube of the distinct payouts; the rules exist to keep this small.
+    assert.ok(new Set([...counts.keys()].map(payoutStakes)).size <= 56, `${machine.name} distinct payouts`);
+    console.log(
+      `${machine.name}: RTP ${Number((returned * 10n ** 8n) / BigInt(total)) / 1e6}%, ${counts.size} outcomes, top ${expected[machine.name].top}x`,
+    );
+    for (const key of counts.keys()) {
+      for (const pick of [0n, BigInt(counts.get(key)! - 1)])
+        assert.equal(
+          keyOf(
+            machine,
+            sampleStops(machine, key, () => pick),
+          ),
+          key,
+          `${machine.name} outcome ${key}`,
+        );
+      assert.equal(payoutStakes(key), outcomeOf(key).pay + (outcomeOf(key).bonus ? BONUS_SPINS : 0));
+    }
+    // Wilds stay off the outer reels and honeycombs on reels one, three and five, as the paytable says.
+    machine.strips.forEach((strip, reel) => {
+      assert.equal(/[W23]/.test(strip), reel >= 1 && reel <= 3, `wilds on reel ${reel + 1}`);
+      assert.equal(strip.includes('H'), reel % 2 === 0, `honeycombs on reel ${reel + 1}`);
+    });
+  }
+});
+
+test('a spin prices as one casino bet at the stake, even against a modest bankroll', () => {
+  const stake = 10n ** 12n;
+  for (const mode of ['base', 'bonus']) {
+    const started = performance.now();
+    const plan = compileGame(slotGraph({ stake, mode }), {
+      admits,
+      bankrollFloor: 25000n * stake,
+      cashQuantum: stake / 1000000000n,
+      initialCash: stake,
+    });
+    assert.ok(plan.requiredCash <= stake, `${mode} needs ${plan.requiredCash}`);
+    assert.equal(plan.maximumDepth, 1);
+    // The spin is collapsed into binary bets the page draws from, each staking the whole stake against one pay, and
+    // together they reach every pay exactly as often as the reels do.
+    const [{ transition: step }] = (plan.nodes.find(n => n.id === plan.root) as any).actions;
+    assert.equal(step.kind, 'casino-bet');
+    const { counts, total } = distribution(mode === 'bonus' ? MACHINES.bonus : MACHINES.base);
+    for (const branch of step.branches)
+      if (branch.kind === 'bet') assert.equal(branch.bet.stake, stake - step.classes[branch.lose].cash);
+    for (const c of step.classes) {
+      const ways = c.outcomes.reduce((sum: bigint, o: any) => sum + BigInt(counts.get(nodeOutcome(o.next)!.key)!), 0n);
+      assert.deepEqual(c.probability, fraction(ways, BigInt(total)), 'each pay as often as the reels make it');
+    }
+    const fromReels = [...counts].reduce((sum, [key, ways]) => sum + BigInt(ways) * BigInt(payoutStakes(key)), 0n);
+    assert.deepEqual(
+      step.classes.reduce((sum: Rational, c: any) => add(sum, multiply(c.probability, fraction(c.cash))), fraction(0n)),
+      fraction(fromReels * stake, BigInt(total)),
+      'the spin pays back what the reels do',
+    );
+    console.log(
+      `${mode}: priced in ${Math.round(performance.now() - started)} ms, needs ${plan.requiredCash} of ${stake}`,
+    );
+  }
+  assert.throws(() => slotGraph({ stake: 0n }), /greater than zero/);
+});
+
+test('spins settle through the wallet bridge in both modes and survive a reload', async () => {
+  const f = await gameWallet(),
+    w = f.wallet;
+  w.openGame(f.identity('samson'));
+  await w.setGameAllowance(100000n);
+  const store = memoryStore();
+  let round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
+  const ids = new Set<string>();
+  let expected = await w.balance();
+  for (let spin = 0; spin < 12; spin++) {
+    const mode = spin % 3 === 2 ? 'bonus' : 'base';
+    let state = await round.start({ stake: 1000n, mode });
+    if (spin === 5) round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
+    state = await round.action('spin');
+    assert.equal(state.terminal, true);
+    const outcome = nodeOutcome(state.nodeId)!;
+    assert.equal(outcome.machine.name, mode);
+    assert.equal(state.cash, 1000n * BigInt(payoutStakes(outcome.key)));
+    expected += state.cash - 1000n;
+    assert.equal(await w.balance(), expected);
+    ids.add(state.id);
+    assert.equal((await round.restore())!.id, state.id, 'a reload sees the same round, so it is applied once');
+  }
+  assert.equal(ids.size, 12, 'every round has its own id');
+  assert.equal(nodeOutcome('samson:base:ready'), null);
+  assert.equal(nodeOutcome('dice:win'), null);
+});
+
+/** The least any bet of this game pays back, in millionths of its stake, when the casino's bankroll is far above the
+ * stake. The bets for the largest pays carry more of the machine's edge than the rest, so the jackpot's pays back less
+ * than the machine does. */
+const FLOOR = 951000n;
+
+test('every bet this game can place pays back at least the floor it is built to', () => {
+  for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
+    for (const mode of ['base', 'bonus']) {
+      const plan = compileGame(slotGraph({ stake, mode }), {
+        admits,
+        bankrollFloor: 10n ** 9n * stake,
+        cashQuantum: stake / 10n ** 9n || 1n,
+        initialCash: stake,
+      });
+      assert.ok(worstReturn(plan) >= FLOOR, `a ${mode} bet pays back less than this game's floor`);
+    }
+});

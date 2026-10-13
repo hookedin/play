@@ -1,0 +1,11 @@
+{
+  "developer": "0x03E5c6b5B7Cc9C0C4020daea6251054a14137f13",
+  "games": {
+    "Samson": "https://samson-game.hookedin.com/",
+    "Plinko": "https://plinko-game.hookedin.com/",
+    "Dice": "https://dice-game.hookedin.com/",
+    "Blackjack": "https://blackjack-game.hookedin.com/",
+    "Mines": "https://mines-game.hookedin.com/"
+  },
+  "trusted": []
+}
