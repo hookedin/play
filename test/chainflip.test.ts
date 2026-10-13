@@ -57,6 +57,25 @@ function chainflip(answers: Record<string, unknown>) {
   }) as typeof fetch;
   return sent;
 }
+const regular = {
+  type: 'REGULAR',
+  srcAsset: { chain: 'Arbitrum', asset: 'USDC' },
+  destAsset: { chain: 'Ethereum', asset: 'ETH' },
+  depositAmount: '10000000',
+  egressAmount: '3761306584668744',
+  estimatedPrice: '0.00037772481483121523',
+  recommendedSlippageTolerancePercent: 1.25,
+  recommendedLivePriceSlippageTolerancePercent: 0.75,
+  recommendedRetryDurationMinutes: 5,
+  estimatedDurationSeconds: 114.65,
+};
+const dca = {
+  ...regular,
+  type: 'DCA',
+  egressAmount: '3761706584668744',
+  estimatedPrice: '0.00037776498362371823',
+  dcaParams: { numberOfChunks: 3, chunkIntervalBlocks: 1 },
+};
 const answers = () => ({
   '/api/networkInfo': { assets: [], cfBrokerCommissionBps: 30 },
   cf_environment: {
@@ -64,20 +83,7 @@ const answers = () => ({
       ingress_egress: { minimum_deposit_amounts: { Arbitrum: { USDC: '0x989680' }, Bitcoin: { BTC: '0x9c40' } } },
     },
   },
-  '/v2/quote': [
-    {
-      type: 'REGULAR',
-      srcAsset: { chain: 'Arbitrum', asset: 'USDC' },
-      destAsset: { chain: 'Ethereum', asset: 'ETH' },
-      depositAmount: '10000000',
-      egressAmount: '3761306584668744',
-      estimatedPrice: '0.00037772481483121523',
-      recommendedSlippageTolerancePercent: 1.25,
-      recommendedLivePriceSlippageTolerancePercent: 0.75,
-      recommendedRetryDurationMinutes: 5,
-      estimatedDurationSeconds: 114.65,
-    },
-  ],
+  '/v2/quote': [regular],
   '/api/openSwapDepositChannel': {
     id: '15225766-Arbitrum-1837',
     depositAddress: deposit,
@@ -140,8 +146,20 @@ test('a channel is refused unless Chainflip states it as asked', async () => {
       JSON.stringify(change),
     );
   }
-  const quoted: Record<string, any> = answers();
-  quoted['/v2/quote'][0].depositAmount = '1';
-  chainflip(quoted);
-  await assert.rejects(openChannel(ARB_USDC, 10000000n, player, player), /Chainflip’s quote/);
+  for (const quotes of [[], [{ ...regular, depositAmount: '1' }], [regular, dca, dca]]) {
+    chainflip({ ...answers(), '/v2/quote': quotes });
+    await assert.rejects(openChannel(ARB_USDC, 10000000n, player, player), /Chainflip’s quote/);
+  }
+});
+
+test('of a regular and a DCA quote, the channel takes the one paying more ETH', async () => {
+  for (const [quotes, taken] of [
+    [[regular, dca], dca],
+    [[regular, { ...dca, egressAmount: '3761306584668743' }], regular],
+  ] as const) {
+    const sent = chainflip({ ...answers(), '/v2/quote': quotes });
+    const channel = await openChannel(ARB_USDC, 10000000n, player, player);
+    assert.equal(channel.quote.egressAmount, BigInt(taken.egressAmount));
+    assert.deepEqual(sent['/api/openSwapDepositChannel'].body.dcaParams, (taken as any).dcaParams);
+  }
 });

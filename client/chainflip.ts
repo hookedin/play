@@ -120,7 +120,8 @@ export interface Quote {
   seconds: number;
   dcaParams?: { numberOfChunks: number; chunkIntervalBlocks: number };
 }
-/** What Chainflip quotes for swapping `amount` of `coin` to ETH on Ethereum, less its broker's `bps`. */
+/** What Chainflip quotes for swapping `amount` of `coin` to ETH on Ethereum, less its broker's `bps`: a regular swap,
+ * and for a large amount a DCA swap in chunks beside it, of which the one paying more ETH is taken. */
 async function quote(coin: Coin, amount: bigint, bps: number): Promise<Quote> {
   const query = new URLSearchParams({
     amount: amount.toString(),
@@ -134,33 +135,37 @@ async function quote(coin: Coin, amount: bigint, bps: number): Promise<Quote> {
     dcaV2Enabled: 'false',
   });
   const quotes = await call(`${BACKEND}/v2/quote?${query}`);
-  if (!Array.isArray(quotes) || quotes.length !== 1) return read.refuse('Chainflip’s quote');
-  const q = fields(quotes[0]);
-  if (
-    !sameAsset(q.srcAsset, coin.chain, coin.asset) ||
-    !sameAsset(q.destAsset, 'Ethereum', 'ETH') ||
-    read.whole(q.depositAmount) !== amount ||
-    !['REGULAR', 'DCA'].includes(q.type as string)
-  )
-    return read.refuse('Chainflip’s quote');
-  const dca = q.type === 'DCA' ? fields(q.dcaParams) : null;
-  return {
-    egressAmount: read.whole(q.egressAmount),
-    estimatedPrice: price(q.estimatedPrice),
-    slippageBps: percent(q.recommendedSlippageTolerancePercent),
-    livePriceBps:
-      q.recommendedLivePriceSlippageTolerancePercent == null
-        ? null
-        : percent(q.recommendedLivePriceSlippageTolerancePercent),
-    retryMinutes: upTo(1440)(q.recommendedRetryDurationMinutes),
-    seconds: upTo(86400)(q.estimatedDurationSeconds),
-    ...(dca && {
-      dcaParams: {
-        numberOfChunks: read.count(dca.numberOfChunks),
-        chunkIntervalBlocks: read.count(dca.chunkIntervalBlocks),
-      },
-    }),
-  };
+  if (!Array.isArray(quotes) || quotes.length < 1 || quotes.length > 2) return read.refuse('Chainflip’s quote');
+  return quotes
+    .map((value): Quote => {
+      const q = fields(value);
+      if (
+        !sameAsset(q.srcAsset, coin.chain, coin.asset) ||
+        !sameAsset(q.destAsset, 'Ethereum', 'ETH') ||
+        read.whole(q.depositAmount) !== amount ||
+        !['REGULAR', 'DCA'].includes(q.type as string)
+      )
+        return read.refuse('Chainflip’s quote');
+      const dca = q.type === 'DCA' ? fields(q.dcaParams) : null;
+      return {
+        egressAmount: read.whole(q.egressAmount),
+        estimatedPrice: price(q.estimatedPrice),
+        slippageBps: percent(q.recommendedSlippageTolerancePercent),
+        livePriceBps:
+          q.recommendedLivePriceSlippageTolerancePercent == null
+            ? null
+            : percent(q.recommendedLivePriceSlippageTolerancePercent),
+        retryMinutes: upTo(1440)(q.recommendedRetryDurationMinutes),
+        seconds: upTo(86400)(q.estimatedDurationSeconds),
+        ...(dca && {
+          dcaParams: {
+            numberOfChunks: read.count(dca.numberOfChunks),
+            chunkIntervalBlocks: read.count(dca.chunkIntervalBlocks),
+          },
+        }),
+      };
+    })
+    .reduce((best, q) => (q.egressAmount > best.egressAmount ? q : best));
 }
 
 export const STATES = ['WAITING', 'RECEIVING', 'SWAPPING', 'SENDING', 'SENT', 'COMPLETED', 'FAILED'] as const;
