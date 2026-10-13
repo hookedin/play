@@ -76,6 +76,19 @@ address to my balance** is off under **Deposits** in Settings, which starting a 
 unavailable ([closing and claims](closing-and-claims.md)). **Add to balance**, on the Deposit tab, adds it when
 you choose.
 
+### Paying with other coins through Chainflip
+
+**Pay with BTC, SOL, USDC or USDT through Chainflip**, at the foot of the Deposit tab, is for coins other than ETH.
+[Chainflip](https://chainflip.io) is a cross-chain swap service HookedIn does not run. The wallet asks it for a
+one-time address on the coin's own network for the amount you enter, and Chainflip swaps what arrives there for ETH and
+sends it to your deposit address, where it joins your balance like any deposit. Chainflip takes its own fees and its
+broker's commission, both in its quote; HookedIn takes nothing. HookedIn only shows it to help: we do not control
+Chainflip and are not responsible for it, its rates, delays or refunds, or anything you send it.
+
+The refund address is your own address on the coin's network, not an exchange's: if the swap cannot fill within the
+quote, Chainflip sends your coins back there. A deposit below Chainflip's minimum, which the wallet shows, or sent after
+the address expires a day later, is lost. **Follow it on Chainflip** opens the channel on Chainflip's explorer.
+
 ## Games and their allowances
 
 The library at `/` lists the games `@hookedin` publishes and the games your own account publishes, each by its

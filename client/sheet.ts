@@ -2,7 +2,8 @@ import qrcode from 'qrcode-generator';
 import { CasinoWallet, answersTo, type PendingOperation, type Receipt } from './wallet.ts';
 import * as readers from './readers.ts';
 import type { Profile } from './readers.ts';
-import { inUnit, typedIn, validateWithdrawal, type Unit } from './withdrawal.ts';
+import { inUnit, typedIn, typedUnits, validateWithdrawal, type Unit } from './withdrawal.ts';
+import { COINS, inCoin, openChannel, status, typedRefund, type Channel, type State } from './chainflip.ts';
 import { Wallet } from 'ethers';
 import { namePasskey, passkeyAccount } from './passkey.ts';
 import { gameReceipt } from './wallet-games.ts';
@@ -184,9 +185,18 @@ function renderSafety() {
     $<HTMLTextAreaElement>('exported-key').value = '';
     $('exported-key').classList.add('hidden');
     $('export-key').textContent = "Show this wallet's private key";
-    for (const id of ['withdraw-to', 'withdraw-amount', 'transfer-to', 'transfer-amount', 'address-send-to'])
+    for (const id of [
+      'withdraw-to',
+      'withdraw-amount',
+      'transfer-to',
+      'transfer-amount',
+      'address-send-to',
+      'chainflip-amount',
+      'chainflip-refund',
+    ])
       $<HTMLInputElement>(id).value = '';
     payee = null;
+    chainflip = null;
   }
   const uri = `ethereum:${wallet.address}@${wallet.expectedChainId}`;
   if (uri !== depositURI) {
@@ -205,6 +215,50 @@ function renderSafety() {
     fee > 0n
       ? `Address balance ${exact(held)} METH. Estimated maximum network fee ${exact(fee)} METH. Up to ${exact(whole + paid)} METH can be added now${paid ? ': the casino pays the network fee' : ''}. The final fee is recorded in Activity.`
       : '';
+}
+
+/** The Chainflip deposit channel the Deposit tab shows, and where its swap is. */
+let chainflip: { channel: Channel; state: State; expired: boolean; refunded: boolean } | null = null;
+const SWAPPED = 'Chainflip has sent the ETH to your deposit address, where it joins your balance like any deposit.';
+const SWAP_STATES: Record<State, string> = {
+  WAITING: 'Chainflip is waiting for your deposit.',
+  RECEIVING: 'Chainflip has seen your deposit and is waiting for its confirmations.',
+  SWAPPING: 'Chainflip is swapping it for ETH.',
+  SENDING: 'Chainflip is sending the ETH to your deposit address.',
+  SENT: SWAPPED,
+  COMPLETED: SWAPPED,
+  FAILED: 'Chainflip reports that the swap failed. Follow it on Chainflip, and ask Chainflip about it.',
+};
+/** Paying through Chainflip, which pays ETH on Ethereum only, so not on a local chain. */
+function renderChainflip(ready: boolean, busy: boolean) {
+  $('chainflip').hidden = wallet.isLocalDevelopment;
+  $<HTMLButtonElement>('chainflip-open').disabled = busy || !ready;
+  $('chainflip-channel').hidden = !chainflip;
+  if (!chainflip) return;
+  const { channel: c, state, expired, refunded } = chainflip;
+  $('chainflip-send').textContent =
+    `Send ${inCoin(c.amount, c.coin)} on ${c.coin.chain} to this address before ${new Date(c.expiresAt).toLocaleString()}. ` +
+    `Chainflip quotes about ${formatAmount(c.quote.egressAmount)} METH for it, about ${Math.ceil(c.quote.seconds / 60)} minutes after you send it. ` +
+    `A deposit under ${inCoin(c.minimum, c.coin)}, or sent later, is lost.`;
+  $('chainflip-address').textContent = c.depositAddress;
+  $<HTMLAnchorElement>('chainflip-track').href = `https://scan.chainflip.io/channels/${c.id}`;
+  $('chainflip-status').textContent =
+    state === 'WAITING' && expired
+      ? 'This address has expired: do not send to it. Get a new one.'
+      : refunded
+        ? 'Chainflip could not swap all of it within the quote, and sends what it could not swap back to your refund address.'
+        : SWAP_STATES[state];
+}
+/** Follow the shown channel's swap while the Deposit tab shows it, until Chainflip is done with it. */
+async function followChainflip(shown: NonNullable<typeof chainflip>) {
+  while (chainflip === shown && !['SENT', 'COMPLETED', 'FAILED'].includes(shown.state)) {
+    await new Promise(resolve => setTimeout(resolve, 15_000));
+    if (chainflip !== shown || !wallet.depositShown || document.hidden) continue;
+    try {
+      Object.assign(shown, await status(shown.channel.id, shown.channel));
+      renderWallet();
+    } catch {}
+  }
 }
 
 /** One user action at a time. A background poll holding the wallet finishes first. */
@@ -463,6 +517,7 @@ export function renderWallet() {
   $('deposit-fee').hidden = $('estimate-deposit-fee').hidden = !addable;
   $<HTMLButtonElement>('add-to-balance').disabled = busy || !ready;
   $<HTMLButtonElement>('copy-address').disabled = !ready;
+  renderChainflip(ready, busy);
   $('setup-wallet').classList.toggle('hidden', !wallet.isLocalDevelopment);
   $<HTMLButtonElement>('setup-wallet').disabled = busy;
 
@@ -1245,6 +1300,32 @@ $<HTMLButtonElement>('copy-address').addEventListener('click', async () => {
     selection?.removeAllRanges();
     selection?.addRange(range);
     toast('Your address is selected. Copy it with your browser’s copy command.');
+  }
+});
+for (const [i, coin] of COINS.entries())
+  $('chainflip-coin').append(h('option', { value: String(i) }, `${coin.asset} on ${coin.chain}`));
+act('chainflip-open', async () => {
+  const coin = COINS[Number($<HTMLSelectElement>('chainflip-coin').value)]!,
+    amount = typedUnits($<HTMLInputElement>('chainflip-amount').value, coin.decimals),
+    refund = typedRefund(coin, $<HTMLInputElement>('chainflip-refund').value);
+  if (amount === null)
+    throw new Error(`Enter an amount of ${coin.asset} above zero, with at most ${coin.decimals} decimal places.`);
+  if (!refund) throw new Error(`Enter your own ${coin.chain} address for refunds.`);
+  const channel = await openChannel(coin, amount, wallet.address, refund),
+    code = qrcode(0, 'M');
+  code.addData(channel.depositAddress);
+  code.make();
+  $<HTMLImageElement>('chainflip-qr').src = code.createDataURL(4, 16);
+  chainflip = { channel, state: 'WAITING', expired: false, refunded: false };
+  void followChainflip(chainflip);
+});
+$<HTMLButtonElement>('copy-chainflip-address').addEventListener('click', async () => {
+  if (!chainflip) return;
+  try {
+    await navigator.clipboard.writeText(chainflip.channel.depositAddress);
+    toast(`Chainflip address copied. Send ${chainflip.channel.coin.asset} on ${chainflip.channel.coin.chain}.`);
+  } catch {
+    toast('Copying failed: copy the address with your browser’s copy command.', true);
   }
 });
 act('export-key', async () => {

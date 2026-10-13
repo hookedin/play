@@ -9,9 +9,10 @@ const DECIMALS: Record<Unit, number> = { METH: 12, ETH: 18 };
 export const inUnit = (wei: bigint, unit: Unit, typed = false) =>
   unit === 'ETH' ? formatEther(wei).replace(/\.0$/, '') : typed ? exactAmount(wei) : exact(wei);
 /** What the player typed in `unit`, as wei: null for anything that is not an amount above zero. */
-export function typedIn(text: string, unit: Unit) {
-  const typed = text.trim(),
-    decimals = DECIMALS[unit];
+export const typedIn = (text: string, unit: Unit) => typedUnits(text, DECIMALS[unit]);
+/** What the player typed, in units of `decimals` places: null for anything that is not an amount above zero. */
+export function typedUnits(text: string, decimals: number) {
+  const typed = text.trim();
   if (!new RegExp(`^(?:\\d+(?:\\.\\d{0,${decimals}})?|\\.\\d{1,${decimals}})$`).test(typed)) return null;
   try {
     const wei = parseUnits(typed, decimals);

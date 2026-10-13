@@ -1349,16 +1349,29 @@ body.elsewhere #elsewhere {
 .state-comparison tr.differs td {
   color: var(--caution);
 }
-.address-send {
+.address-send,
+.chainflip {
   margin-top: 12px;
 }
-.address-send summary {
+.address-send summary,
+.chainflip summary {
   color: var(--muted);
   font-size: 13px;
   cursor: pointer;
 }
-.address-send > .muted {
+.address-send > .muted,
+.chainflip > .muted {
   margin-top: 8px;
+}
+/* Paying through Chainflip: the form fills the panel, and the channel it opens shows like the deposit address. */
+.chainflip[open] {
+  display: flex;
+  flex-direction: column;
+}
+#chainflip-channel {
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 /* What a member types in the HookedIn Discord: the command in the accent, then the code they fill in. */
 .command {

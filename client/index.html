@@ -419,6 +419,44 @@
         <button id="setup-wallet" class="button small hidden" type="button">Add demo ETH</button>
         <p id="deposit-fee" class="help" role="status"></p>
         <button id="estimate-deposit-fee" class="text-button" type="button">Estimate network fee</button>
+        <details id="chainflip" class="chainflip">
+          <summary>Pay with BTC, SOL, USDC or USDT through Chainflip</summary>
+          <p class="muted">
+            <a href="https://chainflip.io" target="_blank" rel="noopener noreferrer">Chainflip ↗</a> is a cross-chain
+            swap service HookedIn does not run. It swaps your coins for ETH and sends it to your deposit address, less
+            its fees. HookedIn only shows it here to help: we do not control Chainflip and are not responsible for it,
+            its rates, delays or refunds, or anything you send it.
+          </p>
+          <label for="chainflip-coin">Pay with</label>
+          <select id="chainflip-coin"></select>
+          <label for="chainflip-amount">Amount</label>
+          <input id="chainflip-amount" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+          <label for="chainflip-refund">Refund address</label>
+          <input id="chainflip-refund" type="text" autocomplete="off" spellcheck="false" />
+          <p class="help">
+            Your own address on the coin's network, not an exchange's: if the swap cannot go through, Chainflip sends
+            your coins back there.
+          </p>
+          <button id="chainflip-open" class="button primary full" type="button">Get a Chainflip address</button>
+          <div id="chainflip-channel" hidden>
+            <p id="chainflip-send"></p>
+            <div class="address">
+              <code id="chainflip-address"></code
+              ><button id="copy-chainflip-address" class="button small" type="button">Copy</button>
+            </div>
+            <img
+              id="chainflip-qr"
+              class="deposit-qr"
+              width="180"
+              height="180"
+              alt="Chainflip deposit address QR code"
+            />
+            <p id="chainflip-status" role="status"></p>
+            <a id="chainflip-track" class="text-button" target="_blank" rel="noopener noreferrer"
+              >Follow it on Chainflip ↗</a
+            >
+          </div>
+        </details>
         <p class="help">
           HookedIn is in open beta, and a reset can start balances over. Need help?
           <a href="mailto:support@hookedin.com">Contact support</a>, and never send your key or key file.
