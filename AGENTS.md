@@ -23,8 +23,9 @@ complexity needs a concrete requirement, and an explanation of why nothing simpl
 - **Keys stay where they belong.** The treasury's key is never on a server or in a repository; the signer's lives in
   Secret Manager and the private deployment record. No key, password or token is printed, logged, committed or sent
   anywhere.
-- **Production data is never deleted:** the signing history, the chain log and the database's backups. Production's
-  database changes only through what the code makes from the history, or by hand with the owner's go-ahead.
+- **Production data is never deleted:** the signing history and the chain log. The database's backups are kept 365
+  days. Production's database changes only through what the code makes from the history, or by hand with the owner's
+  go-ahead.
 
 ## 3. Compatibility for developers does not exist
 
