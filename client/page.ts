@@ -31,6 +31,23 @@ export function showSheet(dialog: HTMLDialogElement) {
   if (!dialog.open) dialog.showModal();
   if (!dialog.contains(document.activeElement)) dialog.querySelector<HTMLElement>('.close')?.focus();
 }
+// A sheet closes at a click outside it, as its × closes it: only one pressed and released outside, so a drag that
+// selects text in it and ends outside keeps it open.
+for (const sheet of document.querySelectorAll<HTMLDialogElement>('dialog.sheet')) {
+  const outside = (event: MouseEvent) => {
+    const box = sheet.getBoundingClientRect();
+    return (
+      event.target === sheet &&
+      (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom)
+    );
+  };
+  let pressed = false;
+  sheet.addEventListener('pointerdown', event => (pressed = outside(event)));
+  sheet.addEventListener('click', event => {
+    if (pressed && outside(event)) sheet.close();
+    pressed = false;
+  });
+}
 /** Show a notice above everything, an open dialog too: the top layer stacks in the order things are shown. */
 export function showOnTop(notice: HTMLElement) {
   if (notice.matches(':popover-open')) notice.hidePopover();
