@@ -45,16 +45,17 @@ verified winnings.
 
 - A game starts with an allowance of zero, and the wallet's own dialog is the only grant. Only the player opens it,
   from **Set allowance** in the wallet's top bar, and every word in it is the wallet's. A game never asks: nothing
-  opens over it, and a bet or payment the allowance does not cover is refused with `insufficient-allowance`, whose
-  message, [`HookedIn.NOT_ENOUGH_ALLOWANCE`](../sdk/hookedin.md#not_enough_allowance), tells the player to set it in
-  the top bar, creating a wallet or depositing first if it asks. Show that message, or your own, before anything is
-  drawn.
+  opens over it. Until the player sets one, the game says so with
+  [`HookedIn.NO_ALLOWANCE`](../sdk/hookedin.md#no_allowance), and a bet or payment the allowance does not cover is
+  refused with `insufficient-allowance`, whose message,
+  [`HookedIn.NOT_ENOUGH_ALLOWANCE`](../sdk/hookedin.md#not_enough_allowance), tells the player to set it in the top
+  bar, creating a wallet or depositing first if it asks. Show that message, or your own, before anything is drawn.
 - Developer bets are allowed apart: the dialog warns that the game's developer takes their stakes and decides what
   they pay. A game that places them says so as its page loads, with `HookedIn.placesDeveloperBets()`, and the dialog
   then asks about them too. Casino bets need no more than the allowance, since the wallet checks their odds and their
   results itself.
 - `HookedIn.allowance()` reads it, with `pending` and `developerBets`, and `HookedIn.onAllowance` hears whenever any
-  of it changes, as when the player sets it after a refusal: take the refusal down then. Every bet and payment must fit
+  of it changes, as when the player sets it: take that word, or a refusal, down then. Every bet and payment must fit
   it. Stakes and payments lower it as they are made; verified winnings raise it, a group's once the game has ended the
   group.
 - The wallet's top bar names the game, by the name it is published under, and shows its allowance beside the player's

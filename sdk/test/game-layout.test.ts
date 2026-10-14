@@ -49,7 +49,9 @@ test('complete stake amounts are readable on phones and tablets, on pages that h
                   virtualBankroll: 1000000000000000000000n,
                   recommendedStake: 1000000000000n,
                 }
-              : null;
+              : request.method === 'game.allowance'
+                ? { allowance: 0n, pending: false, developerBets: false }
+                : null;
         iframe.contentWindow!.postMessage({ hookedin: true, id: request.id, result }, '*');
       });
       iframe.src = url;

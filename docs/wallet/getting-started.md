@@ -103,8 +103,8 @@ A published game's developer is the account that published it: it earns half of 
 game, and takes and settles its developer bets. A game opened by its URL alone is published by nobody: the house keeps
 all of its commission, and it takes no developer bets.
 
-A game opens with nothing to play with, and nothing opens over it: a bet it has no allowance for is refused, and the
-game says to set one in the top bar, creating your wallet or depositing first if it asks. While the game is open, the
+A game opens with nothing to play with, and nothing opens over it: it says to set an allowance in the top bar, creating
+your wallet or depositing first if it asks, and refuses a bet its allowance does not cover. While the game is open, the
 top bar names it and shows its allowance beside **Wallet**, as on every page; until you set one, it offers **Set
 allowance** once your balance has something to allow, which opens the wallet's own dialog, where every word is the
 wallet's. Once you have allowed the game something, the dialog adds up the visit: what you allowed, what you took back,

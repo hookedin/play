@@ -504,6 +504,7 @@ async function recover() {
     if (session && !session.terminal) message('Your last spin is still open. Resume it to see the result.');
     else if (saved.bonus) message(`Your Honey Bonus has ${saved.bonus.left} spins left.`);
     if (dropped) message(dropped, true);
+    if (!$('status').textContent && !(await HookedIn.allowance()).allowance) message(HookedIn.NO_ALLOWANCE);
   } catch (error: any) {
     phase = 'unavailable';
     message(error.message, true);
@@ -597,8 +598,10 @@ reels.show(MACHINES.base, IDLE);
 renderMute();
 paytable();
 render();
-// A refusal for want of allowance goes once the player changes the allowance in the top bar.
-HookedIn.onAllowance(() => {
-  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message('');
+// The game opens saying to set an allowance in the top bar: that word, or a refusal for want of allowance, goes once
+// the player sets one.
+HookedIn.onAllowance(({ allowance }) => {
+  const shown = $('status').textContent;
+  if (allowance && (shown === HookedIn.NO_ALLOWANCE || shown === HookedIn.NOT_ENOUGH_ALLOWANCE)) message('');
 });
 void recover();

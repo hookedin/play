@@ -134,12 +134,15 @@ settled by its developer and collected by the wallet, and returns a function tha
 
 Calls a listener with every [`game.allowance`](../reference/bridge.md#gameallowance-1) push, a
 [`GameAllowance`](#gameallowance): what `allowance()` answers without a group, whenever any of it changes while the page
-is open, whatever changed it. It returns a function that stops it. A page that shows a refusal for want of allowance
-takes it down once the player has changed the allowance:
+is open, whatever changed it. It returns a function that stops it. A page opened with no allowance says so before the
+first bet, and takes that word, or a refusal for want of allowance, down once the player has set one:
 
 ```ts
-HookedIn.onAllowance(() => {
-  if (status.textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) status.textContent = '';
+if (!(await HookedIn.allowance()).allowance) status.textContent = HookedIn.NO_ALLOWANCE;
+HookedIn.onAllowance(({ allowance }) => {
+  const shown = status.textContent;
+  if (allowance && (shown === HookedIn.NO_ALLOWANCE || shown === HookedIn.NOT_ENOUGH_ALLOWANCE))
+    status.textContent = '';
 });
 ```
 
@@ -157,6 +160,11 @@ HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:1:3byt9ocwnnza
 
 A METH in wei, `10n ** 12n`. **1 METH is a millionth of an ETH (0.000001 ETH); 1 ETH = 1,000,000 METH.** A stake of
 5 METH is `5n * HookedIn.METH`.
+
+#### `NO_ALLOWANCE`
+
+What a game says before its first bet while it has no allowance: `Set an allowance in the top bar to play.` Every game
+opens with none.
 
 #### `NOT_ENOUGH_ALLOWANCE`
 

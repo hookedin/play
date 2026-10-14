@@ -218,7 +218,7 @@ async function connect() {
             ? 'Your last pick found a mine.'
             : `You cashed out ${amount(state.cash)}.`,
       );
-    }
+    } else if (!(await HookedIn.allowance()).allowance) message(HookedIn.NO_ALLOWANCE);
   } catch (error: any) {
     message(error.message, true);
   } finally {
@@ -227,10 +227,11 @@ async function connect() {
   }
 }
 render();
-// A refusal for want of allowance goes once the player changes the allowance in the top bar, and the page's opening
-// words come back.
+// The game opens saying to set an allowance in the top bar: that word, or a refusal for want of allowance, goes once
+// the player sets one, and the page's opening words come back.
 const opening = $('status').textContent!.trim();
-HookedIn.onAllowance(() => {
-  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message(opening);
+HookedIn.onAllowance(({ allowance }) => {
+  const shown = $('status').textContent;
+  if (allowance && (shown === HookedIn.NO_ALLOWANCE || shown === HookedIn.NOT_ENOUGH_ALLOWANCE)) message(opening);
 });
 connect();

@@ -217,7 +217,7 @@ async function recover() {
       setBoard(drops.pending.rows, drops.pending.risk);
       stakeInput.value = HookedIn.exactAmount(drops.pending.stake);
       message('A ball is still waiting. Drop to finish it.');
-    }
+    } else if (!(await HookedIn.allowance()).allowance) message(HookedIn.NO_ALLOWANCE);
     // The player's earlier balls, from any device of theirs. A history the wallet cannot read leaves the ticker to this
     // visit's balls.
     for (const past of await drops.past(2 * TICKER).catch(() => []))
@@ -267,10 +267,11 @@ $('mute').addEventListener('click', () => {
 setBoard(rows, risk);
 renderMute();
 render();
-// A refusal for want of allowance goes once the player changes the allowance in the top bar, and the page's opening
-// words come back.
+// The game opens saying to set an allowance in the top bar: that word, or a refusal for want of allowance, goes once
+// the player sets one, and the page's opening words come back.
 const opening = $('status').textContent!.trim();
-HookedIn.onAllowance(() => {
-  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message(opening);
+HookedIn.onAllowance(({ allowance }) => {
+  const shown = $('status').textContent;
+  if (allowance && (shown === HookedIn.NO_ALLOWANCE || shown === HookedIn.NOT_ENOUGH_ALLOWANCE)) message(opening);
 });
 void recover();

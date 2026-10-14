@@ -179,6 +179,7 @@ async function recover() {
       if (state.terminal) show(state);
       else message('A roll is still open. Resume it to see how it landed.');
     }
+    if (!$('status').textContent && !(await HookedIn.allowance()).allowance) message(HookedIn.NO_ALLOWANCE);
     // The player's earlier rolls, from any device of theirs: a dice round is one bet and the end of its group. A
     // history the wallet cannot read leaves the strip to this visit's rolls.
     const earlier = await round.past({ limit: 2 * HISTORY }).catch(() => null);
@@ -223,8 +224,10 @@ document.addEventListener('keydown', event => {
 });
 odds();
 render();
-// A refusal for want of allowance goes once the player changes the allowance in the top bar.
-HookedIn.onAllowance(() => {
-  if ($('status').textContent === HookedIn.NOT_ENOUGH_ALLOWANCE) message('');
+// The game opens saying to set an allowance in the top bar: that word, or a refusal for want of allowance, goes once
+// the player sets one.
+HookedIn.onAllowance(({ allowance }) => {
+  const shown = $('status').textContent;
+  if (allowance && (shown === HookedIn.NO_ALLOWANCE || shown === HookedIn.NOT_ENOUGH_ALLOWANCE)) message('');
 });
 void recover();

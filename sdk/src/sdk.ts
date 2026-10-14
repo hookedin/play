@@ -10,6 +10,7 @@ import type { Round } from '../../protocol/types.ts';
 import {
   HookedInError,
   METH,
+  NO_ALLOWANCE,
   NOT_ENOUGH_ALLOWANCE,
   NO_DEVELOPER_BETS,
   exactAmount,
@@ -212,6 +213,7 @@ export const HookedIn = Object.freeze({
   storageScope,
   /** A METH, in wei. */
   METH,
+  NO_ALLOWANCE,
   NOT_ENOUGH_ALLOWANCE,
   NO_DEVELOPER_BETS,
   parseAmount,
