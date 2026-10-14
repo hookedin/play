@@ -1117,6 +1117,19 @@ body.elsewhere #elsewhere {
 .game-loading .game-icon {
   width: 112px;
 }
+.game-loading.silent {
+  padding: 24px;
+  background: var(--bg);
+  text-align: center;
+  pointer-events: auto;
+}
+.game-loading.silent p {
+  max-width: 420px;
+  line-height: 1.6;
+}
+.game-loading.silent strong {
+  color: var(--text);
+}
 
 /* Dialogs. */
 /* While a toast shows, a sheet's end clears it: what the toast covers scrolls out from under it. */

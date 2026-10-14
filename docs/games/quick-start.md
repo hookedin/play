@@ -23,13 +23,15 @@ clone it:
 git clone https://github.com/hookedin/game-template my-game
 cd my-game
 npm install
+npm test
 ```
 
-The template depends on `@hookedin/play` at its `main` branch ([packages and imports](../sdk/index.md)), which changes
-without notice during the [open beta](../index.md#open-beta). `src/` is the game: `index.html`, `style.css`,
-[`icon.svg`](publishing.md#the-icon) and `game.ts`, here the probe. `test/` places casino and developer bets through the
-real wallet ([testing](testing.md)), and the workflow deploys the game ([publishing](publishing.md)). There is nothing
-to configure: the account that publishes the game is its developer.
+`npm test` runs `test/`, which places casino and developer bets through the real wallet against a stub casino held to
+its rules ([testing](testing.md)): a first success, with no ETH. The template depends on `@hookedin/play` at its `main`
+branch ([packages and imports](../sdk/index.md)), which changes without notice during the
+[open beta](../index.md#open-beta). `src/` is the game: `index.html`, `style.css`, [`icon.svg`](publishing.md#the-icon)
+and `game.ts`, here the probe. The workflow deploys the game ([publishing](publishing.md)). There is nothing to
+configure: the account that publishes the game is its developer.
 
 ## Run it
 
@@ -44,6 +46,9 @@ This runs [`hookedin-game serve`](publishing.md#build): it builds `src/` into `d
 
 1. Open [play.hookedin.com](https://play.hookedin.com).
 2. Choose **Open a game by its URL**, enter `http://127.0.0.1:4185/` and choose **Open**.
+3. When your browser asks whether the site may reach your local network, allow it. If you blocked it, change the
+   answer in the site's settings and press **Try again**: until then, and while the game's server is stopped, the
+   wallet says the game isn't answering.
 
 The wallet frames the page from your machine in a sandbox and connects the bridge, and the probe prints the replies to
 `wallet.hello` and `wallet.info` as it starts. A game served from your machine plays against the public wallet and
@@ -54,12 +59,9 @@ at its name.
 
 1. Press **Set allowance** in the wallet's top bar and allow the game some METH in the wallet's own dialog: a game
    never asks. The **game.allowance** preset prints what the game may now stake.
-2. Press **game.casinoBet · 50% to double**, then **Send**. The request is a step of two results, `Double` and
-   `Nothing`, as likely as each other: one bet, which pays twice the stake on half the outcomes. That leaves the casino
-   no edge, so its quote does not cover it, and the wallet refuses it with `not-covered` before signing anything: the
-   balance is unchanged.
-3. Press the preset again, for a fresh operation ID. In the request, change the `Double` result's `cash` to
-   `"1900000000000"`, 1.9 times the stake, and press **Send**. The casino takes this bet:
+2. Press **game.casinoBet · 50% for 1.9×**, then **Send**. The request is a step of two results, `Win` and
+   `Nothing`, as likely as each other: one bet, which pays 1.9 times the stake on half the outcomes. The casino takes
+   it:
 
 ```json title="Reply"
 {
@@ -79,10 +81,14 @@ at its name.
 The probe shows requests and replies as JSON, every amount a decimal string; on the bridge each is a bigint.
 The wallet split the step into one bet: `chance` is how many of the 2^64 outcomes win, here half of them. `outcome` is
 the round's 64-bit value, which the wallet checked against the round it signed; it is below the chance, so the prize
-paid, and the step landed on `result` 0, `Double`. `draw` is a value the wallet drew after it, for a game to show the
+paid, and the step landed on `result` 0, `Win`. `draw` is a value the wallet drew after it, for a game to show the
 result with. **wallet.showBet · last ID** shows its proof in the wallet. Send the same request again and
 the wallet returns the same receipt: an operation ID names one operation. Send other terms under the same ID and it
 refuses them with `id-conflict`.
+
+Press the preset again, for a fresh operation ID, change the `Win` result's `cash` to `"2000000000000"`, twice the
+stake, and press **Send**. That leaves the casino no edge, so its quote does not cover the bet, and the wallet refuses
+it with `not-covered` before signing anything: the balance is unchanged.
 
 Replace the probe with your game in `src/`, and keep the probe in a branch: it is the quickest way to reproduce a wallet
 reply you did not expect.

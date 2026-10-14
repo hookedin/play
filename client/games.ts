@@ -269,17 +269,53 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     push: () => {},
     developerBets: false,
   };
+  // The game's icon stands in for it until the game greets the wallet, as the SDK does once its page runs. A page that
+  // has loaded and not greeted it 3 seconds later is blocked, stopped or broken: the cover says so, and offers to open
+  // it again. A game on the player's own computer is most often stopped, or kept from this site by the browser.
+  const loading = h(
+      'div',
+      { className: 'game-loading' },
+      gameIcon(entry.href, identity.name),
+      h('p', null, `Loading ${identity.name}…`),
+    ),
+    local = ['localhost', '127.0.0.1', '[::1]'].includes(entry.hostname);
+  let silence: ReturnType<typeof setTimeout> | undefined;
+  const silent = () => {
+    if (!isCurrent() || !loading.isConnected) return;
+    loading.classList.add('silent');
+    loading.replaceChildren(
+      h(
+        'p',
+        null,
+        h('strong', null, `${identity.name} isn't answering.`),
+        local
+          ? " Check that its server is running and that your browser lets this site reach your local network: it asks the first time, and the site's settings change your answer."
+          : '',
+      ),
+      h(
+        'button',
+        { className: 'button', type: 'button', onclick: () => task(() => loadGame(url, gameRoute, false, published)) },
+        'Try again',
+      ),
+    );
+  };
   frame.addEventListener('load', () => {
     if (!isCurrent()) return;
     // The game's own keys, such as Space to play, work without a click into it first.
     if (!document.querySelector('dialog[open]')) frame.focus();
+    clearTimeout(silence);
+    if (loading.isConnected) silence = setTimeout(silent, 3000);
   });
   ({ dispose: active.dispose, push: active.push } = attachGameBridge({
     iframe: frame,
     origin: entry.origin,
     isCurrent,
     onRequest: async (method, params) => {
-      if (method === 'wallet.hello') return wallet.gameHello();
+      if (method === 'wallet.hello') {
+        clearTimeout(silence);
+        loading.remove();
+        return wallet.gameHello();
+      }
       // The player is named once the wallet has heard from the casino, and a game finds its saved rounds by that name:
       // after a reload it waits for it.
       if (method === 'wallet.info') {
@@ -318,14 +354,6 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     onError: message => toast(message, true),
   }));
   frame.src = entry.href;
-  // The game's icon stands in for it until its page has loaded.
-  const loading = h(
-    'div',
-    { className: 'game-loading' },
-    gameIcon(entry.href, identity.name),
-    h('p', null, `Loading ${identity.name}…`),
-  );
-  frame.addEventListener('load', () => loading.remove(), { once: true });
   $('frame-slot').replaceChildren(loading, frame);
   $('game-title').replaceChildren(
     gameIcon(entry.href, identity.name),
