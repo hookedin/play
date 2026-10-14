@@ -46,9 +46,9 @@ export const addressReceipt = (amount: bigint, createdAt: string): Receipt => ({
   status: 'confirmed',
   createdAt,
 });
-/** The most gas a withdrawal fee may pay for: about twice what recording the costliest withdrawal costs, which leaves
- * room for the gas price the wallet reads to be below the one the casino quoted at. The wallet signs no fee above it at
- * the gas price it reads. */
+/** The most gas a withdrawal fee may pay for: about twice what recording the costliest withdrawal to an address without
+ * code costs, which leaves room for the gas price the wallet reads to be below the one the casino quoted at. The wallet
+ * signs no fee above it at the gas price it reads. */
 const MOST_WITHDRAWAL_GAS = 350_000n;
 /** Everything that signs or recovers an on-chain transaction: deposits, withdrawals, closes, claims,
  * challenges, fee caps, nonce recovery and confirmed-receipt bookkeeping. The wallet

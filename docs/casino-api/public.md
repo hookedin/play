@@ -93,8 +93,11 @@ alert, like `observationError`, names no channel.
 ### `GET /api/withdrawal-fee`
 
 What a withdrawal or a lock-in pays the casino for sending it to the contract, `{fee}`, in wei as a decimal string:
-200,000 gas (`WITHDRAWAL_GAS`), a little more than recording the costliest one, winnings paid to a new address, costs,
-at the network's gas price with the tip the casino's transactions pay, which the casino reads and holds for a minute.
+200,000 gas (`WITHDRAWAL_GAS`), a little more than recording the costliest one to an address without code, winnings
+paid to a new address, costs, at the network's gas price with the tip the casino's transactions pay, which the casino
+reads and holds for a minute. A recipient with code may use the 100,000 gas the contract gives its payment, or burn it
+and leave the withdrawal a claim, and then sending it costs up to about 390,000 gas: the casino pays what the fee does
+not.
 The casino declines an operation whose `fee` is below what it pays ([operations](channels.md#post-apichannelsidoperations)).
 `paused` answers while the gas price cannot be read.
 
