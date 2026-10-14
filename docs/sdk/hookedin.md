@@ -163,8 +163,8 @@ A METH in wei, `10n ** 12n`. **1 METH is a millionth of an ETH (0.000001 ETH); 1
 
 #### `NO_ALLOWANCE`
 
-What a game says before its first bet while it has no allowance: `Set an allowance in the top bar to play.` Every game
-opens with none.
+What a game says before its first bet while it has no allowance:
+`Set an allowance in the top bar to play, creating a wallet or depositing first if it asks.` Every game opens with none.
 
 #### `NOT_ENOUGH_ALLOWANCE`
 

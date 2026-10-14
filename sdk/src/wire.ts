@@ -6,8 +6,10 @@ const DECIMALS = 12;
 export const METH = 10n ** BigInt(DECIMALS);
 /** What METH means, said wherever a page labels an amount with it: the title the label shows on hover. */
 export const METH_TITLE = 'A millionth of an ETH: 1 METH = 0.000001 ETH';
-/** What a game says before its first bet while it has no allowance: only the player sets one, in the wallet's top bar. */
-export const NO_ALLOWANCE = 'Set an allowance in the top bar to play.';
+/** What a game says before its first bet while it has no allowance: only the player sets one, in the wallet's top bar,
+ * which offers to create a wallet or deposit when there is nothing to allow yet. */
+export const NO_ALLOWANCE =
+  'Set an allowance in the top bar to play, creating a wallet or depositing first if it asks.';
 /** Why a bet the allowance does not cover is refused, whichever refuses it: only the player sets an allowance, in the
  * wallet's top bar, which offers to create a wallet or deposit when there is nothing to allow yet. */
 export const NOT_ENOUGH_ALLOWANCE =
