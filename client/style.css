@@ -1746,14 +1746,6 @@ button.bet-row:hover {
 .bet-row.tone-negative {
   border-left-color: var(--negative);
 }
-.bet-group {
-  grid-column: span 2;
-}
-.bet-group .bet-figure-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .bet-game {
   display: flex;
   flex-wrap: wrap;
@@ -1767,7 +1759,8 @@ button.bet-row:hover {
   font-weight: 600;
 }
 .bet-who,
-.bet-time {
+.bet-time,
+.bet-count {
   color: var(--muted);
   font-size: 11px;
 }
@@ -1787,9 +1780,6 @@ button.bet-row:hover {
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-}
-.bet-return .bet-figure-value {
-  color: #c6b6ff;
 }
 .bet-figure.positive .bet-figure-value,
 .bet-net.positive {
@@ -1819,6 +1809,65 @@ button.bet-row:hover {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
+}
+/* A round: what it came to, what each step landed on, its figures and its steps folded away. */
+.round-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+  font-size: 22px;
+  font-weight: 600;
+}
+.round-result.positive {
+  color: var(--positive);
+}
+.round-result.negative {
+  color: var(--negative);
+}
+.round-landed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+.round-landed li {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--raised);
+  font-size: 13px;
+}
+.bet-detail-figures.round-figures {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.round-steps table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.round-steps th {
+  color: #7d8494;
+  font-weight: 400;
+  text-align: left;
+}
+.round-steps th,
+.round-steps td {
+  padding: 6px 8px 6px 0;
+  border-top: 1px solid var(--line);
+}
+.round-steps th:last-child,
+.round-steps td:last-child {
+  padding-right: 0;
+  text-align: right;
+}
+.round-steps tfoot td {
+  border-top-color: var(--line-strong);
+  font-weight: 600;
 }
 .bet-detail-section {
   margin-top: 22px;

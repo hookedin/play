@@ -172,8 +172,8 @@ a step once they know where it leads.
 `RoundClient` sends each step under one operation ID, saved before anything is sent, and the wallet answers the same
 ID with the same draw: a lost reply or a reload finds the step as it was drawn. A game is free to draw a step's results
 in its own page and offer the wallet a table of two, the bet's prize and nothing, which is one bet; the wallet's
-[**My games**](../wallet/bets-and-receipts.md#return-offered) then shows such a game's steps offering as many returns as
-it drew.
+[**My games**](../wallet/bets-and-receipts.md#house-edge) then shows such a game's steps with as many house edges as it
+drew.
 
 ## What the player sees
 
@@ -224,17 +224,18 @@ outcome alone decides it. A collapsed step keeps that for the bet it places, and
 offered and draws which bet that is, so neither the page nor the casino chooses it. What it gives up:
 
 - **The table is the page's.** The bet signs the table the page offered, and each bet's detail shows it: every result,
-  what it leaves the player, how likely, and what the step returns of the cash it held. Whether those are the game's
-  rules, such as a Plinko board's buckets, is the developer's word, which the table shown lets the player hold the
-  rules to. A modified page can offer a worse table, never steer the draw; one that draws its results itself before it
-  asks offers a different return every step, which My games shows.
+  what it leaves the player and how likely. Whether those are the game's rules, such as a Plinko board's buckets, is
+  the developer's word, which the table shown lets the player hold the rules to. A modified page can offer a worse
+  table, never steer the draw; one that draws its results itself before it asks has a different house edge every step,
+  which My games shows.
 - **Each bet's measured return is its own.** A step bets only what it can lose, and the bets for the largest prizes
   carry more of the step's edge than the rest, so a collapsed game's bets pay back less of what they stake than the game
   does of its stake. At a bankroll far above the stake, Plinko's bets pay back from about 93% to over 99%, while each
   board returns exactly 99% of the ball; Samson's lowest is the whole stake against the jackpot, at 95.1%. When
   the bankroll is small beside a prize, the bet for it must carry more edge still for the bankroll to take it: at the
   least bankroll that backs Plinko's 16-row low board, its rarest bet pays back about 22%. A step whose results are
-  nothing or one win, as in Dice and Mines, is one bet whose return is the step's. A bet's detail in the wallet shows
-  its own worth beside what its step offered, and My games and the game's public record count what the steps offered.
+  nothing or one win, as in Dice and Mines, is one bet whose return is the step's. In METH, though, the wallet draws
+  each bet as often as the table says, so the house edges of the bets drawn come, on average, to the step's: a bet's
+  detail shows its own, and My games and the game's public record add them up.
 - **The kept amount was never debited.** When showing a gross result, the player ends with `L` or `H`; do not add `L`
   again.

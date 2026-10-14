@@ -58,7 +58,7 @@ Bonus spins are prepaid because the casino has no notion of free credit: every s
 
 ### What the reels pay
 
-These are counted from the paytable, and the game shows none of them to its players, whose wallets work out what each spin offered from the table it signed ([return offered](../../docs/wallet/bets-and-receipts.md#return-offered)).
+These are counted from the paytable, and the game shows none of them to its players, whose wallets work out each spin's house edge from the bet it signed ([house edge](../../docs/wallet/bets-and-receipts.md#house-edge)).
 
 | Reels | Counted from the reels         | Any payout | Bonus trigger | Top payout | Distinct payouts |
 | ----- | ------------------------------ | ---------- | ------------- | ---------- | ---------------- |

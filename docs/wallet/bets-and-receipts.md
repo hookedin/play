@@ -1,6 +1,6 @@
 ---
 title: Bets and receipts
-description: Your bet history, the return each bet offered, rejected bets, a game's public record, developer bets and Activity.
+description: Your bet history, each bet's house edge, rounds, rejected bets, a game's public record, developer bets and Activity.
 sidebar:
   order: 2
 ---
@@ -16,15 +16,15 @@ of your account. No game states what it pays back: every figure here is worked o
 - each developer bet, once what it was paid has been collected;
 - each payment a game made within a [group](#groups), which reads **Paid to the house** and pays nothing back.
 
-Each row has its game, time, what it put in, payout, result and **Return offered**, what the bet offered
-([below](#return-offered)). Rejected requests, and payments outside a group, are not listed. Choose a game to see its
+Each row has its game, time, what it put in, what it paid, its result and its **House edge**, what it was expected to
+cost ([below](#house-edge)). Rejected requests, and payments outside a group, are not listed. Choose a game to see its
 bets alone, at `/bets?game=<id>`.
 
 **Put in** is all the cash the game's step held. The bet it drew stakes part of it when the game keeps the rest back
 ([what is given up](../games/collapsing-bets.md#what-is-given-up)), and the part kept comes back with what the bet paid,
 so a row reads as the game showed it.
 
-Bets and [My games](#return-offered) show your latest bets from this browser's receipts ([Activity](#activity)) and
+Bets and [My games](#house-edge) show your latest bets from this browser's receipts ([Activity](#activity)) and
 the casino's record of the signed-in account, so your bets from another device appear too. The wallet reads a page of
 the account's latest 100 operations when the page opens, at most once a minute, and again on **Refresh ↻**, and checks
 each as it checks a reply. A developer bet from the casino's record shows only for a game whose developer the wallet
@@ -54,22 +54,22 @@ A game can also open any of its bets from its own page, as Dice does from each r
 Opening a bet shows everything its receipt holds, each figure worked out again by your wallet. A bet of a round says so
 first, with what the round came to and the whole round a click away. Then, for a casino bet:
 
-- **Return offered**, beside what it put in, what it paid and its result ([below](#return-offered)).
+- **House edge**, beside what it put in, what it paid and its result ([below](#house-edge)).
 - **What the game offered**, for a step of a game: the table the game gave your wallet, each result with its label,
-  what it leaves you and how likely it is, and what the step held and returns of that. **Landed on** marks the result.
+  what it leaves you and how likely it is, and what the step held. **Landed on** marks the result.
   The bet's round decides what the step leaves, and your seed only which of the results that leave it, so when several
   do it adds _which your seed chose among the 3 results that leave 40 METH_. A step that drew no bet reads **Landed
   on, drawn from your seed**.
 - **Where the round landed**: the bet's **roll**, the round's outcome as a share of 2^64 on a scale of 0 to 100,
   against the line it wins under, its chance on the same scale, so that a dice roll reads as the game showed it.
-- **The bet you signed**, for a casino bet not drawn from a step: its prize, its chance and what they are worth of its
-  stake.
+- **The bet you signed**, for a casino bet not drawn from a step: its prize, its chance and its house edge as a share
+  of its stake.
 - **How your wallet drew it**, for a step: your wallet split the table into bets the casino's quote covered, with a
   chance of no bet when a result keeps what the step held, and drew one with your seed before it signed anything.
   - **The bets pay out as the table says**: each amount the table leaves, reached exactly as often as its weights say.
   - **Drawn from your seed**: _Bet 2 of 3_ or _No bet_, drawn again and checked against what your wallet signed.
-  - **The bet it signed**: what it stakes and pays, the line it wins under, its chance in outcomes of 2^64, and what
-    that is worth of its stake.
+  - **The bet it signed**: what it stakes and pays, the line it wins under, its chance in outcomes of 2^64, and its
+    house edge.
   - **Every bet it could draw**, folded away, lists them all, with the bankroll the casino's quote named, which the
     split is weighed against.
 
@@ -120,57 +120,56 @@ was out, that the bets pay out exactly as the game's table says, and that neithe
 of them you placed or which result it landed on. It cannot prove that your wallet picked the seed at random: the
 wallet you run does that, and [your own build](keys-and-recovery.md#your-own-build) is the one you need not trust.
 
-## Return offered
+## House edge
 
-A bet's **return offered** is what it was expected to pay back, as a share of what it put to it. The wallet works it
-out from what it signed, and never from anything a game says:
+A bet's **house edge** is what it was expected to cost you: what it staked, less what it was expected to pay. The
+wallet works it out from the bet it signed, and never from anything a game says:
 
-- **A step of a round** offers what its step was expected to leave of what the step held, whichever bet the wallet
-  drew. That is a casino bet drawn from a step's table, and a payment in a group that signed what it
-  [`kept`](../reference/signed-messages.md#details-and-memo): its round held the payment and `kept`, and was sure to
-  leave `kept`.
-- **Any other casino bet** offers its own odds on its stake:
+- **A casino bet** has its own odds:
 
   ```text
-  expected payout = prize × chance / 2^64
-  return          = expected payout / stake
+  house edge = stake − prize × chance / 2^64
   ```
 
-- **A developer bet** offers nothing anyone prices, and shows no return.
+  A step of a round puts in all the cash it held. The bet your wallet drew from it stakes part of that and keeps the
+  rest back, which comes back whatever happens, so the step's house edge is its bet's, and a step that drew no bet has
+  none.
 
-A payment's row shows no return either: one that signed `kept` counts in the totals, as a step.
+- **A payment** a round made to the house is all house edge: the round paid it and got nothing back.
+- **A developer bet** has no odds anyone prices, and shows no house edge.
 
-The wallet works the return out in millionths, rounded to the nearest. A bet opened in full shows it as a percentage
-with four decimals, a hundredth of a basis point; lists cut it to two and drop trailing zeros. The coin flip in
-[how it works](../overview/how-it-works.md#casino-bets) returns 98.0000%, which a list shows as 98%.
+Each bet's edge is its own, so the bets of a round add up to what the round was expected to cost, however many steps it
+took. Which bet your wallet drew from a step is luck, and so is how far a round went, so one round's edge is luck too;
+over many rounds it comes to the game's. Lists show it in METH to a millionth, and a bet opened in full every digit. The
+coin flip in [how it works](../overview/how-it-works.md#casino-bets) stakes 1,000 METH at a house edge of 20 METH.
 
 **My games**, `/games`, adds up your bets, overall and game by game:
 
-- **Offered**, on the totals card, and each game's **Return offered**: what the bets offered, the sum of what each
-  was expected to pay back over the sum of what each put to it.
-- **Paid back**: what the bets paid, against what they put in.
+- **Put in**: what your rounds took from your balance, each the most it was ever down.
+- **House edge**: what the bets with odds were expected to cost, as a share of what they put in.
+- **Paid back**: what came back, against what went in.
 
-Over a handful of bets the second figure is luck, and over many it follows the first.
+Over a handful of rounds what came back is luck, and over many it follows the house edge.
 
-Each game also says what its steps offered, each of what it held: a bet drawn or not, and a round's payments included.
-A draw from a table whose results all keep the cash it holds is left out. A game whose steps follow its rules offers one
-return, or a few: _Each of its 40 steps offered 99% of what it held._ One that draws its results in its own page before
-it asks the wallet offers a different return almost every step: _Its 40 steps offered from 41% to 98% of what each
-held._
+Each game also says what the house edge of each of its steps was, as a share of what the step held: a bet drawn or not,
+and a round's payments included. A draw from a table whose results all keep the cash it holds is left out. A game whose
+steps follow its rules has one edge, or a few: _Each of its 40 steps had a house edge of 1% of what it held._ One that
+draws its results in its own page before it asks the wallet has a different one almost every step: _Its 40 steps had
+house edges from 2% to 59% of what each held._
 
-A game's [public record](#a-games-public-record) works out what its bets offered the same way. It counts what each
-casino bet put at risk instead of what went in, leaving out what a step kept back, so a game that collapses a step with
-many outcomes into one bet stakes less there, and pays back less of it
-([what is given up](../games/collapsing-bets.md#what-is-given-up)).
+A game's [public record](#a-games-public-record) counts its bets the same way, from the bets the casino recorded.
 
 ## Groups
 
 A game can give its bets and payments a **group**, a label of up to 64 characters that ties them together: the steps of
 one hand, the bets of one spin, one match.
 
-**Bets** shows the bets and payments of one group in one game as a single row, a round, with what you **put in**, how
-many bets it holds and their net result, so a round comes to what the game showed: a cash-out that pays the house part
-of what its bet won is that round's payment. Opening the row says what the round came to, then lists each bet.
+**Bets** shows the bets and payments of one group in one game as a single row, a round, with how many bets it holds,
+what you **put in**, what it paid back, its result and its house edge, so a round comes to what the game showed: a
+cash-out that pays the house part of what its bet won is that round's payment. Opening the row says what the round came
+to, what each step landed on, as the game labelled its results, and its figures. **How it was settled** lists its steps,
+folded away: what each landed on, what the round was worth before and after it, and its house edge, each opening in
+full. A step that drew no bet signed nothing, so only the browser that drew it lists it.
 
 A round's stakes and payouts are not added up: a multi-step game stakes again what its last step paid, so they would
 count the same money more than once. What you put in is the most the round was ever down, and the counts of bets here,
@@ -199,11 +198,10 @@ with `id-used`, so that it does not place the same bet again under another ID
 of your bets. The page shows:
 
 - the game's name, and while it is published, **Play**;
-- the totals, offered and paid back, as on My games, with every payment its rounds made to the house counted as put
-  in;
+- the totals, house edge and paid back, as on My games;
 - how many of the game's developer bets are open, and how many its developer has settled;
 - the latest 200 bets and payments, newest first, each naming its player by Discord username or uname and never by
-  address or channel, with what it put at risk or paid to the house, its payout, result and return offered.
+  address or channel, with what it put in or paid to the house, what it paid, its result and its house edge.
 
 Anyone can judge a game by what it has paid, without taking the game's word for anything.
 

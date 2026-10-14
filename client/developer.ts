@@ -2,7 +2,7 @@ import type { AccountGame } from '../protocol/types.ts';
 import { gameSlug, json, MAX_GAME_NAME, same, validGameName } from '../protocol/protocol.ts';
 import { exact, h, methLabel, percent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
-import { measuredReturn } from './bets.ts';
+import { edgeShare } from './bets.ts';
 import { $, short, shortDate, showName, toast, typedAmount } from './page.ts';
 import { gameFigures, gameRecord, openGameRecord, type Figure } from './played.ts';
 import { act, task, uiBusy, wallet } from './sheet.ts';
@@ -60,16 +60,15 @@ function ownGame(owner: string, game: AccountGame) {
   let figures: Node[];
   if (record && 'totals' in record) {
     const { totals } = record,
-      staked = totals.staked,
-      result = totals.paid - staked,
-      expected = measuredReturn(totals.priced, totals.expected),
+      result = totals.net,
+      edge = edgeShare(totals),
       earned = totals.earned,
       { open, settled } = record.developerBets;
     const rows: Figure[] = [
       ['Bets', totals.plays.toLocaleString('en-US')],
-      ['Staked', meth(staked), '', `${exact(staked)} METH`],
+      ['Put in', meth(totals.putIn), '', `${exact(totals.putIn)} METH`],
       ["Players' result", signedAmount(result), tone(result), `${exact(result < 0n ? -result : result)} METH`],
-      ['Expected return', expected === null ? '—' : percent(expected)],
+      ['House edge', edge === null ? '—' : percent(edge)],
       ['Commission earned', meth(earned), tone(earned), `${exact(earned)} METH`],
     ];
     figures = [gameFigures(rows)];

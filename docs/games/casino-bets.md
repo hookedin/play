@@ -115,13 +115,14 @@ quote does not cover, in any bet of the split, is refused with `not-covered` bef
 
 ## Measured return
 
-No game states what it pays back ([return offered](../wallet/bets-and-receipts.md#return-offered)). The wallet works
-out the exact return of every casino bet from its terms before it signs, `prize × chance / (2^64 × stake)`.
-[`betReturn(bet)`](../sdk/admits.md#betreturn) is that computation, in millionths of the stake. A bet drawn from a
-step pays back less than the step does ([what is given up](collapsing-bets.md#what-is-given-up)), so a step of a round
-is measured by its table instead: what it was expected to leave of what it held. The wallet's My games and your game's
-public record ([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)) add up what your players' bets offered
-that way.
+No game states what it pays back ([house edge](../wallet/bets-and-receipts.md#house-edge)). The wallet works out the
+exact return of every casino bet from its terms before it signs, `prize × chance / (2^64 × stake)`.
+[`betReturn(bet)`](../sdk/admits.md#betreturn) is that computation, in millionths of the stake. Players see each bet's
+house edge, `stake − prize × chance / 2^64`, in METH: a bet drawn from a step pays back less of its own stake than the
+step does of what it held ([what is given up](collapsing-bets.md#what-is-given-up)), but its wallet draws each bet as
+often as the table says, so the edges of the bets drawn come, on average, to the step's. The wallet's My games and your
+game's public record ([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)) add up your players' bets' edges
+against what their rounds put in.
 
 A chance rounds to whole outcomes and a prize to whole units, so at dust stakes the units can move a return far. Prove
 your floor in a test ([proving a game's floor](testing.md#proving-a-games-floor)):

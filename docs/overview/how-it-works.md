@@ -117,11 +117,11 @@ A coin flip that pays 1.96 times the stake:
 | Chance          | 2^63 (`9223372036854775808`) of 2^64 outcomes: 50% |
 | Prize           | 1,960 METH (`1960000000000000` wei)                |
 | Expected payout | 980 METH                                           |
-| Return          | 98.0000% of the stake                              |
+| House edge      | 20 METH, 2% of the stake                           |
 
 If the outcome is below 2^63 the balance moves by −1,000 + 1,960 = +960 METH; otherwise by −1,000 METH. The wallet
-works out the return of every casino bet from its chance and prize before signing it, and keeps it on the receipt
-([return offered](../wallet/bets-and-receipts.md#return-offered)).
+works out every casino bet's expected payout from its chance and prize before signing it, keeps it on the receipt, and
+shows the bet's [house edge](../wallet/bets-and-receipts.md#house-edge).
 
 A game with more outcomes than two plays them with bets like this one: a single-player game such as Plinko offers each
 step as a table of results, which the wallet [collapses](../games/collapsing-bets.md) into one bet it draws, and a game

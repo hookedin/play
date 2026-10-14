@@ -1,7 +1,7 @@
 import type { PlayerDeveloperBet } from '../protocol/types.ts';
 import type { Receipt } from './wallet.ts';
 import { plain, same } from '../protocol/protocol.ts';
-import { returnParts } from '../protocol/risk.ts';
+import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import { formatAmount, METH_TITLE } from '../sdk/src/wire.ts';
 
 type Tone = 'neutral' | 'positive' | 'negative' | 'warning';
@@ -369,7 +369,7 @@ export function receiptSummary(
     description = `Stake ${formatAmount(receipt.stake!)} METH · Paid ${formatAmount(receipt.payout ?? 0n)} METH${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${formatAmount(receipt.maxPayout)} METH · RTP ${percent(returnParts(receipt.stake!, receipt.expectedPayout!))}`
+        : ` of up to ${formatAmount(receipt.maxPayout)} METH · House edge ${formatAmount((receipt.stake! * OUTCOME_SPACE - receipt.expectedPayout! + OUTCOME_SPACE / 2n) / OUTCOME_SPACE, 6)} METH`
     }${receipt.kind === 'casino-bet' ? ` · Balance ${exact(receipt.balance!)} METH` : ''}`;
   }
   if (receipt.kind === 'developer-bet')

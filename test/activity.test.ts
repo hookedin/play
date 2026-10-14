@@ -54,7 +54,7 @@ test('bet summaries show the payout against the stake in METH, cut at a gwei, ne
   assert.match(win.description!, /Balance 999,999\.999999999999 METH/);
   assert.equal(win.amountLabel, 'Net game result');
   assert.equal(win.title, 'Casino bet won');
-  assert.match(win.description!, /Paid 2,234\.567 METH of up to 5,000 METH · RTP 97.0000%/);
+  assert.match(win.description!, /Paid 2,234\.567 METH of up to 5,000 METH · House edge 30 METH/);
   const loss = receiptSummary({ ...receipt, payout: 0n, stake: 1n }, contract);
   assert.equal(loss.amount, '−<0.001 METH');
   assert.equal(loss.tone, 'negative');

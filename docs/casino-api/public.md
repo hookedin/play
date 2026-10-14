@@ -153,40 +153,35 @@ totals of zero and no bets, and one that is not a game ID with `invalid`.
 | ------- | ------ | -------------------------------------------------------------------------------------------------------------- |
 | `limit` | number | How many bets, 1 to 500 and 100 by default; other values are clamped, and one that is not a number counts as 1 |
 
-| Response field  | Type           | Meaning                                                                                                        |
-| --------------- | -------------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`            | string         | The game's ID                                                                                                  |
-| `name`          | string or null | The name its developer published it under: null for a game nobody published                                    |
-| `page`          | string or null | While it is published, its developer's name and its slug, `@bob/super-dice`, its page in the wallet            |
-| `bank`          | string         | What the game's bank holds now: nothing for a game nobody published                                            |
-| `developerBets` | object         | `{open, settled}`: how many of the game's developer bets are open and settled                                  |
-| `totals`        | object         | `{plays, staked, paid, expected, priced, earned}`, below                                                       |
-| `bets`          | array          | `{id, kind, bet?, uname, discordUsername, group?, stake, chance?, prize?, held?, offered?, payout, at}`, below |
+| Response field  | Type           | Meaning                                                                                              |
+| --------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
+| `id`            | string         | The game's ID                                                                                        |
+| `name`          | string or null | The name its developer published it under: null for a game nobody published                          |
+| `page`          | string or null | While it is published, its developer's name and its slug, `@bob/super-dice`, its page in the wallet  |
+| `bank`          | string         | What the game's bank holds now: nothing for a game nobody published                                  |
+| `developerBets` | object         | `{open, settled}`: how many of the game's developer bets are open and settled                        |
+| `totals`        | object         | `{plays, putIn, net, edge, priced, earned}`, below                                                   |
+| `bets`          | array          | `{id, kind, bet?, uname, discordUsername, group?, stake, chance?, prize?, held?, payout, at}`, below |
 
 The totals are the players' bets: the game's own casino bets are listed, and add up to nothing here. `plays` is a number,
-the bets of one player in one group counting once, as the steps of a round; `staked` and `paid` are what every bet
-staked and paid, a round's steps each on its own, with every payment a round made to the house in `staked`, so only
-`paid − staked` is what the players came out with. `earned` is what the game's bank took of their
+the bets of one player in one group counting once, as the steps of a round. `putIn` is what the players put in, each
+round the most it was ever down: a step stakes what the round's earlier bets paid before anything more, and a bet with
+no group is a round of its own. `net` is what their bets paid less what they staked, payments to the house included:
+what the players came out with, which can be below 0. `earned` is what the game's bank took of their
 [commission](../games/publishing.md#earnings), its own casino bets' included.
 
-`expected / (priced × 2^64)` is what the players' bets offered. Each adds to them by what it is:
-
-- A step of a round adds what the step held to `priced`, and what it was expected to leave, times 2^64, to `expected`,
-  whichever bet it drew. That is a casino bet drawn from a step, whose
-  [table](../reference/signed-messages.md#details-and-memo) it signed, and a payment in a group that signed what it
-  `kept`, which held the payment and `kept` together and was sure to leave `kept`.
-- Any other casino bet adds its stake to `priced`, and its prize times its chance to `expected`: its own odds.
-- A developer bet has no odds, and counts in neither; nor does a payment that signed no `kept`. A step that drew no bet
-  never reaches the casino.
+`edge / (priced × 2^64)` is the house edge on what the players' bets put in. A casino bet adds its stake times 2^64,
+less its prize times its chance, to `edge`, a payment all it paid times 2^64, and each adds what it put in to `priced`. A
+developer bet has no odds, and counts in neither. A step that drew no bet never reaches the casino, and has no edge.
 
 The bets are the latest settled, newest first, payments included, so that all of them add up to the totals. A bet's
 `id` is a UUIDv7, the ID of the casino's record that placed it: it says when the bet was placed and nothing of how many
 bets there are. `kind` is `casino`, `developer` or `payment`, and a developer bet is its hash too, `bet`, which
 [`GET /api/developer-bets/:bet`](#get-apideveloper-betsbet) reads. Its player is their `uname` and `discordUsername`,
 both null for the game's own casino bet, from its bank. `stake` and `payout` are what it staked and paid, a payment's
-what it paid the house and `0`; a casino bet's `chance` and `prize` are its odds, and `at` is when it settled. A step of
-a round has `held`, what the step held, and `offered`, what it was expected to leave, times 2^64, as the totals count
-them.
+what it paid the house and `0`; a casino bet's `chance` and `prize` are its odds, and `at` is when it settled. A casino
+bet drawn from a step has `held`, what the step held, part of which it staked and the rest of which it kept back, and a
+payment that signed what its round `kept` has `held`, the payment and `kept` together.
 
 ## Rounds and developer bets
 

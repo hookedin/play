@@ -2,16 +2,17 @@ import type { Receipt } from './wallet.ts';
 import * as read from '../protocol/read.ts';
 import { json, validGameName } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
-import { copyBlock, h, shortPercent, signedAmount } from './activity.ts';
+import { copyBlock, h, percent, shortPercent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import {
   betDetail,
   betRowElement,
   betTotals,
+  edgeShare,
   groupRowElement,
   groupRows,
-  measuredReturn,
   putIn,
+  roundDetail,
   tableOffered,
   totalCards,
 } from './bets.ts';
@@ -24,8 +25,8 @@ import { active, knownGames, loadGame, openGame } from './games.ts';
 
 /** A bet as a game's public record lists it: the ID of the record that placed it, a casino bet's, a developer bet's or
  * a round's payment to the house, the developer bet's hash, who placed it (nobody for the game's own, from its bank),
- * its group, stake, a casino bet's chance and prize, what a step of a round held and offered, out of 2^64, what it paid
- * and when it settled. */
+ * its group, stake, a casino bet's chance and prize, what a step of a round held, a payment's with what its round kept,
+ * what it paid and when it settled. */
 const recordBet = read.object<{
   id: string;
   kind: 'casino' | 'developer' | 'payment';
@@ -37,7 +38,6 @@ const recordBet = read.object<{
   chance?: bigint;
   prize?: bigint;
   held?: bigint;
-  offered?: bigint;
   payout: bigint;
   at: number;
 }>({
@@ -51,7 +51,6 @@ const recordBet = read.object<{
   chance: read.optional(read.whole),
   prize: read.optional(read.whole),
   held: read.optional(read.whole),
-  offered: read.optional(read.whole),
   payout: read.whole,
   at: read.time,
 });
@@ -65,9 +64,9 @@ export const gameRecord = read.object<{
   developerBets: { open: number; settled: number };
   totals: {
     plays: number;
-    staked: bigint;
-    paid: bigint;
-    expected: bigint;
+    putIn: bigint;
+    net: bigint;
+    edge: bigint;
     priced: bigint;
     earned: bigint;
   };
@@ -86,9 +85,9 @@ export const gameRecord = read.object<{
   developerBets: read.object({ open: read.count, settled: read.count }),
   totals: read.object({
     plays: read.count,
-    staked: read.whole,
-    paid: read.whole,
-    expected: read.whole,
+    putIn: read.whole,
+    net: read.integer,
+    edge: read.whole,
     priced: read.whole,
     earned: read.whole,
   }),
@@ -187,8 +186,8 @@ function ownBets(): BetRow[] {
     )
     .map(receiptRow);
 }
-/** What a step of a round offered, a casino bet drawn from a game's step or a payment of a round: what the step held,
- * and what it was expected to leave, out of 2^64. */
+/** A step of a round, a casino bet drawn from a game's step, a draw that placed none or a payment of a round: what the
+ * step held, and what it was expected to leave, out of 2^64. */
 function stepOffered(receipt: Receipt) {
   const { table, kept } = receipt.details ?? {};
   if (table) return { held: table.cash, offered: tableOffered(table) };
@@ -197,12 +196,12 @@ function stepOffered(receipt: Receipt) {
   return undefined;
 }
 /** One of this wallet's receipts as a row of bets. A game's step puts in all the cash it holds and bets part of it: the
- * rest, kept, comes back whatever the round does, so the row counts it in both what went in and what came back, as the
- * game showed them. */
+ * rest, kept, comes back whatever the round does, so the row counts it in what went in, what came back and what it was
+ * expected to pay back, as the game showed them. A step that drew no bet kept it all. */
 function receiptRow(receipt: Receipt): BetRow {
-  const kept = receipt.details?.table && receipt.stake !== undefined ? receipt.details.table.cash - receipt.stake : 0n,
-    route = receipt.game ? knownGames.get(receipt.game.id)?.route : undefined,
-    offered = stepOffered(receipt);
+  const held: bigint | undefined = receipt.details?.table?.cash,
+    kept = held === undefined ? 0n : held - (receipt.stake ?? 0n),
+    route = receipt.game ? knownGames.get(receipt.game.id)?.route : undefined;
   return {
     ...(route && 'owner' in route ? { publisher: route.owner } : {}),
     at: Date.parse(receipt.createdAt),
@@ -211,12 +210,15 @@ function receiptRow(receipt: Receipt): BetRow {
     ...(receipt.details?.group ? { group: receipt.details.group } : {}),
     stake: (receipt.stake ?? 0n) + kept,
     payout: (receipt.payout ?? 0n) + kept,
-    ...(offered ? { offered } : {}),
-    ...(receipt.kind === 'payment' ? { payment: true } : {}),
+    ...(receipt.kind === 'payment'
+      ? { payment: true, ...(receipt.details?.kept === undefined ? {} : { kept: receipt.details.kept }) }
+      : {}),
     expected:
-      receipt.kind === 'payment' || receipt.expectedPayout === undefined
-        ? null
-        : receipt.expectedPayout + kept * OUTCOME_SPACE,
+      receipt.kind === 'payment'
+        ? 0n
+        : receipt.expectedPayout === undefined && held === undefined
+          ? null
+          : (receipt.expectedPayout ?? 0n) + kept * OUTCOME_SPACE,
     maxPayout: receipt.maxPayout === undefined ? null : receipt.maxPayout + kept,
     operation: receipt.operationId,
     receipt,
@@ -252,7 +254,7 @@ function showBet(row: BetRow) {
           h(
             'p',
             { className: 'bet-round-summary' },
-            `${roundSummary(round!)} ${kept ? '' : 'This bet staked what the round held after the bets before it. '}`,
+            `${roundSummary(round!)} ${kept ? '' : 'This bet staked what the round was worth after the bets before it. '}`,
             h(
               'button',
               { type: 'button', className: 'text-button', onclick: () => showGroup(round!, showBet) },
@@ -319,20 +321,21 @@ function roundSummary(rows: readonly BetRow[]) {
   const net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n);
   return `You put in ${formatAmount(putIn(rows))} METH and ${net < 0n ? 'lost' : net > 0n ? 'won' : 'broke even'}${net ? ` ${formatAmount(net < 0n ? -net : net)} METH` : ''}.`;
 }
-/** The bets of one group, each opening in full where this wallet kept its receipt. */
+/** A round of this wallet's own bets with its steps that drew no bet in this browser, oldest first: a public round's
+ * bets as they are. */
+function withKept(rows: readonly BetRow[]) {
+  const { gameId, group } = rows[0]!;
+  if (rows.some(row => !row.receipt)) return rows;
+  const kept = receipts()
+    .filter(receipt => receipt.status === 'kept' && receipt.game?.id === gameId && receipt.details?.group === group)
+    .map(receiptRow);
+  return [...rows, ...kept].sort((a, b) => a.at - b.at);
+}
+/** A round as the player played it, its steps folded away, each opening in full where this wallet kept its receipt. */
 function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
-  const last = rows.at(-1)!;
-  $('bet-detail-eyebrow').textContent = `One round, ${rows.length} bets`;
-  $('bet-detail-title').textContent = last.game;
-  // The round first, as the player played it; then its bets, each staking what the last one paid.
-  $('bet-detail').replaceChildren(
-    h(
-      'p',
-      { className: 'bet-round-summary', title: `Group ${last.group}` },
-      `${roundSummary(rows)} Each bet below stakes what the bet before it paid.`,
-    ),
-    h('div', { className: 'bet-table' }, ...rows.map(row => betRowElement(row, onOpen))),
-  );
+  $('bet-detail-eyebrow').textContent = 'One round';
+  $('bet-detail-title').textContent = rows.at(-1)!.game;
+  $('bet-detail').replaceChildren(...roundDetail(withKept(rows), onOpen));
   $('bet-dialog').scrollTop = 0;
   showSheet($<HTMLDialogElement>('bet-dialog'));
 }
@@ -384,13 +387,13 @@ export const gameFigures = (figures: Figure[]) =>
       h('div', null, h('dt', null, label), h('dd', { className, ...(exact ? { title: exact } : {}) }, value)),
     ),
   );
-/** What a game's steps offered, here or on another device, in a line: each return they offered, to the hundredth of a
- * percent, and how many offered it. A step is a casino bet drawn from the game's table, a draw from a table that could
- * have placed one, or a payment of a round, which offers what it leaves of what the round held; a draw from a table
- * whose results all keep what it holds offers nothing to weigh. A game of one step a round whose steps come from its
- * rules offers one return; one that draws its results in its own page before it asks the wallet offers many. */
-function offered(gameId: string) {
-  const returns = new Map<bigint, number>();
+/** The house edges of a game's steps, here or on another device, in a line: each step's edge as a share of what it
+ * held, to the hundredth of a percent, and how many had it. A step is a casino bet drawn from the game's table, a draw
+ * from a table that could have placed one, or a payment of a round, whose edge is what it pays of what the round held;
+ * a draw from a table whose results all keep what it holds has nothing to weigh. A game whose steps come from its
+ * rules has one edge or a few; one that draws its results in its own page before it asks the wallet has many. */
+function stepEdges(gameId: string) {
+  const edges = new Map<bigint, number>();
   let steps = 0;
   for (const receipt of receipts()) {
     const step = receipt.game?.id === gameId && ['signed', 'kept'].includes(receipt.status) && stepOffered(receipt);
@@ -400,12 +403,12 @@ function offered(gameId: string) {
         new Set(receipt.details.table.results.map((result: { cash: bigint }) => result.cash)).size === 1)
     )
       continue;
-    const parts = ((returnParts(step.held, step.offered) + 50n) / 100n) * 100n;
-    returns.set(parts, (returns.get(parts) ?? 0) + 1);
+    const parts = ((1_000_000n - returnParts(step.held, step.offered) + 50n) / 100n) * 100n;
+    edges.set(parts, (edges.get(parts) ?? 0) + 1);
     steps++;
   }
   if (!steps) return null;
-  const each = [...returns].sort(([a], [b]) => (a < b ? 1 : -1)),
+  const each = [...edges].sort(([a], [b]) => (a < b ? 1 : -1)),
     [highest] = each[0]!,
     [lowest] = each.at(-1)!;
   return h(
@@ -415,14 +418,13 @@ function offered(gameId: string) {
       title: each.map(([parts, count]) => `${shortPercent(parts)} × ${count}`).join(' · '),
     },
     each.length > 1
-      ? `Its ${steps} steps offered from ${shortPercent(lowest)} to ${shortPercent(highest)} of what each held.`
+      ? `Its ${steps} steps had house edges from ${shortPercent(lowest)} to ${shortPercent(highest)} of what each held.`
       : steps === 1
-        ? `Its one step offered ${shortPercent(highest)} of what it held.`
-        : `Each of its ${steps} steps offered ${shortPercent(highest)} of what it held.`,
+        ? `Its one step had a house edge of ${shortPercent(highest)} of what it held.`
+        : `Each of its ${steps} steps had a house edge of ${shortPercent(highest)} of what it held.`,
   );
 }
-/** One line per game: what this wallet staked in it, what came back, what its bets were worth, and what its steps
- * offered. */
+/** One line per game: what this wallet put in it, what came back, the house edge on it, and its steps' edges. */
 export function renderMyGames() {
   loadRecorded();
   const all = ownBets(),
@@ -451,14 +453,14 @@ export function renderMyGames() {
     ...list.map(({ id, name, last, rows }) => {
       const favourite = id !== null && starred.has(id),
         totals = betTotals(rows),
-        expected = measuredReturn(totals.priced, totals.expected),
+        edge = edgeShare(totals),
         known = id ? knownGames.get(id) : undefined;
       const figures: Figure[] = [
         ['Bets', String(totals.bets)],
         ['Put in', `${formatAmount(totals.putIn)} METH`],
         ['Paid back', `${formatAmount(totals.putIn + totals.net)} METH`],
         ['Your result', signedAmount(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
-        ['Return offered', expected === null ? '—' : shortPercent(expected)],
+        ['House edge', edge === null ? '—' : shortPercent(edge), '', edge === null ? undefined : percent(edge)],
       ];
       return h(
         'div',
@@ -486,7 +488,7 @@ export function renderMyGames() {
           h('span', { className: 'game-line-when' }, `Last played ${shortDate(last)}`),
         ),
         gameFigures(figures),
-        ...(id ? [offered(id)].filter(note => note !== null) : []),
+        ...(id ? [stepEdges(id)].filter(note => note !== null) : []),
         h(
           'div',
           { className: 'game-actions' },
@@ -549,32 +551,38 @@ export async function openGameRecord(id: string, push = true) {
       play.classList.remove('hidden');
       play.onclick = () => void openGame(parseRoute(new URL(`/${record.page}`, location.origin)) as GameRoute);
     }
-    const rows: BetRow[] = record.bets.map(bet => ({
-      at: bet.at,
-      game: name,
-      // The game's own casino bet, from its bank, has no player: it is listed beside its players' bets, and counted in
-      // no total.
-      who: bet.uname === null ? "the game's bank" : bet.discordUsername ? '@' + bet.discordUsername : '~' + bet.uname,
-      ...(bet.group === undefined ? {} : { group: bet.group }),
-      stake: bet.stake,
-      payout: bet.payout,
-      expected: bet.chance === undefined || bet.prize === undefined ? null : bet.prize * bet.chance,
-      ...(bet.held === undefined || bet.offered === undefined
-        ? {}
-        : { offered: { held: bet.held, offered: bet.offered } }),
-      ...(bet.kind === 'payment' ? { payment: true } : {}),
-      maxPayout: bet.prize ?? null,
-      id: bet.id,
-    }));
+    const rows: BetRow[] = record.bets.map(bet => {
+      // A step's bet keeps back the rest of what the step held, as this wallet's own rows count it; a payment's round
+      // kept the rest of what it held.
+      const kept = bet.held === undefined ? 0n : bet.held - bet.stake,
+        payment = bet.kind === 'payment';
+      return {
+        at: bet.at,
+        game: name,
+        // The game's own casino bet, from its bank, has no player: it is listed beside its players' bets, and counted
+        // in no total.
+        who: bet.uname === null ? "the game's bank" : bet.discordUsername ? '@' + bet.discordUsername : '~' + bet.uname,
+        ...(bet.group === undefined ? {} : { group: bet.group }),
+        stake: payment ? bet.stake : bet.stake + kept,
+        payout: payment ? bet.payout : bet.payout + kept,
+        expected: payment
+          ? 0n
+          : bet.chance === undefined || bet.prize === undefined
+            ? null
+            : bet.prize * bet.chance + kept * OUTCOME_SPACE,
+        ...(payment ? { payment, ...(bet.held === undefined ? {} : { kept }) } : {}),
+        maxPayout: bet.prize === undefined ? null : bet.prize + kept,
+        id: bet.id,
+      };
+    });
     const { totals, developerBets } = record;
     $('gamebets-totals').replaceChildren(
       ...totalCards({
         bets: totals.plays,
-        staked: totals.staked,
-        paid: totals.paid,
-        expected: totals.expected,
+        putIn: totals.putIn,
+        net: totals.net,
+        edge: totals.edge,
         priced: totals.priced,
-        net: totals.paid - totals.staked,
         unpriced: developerBets.settled > 0,
       }),
     );

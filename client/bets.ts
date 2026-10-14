@@ -1,4 +1,4 @@
-import { OUTCOME_SPACE, admits, betReturn, returnParts } from '../protocol/risk.ts';
+import { OUTCOME_SPACE, admits } from '../protocol/risk.ts';
 import { betPayout, channelId, drawStep, landStep, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
 import { splitStep } from '../sdk/src/engine/transition.ts';
 import type { StepBranch } from '../sdk/src/engine/transition.ts';
@@ -6,6 +6,7 @@ import { activityJSON, copyBlock, exact, h, percent, shortPercent, signedAmount,
 import { formatAmount } from '../sdk/src/wire.ts';
 import type { Operation, StepTable } from '../protocol/types.ts';
 import type { Receipt } from './wallet.ts';
+import { landed } from './wallet-games.ts';
 
 /**
  * One settled bet, however it was read: from this wallet's own receipt, or from a game's public
@@ -25,18 +26,17 @@ export interface BetRow {
   publisher?: string;
   /** The label the game gave it, such as a hand or a match. */
   group?: string;
-  /** What went in: this wallet's own bet puts in all its step held, the part the step kept back included, and a payment
-   * what it paid the house; a public row, what the casino bet staked, which leaves out what a step kept back. */
+  /** What went in and what came back. A step of a round puts in all the cash it held: its bet stakes part of it and
+   * keeps the rest back, which comes back whatever happens, and a step that drew no bet keeps it all. A payment puts
+   * in what it paid the house. */
   stake: bigint;
   payout: bigint;
-  /** The bet's expected payout, out of 2^64 stakes: what its own odds were worth. A developer bet has no
-   * odds, so nothing says what it was worth. */
+  /** What it was expected to pay back, out of 2^64: its own odds' expected payout with what its step kept back, and
+   * nothing for a payment. A developer bet has no odds, so nothing says what it was worth. */
   expected: bigint | null;
-  /** A step of a round, a casino bet drawn from a game's step or a payment of a round: what the step held, and what it
-   * was expected to leave, out of 2^64, which is what the bet offered. */
-  offered?: { held: bigint; offered: bigint };
-  /** A payment a game's round made to the house. */
+  /** A payment a game's round made to the house, with what the round kept beside it, when it signed that. */
   payment?: boolean;
+  kept?: bigint;
   /** The most the bet could pay, when the reader knows it. */
   maxPayout?: bigint | null;
   /** This wallet's own name for the bet. A public row has none: it is known by `id` instead. */
@@ -48,85 +48,73 @@ export interface BetRow {
   receipt?: Receipt;
 }
 
-/** What a set of bets was expected to pay back, in millionths of everything staked. */
-export const measuredReturn = (staked: bigint, expected: bigint) =>
-  staked > 0n ? returnParts(staked, expected) : null;
-/** What a set of bets did pay back. Over a handful of bets this is luck; over thousands it is the
- * odds. Both are shown, because a player deserves to see which one they are reading. */
-export const realisedReturn = (staked: bigint, paid: bigint) =>
-  staked > 0n ? (paid * 1_000_000n + staked / 2n) / staked : null;
+/** A bet's house edge, out of 2^64: what it put in less what it was expected to pay back, which is what it was expected
+ * to cost. A step's bet keeps back the rest of what the step held, which comes back whatever happens, so its edge is
+ * that of its own odds, and a payment's is all it paid. Each is worked out from the bet's own signed terms, so the
+ * bets of a round add up to what the round was played at. None for a developer bet, whose odds nobody prices. */
+export const rowEdge = (row: BetRow) => (row.expected === null ? null : row.stake * OUTCOME_SPACE - row.expected);
+/** The house edge of a round's bets: none if one of them is a developer bet. */
+const edgeOf = (rows: readonly BetRow[]) =>
+  rows.reduce<bigint | null>((sum, row) => {
+    const edge = rowEdge(row);
+    return sum === null || edge === null ? null : sum + edge;
+  }, 0n);
+/** A house edge as an amount, to the nearest wei. */
+const edgeWei = (edge: bigint) => (edge + OUTCOME_SPACE / 2n) / OUTCOME_SPACE;
+/** A part of a whole in millionths, to the nearest: none of nothing. */
+const share = (part: bigint, whole: bigint) => (whole > 0n ? (part * 1_000_000n + whole / 2n) / whole : null);
 
 export interface BetTotals {
   /** Bets, a round's steps counting once. */
   bets: number;
-  staked: bigint;
-  paid: bigint;
-  /** What the bets that offered something were expected to leave, out of 2^64, and what they put to it: a step's
-   * expected leave of what it held, or a bet's own odds on its stake (`rowReturn`). */
-  expected: bigint;
-  priced: bigint;
+  /** What the bets took from outside their rounds, and what they came out with. */
+  putIn: bigint;
   net: bigint;
-  /** Whether some bet offered nothing anyone prices: a developer bet. */
+  /** The house edge of the bets with odds, out of 2^64, and what they put in. */
+  edge: bigint;
+  priced: bigint;
+  /** Whether some bet has no odds anyone prices: a developer bet. */
   unpriced: boolean;
 }
-/** What went in is called: a payment of a game's round is money paid to the house; a public row knows only what the
- * casino bet put at risk. */
-const stakeLabel = (row: BetRow) => (row.payment ? 'Paid to the house' : !row.receipt ? 'At risk' : 'Put in');
-/** What a bet offered, in millionths of what it put to it: what its step was expected to leave of what the step held,
- * or its own odds on its stake; none for a developer bet, whose odds nobody prices, or a payment, which is no bet. */
-export const rowReturn = (row: BetRow) =>
-  row.payment
-    ? null
-    : row.offered
-      ? returnParts(row.offered.held, row.offered.offered)
-      : row.expected === null
-        ? null
-        : returnParts(row.stake, row.expected);
-/** What a set of bets offered, a step's or a bet's own: `expected` out of 2^64 of `priced`. */
-function addOffered(totals: BetTotals, row: BetRow) {
-  if (row.offered) {
-    totals.expected += row.offered.offered;
-    totals.priced += row.offered.held;
-  } else if (row.payment) return;
-  else if (row.expected === null) totals.unpriced = true;
-  else {
-    totals.expected += row.expected;
-    totals.priced += row.stake;
-  }
-}
-/** What a round took from outside itself, its bets oldest first: each step stakes what the round's earlier steps paid
- * before anything more, so this is the most the round was ever down, what the player put in. */
-export function putIn(rows: readonly BetRow[]) {
-  let held = 0n,
+/** What went in is called: a payment of a game's round is money paid to the house. */
+const stakeLabel = (row: BetRow) => (row.payment ? 'Paid to the house' : 'Put in');
+/** What each bet of a round, oldest first, added to what the round took from outside itself: each step stakes what the
+ * round's earlier steps paid before anything more, so together they are the most the round was ever down, what the
+ * player put in. */
+export function putIns(rows: readonly BetRow[]) {
+  let down = 0n,
     most = 0n;
-  for (const row of rows) {
-    held -= row.stake;
-    if (-held > most) most = -held;
-    held += row.payout;
-  }
-  return most;
+  return rows.map(row => {
+    const added = down + row.stake > most ? down + row.stake - most : 0n;
+    most += added;
+    down += row.stake - row.payout;
+    return added;
+  });
 }
-/** Bets, added up, a round's steps as one, with what they took from outside their rounds. */
+export const putIn = (rows: readonly BetRow[]) => putIns(rows).reduce((sum, added) => sum + added, 0n);
+/** Bets, added up, a round's steps as one: what they took from outside their rounds and came out with, and the house
+ * edge of those with odds against what those put in. */
 export function betTotals(rows: readonly BetRow[]) {
   const rounds = groupRows(rows),
-    totals: BetTotals & { putIn: bigint } = {
-      bets: rounds.length,
-      putIn: rounds.reduce((sum, round) => sum + putIn(round), 0n),
-      staked: 0n,
-      paid: 0n,
-      expected: 0n,
-      priced: 0n,
-      net: 0n,
-      unpriced: false,
-    };
-  for (const row of rows) {
-    totals.staked += row.stake;
-    totals.paid += row.payout;
-    totals.net += row.payout - row.stake;
-    addOffered(totals, row);
+    totals: BetTotals = { bets: rounds.length, putIn: 0n, net: 0n, edge: 0n, priced: 0n, unpriced: false };
+  for (const round of rounds) {
+    const added = putIns(round);
+    round.forEach((row, i) => {
+      const edge = rowEdge(row);
+      totals.putIn += added[i]!;
+      totals.net += row.payout - row.stake;
+      if (edge === null) totals.unpriced = true;
+      else {
+        totals.edge += edge;
+        totals.priced += added[i]!;
+      }
+    });
   }
   return totals;
 }
+/** Bets' house edge, in millionths of what they put in. */
+export const edgeShare = (totals: Pick<BetTotals, 'edge' | 'priced'>) =>
+  share(totals.edge, totals.priced * OUTCOME_SPACE);
 
 const tone = (net: bigint) => (net < 0n ? 'negative' : net > 0n ? 'positive' : '');
 /** One figure under its label, as a bet's row and a bet in full both show it; `exact`, when the figure is cut short. */
@@ -140,12 +128,19 @@ const figure = (label: string | Node, value: string, className = '', exact = '')
 /** An amount as a row shows it, short, with the exact one on hover. */
 const amount = (label: string | Node, wei: bigint, className = '') =>
   figure(label, `${formatAmount(wei)} METH`, className, `${exact(wei)} METH`);
+/** A house edge, to a millionth of a METH with every digit on hover, or in full; none for a developer bet. */
+const edgeFigure = (edge: bigint | null, full = false) =>
+  edge === null
+    ? figure('House edge', '—', '', 'A developer bet has no odds anyone prices')
+    : full
+      ? figure('House edge', `${exact(edgeWei(edge))} METH`)
+      : figure('House edge', `${formatAmount(edgeWei(edge), 6)} METH`, '', `${exact(edgeWei(edge))} METH`);
 
-/** How much went in, how much came back, and both returns side by side: one card, or none for no bets. */
+/** What went in, the house edge on it and what came back: one card, or none for no bets. */
 export function totalCards(totals: BetTotals) {
   if (!totals.bets) return [];
-  const expected = measuredReturn(totals.priced, totals.expected),
-    realised = realisedReturn(totals.staked, totals.paid);
+  const edge = edgeShare(totals),
+    paid = share(totals.putIn + totals.net, totals.putIn);
   return [
     h(
       'div',
@@ -158,46 +153,51 @@ export function totalCards(totals: BetTotals) {
       h(
         'div',
         { className: 'large-amount' },
-        h('span', null, expected === null ? '—' : shortPercent(expected)),
-        h('small', null, 'OFFERED'),
+        h('span', edge === null ? null : { title: percent(edge) }, edge === null ? '—' : shortPercent(edge)),
+        h('small', null, 'HOUSE EDGE'),
       ),
       h(
         'p',
         null,
-        `What these bets offered: the steps they were drawn from, payments included, or their own odds${totals.unpriced ? '. A developer bet offers nothing anyone prices' : ''}. ` +
-          `They paid back ${realised === null ? '—' : shortPercent(realised)}.`,
+        (totals.priced
+          ? `What the bets were expected to cost: ${formatAmount(edgeWei(totals.edge), 6)} METH of the ${formatAmount(totals.priced)} METH put in${totals.unpriced ? ', leaving out developer bets, which have no odds anyone prices' : ''}. `
+          : 'Developer bets have no odds anyone prices. ') +
+          `They paid back ${paid === null ? '—' : shortPercent(paid)} of what went in.`,
       ),
       h('p', { className: `bet-net ${totals.net < 0n ? 'negative' : 'positive'}` }, signedAmount(totals.net)),
     ),
   ];
 }
 
-/** A row of a bet list, with the game, player and time of its latest bet. `who` is shown on a public list and left
- * out of a player's own. A row that can be opened is a button: only this wallet's own receipt holds the odds and
- * preimages to show. */
-function rowElement(last: BetRow, net: bigint, onOpen?: () => void) {
+/** A row of a bet list, with the game, player and time of its latest bet, and how many bets a round's row holds. `who`
+ * is shown on a public list and left out of a player's own. A row that can be opened is a button: only this wallet's
+ * own receipt holds the odds and preimages to show. */
+function rowElement(last: BetRow, net: bigint, onOpen?: () => void, bets?: string) {
   const item = onOpen ? h('button', { type: 'button', onclick: onOpen }) : h('div');
   item.className = `bet-row tone-${tone(net) || 'neutral'}`;
   const name = h('div', { className: 'bet-game' }, h('span', { className: 'bet-game-name' }, last.game));
   if (last.who) name.append(h('span', { className: 'bet-who' }, last.who));
   name.append(timeOf(last.at, 'bet-time', true));
+  if (bets) name.append(h('span', { className: 'bet-count' }, bets));
   item.append(name);
   return item;
 }
+const plural = (n: number, noun: string) => `${n === 1 ? 'one' : n} ${noun}${n === 1 ? '' : 's'}`;
 /** One row per bet. */
 export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   const net = row.payout - row.stake,
     item = rowElement(row, net, onOpen && (() => onOpen(row)));
   item.append(
     amount(stakeLabel(row), row.stake),
-    amount(
-      row.maxPayout === undefined || row.maxPayout === null
-        ? 'Paid'
-        : `Paid of up to ${formatAmount(row.maxPayout)} METH`,
-      row.payout,
+    figure(
+      'Paid',
+      `${formatAmount(row.payout)} METH`,
+      '',
+      `${exact(row.payout)} METH` +
+        (row.maxPayout === undefined || row.maxPayout === null ? '' : ` of up to ${exact(row.maxPayout)} METH`),
     ),
     figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} METH`),
-    figure('Return offered', rowReturn(row) === null ? '—' : shortPercent(rowReturn(row)!), 'bet-return'),
+    edgeFigure(rowEdge(row)),
   );
   // This wallet's own operation ID is long: it is searched, not shown, and so is a public row's ID in the game's record.
   const named = row.operation ? `operation ${row.operation}` : row.id === undefined ? null : `bet ${row.id}`;
@@ -208,6 +208,8 @@ export function betRowElement(row: BetRow, onOpen?: (row: BetRow) => void) {
   return item;
 }
 
+/** The bets of a round, leaving out its payments to the house and its steps that drew no bet. */
+const betsIn = (rows: readonly BetRow[]) => rows.filter(row => !row.payment && row.receipt?.status !== 'kept').length;
 /** Bets that carry the same group, in the same game and by the same player, belong together: the steps
  * of one hand, the bets on one match. Each group stands where its latest bet would, as one list of its
  * bets, oldest first; a bet alone stands as itself. */
@@ -226,22 +228,120 @@ export function groupRows(rows: readonly BetRow[]): BetRow[][] {
   }
   return order;
 }
-/** One row for a round, a group of bets: what it took from the player, its bets, and what it came to. Its stakes and
- * payouts are not added up: a round's steps stake again what its last step paid, which would count the same money
- * more than once. Its label is the game's own, often a long ID: it is searched, not shown. */
+/** One row for a round, a group of bets: what the player put in, what came back, what it came to and its house edge.
+ * Its bets' own stakes and payouts are not added up: a round's steps stake again what its last step paid, which would
+ * count the same money more than once. Its label is the game's own, often a long ID: it is searched, not shown. */
 export function groupRowElement(rows: readonly BetRow[], onOpen?: (rows: readonly BetRow[]) => void) {
   const last = rows.at(-1)!,
     net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n),
-    item = rowElement(last, net, onOpen && (() => onOpen(rows)));
+    added = putIn(rows),
+    bets = plural(betsIn(rows), 'bet'),
+    item = rowElement(last, net, onOpen && (() => onOpen(rows)), bets);
   item.append(
-    amount('Put in', putIn(rows)),
-    figure('Bets in one round', String(rows.length)),
+    amount('Put in', added),
+    amount('Paid', added + net),
     figure('Result', signedAmount(net), tone(net), `${exact(net < 0n ? -net : net)} METH`),
+    edgeFigure(edgeOf(rows)),
   );
   item.dataset.search =
     `round group ${last.group} ${rows.map(row => row.operation ?? `bet ${row.id}`).join(' ')}`.toLowerCase();
-  item.title = onOpen ? `Open the round's ${rows.length} bets` : `The round's ${rows.length} bets`;
+  item.title = onOpen ? `Open the round of ${bets}` : `A round of ${bets}`;
   return item;
+}
+
+/** What a step landed on, by the label the game gave the result: none for a bet of no step, or a result without one. */
+function landedLabel(receipt: Receipt | undefined) {
+  try {
+    const step = receipt && landed(receipt);
+    return step ? receipt!.details!.table!.results[Number(step.result)]!.label : undefined;
+  } catch {
+    return undefined;
+  }
+}
+/**
+ * A round as the player played it: what it came to, what each step landed on, what went in and came back, and its
+ * house edge; then, folded away, each step with what the round was worth before and after it, each opening in full.
+ * A step that drew no bet signed nothing, so only the browser that drew it lists it.
+ */
+export function roundDetail(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
+  const added = putIn(rows),
+    net = rows.reduce((sum, row) => sum + row.payout - row.stake, 0n),
+    bets = betsIn(rows),
+    labels = rows.map(row => landedLabel(row.receipt)),
+    worth = (wei: bigint) => h('span', { title: `${exact(wei)} METH` }, formatAmount(wei)),
+    edgeAmount = (edge: bigint | null) =>
+      edge === null ? '—' : h('span', { title: `${exact(edgeWei(edge))} METH` }, formatAmount(edgeWei(edge), 6));
+  const steps = rows.map((row, i) => {
+    // A payment's round held what it paid and what it kept.
+    const held = row.stake + (row.kept ?? 0n),
+      left = row.payout + (row.kept ?? 0n),
+      name = labels[i] ?? (row.payment ? 'Paid to the house' : `Step ${i + 1}`),
+      kept = row.receipt?.status === 'kept';
+    return h(
+      'tr',
+      null,
+      h(
+        'td',
+        null,
+        onOpen && row.receipt
+          ? h('button', { type: 'button', className: 'text-button', onclick: () => onOpen(row) }, name)
+          : name,
+      ),
+      h('td', null, worth(held), ' → ', worth(left)),
+      h('td', null, kept ? 'No bet' : edgeAmount(rowEdge(row))),
+    );
+  });
+  const edge = edgeOf(rows);
+  return [
+    h(
+      'p',
+      { className: `round-result ${tone(net)}`.trim(), title: `Group ${rows[0]!.group}` },
+      net > 0n ? `Won ${formatAmount(net)} METH` : net < 0n ? `Lost ${formatAmount(-net)} METH` : 'Broke even',
+      h('span', { className: 'bet-time' }, new Date(rows[0]!.at).toLocaleString()),
+    ),
+    ...(labels.some(Boolean)
+      ? [h('ol', { className: 'round-landed' }, ...labels.flatMap(label => (label ? [h('li', null, label)] : [])))]
+      : []),
+    h(
+      'div',
+      { className: 'bet-detail-figures round-figures' },
+      amount('Put in', added),
+      amount('Paid back', added + net),
+      edgeFigure(edge),
+    ),
+    h(
+      'details',
+      { className: 'raw-details round-steps' },
+      h('summary', null, `How it was settled: ${plural(bets, 'bet')}`),
+      h(
+        'p',
+        { className: 'bet-detail-note' },
+        'Each bet stakes what the round was worth after the one before it, so only what the round took from your ' +
+          'balance is money you put in. Open a step to see how your wallet drew it and how its outcome was fixed.',
+      ),
+      h(
+        'table',
+        null,
+        h(
+          'thead',
+          null,
+          h('tr', null, h('th', null, 'Landed on'), h('th', null, 'Worth, METH'), h('th', null, 'House edge')),
+        ),
+        h('tbody', null, ...steps),
+        h(
+          'tfoot',
+          null,
+          h(
+            'tr',
+            null,
+            h('td', null, 'The round'),
+            h('td', null, worth(added), ' → ', worth(added + net)),
+            h('td', null, edgeAmount(edge)),
+          ),
+        ),
+      ),
+    ),
+  ];
 }
 
 // --- One bet, in full -------------------------------------------------------------------------
@@ -285,8 +385,6 @@ const total = (weights: readonly { weight: bigint }[]) => weights.reduce((sum, i
 /** What a step's table was expected to leave the player, out of 2^64. */
 export const tableOffered = ({ results }: Pick<StepTable, 'results'>) =>
   (results.reduce((sum, result) => sum + result.weight * result.cash, 0n) * OUTCOME_SPACE) / total(results);
-/** What a step's table returns of the cash it holds, in millionths. */
-export const tableReturn = (table: Pick<StepTable, 'cash' | 'results'>) => returnParts(table.cash, tableOffered(table));
 /** Whether a step's ways reach each amount its table leaves exactly as often as its results' weights say. */
 function realizes({ cash, results }: StepTable, branches: readonly StepBranch[]) {
   const offered = new Map<bigint, bigint>(),
@@ -430,7 +528,6 @@ function offeredSection(step: NonNullable<ReturnType<typeof drawnStep>>) {
   section.append(
     factList([
       ['What the step held', `${exact(table.cash)} METH`],
-      ['What it returns', `${percent(tableReturn(table))} of what it held`],
       // A bet's round decides what it leaves, and the seed only which of the results that leave it.
       bet
         ? [
@@ -492,7 +589,7 @@ function stepSection(step: NonNullable<ReturnType<typeof drawnStep>>) {
       'stake' in chosen && [
         'The bet it signed',
         `Stakes ${exact(chosen.stake)} METH and pays ${exact(chosen.prize)} METH under ${roll(0n, chosen.chance).under}, ` +
-          `${chosen.chance} of 2⁶⁴ outcomes: worth ${percent(betReturn(chosen))} of its stake`,
+          `${chosen.chance} of 2⁶⁴ outcomes, at a house edge of ${exact(edgeWei(chosen.stake * OUTCOME_SPACE - chosen.prize * chosen.chance))} METH`,
       ],
     ]),
     h(
@@ -565,7 +662,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
       figure(stakeLabel(row), `${exact(row.stake)} METH`),
       figure('Paid', `${exact(row.payout)} METH`),
       figure('Result', signedAmount(net), tone(net)),
-      figure('Return offered', rowReturn(row) === null ? '—' : percent(rowReturn(row)!), 'bet-return'),
+      edgeFigure(rowEdge(row), true),
     ),
   );
 
@@ -672,7 +769,11 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         factList([
           ['Prize', `${exact(revealed.prize)} METH`],
           ['Chance', `Wins under ${rolled.under} · ${revealed.chance} of 2⁶⁴ outcomes`],
-          ['Worth', `${percent(returnParts(receipt.stake ?? 0n, receipt.expectedPayout ?? 0n))} of the stake`],
+          [
+            'House edge',
+            `${percent(share(op!.amount * OUTCOME_SPACE - revealed.prize * revealed.chance, op!.amount * OUTCOME_SPACE)!)} of the stake: ` +
+              'what it stakes, less its prize times its chance',
+          ],
         ]),
       );
       body.append(terms);
