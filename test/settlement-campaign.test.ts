@@ -9,6 +9,8 @@ import {
   step,
   assessBinary,
   claimOf,
+  claimReceiver,
+  jointly,
   channelAt,
   disputedBet,
   forceClose,
@@ -412,11 +414,7 @@ test('gas profile covers full-width evidence, a long winnings queue, forced ETH 
     max = MAX_BALANCE - 1n;
   const base = { ...ch.state, sequence: 2n, balance: max / 8n };
   ch.state = base;
-  ch.evidence = checkpointEvidence(
-    base,
-    await ch.player.signTypedData(f.d, STATE_TYPES, base),
-    await f.signer.signTypedData(f.d, STATE_TYPES, base),
-  );
+  ch.evidence = await jointly(f, ch, base);
   // Exercise full-width casino bet terms.
   const { operation, OP_TYPES, deriveState, roundId, seedHash } = await import('../protocol/protocol.ts');
   const secret = id('wide secret'),
@@ -444,13 +442,7 @@ test('gas profile covers full-width evidence, a long winnings queue, forced ETH 
   };
   await (await f.contract.connect(ch.player).startClose(ch.base)).wait();
   gas.challengeWide = (await (await f.contract.challengeClose(evidence)).wait()).gasUsed;
-  const receiverArtifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver');
-  const receiver: any = await new ContractFactory(
-    receiverArtifact.abi,
-    receiverArtifact.evm.bytecode.object,
-    env.wallets[4],
-  ).deploy(f.contract.target);
-  await receiver.waitForDeployment();
+  const receiver = await claimReceiver(f, env.wallets[4]);
   // A contract account signs nothing, but anyone funds its channel and it closes from its base.
   const opening = openingFor(String(receiver.target), 0n);
   await (await f.contract.connect(env.wallets[4]).deposit(receiver.target, { value: 100n })).wait();

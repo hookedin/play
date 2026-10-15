@@ -1,6 +1,6 @@
 ---
 title: Casino bets
-description: The stake, chance and prize of a casino bet, a one-shot game, the casino's edge, measured return, payments and groups.
+description: The stake, chance and prize of a casino bet, a one-shot game, the casino's edge, measured return and payments.
 sidebar:
   order: 3
 ---
@@ -81,7 +81,7 @@ bet the wallet placed, the round's `outcome`, the `payout`, the prize or 0, and 
 result the step landed on; a `rejected` one is a bet the casino declined, as when its quote expired while it waited,
 with the balance unchanged: offer the same step again under a fresh `id`. The saved `id` is
 what finds the result after a lost reply or a reload ([lost replies](how-a-game-works.md#lost-replies)), and what
-[`HookedIn.showBet(id)`](../sdk/hookedin.md#showbet) shows the player the proof of, in the wallet.
+[`HookedIn.showBet(id)`](../reference/bridge.md#walletshowbet) shows the player the proof of, in the wallet.
 
 A game of more outcomes, such as a Plinko board or a slot, plays each step as one bet all the same: the page offers
 every result with its weight, and the wallet splits the table into bets and draws which to place, so that every result
@@ -155,9 +155,3 @@ result: [Plinko](../../games/plinko/src/tables.ts) draws its ball's path with it
 A payment is a deterministic debit to the bankroll, [`game.payment`](../reference/bridge.md#gamepayment): no round, no
 outcome, no commission. `RoundClient` places one when a step leaves the player less cash with nothing to draw, such as a
 cash-out from a state priced above what it pays ([one step is one bet](multi-step-games.md#one-step-is-one-bet)).
-
-## Groups
-
-`group`, a label of 1 to 64 characters, marks bets and payments that belong together: the steps of one hand, the bets
-on one match. The player signs it with each; the wallet's bet history shows a group as one row with its net result, and
-the game's public record can be read by group. `RoundClient` gives every step of a round the round's ID.

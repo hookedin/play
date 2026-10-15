@@ -250,8 +250,9 @@ export class TransactionJournal {
     // leaves the exact signed transaction available to the next process.
     this.requireDurableState();
     await this.durable?.();
-    const providers = this.observer?.witnessProvider ? [this.provider, this.observer.witnessProvider] : [this.provider];
-    const outcomes = await Promise.allSettled(providers.map(p => p.broadcastTransaction(pending.raw)));
+    const outcomes = await Promise.allSettled(
+      (this.observer?.providers ?? [this.provider]).map(p => p.broadcastTransaction(pending.raw)),
+    );
     if (outcomes.every(r => r.status === 'rejected') && !(await this.provider.getTransaction(pending.hash)))
       throw new Error('Broadcast uncertain; signed transaction retained for retry');
     return { ...pending, status: 'pending' };

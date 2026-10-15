@@ -89,16 +89,12 @@ is half the casino's bankroll when it quoted. A quote **covers** a casino bet th
 it holds, and whose terms its virtual bankroll admits by the casino's
 [Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager).
 
-The casino settles every casino bet a quote covers. The wallet sends the seed with a covered bet only, so the casino
-declines any other without learning what it would have paid. A covered bet the casino declines or leaves unanswered
-stays saved in the wallet, which **disputes** it by closing the channel with it before the quote expires, as a
-watchtower holding its recovery bundle does: the contract counts it as won until the casino settles it with the round's
-secret ([dispute a casino bet](../wallet/closing-and-claims.md#dispute-a-casino-bet)). The casino declines a covered bet
-only as a game's operation its player carried out on another channel, with the operation the account signed there as
-proof.
-
-A quote binds the casino for its day whatever the bankroll does meanwhile, and the quotes out at once are not divided
-between them: the bankroll overcommits ([limitations](architecture.md#limitations)).
+The casino settles every casino bet a quote covers, and the wallet sends the seed with a covered bet only, so the casino
+declines any other without learning what it would have paid. A covered bet the casino leaves unsettled, the wallet or a
+watchtower **disputes** by closing the channel with it before the quote expires: the contract counts it as won until the
+casino settles it with the round's secret ([dispute a casino
+bet](../wallet/closing-and-claims.md#dispute-a-casino-bet)). A quote binds the casino for its day whatever the bankroll
+does meanwhile, so the bankroll [overcommits](architecture.md#limitations).
 
 A game with a server of its own can also have the casino name rounds for it and place casino bets on them, so that many
 players share one draw; see [developer bets](../games/developer-bets.md).
@@ -145,7 +141,7 @@ and collects with a credit ([trust model](trust-model.md#developer-bets-trust-th
 | Against      | The casino's bankroll                                   | The game's developer                      |
 | Settled      | In the request that places it, by its round             | When the game's server signs a settlement |
 | What it pays | Its prize, when the round's outcome is below its chance | What the server's settlement says         |
-| Its return   | Measured from its chance and prize                      | None: it has no odds                      |
+| House edge   | From its chance and prize                               | None: it has no odds                      |
 | Games        | Any game                                                | A published game, whose server settles it |
 
 ## Payments
@@ -167,18 +163,11 @@ Anyone with a balance can move money from it into the bankroll and hold shares o
 
 ## Withdrawing
 
-A withdrawal takes part or all of the balance out, and the channel stays active. It is an operation that names the address
-to pay: your account signs it, the casino signs the checkpoint after it at once, like any operation, and play goes on
-from the lower balance. With that evidence, which your receipt keeps, anyone can have the contract record and pay the
-withdrawal with `withdraw`, and the casino does straight away. A withdrawal pays the casino a fee for sending it to the
-contract. To fund a friend's balance,
-[transfer](../wallet/getting-started.md#transfer) to them instead, off-chain and with no fee.
-
-The contract pays a withdrawal out of the channel's principal first, then its collateral, and its winnings from house
-cash, in the order
-the account made them ([withdrawals](../reference/contract.md#withdrawals)). The casino takes a withdrawal on only when
-all of it can be paid now, and otherwise declines it, leaving the balance unchanged
-([what you trust the casino for](trust-model.md#what-you-trust-the-casino-for)).
+A withdrawal takes part or all of the balance out, and the channel stays active: an operation that names the address to
+pay, which the casino signs at once, like any operation. With that evidence anyone can have the contract record and pay
+it, and the casino sends it straight away, for a fee. The contract pays it out of the channel's principal first, then
+its collateral, and its winnings from house cash ([withdraw](../wallet/closing-and-claims.md#withdraw)). To fund a
+friend's balance, [transfer](../wallet/getting-started.md#transfer) to them instead, off-chain and with no fee.
 
 ## Closing and claims
 

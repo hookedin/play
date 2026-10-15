@@ -8,7 +8,6 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { hexlify, keccak256, randomBytes } from 'ethers';
 import { drawStep, landStep, outcome, roundId, seedHash } from '../protocol/protocol.ts';
-import { admits } from '../protocol/risk.ts';
 import { splitStep } from '../sdk/src/engine/transition.ts';
 
 const html = readFileSync(new URL('../docs/verify.html', import.meta.url), 'utf8'),
@@ -50,7 +49,7 @@ test('it checks that the ways the wallet split a table into pay each amount exac
       { weight: 2n, cash: 2000n },
       { weight: 1n, cash: 3000n },
     ],
-    ways = splitStep({ admits, bankroll: 10n ** 9n, cash: 1000n, results }).map(way =>
+    ways = splitStep({ bankroll: 10n ** 9n, cash: 1000n, results }).map(way =>
       'stake' in way ? [way.weight, way.stake, way.chance, way.prize] : [way.weight],
     ),
     table = results.map(result => [result.weight, result.cash]);

@@ -1,3 +1,2 @@
-package-lock.json
-client/contract-artifact.ts
+protocol/contract-artifact.ts
 vectors/

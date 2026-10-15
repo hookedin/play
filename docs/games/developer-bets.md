@@ -56,18 +56,14 @@ const receipt = await HookedIn.developerBet({
 - Only a published game takes developer bets. A game opened by its URL alone is refused with `invalid-request`
   ([publishing](publishing.md#publish-it)).
 - A deposit pays a developer bet once the chain finalizes it, about 15 minutes after it: until then the casino declines
-  a bet it would pay, `rejected` with why, unless it trusts your account as it does the house
-  ([publishing](publishing.md#publish-it)). What the player won or was sent pays at once.
-- The player allows developer bets apart from casino bets. Call `HookedIn.placesDeveloperBets()` as your page loads,
-  and the allowance dialog the player opens from the wallet's top bar asks about them too
-  ([the allowance](how-a-game-works.md#the-allowance)). It warns that you take the stakes and decide what they pay,
-  which neither the casino nor the wallet can check. Until the player allows them, a developer bet is refused with
-  `developer-bets-not-allowed`, whose message is [`HookedIn.NO_DEVELOPER_BETS`](../sdk/hookedin.md#no_developer_bets),
-  `HookedIn.allowance()` says `developerBets: false`, and `HookedIn.onAllowance` hears when the player allows them.
+  a bet it would pay, `rejected` with why. What the player won or was sent pays at once.
+- The player allows developer bets apart from casino bets: call `HookedIn.placesDeveloperBets()` as your page loads
+  ([the allowance](how-a-game-works.md#the-allowance)). Until the player allows them, a developer bet is refused with
+  `developer-bets-not-allowed`, whose message is [`HookedIn.NO_DEVELOPER_BETS`](../sdk/hookedin.md#no_developer_bets).
 - Once your server settles a bet, the wallet checks the settlement against the server key you named, and your signed
   naming of it, and collects what it pays into the player's balance.
   While the game is open, it adds that to the bet's group, which joins the allowance once the page ends the group with
-  [`HookedIn.end`](../sdk/hookedin.md#end), and pushes the receipt, `settled` with its `payout`, as a `game.receipt`
+  [`HookedIn.end`](../reference/bridge.md#gameend), and pushes the receipt, `settled` with its `payout`, as a `game.receipt`
   event. The wallet looks only every 10 minutes while its tab is visible, so a page that hears from your server
   that a bet has settled calls `HookedIn.receipt(id)`, and the wallet looks at once. After a reload,
   `HookedIn.receipt(id)` finds the bet.
@@ -338,7 +334,7 @@ One draw of a provably fair game, from the first request to the players' money, 
 Anyone can then check the draw: [`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround) shows each
 round's seed, its secret, the outcome and your casino bet with its group and meta, and
 [`@hookedin/play/sdk/outcome`](../sdk/outcome.md#checking-a-round) recomputes them. A page talks to nobody but its own
-origin: it reads a round through its player's wallet with [`HookedIn.round`](../sdk/hookedin.md#round).
+origin: it reads a round through its player's wallet with [`HookedIn.round`](../reference/bridge.md#walletround).
 
 ## Crash games
 

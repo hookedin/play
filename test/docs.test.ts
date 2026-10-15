@@ -25,7 +25,7 @@ function section(text: string, title: string) {
 const codes = (text: string) =>
   text
     .split('\n')
-    .filter((line, i, lines) => !lines[i + 1]?.startsWith('| -'))
+    .filter((_, i, lines) => !lines[i + 1]?.startsWith('| -'))
     .flatMap(line => /^\| `([a-z-]+)`\s*\|/.exec(line)?.[1] ?? []);
 /** The names of a text's `### \`name\`` entries. */
 const entries = (text: string) => [...prose(text).matchAll(/^### `([^`]+)`$/gm)].map(match => match[1]).sort();

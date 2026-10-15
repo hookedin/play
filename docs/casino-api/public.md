@@ -147,11 +147,11 @@ A game's public record, by its [ID](../reference/signed-messages.md#game-ids): w
 bets and payments, newest first, and their totals. A bet appears when it settles: a player's casino bet or payment
 when the casino carries it out, a developer bet when the game's server settles it, and the game's own casino bet from
 its bank when the bankroll takes it. Declined bets and reveals do not appear. An unknown ID answers with a bank and
-totals of zero and no bets, and one that is not a game ID with `invalid`.
+totals of zero and no bets, and one that is not a game ID, or a malformed `limit`, with `invalid`.
 
-| Query   | Type   | Meaning                                                                                                        |
-| ------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| `limit` | number | How many bets, 1 to 500 and 100 by default; other values are clamped, and one that is not a number counts as 1 |
+| Query   | Type   | Meaning                                                  |
+| ------- | ------ | -------------------------------------------------------- |
+| `limit` | number | How many bets, a whole number from 1 to 500; default 100 |
 
 | Response field  | Type           | Meaning                                                                                              |
 | --------------- | -------------- | ---------------------------------------------------------------------------------------------------- |
@@ -240,8 +240,9 @@ game's bets by waiting again with each page's `cursor`.
 | `limit`  | number | How many, a whole number from 1 to 256; default 100                                    |
 | `wait`   | number | Open bets only: how many seconds to hold a page with none, a whole number from 1 to 25 |
 
-`invalid` answers a missing or malformed game ID, status, cursor, limit or wait, and a cursor that names no bet, or for
-settled bets no settled bet. `unauthorized` answers a wait without the access of the published game's server, and `busy` one too many.
+`invalid` answers a missing or malformed game ID, status, group, cursor, limit or wait, and a cursor that names no bet,
+or for settled bets no settled bet. `unauthorized` answers a wait without the access of the published game's server, and
+`busy` one too many.
 
 ## Local development
 

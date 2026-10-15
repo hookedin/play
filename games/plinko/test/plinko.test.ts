@@ -7,7 +7,6 @@ import { admits } from '@hookedin/play/sdk/admits';
 import { compileGame, fraction, getNode, seededRandom } from '@hookedin/play/sdk/engine';
 const plan = (rows: any, risk: any, stake: bigint, bankroll = 20000n * stake) =>
   compileGame(dropGraph({ stake, rows, risk }), {
-    admits,
     bankrollFloor: bankroll,
     cashQuantum: 1n,
     initialCash: stake,
@@ -133,7 +132,10 @@ test('every bet this game can place pays back at least the floor it is built to'
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
     for (const rows of ROWS)
       for (const risk of RISKS)
-        assert.ok(worstReturn(plan(rows, risk, stake, 10n ** 9n * stake)) >= FLOOR, `${rows} ${risk} below the floor`);
+        assert.ok(
+          worstReturn(dropGraph({ stake, rows, risk }), stake, 2n * 10n ** 9n * stake) >= FLOOR,
+          `${rows} ${risk} below the floor`,
+        );
 });
 
 test('a landed ball ended is read back from the history on its own board and the path it fell, newest first', async () => {

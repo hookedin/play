@@ -1,29 +1,21 @@
 import type { ClientConfig } from './config.ts';
-import { parseUnits } from 'ethers';
 import * as read from '../protocol/read.ts';
 import { h } from './activity.ts';
 import config from './config.ts';
 
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 export const short = (value: string | null | undefined) => (value ? `${value.slice(0, 8)}…${value.slice(-6)}` : '—');
-/** A typed amount of METH, in wei. */
-export const typedAmount = (text: string) => parseUnits(text, 12);
-/** How a player is written: a Discord username wears `@`, a uname wears `~`. */
-export const showName = (names: { uname?: string | null; discordUsername?: string | null } | null) =>
-  names?.discordUsername ? '@' + names.discordUsername : names?.uname ? '~' + names.uname : '—';
 /** A day, as a page says when something began. */
 export const shortDate = (time: number) =>
   new Date(time).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
-// The launcher names the network, the casino and the deployment to trust in config.js.
-export const {
-  network,
-  casino: casinoURL,
-  deployment,
-} = read.object<ClientConfig>({
-  network: read.oneOf('mainnet', 'local'),
+// The launcher names the casino and the deployment to trust in config.js.
+export const { casino: casinoURL, deployment } = read.object<ClientConfig>({
   casino: read.text,
   deployment: read.deployment,
 })(config);
+/** The deployment's network: Ethereum, or a local Anvil chain. */
+export const network =
+  deployment.chainId === 1n ? 'mainnet' : deployment.chainId === 31337n ? 'local' : read.refuse('A chain');
 
 /** Open a sheet over the page, and take the focus into it: a game frame that had it is inert under the sheet, and keys
  * and clicks would go nowhere. */
@@ -71,6 +63,17 @@ $('toast').addEventListener('toggle', event => {
     for (const sheet of document.querySelectorAll<HTMLElement>('dialog.sheet'))
       sheet.style.removeProperty('--toast-room');
 });
+/** Copy `text` and say `copied`. Where the browser refuses, say `refused`: with `shown`, the element that shows the
+ * text is selected for the browser's own copy command, and without it, copying failed. */
+export async function copyText(text: string, copied: string, refused: string, shown?: HTMLElement) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(copied);
+  } catch {
+    if (shown) getSelection()?.selectAllChildren(shown);
+    toast(refused, !shown);
+  }
+}
 /** Save `text` as a file the player downloads. */
 export function download(name: string, text: string, type = 'application/json') {
   const url = URL.createObjectURL(new Blob([text], { type }));

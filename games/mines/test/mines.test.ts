@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
-import { RoundClient } from '@hookedin/play/sdk/round';
+import { RoundClient, pricing } from '@hookedin/play/sdk/round';
 import { TILES, coveredPicks, minesGraph, multiplier, payout } from '../src/rules.ts';
 import { compileGame } from '@hookedin/play/sdk/engine';
-import { admits } from '@hookedin/play/sdk/admits';
 /** The ways to choose k of n, counted apart from the rules' own count. */
 const factorial = (n: number): bigint => (n < 2 ? 1n : BigInt(n) * factorial(n - 1));
 const choose = (n: number, k: number) => factorial(n) / (factorial(k) * factorial(n - k));
@@ -56,7 +55,7 @@ async function setUp(bankroll?: bigint) {
   w.openGame(f.identity('mines'));
   await w.setGameAllowance(200000n);
   const store = memoryStore(),
-    client = () => new RoundClient(f.bridge, minesGraph, undefined, { store, name: 'mines' }),
+    client = () => new RoundClient(f.bridge, minesGraph, { store, name: 'mines' }),
     covered = async (stake: bigint, mines: number) =>
       coveredPicks(stake, mines, (await f.bridge.call('wallet.info')).virtualBankroll);
   return { client, covered };
@@ -126,14 +125,12 @@ test('every bet this game can place pays back at least its floor, and a cash-out
         // The ladder the page starts, priced as `RoundClient` prices it.
         const picks = coveredPicks(stake, mines, bankroll);
         if (!picks) continue;
-        const plan = compileGame(minesGraph({ stake, mines, picks }), {
-          admits,
-          bankrollFloor: bankroll / 2n,
-          cashQuantum: stake / 10n ** 9n || 1n,
-          initialCash: stake,
-        });
-        assert.ok(worstReturn(plan) >= FLOOR, `a bet among ${mines} mines pays back less than this game's floor`);
-        for (const node of plan.nodes) {
+        const graph = minesGraph({ stake, mines, picks });
+        assert.ok(
+          worstReturn(graph, stake, bankroll) >= FLOOR,
+          `a bet among ${mines} mines pays back less than this game's floor`,
+        );
+        for (const node of compileGame(graph, pricing(stake, bankroll)).nodes) {
           if (node.kind !== 'decision') continue;
           for (const { transition: step } of node.actions) {
             if (step.kind === 'casino-bet') continue;

@@ -33,6 +33,7 @@ test('historical polling stays bounded, sweeps all evidence and prioritizes reor
     observe: async () => ({ block: { number: 100, hash: 'canonical' } }),
     balance: async () => 1n,
     accept: async () => {},
+    requireCanonical: async () => {},
     corroborate: async (_: any, read: any) => read({ getBlock: async () => ({ hash: 'canonical' }) }),
     contractRead: async (_: any, method: any, args: any) => {
       if (method === 'channelIndex') return BigInt(current + 1);

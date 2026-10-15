@@ -57,11 +57,10 @@ const RELOAD =
 
 /**
  * Serve a built directory the way its static host does: its files, the headers of its `_headers` file, and the page
- * for any path without an extension. `config`, when given, replaces config.js, so a launcher can point the wallet at
- * its casino. `build`, when given, builds the directory again before every page load, so a change shows on reload.
- * `watched`, when given, is the directory whose changes reload every page open from this server.
+ * for any path without an extension. `build`, when given, builds the directory again before every page load, so a
+ * change shows on reload. `watched`, when given, is the directory whose changes reload every page open from this server.
  */
-export function createStaticServer(dir, config, build, watched) {
+export function createStaticServer(dir, build, watched) {
   let serving = Promise.resolve();
   /** The open pages, each a stream the server tells to reload, a moment after the last change. */
   const pages = new Set();
@@ -116,18 +115,11 @@ export function createStaticServer(dir, config, build, watched) {
           }
           headers = await readHeaders();
         }
-        let data, type;
-        if (pathname === '/config.js' && config) {
-          data = `export default ${JSON.stringify(config)};`;
-          type = types['.js'];
-        } else {
-          const file = path.join(dir, route ? 'index.html' : pathname);
-          data = await fs.promises.readFile(file);
-          type = types[path.extname(file)] ?? 'application/octet-stream';
-          if (watcher && file.endsWith('.html'))
-            data = data.toString().replace('</head>', '<script type="module" src="/__reload.js"></script></head>');
-        }
-        res.writeHead(200, { ...headers, 'Content-Type': type });
+        const file = path.join(dir, route ? 'index.html' : pathname);
+        let data = await fs.promises.readFile(file);
+        if (watcher && file.endsWith('.html'))
+          data = data.toString().replace('</head>', '<script type="module" src="/__reload.js"></script></head>');
+        res.writeHead(200, { ...headers, 'Content-Type': types[path.extname(file)] ?? 'application/octet-stream' });
         res.end(req.method === 'HEAD' ? undefined : data);
       } catch {
         res.writeHead(404, { ...headers, 'Content-Type': 'text/plain' }).end('Not found');
@@ -215,7 +207,7 @@ export async function serveGame(root, port) {
     })
   ).outputFiles;
   const local = { '/': [LOCAL_WALLET, types['.html']], '/local-wallet.js': [script.contents, types['.js']] };
-  const game = createStaticServer(path.join(root, 'dist'), undefined, () => buildGame(root), path.join(root, 'src'));
+  const game = createStaticServer(path.join(root, 'dist'), () => buildGame(root), path.join(root, 'src'));
   const server = http.createServer((req, res) => {
     if (new URL(`http://${req.headers.host}`).hostname !== 'localhost') return void game.emit('request', req, res);
     const page = local[new URL(req.url, 'http://localhost').pathname];

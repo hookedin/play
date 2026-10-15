@@ -29,26 +29,17 @@ Each address opens its tab, over the library when it is a link. Closing it, or B
 
 The wallet, its games and hookedin.com count money in **METH**. **1 METH is a millionth of an ETH (0.000001 ETH)**,
 so **1 ETH = 1,000,000 METH** and 0.01 ETH = 10,000 METH. Amounts are cut off, never rounded: a balance in whole METH,
-and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every digit on hover or in full. Every METH
-that labels an amount says what it is on hover, and the wallet's balance says it outright. The name is a joke, and a
-deliberate one: HookedIn, hooked in METH.
+and a stake, a payout or a fee at a thousandth of a METH, a gwei, with every digit on hover or in full.
 
 This deployment uses **ETH on Ethereum mainnet only** and is in [open beta](../index.md#open-beta). Send it nothing
 else: it accepts no other asset or network, and offers no fiat conversion or card purchase. The game library works at
 once; everything with ETH waits until the wallet has checked the casino's contract on-chain, and a banner says so if
 that check fails ([how the wallet pins its deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
-**Backup and keys**, under **Keys** in Settings, keeps the key of every account this browser created, signed in to or
-imported, and **Import a private key** makes one your account. A game you have open opens again under the account you
-switch to. **Start over** deletes them all and leaves the wallet with no account
-([your key](keys-and-recovery.md#your-key)).
-
 ## Deposit
 
-Until you have an account, the wallet offers to create one instead of the Deposit tab: **Create with a passkey**,
-**Sign in with a passkey** to open the account of one you made before, or **Create a key file**
-([your key](keys-and-recovery.md#your-key)). A game you have open opens again under the account, and the Deposit tab
-shows its address.
+Until you have an account, the Deposit tab offers to create one or sign in ([your key](keys-and-recovery.md#your-key));
+then it shows your deposit address.
 
 Send ETH on Ethereum to the address, or have another player withdraw some to it. While the Deposit tab
 is open and the page visible, the wallet checks the address every 20 seconds and adds what arrives to your balance;
@@ -81,8 +72,7 @@ you choose.
 [Chainflip](https://chainflip.io) is a cross-chain swap service HookedIn does not run. The wallet asks it for a
 one-time address on the coin's own network for the amount you enter, and Chainflip swaps what arrives there for ETH and
 sends it to your deposit address, where it joins your balance like any deposit. Chainflip takes its own fees and its
-broker's commission, both in its quote; HookedIn takes nothing. HookedIn only shows it to help: we do not control
-Chainflip and are not responsible for it, its rates, delays or refunds, or anything you send it.
+broker's commission, both in its quote; HookedIn takes nothing.
 
 The refund address is your own address on the coin's network, not an exchange's: if the swap cannot fill within the
 quote, Chainflip sends your coins back there. A deposit below Chainflip's minimum, which the wallet shows, or sent after
@@ -104,34 +94,26 @@ game, and takes and settles its developer bets. A game opened by its URL alone i
 all of its commission, and it takes no developer bets.
 
 A game opens with nothing to play with, and nothing opens over it: it says to set an allowance in the top bar, creating
-your wallet or depositing first if it asks, and refuses a bet its allowance does not cover. While the game is open, the
-top bar names it and shows its allowance beside **Wallet**, as on every page; until you set one, it offers **Set
-allowance** once your balance has something to allow, which opens the wallet's own dialog, where every word is the
-wallet's. Once you have allowed the game something, the dialog adds up the visit: what you allowed, what you took back,
-what the game won or lost, and what is left. The allowance caps what the game may risk, and moves no money:
+your wallet or depositing first if it asks. While the game is open, the top bar names it and shows its allowance beside
+**Wallet**. **Set allowance** opens the wallet's own dialog, where every word is the wallet's, in whole METH; it adds up
+the visit: what you allowed, what you took back, what the game won or lost, and what is left. The allowance caps what
+the game may risk, and moves no money:
 
 - The money stays in your balance. The allowance is the most the game may put at risk, out of what your balance has
-  taken in: a deposit still arriving cannot raise it.
-- It lives only in this tab's memory. Leaving the game, reloading or closing the tab takes it back: every time you open
-  a game it starts with nothing, and so does its visit. The dialog deals in whole METH, and starts at what the game
-  holds now, nothing for a game just opened. The wallet gives a game nothing without your word in its dialog. One tab
-  at a time plays with your balance: in another, the dialog says so.
-- Every verified result of the game's own operations moves it: a stake lowers it as it is bet, and a win raises it once
-  the game has shown it, so the figure gives no result away before the game does, and stands still while a round is
-  played. Until then the wallet's window says how much of your balance is in play. A game can lose everything it
-  holds, its winnings included, and not a wei more.
-- Casino bets need nothing more: your wallet checks their odds and their results. A developer bet is a bet against the
-  game's developer, who takes the stake and decides what it pays, so for a game that places them the dialog asks you
-  to allow developer bets too, and warns you first. Taking the whole allowance back takes that leave back too.
-- A withdrawal lowers it to what stays in your balance, if it was more; taking out everything, or locking in, closes
-  the game.
-- It signs nothing, so you can change it while an operation is pending, up to your balance less what that operation
-  has already committed.
+  taken in. It signs nothing, so you can change it while an operation is pending.
+- It lives only in this tab's memory: leaving the game, reloading or closing the tab takes it back, and every game opens
+  with nothing.
+- A stake lowers it as it is bet, and a win raises it once the game has shown it, so it gives no result away and stands
+  still while a round is played; meanwhile the wallet's window says how much of your balance is in play. A game can
+  lose everything it holds, its winnings included, and not a wei more.
+- Casino bets need nothing more: your wallet checks their odds and their results. A developer bet's stake goes to the
+  game's developer, who decides what it pays, so the dialog asks you to allow developer bets too, and warns you first.
+- A withdrawal lowers it to what stays in your balance; taking out everything, or locking in, closes the game.
 - The wallet runs in one tab at a time. Another tab shows only **Use here**, which moves the wallet to it and stops any
   game playing in the tab it leaves.
 
-The wallet does not refuse a bet for paying back little: a game can spend its whole allowance on poor bets, and your
-[bets](bets-and-receipts.md) show what each game really paid back.
+The wallet does not refuse a bet for paying back little, [on purpose](../overview/architecture.md#settled-trade-offs):
+your [bets](bets-and-receipts.md) show what each game really paid back.
 
 ## Withdraw
 
@@ -143,10 +125,9 @@ contract then pays the address ([how a withdrawal is paid](closing-and-claims.md
 casino a fee for sending the withdrawal to the contract, which the tab shows ([fees and
 gas](closing-and-claims.md#fees-and-gas)): **Max** is your balance less it.
 
-The casino takes a withdrawal on only when the contract can pay all of it now; otherwise it declines it and says how
-much can be withdrawn now, and your balance is as it was. A withdrawal needs the casino and no operation in flight
-([when a reply is lost](keys-and-recovery.md#when-a-reply-is-lost)); without the casino,
-[close without the casino](closing-and-claims.md#close-without-the-casino).
+A withdrawal needs the casino and no operation in flight ([when a reply is
+lost](keys-and-recovery.md#when-a-reply-is-lost)); without the casino, [close without the
+casino](closing-and-claims.md#close-without-the-casino).
 
 ## Transfer
 

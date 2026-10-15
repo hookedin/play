@@ -35,7 +35,7 @@ export async function anvil(chainId = 31337n, { epoch = 0 } = {}) {
   const port = (probe.address()! as any).port;
   await new Promise(r => probe.close(r));
   const child = spawn(
-    process.env.ANVIL_BIN || 'anvil',
+    'anvil',
     ['--port', String(port), '--chain-id', String(chainId), '--slots-in-an-epoch', String(epoch), '--silent'],
     { stdio: ['ignore', 'ignore', 'pipe'] },
   );
@@ -93,6 +93,16 @@ export async function deployment(env: any, { payoutLimit = MAX_BALANCE - 1n } = 
   await contract.waitForDeployment();
   return { contract, d: domain(env.chainId, await contract.getAddress()), signer, treasury };
 }
+/** A contract account on `f`'s contract (contracts/test/ClaimReceiver.sol) that `controller` deploys and alone tells
+ * how to take a payment: it refuses one until its mode changes. */
+export async function claimReceiver(f: any, controller: any) {
+  const artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
+    receiver: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, controller).deploy(
+      f.contract.target,
+    );
+  await receiver.waitForDeployment();
+  return receiver;
+}
 let count = 0;
 export function openingFor(player: string, index = 0n) {
   return { channelId: channelId(player, index), player, index };
@@ -138,6 +148,14 @@ export async function open(f: any, player: any, deposit = 1000n, from = player) 
   const ch = await fund(f, player, deposit, from),
     taken = await step(f, ch, KIND.deposit, deposit);
   return { ...ch, state: taken.state, evidence: await countersigned(f, ch, taken) };
+}
+/** `state` as both sides sign it: the account of the channel `ch` and the casino. */
+export async function jointly(f: any, ch: any, state: any) {
+  return checkpointEvidence(
+    state,
+    await ch.player.signTypedData(f.d, STATE_TYPES, state),
+    await f.signer.signTypedData(f.d, STATE_TYPES, state),
+  );
 }
 /** The checkpoint a step reached, as both sides sign it: the account countersigns the casino's signed result. */
 export async function countersigned(f: any, ch: any, { state, evidence }: any) {
@@ -211,15 +229,7 @@ export async function signedIncrease(f: any, ch: any, amount: bigint) {
     transitionHash: id('checkpoint:' + ++count),
     balance: ch.state.balance + amount,
   };
-  const signer = ch.player;
-  return {
-    state,
-    evidence: checkpointEvidence(
-      state,
-      await signer.signTypedData(f.d, STATE_TYPES, state),
-      await f.signer.signTypedData(f.d, STATE_TYPES, state),
-    ),
-  };
+  return { state, evidence: await jointly(f, ch, state) };
 }
 /** The casino's offer of `amount` of collateral for a channel at `price`, which `buy` buys from `buyer` on-chain and
  * `attempt` tries without sending. */

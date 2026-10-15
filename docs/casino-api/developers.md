@@ -39,19 +39,21 @@ the prize when the round's outcome is below the chance, and takes half the bet's
 the game; it is listed in the game's public record, in its group. Declined, no money moves. A stake, chance and prize of
 zero bet nothing: they only reveal the round, with no bank check and no admission, and `accepted` is false.
 
-| Body field  | Type    | Meaning                                                                                                                                                                                          |
-| ----------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `game`      | string  | The ID of the published game whose round it is and whose bank pays its stake                                                                                                                     |
-| `stake`     | string  | Decimal, 1 to 2^96 − 1, without leading zeros; `0` to reveal                                                                                                                                     |
-| `chance`    | string  | Decimal: how many of the 2^64 outcomes win, 1 to 2^64 − 1; `0` to reveal                                                                                                                         |
-| `prize`     | string  | Decimal: what the bet pays when it wins, 1 to 2^96 − 1; `0` to reveal                                                                                                                            |
-| `group`     | string  | 1 to 64 characters: the label the game gives the bets that belong together                                                                                                                       |
-| `meta`      | object  | The game's own JSON: at most 4,096 bytes of canonical JSON, whose numbers are safe integers and whose text is well-formed, without a NUL. The casino keeps it with the reveal and never reads it |
-| `seed`      | bytes32 | The bet's seed                                                                                                                                                                                   |
-| `signature` | string  | The server's EIP-712 `BankCasinoBet` over `{round, game, stake, chance, prize, group, seedHash: keccak256(seed), meta: keccak256(canonicalJSON(meta))}`                                          |
+| Body field  | Type    | Meaning                                                                                                                                                                    |
+| ----------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `round`     | bytes32 | The round, as in the path                                                                                                                                                  |
+| `game`      | string  | The ID of the published game whose round it is and whose bank pays its stake                                                                                               |
+| `stake`     | string  | Decimal, 1 to 2^96 − 1, without leading zeros; `0` to reveal                                                                                                               |
+| `chance`    | string  | Decimal: how many of the 2^64 outcomes win, 1 to 2^64 − 1; `0` to reveal                                                                                                   |
+| `prize`     | string  | Decimal: what the bet pays when it wins, 1 to 2^96 − 1; `0` to reveal                                                                                                      |
+| `group`     | string  | 1 to 64 printable characters: the label the game gives the bets that belong together                                                                                       |
+| `meta`      | object  | The game's own JSON, with the bounds of a developer bet's [meta](../reference/signed-messages.md#details-and-memo). The casino keeps it with the reveal and never reads it |
+| `seed`      | bytes32 | The bet's seed                                                                                                                                                             |
+| `signature` | string  | The server's EIP-712 `BankCasinoBet` over `{round, game, stake, chance, prize, group, seedHash: keccak256(seed), meta: keccak256(canonicalJSON(meta))}`                    |
 
 ```json title="Request"
 {
+  "round": "0xb897ea5638d35f3f06bfb2b39e600358921a6a83c5be452745c5c738c3300425",
   "game": "0199b8c4-5d2e-7a31-9f60-2c4e8b1d7a93",
   "stake": "1000000000000000",
   "chance": "8974091711534376461",
@@ -62,29 +64,26 @@ zero bet nothing: they only reveal the round, with no bank check and no admissio
     "side": "left"
   },
   "seed": "0x677a5f560aadfc5627c98b34edd076d53481e76411befe62dd848cbed1fc9ed4",
-  "signature": "0x4ea3a2c14eb3d6abcd9733f43d71fbac9ba458193187cae6f71427b3ca63dfab4244e9525980e79ca3ecc202e818ae0090a828e7d19bca07c271a6e832de5c971b"
+  "signature": "0xe89436bfd03198eedf53f87cefebe2907aef917b4ae9000736cf083086216821694a0437651d3a18bfb58eaaab308404b110a016d9c7b8a9cff89785fc09db7b1b"
 }
 ```
 
-The reply is the revealed round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it. `invalid` answers a
-malformed field, a game nobody publishes, and a signature that is not the server's; `unauthorized` a key that is not the
-game's server; `not-found` a round that is unknown, a channel's or another game's; `round-revealed` another bet on a
-revealed round; and `bank-short` a bank that cannot pay the stake.
+The reply is the revealed round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it. `invalid` answers
+a malformed field, a `round` other than the path's, a game nobody publishes, and a signature that is not the server's;
+`unauthorized` a key that is not the game's server; `not-found` a round that is unknown, a channel's or another game's;
+`round-revealed` another bet on a revealed round; and `bank-short` a bank that cannot pay the stake.
 
 ## Settling developer bets
 
 ### `POST /api/developer-bets/settle`
 
-Settles developer bets on one game, each with its own signed `Settlement` of what the player is paid and what the casino
-is given, both from the game's bank. The bank must hold the sum over every bet in the batch not yet settled, or nothing
-in the batch is settled (`bank-short`). A bet already settled is left as it is, unchecked, so a batch sent again answers
-as it stands. The server of a game taken down still settles the bets placed on it. A settled bet's payout is owed to
-its player: [`GET /api/account/payouts`](channels.md#get-apiaccountpayouts) lists it under the bet's hash, and the
-player's wallet collects it after checking the server's signature and, for a server the developer named, the
-developer's `GameServer` naming it. A bet whose player signed a round with it, the hash of a secret its developer
-committed to, is settled only with that secret, which the reply shows and the wallet checks
-([a round of your own](../games/developer-bets.md#a-round-of-your-own)). The casino's part is its commission on the
-bet.
+Settles developer bets on one game, each with its own signed
+[`Settlement`](../reference/signed-messages.md#developer-messages). The bank must hold the sum over every bet in the
+batch not yet settled, or nothing in the batch is settled (`bank-short`). A bet already settled is left as it is,
+unchecked, so a batch sent again answers as it stands. The server of a game taken down still settles the bets placed on
+it. A settled bet's payout is owed to its player: [`GET /api/account/payouts`](channels.md#get-apiaccountpayouts) lists
+it under the bet's hash. A bet whose player signed a round with it is settled only with that round's secret, which the
+reply shows ([a round of your own](../games/developer-bets.md#a-round-of-your-own)).
 
 | Body field                | Type    | Meaning                                                                      |
 | ------------------------- | ------- | ---------------------------------------------------------------------------- |

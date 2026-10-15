@@ -10,6 +10,9 @@ export const inUnit = (wei: bigint, unit: Unit, typed = false) =>
   unit === 'ETH' ? formatEther(wei).replace(/\.0$/, '') : typed ? exactAmount(wei) : exact(wei);
 /** What the player typed in `unit`, as wei: null for anything that is not an amount above zero. */
 export const typedIn = (text: string, unit: Unit) => typedUnits(text, DECIMALS[unit]);
+/** What the wallet says of a typed amount in `unit` that `typedIn` refuses. */
+export const amountRule = (unit: Unit) =>
+  `Enter an amount in ${unit} above zero, with at most ${DECIMALS[unit]} decimal places.`;
 /** What the player typed, in units of `decimals` places: null for anything that is not an amount above zero. */
 export function typedUnits(text: string, decimals: number) {
   const typed = text.trim();
@@ -23,7 +26,7 @@ export function typedUnits(text: string, decimals: number) {
   }
 }
 
-export interface WithdrawalInput {
+interface WithdrawalInput {
   destination: string;
   ownAddress: string;
   contractAddress?: string;
@@ -32,7 +35,7 @@ export interface WithdrawalInput {
   maximum: bigint;
   channel: boolean;
 }
-export interface WithdrawalValidation {
+interface WithdrawalValidation {
   to: string | null;
   /** Null means sweep the deposit address, with the network fee deducted by the wallet. */
   amount: bigint | null;
@@ -59,10 +62,7 @@ export function validateWithdrawal({ unit = 'METH', ...input }: WithdrawalInput)
   }
   if (input.channel) {
     amount = typedIn(input.amount, unit);
-    if (amount === null)
-      error ??= input.amount.trim()
-        ? `Enter an amount in ${unit} above zero, with at most ${DECIMALS[unit]} decimal places.`
-        : 'Enter an amount or choose Max.';
+    if (amount === null) error ??= input.amount.trim() ? amountRule(unit) : 'Enter an amount or choose Max.';
     else if (amount > input.maximum) error ??= `At most ${inUnit(input.maximum, unit)} ${unit} can be withdrawn.`;
   }
   if (input.maximum <= 0n)

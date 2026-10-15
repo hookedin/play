@@ -3,13 +3,12 @@ import type { Rational } from './rational.ts';
 import type { GameGraph, GameNode } from './model.ts';
 import { cashClasses, compileTransition, priceTransition } from './transition.ts';
 import { uint256 } from '../../../protocol/risk.ts';
-import type { Admits, CashOutcome, TransitionPlan } from './transition.ts';
+import type { CashOutcome, TransitionPlan } from './transition.ts';
 
 /** A uniform integer in [0, limit), such as `seededRandom` draws what the page shows a result with. */
 export type RandomBelow = (limit: bigint) => bigint;
 
 const ZERO = fraction(0n);
-const ONE = fraction(1n);
 const indexes = new WeakMap<GamePlan, ReadonlyMap<string, PricedNode>>();
 
 interface PricedAction {
@@ -28,7 +27,6 @@ export type PricedNode =
       readonly actions: readonly PricedAction[];
     };
 export interface GamePlan {
-  readonly admits: Admits;
   readonly root: string;
   readonly bankrollFloor: bigint;
   readonly cashQuantum: bigint;
@@ -41,8 +39,6 @@ export interface GamePlan {
   readonly nodes: readonly PricedNode[];
 }
 interface CompileOptions {
-  /** The casino's admission rule. Every bet a step can place is checked against it at the planning bankroll. */
-  readonly admits: Admits;
   readonly bankrollFloor: bigint;
   readonly cashQuantum: bigint;
   readonly initialCash?: bigint;
@@ -66,12 +62,11 @@ export function compileGame(graph: GameGraph, options: CompileOptions): GamePlan
 }
 
 /** Load exact integer-scaled funding; construct only transitions actually used. */
-export function loadFundedGame(graph: GameGraph, table: FundingTable, scale: bigint, admits: Admits): GamePlan {
+export function loadFundedGame(graph: GameGraph, table: FundingTable, scale: bigint): GamePlan {
   uint256(scale, 'funding scale', true);
   const work = compileSteps(
     graph,
     {
-      admits,
       bankrollFloor: table.bankrollFloor * scale,
       cashQuantum: table.cashQuantum * scale,
       initialCash: table.initialCash * scale,
@@ -115,7 +110,6 @@ function* compileSteps(
   }
   const visiting = new Set<string>();
   const priced = new Map<string, PricedNode>();
-  if (typeof options.admits !== 'function') throw new TypeError('the casino admission rule is required');
   // Many public card states need the same cash with the same probabilities. Reuse their exact price.
   const prices = new Map<string, bigint>();
   const cashKey = (outcomes: readonly CashOutcome[]): string =>
@@ -123,7 +117,7 @@ function* compileSteps(
       .map(c => `${c.cash}:${c.probability.n}/${c.probability.d}`)
       .join(';');
   const transition = (cash: bigint, outcomes: readonly CashOutcome[]): TransitionPlan =>
-    compileTransition({ admits: options.admits, bankroll: options.bankrollFloor, cash, outcomes });
+    compileTransition({ bankroll: options.bankrollFloor, cash, outcomes });
   let requiredCash = 0n;
   function* visit(id: string): Generator<void, PricedNode> {
     const cached = priced.get(id);
@@ -233,7 +227,6 @@ function* compileSteps(
   const conservativeBankroll = options.bankrollFloor + BigInt(root.depth) * maximumCash;
   uint256(conservativeBankroll, 'conservativeBankroll', true);
   const plan: GamePlan = Object.freeze({
-    admits: options.admits,
     root: root.id,
     bankrollFloor: options.bankrollFloor,
     cashQuantum: options.cashQuantum,
@@ -258,68 +251,38 @@ export function getNode(plan: GamePlan, id: string): PricedNode {
 
 export type Policy = (node: Extract<PricedNode, { kind: 'decision' }>) => string;
 interface PolicyEvaluation {
-  readonly distribution: readonly { readonly payout: bigint; readonly probability: Rational }[];
   readonly expectedPayout: Rational;
   readonly expectedAdditionalCash: Rational;
   readonly netEV: Rational;
-  readonly expectedCasinoBets: Rational;
-  readonly expectedPayments: Rational;
 }
 
-/** Exact PMF propagation; this evaluates faithful completion, excluding optional early cash-out. */
+/** Exact expectations; this evaluates faithful completion, excluding optional early cash-out. */
 export function evaluatePolicy(plan: GamePlan, policy: Policy): PolicyEvaluation {
-  const cache = new Map<
-    string,
-    { pmf: Map<bigint, Rational>; bets: Rational; payments: Rational; additional: Rational }
-  >();
-  function evaluate(id: string): {
-    pmf: Map<bigint, Rational>;
-    bets: Rational;
-    payments: Rational;
-    additional: Rational;
-  } {
+  const cache = new Map<string, { payout: Rational; additional: Rational }>();
+  function evaluate(id: string): { payout: Rational; additional: Rational } {
     const cached = cache.get(id);
     if (cached) return cached;
     const node = getNode(plan, id);
-    if (node.kind === 'terminal')
-      return { pmf: new Map([[node.cash, ONE]]), bets: ZERO, payments: ZERO, additional: ZERO };
+    if (node.kind === 'terminal') return { payout: fraction(node.cash), additional: ZERO };
     const actionId = policy(node);
     const action = node.actions.find(value => value.id === actionId);
     if (!action) throw new Error(`invalid policy action ${actionId} at ${id}`);
-    const pmf = new Map<bigint, Rational>();
-    let bets = ZERO;
-    let payments = ZERO;
+    let payout = ZERO;
     let additional = fraction(action.additionalCash);
-    if (action.transition.kind === 'casino-bet') bets = action.transition.betMass;
-    if (action.transition.kind === 'payment') payments = ONE;
     for (const outcome of action.transition.outcomes) {
       const child = evaluate(outcome.next);
-      for (const [payout, probability] of child.pmf) {
-        pmf.set(payout, add(pmf.get(payout) ?? ZERO, multiply(outcome.probability, probability)));
-      }
-      bets = add(bets, multiply(outcome.probability, child.bets));
-      payments = add(payments, multiply(outcome.probability, child.payments));
+      payout = add(payout, multiply(outcome.probability, child.payout));
       additional = add(additional, multiply(outcome.probability, child.additional));
     }
-    const result = { pmf, bets, payments, additional };
+    const result = { payout, additional };
     cache.set(id, result);
     return result;
   }
-  const result = evaluate(plan.root);
-  const distribution = [...result.pmf]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([payout, probability]) => Object.freeze({ payout, probability }));
-  const expectedPayout = distribution.reduce(
-    (value, outcome) => add(value, multiply(fraction(outcome.payout), outcome.probability)),
-    ZERO,
-  );
+  const { payout, additional } = evaluate(plan.root);
   return Object.freeze({
-    distribution: Object.freeze(distribution),
-    expectedPayout,
-    expectedAdditionalCash: result.additional,
-    netEV: add(add(expectedPayout, fraction(-plan.initialCash)), fraction(-result.additional.n, result.additional.d)),
-    expectedCasinoBets: result.bets,
-    expectedPayments: result.payments,
+    expectedPayout: payout,
+    expectedAdditionalCash: additional,
+    netEV: add(add(payout, fraction(-plan.initialCash)), fraction(-additional.n, additional.d)),
   });
 }
 

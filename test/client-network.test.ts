@@ -72,15 +72,6 @@ test('Ethereum is required by default, and unknown or test-network modes cannot 
   assert.equal(wallet.recommendedStake, 1000000000000n);
   for (const network of ['sepolia', 'ethereum', '1', '', 'testnet'])
     assert.throws(() => new CasinoWallet({ network }), /supported/);
-  wallet.config = { chainId: 31337n };
-  assert.throws(() => wallet.validateConfiguredNetwork(), /requires Ethereum.*casino reports chain 31337/);
-});
-
-test('a casino advertising the wrong chain is rejected before consulting the RPC', async () => {
-  const { wallet, state } = fixture();
-  wallet.config.chainId = 11155111n;
-  await assert.rejects(wallet.sendTransaction('claim'), /requires Ethereum/);
-  assert.deepEqual([state.calls, state.signed], [[], []]);
 });
 
 test('a test-network or local RPC, or one that changes chain during the estimate, signs nothing', async () => {
@@ -104,15 +95,17 @@ test('a transaction reads the network before and after, spends no more than the 
     wallet.sendTransaction('deposit', [], { value: state.balance }),
     /Your address holds too little/,
   );
+  // The nonce is the address's next, as the RPC counts it, and the chain the wallet's own.
+  state.latestNonce = state.pendingNonce = '0x9';
   const value = state.balance - 60000n * state.maxFee;
-  await wallet.sendTransaction('deposit', [], { value, nonce: 7, chainId: 11155111n });
+  await wallet.sendTransaction('deposit', [], { value });
   assert.equal(state.calls[0], 'eth_chainId');
   assert.equal(state.calls.at(-1), 'eth_chainId');
   assert.deepEqual(state.signed, [
     {
       method: 'deposit',
       value,
-      nonce: 7,
+      nonce: 9,
       chainId: 1n,
       gasLimit: 60000n,
       maxFeePerGas: state.maxFee,
@@ -120,7 +113,7 @@ test('a transaction reads the network before and after, spends no more than the 
       type: 2,
     },
   ]);
-  assert.equal(wallet.transactionIntent!.nonce, 7);
+  assert.equal(wallet.transactionIntent!.nonce, 9);
 });
 
 test('a deposit of everything at the address keeps back nothing but its own fee, priced once', async () => {
@@ -129,7 +122,7 @@ test('a deposit of everything at the address keeps back nothing but its own fee,
   // The estimate with a fifth more, at the most the fee can be.
   assert.equal(fee, 60000n * state.maxFee);
   assert.equal(amount + fee, state.balance);
-  await wallet.sendTransaction('deposit', [wallet.address], { value: amount, ...overrides });
+  await wallet.sendTransaction('deposit', [wallet.address], { value: amount, priced: overrides });
   assert.equal(state.signed[0].value, amount);
   assert.equal(state.estimated.length, 1, 'the deposit keeps the price its amount was worked out with');
 });

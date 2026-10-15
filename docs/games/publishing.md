@@ -77,9 +77,9 @@ A repository made from the template deploys itself to Cloudflare, as a Worker th
 3. Push to `main`.
 
 The **Deploy** workflow runs on every push: it checks the formatting, runs `npm test` and builds, and on `main`, with
-the token set, publishes `dist/` with `wrangler deploy`. To publish by hand, `npm run build && npx wrangler deploy`. A
-game with a server deploys the same way, as one Worker that also answers `/api/`
-([one Cloudflare Worker](developer-bets.md#one-cloudflare-worker)).
+the token set, publishes with `wrangler deploy`, which builds `dist/` first. To publish by hand, `npx wrangler deploy`.
+A game with a server deploys the same way, as one Worker that also answers `/api/` ([one Cloudflare
+Worker](developer-bets.md#one-cloudflare-worker)).
 
 ## Publish it
 
@@ -111,32 +111,22 @@ beside the game on **Developer**, as its server key
 game's developer bets and places its casino bets from its bank, and nothing else. Until you name one, a server signs
 with your account's own key, which holds everything your account holds.
 
-The library a deployment ships with is what `@hookedin` publishes, listed in [catalog.json](../../catalog.json). Its
-`trusted` lists the developers the casino trusts as it does the house: their games' developer bets take a deposit before
-the chain finalizes it ([developer bets](developer-bets.md#placing-a-bet-from-the-page)). To be in either, open an issue
-or a pull request on [hookedin/play](https://github.com/hookedin/play).
+The library a deployment ships with is what `@hookedin` publishes, listed in [catalog.json](../../catalog.json). To be
+in it, open an issue or a pull request on [hookedin/play](https://github.com/hookedin/play).
 
 ## Earnings
 
-Every game you publish has a **bank** at the casino, and half the commission on every casino bet placed in the game goes
-into it. Commission is the edge the bankroll does not need, set when the bet is admitted, rounded down to an even amount
-and split in half between the game's bank and the casino: a
+Every game you publish has a **bank** at the casino, and half the commission on every settled casino bet in the game
+goes into it, won or lost, the game's own casino bets on its rounds included, while the game is published. Commission
+is the edge the bankroll does not need, never an extra debit to the player: a
 [settled trade-off](../overview/architecture.md#settled-trade-offs), whose arithmetic is in
-[pricing and commission](../reference/economics.md).
-
-- It depends on the bet's edge and on the casino's bankroll. A bet with no more edge than the bankroll needs earns
-  nothing, and a bet with no edge is declined.
-- It is never an extra debit to the player: the stake, chance and prize are exactly what the player signed.
-- No fee protects a player from a game. A game can spend its whole allowance on bets that pay back little, and the
-  wallet records each bet's [measured return](casino-bets.md#measured-return) without refusing it: the allowance the
-  player sets is their protection.
-- Every settled casino bet earns it, won or lost, the game's own casino bets on its rounds included, while the game is
-  published. A rejected bet earns nothing, nor does a reveal, and a game nobody publishes, or one taken down, earns
-  nothing. A developer bet earns no commission, since the bankroll does not back it
-  ([the casino's share](developer-bets.md#the-casinos-share)); its stake goes into the same bank.
+[pricing and commission](../reference/economics.md). A bet with no more edge than the bankroll needs earns nothing, nor
+does a rejected bet, a reveal, or a game nobody publishes or one taken down. A developer bet earns no commission, since
+the bankroll does not back it ([the casino's share](developer-bets.md#the-casinos-share)); its stake goes into the same
+bank.
 
 The wallet's **Developer** page shows each game's bank, and beside it the game's bets, what its players staked and came
-out with, its return and what commission it took, from its [public record](../casino-api/public.md#get-apigamesid).
+out with, its house edge and what commission it took, from its [public record](../casino-api/public.md#get-apigamesid).
 **Take out** moves money from a game's bank into your balance: your wallet signs a `BankWithdraw`, the casino owes you
 the amount at once, and the wallet collects it with a credit naming the game
 ([`POST /api/account/games/withdraw`](../casino-api/channels.md#post-apiaccountgameswithdraw)). Nobody at the casino

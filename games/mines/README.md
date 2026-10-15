@@ -29,7 +29,7 @@ At a stake large for the casino's bankroll, the casino covers fewer picks than t
 
 ### The rules are a graph
 
-The rules are `createMines` from the SDK's engine, [mines.ts](../../sdk/src/engine/mines.ts). [src/rules.ts](src/rules.ts) builds its arguments from the round's setup, `{ stake, mines, picks }`:
+The rules are `createMines` in [src/rules.ts](src/rules.ts), which `minesGraph` builds from the round's setup, `{ stake, mines, picks }`:
 
 ```ts
 createMines({ tiles: 25, mines, cashouts: [1, …, picks].map(k => payout(stake, mines, k)) });
@@ -41,13 +41,13 @@ The graph tracks only the number of safe picks so far, because unrevealed tiles 
 
 `RoundClient` runs the round, and the engine prices each state with the cash its actions need, working backward from the cash-outs. A reveal has two outcomes, so it is one bet: the stake is the state's cash, the chance is the gem's share of the 2^64 outcomes, and the prize is the next state's cash.
 
-The cash-outs rise exactly as the odds fall, so at them every pick after the first is a fair bet, and the casino's admission rule takes no bet without an edge. Each state therefore holds a little more than its cash-out: what its next pick needs beyond fair odds for the casino to take it. The 1% the first pick keeps pays for all of them, and a longer ladder needs more. `coveredPicks` in [src/rules.ts](src/rules.ts) finds the most picks the bankroll backs at the stake, pricing exactly as `RoundClient` does, against half the bankroll `wallet.info` reports, on a grid of a billionth of the stake. The page starts the round with that many; past them the graph offers only the cash-out.
+The cash-outs rise exactly as the odds fall, so at them every pick after the first is a fair bet, and the casino's admission rule takes no bet without an edge. Each state therefore holds a little more than its cash-out: what its next pick needs beyond fair odds for the casino to take it. The 1% the first pick keeps pays for all of them, and a longer ladder needs more. `coveredPicks` in [src/rules.ts](src/rules.ts) finds the most picks the bankroll backs at the stake, pricing exactly as `RoundClient` does with the SDK's `pricing`: against half the bankroll `wallet.info` reports, on a grid of a billionth of the stake. The page starts the round with that many; past them the graph offers only the cash-out.
 
 A cash-out moves the state's cash down to what it pays: the extra goes back to the house as a payment of at most a 99th of the cash-out, and nothing at the last covered pick. The cash is already in the player's signed balance, and a player who leaves without cashing out keeps all of it: a [settled trade-off](../../docs/overview/architecture.md#settled-trade-offs).
 
-**Return.** A player who always cashes out after `k` gems gets back 99% of what they stake, on average and whatever the bankroll, less the wei each cash-out rounds away, because a round reaches `k` gems exactly as often as the rules say. The return the wallet measures is each pick's own, between 99% and 100%: the extra is what a cash-out gives back.
+**Return.** A player who always cashes out after `k` gems gets back 99% of what they stake, on average and whatever the bankroll, less the wei each cash-out rounds away, because a round reaches `k` gems exactly as often as the rules say. The house edge the wallet shows is each pick's own, under 1% of what the pick stakes: the rest is what a cash-out gives back.
 
-To change the game, `TILES` and `multiplier` in [src/rules.ts](src/rules.ts) set the board and the table; `createMines` takes one positive cash-out per allowed safe pick, at most `tiles − mines`. For different rules altogether, copy [mines.ts](../../sdk/src/engine/mines.ts) into your `src/` and pass your own graph function to `RoundClient`.
+To change the game, `TILES` and `multiplier` in [src/rules.ts](src/rules.ts) set the board and the table; `createMines` takes one positive cash-out per allowed safe pick, at most `tiles − mines`. For different rules altogether, write your own graph function and pass it to `RoundClient`.
 
 ## Run it, test it, make it yours
 

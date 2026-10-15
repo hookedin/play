@@ -107,7 +107,7 @@ reply you did not expect.
 
 ## The house games
 
-The house's games are what `@hookedin` publishes, each with its README, its tests and its deployment. Start from the
+Each house game has its README, its tests and its deployment, and `@hookedin` publishes all but crash. Start from the
 one closest to your game.
 
 | Game                                                    | What it shows                                                               | Copy                                                                                             |

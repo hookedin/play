@@ -28,19 +28,9 @@ export const METHODS = [
   'game.end',
 ];
 const methods = new Set(METHODS);
-/** Questions the wallet answers at once, and what a game tells it, which signs nothing. Everything else signs, and
- * waits its turn. */
-const IMMEDIATE = new Set([
-  'wallet.hello',
-  'wallet.info',
-  'wallet.round',
-  'wallet.showBet',
-  'game.receipt',
-  'game.history',
-  'game.allowance',
-  'game.placesDeveloperBets',
-  'game.end',
-]);
+/** What a game asks the wallet to sign, which waits its turn. Everything else, its questions and what it tells the
+ * wallet, signs nothing and is answered at once. */
+export const SIGNS = new Set(['game.casinoBet', 'game.developerBet', 'game.payment']);
 /** Requests a game may have waiting for their turn. */
 const MAX_QUEUE = 32;
 /** The game an operation is for, as a bet or a payment signs it: its ID, which stays the same wherever the game
@@ -119,7 +109,7 @@ function validate(data: any) {
     if (!only(params, ['id'])) throw new Error('Unexpected game request field.');
     gameOperationKey(params.id);
   } else if (data.method === 'wallet.round') {
-    if (!only(params, ['id']) || typeof params.id !== 'string' || !/^0x[0-9a-f]{64}$/.test(params.id))
+    if (!only(params, ['id']) || !validHash(params.id))
       throw new Error('A round is named by its 32-byte hash, as 0x and 64 lowercase hex digits.');
   } else if (data.method === 'game.history') {
     if (!only(params, ['after', 'limit'])) throw new Error('Unexpected game request field.');
@@ -227,7 +217,7 @@ export function attachGameBridge({
     last = request.id;
     if (request.method === 'wallet.hello') greeted = page;
     const asked = page;
-    if (IMMEDIATE.has(request.method)) return answer(request, asked);
+    if (!SIGNS.has(request.method)) return answer(request, asked);
     // Whatever signs takes its turn, in the order the game asked.
     if (waiting >= MAX_QUEUE) return fail(request.id, gameError('busy', 'Too many game requests are waiting.'));
     waiting++;

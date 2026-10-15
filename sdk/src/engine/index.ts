@@ -14,4 +14,3 @@ export {
   seededRandom,
 } from './engine.ts';
 export type { FundingTable, GamePlan, Policy, PricedNode, RandomBelow } from './engine.ts';
-export { createMines } from './mines.ts';

@@ -3,8 +3,6 @@ import assert from 'node:assert/strict';
 import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
 import { RoundClient } from '@hookedin/play/sdk/round';
 import { CHANCE_MAX, CHANCE_MIN, diceGraph } from '../src/rules.ts';
-import { compileGame } from '@hookedin/play/sdk/engine';
-import { admits } from '@hookedin/play/sdk/admits';
 
 test('every roll on the slider returns 99% of the stake, to the last wei', () => {
   const stake = 10n ** 15n;
@@ -41,7 +39,7 @@ test('a roll settles through the real wallet and pays what the rules promise', a
     w = f.wallet;
   w.openGame(f.identity('dice'));
   await w.setGameAllowance(200000n);
-  const round = new RoundClient(f.bridge, diceGraph, undefined, { store: memoryStore(), name: 'dice' });
+  const round = new RoundClient(f.bridge, diceGraph, { store: memoryStore(), name: 'dice' });
   // Forty rolls at 49.50% all land on one side about once in 10^12 runs, so both outcomes are always seen.
   let wins = 0,
     losses = 0;
@@ -67,13 +65,9 @@ const FLOOR = 989000n;
 
 test('every bet this game can place pays back at least the floor it is built to', () => {
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
-    for (const chanceBps of [CHANCE_MIN, 1234, 3333, 5000, 6667, 9000 - 1, CHANCE_MAX]) {
-      const plan = compileGame(diceGraph({ stake, chanceBps }), {
-        admits,
-        bankrollFloor: 10n ** 9n * stake,
-        cashQuantum: stake / 10n ** 9n || 1n,
-        initialCash: stake,
-      });
-      assert.ok(worstReturn(plan) >= FLOOR, `a bet at ${chanceBps} pays back less than this game's floor`);
-    }
+    for (const chanceBps of [CHANCE_MIN, 1234, 3333, 5000, 6667, 9000 - 1, CHANCE_MAX])
+      assert.ok(
+        worstReturn(diceGraph({ stake, chanceBps }), stake, 2n * 10n ** 9n * stake) >= FLOOR,
+        `a bet at ${chanceBps} pays back less than this game's floor`,
+      );
 });

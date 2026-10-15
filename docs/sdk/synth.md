@@ -12,9 +12,9 @@ It is Node-safe to import, and makes sound only in a browser.
 
 ### `createSynth`
 
-`createSynth(storageKey?)` makes short synthesized sounds, so a game hosts no audio files. `storageKey`,
-`hookedin:muted` by default, is where the player's mute choice is kept in `localStorage`; a storage that fails is
-ignored. Delays and durations are in seconds, frequencies in hertz.
+`createSynth()` makes short synthesized sounds, so a game hosts no audio files. The player's mute choice is kept in
+the game's `localStorage`, under `hookedin:muted`; a storage that fails is ignored. Delays and durations are in seconds,
+frequencies in hertz.
 
 | Member                                       | What it does                                                                                                                                                                                                               |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

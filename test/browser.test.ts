@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
 import { chromium } from 'playwright-core';
 import type { Page } from 'playwright-core';
-import { createStaticServer } from '../scripts/static.ts';
+import { createStaticServer } from '../sdk/bin/hookedin-game.js';
 
 const app = createStaticServer(fileURLToPath(new URL('../dist', import.meta.url)));
 /** A browser test is bundled like the wallet itself: our modules inline, ethers from the served release. */

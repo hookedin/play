@@ -83,12 +83,13 @@ deeper than 64 levels. A developer bet's meta is bounded more tightly, by the [b
 
 ## Queueing
 
-`wallet.hello`, `wallet.round`, `game.receipt`, `game.history`, `game.allowance`, `game.placesDeveloperBets` and
-`game.end` are answered at once, also while a bet is open, and so is `wallet.info`, except that it waits until the
-wallet has first heard from the casino. `game.casinoBet`, `game.developerBet` and `game.payment` sign something, so
-they take their turn one at a time, in the order the game sent them. At most 32 wait; one more is refused with `busy`.
-A request whose turn comes while the player is doing something in the wallet is refused with `busy` too; one whose turn
-comes while the wallet does work of its own, such as its regular look at the chain, waits for it.
+`wallet.hello`, `wallet.round`, `wallet.showBet`, `game.receipt`, `game.history`, `game.allowance`,
+`game.placesDeveloperBets` and `game.end` are answered at once, also while a bet is open, and so is `wallet.info`,
+except that it waits until the wallet has first heard from the casino. `game.casinoBet`, `game.developerBet` and
+`game.payment` sign something, so they take their turn one at a time, in the order the game sent them. At most 32 wait;
+one more is refused with `busy`. A request whose turn comes while the player is doing something in the wallet is refused
+with `busy` too; one whose turn comes while the wallet does work of its own, such as its regular look at the chain,
+waits for it.
 
 ## Amounts
 
@@ -137,7 +138,7 @@ that name.
 | `uname`            | `string` or `null` | The player's uname, theirs for good, written `~uname`. Every account has one from the start, before its first deposit; `null` for a guest, who has no account yet, and while the wallet cannot reach the casino. A game keys anything of its own by it |
 | `discordUsername`  | `string` or `null` | The name the player is shown by, written `@bob`: the username of the Discord account that verified them; `null` unless one did                                                                                                                         |
 | `chainId`          | `bigint`           | The chain the wallet is pinned to: `1n` for Ethereum, `31337n` for a local Anvil                                                                                                                                                                       |
-| `virtualBankroll`  | `bigint`           | The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino bets against. The casino settles every casino bet it admits                                                                         |
+| `virtualBankroll`  | `bigint`           | The virtual bankroll of the casino's latest quote, half the casino's bankroll when it quoted: what to price casino bets against; `0n` while the account has no balance that plays                                                                      |
 | `recommendedStake` | `bigint`           | A stake to start the stake field at: 10^12 wei on Ethereum and 10^15 on a local Anvil                                                                                                                                                                  |
 
 ### `wallet.round`
@@ -180,7 +181,8 @@ The receipt of an earlier operation of this game, by the game's own ID. Answered
 | `id`  | `string` | The operation's ID |
 
 The result is the operation's [receipt](#receipt), or `null` when this wallet has none: the operation was never signed,
-it is still pending ([`game.allowance`](#gameallowance)'s `pending` says so), or this wallet has lost its record. For an
+it is still pending ([`game.allowance`](#gameallowance)'s `pending` says so), or this wallet has lost its record. One
+carried out on another channel, whose result this wallet does not hold, is refused with `id-used`. For an
 open developer bet the wallet also asks the casino about it; once its developer has settled it, the wallet collects
 what it pays and pushes the settled receipt as a [`game.receipt`](#gamereceipt-1) event.
 
@@ -265,15 +267,12 @@ pairs. A table whose results all leave one amount must leave `cash`: it places n
 of them the step reaches, such as which card comes when every card leaves the same cash. Anything else is refused with
 `invalid-request`.
 
-The wallet, not the page, splits the table into ways, each one casino bet that stakes part of `cash`, or none, which
-together reach every amount exactly as often as the weights say, at the virtual bankroll of the casino's
-[quote](../overview/how-it-works.md#quotes), and draws one with the seed it signs the bet with, before it signs
-anything: [how the wallet draws a step](../games/collapsing-bets.md#the-wallet-draws-the-step) says how, and anyone can
-work it out again from the seed. It draws only once the quote covers every bet of the split; a step it does not cover
-is refused with `not-covered`, before anything is drawn or signed, so a refusal never favours one way over another. The
-casino then settles the bet drawn, whose [details](signed-messages.md#details-and-memo) sign the table. A way without a
-bet signs nothing: the step keeps its cash. Either way the wallet then lands the step, with the same seed, on one of
-the results that leave what the player then holds, by their weights.
+The wallet, not the page, splits the table into ways, each one casino bet that stakes part of `cash`, or none, at the
+virtual bankroll of the casino's [quote](../overview/how-it-works.md#quotes), draws one with the seed it signs the bet
+with, and lands the step on a result with the same seed
+([how the wallet draws a step](../games/collapsing-bets.md#the-wallet-draws-the-step)). A step the quote does not cover
+in every bet of the split is refused with `not-covered`, before anything is drawn or signed. A way without a bet signs
+nothing: the step keeps its cash.
 
 In a group, the allowance drops by the step's cash, and what the step holds after the bet joins it once the step's
 [group](#groups-and-the-allowance-the-player-sees) ends; outside a group, it drops by the bet's stake and rises at once
@@ -322,7 +321,7 @@ result with:
 ```
 
 The wallet split this table into one bet: the whole cash for 1.98 times it, on half the outcomes. The same request
-again returns the same receipt: one ID is one draw. The same ID with another table is refused with `id-conflict`.
+again returns the same receipt: one [ID](#ids) is one draw.
 
 ### `game.developerBet`
 
@@ -341,7 +340,8 @@ the player has allowed them, a developer bet is refused with `developer-bets-not
 | `group` | `string` | Optional: the group the bet belongs to, such as a match or a spin                                                                        |
 
 `meta` is a plain object of JSON values whose canonical JSON, keys sorted and no spaces, takes at most 4,096 bytes of
-UTF-8. Its numbers are whole, so odds of 2.1 go as the string `"2.1"`, and its text is well-formed, without a NUL.
+UTF-8. Its numbers are safe integers, so odds of 2.1 go as the string `"2.1"`, and its text is well-formed, without a
+NUL.
 `round` is signed with the bet: the casino settles a bet that names one only with the secret that hashes to it, and the
 wallet checks the secret before it collects, and shows the player that what the bet rode on was fixed before they
 signed ([a round of your own](../games/developer-bets.md#a-round-of-your-own)).
@@ -399,12 +399,11 @@ The result is the payment's receipt, `settled` or `rejected`. It carries no amou
 
 ### `game.placesDeveloperBets`
 
-Says the game places developer bets. No params; the result is `null`, at once, and nothing opens. A game never asks the
-player for money: only the player opens the wallet's allowance dialog, from its top bar, and sets in its own words how
-much of their balance the game may risk ([the allowance](../games/how-a-game-works.md#the-allowance)). Once a game has
-said this, that dialog also warns that the game's developer takes developer bets' stakes and decides what they pay,
-and confirming it allows developer bets too. A game opened by its URL alone has no developer, and its dialog offers
-none. Taking the whole allowance back takes back developer bets with it.
+Says the game places developer bets. No params; the result is `null`, at once, and nothing opens. Once a game has said
+this, the allowance dialog the player opens from the wallet's top bar also warns that the game's developer takes
+developer bets' stakes and decides what they pay, and confirming it allows developer bets too
+([the allowance](../games/how-a-game-works.md#the-allowance)). A game opened by its URL alone has no developer, and its
+dialog offers none. Taking the whole allowance back takes back developer bets with it.
 
 ### `game.allowance`
 

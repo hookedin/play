@@ -9,7 +9,7 @@ import * as read from '../protocol/read.ts';
 const BACKEND = 'https://chainflip-swap.chainflip.io';
 const STATE_CHAIN = 'https://rpc.mainnet.chainflip.io';
 
-export interface Coin {
+interface Coin {
   chain: 'Bitcoin' | 'Solana' | 'Ethereum' | 'Arbitrum';
   asset: 'BTC' | 'SOL' | 'ETH' | 'USDC' | 'USDT';
   decimals: number;
@@ -168,15 +168,13 @@ async function quote(coin: Coin, amount: bigint, bps: number): Promise<Quote> {
     .reduce((best, q) => (q.egressAmount > best.egressAmount ? q : best));
 }
 
-export const STATES = ['WAITING', 'RECEIVING', 'SWAPPING', 'SENDING', 'SENT', 'COMPLETED', 'FAILED'] as const;
+const STATES = ['WAITING', 'RECEIVING', 'SWAPPING', 'SENDING', 'SENT', 'COMPLETED', 'FAILED'] as const;
 export type State = (typeof STATES)[number];
 /** Where the swap through `channel` is, as Chainflip reports it: refused unless the channel is the one opened, paying
  * `destination` with refunds to `refund`. */
-export async function status(
-  id: string,
-  channel: { coin: Coin; depositAddress: string; destination: string; refund: string },
-) {
-  const s = fields(await call(`${BACKEND}/v2/swaps/${encodeURIComponent(id)}`)),
+export async function status(channel: Pick<Channel, 'id' | 'coin' | 'depositAddress' | 'destination' | 'refund'>) {
+  const { id } = channel,
+    s = fields(await call(`${BACKEND}/v2/swaps/${encodeURIComponent(id)}`)),
     deposit = fields(s.depositChannel),
     { refundAddress } = fields(s.fillOrKillParams);
   if (
@@ -250,6 +248,6 @@ export async function openChannel(coin: Coin, amount: bigint, destination: strin
     refund,
     expiresAt: read.time(opened.estimatedExpiryTime),
   };
-  if ((await status(id, channel)).state !== 'WAITING') return read.refuse('Chainflip’s channel');
+  if ((await status(channel)).state !== 'WAITING') return read.refuse('Chainflip’s channel');
   return channel;
 }

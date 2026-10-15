@@ -7,22 +7,20 @@ sidebar:
 
 `import { RoundClient } from '@hookedin/play/sdk/round';` plays a game of several steps, such as a hand of blackjack, as
 a sequence of casino bets priced by the [engine](engine.md): each step is one casino bet, a payment or nothing. The
-module is Node-safe: it reaches `localStorage` only through its default store, and holds its round with
-`navigator.locks`, which Node has too, so a test runs it in Node with a store of its own. [Multi-step games](../games/multi-step-games.md) is the guide, and
-[pricing and collapsing](../games/collapsing-bets.md) the method.
+module is Node-safe: it reaches `localStorage` only through its default store, [`browserStore`](#browserstore), and
+holds its round with `navigator.locks`, which Node has too, so a test runs it in Node with a store of its own.
+[Multi-step games](../games/multi-step-games.md) is the guide, and [pricing and collapsing](../games/collapsing-bets.md)
+the method.
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
 import { RoundClient } from '@hookedin/play/sdk/round';
-import { createMines } from '@hookedin/play/sdk/engine';
+import { diceGraph } from './rules.ts'; // the house's dice: one roll, which wins with `chanceBps` in ten-thousandths
 
-const round = new RoundClient(HookedIn, setup =>
-  createMines({ tiles: 5, mines: 1, cashouts: [120n, 156n, 228n].map(n => (setup.stake * n) / 100n) }),
-);
+const round = new RoundClient(HookedIn, diceGraph);
 await round.restore();
-let state = await round.start({ stake: HookedIn.METH });
-state = await round.action('reveal'); // state.actions lists what is legal next
-if (state.actions.includes('cash-out')) state = await round.action('cash-out');
+let state = await round.start({ stake: HookedIn.METH, chanceBps: 4950 });
+state = await round.action('roll'); // state.actions lists what is legal next: here the one roll, then nothing
 await round.end(state); // once the page has shown how it ended: kept in the player's history, which round.past() reads
 ```
 
@@ -30,14 +28,14 @@ await round.end(state); // once the page has shown how it ended: kept in the pla
 
 ### `RoundClient`
 
-`new RoundClient(bridge, graph, funding?, { store?, name? })`:
+`new RoundClient(bridge, graph, { funding?, store?, name? })`:
 
 | Parameter | Meaning                                                                                                       |
 | --------- | ------------------------------------------------------------------------------------------------------------- |
 | `bridge`  | How it reaches the wallet, a [`RoundBridge`](#roundbridge): `HookedIn` in a page, a test bridge in a test     |
 | `graph`   | Builds the game's graph for a setup, the object `start` is given. Called once per distinct setup in a page    |
 | `funding` | Precomputed action prices, a [`FundingTable`](engine.md#fundingtable), such as blackjack's                    |
-| `store`   | Where the round is saved, a [`RoundStore`](#roundstore). `localStorage` by default                            |
+| `store`   | Where the round is saved, a [`RoundStore`](#roundstore). [`browserStore`](#browserstore) by default           |
 | `name`    | Tells games on one host origin apart. `location.pathname` by default, or `round` where there is no `location` |
 
 Each step's operations are in one group, the round's `id`: what the steps win stays with the round, out of the
@@ -70,10 +68,9 @@ time too.
 plan when the setup is the same and the virtual bankroll still covers the plan's `conservativeBankroll`. With `funding`,
 when the stake is a whole multiple `k` of `funding.initialCash` and the virtual bankroll covers `k` times
 `funding.conservativeBankroll`, it loads the table at scale `k` ([`loadFundedGame`](engine.md#loadfundedgame)).
-Otherwise it compiles the graph in the page with a planning floor of half the virtual bankroll and a cash grid of the
-stake divided by 10^9, at least 1. When pricing fails, or the virtual bankroll is below the plan's
-`conservativeBankroll`, `start` throws
-`The casino can only back about <amount> ETH of payouts right now. Lower your stake and try again.`
+Otherwise it compiles the graph in the page as [`pricing`](#pricing) says. When pricing fails, or the virtual bankroll
+is below the plan's `conservativeBankroll`, `start` throws
+`The casino can only back about <amount> METH of payouts right now. Lower your stake and try again.`
 
 #### `restore`
 
@@ -122,9 +119,9 @@ shows, with the round as the group's meta, which the casino keeps in the player'
 the hash of its rules, its `setup`, `nodeId`, `cash`, `contributed`, `events` and `settlement`, as JSON holds them,
 every bigint a decimal string, and `extra`, anything else the page draws the round with, such as the tiles a player
 picked. Call it with the state the page has just shown, even after the next round has started. Meta the wallet refuses,
-larger than the [bounds](../reference/bridge.md#bounds) allow or with numbers that are not whole, is left out, and the
-round ends without it. It resolves with `null`, and throws the bridge's errors: with `failed` the round has ended all
-the same, and calling `end` again keeps its meta.
+larger than the [bounds](../reference/bridge.md#bounds) allow or with numbers that are not safe integers, is left out,
+and the round ends without it. It resolves with `null`, and throws the bridge's errors: with `failed` the round has
+ended all the same, and calling `end` again keeps its meta.
 
 #### `past`
 
@@ -154,6 +151,30 @@ with the message [`HookedIn.NOT_ENOUGH_ALLOWANCE`](hookedin.md#not_enough_allowa
 `start` and `action` call it; a page calls it before something of its own, such as reels that spin before a resumed
 step.
 
+### `pricing`
+
+`pricing(stake, bankroll)`: how `RoundClient` prices a round of `stake` without a funding table, against `bankroll`,
+the virtual bankroll `wallet.info` reports: `{ bankrollFloor, cashQuantum, initialCash }`, a planning floor of half
+`bankroll`, a cash grid of the stake divided by 10^9, at least 1, and the stake. [`compileGame`](engine.md#compilegame)
+takes it to price a round as the page will, as [Mines](../../games/mines/src/rules.ts) does to find how many picks the
+casino covers.
+
+```ts
+import { compileGame } from '@hookedin/play/sdk/engine';
+import { pricing } from '@hookedin/play/sdk/round';
+
+const stake = HookedIn.METH,
+  { virtualBankroll } = await HookedIn.info(),
+  plan = compileGame(diceGraph({ stake, chanceBps: 4950 }), pricing(stake, virtualBankroll));
+virtualBankroll >= plan.conservativeBankroll; // what start requires of the virtual bankroll
+```
+
+### `browserStore`
+
+The page's origin storage, `localStorage`, as a [`RoundStore`](#roundstore): where `RoundClient` saves a round unless
+it is given a `store`. A game client that keeps something of its own beside the round, as Plinko's keeps which balls it
+has shown, takes the same default.
+
 ## Types
 
 ### `RoundState`
@@ -176,7 +197,7 @@ step.
 
 How the round's last step went. A settled step's is `{ kind, id, won?, chance?, payout, outcome, draw }`. `kind` is
 `casino-bet`, `payment` or `noop`, a step that drew no bet included. `id` is the operation whose receipt in the wallet
-proves how the step went, for [`HookedIn.showBet`](hookedin.md#showbet) to show the player: the bet, the wallet's draw,
+proves how the step went, for [`HookedIn.showBet`](../reference/bridge.md#walletshowbet) to show the player: the bet, the wallet's draw,
 or the payment; `null` for a step that asked the wallet nothing. A casino bet's `won` says whether its outcome was below
 its `chance`, and its `payout` and `outcome` are the receipt's; a payment's or a no-op's `payout` and `outcome` are
 `null`. `draw` is a 64-bit bigint to show the result with, such as which reel stops or which path a ball takes: the

@@ -1,12 +1,18 @@
 import fs from 'node:fs';
 import { Contract, Wallet } from 'ethers';
-import { ChainObserver, createRpcProvider, requireIndependentRpc } from '../protocol/chain-observer.ts';
+import {
+  ChainObserver,
+  confirmationsOn,
+  createRpcProvider,
+  requireIndependentRpc,
+} from '../protocol/chain-observer.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
 import { DisputeWorker } from '../protocol/dispute-worker.ts';
 import { acquireFileLock } from '../protocol/file-lock.ts';
+import { TransactionJournal } from '../protocol/transaction-journal.ts';
 import { json } from '../protocol/protocol.ts';
 import * as read from '../protocol/read.ts';
-import artifact from '../client/contract-artifact.ts';
+import artifact from '../protocol/contract-artifact.ts';
 const args = process.argv.slice(2),
   arg = (name: any) => args[args.indexOf(name) + 1];
 let provider,
@@ -24,7 +30,7 @@ try {
     throw new Error('Fund and configure HOOKEDIN_RELAYER_KEY separately from the settlement signer');
   provider = createRpcProvider(deployment.rpcUrl!);
   witnessProvider = deployment.witnessRpcUrl ? createRpcProvider(deployment.witnessRpcUrl) : undefined;
-  const finality = deployment.chainId === 31337n ? 1 : 2;
+  const finality = confirmationsOn(deployment.chainId);
   const observer = new ChainObserver({ provider, witnessProvider, chainId: deployment.chainId, finality });
   await verifyDeployment({
     observer,
@@ -38,12 +44,15 @@ try {
   const contract = new Contract(deployment.contractAddress, artifact.abi, signer);
   const worker = new DisputeWorker({
     contract,
-    provider,
     observer,
-    signer,
-    file: arg('--journal'),
-    chainId: deployment.chainId,
-    confirmations: finality,
+    outbox: new TransactionJournal({
+      file: arg('--journal'),
+      provider,
+      observer,
+      signer,
+      chainId: deployment.chainId,
+      confirmations: finality,
+    }),
   });
   process.on('SIGINT', () => {
     stopping = true;
@@ -54,15 +63,11 @@ try {
   do {
     try {
       // Re-read every tick: the wallet's newest exported evidence replaces the file.
-      const bundles = [read.bundle(JSON.parse(fs.readFileSync(arg('--evidence'), 'utf8')))];
-      if (
-        bundles.some(
-          b => b.chainId !== deployment.chainId || b.casino.toLowerCase() !== deployment.contractAddress.toLowerCase(),
-        )
-      )
+      const bundle = read.bundle(JSON.parse(fs.readFileSync(arg('--evidence'), 'utf8')));
+      if (bundle.chainId !== deployment.chainId || bundle.casino !== deployment.contractAddress)
         throw new Error('Watchtower evidence belongs to another deployment');
       const observation = await observer.observe();
-      const status = await worker.tick(bundles, observation);
+      const status = await worker.tick([bundle], observation);
       await observer.accept(observation);
       console.log(
         json({

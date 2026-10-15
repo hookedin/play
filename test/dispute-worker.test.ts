@@ -3,17 +3,47 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { anvil, channelAt, deployment, disputedBet, open, signedIncrease } from '../testing/contract.ts';
 import { hashState, json, verifyEvidence } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import { ChainObserver } from '../protocol/chain-observer.ts';
 import { DisputeWorker } from '../protocol/dispute-worker.ts';
+import { TransactionJournal } from '../protocol/transaction-journal.ts';
+
+/** A worker with its own journal, and a bundle of a channel's checkpoint that carries the casino bet `bet` when given. */
+function watchtower(t: any, env: any, f: any) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId });
+  return {
+    observer,
+    worker: new DisputeWorker({
+      contract: f.contract,
+      observer,
+      outbox: new TransactionJournal({
+        file: path.join(directory, 'journal.json'),
+        provider: env.provider,
+        observer,
+        signer: env.wallets[9],
+        chainId: env.chainId,
+      }),
+    }),
+    bundleOf: (ch: any, bet?: any, evidence = ch.evidence) => ({
+      evidence,
+      ...(bet ? { dispute: { step: bet.evidence.step, quote: bet.quote } } : {}),
+      casino: String(f.contract.target),
+      chainId: env.chainId,
+      operator: f.signer.address,
+    }),
+  };
+}
 
 test("evidence this contract cannot settle blocks no other channel's challenge", async t => {
   const env = await anvil();
   t.after(() => env.close());
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const f = await deployment(env),
     other = await deployment(env),
     bad = await open(f, env.wallets[1], 100n),
@@ -24,24 +54,13 @@ test("evidence this contract cannot settle blocks no other channel's challenge",
     stale = await signedIncrease(other, elsewhere, 10n);
   await (await f.contract.startClose(bad.evidence)).wait();
   await (await f.contract.startClose(good.evidence)).wait();
-  const bundles = [
-    { evidence: stale.evidence, casino: String(other.contract.target) },
-    { evidence: win.evidence, casino: String(f.contract.target) },
-  ].map(bundle => ({ ...bundle, chainId: env.chainId, operator: f.signer.address }));
+  const { observer, worker, bundleOf } = watchtower(t, env, f),
+    bundles = [{ ...bundleOf(bad, null, stale.evidence), casino: String(other.contract.target) }, bundleOf(win)];
   // Signed as it says, and not this contract's: it must not monopolize the submission queue.
   assert.equal(elsewhere.opening.channelId, bad.opening.channelId);
   assert.doesNotThrow(() => verifyEvidence(bundles[0]));
   await assert.rejects(f.contract.challengeClose.staticCall(stale.evidence));
-  const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId }),
-    worker = new DisputeWorker({
-      contract: f.contract,
-      provider: env.provider,
-      observer,
-      signer: env.wallets[9],
-      chainId: env.chainId,
-      file: path.join(directory, 'journal.json'),
-    }),
-    result = await worker.tick(bundles, await observer.observe());
+  const result = await worker.tick(bundles, await observer.observe());
   assert.ok(result.pending, 'the valid challenge must be submitted in this tick');
   await env.provider.waitForTransaction(result.pending);
   assert.equal((await channelAt(f, good.opening)).closingSequence, 2n);
@@ -54,9 +73,8 @@ test("evidence this contract cannot settle blocks no other channel's challenge",
 test('a disputed casino bet is settled by the evidence at its own sequence', async t => {
   const env = await anvil();
   t.after(() => env.close());
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const f = await deployment(env),
+    { observer, worker, bundleOf } = watchtower(t, env, f),
     ch = await open(f, env.wallets[1], 1000n),
     expiresAt = BigInt((await env.provider.getBlock('latest'))!.timestamp + 86400),
     bet = await disputedBet(f, ch, {
@@ -68,22 +86,7 @@ test('a disputed casino bet is settled by the evidence at its own sequence', asy
     });
   await (await f.contract.connect(env.wallets[1]).dispute(bet.evidence, bet.terms)).wait();
   const settled = await bet.settled(),
-    observer = new ChainObserver({ provider: env.provider, chainId: env.chainId }),
-    worker = new DisputeWorker({
-      contract: f.contract,
-      provider: env.provider,
-      observer,
-      signer: env.wallets[9],
-      chainId: env.chainId,
-      file: path.join(directory, 'journal.json'),
-    }),
-    bundle = {
-      evidence: settled.evidence,
-      casino: String(f.contract.target),
-      chainId: env.chainId,
-      operator: f.signer.address,
-    },
-    result = await worker.tick([bundle], await observer.observe());
+    result = await worker.tick([bundleOf(ch, null, settled.evidence)], await observer.observe());
   assert.ok(result.alerts.some(alert => alert.reason === 'disputed-bet'));
   await env.provider.waitForTransaction(result.pending!);
   const c = await channelAt(f, ch.opening);
@@ -93,29 +96,12 @@ test('a disputed casino bet is settled by the evidence at its own sequence', asy
 test('a watchtower disputes a casino bet the casino leaves unsettled: an hour before its quote expires, or at once when a close stops short of it', async t => {
   const env = await anvil();
   t.after(() => env.close());
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const f = await deployment(env),
     [, a, b] = env.wallets,
     terms = { virtualBankroll: 5000n, stake: 100n, chance: OUTCOME_SPACE / 2n, prize: 196n },
     now = async () => (await env.provider.getBlock('latest'))!.timestamp;
   await (await f.contract.fundBankroll({ value: 10000n })).wait();
-  const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId }),
-    worker = new DisputeWorker({
-      contract: f.contract,
-      provider: env.provider,
-      observer,
-      signer: env.wallets[9],
-      chainId: env.chainId,
-      file: path.join(directory, 'journal.json'),
-    }),
-    bundleOf = (ch: any, bet: any) => ({
-      evidence: ch.evidence,
-      dispute: { step: bet.evidence.step, quote: bet.quote },
-      casino: String(f.contract.target),
-      chainId: env.chainId,
-      operator: f.signer.address,
-    }),
+  const { observer, worker, bundleOf } = watchtower(t, env, f),
     // A tick that must dispute: its own transaction goes out and lands, or the failure says what the tick did instead.
     disputed = async (bundle: any) => {
       const previous = worker.outbox.state.pending?.hash ?? null,
@@ -162,31 +148,6 @@ test('a watchtower disputes a casino bet the casino leaves unsettled: an hour be
   // A bundle whose bet does not follow its checkpoint is refused.
   assert.throws(() => verifyEvidence({ ...bundleOf(open2, bet2), evidence: open2.base }), /does not follow/);
 });
-
-/** A worker with its own journal, and a bundle of a channel's checkpoint that carries the casino bet `bet` when given. */
-function watchtower(t: any, env: any, f: any) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-disputes-'));
-  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const observer = new ChainObserver({ provider: env.provider, chainId: env.chainId });
-  return {
-    observer,
-    worker: new DisputeWorker({
-      contract: f.contract,
-      provider: env.provider,
-      observer,
-      signer: env.wallets[9],
-      chainId: env.chainId,
-      file: path.join(directory, 'journal.json'),
-    }),
-    bundleOf: (ch: any, bet?: any, evidence = ch.evidence) => ({
-      evidence,
-      ...(bet ? { dispute: { step: bet.evidence.step, quote: bet.quote } } : {}),
-      casino: String(f.contract.target),
-      chainId: env.chainId,
-      operator: f.signer.address,
-    }),
-  };
-}
 
 test("a watchtower's dispute estimated in its close's own second still has the gas to land in the next", async t => {
   const env = await anvil();
@@ -278,4 +239,46 @@ test('a casino bet whose quote expired before anyone disputed it is reported, on
   await env.provider.send('evm_mine', []);
   await (await f.contract.finalizeClose(ch.opening.player, ch.opening.index)).wait();
   assert.deepEqual(await expired(), [['expired-bet', 'critical']]);
+});
+
+test('independent watchtower restarts and challenges without the casino API or the account key', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-watchtower-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const ch = await open(f, env.wallets[1], 1000n),
+    latest = await signedIncrease(f, ch, 300n);
+  await (await f.contract.startClose(ch.evidence)).wait();
+  const bundle = {
+    chainId: 31337n,
+    casino: await f.contract.getAddress(),
+    operator: f.signer.address,
+    evidence: latest.evidence,
+  };
+  const manifest = { chainId: 31337n, contractAddress: bundle.casino, operator: f.signer.address, rpcUrl: env.url };
+  const write = (name: any, value: any) => fs.writeFileSync(path.join(dir, name), json(value), { mode: 0o600 });
+  write('evidence.json', bundle);
+  write('deployment.json', manifest);
+  const args = [
+    fileURLToPath(new URL('../scripts/watchtower.ts', import.meta.url)),
+    '--deployment',
+    path.join(dir, 'deployment.json'),
+    '--evidence',
+    path.join(dir, 'evidence.json'),
+    '--journal',
+    path.join(dir, 'watcher.json'),
+    '--once',
+  ];
+  const run = () =>
+    promisify(execFile)(process.execPath, args, {
+      env: { ...process.env, HOOKEDIN_RELAYER_KEY: env.wallets[5].privateKey },
+    });
+  const first = JSON.parse((await run()).stdout);
+  assert.equal(first.alerts[0].reason, 'stale-close');
+  await env.provider.waitForTransaction(first.pending);
+  assert.equal((await channelAt(f, ch.opening)).closingBalance, 1300n);
+  const again = JSON.parse((await run()).stdout);
+  assert.equal(again.pending, null);
+  assert.deepEqual(again.alerts, []);
 });

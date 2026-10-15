@@ -16,7 +16,7 @@ test('a game served while its sources are watched reloads its pages when a sourc
   );
   fs.writeFileSync(path.join(root, 'src/game.ts'), 'export {};');
   await buildGame(root);
-  const server = createStaticServer(path.join(root, 'dist'), undefined, () => buildGame(root), path.join(root, 'src'));
+  const server = createStaticServer(path.join(root, 'dist'), () => buildGame(root), path.join(root, 'src'));
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => {

@@ -26,12 +26,6 @@ function checkTerms({ stake, chance, prize }: BetTerms) {
   if (typeof chance !== 'bigint' || chance <= 0n || chance >= OUTCOME_SPACE)
     throw new RangeError('chance must lie in [1, 2^64)');
 }
-/** What a player is signing, exactly: the most the bet can pay and its expected payout out of 2^64. */
-export function describeBet(bet: BetTerms) {
-  checkTerms(bet);
-  // expectedPayout / (stake * 2^64) is the return to player.
-  return { maxPayout: bet.prize, expectedPayout: bet.prize * bet.chance };
-}
 
 /** A return is measured in millionths of the stake: a percentage with four decimals, so 98.5% is
  * 985000. It is what one signed bet was expected to pay back, measured from the bet itself. */
@@ -43,8 +37,11 @@ export const returnParts = (stake: bigint, expectedPayout: bigint) => {
   const unit = uint256(stake, 'stake', true) * OUTCOME_SPACE;
   return (uint256(expectedPayout, 'expectedPayout') * RETURN_SCALE + unit / 2n) / unit;
 };
-/** The return of one bet, straight from its terms. */
-export const betReturn = (bet: BetTerms) => returnParts(bet.stake, describeBet(bet).expectedPayout);
+/** The return of one bet, straight from its terms: its expected payout, its prize times its chance, out of 2^64. */
+export function betReturn(bet: BetTerms) {
+  checkTerms(bet);
+  return returnParts(bet.stake, bet.prize * bet.chance);
+}
 
 /** The largest integer whose square is at most `n`. */
 function isqrt(n: bigint) {

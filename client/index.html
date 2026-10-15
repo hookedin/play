@@ -4,10 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; connect-src 'self' http: https:; frame-src http: https:; img-src 'self' data: http: https:; object-src 'none'; base-uri 'none'; form-action 'none'"
-    />
     <title>HookedIn</title>
     <meta name="description" content="Casino games on Ethereum, in a wallet that checks every bet." />
     <meta property="og:title" content="HookedIn" />
@@ -200,9 +196,7 @@
             </p>
           </div>
         </div>
-        <h2 class="section-title">
-          Your games <span id="published-count" class="count" title="A profile holds 100 games">0/100</span>
-        </h2>
+        <h2 class="section-title">Your games <span id="published-count" class="count"></span></h2>
         <div id="published-games" class="game-lines"></div>
         <p id="published-empty" class="empty hidden">You publish no games yet. Publish one below.</p>
         <div id="taken-down" class="hidden">
@@ -681,7 +675,7 @@
         </section>
       </section>
       <section class="tab-panel" data-panel="recovery" hidden>
-        <section class="setting recovery">
+        <section class="setting">
           <p id="channel-status" class="mono">No balance open</p>
           <p id="channel-observation" class="muted"></p>
           <p id="recovery-gas" class="help"></p>

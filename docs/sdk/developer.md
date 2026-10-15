@@ -32,7 +32,8 @@ const seedHash = await developer.seedHash(round.id); // commit to both before an
 | `key`       | The private key of the game's server, hex: the key its developer named, or the developer's own                         |
 | `game`      | The game's [ID](../reference/signed-messages.md#game-ids), which the wallet's **Developer** page shows beside the game |
 
-It reads [`GET /api/config`](../casino-api/public.md#get-apiconfig) and throws an `Error` with code `protocol-mismatch`
+It throws an `Error` with code `invalid` for a `game` that is not a game ID in its one form, lowercase. It reads
+[`GET /api/config`](../casino-api/public.md#get-apiconfig) and throws an `Error` with code `protocol-mismatch`
 when the casino's `developerProtocol` is not the one this kit signs for: the casino speaks another revision of what a
 developer signs ([signed messages](../reference/signed-messages.md)).
 
@@ -71,7 +72,8 @@ A new round for the game's casino bet, named by the casino by the hash of a secr
 
 The hash of the seed the game's casino bet on a round brings. It makes no request: the seed is `keccak256` of the
 key's signature of the round (an Ethereum signed message over its 32 bytes), so only this key knows it before the bet,
-and the same round always gets the same seed.
+and the same round always gets the same seed. It throws an `Error` with code `invalid` for a round that is not a hash in
+its one form, lowercase hex.
 
 #### `casinoBet`
 
@@ -82,8 +84,9 @@ the game, the stake, the chance, the prize, the group, the hash of the seed and 
 with it. The round's `casinoBet.accepted` says whether the bankroll took it; either way the round is revealed. Placing
 it again after a lost reply is the same bet and gets the same answer; a different casino bet on a revealed round is
 refused with `round-revealed`, and one the bank cannot pay with `bank-short`. It throws an `Error` with `status` 400 and
-code `invalid` before sending when `meta` is not a JSON object of up to 4,096 bytes of canonical JSON with whole
-numbers and well-formed text without a NUL, and an `Error` when the reply is not this bet's reveal: the secret must hash
+code `invalid` before sending when `meta` is not a JSON object of up to 4,096 bytes of canonical JSON whose numbers are
+safe integers and whose text is well-formed, without a NUL; an `Error` with code `invalid` for a `round` that is not a
+hash in its one form; and an `Error` when the reply is not this bet's reveal: the secret must hash
 to the round, the seed and the signature must be this bet's, and the outcome must be their
 [`outcome`](outcome.md#outcome).
 

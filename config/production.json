@@ -1,5 +1,4 @@
 {
-  "network": "mainnet",
   "casino": "https://casino.hookedin.com",
   "deployment": {
     "chainId": "1",

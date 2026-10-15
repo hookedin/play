@@ -1,17 +1,17 @@
 import type { AccountGame } from '../protocol/types.ts';
-import { gameSlug, json, MAX_GAME_NAME, same, validGameName } from '../protocol/protocol.ts';
+import { gameSlug, json, MAX_GAME_NAME, MAX_GAMES, same, validGameName } from '../protocol/protocol.ts';
 import { exact, h, methLabel, percent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
-import { edgeShare } from './bets.ts';
-import { $, short, shortDate, showName, toast, typedAmount } from './page.ts';
+import { edgeShare, tone } from './bets.ts';
+import { $, short, shortDate, toast } from './page.ts';
+import { showName } from './readers.ts';
 import { gameFigures, gameRecord, openGameRecord, type Figure } from './played.ts';
 import { act, task, uiBusy, wallet } from './sheet.ts';
 import { gameIcon, gameURL, loadGame, loadLibrary } from './games.ts';
+import { amountRule, typedIn } from './withdrawal.ts';
 
 /** Why a name is not one a game can be published under. */
 const NAME_RULE = `A game name is 1 to ${MAX_GAME_NAME} characters, at least one of them a letter from A to Z or a digit.`;
-/** How many games one profile holds. */
-const MAX_GAMES = 100;
 /** Every game this account has published, with its bank and its server, as the casino last answered: null until it
  * has. */
 let owned: AccountGame[] | null = null;
@@ -26,12 +26,17 @@ let libraryKey = '';
  * poll, and a button replaced under the cursor takes the click with it. */
 let shownGames = '';
 
-const tone = (amount: bigint) => (amount < 0n ? 'negative' : amount > 0n ? 'positive' : '');
 const meth = (amount: bigint) => `${formatAmount(amount)} METH`;
 /** The games this account has published, as the casino has them now, and the page drawn again with them. */
 async function loadOwned() {
   owned = await wallet.accountGames();
   renderDeveloper();
+}
+/** Once a game is published, renamed or taken down: the lobby and this page as they are now, and `done` said. */
+async function afterPublishing(done: string) {
+  await loadLibrary();
+  await loadOwned();
+  toast(done);
 }
 /** One setting of a game on the developer page: its label and what it is now, beside the field that changes it, a
  * note on what changing it does, and anything else it offers. */
@@ -107,8 +112,11 @@ function ownGame(owner: string, game: AccountGame) {
     busy = uiBusy || !wallet.playable || Boolean(wallet.pending);
   const moveBank = (into: boolean) =>
     task(async () => {
-      const value = typedAmount(amount.value.trim());
-      if (value <= 0n) throw new Error(`Enter how much to ${into ? 'put into' : 'take out of'} the bank.`);
+      const value = typedIn(amount.value, 'METH');
+      if (value === null)
+        throw new Error(
+          amount.value.trim() ? amountRule('METH') : `Enter how much to ${into ? 'put into' : 'take out of'} the bank.`,
+        );
       if (into) {
         const receipt = await wallet.depositBank(game, value);
         if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this deposit.');
@@ -239,9 +247,7 @@ function ownGame(owner: string, game: AccountGame) {
                       const name = rename.value.trim();
                       if (!validGameName(name)) throw new Error(NAME_RULE);
                       await wallet.publishGame(name, game.url, game.id);
-                      await loadLibrary();
-                      await loadOwned();
-                      toast(`${game.name} is ${name} now, at ${owner}/${gameSlug(name)}.`);
+                      await afterPublishing(`${game.name} is ${name} now, at ${owner}/${gameSlug(name)}.`);
                     }),
                 },
                 'Rename',
@@ -267,9 +273,7 @@ function ownGame(owner: string, game: AccountGame) {
               onclick: () =>
                 task(async () => {
                   await wallet.publishGame(game.name, game.url);
-                  await loadLibrary();
-                  await loadOwned();
-                  toast(`${game.name} is published again, at ${owner}/${game.slug}.`);
+                  await afterPublishing(`${game.name} is published again, at ${owner}/${game.slug}.`);
                 }),
             },
             'Publish again',
@@ -291,9 +295,7 @@ function ownGame(owner: string, game: AccountGame) {
                 onclick: () =>
                   task(async () => {
                     await wallet.publishGame(game.name, null);
-                    await loadLibrary();
-                    await loadOwned();
-                    toast(`${game.name} is taken down.`);
+                    await afterPublishing(`${game.name} is taken down.`);
                   }),
               },
               'Take down',
@@ -369,6 +371,7 @@ function renderGameAddress() {
   $('game-address').classList.toggle('check-failed', !valid);
 }
 $('game-name-input').addEventListener('input', renderGameAddress);
+$('published-count').title = `A profile holds ${MAX_GAMES} games`;
 act('publish-game', async () => {
   const name = $<HTMLInputElement>('game-name-input'),
     url = $<HTMLInputElement>('game-url-input');
@@ -377,7 +380,5 @@ act('publish-game', async () => {
   await wallet.publishGame(published, gameURL(url.value.trim()).href);
   name.value = url.value = '';
   renderGameAddress();
-  await loadLibrary();
-  await loadOwned();
-  toast(`Published ${published} at ${showName(wallet)}/${gameSlug(published)}.`);
+  await afterPublishing(`Published ${published} at ${showName(wallet)}/${gameSlug(published)}.`);
 });

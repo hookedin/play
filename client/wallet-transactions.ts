@@ -1,4 +1,4 @@
-import type { TransactionReceipt, TransactionResponse, TransactionRequest } from 'ethers';
+import type { TransactionReceipt, TransactionResponse } from 'ethers';
 import type { Checkpoint, OperationResponse } from '../protocol/types.ts';
 import type { ChainBlock } from '../protocol/chain-observer.ts';
 import type { CasinoWallet, Fees, Receipt, TransactionIntent } from './wallet.ts';
@@ -55,28 +55,27 @@ const MOST_WITHDRAWAL_GAS = 350_000n;
  * class is a chain: `CasinoWallet` extends `GameSessions` extends `ChannelClient`
  * extends this, so each method declares `this: CasinoWallet`. */
 export class WalletTransactions {
-  /** Sign, save and broadcast one transaction from this account's address, under the wallet's lock. `whole` marks a
-   * deposit of everything the address held, which kept back the most its transaction can cost, which the casino pays. */
+  /** Sign, save and broadcast one transaction from this account's address, under the wallet's lock, paying `value`
+   * at `priced` fees, or at fees it prices itself. `whole` marks a deposit of everything the address held, which kept
+   * back the most its transaction can cost, which the casino pays. */
   async sendTransaction(
     this: CasinoWallet,
     method: string,
     args: any[] = [],
-    overrides: TransactionRequest = {},
-    { whole = false } = {},
+    { value = 0n, priced, whole = false }: { value?: bigint; priced?: Fees; whole?: boolean } = {},
   ) {
     this.requireDurableState();
     await this.assertNetwork();
     const { address, signer, provider, contract } = this;
-    const value = BigInt(overrides.value ?? 0);
     if (value < 0n) throw new Error('Transaction value cannot be negative.');
     // A deposit of everything the address holds is priced before its value is known, and keeps that price.
-    const fees = overrides.gasLimit
+    const fees = priced
       ? {
-          maxCost: BigInt(overrides.gasLimit) * BigInt(overrides.maxFeePerGas!),
+          maxCost: priced.gasLimit * priced.maxFeePerGas,
           overrides: {
-            gasLimit: BigInt(overrides.gasLimit),
-            maxFeePerGas: BigInt(overrides.maxFeePerGas!),
-            maxPriorityFeePerGas: BigInt(overrides.maxPriorityFeePerGas!),
+            gasLimit: priced.gasLimit,
+            maxFeePerGas: priced.maxFeePerGas,
+            maxPriorityFeePerGas: priced.maxPriorityFeePerGas,
             type: 2,
           },
         }
@@ -91,8 +90,6 @@ export class WalletTransactions {
     if (BigInt(latestNonce) !== BigInt(pendingNonce))
       throw new Error('A wallet transaction is pending. Wait for confirmation before sending another.');
     const nonce = Number(BigInt(pendingNonce));
-    if (overrides.nonce != null && BigInt(overrides.nonce) !== BigInt(pendingNonce))
-      throw new Error('The wallet nonce changed. Recover the pending operation before sending again.');
     if (balance < value + fees.maxCost) {
       // To the thousandth of a METH it reads in, rounded up, so that sending what it says is enough.
       const upTo = ((fees.maxCost + GWEI - 1n) / GWEI) * GWEI;
@@ -276,7 +273,7 @@ export class WalletTransactions {
         this.buying = null;
         this.onProgress('Buying collateral…');
         await this.waitTransaction(
-          await this.sendTransaction('buyCollateral', offerTerms(offer), { value: price, ...fees.overrides }),
+          await this.sendTransaction('buyCollateral', offerTerms(offer), { value: price, priced: fees.overrides }),
         );
         return true;
       },
@@ -303,7 +300,7 @@ export class WalletTransactions {
     this.render();
     try {
       this.onProgress('Adding ETH to your balance…');
-      const tx = await this.sendTransaction('deposit', [this.address], { value: amount, ...fees }, { whole });
+      const tx = await this.sendTransaction('deposit', [this.address], { value: amount, priced: fees, whole });
       await this.waitTransaction(tx);
       return true;
     } finally {
@@ -392,11 +389,7 @@ export class WalletTransactions {
     this.onProgress('Withdrawing…');
     const tx = await this.sendTransaction('send', [recipient], {
       value: amount,
-      gasLimit,
-      maxFeePerGas: fees.maxFeePerGas,
-      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
-      chainId: this.expectedChainId,
-      type: 2,
+      priced: { gasLimit, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas },
     });
     const receipt = await this.waitTransaction(tx);
     return this.history.find(entry => entry.txHash === receipt.hash);
@@ -660,7 +653,9 @@ export class WalletTransactions {
       throw new Error('Transaction history has no saved intent');
     });
   }
-  async recoverTransaction(this: CasinoWallet, { replace = false, wait = true } = {}) {
+  /** Find what became of the saved transaction, or send it again, and wait for it; `speedUp` sends it again at a higher
+   * fee and does not wait. */
+  async recoverTransaction(this: CasinoWallet, speedUp = false) {
     this.requireDurableState();
     const intent = this.transactionIntent;
     if (!intent) return;
@@ -676,7 +671,7 @@ export class WalletTransactions {
     // A consumed nonce may be awaiting the configured confirmation depth.
     if ((await this.provider.getTransactionCount(this.address, 'latest')) > intent.nonce)
       throw new Error('Replacement is awaiting confirmation; recover again shortly');
-    if (replace) {
+    if (speedUp) {
       const original = Transaction.from(intent.raw);
       if (!sameTransactionIntent(original, intent, this.address))
         throw new Error('Saved transaction differs from the original intent');
@@ -707,14 +702,14 @@ export class WalletTransactions {
     } else if (!(await this.provider.getTransaction(intent.hash))) {
       await this.provider.broadcastTransaction(intent.raw);
     }
-    if (!wait) return intent.hash;
+    if (speedUp) return intent.hash;
     await this.provider.waitForTransaction(intent.hash, options.confirmations, 90000);
     const receipt = await confirmedReceipt(options, intent.hash);
     if (!receipt) throw new Error('Transaction remains pending; recover or speed it up');
     await this.acceptTransaction(receipt);
   }
   async speedUpTransaction(this: CasinoWallet) {
-    const hash = await this.exclusive(() => this.recoverTransaction({ replace: true, wait: false }));
+    const hash = await this.exclusive(() => this.recoverTransaction(true));
     await this.refresh();
     return hash;
   }
@@ -734,11 +729,7 @@ export class WalletTransactions {
       throw new Error(
         `Not that much is in your balance: ${exact(withdrawable)} METH can go, after the fee of ${exact(fee)} METH for sending it.`,
       );
-    // The open game may risk no more than stays in the balance, what its groups hold included.
-    if (this.game && this.game.allowance + this.inPlay() > withdrawable - value) {
-      const left = withdrawable - value - this.inPlay();
-      this.game.allowance = left < 0n ? 0n : left;
-    }
+    this.leaveForGame(withdrawable - value);
     const receipt = await this.perform('withdrawal', { amount: value, recipient, fee }, crypto.randomUUID());
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this withdrawal.');
     return receipt;
@@ -753,18 +744,21 @@ export class WalletTransactions {
     if (to.uname === this.uname) throw new Error('A transfer goes to another player.');
     if (value <= 0n || value > balance)
       throw new Error(`Not that much is in your balance: ${exact(balance)} METH can go.`);
-    // The open game may risk no more than stays in the balance, what its groups hold included.
-    if (this.game && this.game.allowance + this.inPlay() > balance - value) {
-      const left = balance - value - this.inPlay();
-      this.game.allowance = left < 0n ? 0n : left;
-    }
+    this.leaveForGame(balance - value);
     const receipt = await this.perform(
       'transfer',
-      { amount: value, source: '~' + to.uname, name: to.discordUsername ? '@' + to.discordUsername : '~' + to.uname },
+      { amount: value, source: '~' + to.uname, name: readers.showName(to) },
       crypto.randomUUID(),
     );
     if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this transfer.');
     return receipt;
+  }
+  /** Money is leaving the balance, and `left` stays: the open game may risk no more than that, what its groups hold
+   * included. */
+  leaveForGame(this: CasinoWallet, left: bigint) {
+    if (!this.game || this.game.allowance + this.inPlay() <= left) return;
+    const allowance = left - this.inPlay();
+    this.game.allowance = allowance < 0n ? 0n : allowance;
   }
   /** Send everything at this account's address to another address, less the network fee: the way out for ETH that
    * stays at the address, which never touches the balance. */

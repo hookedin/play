@@ -69,29 +69,35 @@ for (const location of ['cached', 'pending'])
     wallet.ready = async () => {};
     wallet.render = (() => {}) as any;
     wallet.openGame(testGame());
-    const input = { stake: 10n, chance: 123n, prize: 30n };
+    const results = (weight: bigint, cash: bigint) => [
+        { weight, cash },
+        { weight: 1000n - weight, cash: 0n },
+      ],
+      input = { cash: 10n, results: results(123n, 30n) },
+      play = (step: typeof input) => wallet.playStep(step, 'operation', wallet.gameIntent('operation'));
     const operation = { kind: 1n, amount: 10n, recipient: ZeroAddress, fee: 0n, chance: 123n, prize: 30n };
-    const details = { id: id('operation'), game: gameRef(testGame()) };
-    const receipt = { operationId: 'operation', details, proof: { step: { operation } } };
+    const details = { id: id('operation'), game: gameRef(testGame()), table: { ...input, bankroll: 5000n } },
+      game = wallet.gameIntent('operation');
+    const receipt = { operationId: 'operation', game, details, proof: { step: { operation } } };
     if (location === 'cached') await storage.put('wallet:receipt:operation', receipt);
     else {
       wallet.channelId = 'channel';
       wallet.channels.channel = {
         key: 'unused',
         onchain: { status: 0n, deposited: 10n, principal: 10n, claimed: 0n },
-        pending: { operationId: 'operation', request: operation, details },
+        pending: { operationId: 'operation', request: operation, details, game },
       } as any;
       wallet.resume = (async () => receipt) as any;
     }
-    // Every term is part of the intent: the stake, the chance and the prize.
-    for (const changed of [{ stake: 11n }, { chance: 124n }, { prize: 31n }])
-      await assert.rejects(wallet.executeCasinoBet({ ...input, ...changed }, 'operation'), /different intent/);
+    // Every term of the step is part of the intent: its cash, and each result's weight and cash.
+    for (const changed of [{ cash: 11n }, { results: results(124n, 30n) }, { results: results(123n, 31n) }])
+      await assert.rejects(play({ ...input, ...changed }), /different intent/);
     await assert.rejects(wallet.payBankroll(10n, 'operation'), /different intent/);
-    // The game is part of the intent too: the same terms in another game are another bet.
+    // The game is part of the intent too: the same step in another game is another bet.
     wallet.openGame(testGame('another-game'));
-    await assert.rejects(wallet.executeCasinoBet(input, 'operation'), /different intent/);
+    await assert.rejects(play(input), /different intent/);
     wallet.openGame(testGame());
-    assert.equal((await wallet.executeCasinoBet(input, 'operation')).operationId, 'operation');
+    assert.equal((await play(input)).operationId, 'operation');
   });
 
 test('payment retries reject changed amounts and explicit receipt lookup needs no execution terms', async () => {
@@ -137,6 +143,7 @@ function observingWallet(storage = new MemoryStore()) {
     observe: async () => ({ block }),
     balance: async () => 1n,
     accept: async () => {},
+    requireCanonical: async () => {},
     corroborate: async (_: any, read: any) => read({ getBlock: async () => block }),
     contractRead: async (_: any, method: any) =>
       method === 'channelIndex' ? 0n : { ...UNTOUCHED_CHANNEL, status: 1n, deposited: 10n, deadline: 1000n },

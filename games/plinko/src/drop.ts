@@ -3,7 +3,7 @@
  * casino bet the drop places, and the ball is drawn inside the bucket that bet reached. The reference for a one-shot
  * table: the page asks for a drop, and a drop saved before a reload lands after it, once.
  */
-import { RoundClient } from '@hookedin/play/sdk/round';
+import { RoundClient, browserStore } from '@hookedin/play/sdk/round';
 import type { PastRound, RoundBridge, RoundState, RoundStore } from '@hookedin/play/sdk/round';
 import { seededRandom } from '@hookedin/play/sdk/engine';
 import { bucketOf, dropGraph, path } from './tables.ts';
@@ -22,12 +22,6 @@ export interface Landed extends DropConfig {
   /** The ball's turns, true for right; their sum is the bucket. */
   turns: boolean[];
 }
-const browserStore: RoundStore = {
-  get: key => localStorage.getItem(key),
-  set: (key, value) => localStorage.setItem(key, value),
-  remove: key => localStorage.removeItem(key),
-};
-
 export class DropClient {
   private readonly round: RoundClient;
   private readonly store: RoundStore;
@@ -43,7 +37,7 @@ export class DropClient {
   ) {
     this.store = store;
     this.name = name;
-    this.round = new RoundClient(bridge, dropGraph, undefined, { store, name });
+    this.round = new RoundClient(bridge, dropGraph, { store, name });
   }
   /** The drop saved before the wallet signed it, whose result has not come back yet. */
   get pending(): DropConfig | null {

@@ -5,14 +5,19 @@ import { checkpointEvidence, plain, rejectionCheckpoint, STATE_TYPES, verifyEvid
 import type { Checkpoint } from '../protocol/types.ts';
 import type { CasinoWallet } from '../client/wallet.ts';
 
-/** One casino bet of the open game, as the wallet signs one: a game's step only once its quote covers it, so a
- * declined bet is one whose quote expired while it waited, or one the quote never covered, placed as this. */
+/** A casino bet of the open game, a step of two results, which the wallet signs only once the casino's quote covers
+ * it. */
 const bet = (w: CasinoWallet) =>
-  w.executeCasinoBet(
-    { stake: 10n, chance: 9000000000000000000n, prize: 20n },
-    w.gameOperationId('declined'),
-    w.gameIntent('declined'),
-  );
+  w.gameCasinoBet({
+    id: 'declined',
+    cash: 10n,
+    results: [
+      { weight: 9n, cash: 20n },
+      { weight: 11n, cash: 0n },
+    ],
+  });
+/** A payment of the open game, which the casino may decline. */
+const payment = (w: CasinoWallet) => w.payBankroll(10n, w.gameOperationId('declined'), w.gameIntent('declined'));
 /** The casino declining what `body` submits, unsigned, from `base`, as its JSON answer says it. */
 const declined = (w: CasinoWallet, body: any, base: Checkpoint, reason: string) =>
   plain({
@@ -28,7 +33,7 @@ const declined = (w: CasinoWallet, body: any, base: Checkpoint, reason: string) 
   });
 
 test('a rejection is agreed durably before completion, and a lost completion survives reload', async () => {
-  const f = await gameWallet({ bankroll: 1n }),
+  const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameAllowance(100n);
@@ -38,24 +43,23 @@ test('a rejection is agreed durably before completion, and a lost completion sur
   w.api = async (path, body: any) => {
     if (!path.endsWith('/operations')) return api(path, body);
     requests++;
-    const response = await api(path, body);
     assert.deepEqual(w.channel!.state, base, 'the proposal does not advance the wallet');
     if (requests === 1) {
       assert.equal(body.rejectionSignature, undefined);
-      assert.equal(response.casinoSignature, '0x');
-      return response;
+      return declined(w, body, base, 'Declined');
     }
+    const response = await api(path, body);
     const saved = await f.storage.get(w.storageKey);
     assert.equal(saved.channels[w.channelId!].pending.rejectionSignature, body.rejectionSignature);
     assert.notEqual(response.casinoSignature, '0x');
     throw new Error('completion lost');
   };
-  await assert.rejects(bet(w), /completion lost/);
+  await assert.rejects(payment(w), /completion lost/);
   assert.equal(requests, 2);
   const restored = await f.reload(),
     receipt = await restored.resume();
   assert.equal(receipt.status, 'rejected');
-  assert.equal(receipt.reason, 'No quote of the casino covers this casino bet');
+  assert.equal(receipt.reason, 'Declined');
   assert.equal(restored.pending, null);
   assert.equal(await restored.balance(), base.balance);
   assert.deepEqual(
@@ -87,23 +91,21 @@ test('a covered casino bet signs no rejection proposal', async () => {
 });
 
 test('a rejection signature stays inside the wallet when its save fails', async () => {
-  const f = await gameWallet({ bankroll: 1n }),
+  const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameAllowance(100n);
   const api = w.api.bind(w);
   let requests = 0;
   w.api = async (path, body: any) => {
-    const response = await api(path, body);
-    if (path.endsWith('/operations')) {
-      requests++;
-      f.storage.beforeCommit = () => {
-        throw new Error('storage failed');
-      };
-    }
-    return response;
+    if (!path.endsWith('/operations')) return api(path, body);
+    requests++;
+    f.storage.beforeCommit = () => {
+      throw new Error('storage failed');
+    };
+    return declined(w, body, w.channel!.state, 'Declined');
   };
-  await assert.rejects(bet(w), /storage failed/);
+  await assert.rejects(payment(w), /storage failed/);
   assert.equal(requests, 1);
   const saved = await f.storage.get(w.storageKey);
   assert.equal(saved.channels[w.channelId!].pending.rejectionSignature, undefined);
@@ -129,17 +131,17 @@ test('a result after an agreed rejection is refused, so the signed rejection can
 });
 
 test('a casino-only rejection signature does not complete a rejection', async () => {
-  const f = await gameWallet({ bankroll: 1n }),
+  const f = await gameWallet(),
     w = f.wallet;
   w.openGame(f.identity());
   await w.setGameAllowance(100n);
   const api = w.api.bind(w);
   w.api = async (path, body: any) => {
-    const response = await api(path, body);
-    if (path.endsWith('/operations'))
-      response.casinoSignature = await f.signer.signTypedData(w.domain, STATE_TYPES, response.state);
+    if (!path.endsWith('/operations')) return api(path, body);
+    const response = declined(w, body, w.channel!.state, 'Declined');
+    response.casinoSignature = await f.signer.signTypedData(w.domain, STATE_TYPES, response.state);
     return response;
   };
-  await assert.rejects(bet(w), /jointly signed/);
+  await assert.rejects(payment(w), /jointly signed/);
   assert.equal(w.pending!.rejectionSignature, undefined);
 });

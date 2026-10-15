@@ -1,7 +1,8 @@
 import { exactAmount, formatAmount } from '../sdk/src/wire.ts';
 import { exact } from './activity.ts';
-import { $, toast, typedAmount } from './page.ts';
+import { $, toast } from './page.ts';
 import { act, uiBusy, wallet } from './sheet.ts';
+import { amountRule, typedIn } from './withdrawal.ts';
 
 /** The bankroll fund as the casino states it, signed, against the shares this wallet can prove it holds. */
 let fundStatus: Awaited<ReturnType<typeof wallet.fundStatus>> | null = null;
@@ -50,7 +51,8 @@ export function renderFund() {
 }
 
 act('invest', async () => {
-  const amount = typedAmount($<HTMLInputElement>('invest-amount').value.trim());
+  const amount = typedIn($<HTMLInputElement>('invest-amount').value, 'METH');
+  if (amount === null) throw new Error(amountRule('METH'));
   if (wallet.pending) throw new Error('Finish the operation in flight before buying shares.');
   const receipt = await wallet.invest(amount);
   if (receipt.status === 'rejected') throw new Error(receipt.reason || 'The casino declined this investment.');
@@ -61,10 +63,12 @@ $<HTMLButtonElement>('divest-all').addEventListener('click', () => {
   if (fundStatus) $<HTMLInputElement>('divest-amount').value = exactAmount(fundStatus.value);
 });
 act('divest', async () => {
+  const typed = $<HTMLInputElement>('divest-amount').value,
+    wanted = typedIn(typed, 'METH');
+  if (wanted === null && typed.trim()) throw new Error(amountRule('METH'));
   const status = await wallet.fundStatus(),
-    held = wallet.fund.shares,
-    wanted = typedAmount($<HTMLInputElement>('divest-amount').value.trim());
-  if (wanted <= 0n || status.equity <= 0n) throw new Error('Enter what the shares you sell should be worth.');
+    held = wallet.fund.shares;
+  if (wanted === null || status.equity <= 0n) throw new Error('Enter what the shares you sell should be worth.');
   // Shares worth the amount asked for at the stated price; everything, when that is all of them.
   const shares = wanted >= status.value ? held : (wanted * status.totalShares) / status.equity;
   if (!shares) throw new Error('That is less than one share.');

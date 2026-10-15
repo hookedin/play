@@ -58,9 +58,8 @@ export function canonicalJSON(value: any): string {
     '}'
   );
 }
-export function hashJSON(context: unknown) {
-  if (context == null) return ZeroHash;
-  const bytes = toUtf8Bytes(canonicalJSON(context));
+export function hashJSON(value: unknown) {
+  const bytes = toUtf8Bytes(canonicalJSON(value));
   if (bytes.length > MAX_JSON_BYTES) throw new Error('JSON payload is too large');
   return keccak256(bytes);
 }
@@ -396,21 +395,22 @@ export function protection(
  * they were signed, so once the channel's `claimed` has passed the `withdrawn` of the checkpoint the withdrawal
  * follows. What stays owed of it is a claim under its ID; one paid in full at once leaves none. */
 export const withdrawalRecorded = (claimed: bigint, evidence: Evidence) => claimed > evidence.base.withdrawn;
+/** The operation of no kind, every field zero: the empty step's. */
+const ZERO_OPERATION: Operation = {
+  previousStateHash: ZeroHash,
+  kind: 0n,
+  amount: 0n,
+  recipient: ZeroAddress,
+  fee: 0n,
+  chance: 0n,
+  prize: 0n,
+  round: ZeroHash,
+  seedHash: ZeroHash,
+  memo: ZeroHash,
+};
 /** The operation that follows `base`, in its one form (`canonical`): zero but for `values`. */
 export function operation(d: Domain, base: Checkpoint, values: Partial<Operation>): Operation {
-  const op: Operation = {
-    previousStateHash: hashState(d, base),
-    kind: 0n,
-    amount: 0n,
-    recipient: ZeroAddress,
-    fee: 0n,
-    chance: 0n,
-    prize: 0n,
-    round: ZeroHash,
-    seedHash: ZeroHash,
-    memo: ZeroHash,
-    ...values,
-  };
+  const op: Operation = { ...ZERO_OPERATION, previousStateHash: hashState(d, base), ...values };
   if (!canonical(OP_TYPES, op)) throw new RangeError('The operation is not in its one form');
   return op;
 }
@@ -490,6 +490,8 @@ export function urlGameId(url: string) {
 }
 /** The longest name a game is published under. */
 export const MAX_GAME_NAME = 32;
+/** How many games one profile holds. */
+export const MAX_GAMES = 100;
 /** The part of a game's address its name makes, `@username/<slug>`: the name's letters and digits, lowercase and
  * without their accents, each run of anything else one hyphen. */
 export const gameSlug = (name: string) =>
@@ -556,7 +558,7 @@ export const BOUNDS = {
 };
 /** The pairs the wallet splits a step of these amounts into, at `cash`: each amount below it with each above it, or
  * with none above it, each below it with the highest, or with the cash itself when one result keeps it. */
-export function stepPairs(cash: bigint, amounts: ReadonlySet<bigint>) {
+function stepPairs(cash: bigint, amounts: ReadonlySet<bigint>) {
   let lows = 0,
     highs = 0;
   for (const amount of amounts) amount < cash ? lows++ : amount > cash ? highs++ : 0;
@@ -793,11 +795,12 @@ export const KIND = {
 export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret = ZeroHash, seed = ZeroHash) {
   if (!canonical(OP_TYPES, op) || !validHash(secret) || !validHash(seed))
     throw new Error('Operation is not in its one form');
-  if (!same(hashState(d, base), op.previousStateHash)) throw new Error('Operation is not next in this channel');
+  const previousStateHash = hashState(d, base);
+  if (previousStateHash !== op.previousStateHash) throw new Error('Operation is not next in this channel');
   const next = {
     ...base,
     sequence: base.sequence + 1n,
-    previousStateHash: hashState(d, base),
+    previousStateHash,
     transitionHash: keccak256(
       AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32'], [hashOperation(d, op), secret]),
     ),
@@ -818,20 +821,20 @@ export function deriveState(d: Domain, base: Checkpoint, op: Operation, secret =
         chance >= OUTCOME_SPACE ||
         prize <= 0n ||
         prize >= MAX_BALANCE ||
-        same(op.seedHash, ZeroHash) ||
-        same(op.round, ZeroHash) ||
-        !same(roundId(secret), op.round) ||
-        !same(seedHash(seed), op.seedHash)
+        op.seedHash === ZeroHash ||
+        op.round === ZeroHash ||
+        roundId(secret) !== op.round ||
+        seedHash(seed) !== op.seedHash
       : chance !== 0n ||
         prize !== 0n ||
-        !same(op.seedHash, ZeroHash) ||
-        !same(op.round, ZeroHash) ||
-        !same(secret, ZeroHash) ||
-        !same(seed, ZeroHash)) ||
+        op.seedHash !== ZeroHash ||
+        op.round !== ZeroHash ||
+        secret !== ZeroHash ||
+        seed !== ZeroHash) ||
     // Only a withdrawal names a recipient, never nobody and never the contract, and only it and a lock-in pay a fee.
     (withdrawal
-      ? same(op.recipient, ZeroAddress) || same(op.recipient, d.verifyingContract)
-      : !same(op.recipient, ZeroAddress)) ||
+      ? op.recipient === ZeroAddress || op.recipient === d.verifyingContract
+      : op.recipient !== ZeroAddress) ||
     (!pays && fee !== 0n) ||
     amount === 0n ||
     amount >= MAX_BALANCE ||
@@ -894,18 +897,7 @@ export function verifyStep(d: Domain, base: Checkpoint, step: Step, playerSigner
   return settleStep(d, base, step, casinoSigner);
 }
 const emptyStep = (): Step => ({
-  operation: {
-    previousStateHash: ZeroHash,
-    kind: 0n,
-    amount: 0n,
-    recipient: ZeroAddress,
-    fee: 0n,
-    chance: 0n,
-    prize: 0n,
-    round: ZeroHash,
-    seedHash: ZeroHash,
-    memo: ZeroHash,
-  },
+  operation: { ...ZERO_OPERATION },
   authorization: '0x',
   seed: ZeroHash,
   secret: ZeroHash,

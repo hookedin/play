@@ -3,9 +3,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Wallet, id, keccak256 } from 'ethers';
+import { ContractFactory, Transaction, Wallet, id, keccak256 } from 'ethers';
 import { TransactionJournal } from '../protocol/transaction-journal.ts';
 import { confirmedNonce, confirmedReceipt, findNonceTransaction } from '../protocol/transaction-recovery.ts';
+import { loadArtifact } from '../protocol/deployment.ts';
+import { anvil, deployment } from '../testing/contract.ts';
+
+/** A directory of the test's own, for the file a journal keeps. */
+function directory(t: any) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hookedin-journal-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
 
 test('journal keeps calldata private until its evidence is durable and broadcasts only its durable transaction', async () => {
   const key = Wallet.createRandom(),
@@ -120,31 +129,34 @@ test('journal retries reject changed intent before confirmation or broadcast, in
   assert.equal((await journal.submit('claim', request)).status, 'confirmed');
 });
 
-test('shared receipt validation uses the supplied confirmation anchor and rejects orphaned or malformed receipts', async () => {
-  const anchor = { number: 10, hash: id('anchor'), timestamp: 0 },
+test('a receipt counts only in a confirmed block on the canonical branch, and a malformed one is refused', async () => {
+  const anchor = { number: 10, hash: id('anchor') },
     included = { number: 8, hash: id('included') };
   let receipt = { hash: id('tx'), blockNumber: 8, blockHash: included.hash, status: 1 },
+    changing = false,
     changed = false;
   const provider = {
     getTransactionReceipt: async () => receipt,
     getBlock: async (height: any) => {
-      assert.notEqual(height, 'latest', 'the monitor already supplied its confirmed block');
-      return height === 8 ? included : changed ? { ...anchor, hash: id('replacement') } : anchor;
+      // The confirmed block is replaced once the receipt's block has been read.
+      if (height === 8) {
+        changed = changing;
+        return included;
+      }
+      return changed ? { ...anchor, hash: id('replacement') } : anchor;
     },
   };
-  assert.equal(await confirmedReceipt({ provider: provider as any }, receipt.hash, anchor), receipt);
+  const confirmed = () => confirmedReceipt({ provider: provider as any }, receipt.hash);
+  assert.equal(await confirmed(), receipt);
   receipt = { ...receipt, blockNumber: 11 };
-  assert.equal(await confirmedReceipt({ provider: provider as any }, receipt.hash, anchor), null);
+  assert.equal(await confirmed(), null);
   receipt = { ...receipt, blockNumber: 8, blockHash: id('orphan') };
-  assert.equal(await confirmedReceipt({ provider: provider as any }, receipt.hash, anchor), null);
+  assert.equal(await confirmed(), null);
   receipt = { ...receipt, blockHash: included.hash, status: 2 };
-  await assert.rejects(
-    confirmedReceipt({ provider: provider as any }, receipt.hash, anchor),
-    /Invalid transaction receipt/,
-  );
+  await assert.rejects(confirmed(), /Invalid transaction receipt/);
   receipt.status = 1;
-  changed = true;
-  await assert.rejects(confirmedReceipt({ provider: provider as any }, receipt.hash, anchor), /Chain changed/);
+  changing = true;
+  await assert.rejects(confirmed(), /Chain changed/);
 });
 
 for (const boundary of ['initial', 'replacement', 'completion'])
@@ -271,4 +283,62 @@ test('a journal refuses a file that is not one, and leaves it as it is', t => {
   fs.writeFileSync(file, bundle);
   assert.throws(() => new TransactionJournal({ file, chainId: 31337n } as any), /Not a transaction journal/);
   assert.equal(fs.readFileSync(file, 'utf8'), bundle);
+});
+
+test('confirmed reverts release the journal and replacements preserve transaction intent', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    signer = env.wallets[3];
+  const outbox = new TransactionJournal({
+    file: path.join(directory(t), 'tx.json'),
+    signer,
+    provider: env.provider,
+    chainId: 31337n,
+    replaceAfterMs: 0,
+  });
+  const bad = await f.contract.withdrawHouse.populateTransaction(signer.address, 1n);
+  const pending = await outbox.submit('revert', { ...bad, gasLimit: 150000n });
+  await env.provider.waitForTransaction(pending.hash as any);
+  assert.equal((await outbox.reconcile())!.status, 'reverted');
+  assert.equal(outbox.state.pending, null);
+  await env.provider.send('evm_setAutomine', [false]);
+  const first = await outbox.submit('recover', { to: env.wallets[1].address, value: 1n });
+  await env.provider.send('anvil_dropTransaction', [first.hash]);
+  const second = await outbox.submit('recover', null);
+  const a = Transaction.from((first as any).raw),
+    b = Transaction.from((second as any).raw);
+  assert.equal(a.nonce, b.nonce);
+  assert.equal(a.to, b.to);
+  assert.equal(a.value, b.value);
+  assert.equal(a.data, b.data);
+  assert.ok(b.maxFeePerGas! > a.maxFeePerGas!);
+  await env.provider.send('evm_setAutomine', [true]);
+  await env.provider.send('evm_mine', []);
+  await env.provider.waitForTransaction(second.hash as any);
+  assert.equal((await outbox.reconcile())!.status, 'confirmed');
+});
+
+test('the deployment outbox deploys the contract under its own gas budget', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const dir = directory(t);
+  const artifact = loadArtifact();
+  const signer = env.wallets[6],
+    request = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, signer).getDeployTransaction(
+      signer.address,
+      env.wallets[7].address,
+      1n,
+    );
+  const outbox = new TransactionJournal({
+    file: path.join(dir, 'deployment.json'),
+    signer,
+    provider: env.provider,
+    chainId: 31337n,
+    maxGasLimit: 8000000n,
+  });
+  const pending = await outbox.submit('deploy', request);
+  const receipt = await env.provider.waitForTransaction(pending.hash as any);
+  assert.ok(receipt!.contractAddress);
+  assert.equal((await outbox.reconcile())!.status, 'confirmed');
 });

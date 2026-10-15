@@ -41,101 +41,34 @@ The wallet's top bar names the game and shows its allowance, so a page holds onl
 
 One frozen object per page. A member that talks to the wallet sends one request envelope to `window.parent` and
 resolves with the reply to it; envelope IDs count up from 1 for the life of the page, and replies from any other window
-are ignored.
+are ignored. Each request member is one request of the [game bridge](../reference/bridge.md), which says what it takes,
+what the wallet checks and what it answers:
 
-#### `call`
+| Member                        | Bridge request                                                                       | Resolves with                                                                                                          |
+| ----------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `hello()`                     | [`wallet.hello`](../reference/bridge.md#wallethello)                                 | `{ bounds }`, the [`WalletBounds`](#walletbounds)                                                                      |
+| `info()`                      | [`wallet.info`](../reference/bridge.md#walletinfo)                                   | A [`WalletInfo`](#walletinfo)                                                                                          |
+| `round(id)`                   | [`wallet.round`](../reference/bridge.md#walletround)                                 | A [`Round`](developer.md#round), open or revealed                                                                      |
+| `allowance(group?)`           | [`game.allowance`](../reference/bridge.md#gameallowance)                             | A [`GameAllowance`](#gameallowance)                                                                                    |
+| `placesDeveloperBets()`       | [`game.placesDeveloperBets`](../reference/bridge.md#gameplacesdeveloperbets)         | `null`                                                                                                                 |
+| `end(group, meta?)`           | [`game.end`](../reference/bridge.md#gameend)                                         | `null`                                                                                                                 |
+| `history({ after?, limit? })` | [`game.history`](../reference/bridge.md#gamehistory)                                 | A [`GameHistory`](#gamehistory)                                                                                        |
+| `receipt(id)`                 | [`game.receipt`](../reference/bridge.md#gamereceipt)                                 | A [`GameReceipt`](#gamereceipt), or `null` when this wallet has none; `id-used` for one carried out on another channel |
+| `showBet(id)`                 | [`wallet.showBet`](../reference/bridge.md#walletshowbet)                             | `null`                                                                                                                 |
+| `casinoBet(request)`          | [`game.casinoBet`](../reference/bridge.md#gamecasinobet)                             | A `GameReceipt`: `settled`, `kept` or `rejected`                                                                       |
+| `developerBet(request)`       | [`game.developerBet`](../reference/bridge.md#gamedeveloperbet)                       | A `GameReceipt`: `open` or `rejected`                                                                                  |
+| `onReceipt(listener)`         | Each [`game.receipt`](../reference/bridge.md#gamereceipt-1) event, to `listener`     | A function that stops the listener                                                                                     |
+| `onAllowance(listener)`       | Each [`game.allowance`](../reference/bridge.md#gameallowance-1) event, to `listener` | A function that stops the listener                                                                                     |
 
-Sends any bridge request, with `params` `{}` by default, and resolves with the reply's `result`. It rejects with a
-`HookedInError` carrying the wallet's `code` and `message` when the wallet refuses (`failed` if the reply names no
-code); with `HookedInError('no-wallet')` at once when the page is not inside a frame; with `HookedInError('timeout')`
-when no reply arrives within 180,000 ms, after which the request is forgotten, although the wallet may still have
-carried it out, which `receipt` tells; and with a plain `Error` for a reply with neither `result` nor `error`.
+What the SDK adds to the bridge:
 
-#### `hello`
-
-[`wallet.hello`](../reference/bridge.md#wallethello), `{ bounds }`: the page's first message, which the module sends as
-it loads inside a frame. Every call returns that one promise while it is pending or once it has resolved; a greeting
-that failed is forgotten, so the next call asks again.
-
-#### `info`
-
-[`wallet.info`](../reference/bridge.md#walletinfo), asked afresh on every call.
-
-#### `round`
-
-A game's round as the casino shows it to anyone, read through the player's wallet with
-[`wallet.round`](../reference/bridge.md#walletround), since a game page talks to nobody but its own origin: a
-[`Round`](developer.md#round), open or revealed. The wallet passes the casino's answer on as it read it, its numbers
-bigints, without checking it: check it as [checking a round](outcome.md#checking-a-round) shows.
-
-#### `allowance`
-
-[`game.allowance`](../reference/bridge.md#gameallowance), a [`GameAllowance`](#gameallowance): what the game may stake
-now, or with `group`, what a bet in that group may stake. `onAllowance` hears whenever it changes.
-
-#### `placesDeveloperBets`
-
-[`game.placesDeveloperBets`](../reference/bridge.md#gameplacesdeveloperbets): the game places developer bets, so the
-allowance dialog the player opens from the wallet's top bar asks them to allow those too. Call it as the page loads. It
-resolves with `null`, and nothing opens: a game never asks the player for anything
-([the allowance](../games/how-a-game-works.md#the-allowance)).
-
-#### `end`
-
-[`game.end`](../reference/bridge.md#gameend): the player has seen how `group` ended, so what its bets won joins the
-allowance the wallet shows. Call it once the result is on the page, such as when a ball lands: until then the wallet's
-figures give nothing away, and stand still while a round is played
-([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)). `end(group, meta)` also keeps `meta`, your
-own JSON saying how the group went, in the player's history of your game, which `history` lists; a
-[`RoundClient`](round.md#end) round ends with its state as its meta.
-
-#### `history`
-
-[`game.history`](../reference/bridge.md#gamehistory), a [`GameHistory`](#gamehistory): a page of the player's history
-of your game, newest first, from whichever channel and device they played it on. `history({ after, limit })` reads the
-page older than the `cursor` of the one before.
-
-```ts
-const { entries } = await HookedIn.history({ limit: 20 });
-// Each past roll, as its receipt said.
-for (const entry of entries) if (entry.kind === 'casino-bet') showRoll(entry.outcome!, entry.payout!);
-```
-
-#### `receipt`
-
-[`game.receipt`](../reference/bridge.md#gamereceipt): an earlier operation's receipt by the game's own `id`, or `null`
-if this wallet has none. For an open developer bet the wallet also asks the casino, and once its developer has settled
-it, collects it, and `onReceipt` hears.
-
-#### `showBet`
-
-[`wallet.showBet`](../reference/bridge.md#walletshowbet): shows the player one of the game's operations in full, by its
-`id`, in the wallet over the page, with the proof of how it settled. Resolves with `null`, or refuses with `not-found`
-for an operation this wallet keeps no receipt of.
-
-#### `casinoBet`
-
-[`game.casinoBet`](../reference/bridge.md#gamecasinobet): the wallet splits the step's table into casino bets, draws
-one and lands on a result, and resolves with the receipt: `settled` for a bet, `kept` for a way without one, or
-`rejected`.
-
-#### `developerBet`
-
-[`game.developerBet`](../reference/bridge.md#gamedeveloperbet): resolves with the bet's receipt, `open` or `rejected`;
-once the developer has settled it and the wallet has collected what it pays, `onReceipt` hears. A bet can name a
-`round`, the hash of a secret your server committed to, which its settlement must reveal.
-
-#### `onReceipt`
-
-Calls a listener with every [`game.receipt`](../reference/bridge.md#gamereceipt-1) push, a developer bet of this game
-settled by its developer and collected by the wallet, and returns a function that stops it.
-
-#### `onAllowance`
-
-Calls a listener with every [`game.allowance`](../reference/bridge.md#gameallowance-1) push, a
-[`GameAllowance`](#gameallowance): what `allowance()` answers without a group, whenever any of it changes while the page
-is open, whatever changed it. It returns a function that stops it. A page opened with no allowance says so before the
-first bet, and takes that word, or a refusal for want of allowance, down once the player has set one:
+- The module sends `hello` as it loads inside a frame. Every call returns that one promise while it is pending or once
+  it has resolved; a greeting that failed is forgotten, so the next call asks again.
+- `info()` asks afresh on every call.
+- `round(id)` passes the casino's answer on as the wallet read it, its numbers bigints, without checking it: check it as
+  [checking a round](outcome.md#checking-a-round) shows.
+- A page opened with no allowance says so before the first bet, and takes that word, or a refusal for want of
+  allowance, down once `onAllowance` hears the player has set one:
 
 ```ts
 if (!(await HookedIn.allowance()).allowance) status.textContent = HookedIn.NO_ALLOWANCE;
@@ -146,11 +79,19 @@ HookedIn.onAllowance(({ allowance }) => {
 });
 ```
 
+#### `call`
+
+Sends any bridge request, with `params` `{}` by default, and resolves with the reply's `result`. It rejects with a
+`HookedInError` carrying the wallet's `code` and `message` when the wallet refuses (`failed` if the reply names no
+code); with `HookedInError('no-wallet')` at once when the page is not inside a frame; with `HookedInError('timeout')`
+when no reply arrives within 180,000 ms, after which the request is forgotten, although the wallet may still have
+carried it out, which `receipt` tells; and with a plain `Error` for a reply with neither `result` nor `error`.
+
 #### `storageScope`
 
 A storage key for this page, chain and player, from a `wallet.info` result: `hookedin:<pathname>:<chainId>:<uname>`,
-with `chain` for a missing chain and `anonymous` for a guest's missing uname, in lower case. It keys on the uname, so taking or
-dropping a Discord username keeps what the player had ([storage](../games/how-a-game-works.md#storage)).
+with `anonymous` for a guest's uname, which is `null`. It keys on the uname, so taking or dropping a Discord username
+keeps what the player had ([storage](../games/how-a-game-works.md#storage)).
 
 ```ts
 HookedIn.storageScope(await HookedIn.info()); // 'hookedin:/dice/:1:3byt9ocwnnzaxanmiz3stocj'
@@ -181,8 +122,8 @@ the same.
 
 #### `parseAmount`
 
-What the player typed into a stake field, a whole number of METH, as a bigint of wei: digits only, spaces trimmed.
-Every stake a player chooses is whole METH. It throws an `Error` whose message is for the player,
+What the player typed into a stake field, a whole number of METH, as a bigint of wei: digits only, without a leading
+zero, spaces trimmed. Every stake a player chooses is whole METH. It throws an `Error` whose message is for the player,
 `Enter a whole number of METH.` or, for zero, `Enter an amount greater than zero.` A page's own amounts are bigints
 already: it parses only what a person typed.
 
@@ -290,7 +231,7 @@ What a game learns about an operation, under its own `id`: how it ended, never t
 ### `PastOperation`
 
 An earlier operation of the game, on any channel or device of the player's: its [`GameReceipt`](#gamereceipt) as the
-wallet checked it, without `id`, and `at`, when the casino recorded it, in milliseconds.
+wallet checked it, without `id` and `reason`, and `at`, when the casino recorded it, in milliseconds.
 
 ### `EndedGroup`
 

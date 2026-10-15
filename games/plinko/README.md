@@ -40,7 +40,7 @@ A casino bet has two outcomes, so the wallet collapses the board ([pricing and c
 
 **Return.** Every table satisfies `sum(C(rows, j) × multiplier_j) = 99 × 2^rows` in hundredths, which is a return of exactly 99% of the ball. [test/plinko.test.ts](test/plinko.test.ts) proves it for all nine boards, and that the drop the SDK compiles reaches every bucket at exactly its binomial odds.
 
-Each bet's own return, which the wallet measures and keeps, is lower. A drop stakes only what its ball can lose, and the bets for the outer buckets carry more of the board's edge than the rest. With the casino's bankroll far above the stake, the bets pay back from 92.7% to 99.6% of what they stake, and the test holds every bet to at least 92.7%. When the bankroll is small beside a prize, the bet for it must carry more edge still for the casino to take it: at the least bankroll that backs the 16-row low board, its bet for the outer buckets pays back 22%.
+Each bet's own house edge, which the wallet shows and keeps, is higher. A drop stakes only what its ball can lose, and the bets for the outer buckets carry more of the board's edge than the rest. With the casino's bankroll far above the stake, the bets pay back from 92.7% to 99.6% of what they stake, and the test holds every bet to at least 92.7%. When the bankroll is small beside a prize, the bet for it must carry more edge still for the casino to take it: at the least bankroll that backs the 16-row low board, its bet for the outer buckets pays back 22%.
 
 If you change a multiplier, keep `sum(C(rows, j) × multiplier_j)` equal to your target return times `2^rows`, and update the test's return assertion and its `FLOOR`.
 

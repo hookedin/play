@@ -13,8 +13,8 @@ else: what an operation means is its `memo`, which the contract never reads. The
 
 ## Build
 
-The wallet accepts only the runtime pinned in [client/contract-artifact.ts](../../client/contract-artifact.ts), with the
-immutables `signer` and `treasury` filled in; [verify a release](deployment.md#verify-a-release) compiles it again.
+The wallet accepts only the runtime pinned in [protocol/contract-artifact.ts](../../protocol/contract-artifact.ts), with
+the immutables `signer` and `treasury` filled in; [verify a release](deployment.md#verify-a-release) compiles it again.
 
 The constructor, `constructor(address signer_, address treasury_, uint256 payoutLimit_)`, sets two immutable keys and
 the [payout limit](#the-payout-limit), and anyone can deploy it. `signer` is the casino's key, on its server: it signs
@@ -23,7 +23,8 @@ every checkpoint, [quote](#disputes) and [collateral offer](#collateral), and ma
 `InvalidTerms` when either key is zero, when they are the same address, or when the limit is not below 2^96. There is
 no upgrade, pause or change of either key. There is no `receive` or `fallback` function, so a plain ETH transfer reverts: ETH enters
 through `deposit`, `fundBankroll` and `buyCollateral`, and any ETH forced in counts as house cash. It leaves through `withdraw`, `claim`,
-`claimTo` and `withdrawHouse`. Every function that changes state holds a transient reentrancy guard.
+`claimTo` and `withdrawHouse`. Every function that changes state holds a transient reentrancy guard, but the treasury's
+`setPayoutLimit`, which calls nothing.
 
 ## Constants
 

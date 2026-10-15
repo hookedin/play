@@ -6,7 +6,6 @@ interface ObserverOptions {
   chainId: bigint;
   finality?: number;
   now?: () => number;
-  maxAgeMs?: number;
 }
 export interface Observation {
   block: ChainBlock;
@@ -18,14 +17,18 @@ import { canonicalJSON, plain } from './protocol.ts';
 import { FeeData, FetchRequest, JsonRpcProvider, Network } from 'ethers';
 
 export const RPC_TIMEOUT_MS = 10000;
+/** How old a chain head may be before an observation counts as stale. */
+const MAX_AGE_MS = 60000;
 /** How long the confirmed chain may stand still before an observation counts as stale. */
 const MAX_STALL_MS = 60000;
-/** Bound the transport itself: a late response cannot resume a failed read. Given the chain it serves, the provider
- * skips its own detection round trip; every observation checks the chain ID anyway. Each call is a request of its own:
- * every RPC answers those, while public ones cap what a batch may cost (Tenderly's refuses six contract calls in one). */
+/** How deep a block is confirmed on the chain `chainId`: one block on a local Anvil chain, two on Ethereum. */
+export const confirmationsOn = (chainId: bigint) => (chainId === 31337n ? 1 : 2);
 /** The least tip a transaction offers block builders, 0.1 gwei: RPCs suggest none, and a transaction without one can
  * wait unmined. */
 export const MIN_PRIORITY_FEE = 100_000_000n;
+/** Bound the transport itself: a late response cannot resume a failed read. Given the chain it serves, the provider
+ * skips its own detection round trip; every observation checks the chain ID anyway. Each call is a request of its own:
+ * every RPC answers those, while public ones cap what a batch may cost (Tenderly's refuses six contract calls in one). */
 export function createRpcProvider(url: string, chainId: bigint | undefined = undefined) {
   const request = new FetchRequest(url);
   request.timeout = RPC_TIMEOUT_MS;
@@ -67,7 +70,7 @@ export async function readContract(
   const decoded = contract.interface.decodeFunctionResult(method, encoded);
   return decoded.length === 1 ? decoded[0] : decoded;
 }
-export async function requireCanonicalBlock(provider: JsonRpcProvider, block: ChainBlock) {
+export async function requireCanonicalBlock(provider: JsonRpcProvider, block: Pick<ChainBlock, 'number' | 'hash'>) {
   if ((await provider.getBlock(block.number))?.hash !== block.hash) throw new Error('Chain changed during observation');
 }
 
@@ -75,18 +78,20 @@ export async function requireCanonicalBlock(provider: JsonRpcProvider, block: Ch
 export class ChainObserver {
   declare provider: JsonRpcProvider;
   declare witnessProvider: JsonRpcProvider | undefined;
+  /** Every RPC it reads: the primary, and the witness when there is one. */
+  declare providers: JsonRpcProvider[];
   declare chainId: bigint;
   declare finality: number;
   declare now: () => number;
-  declare maxAgeMs: number;
   declare local: boolean;
   declare last: Pick<ChainBlock, 'number' | 'hash'> | null;
   /** Whether the RPCs' chain was read since the last failed observation. */
   declare chainChecked: boolean;
   declare lastProgress: number;
 
-  constructor({ provider, witnessProvider, chainId, finality = 1, now = Date.now, maxAgeMs = 60000 }: ObserverOptions) {
-    Object.assign(this, { provider, witnessProvider, chainId, finality, now, maxAgeMs });
+  constructor({ provider, witnessProvider, chainId, finality = 1, now = Date.now }: ObserverOptions) {
+    Object.assign(this, { provider, witnessProvider, chainId, finality, now });
+    this.providers = witnessProvider ? [provider, witnessProvider] : [provider];
     if (!Number.isSafeInteger(finality) || finality < 1) throw new Error('Invalid confirmation depth');
     this.local = this.chainId === 31337n;
     if (!this.local && (!witnessProvider || witnessProvider === provider))
@@ -107,9 +112,8 @@ export class ChainObserver {
     }
   }
   async observeOnce(): Promise<Observation> {
-    const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
     const tips = await Promise.all(
-      providers.map(async provider => {
+      this.providers.map(async provider => {
         const [chain, tip] = await Promise.all([
           this.chainChecked ? null : provider.send('eth_chainId', []),
           provider.getBlock('latest'),
@@ -118,7 +122,7 @@ export class ChainObserver {
         if (!tip || !Number.isSafeInteger(tip.number) || !tip.hash || !Number.isSafeInteger(tip.timestamp))
           throw new Error('Invalid chain head');
         const age = this.now() - tip.timestamp * 1000;
-        if (!this.local && (age > this.maxAgeMs || age < -15000))
+        if (!this.local && (age > MAX_AGE_MS || age < -15000))
           throw new Error('Chain head timestamp is stale or in the future');
         return tip;
       }),
@@ -131,8 +135,8 @@ export class ChainObserver {
     const advanced = !this.last || height > this.last.number,
       follows = Boolean(this.last) && height === this.last!.number + 1;
     const [blocks, ancestors] = await Promise.all([
-      Promise.all(providers.map(p => p.getBlock(height))),
-      this.last && advanced && !follows ? Promise.all(providers.map(p => p.getBlock(this.last!.number))) : null,
+      Promise.all(this.providers.map(p => p.getBlock(height))),
+      this.last && advanced && !follows ? Promise.all(this.providers.map(p => p.getBlock(this.last!.number))) : null,
     ]);
     const block = blocks[0];
     if (
@@ -150,7 +154,7 @@ export class ChainObserver {
       )
     )
       throw new Error('Independent RPC block hashes disagree');
-    if (!this.local && this.now() - block.timestamp * 1000 > this.maxAgeMs + this.finality * 15000)
+    if (!this.local && this.now() - block.timestamp * 1000 > MAX_AGE_MS + this.finality * 15000)
       throw new Error('Confirmed block timestamp is stale');
     if (this.last && (height < this.last.number || (height === this.last.number && block.hash !== this.last.hash)))
       throw new Error('Observed chain regressed or reorganized; wait for a newer corroborated block');
@@ -181,18 +185,20 @@ export class ChainObserver {
     const { block, advanced } = observation;
     if (
       !this.local &&
-      (observation.tips.some(t => this.now() - t.timestamp * 1000 > this.maxAgeMs) ||
+      (observation.tips.some(t => this.now() - t.timestamp * 1000 > MAX_AGE_MS) ||
         (!advanced && this.now() - this.lastProgress > MAX_STALL_MS))
     )
       throw new Error('Chain observation became stale during reads');
-    const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
-    await Promise.all(providers.map(p => requireCanonicalBlock(p, block)));
+    await this.requireCanonical(block);
     if (advanced) this.lastProgress = this.now();
     this.last = { number: block.number, hash: block.hash };
   }
+  /** Throws unless `block` is still the chain's block at its height on every RPC. */
+  async requireCanonical(block: Pick<ChainBlock, 'number' | 'hash'>) {
+    await Promise.all(this.providers.map(p => requireCanonicalBlock(p, block)));
+  }
   async corroborate<T>(label: string, read: (provider: JsonRpcProvider) => Promise<T>) {
-    const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
-    const values = await Promise.all(providers.map(read));
+    const values = await Promise.all(this.providers.map(read));
     if (values.some(value => canonicalJSON(plain(value)) !== canonicalJSON(plain(values[0]))))
       throw new Error(`Independent RPC ${label} disagree`);
     return values[0];
@@ -200,8 +206,7 @@ export class ChainObserver {
   /** The newest block every RPC says the chain has finalized, which no reorganisation takes back, and never one above
    * `block`, a confirmed one. */
   async finalized(block: ChainBlock) {
-    const providers = this.witnessProvider ? [this.provider, this.witnessProvider] : [this.provider];
-    const numbers = await Promise.all(providers.map(async p => (await p.getBlock('finalized'))?.number));
+    const numbers = await Promise.all(this.providers.map(async p => (await p.getBlock('finalized'))?.number));
     if (!numbers.every(Number.isSafeInteger)) throw new Error('Invalid finalized block');
     return Math.min(block.number, ...(numbers as number[]));
   }

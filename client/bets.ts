@@ -1,8 +1,8 @@
-import { OUTCOME_SPACE, admits } from '../protocol/risk.ts';
+import { OUTCOME_SPACE } from '../protocol/risk.ts';
 import { betPayout, channelId, drawStep, landStep, outcome, roundId, same, seedHash } from '../protocol/protocol.ts';
 import { splitStep } from '../sdk/src/engine/transition.ts';
 import type { StepBranch } from '../sdk/src/engine/transition.ts';
-import { activityJSON, copyBlock, exact, h, percent, shortPercent, signedAmount, timeOf } from './activity.ts';
+import { activityJSON, copyBlock, edgeWei, exact, h, percent, shortPercent, signedAmount, timeOf } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import type { Operation, StepTable } from '../protocol/types.ts';
 import type { Receipt } from './wallet.ts';
@@ -52,19 +52,17 @@ export interface BetRow {
  * to cost. A step's bet keeps back the rest of what the step held, which comes back whatever happens, so its edge is
  * that of its own odds, and a payment's is all it paid. Each is worked out from the bet's own signed terms, so the
  * bets of a round add up to what the round was played at. None for a developer bet, whose odds nobody prices. */
-export const rowEdge = (row: BetRow) => (row.expected === null ? null : row.stake * OUTCOME_SPACE - row.expected);
+const rowEdge = (row: BetRow) => (row.expected === null ? null : row.stake * OUTCOME_SPACE - row.expected);
 /** The house edge of a round's bets: none if one of them is a developer bet. */
 const edgeOf = (rows: readonly BetRow[]) =>
   rows.reduce<bigint | null>((sum, row) => {
     const edge = rowEdge(row);
     return sum === null || edge === null ? null : sum + edge;
   }, 0n);
-/** A house edge as an amount, to the nearest wei. */
-const edgeWei = (edge: bigint) => (edge + OUTCOME_SPACE / 2n) / OUTCOME_SPACE;
 /** A part of a whole in millionths, to the nearest: none of nothing. */
 const share = (part: bigint, whole: bigint) => (whole > 0n ? (part * 1_000_000n + whole / 2n) / whole : null);
 
-export interface BetTotals {
+interface BetTotals {
   /** Bets, a round's steps counting once. */
   bets: number;
   /** What the bets took from outside their rounds, and what they came out with. */
@@ -81,7 +79,7 @@ const stakeLabel = (row: BetRow) => (row.payment ? 'Paid to the house' : 'Put in
 /** What each bet of a round, oldest first, added to what the round took from outside itself: each step stakes what the
  * round's earlier steps paid before anything more, so together they are the most the round was ever down, what the
  * player put in. */
-export function putIns(rows: readonly BetRow[]) {
+function putIns(rows: readonly BetRow[]) {
   let down = 0n,
     most = 0n;
   return rows.map(row => {
@@ -116,7 +114,8 @@ export function betTotals(rows: readonly BetRow[]) {
 export const edgeShare = (totals: Pick<BetTotals, 'edge' | 'priced'>) =>
   share(totals.edge, totals.priced * OUTCOME_SPACE);
 
-const tone = (net: bigint) => (net < 0n ? 'negative' : net > 0n ? 'positive' : '');
+/** The class of a gain or a loss: none for nothing. */
+export const tone = (net: bigint) => (net < 0n ? 'negative' : net > 0n ? 'positive' : '');
 /** One figure under its label, as a bet's row and a bet in full both show it; `exact`, when the figure is cut short. */
 const figure = (label: string | Node, value: string, className = '', exact = '') =>
   h(
@@ -414,7 +413,7 @@ function drawnStep(receipt: Partial<Receipt>, paid: bigint | null) {
   if (!table || !seed || (op && paid === null)) return null;
   let branches: StepBranch[];
   try {
-    branches = splitStep({ admits, bankroll: table.bankroll ?? 0n, cash: table.cash, results: table.results });
+    branches = splitStep({ bankroll: table.bankroll ?? 0n, cash: table.cash, results: table.results });
   } catch {
     return null;
   }
@@ -718,9 +717,8 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     );
     body.append(settled);
   }
-  if (developerBet) {
-    // A developer bet has no odds and no round.
-  } else if (!revealed || landed === null) {
+  // A developer bet has no odds and no round.
+  if (!developerBet && (!revealed || landed === null)) {
     body.append(
       h(
         'p',
@@ -732,7 +730,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
             : 'This receipt keeps no revealed round, so there is nothing to draw: only the amounts above are known.',
       ),
     );
-  } else {
+  } else if (revealed && landed !== null) {
     const won = landed < revealed.chance,
       rolled = roll(landed, revealed.chance);
     // The whole outcome space, the stretch below the bet's chance and where the round landed in it.

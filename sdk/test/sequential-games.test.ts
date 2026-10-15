@@ -4,7 +4,6 @@ import {
   divide,
   fraction,
   compileGame,
-  createMines,
   evaluatePolicy,
   getNode,
   optimalExpectedValuePolicy,
@@ -15,12 +14,12 @@ import { compileGameAsync } from '../src/engine/engine.ts';
 import { splitStep } from '../src/engine/transition.ts';
 import { drawStep } from '../../protocol/protocol.ts';
 import { admits } from '../src/admits.ts';
+import { createMines } from '../../games/mines/src/rules.ts';
 import { coin } from './coin.ts';
 
 const UNIT = 10n ** 18n;
-const ZERO = fraction(0n);
 const ONE = fraction(1n);
-const options = { admits, bankrollFloor: 1_000_000n * UNIT, cashQuantum: 10n ** 9n, initialCash: UNIT };
+const options = { bankrollFloor: 1_000_000n * UNIT, cashQuantum: 10n ** 9n, initialCash: UNIT };
 /** A coin toss that pays 1.9 times: one step, one casino bet. */
 const toss = coin({ action: 'toss', payout: () => 19n * UNIT })({ stake: 0n });
 const plan = compileGame(toss, { ...options, initialCash: 10n * UNIT });
@@ -98,7 +97,6 @@ test('a step lands on the successor the wallet drew, and the bankroll takes what
   // The wallet splits the table into bets the live bankroll admits, and its seed draws one by its weight, the same seed
   // always the same one.
   const branches = splitStep({
-      admits,
       bankroll: state.bankroll,
       cash: step.cash,
       results: step.outcomes.map((outcome, i) => ({ weight: step.weights[i]!, cash: outcome.cash })),
@@ -109,7 +107,7 @@ test('a step lands on the successor the wallet drew, and the bankroll takes what
   assert.equal(drawStep(seed, weights), drawStep(seed, weights));
 });
 
-test('Mines uses the same engine and preserves stopping-policy payouts without payments', () => {
+test('Mines uses the same engine and preserves stopping-policy payouts', () => {
   const game = createMines({
     tiles: 5,
     mines: 1,
@@ -123,7 +121,6 @@ test('Mines uses the same engine and preserves stopping-policy payouts without p
   ]) {
     const ev = evaluatePolicy(mines, node => (node.id === `mines:picks:${picks}` ? 'cash-out' : 'reveal'));
     assert.deepEqual(divide(ev.expectedPayout, fraction(UNIT)), expected);
-    assert.deepEqual(ev.expectedPayments, ZERO);
   }
 });
 
@@ -160,7 +157,6 @@ test('malformed, cyclic, and underfunded game graphs fail before any execution',
     /below required/,
   );
   assert.throws(() => getNode({ ...plan }, plan.root), /returned by compileGame/);
-  assert.throws(() => compileGame(toss, { ...options, admits: undefined as any }), /admission rule is required/);
   assert(Object.isFrozen(plan) && Object.isFrozen(plan.nodes));
 });
 

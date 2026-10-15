@@ -23,7 +23,7 @@ which only house cash pays, and a deposit it took in that a reorganisation of th
 is owed it only once it lands again.
 
 Collateral protects what you win before you win it. The casino offers it at its rate, a share of the amount paid once,
-which Protection shows. Enter an amount and **Buy for … ETH**: the wallet asks the casino for an offer, checks its
+which Protection shows. Enter an amount and **Buy for … METH**: the wallet asks the casino for an offer, checks its
 signature and that its price is the rate, and buys it on-chain from your deposit address, the price and the network fee
 both paid there ([contract](../reference/contract.md#collateral)). In that one transaction the contract moves that much
 house cash into your channel, where the casino can no longer take it, or the purchase reverts and only the fee is spent.
@@ -84,7 +84,7 @@ was recorded.
 The casino takes a withdrawal on only when the contract can pay all of it now: out of the deposits your balance has
 taken in and the collateral that the withdrawals it owes from it leave, and house cash that no claim counts on, less
 what the withdrawals it owes will take from it. A withdrawal your deposits and collateral cover needs no house cash. It
-declines the rest like any declined debit, with a signed rejection that says _At most … ETH can be withdrawn now_. It
+declines the rest like any declined debit, with a signed rejection that says _At most … METH can be withdrawn now_. It
 also declines a withdrawal to a contract that would refuse a payment from the contract, or needs more gas to take it
 than the contract gives a payment as it records a withdrawal: _That address does not accept a payment from the
 contract_. An address without code, new or not, takes any payment. Withdrawing everything leaves the

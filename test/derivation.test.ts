@@ -1,18 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { id, ZeroAddress, ZeroHash } from 'ethers';
-import { anvil, deployment, open, step, below } from '../testing/contract.ts';
+import { AbiCoder, id, keccak256, ZeroAddress, ZeroHash } from 'ethers';
+import { anvil, deployment, jointly, open, step, below } from '../testing/contract.ts';
 import {
+  betPayout,
   deriveState,
+  domain,
+  hashOperation,
   hashState,
   checkpointEvidence,
   operation,
+  outcome,
   roundId,
   seedHash,
-  STATE_TYPES,
   OP_TYPES,
 } from '../protocol/protocol.ts';
-import { MAX_BALANCE } from '../protocol/risk.ts';
+import { MAX_BALANCE, OUTCOME_SPACE } from '../protocol/risk.ts';
+import { buildVectors } from '../scripts/vectors.ts';
+
+const secret0 = `0x${'cd'.repeat(32)}`;
+const player = '0x0000000000000000000000000000000000000002';
 
 /** The contract and the TypeScript derivation are hand-mirrored; feed both the same
  * evidence for every kind and every invalid branch and require identical verdicts. */
@@ -27,11 +34,7 @@ test('the contract and deriveState agree on every operation kind and invalid enc
     const onchain = await f.contract.supported(evidence);
     assert.equal(hashState(f.d, onchain.toObject()), hashState(f.d, local));
     ch.state = local;
-    ch.evidence = checkpointEvidence(
-      local,
-      await ch.player.signTypedData(f.d, STATE_TYPES, local),
-      await f.signer.signTypedData(f.d, STATE_TYPES, local),
-    );
+    ch.evidence = await jointly(f, ch, local);
   };
   // Build evidence without deriving locally, so invalid encodings reach both verifiers.
   const craft = async (ch: any, values: any, secret = ZeroHash, seed = ZeroHash) => {
@@ -156,4 +159,37 @@ test('the contract and deriveState agree on every operation kind and invalid enc
   await assert.rejects(f.contract.supported(padded));
   assert.ok((await f.contract.supported(a.evidence)).balance === a.state.balance);
   assert.equal(padded.step.operation.seedHash, ZeroHash);
+});
+
+test('signed operation binds every field and deployment domain', () => {
+  const v = buildVectors(),
+    d = domain(v.identity.chainId, v.identity.casino),
+    request = v.operations[1].operation,
+    digest = hashOperation(d, request);
+  for (const [field, value] of Object.entries(request)) {
+    const changed = typeof value === 'bigint' ? value + 1n : value.length === 42 ? player : secret0;
+    assert.notEqual(hashOperation(d, { ...request, [field]: changed }), digest, field);
+  }
+  // A chance is 64 bits: one past the outcome space cannot even be signed.
+  assert.throws(() => hashOperation(d, { ...request, chance: OUTCOME_SPACE }));
+  assert.notEqual(hashOperation({ ...d, chainId: 1n }, request), digest);
+  assert.notEqual(hashOperation({ ...d, verifyingContract: player }, request), digest);
+});
+test('outcome depends only on the round, and a bet pays its prize exactly when the outcome is below its chance', () => {
+  const { operation: request, seed } = buildVectors().operations[1],
+    result = outcome(seed, secret0);
+  const expected = keccak256(
+    AbiCoder.defaultAbiCoder().encode(['bytes32', 'bytes32', 'bytes32'], [id('HOOKEDIN/OUTCOME'), seed, secret0]),
+  );
+  assert.equal(result.randomHash, expected);
+  assert.equal(result.value, BigInt(expected) & (OUTCOME_SPACE - 1n));
+  // Another channel's bet on the same round and seed sees the same outcome; another seed does not.
+  assert.notEqual(outcome(id('other'), secret0).randomHash, expected);
+  assert.equal(seedHash(seed), request.seedHash, 'the bet names its seed by its hash');
+  for (const secret of [1, 2, 3, 4].map(n => id(`secret ${n}`))) {
+    const u = outcome(seed, secret).value;
+    // The boundary is exact: a chance of u + 1 holds the outcome, a chance of u does not.
+    assert.equal(betPayout({ chance: u + 1n, prize: 9n }, u), 9n);
+    assert.equal(betPayout({ chance: u, prize: 9n }, u), 0n);
+  }
 });

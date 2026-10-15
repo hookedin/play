@@ -63,5 +63,5 @@ export const exactAmount = (wei: bigint) => formatAmount(wei, DECIMALS).replaceA
 
 /** What tells one player's saved state from another's: the chain, and the player's uname, which a Discord username
  * never changes. Games that share a host and accounts that share a browser must not read each other's state. */
-export const playerScope = (names: { uname?: string | null; chainId?: bigint } | null | undefined) =>
-  `${names?.chainId ?? 'chain'}:${String(names?.uname ?? 'anonymous').toLowerCase()}`;
+export const playerScope = ({ uname, chainId }: { uname: string | null; chainId: bigint }) =>
+  `${chainId}:${uname ?? 'anonymous'}`;

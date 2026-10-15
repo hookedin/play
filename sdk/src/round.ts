@@ -3,7 +3,6 @@
 import { getNode, loadFundedGame, prepareAction, resolveTransition } from './engine/index.ts';
 import type { FundingTable, GameGraph, GamePlan } from './engine/index.ts';
 import { compileGameAsync, rngFromBytes } from './engine/engine.ts';
-import { admits } from './admits.ts';
 import { HookedInError, NOT_ENOUGH_ALLOWANCE, formatAmount, playerScope } from './wire.ts';
 import { json, plain } from '../../protocol/protocol.ts';
 import * as read from '../../protocol/read.ts';
@@ -144,11 +143,20 @@ const ended = read.object<Omit<PastRound, 'id' | 'at'> & { schema: typeof SCHEMA
   extra: read.optional(read.meta),
 });
 const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-const browserStore: RoundStore = {
+/** The page's origin storage, `localStorage`: where a round lives unless a `store` is given. */
+export const browserStore: RoundStore = {
   get: key => localStorage.getItem(key),
   set: (key, value) => localStorage.setItem(key, value),
   remove: key => localStorage.removeItem(key),
 };
+/** How a round of `stake` is priced without a funding table, against `bankroll`, the virtual bankroll `wallet.info`
+ * reports: against half of it, on a grid of a billionth of the stake, starting with the stake. `compileGame` takes it
+ * to price a round as `RoundClient` does. */
+export const pricing = (stake: bigint, bankroll: bigint) => ({
+  bankrollFloor: bankroll / 2n,
+  cashQuantum: stake / 1000000000n || 1n,
+  initialCash: stake,
+});
 export class RoundClient {
   private data: Saved | null = null;
   private plan: GamePlan | null = null;
@@ -165,11 +173,12 @@ export class RoundClient {
   constructor(
     bridge: RoundBridge,
     graph: (setup: any) => GameGraph,
-    funding?: FundingTable,
     {
+      funding,
       store = browserStore,
       name = typeof location === 'undefined' ? 'round' : location.pathname,
     }: {
+      funding?: FundingTable;
       store?: RoundStore;
       name?: string;
     } = {},
@@ -192,25 +201,26 @@ export class RoundClient {
     }
     return found;
   }
-  private rules(setup: Setup) {
-    return this.built(setup).rules;
-  }
   private fundingScale(stake: bigint) {
     return this.funding && stake > 0n && stake % this.funding.initialCash === 0n
       ? stake / this.funding.initialCash
       : 0n;
   }
+  /** The plan a round of `setup` is played by at this pricing, compiled once and kept while the rounds use it. */
   private async compile(setup: Setup, bankrollFloor: bigint, cashQuantum: bigint) {
+    const key = json([setup, bankrollFloor, cashQuantum]);
+    if (this.plan && this.planKey === key) return this.plan;
     const scale = this.fundingScale(setup.stake),
       { graph } = this.built(setup);
-    if (
+    this.plan =
       this.funding &&
       scale &&
       bankrollFloor === this.funding.bankrollFloor * scale &&
       cashQuantum === this.funding.cashQuantum * scale
-    )
-      return loadFundedGame(graph, this.funding, scale, admits);
-    return compileGameAsync(graph, { admits, bankrollFloor, cashQuantum, initialCash: setup.stake });
+        ? loadFundedGame(graph, this.funding, scale)
+        : await compileGameAsync(graph, { bankrollFloor, cashQuantum, initialCash: setup.stake });
+    this.planKey = key;
+    return this.plan;
   }
   /** A step, from reading the round to saving where it led, holds the round's lock: `start` and `action` refuse while
    * it is held, as when a button is pressed twice, and `restore` waits for it. */
@@ -251,7 +261,7 @@ export class RoundClient {
       rules = null;
     try {
       data = saved(JSON.parse(stored));
-      rules = await this.rules(data.setup);
+      rules = await this.built(data.setup).rules;
     } catch {}
     if (!data || data.rules !== rules) {
       this.store.remove(this.storageKey);
@@ -259,10 +269,7 @@ export class RoundClient {
       throw new Error('This round was started under rules this game does not play. What it held is in your balance.');
     }
     this.data = data;
-    const planKey = json([data.setup, data.bankrollFloor, data.cashQuantum]);
-    if (!this.plan || this.planKey !== planKey)
-      this.plan = await this.compile(data.setup, data.bankrollFloor, data.cashQuantum);
-    this.planKey = planKey;
+    await this.compile(data.setup, data.bankrollFloor, data.cashQuantum);
   }
   state(): RoundState | null {
     const data = this.data;
@@ -304,7 +311,7 @@ export class RoundClient {
   async end(state: RoundState, extra?: Record<string, unknown>): Promise<null> {
     const meta = plain({
       schema: SCHEMA,
-      rules: await this.rules(state.setup),
+      rules: await this.built(state.setup).rules,
       setup: state.setup,
       nodeId: state.nodeId,
       cash: state.cash,
@@ -333,7 +340,7 @@ export class RoundClient {
         rules = null;
       try {
         round = ended(entry.meta);
-        rules = await this.rules(round.setup);
+        rules = await this.built(round.setup).rules;
       } catch {}
       if (!round || rules !== round.rules) continue;
       const { schema: _, rules: __, ...past } = round;
@@ -348,51 +355,43 @@ export class RoundClient {
     await this.load();
     if (this.data?.pending) throw new Error('Recover the pending action first');
     await this.checkAllowance(setup.stake);
-    const info = await this.call('wallet.info'),
-      bankroll: bigint = info.virtualBankroll;
+    const bankroll: bigint = (await this.call('wallet.info')).virtualBankroll;
     const reusable =
       this.plan && this.data && json(this.data.setup) === json(setup) && bankroll >= this.plan.conservativeBankroll;
     const scale = this.fundingScale(setup.stake);
     const funded = this.funding && scale && bankroll >= this.funding.conservativeBankroll * scale;
-    const bankrollFloor = reusable
-      ? this.plan!.bankrollFloor
+    const { bankrollFloor, cashQuantum } = reusable
+      ? this.plan!
       : funded
-        ? this.funding!.bankrollFloor * scale
-        : bankroll / 2n;
-    const cashQuantum = reusable
-      ? this.plan!.cashQuantum
-      : funded
-        ? this.funding!.cashQuantum * scale
-        : setup.stake / 1000000000n || 1n;
+        ? { bankrollFloor: this.funding!.bankrollFloor * scale, cashQuantum: this.funding!.cashQuantum * scale }
+        : pricing(setup.stake, bankroll);
     // Pricing fails when the casino cannot cover the round's payouts; say so in the player's terms.
     const capacity = () =>
       new Error(
         `The casino can only back about ${formatAmount(bankrollFloor)} METH of payouts right now. Lower your stake and try again.`,
       );
-    if (!reusable)
-      try {
-        this.plan = await this.compile(setup, bankrollFloor, cashQuantum);
-      } catch (error) {
-        if (error instanceof RangeError) throw capacity();
-        throw error;
-      }
-    if (!this.plan) throw new Error('Missing round plan');
-    if (bankroll < this.plan.conservativeBankroll) throw capacity();
+    let plan;
+    try {
+      plan = await this.compile(setup, bankrollFloor, cashQuantum);
+    } catch (error) {
+      if (error instanceof RangeError) throw capacity();
+      throw error;
+    }
+    if (bankroll < plan.conservativeBankroll) throw capacity();
     this.data = {
       schema: SCHEMA,
-      rules: await this.rules(setup),
+      rules: await this.built(setup).rules,
       id: crypto.randomUUID(),
       setup,
       bankrollFloor,
       cashQuantum,
-      nodeId: this.plan.root,
-      cash: this.plan.initialCash,
+      nodeId: plan.root,
+      cash: plan.initialCash,
       contributed: setup.stake,
       events: [],
       pending: null,
     };
     this.save();
-    this.planKey = json([this.data.setup, this.data.bankrollFloor, this.data.cashQuantum]);
     return this.state()!;
   }
   /** One step at a time: a second press while a step runs would draw and place a bet of its own. */

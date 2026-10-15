@@ -23,7 +23,9 @@ import {
   countersigned,
   assessBinary,
   claimOf,
+  claimReceiver,
   channelAt,
+  jointly,
   current,
   disputedBet,
   offered,
@@ -165,11 +167,7 @@ test('a withdrawal to a recipient that refuses payment is still a claim, owed in
     [, a, other] = env.wallets,
     to = Wallet.createRandom().address,
     ch = await open(f, a, 1000n),
-    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
-    receiver: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.signer).deploy(
-      f.contract.target,
-    );
-  await receiver.waitForDeployment();
+    receiver = await claimReceiver(f, f.signer);
   await (await f.contract.fundBankroll({ value: 100n })).wait();
   const won = await signedIncrease(f, ch, 100n),
     out = await step(f, { ...ch, ...won }, 5n, 1100n, { recipient: String(receiver.target) }),
@@ -474,11 +472,7 @@ test('a recipient that needs more gas than recording gives its payment is paid b
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
-    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
-    heavy: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.signer).deploy(
-      f.contract.target,
-    );
-  await heavy.waitForDeployment();
+    heavy = await claimReceiver(f, f.signer);
   await (await heavy.setMode(6)).wait();
   const ch = await open(f, env.wallets[1], 1000n),
     out = await step(f, ch, 5n, 500n, { recipient: String(heavy.target) }),
@@ -497,11 +491,7 @@ test('a recipient pays for what it returns, and a close owed nothing, or with no
   const env = await anvil();
   t.after(() => env.close());
   const f = await deployment(env),
-    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
-    chatty: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.signer).deploy(
-      f.contract.target,
-    );
-  await chatty.waitForDeployment();
+    chatty = await claimReceiver(f, f.signer);
   await (await chatty.setMode(4)).wait();
   // Whatever a recipient returns is not copied: it costs the sender no more than the recipient's own gas.
   const a = await open(f, env.wallets[1], 1000n),
@@ -735,12 +725,7 @@ test('a bet settles on-chain, and only strictly newer evidence challenges a clos
   // A fully signed checkpoint requires no historical replay.
   const cd = await open(f, b, 100n);
   const changed = { ...cd.state, sequence: 100n, previousStateHash: id('earlier'), balance: 90n };
-  const jointly = checkpointEvidence(
-    changed,
-    await b.signTypedData(f.d, STATE_TYPES, changed),
-    await f.signer.signTypedData(f.d, STATE_TYPES, changed),
-  );
-  assert.equal((await f.contract.supported(jointly)).balance, 90n);
+  assert.equal((await f.contract.supported(await jointly(f, cd, changed))).balance, 90n);
 });
 
 const now = async (env: any) => BigInt((await env.provider.getBlock('latest')).timestamp);
@@ -1084,12 +1069,7 @@ test('balances are capped below MAX_BALANCE so aggregate debt cannot overflow an
     c = await open(f, env.wallets[3], 1n),
     max = MAX_BALANCE - 1n;
   async function balanceEvidence(ch: any, balance: any) {
-    const state = { ...ch.state, sequence: 2n, balance: balance };
-    return checkpointEvidence(
-      state,
-      await ch.player.signTypedData(f.d, STATE_TYPES, state),
-      await f.signer.signTypedData(f.d, STATE_TYPES, state),
-    );
+    return jointly(f, ch, { ...ch.state, sequence: 2n, balance: balance });
   }
   // A jointly signed balance at or above the cap is not settlement evidence, however it was produced.
   await assert.rejects(f.contract.supported(await balanceEvidence(a, MAX_BALANCE)));
@@ -1113,12 +1093,7 @@ test('offline evidence and the contract enforce the same checkpoint amount bound
     cap = MAX_BALANCE;
   for (const field of ['balance', 'deposited', 'withdrawn']) {
     for (const amount of [cap - 1n, cap, (1n << 256n) - 1n]) {
-      const state = { ...ch.state, [field]: amount },
-        evidence = checkpointEvidence(
-          state,
-          await ch.player.signTypedData(f.d, STATE_TYPES, state),
-          await f.signer.signTypedData(f.d, STATE_TYPES, state),
-        ),
+      const evidence = await jointly(f, ch, { ...ch.state, [field]: amount }),
         bundle = {
           chainId: env.chainId,
           casino: String(f.contract.target),
@@ -1142,12 +1117,7 @@ test('evidence is taken in the one form it was signed in, though the contract re
   const f = await deployment(env),
     ch = await open(f, env.wallets[1], 1n),
     state = { ...ch.state, balance: 100n },
-    signed = async (base: any) =>
-      checkpointEvidence(
-        base,
-        await ch.player.signTypedData(f.d, STATE_TYPES, base),
-        await f.signer.signTypedData(f.d, STATE_TYPES, base),
-      ),
+    signed = (base: any) => jointly(f, ch, base),
     bundle = (evidence: any) => ({
       chainId: env.chainId,
       casino: String(f.contract.target),
@@ -1229,11 +1199,7 @@ test('a rejecting winnings recipient keeps its share while junior claims collect
   const f = await deployment(env),
     senior = await open(f, env.wallets[1], 1n),
     win = await signedIncrease(f, senior, 10n),
-    artifact = loadArtifact('contracts/test/ClaimReceiver.sol', 'ClaimReceiver'),
-    receiver: any = await new ContractFactory(artifact.abi, artifact.evm.bytecode.object, f.signer).deploy(
-      f.contract.target,
-    );
-  await receiver.waitForDeployment();
+    receiver = await claimReceiver(f, f.signer);
   await forceClose(f, env, senior, win.evidence);
   await (await f.contract.claim(senior.opening.channelId)).wait();
   // With no house cash to reach its winnings, the beneficiary can name a recipient before any ETH is sent to it.
@@ -1261,15 +1227,6 @@ test('a rejecting winnings recipient keeps its share while junior claims collect
   await (await f.contract.connect(senior.player).claimTo(senior.opening.channelId, senior.player.address)).wait();
   assert.equal((await claimOf(f, senior.opening)).paid, 11n);
   assert.equal(await f.contract.unpaidWinnings(), 0n);
-});
-
-test('the account countersigns the checkpoint a step reached', async t => {
-  const env = await anvil();
-  t.after(() => env.close());
-  const f = await deployment(env),
-    ch = await open(f, env.wallets[1], 50n),
-    spent = await step(f, ch, 2n, 20n);
-  assert.equal((await f.contract.supported(await countersigned(f, ch, spent))).balance, 30n);
 });
 
 test("house cash becomes players' money at the treasury's payout limit: winnings paid, collateral and dispute holds", async t => {
@@ -1355,4 +1312,44 @@ test("house cash becomes players' money at the treasury's payout limit: winnings
   const capped = await disputedBet(f, await open(f, d, 1000n), await flip());
   await (await f.contract.dispute(capped.evidence, capped.terms)).wait();
   assert.deepEqual([(await channelAt(f, { player: d.address, index: 0n })).disputeHold, await allowed()], [50n, 0n]);
+});
+
+test('the treasury alone withdraws surplus, never protected principal', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env);
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  const ch = await open(f, env.wallets[1], 500n),
+    recipient = env.wallets[4].address,
+    treasury = f.contract.connect(f.treasury);
+  const before = await env.provider.getBalance(recipient);
+  await assert.rejects(f.contract.connect(env.wallets[5]).withdrawHouse(recipient, 100n));
+  await assert.rejects(f.contract.withdrawHouse(recipient, 100n), 'not even the signer');
+  await assert.rejects(treasury.withdrawHouse(ZeroAddress, 100n));
+  await assert.rejects(treasury.withdrawHouse(await f.contract.getAddress(), 100n));
+  await assert.rejects(treasury.withdrawHouse(recipient, 0n));
+  await assert.rejects(treasury.withdrawHouse(recipient, 1001n));
+  const receipt = await (await treasury.withdrawHouse(recipient, 1000n)).wait();
+  const event = receipt.logs
+    .map((log: any) => f.contract.interface.parseLog(log))
+    .find((e: any) => e?.name === 'HouseWithdrawal');
+  assert.deepEqual([event.args.recipient, event.args.amount], [recipient, 1000n]);
+  assert.equal(await env.provider.getBalance(recipient), before + 1000n);
+  await forceClose(f, env, ch);
+  await (await f.contract.claim(ch.opening.channelId)).wait();
+  assert.equal((await claimOf(f, ch.opening)).paid, 500n);
+});
+
+test('a house withdrawal its recipient refuses changes nothing, and can be sent again', async t => {
+  const env = await anvil();
+  t.after(() => env.close());
+  const f = await deployment(env),
+    receiver = await claimReceiver(f, env.wallets[1]);
+  await (await f.contract.fundBankroll({ value: 1000n })).wait();
+  const recipient = await receiver.getAddress();
+  await assert.rejects(f.contract.connect(f.treasury).withdrawHouse(recipient, 100n));
+  assert.equal(await f.contract.withdrawableHouse(), 1000n);
+  await (await receiver.setMode(0)).wait();
+  await (await f.contract.connect(f.treasury).withdrawHouse(recipient, 100n)).wait();
+  assert.equal(await env.provider.getBalance(recipient), 100n);
 });

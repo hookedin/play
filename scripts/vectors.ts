@@ -11,6 +11,7 @@ import {
   deriveState,
   rejectionCheckpoint,
   canonicalJSON,
+  plain,
   memo,
   outcome,
   betPayout,
@@ -191,7 +192,7 @@ export function buildVectors() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const file = new URL('../vectors/protocol.json', import.meta.url);
-  const text = `${JSON.stringify(buildVectors(), (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)}\n`;
+  const text = `${JSON.stringify(plain(buildVectors()), null, 2)}\n`;
   if (process.argv.includes('--check')) {
     if (!fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== text)
       throw new Error('The protocol vectors differ; run npm run vectors for an intentional update');

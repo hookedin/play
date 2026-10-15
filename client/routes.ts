@@ -118,7 +118,7 @@ export async function route(push = false) {
 for (const link of document.querySelectorAll<HTMLElement>('[data-page]'))
   link.addEventListener('click', event => {
     event.preventDefault();
-    $('account-menu').hidePopover?.();
+    $('account-menu').hidePopover();
     navigate(link.dataset.page!);
   });
 window.addEventListener('popstate', () => void route(false));

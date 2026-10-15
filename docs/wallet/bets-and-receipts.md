@@ -45,6 +45,7 @@ While you play, the game's name in the top bar opens a menu:
 - **Your bets in** the game lists this browser's bets in it and those the casino keeps for your account from your
   other devices, each checked as the wallet checks a reply.
 - **Everyone's bets in** it opens its [public record](#a-games-public-record).
+- **Reload game** loads the game's page again, keeping its allowance.
 
 A game can also open any of its bets from its own page, as Dice does from each roll in its strip
 ([`wallet.showBet`](../reference/bridge.md#walletshowbet)).
@@ -185,10 +186,9 @@ sends the seed only with a covered one, so a declined bet reveals nothing: its r
 bet. A covered bet the casino declines is not countersigned: it stays saved, for you to
 [dispute](closing-and-claims.md#dispute-a-casino-bet).
 
-A game's operation that its player already carried out on another channel is declined too, marked `used`; a covered
-casino bet only with the operation your account signed there, which the wallet checks. The wallet then answers the game
-with `id-used`, so that it does not place the same bet again under another ID
-([how a game works](../games/how-a-game-works.md)).
+A game's operation you already carried out on another channel is declined too, a covered casino bet only with the
+operation your account signed there as proof, and the game is told so, so that it does not place it again
+([when a wallet has lost receipts](../games/how-a-game-works.md#when-a-wallet-has-lost-receipts)).
 
 ## A game's public record
 

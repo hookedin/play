@@ -1,12 +1,12 @@
 import qrcode from 'qrcode-generator';
 import { CasinoWallet, answersTo, type PendingOperation, type Receipt } from './wallet.ts';
 import * as readers from './readers.ts';
-import type { Profile } from './readers.ts';
-import { inUnit, typedIn, typedUnits, validateWithdrawal, type Unit } from './withdrawal.ts';
+import { showName, type Profile } from './readers.ts';
+import { amountRule, inUnit, typedIn, typedUnits, validateWithdrawal, type Unit } from './withdrawal.ts';
 import { COINS, inCoin, openChannel, status, typedRefund, type Channel, type State } from './chainflip.ts';
 import { Wallet } from 'ethers';
 import { namePasskey, passkeyAccount } from './passkey.ts';
-import { gameReceipt } from './wallet-games.ts';
+import { receiptForGame } from './wallet-games.ts';
 import { OPERATIONS } from './wallet-channel.ts';
 import { inbound } from './wallet-transactions.ts';
 import { BrowserStore } from './storage.ts';
@@ -36,16 +36,15 @@ import { formatAmount } from '../sdk/src/wire.ts';
 import {
   $,
   casinoURL,
+  copyText,
   deployment,
   download,
   network,
   short,
-  showName,
   showOnTop,
   shortDate,
   showSheet,
   toast,
-  typedAmount,
 } from './page.ts';
 import { inSettings, parseRoute, route, walletPath, walletRoute, type GameRoute, type WalletTab } from './routes.ts';
 import { abandonGame, active, closeGame, openGame, renderGameAccount } from './games.ts';
@@ -56,8 +55,9 @@ import { renderFund } from './bankroll.ts';
 
 export let uiBusy = false;
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
-export let historyBusy = false;
-let historyError: any = null;
+/** Whether Refresh is checking the chain and the casino, and what stopped it last. */
+export let refreshBusy = false;
+let refreshError: any = null;
 export const storage = new BrowserStore();
 export const wallet = new CasinoWallet({
   storage,
@@ -73,7 +73,8 @@ export const wallet = new CasinoWallet({
   },
   // A developer bet's receipt reaches the game that placed it as soon as the wallet has collected what it was paid.
   onGameReceipt: (game, receipt) => {
-    if (active?.identity.id === game.id) active.push('game.receipt', { receipt: gameReceipt(game.operation, receipt) });
+    if (active?.identity.id === game.id)
+      active.push('game.receipt', { receipt: receiptForGame(game.operation, receipt) });
   },
   onGameAllowance: (game, allowance) => {
     if (active?.identity.id === game.id) active.push('game.allowance', { ...allowance });
@@ -87,15 +88,6 @@ const paidTo = (to: string) =>
     : same(to, wallet.address)
       ? 'to your address'
       : `to ${short(to)}`;
-/** A typed amount of METH, in wei: null for anything that is not an amount above zero. */
-const positiveAmount = (text: string) => {
-  try {
-    const value = typedAmount(text);
-    return value > 0n ? value : null;
-  } catch {
-    return null;
-  }
-};
 /** A saved operation in words: what it is, the ID the casino knows it by and the sequence it was signed at, and what the
  * last attempt to send it ran into. */
 function pendingSummary({ kind, request, details, game, operationId, quote }: PendingOperation) {
@@ -177,12 +169,20 @@ const addressSendRequest = () =>
     maximum: wallet.publicState.nativeBalance ?? 0n,
     channel: false,
   });
-let safetyAccount = '',
+/** The account the forms were last emptied for, and the deposit address's URI the QR code shows. */
+let formsFor = '',
   depositURI = '';
-/** The deposit address, and what a deposit of what it holds would cost. */
-function renderSafety() {
-  if (safetyAccount !== wallet.storageKey) {
-    safetyAccount = wallet.storageKey;
+/** A QR code of `text`, as an image's source. */
+function qrImage(text: string) {
+  const code = qrcode(0, 'M');
+  code.addData(text);
+  code.make();
+  return code.createDataURL(4, 16);
+}
+/** The deposit address, and what a deposit of what it holds would cost. Another account starts with empty forms. */
+function renderDeposit() {
+  if (formsFor !== wallet.storageKey) {
+    formsFor = wallet.storageKey;
     $<HTMLTextAreaElement>('exported-key').value = '';
     $('exported-key').classList.add('hidden');
     $('export-key').textContent = "Show this wallet's private key";
@@ -202,10 +202,7 @@ function renderSafety() {
   const uri = `ethereum:${wallet.address}@${wallet.expectedChainId}`;
   if (uri !== depositURI) {
     depositURI = uri;
-    const code = qrcode(0, 'M');
-    code.addData(uri);
-    code.make();
-    $<HTMLImageElement>('deposit-qr').src = code.createDataURL(4, 16);
+    $<HTMLImageElement>('deposit-qr').src = qrImage(uri);
     $<HTMLAnchorElement>('deposit-link').href = uri;
   }
   const held = wallet.publicState.nativeBalance ?? 0n,
@@ -256,7 +253,7 @@ async function followChainflip(shown: NonNullable<typeof chainflip>) {
     await new Promise(resolve => setTimeout(resolve, 15_000));
     if (chainflip !== shown || !wallet.depositShown || document.hidden) continue;
     try {
-      Object.assign(shown, await status(shown.channel.id, shown.channel));
+      Object.assign(shown, await status(shown.channel));
       renderWallet();
     } catch {}
   }
@@ -290,8 +287,8 @@ export function act(id: string, run: () => unknown, done?: string | (() => strin
 let walletTab: WalletTab = 'deposit';
 /** The wallet's dialog on one of its tabs, over the page it opens on. Opening it is a step in the history, which closing
  * it goes back from. */
-export function openWallet(tab: WalletTab = 'deposit') {
-  $('account-menu').hidePopover?.();
+export function openWallet(tab: WalletTab) {
+  $('account-menu').hidePopover();
   if (!$<HTMLDialogElement>('wallet-dialog').open) history.pushState({ over: true }, '', walletPath(tab));
   showWallet(tab);
 }
@@ -398,7 +395,7 @@ function transferRequest() {
         : most <= 0n
           ? 'Nothing to transfer: your balance is empty.'
           : typed && amount === null
-            ? 'Enter an amount in METH above zero, with at most 12 decimal places.'
+            ? amountRule('METH')
             : amount !== null && amount > most
               ? `At most ${exact(most)} METH can go.`
               : null),
@@ -465,7 +462,7 @@ export function renderWallet() {
   $('wallet-dialog').classList.toggle('guest', Boolean(wallet.guest));
   $('menu-sign-in').hidden = $('menu-key-file').hidden = !wallet.guest;
   showPanel();
-  $<HTMLButtonElement>('refresh-wallet').disabled = historyBusy || !wallet.address;
+  $<HTMLButtonElement>('refresh-wallet').disabled = refreshBusy || !wallet.address;
   if (!wallet.address) return renderGameAccount();
   const state = wallet.publicState;
   if (active?.channelId && active.channelId !== wallet.channelId) abandonGame();
@@ -480,7 +477,7 @@ export function renderWallet() {
   $('balance-amount').textContent = formatAmount(balance, 0);
   $('balance-amount').title = `${exact(balance)} METH`;
   renderCollateral();
-  renderSafety();
+  renderDeposit();
   const inPlay = wallet.inPlay();
   $('balance-note').textContent = inPlay
     ? `${formatAmount(inPlay)} METH of it is in play in ${active?.identity.name}: it joins the game's allowance once the game has shown how its round ended.`
@@ -613,7 +610,7 @@ function renderCollateral() {
     p = state.protection ?? { deposits: 0n, collateral: 0n, covered: 0n, uncovered: 0n, missing: 0n, spare: 0n },
     { uncovered, missing, spare } = p,
     rate = state.collateralRate ?? null,
-    amount = positiveAmount($<HTMLInputElement>('collateral-buy-amount').value.trim()),
+    amount = typedIn($<HTMLInputElement>('collateral-buy-amount').value, 'METH'),
     buying = state.buying;
   $('held-deposits').textContent = formatAmount(p.deposits, 0);
   $('collateral-amount').textContent = formatAmount(p.collateral, 0);
@@ -713,17 +710,17 @@ function renderDeveloperBets() {
 }
 
 export function renderActivity() {
-  const refreshError = historyError?.shortMessage || historyError?.message || historyError || wallet.detailsError;
+  const error = refreshError?.shortMessage || refreshError?.message || refreshError || wallet.detailsError;
   $('history-status').textContent =
-    historyError || wallet.detailsError
-      ? `This may be out of date; your saved proofs are safe. ${refreshError}`
-      : historyBusy || wallet.detailsRefreshing
+    refreshError || wallet.detailsError
+      ? `This may be out of date; your saved proofs are safe. ${error}`
+      : refreshBusy || wallet.detailsRefreshing
         ? 'Checking the chain and the casino…'
         : 'Everything your wallet signed, sent and found, with the JSON behind it.' +
           (wallet.detailsObservedAt
             ? ` Checked ${new Date(wallet.detailsObservedAt).toLocaleTimeString([], { hour12: false })}.`
             : '');
-  $('history-status').classList.toggle('check-failed', Boolean(historyError || wallet.detailsError));
+  $('history-status').classList.toggle('check-failed', Boolean(refreshError || wallet.detailsError));
   // A withdrawal shows its transaction once the ones before it are recorded, which its own JSON does not say. A step
   // that drew no bet signed nothing: its proof is its game's to open, not Activity's.
   syncRows(
@@ -1076,17 +1073,17 @@ function transactionLink(hash: string) {
 
 /** Check now what the wallet's own loop checks every 10 minutes, and the activity's details with it. */
 export async function refreshWallet() {
-  if (historyBusy || !wallet.address || !wallet.reader) return;
-  historyBusy = true;
-  historyError = null;
+  if (refreshBusy || !wallet.address || !wallet.reader) return;
+  refreshBusy = true;
+  refreshError = null;
   renderWallet();
   try {
     await wallet.check();
     await wallet.refreshDetails();
   } catch (error) {
-    historyError = error;
+    refreshError = error;
   } finally {
-    historyBusy = false;
+    refreshBusy = false;
     renderWallet();
   }
 }
@@ -1236,7 +1233,7 @@ act('address-send', async () => {
   toast(`Sent ${exact(receipt!.amount!)} METH to ${short(to)}. Activity shows the transaction and its fee.`);
 });
 act('buy-collateral', async () => {
-  const amount = positiveAmount($<HTMLInputElement>('collateral-buy-amount').value.trim());
+  const amount = typedIn($<HTMLInputElement>('collateral-buy-amount').value, 'METH');
   if (!amount) throw new Error('Enter how much collateral to buy.');
   const bought = await wallet.buyCollateral(amount);
   $<HTMLInputElement>('collateral-buy-amount').value = '';
@@ -1292,19 +1289,14 @@ $<HTMLInputElement>('channel-import').addEventListener('change', event => {
       toast('Recovery bundle checked and imported.');
     });
 });
-$<HTMLButtonElement>('copy-address').addEventListener('click', async () => {
-  if (!wallet.address || wallet.publicState.address !== wallet.address) return;
-  try {
-    await navigator.clipboard.writeText(wallet.address);
-    toast(`Address copied. Send ETH on ${wallet.networkName}.`);
-  } catch {
-    const selection = window.getSelection(),
-      range = document.createRange();
-    range.selectNodeContents($('wallet-address'));
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    toast('Your address is selected. Copy it with your browser’s copy command.');
-  }
+$<HTMLButtonElement>('copy-address').addEventListener('click', () => {
+  if (wallet.address && wallet.publicState.address === wallet.address)
+    void copyText(
+      wallet.address,
+      `Address copied. Send ETH on ${wallet.networkName}.`,
+      'Your address is selected. Copy it with your browser’s copy command.',
+      $('wallet-address'),
+    );
 });
 for (const [i, coin] of COINS.entries())
   $('chainflip-coin').append(h('option', { value: String(i) }, `${coin.asset} on ${coin.chain}`));
@@ -1315,22 +1307,18 @@ act('chainflip-open', async () => {
   if (amount === null)
     throw new Error(`Enter an amount of ${coin.asset} above zero, with at most ${coin.decimals} decimal places.`);
   if (!refund) throw new Error(`Enter your own ${coin.chain} address for refunds.`);
-  const channel = await openChannel(coin, amount, wallet.address, refund),
-    code = qrcode(0, 'M');
-  code.addData(channel.depositAddress);
-  code.make();
-  $<HTMLImageElement>('chainflip-qr').src = code.createDataURL(4, 16);
+  const channel = await openChannel(coin, amount, wallet.address, refund);
+  $<HTMLImageElement>('chainflip-qr').src = qrImage(channel.depositAddress);
   chainflip = { channel, state: 'WAITING', expired: false, refunded: false };
   void followChainflip(chainflip);
 });
-$<HTMLButtonElement>('copy-chainflip-address').addEventListener('click', async () => {
-  if (!chainflip) return;
-  try {
-    await navigator.clipboard.writeText(chainflip.channel.depositAddress);
-    toast(`Chainflip address copied. Send ${chainflip.channel.coin.asset} on ${chainflip.channel.coin.chain}.`);
-  } catch {
-    toast('Copying failed: copy the address with your browser’s copy command.', true);
-  }
+$<HTMLButtonElement>('copy-chainflip-address').addEventListener('click', () => {
+  if (chainflip)
+    void copyText(
+      chainflip.channel.depositAddress,
+      `Chainflip address copied. Send ${chainflip.channel.coin.asset} on ${chainflip.channel.coin.chain}.`,
+      'Copying failed: copy the address with your browser’s copy command.',
+    );
 });
 act('export-key', async () => {
   const field = $<HTMLTextAreaElement>('exported-key');
@@ -1381,7 +1369,7 @@ act('start-over', async () => {
 // A key file opens its account, as signing in with a passkey does: the file is the key this wallet saved, and nothing else.
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-open-key-file]'))
   button.addEventListener('click', () => {
-    $('account-menu').hidePopover?.();
+    $('account-menu').hidePopover();
     $<HTMLInputElement>('key-file').click();
   });
 $('key-file').addEventListener('change', () => {
@@ -1409,7 +1397,7 @@ $('import-key').addEventListener('keydown', event => {
 // open, a key file is a copy of its key.
 for (const button of document.querySelectorAll<HTMLButtonElement>('[data-key]'))
   button.addEventListener('click', async () => {
-    $('account-menu').hidePopover?.();
+    $('account-menu').hidePopover();
     const how = button.dataset.key,
       copy = how === 'file' && !wallet.guest,
       playing = copy ? null : (active?.path ?? null);

@@ -125,7 +125,7 @@ actions with bets the casino's rule admits. That is more than the state's expect
 every step needs an edge of its own at its state's cash.
 
 `RoundClient` prices against half the virtual bankroll `wallet.info` reports, on a grid of a billionth of the stake, and
-starts the round with the stake as its cash. A stake the casino cannot back is refused before anything is signed, with
+starts the round with the stake as its cash ([`pricing`](../sdk/round.md#pricing)). A stake the casino cannot back is refused before anything is signed, with
 an error naming about how much it can back. The next round with the same setup reuses the prices while the virtual
 bankroll still covers their conservative starting requirement.
 
@@ -138,14 +138,16 @@ the allowance and what the round holds do not cover is refused with
 
 ## Precomputed prices
 
-Pricing a large graph in the page takes time. The constructor's third argument is a
+Pricing a large graph in the page takes time. The constructor's `funding` option is a
 [`FundingTable`](../sdk/engine.md#fundingtable): each action's required cash at one stake, which `RoundClient` uses,
 scaled by an exact integer, when the stake is a multiple of the table's `initialCash` and the bankroll covers its
 `conservativeBankroll` times that multiple. [Blackjack](https://github.com/hookedin/game-blackjack) commits its table and
 passes it:
 
 ```ts
-const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: setup.stake }), blackjackFunding);
+const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: setup.stake }), {
+  funding: blackjackFunding,
+});
 ```
 
 A table is right only for the rules it was generated from: blackjack's `npm run generate` compiles its rules with

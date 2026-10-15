@@ -87,8 +87,10 @@ What the stub holds a game to:
   and a wallet that has lost the receipt is refused with `id-used`.
 - Only a published game takes developer bets. Settlements are paid whole from the bank or refused with `bank-short`,
   and one of a bet that names a round must reveal its secret, as only such a settlement may.
-- The game's casino bet names a group, is admitted against the virtual bankroll and reveals its round, once: the same bet again
-  gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing and moves no money.
+- The game's casino bet is checked as the kit and the casino check it, its terms, its group, its meta and its round
+  each in its one form, or refused with `invalid`. It is admitted against the virtual bankroll and reveals its round,
+  once: the same bet again gets the same answer, and another is refused with `round-revealed`. A reveal bets nothing
+  and moves no money.
 - The player's history of each game is kept as the casino keeps it: every game operation the stub carried out and
   every group a game ended with meta, newest first, on any wallet of the player's, `reload()` and `forget()`
   included. A group ends with meta once: other meta is refused with `id-conflict`.
@@ -124,7 +126,7 @@ import { doubleUp } from '../src/rules.ts';
 test('a round of Double up settles one step at a time', async () => {
   const f = await gameWallet();
   f.wallet.openGame(f.identity('double-up'));
-  const round = new RoundClient(f.bridge, doubleUp, undefined, { store: memoryStore(), name: 'double-up' });
+  const round = new RoundClient(f.bridge, doubleUp, { store: memoryStore(), name: 'double-up' });
   await round.start({ stake: 1000n });
   const state = await round.action('flip');
   assert.equal(state.cash, state.nodeId === 'won' ? 1900n : 0n);
@@ -164,18 +166,19 @@ outside it as arguments, so its tests run it against a casino and a clock of the
 
 A game states no floor to its players: a promise nobody can verify is worth nothing, because no game bounds how often
 it wagers what it holds. It holds its own table to one in a test instead, and every player sees the
-[measured return](casino-bets.md#measured-return) of each bet they signed. The house games pin theirs as `FLOOR`, over
+[house edge](casino-bets.md#measured-return) of each bet they signed. The house games pin theirs as `FLOOR`, over
 every step of every graph they build, at stakes from 1,000 wei to 10^18.
 
 ### `worstReturn`
 
-`worstReturn(plan)` is the least any bet a priced game can place pays back, in millionths of its stake: every branch
-of every step of a [`GamePlan`](../sdk/engine.md#gameplan), split at its planning bankroll.
+`worstReturn(graph, stake, bankroll)` is the least any bet of a round of `stake` can place pays back, in millionths of
+its stake: every branch of every step of `graph`, priced as `RoundClient` prices it against the virtual bankroll
+`bankroll` ([`pricing`](../sdk/round.md#pricing)), split at its planning bankroll.
 
 ```ts
 import { worstReturn } from '@hookedin/play/testing/game-wallet.ts';
 
-assert.ok(worstReturn(compileGame(graph, { admits, bankrollFloor, cashQuantum, initialCash: stake })) >= FLOOR);
+assert.ok(worstReturn(doubleUp({ stake }), stake, 2n * 10n ** 9n * stake) >= FLOOR);
 ```
 
 ## The conformance suite

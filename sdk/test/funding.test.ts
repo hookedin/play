@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compileGame, fraction, loadFundedGame } from '../src/engine/index.ts';
 import { UINT256_MAX } from '../../protocol/risk.ts';
-import { admits } from '../src/admits.ts';
 import { RoundClient } from '../src/round.ts';
 import { memoryStore } from '../../testing/game-wallet.ts';
 import { coin } from './coin.ts';
@@ -12,7 +11,7 @@ const graph = (scale: bigint) =>
   coin({ action: 'double', additionalCash: 2n * scale, payout: () => 6n * scale, labels: ['card', 'other card'] })({
     stake: 0n,
   });
-const base = compileGame(graph(1n), { admits, bankrollFloor: 1000n, cashQuantum: 1n, initialCash: 2n });
+const base = compileGame(graph(1n), { bankrollFloor: 1000n, cashQuantum: 1n, initialCash: 2n });
 const table = {
   bankrollFloor: base.bankrollFloor,
   cashQuantum: base.cashQuantum,
@@ -24,9 +23,8 @@ const table = {
 };
 test('loaded integer-scaled plans preserve exact bets, successors, labels and additional wagers', () => {
   for (const scale of [1n, 7n, 10n ** 12n]) {
-    const loaded = loadFundedGame(graph(scale), table, scale, admits);
+    const loaded = loadFundedGame(graph(scale), table, scale);
     const compiled = compileGame(graph(scale), {
-      admits,
       bankrollFloor: table.bankrollFloor * scale,
       cashQuantum: table.cashQuantum * scale,
       initialCash: table.initialCash * scale,
@@ -44,10 +42,10 @@ test('loaded integer-scaled plans preserve exact bets, successors, labels and ad
       "in the game's own order",
     );
   }
-  assert.throws(() => loadFundedGame(graph(1n), table, 0n, admits), /funding scale/);
-  assert.throws(() => loadFundedGame(graph(1n), table, UINT256_MAX, admits), /bankrollFloor/);
-  assert.throws(() => loadFundedGame(graph(1n), { ...table, actions: {} }, 1n, admits), /missing actions/);
-  assert.throws(() => loadFundedGame(graph(1n), { ...table, conservativeBankroll: 1n }, 1n, admits), /does not match/);
+  assert.throws(() => loadFundedGame(graph(1n), table, 0n), /funding scale/);
+  assert.throws(() => loadFundedGame(graph(1n), table, UINT256_MAX), /bankrollFloor/);
+  assert.throws(() => loadFundedGame(graph(1n), { ...table, actions: {} }, 1n), /missing actions/);
+  assert.throws(() => loadFundedGame(graph(1n), { ...table, conservativeBankroll: 1n }, 1n), /does not match/);
 });
 
 test('rounds use the table when supported and preserve the ordinary fallback and saved pricing', async () => {
@@ -82,10 +80,10 @@ test('rounds use the table when supported and preserve the ordinary fallback and
       actions: { start: [2n] },
     };
     const memory = memoryStore();
-    const round = new RoundClient(call, make, funding, { store: memory }),
+    const round = new RoundClient(call, make, { funding, store: memory }),
       started = await round.start({ stake });
     assert.equal(round['plan']!.bankrollFloor, floor);
-    const reloaded = new RoundClient(call, make, funding, { store: memory });
+    const reloaded = new RoundClient(call, make, { funding, store: memory });
     assert.deepEqual(await reloaded.restore(), started);
     assert.equal(reloaded['plan']!.bankrollFloor, round['plan']!.bankrollFloor);
   }

@@ -6,12 +6,14 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createStaticServer } from '../scripts/static.ts';
+import { createStaticServer } from '../sdk/bin/hookedin-game.js';
+import { json } from '../protocol/protocol.ts';
+import production from '../client/config.ts';
 
 const dist = fileURLToPath(new URL('../dist', import.meta.url));
 
-async function serve(t: TestContext, config?: unknown, build?: () => Promise<unknown>, directory = dist) {
-  const server = createStaticServer(directory, config, build);
+async function serve(t: TestContext, build?: () => Promise<unknown>, directory = dist) {
+  const server = createStaticServer(directory, build);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(
@@ -27,7 +29,7 @@ async function serve(t: TestContext, config?: unknown, build?: () => Promise<unk
 }
 
 test('the built wallet is one module plus the untouched ethers release and its config', async t => {
-  const base = await serve(t, { network: 'local' });
+  const base = await serve(t);
   const html = await fetch(base + '/');
   assert.match(await html.text(), /src="\/main\.js"/);
   assert.match(html.headers.get('content-security-policy')!, /worker-src 'self'/);
@@ -35,7 +37,7 @@ test('the built wallet is one module plus the untouched ethers release and its c
   for (const route of ['/', '/games/dice', '/main.js'])
     assert.match((await fetch(base + route)).headers.get('content-security-policy')!, /frame-ancestors 'none'/, route);
   assert.equal(html.headers.get('x-content-type-options'), 'nosniff');
-  assert.equal(await (await fetch(base + '/config.js')).text(), 'export default {"network":"local"};');
+  assert.equal(await (await fetch(base + '/config.js')).text(), `export default ${json(production)};\n`);
 
   const main = await (await fetch(base + '/main.js')).text();
   const imports = [...main.matchAll(/^\s*import\s[^'"]*['"]([^'"]+)['"]/gm)].map(match => match[1]).sort();
@@ -60,7 +62,7 @@ test('simultaneous tab reloads serve complete files throughout preview rebuilds'
     fs.writeFileSync(path.join(directory, 'main.js'), 'window.walletReady = true;');
     fs.writeFileSync(path.join(directory, '_headers'), "/*\n  Content-Security-Policy: default-src 'self'\n");
   };
-  const base = await serve(t, undefined, build, directory);
+  const base = await serve(t, build, directory);
   const replies = await Promise.all(Array.from({ length: 8 }, (_, i) => fetch(base + '/wallet?tab=' + i)));
   assert.equal(builds, 8);
   for (const reply of replies) {

@@ -11,6 +11,7 @@ import type {
   DeveloperCasinoBet,
   Evidence,
   EvidenceBundle,
+  Fund,
   OnchainChannel,
   Operation,
   OperationResponse,
@@ -25,6 +26,7 @@ import type {
 import {
   BANK_TYPES,
   CHANNEL_FIELDS,
+  FUND_TYPES,
   GAME_SERVER_TYPES,
   HEAD_TYPES,
   OFFER_TYPES,
@@ -162,6 +164,8 @@ export const checkpoint = message<Checkpoint>(STATE_TYPES);
 export const operation = message<Operation>(OP_TYPES);
 export const quote = signed<Quote['message']>(QUOTE_TYPES);
 export const offer = signed<CollateralOffer['message']>(OFFER_TYPES);
+/** The fund as the casino signs it when asked (`GET /api/fund`). */
+export const fund = signed<Fund['message']>(FUND_TYPES);
 /** A game's step as a bet signs it (protocol.ts `validTable`). */
 export const table: Reader<StepTable> = value =>
   exactly(

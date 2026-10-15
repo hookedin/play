@@ -63,6 +63,8 @@ export const shortPercent = (parts: bigint) => percent(parts - (parts % 100n)).r
 export const exact = (value: bigint) => formatAmount(value, 12);
 /** METH, labelling an amount: what it means shows on hover. */
 export const methLabel = () => h('abbr', { title: METH_TITLE }, 'METH');
+/** A house edge, out of 2^64, as an amount to the nearest wei. */
+export const edgeWei = (edge: bigint) => (edge + OUTCOME_SPACE / 2n) / OUTCOME_SPACE;
 /** A gain or a loss in METH, with its sign, as a list shows it. */
 export const signedAmount = (value: bigint) =>
   `${value < 0n ? '−' : '+'}${formatAmount(value < 0n ? -value : value)} METH`;
@@ -369,7 +371,7 @@ export function receiptSummary(
     description = `Stake ${formatAmount(receipt.stake!)} METH · Paid ${formatAmount(receipt.payout ?? 0n)} METH${
       receipt.maxPayout === undefined
         ? ''
-        : ` of up to ${formatAmount(receipt.maxPayout)} METH · House edge ${formatAmount((receipt.stake! * OUTCOME_SPACE - receipt.expectedPayout! + OUTCOME_SPACE / 2n) / OUTCOME_SPACE, 6)} METH`
+        : ` of up to ${formatAmount(receipt.maxPayout)} METH · House edge ${formatAmount(edgeWei(receipt.stake! * OUTCOME_SPACE - receipt.expectedPayout!), 6)} METH`
     }${receipt.kind === 'casino-bet' ? ` · Balance ${exact(receipt.balance!)} METH` : ''}`;
   }
   if (receipt.kind === 'developer-bet')

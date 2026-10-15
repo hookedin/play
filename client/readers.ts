@@ -1,9 +1,11 @@
 /** What the wallet reads from the casino beside the protocol's own structures, each as protocol/read.ts reads: a value
  * as JSON holds it, in its one form, given back with every whole number a bigint, or refused. */
-import type { Checkpoint, OperationResponse, SignedStatement } from '../protocol/types.ts';
+import type { AccountGame, Checkpoint, OperationResponse, SignedStatement } from '../protocol/types.ts';
 import * as read from '../protocol/read.ts';
 import {
+  BANK_TYPES,
   GAME_ID,
+  MAX_GAMES,
   MAX_REDEEMS,
   REDEEM_TYPES,
   SHARE_TYPES,
@@ -14,9 +16,12 @@ import {
 } from '../protocol/protocol.ts';
 
 const { uname, discordUsername, gameId, recordId, count, integer } = read;
+/** How a player is written: a Discord username wears `@`, a uname wears `~`. */
+export const showName = (names: { uname?: string | null; discordUsername?: string | null } | null) =>
+  names?.discordUsername ? '@' + names.discordUsername : names?.uname ? '~' + names.uname : '—';
 /** A game as a profile lists it: its ID, the name it is published under with the slug that name makes, where it is
  * served, its developer and when it was first published. */
-export interface ProfileGame {
+interface ProfileGame {
   id: string;
   name: string;
   slug: string;
@@ -24,9 +29,11 @@ export interface ProfileGame {
   developer: string;
   createdAt: number;
 }
+/** A name a game is published under. */
+export const gameName = read.exactly(validGameName, 'A game name');
 const gameFields = {
   id: gameId,
-  name: read.exactly(validGameName, 'A game name'),
+  name: gameName,
   slug: read.text,
   url: read.text,
   developer: read.address,
@@ -34,7 +41,25 @@ const gameFields = {
 };
 const named = <T extends { name: string; slug: string }>(game: T) =>
   game.slug === gameSlug(game.name) ? game : read.refuse('A game');
-export const profileGame = (value: unknown) => named(read.object<ProfileGame>(gameFields)(value));
+const profileGame = (value: unknown) => named(read.object<ProfileGame>(gameFields)(value));
+/** One of the account's games as `GET /api/account/games` lists it, taken down or not: a profile's fields but its
+ * developer, which is the account, with when it was taken down, the key its server signs with, its bank and the
+ * casino's latest statement of it. */
+export const accountGame = (value: unknown) =>
+  named(
+    read.object<AccountGame>({
+      id: gameId,
+      name: gameName,
+      slug: read.text,
+      url: read.text,
+      takenDownAt: read.nullable(read.time),
+      server: read.address,
+      bank: read.whole,
+      sequence: read.whole,
+      statement: read.nullable(read.signed(BANK_TYPES)),
+      createdAt: read.time,
+    })(value),
+  );
 /** A player's public record, as `GET /api/players/:name` gives it: the names they answer to, when they last verified
  * their Discord account, their bets and what they came to, when the casino met them, and the games they publish. */
 export interface Profile {
@@ -45,8 +70,6 @@ export interface Profile {
   createdAt: number;
   games: ProfileGame[];
 }
-/** The most games a profile lists. */
-const MAX_GAMES = 100;
 export const profile = read.object<Profile>({
   uname,
   discordUsername: read.nullable(discordUsername),

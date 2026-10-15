@@ -2,7 +2,7 @@ import { Wallet, ZeroHash, getBytes, hexlify, keccak256, randomBytes } from 'eth
 import { CasinoWallet } from '../client/wallet.ts';
 import { MemoryStore } from '../client/storage.ts';
 import { validateRequest } from '../client/bridge.ts';
-import { gameReceipt } from '../client/wallet-games.ts';
+import { gameCall, receiptForGame } from '../client/wallet-games.ts';
 import {
   domain,
   baseState,
@@ -28,6 +28,7 @@ import {
   MAX_DEVELOPER_BETS,
   MAX_META_BYTES,
   MAX_PAYOUTS,
+  validBet,
   validMeta,
   validGroup,
   canonical,
@@ -46,7 +47,9 @@ import { assessBet, betReturn, RETURN_SCALE } from '../protocol/risk.ts';
 import type { GameAllowance, GameIdentity, GameReceipt } from '../protocol/game-types.ts';
 import type { Details, DeveloperCasinoBet, Operation, PublicDeveloperBet, Quote, Round } from '../protocol/types.ts';
 import type { BankCasinoBet, Developer, Settlement } from '../sdk/src/developer.ts';
-import type { GamePlan } from '../sdk/src/engine/index.ts';
+import { compileGame } from '../sdk/src/engine/index.ts';
+import type { GameGraph } from '../sdk/src/engine/index.ts';
+import { pricing } from '../sdk/src/round.ts';
 
 /** A game's side of the bridge, as `RoundClient` and a game's own client take it: every request goes through the
  * checks the wallet's bridge makes. The test sets the allowance, as the player does in the wallet's top bar. */
@@ -58,8 +61,8 @@ export interface TestBridge {
   onAllowance(listener: (allowance: GameAllowance) => void): () => void;
 }
 
-/** A game's side of the bridge to any wallet: requests go through the checks the wallet's bridge makes, and every
- * receipt and allowance the wallet pushes reaches the listeners. */
+/** A game's side of the bridge to any wallet: requests go through the checks the wallet's bridge makes to the calls
+ * the page makes (`gameCall`), and every receipt and allowance the wallet pushes reaches the listeners. */
 const pushes = new WeakMap<
   CasinoWallet,
   { receipts: Set<(receipt: GameReceipt) => void>; allowances: Set<(allowance: GameAllowance) => void> }
@@ -71,7 +74,7 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
     const heard = (listeners = { receipts: new Set(), allowances: new Set() });
     pushes.set(wallet, heard);
     wallet.onGameReceipt = (game, receipt) => {
-      for (const listener of heard.receipts) listener(gameReceipt(game.operation, receipt));
+      for (const listener of heard.receipts) listener(receiptForGame(game.operation, receipt));
     };
     wallet.onGameAllowance = (_, allowance) => {
       for (const listener of heard.allowances) listener({ ...allowance });
@@ -79,25 +82,7 @@ export function bridgeTo(wallet: CasinoWallet): TestBridge {
   }
   return {
     async call(method, params = {}) {
-      const checked = validateRequest({ hookedin: true, id: ++sent, method, params }).params;
-      if (method === 'wallet.hello') return wallet.gameHello();
-      if (method === 'wallet.info') return wallet.gameInfo();
-      if (method === 'wallet.round') return wallet.gameRound(checked.id);
-      if (method === 'wallet.showBet') {
-        await wallet.gameBet(checked.id);
-        return null;
-      }
-      if (method === 'game.receipt') return wallet.gameReceipt(checked.id);
-      if (method === 'game.history') return wallet.gameHistory(checked.after, checked.limit);
-      if (method === 'game.allowance') return wallet.gameAllowance(checked.group);
-      if (method === 'game.end') {
-        await wallet.gameEnd(checked.group, checked.meta);
-        return null;
-      }
-      if (method === 'game.placesDeveloperBets') return null;
-      if (method === 'game.casinoBet') return wallet.gameCasinoBet(checked);
-      if (method === 'game.developerBet') return wallet.gameDeveloperBet(checked);
-      return wallet.gamePayment(checked);
+      return gameCall(wallet, method, validateRequest({ hookedin: true, id: ++sent, method, params }).params);
     },
     onReceipt(listener) {
       listeners!.receipts.add(listener);
@@ -122,10 +107,11 @@ export function memoryStore() {
   };
 }
 
-/** The least any bet a priced game can place pays back, in millionths of its stake: every branch of every step. */
-export function worstReturn(plan: GamePlan) {
+/** The least any bet of a round of `stake` can place pays back, in millionths of its stake, priced as `RoundClient`
+ * prices it against the virtual bankroll `bankroll` (`pricing`): every branch of every step. */
+export function worstReturn(graph: GameGraph, stake: bigint, bankroll: bigint) {
   let worst = RETURN_SCALE;
-  for (const node of plan.nodes)
+  for (const node of compileGame(graph, pricing(stake, bankroll)).nodes)
     if (node.kind === 'decision')
       for (const { transition } of node.actions)
         if (transition.kind === 'casino-bet')
@@ -220,7 +206,7 @@ export async function gameWallet({
   // The games this fixture's developer publishes, by ID: only a published game takes developer bets.
   const published = new Set([game.id]);
   const publicRound = (id: string): Round => {
-    const round = rounds.get(id.toLowerCase());
+    const round = rounds.get(id);
     if (!round) throw Object.assign(new Error('Unknown round'), { status: 404, code: 'not-found' });
     const secret = secrets.get(round.id)!;
     return {
@@ -439,7 +425,7 @@ export async function gameWallet({
           type: 'operation',
           details,
           evidence: response.evidence,
-          ...(details.meta ? { hash: hashOperation(d, request).toLowerCase() } : {}),
+          ...(details.meta ? { hash: hashOperation(d, request) } : {}),
         });
       }
       settlements++;
@@ -497,7 +483,7 @@ export async function gameWallet({
      * and the game's server settles it. */
     const placeDeveloperBet = async (channel: string, request: Operation, details: Details, signature: string) => {
       if (!published.has(details.game!)) return decline(channel, request, details, 'This game is published nowhere');
-      const hash = hashOperation(d, request).toLowerCase();
+      const hash = hashOperation(d, request);
       bank += request.amount;
       developerBets.set(hash, {
         bet: hash,
@@ -559,29 +545,37 @@ export async function gameWallet({
   };
   /** The seed of the game's casino bet on a round, derived from its server's key as the developer kit derives it. */
   const seedOf = async (round: string) => keccak256(await developerKey.signMessage(getBytes(round)));
-  /** The game's casino bet on its round, as the casino takes it: admitted against the virtual bankroll, half the
-   * bankroll, before the secret is read, or, betting nothing, a plain reveal. Either way the round is revealed once. */
+  /** The game's casino bet on its round, as the kit sends it and the casino takes it: admitted against the virtual
+   * bankroll, half the bankroll, before the secret is read, or, betting nothing, a plain reveal. Either way the round is
+   * revealed once. */
   const stubCasinoBet = async ({ round: id, stake, chance, prize, group, meta }: BankCasinoBet) => {
-    const round = rounds.get(id.toLowerCase());
-    if (!round) throw refused(404, 'not-found', 'Unknown round');
     if (!validMeta(meta))
       throw refused(400, 'invalid', `A casino bet's meta is a JSON object of up to ${MAX_META_BYTES} bytes`);
-    if (typeof group !== 'string' || !group.length || group.length > BOUNDS.group)
-      throw refused(400, 'invalid', 'A casino bet names a group of 1 to 64 characters');
+    const round = rounds.get(read.hash(id)),
+      reveal = stake === 0n && chance === 0n && prize === 0n;
+    if (!reveal && !validBet(stake, chance, prize))
+      throw refused(400, 'invalid', 'A casino bet stakes, risks and pays whole amounts, or bets nothing');
+    if (!validGroup(group))
+      throw refused(400, 'invalid', `A casino bet's group is 1 to ${BOUNDS.group} printable characters`);
+    if (!round) throw refused(404, 'not-found', 'Unknown round');
     const seed = await seedOf(round.id),
-      message = { round: round.id, game: game.id, stake, chance, prize, group },
-      signed = { ...message, seedHash: seedHash(seed), meta: hashJSON(meta) };
-    if (!canonical(BANK_CASINO_BET_TYPES, signed))
-      throw refused(400, 'invalid', 'A casino bet stakes, risks and pays whole amounts');
-    const signature = await developerKey.signTypedData(d, BANK_CASINO_BET_TYPES, signed);
+      signature = await developerKey.signTypedData(d, BANK_CASINO_BET_TYPES, {
+        round: round.id,
+        game: game.id,
+        stake,
+        chance,
+        prize,
+        group,
+        seedHash: seedHash(seed),
+        meta: hashJSON(meta),
+      });
     // A round is revealed once: the same casino bet again is answered as it stands.
     if (round.casinoBet) {
       if (round.casinoBet.signature !== signature)
         throw refused(409, 'round-revealed', 'This round was revealed by another casino bet');
       return roundRead(round.id);
     }
-    const reveal = stake === 0n && chance === 0n && prize === 0n,
-      terms = { stake, chance, prize };
+    const terms = { stake, chance, prize };
     if (!reveal && terms.stake > bank) throw refused(409, 'bank-short', "The game's bank cannot pay this casino bet");
     let fee: bigint | null = null;
     if (!reveal)
@@ -619,7 +613,7 @@ export async function gameWallet({
       rounds.set(id, { id, createdAt: Date.now() });
       return roundRead(id);
     },
-    seedHash: async id => seedHash(await seedOf(id.toLowerCase())),
+    seedHash: async id => seedHash(await seedOf(read.hash(id))),
     round: async id => roundRead(id),
     casinoBet: bet => stubCasinoBet(bet),
     reveal: ({ round, group, meta }) => stubCasinoBet({ round, stake: 0n, chance: 0n, prize: 0n, group, meta }),
@@ -679,7 +673,7 @@ export async function gameWallet({
     /** What the game's bank holds. */
     bank: () => bank,
     /** A round's secret, which only the casino knows until it reveals the round. */
-    secretOf: (round: string) => secrets.get(round.toLowerCase())!,
+    secretOf: (round: string) => secrets.get(round)!,
     /** The player closes their channel and opens another. A game's operation IDs are theirs across both. */
     async replaceChannel() {
       const old = wallet.channels[wallet.channelId!]!,

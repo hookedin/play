@@ -8,8 +8,7 @@ interface RecoveryContext {
 import { same } from './protocol.ts';
 import { blockReference, requireCanonicalBlock } from './chain-observer.ts';
 
-const providersFor = ({ provider, observer }: RecoveryContext) =>
-  observer?.witnessProvider ? [provider, observer.witnessProvider] : [provider];
+const providersFor = ({ provider, observer }: RecoveryContext) => observer?.providers ?? [provider];
 async function canonical(context: RecoveryContext, block: ChainBlock) {
   await Promise.all(providersFor(context).map(p => requireCanonicalBlock(p, block)));
 }
@@ -56,11 +55,7 @@ export async function confirmedNonce(context: RecoveryContext, address: string) 
 }
 
 /** Only receipts on an agreed canonical branch at the requested depth count. */
-export async function confirmedReceipt(
-  context: RecoveryContext,
-  hash: string,
-  anchor: ChainBlock | undefined = undefined,
-) {
+export async function confirmedReceipt(context: RecoveryContext, hash: string) {
   const { provider, observer } = context;
   const receipt = observer ? await observer.receipt(hash) : await provider.getTransactionReceipt(hash);
   if (!receipt) return null;
@@ -71,7 +66,7 @@ export async function confirmedReceipt(
     ![0, 1].includes(receipt.status!)
   )
     throw new Error('Invalid transaction receipt');
-  anchor ??= await confirmedBlock(context);
+  const anchor = await confirmedBlock(context);
   if (receipt.blockNumber > anchor.number) return null;
   const block = await blockAt(context, receipt.blockNumber);
   if (block.hash !== receipt.blockHash) return null;

@@ -1,9 +1,5 @@
 # Security
 
-## Status
-
-HookedIn is in [open beta](docs/index.md#open-beta) on Ethereum mainnet. The contract stays as it is, and what a wallet signed and saved stays enough to close its channel and collect what it is owed; the SDK, the game bridge and the casino API change without notice. Do not use it with funds you cannot afford to lose.
-
 ## Reporting a vulnerability
 
 Report privately through GitHub's private vulnerability reporting: open <https://github.com/hookedin/play/security/advisories/new>, or choose **Report a vulnerability** under the repository's **Security** tab. Please do not open a public issue or pull request for a suspected vulnerability, and do not test against other people's channels or funds.

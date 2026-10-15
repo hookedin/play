@@ -190,7 +190,7 @@ changes only what the page shows.
 
 ## Playing to the end, and stopping
 
-[`evaluatePolicy`](../sdk/engine.md#evaluatepolicy) computes the exact payout distribution of a policy that plays the
+[`evaluatePolicy`](../sdk/engine.md#evaluatepolicy) computes the exact expected payout of a policy that plays the
 graph to its end. Its net EV subtracts the starting cash and the expected additional wagers: gross payout over the first
 stake alone is not a game's return when doubles and splits exist. A policy is a function of the current state alone,
 and reaching every class exactly as often as the rules say preserves each step's distribution for the policy played; it

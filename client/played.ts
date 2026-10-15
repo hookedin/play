@@ -1,6 +1,6 @@
 import type { Receipt } from './wallet.ts';
 import * as read from '../protocol/read.ts';
-import { json, validGameName } from '../protocol/protocol.ts';
+import { json } from '../protocol/protocol.ts';
 import { OUTCOME_SPACE, returnParts } from '../protocol/risk.ts';
 import { copyBlock, h, percent, shortPercent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
@@ -14,13 +14,15 @@ import {
   putIn,
   roundDetail,
   tableOffered,
+  tone,
   totalCards,
 } from './bets.ts';
 import type { BetRow } from './bets.ts';
 import { $, network, shortDate, showSheet } from './page.ts';
+import { gameName, showName } from './readers.ts';
 import { navigate, parseRoute } from './routes.ts';
 import type { GameRoute } from './routes.ts';
-import { historyBusy, task, wallet } from './sheet.ts';
+import { refreshBusy, task, wallet } from './sheet.ts';
 import { active, knownGames, loadGame, openGame } from './games.ts';
 
 /** A bet as a game's public record lists it: the ID of the record that placed it, a casino bet's, a developer bet's or
@@ -73,7 +75,7 @@ export const gameRecord = read.object<{
   bets: ReturnType<typeof recordBet>[];
 }>({
   id: read.gameId,
-  name: read.nullable(read.exactly(validGameName, 'A game name')),
+  name: read.nullable(gameName),
   page: read.nullable(
     read.exactly(
       (value: unknown): value is string =>
@@ -227,6 +229,15 @@ function receiptRow(receipt: Receipt): BetRow {
 /** One of the open game's operations in full, when the game asks the wallet to show it: from a result on its page to
  * the proof behind it. */
 export const showReceipt = (receipt: Receipt) => showBet(receiptRow(receipt));
+/** The bet dialog, over the page, with `eyebrow` above `title` and `detail` under them, scrolled to its top. A bet
+ * opened from its round's list replaces the list in the dialog already open. */
+function openBetDialog(eyebrow: string, title: string, ...detail: Node[]) {
+  $('bet-detail-eyebrow').textContent = eyebrow;
+  $('bet-detail-title').textContent = title;
+  $('bet-detail').replaceChildren(...detail);
+  $('bet-dialog').scrollTop = 0;
+  showSheet($<HTMLDialogElement>('bet-dialog'));
+}
 /** One bet in full: the odds it rode, where its round landed, and the preimages that fixed
  * it. Everything shown comes out of the receipt this wallet kept. */
 function showBet(row: BetRow) {
@@ -241,13 +252,9 @@ function showBet(row: BetRow) {
         )
       : undefined,
     place = round && round.length > 1 ? round.findIndex(other => other.operation === row.operation) : -1;
-  $('bet-detail-eyebrow').textContent = kept
-    ? 'A step without a bet'
-    : place < 0
-      ? 'One bet'
-      : `Bet ${place + 1} of a round of ${round!.length}`;
-  $('bet-detail-title').textContent = row.game;
-  $('bet-detail').replaceChildren(
+  openBetDialog(
+    kept ? 'A step without a bet' : place < 0 ? 'One bet' : `Bet ${place + 1} of a round of ${round!.length}`,
+    row.game,
     ...(place < 0 && !(kept && round)
       ? []
       : [
@@ -267,9 +274,6 @@ function showBet(row: BetRow) {
       if (opened.gameId) void openGameRecord(opened.gameId);
     }),
   );
-  $('bet-dialog').scrollTop = 0;
-  // A bet opened from its group's list replaces the list in the dialog already open.
-  showSheet($<HTMLDialogElement>('bet-dialog'));
 }
 /** A list is rebuilt only when what it shows has changed. The wallet renders on every poll, and a
  * row replaced under the player's cursor takes their click with it. */
@@ -291,7 +295,7 @@ const betsPath = () => (betGame ? `/bets?game=${betGame}` : '/bets');
 export function renderBets() {
   loadRecorded();
   const rows = ownBets();
-  $<HTMLButtonElement>('refresh-bets').disabled = historyBusy || !wallet.address;
+  $<HTMLButtonElement>('refresh-bets').disabled = refreshBusy || !wallet.address;
   // A game to choose for every game played, and the one asked for even before it has a bet.
   const games = new Map(rows.flatMap(row => (row.gameId ? [[row.gameId, row.game] as const] : [])));
   if (betGame && !games.has(betGame)) games.set(betGame, knownGames.get(betGame)?.name ?? 'This game');
@@ -333,11 +337,7 @@ function withKept(rows: readonly BetRow[]) {
 }
 /** A round as the player played it, its steps folded away, each opening in full where this wallet kept its receipt. */
 function showGroup(rows: readonly BetRow[], onOpen?: (row: BetRow) => void) {
-  $('bet-detail-eyebrow').textContent = 'One round';
-  $('bet-detail-title').textContent = rows.at(-1)!.game;
-  $('bet-detail').replaceChildren(...roundDetail(withKept(rows), onOpen));
-  $('bet-dialog').scrollTop = 0;
-  showSheet($<HTMLDialogElement>('bet-dialog'));
+  openBetDialog('One round', rows.at(-1)!.game, ...roundDetail(withKept(rows), onOpen));
 }
 /** Show the rows of a list, of bets or events, that hold every word typed in its search, and count them. */
 export function filterList(name: 'activity' | 'bet' | 'gamebets') {
@@ -459,7 +459,7 @@ export function renderMyGames() {
         ['Bets', String(totals.bets)],
         ['Put in', `${formatAmount(totals.putIn)} METH`],
         ['Paid back', `${formatAmount(totals.putIn + totals.net)} METH`],
-        ['Your result', signedAmount(totals.net), totals.net < 0n ? 'negative' : totals.net > 0n ? 'positive' : ''],
+        ['Your result', signedAmount(totals.net), tone(totals.net)],
         ['House edge', edge === null ? '—' : shortPercent(edge), '', edge === null ? undefined : percent(edge)],
       ];
       return h(
@@ -561,7 +561,7 @@ export async function openGameRecord(id: string, push = true) {
         game: name,
         // The game's own casino bet, from its bank, has no player: it is listed beside its players' bets, and counted
         // in no total.
-        who: bet.uname === null ? "the game's bank" : bet.discordUsername ? '@' + bet.discordUsername : '~' + bet.uname,
+        who: bet.uname === null ? "the game's bank" : showName(bet),
         ...(bet.group === undefined ? {} : { group: bet.group }),
         stake: payment ? bet.stake : bet.stake + kept,
         payout: payment ? bet.payout : bet.payout + kept,
@@ -642,8 +642,9 @@ $('game-verify').addEventListener('click', async () => {
     last =
       recorded && (!local || recorded.at > Date.parse(local.createdAt)) ? recorded : local ? receiptRow(local) : null;
   if (last) return showBet(last);
-  $('bet-detail-eyebrow').textContent = 'Your last bet';
-  $('bet-detail').replaceChildren(
+  openBetDialog(
+    'Your last bet',
+    name,
     h(
       'p',
       { className: 'empty' },
@@ -652,9 +653,6 @@ $('game-verify').addEventListener('click', async () => {
         : `No bet in ${name} to verify in this browser yet.`,
     ),
   );
-  $('bet-detail-title').textContent = name;
-  $('bet-dialog').scrollTop = 0;
-  showSheet($<HTMLDialogElement>('bet-dialog'));
 });
 /** The round the next casino bet settles on, which the casino fixed before it, as the menu opens: the player can copy
  * it before betting, and find it again in the bet's proof, with the secret that hashes to it. */
@@ -673,9 +671,9 @@ $('game-menu').addEventListener('toggle', async event => {
 $('game-next-round').addEventListener('click', () => {
   $('game-menu').hidePopover();
   const round = $('game-next-round').dataset.round!;
-  $('bet-detail-eyebrow').textContent = 'Before your next bet';
-  $('bet-detail-title').textContent = 'Next round';
-  $('bet-detail').replaceChildren(
+  openBetDialog(
+    'Before your next bet',
+    'Next round',
     h(
       'p',
       { className: 'bet-detail-note' },
@@ -685,8 +683,6 @@ $('game-next-round').addEventListener('click', () => {
     ),
     ...copyBlock(round, 'the next round', 'round'),
   );
-  $('bet-dialog').scrollTop = 0;
-  showSheet($<HTMLDialogElement>('bet-dialog'));
 });
 /** The open game's own bets, over it, so the game plays on: this browser's, and those the casino keeps for the account
  * from its other devices; and everyone's, on its public record. */
@@ -699,15 +695,13 @@ $('game-my-bets').addEventListener('click', async () => {
     rows = [...own, ...(await recordedRows()).filter(row => !mine.has(row.receipt?.details?.id))].sort(
       (a, b) => b.at - a.at,
     );
-  $('bet-detail-eyebrow').textContent = 'Your bets';
-  $('bet-detail-title').textContent = name;
-  $('bet-detail').replaceChildren(
+  openBetDialog(
+    'Your bets',
+    name,
     rows.length
       ? h('div', { className: 'bet-table' }, ...betElements(rows, showBet))
       : h('p', { className: 'empty' }, `No bets in ${name} yet.`),
   );
-  $('bet-dialog').scrollTop = 0;
-  showSheet($<HTMLDialogElement>('bet-dialog'));
 });
 $('game-all-bets').addEventListener('click', event => {
   event.preventDefault();

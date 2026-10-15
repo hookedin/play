@@ -26,18 +26,19 @@ interface Saved {
   shown: { mode: Mode; stops: number[] } | null;
   bonus: { left: number; played: number; won: number; stake: bigint } | null;
 }
-const count = read.exactly(
-  (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0,
-  'A count',
-);
 /** What the game remembers, as its storage holds it. */
 const remembered = read.object<Saved>({
   applied: read.nullable(read.text),
   shown: read.nullable(
-    read.object<NonNullable<Saved['shown']>>({ mode: read.oneOf('base', 'bonus'), stops: read.list(count, 5) }),
+    read.object<NonNullable<Saved['shown']>>({ mode: read.oneOf('base', 'bonus'), stops: read.list(read.count, 5) }),
   ),
   bonus: read.nullable(
-    read.object<NonNullable<Saved['bonus']>>({ left: count, played: count, won: count, stake: read.whole }),
+    read.object<NonNullable<Saved['bonus']>>({
+      left: read.count,
+      played: read.count,
+      won: read.count,
+      stake: read.whole,
+    }),
   ),
 });
 const NAMES: Record<string, string> = {

@@ -1,10 +1,12 @@
+/** Where the player's mute choice is kept: each game's origin has its own storage. */
+const MUTED = 'hookedin:muted';
 /** Synthesized sound for a game's page: no audio files to host. The context starts on the player's first gesture. */
-export function createSynth(storageKey = 'hookedin:muted') {
+export function createSynth() {
   let context: AudioContext | null = null,
     master: GainNode | null = null,
     muted = false;
   try {
-    muted = localStorage.getItem(storageKey) === '1';
+    muted = localStorage.getItem(MUTED) === '1';
   } catch {}
   /** Sound decorates a game and never stops one: a browser without Web Audio, or one that refuses a context, plays it
    * silently, since `unlock` runs in the handler of the very click that plays. */
@@ -70,7 +72,7 @@ export function createSynth(storageKey = 'hookedin:muted') {
       muted = value;
       if (master) master.gain.value = value ? 0 : 1;
       try {
-        localStorage.setItem(storageKey, value ? '1' : '0');
+        localStorage.setItem(MUTED, value ? '1' : '0');
       } catch {}
     },
     /** For sounds that outlast one envelope; null until the first gesture. */

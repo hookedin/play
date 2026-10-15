@@ -66,7 +66,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          for workflow in caserver/release.yml website/deploy.yml game-roulette/deploy.yml game-crash/deploy.yml \
-            game-blackjack/deploy.yml game-template/deploy.yml; do
-            gh workflow run "${workflow#*/}" --repo "hookedin/${workflow%%/*}" --ref main
+          for repo in caserver website game-roulette game-crash game-blackjack game-template; do
+            gh workflow run deploy.yml --repo "hookedin/$repo" --ref main
           done

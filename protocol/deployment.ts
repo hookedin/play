@@ -2,8 +2,9 @@ import type { JsonRpcProvider } from 'ethers';
 import type { ChainObserver } from './chain-observer.ts';
 import type { Deployment } from './types.ts';
 import { Contract, getAddress } from 'ethers';
-import artifact from '../client/contract-artifact.ts';
+import artifact from './contract-artifact.ts';
 import { same } from './protocol.ts';
+import { blockReference } from './chain-observer.ts';
 
 /** The compiled HookedInCasino entry of build/contracts.json, for deployment scripts and tests. */
 export function loadArtifact(source = 'contracts/HookedInCasino.sol', name = 'HookedInCasino') {
@@ -31,19 +32,17 @@ export async function verifyDeployment({
   address = getAddress(address);
   if (chainId !== 31337n && !expected)
     throw new Error('Install an independently verified deployment manifest before funding');
-  if (expected && (expected.chainId !== chainId || !same(expected.contractAddress, address)))
+  if (expected && (expected.chainId !== chainId || expected.contractAddress !== address))
     throw new Error('Casino deployment differs from the pinned identity');
   const observation = await observer.observe();
   const contract = new Contract(address, artifact.abi, provider);
   // The immutables and the code are independent reads of one block.
   const [code, ...read] = await Promise.all([
-    observer.corroborate('contract bytecode', p =>
-      p.send('eth_getCode', [address, { blockHash: observation.block.hash, requireCanonical: true }]),
-    ),
+    observer.corroborate('contract bytecode', p => p.send('eth_getCode', [address, blockReference(observation.block)])),
     ...artifact.immutables.map(({ name }) => observer.contractRead(contract, name, [], observation.block)),
   ]);
   const values: Record<string, string> = Object.fromEntries(artifact.immutables.map(({ name }, i) => [name, read[i]]));
-  if (expected && !same(expected.operator, values.signer))
+  if (expected && expected.operator !== values.signer)
     throw new Error('Deployment operator identity differs from trusted manifest');
   let runtime = artifact.runtime.slice(2);
   for (const { name, locations } of artifact.immutables)

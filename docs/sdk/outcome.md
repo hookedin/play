@@ -39,7 +39,7 @@ The hash a bet names its seed by: `keccak256(seed)`, in lower-case hex.
 
 The wallet checks a casino bet on the player's own round before the game hears of it. A game's round is public
 once the game's casino bet reveals it ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround), which
-a game page reads with [`HookedIn.round`](hookedin.md#round)), and anyone can check it by hand:
+a game page reads with [`HookedIn.round`](../reference/bridge.md#walletround)), and anyone can check it by hand:
 
 1. `roundId(round.secret)` is the round's ID: the casino revealed the secret it committed to.
 2. `seedHash(round.seed)` is the seed hash the game published before anybody bet: the developer brought the seed it
@@ -61,7 +61,7 @@ async function checkRound(id: string, publishedSeedHash: string) {
   if (round.status !== 'revealed') throw new Error('The round is not revealed yet');
   const { seed, secret, casinoBet } = round as Required<typeof round>;
   if (roundId(secret) !== id) throw new Error("The secret is not the round's");
-  if (seedHash(seed) !== publishedSeedHash.toLowerCase()) throw new Error('The seed is not the one published');
+  if (seedHash(seed) !== publishedSeedHash) throw new Error('The seed is not the one published');
   const { value } = outcome(seed, secret);
   if (value !== round.outcome) throw new Error('The outcome does not follow from the seed and the secret');
   // payout is what the casino bet paid, when the bankroll accepted it

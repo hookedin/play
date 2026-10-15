@@ -51,7 +51,7 @@ const historyPage = read.object<AccountHistory>({
 
 /** The one view a game gets of a wallet receipt, whichever request asked. The signed evidence, the
  * channel and its balance stay out: they would name the player. */
-export const gameReceipt = (id: string, receipt: Receipt): GameReceipt => {
+export const receiptForGame = (id: string, receipt: Receipt): GameReceipt => {
   // Declined because the player carried it out on another channel: its result is there, and nothing here may
   // look like a rejection the game would answer by placing the same bet again.
   if (receipt.used)
@@ -97,6 +97,30 @@ const receiptView = (receipt: Partial<Receipt>) => {
     ...(receipt.reason === undefined ? {} : { reason: receipt.reason }),
   };
 };
+
+/** What the wallet answers a game's request, by its method, with its parameters as the bridge checked them
+ * (`validateRequest`). The page adds what it shows: a bet in full, and the game's cover until it greets the wallet. */
+export async function gameCall(wallet: CasinoWallet, method: string, params: any): Promise<unknown> {
+  if (method === 'wallet.hello') return wallet.gameHello();
+  if (method === 'wallet.info') return wallet.gameInfo();
+  if (method === 'wallet.round') return wallet.gameRound(params.id);
+  // The bet is the wallet's to show, never the game's: the game learns only that the wallet has it.
+  if (method === 'wallet.showBet') {
+    await wallet.gameBet(params.id);
+    return null;
+  }
+  if (method === 'game.receipt') return wallet.gameReceipt(params.id);
+  if (method === 'game.history') return wallet.gameHistory(params.after, params.limit);
+  if (method === 'game.allowance') return wallet.gameAllowance(params.group);
+  if (method === 'game.end') {
+    await wallet.gameEnd(params.group, params.meta);
+    return null;
+  }
+  if (method === 'game.placesDeveloperBets') return null;
+  if (method === 'game.casinoBet') return wallet.gameCasinoBet(params);
+  if (method === 'game.developerBet') return wallet.gameDeveloperBet(params);
+  return wallet.gamePayment(params);
+}
 
 /**
  * The open game's allowance. It lives only in this tab's memory: the wallet persists no game
@@ -222,7 +246,7 @@ export class GameSessions extends ChannelClient {
     const bet = {
       ...receipt,
       kind: 'developer-bet',
-      bet: hashOperation(this.domain, op).toLowerCase(),
+      bet: hashOperation(this.domain, op),
       stake: op.amount,
       game: { id: identity.id, developer: identity.developer },
     };
@@ -238,10 +262,9 @@ export class GameSessions extends ChannelClient {
     this: CasinoWallet,
     games: ReadonlyMap<string, { name: string; developer: string }>,
     game = '',
-    limit = 100,
   ): Promise<Partial<Receipt>[]> {
     if (!this.signer) return [];
-    const page = historyPage(await this.api(`/api/account/game-history?game=${game}&after=&limit=${limit}`));
+    const page = historyPage(await this.api(`/api/account/game-history?game=${game}&after=&limit=100`));
     return page.entries.flatMap(entry => {
       if (entry.type !== 'operation') return [];
       const id = entry.details.game!,
@@ -315,7 +338,7 @@ export class GameSessions extends ChannelClient {
   async gameReceipt(this: CasinoWallet, id: string) {
     const receipt = await this.getReceipt(this.gameOperationId(id));
     if (!receipt) return null;
-    const answer = gameReceipt(id, receipt);
+    const answer = receiptForGame(id, receipt);
     if (answer.status === 'open')
       void this.collectDeveloperBet(receipt.bet).catch(error =>
         console.error(`Collecting developer bet ${receipt.bet} failed`, error),
@@ -393,7 +416,7 @@ export class GameSessions extends ChannelClient {
    * the bankroll, on the player's own round, and lands it on a result. The same request again returns its receipt. */
   async gameCasinoBet(this: CasinoWallet, request: CasinoBetRequest) {
     const group = request.group === undefined ? {} : { group: request.group };
-    return gameReceipt(
+    return receiptForGame(
       request.id,
       await this.playStep(
         { cash: request.cash, results: request.results, ...group },
@@ -408,7 +431,7 @@ export class GameSessions extends ChannelClient {
    * stands. */
   async gameDeveloperBet(this: CasinoWallet, request: DeveloperBetRequest) {
     const group = request.group === undefined ? {} : { group: request.group };
-    return gameReceipt(
+    return receiptForGame(
       request.id,
       await this.placeDeveloperBet(
         {
@@ -423,7 +446,7 @@ export class GameSessions extends ChannelClient {
     );
   }
   async gamePayment(this: CasinoWallet, request: { id: string; amount: bigint; group?: string; kept?: bigint }) {
-    return gameReceipt(
+    return receiptForGame(
       request.id,
       await this.payBankroll(
         gameAmount(request.amount),

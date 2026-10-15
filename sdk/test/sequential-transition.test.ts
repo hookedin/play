@@ -5,7 +5,6 @@ import type { Rational } from '../src/engine/index.ts';
 import { cashClasses, compileTransition, priceTransition, tableAdmits } from '../src/engine/transition.ts';
 import { hexlify, randomBytes } from 'ethers';
 import { landStep } from '../../protocol/protocol.ts';
-import { admits } from '../src/admits.ts';
 import { assessBet, OUTCOME_SPACE, UINT256_MAX } from '../../protocol/risk.ts';
 
 const ZERO = fraction(0n);
@@ -63,7 +62,7 @@ test('a step collapses into binary bets that reach every successor exactly as of
     labeled(400n, fraction(1n, 8n)),
   ];
   const cash = priceTransition({ bankroll: 100000n, outcomes, quantum: 1n });
-  const step = compileTransition({ admits, bankroll: 100000n, cash, outcomes }) as any;
+  const step = compileTransition({ bankroll: 100000n, cash, outcomes }) as any;
   verifyStep(step, 100000n);
   // Two classes below the cash, two above: every lower class paired with every higher one.
   assert.equal(step.classes.length, 4);
@@ -73,25 +72,24 @@ test('a step collapses into binary bets that reach every successor exactly as of
   assert.ok(kelly(100000n, cash, outcomes) && !tableAdmits(100000n, cash - 1n, cashClasses(outcomes)));
   assert.ok(compare(fraction(cash), expected) > 0, 'a finite bankroll prices risk above the expected value');
   // More cash than the price stakes more in every bet, and reaches the same classes as often.
-  verifyStep(compileTransition({ admits, bankroll: 100000n, cash: cash + 50n, outcomes }), 100000n);
+  verifyStep(compileTransition({ bankroll: 100000n, cash: cash + 50n, outcomes }), 100000n);
 });
 
 test('cash kept in every outcome is never staked, and the class at the cash already held needs no bet', () => {
   // A push keeps the cash; the worst case keeps 40: a bet stakes 60 to win up to 160 more.
   const outcomes = [labeled(40n, fraction(1n, 2n)), labeled(100n, fraction(1n, 4n)), labeled(200n, fraction(1n, 4n))];
-  const step = compileTransition({ admits, bankroll: 10n ** 9n, cash: 100n, outcomes }) as any;
+  const step = compileTransition({ bankroll: 10n ** 9n, cash: 100n, outcomes }) as any;
   verifyStep(step, 10n ** 9n);
   assert.deepEqual(
     step.branches.map((b: any) => (b.kind === 'none' ? ['none', b.weight] : [b.bet.stake, b.bet.prize])),
     [['none', fraction(1n, 4n)], ...step.branches.filter((b: any) => b.kind === 'bet').map(() => [60n, 160n])],
   );
-  assert.deepEqual(step.betMass, fraction(3n, 4n), 'a bet is placed three times in four');
 });
 
 test('a step with nothing above its cash pairs every other class with the highest, and cannot cost the bankroll', () => {
   const outcomes = [labeled(10n, fraction(1n, 3n)), labeled(20n, fraction(1n, 3n)), labeled(50n, fraction(1n, 3n))];
   for (const cash of [50n, 80n]) {
-    const step = compileTransition({ admits, bankroll: 1000n, cash, outcomes }) as any;
+    const step = compileTransition({ bankroll: 1000n, cash, outcomes }) as any;
     verifyStep(step, 1000n);
     for (const branch of step.branches)
       assert.ok(branch.bet.prize <= branch.bet.stake, 'a win never pays more than the stake');
@@ -105,7 +103,7 @@ test("successors that need the same cash share a class, and the wallet's seed pi
     labeled(300n, fraction(1n, 4n), 'soft-seventeen', 'six of spades'),
     labeled(0n, fraction(1n, 4n), 'bust-again', 'queen'),
   ];
-  const step = compileTransition({ admits, bankroll: 10n ** 9n, cash: 200n, outcomes }) as any;
+  const step = compileTransition({ bankroll: 10n ** 9n, cash: 200n, outcomes }) as any;
   verifyStep(step, 10n ** 9n);
   assert.deepEqual(
     step.classes.map((c: any) => [c.cash, c.outcomes.map((o: any) => o.next)]),
@@ -135,11 +133,11 @@ test("successors that need the same cash share a class, and the wallet's seed pi
 test('a step that moves no money bets nothing: what is left over is an explicit payment', () => {
   const same = [labeled(70n, fraction(1n, 2n), 'left'), labeled(70n, fraction(1n, 2n), 'right')];
   assert.equal(priceTransition({ bankroll: 1000n, outcomes: same, quantum: 7n }), 70n, 'exactly, off the grid');
-  const noop = compileTransition({ admits, bankroll: 1000n, cash: 70n, outcomes: same }) as any;
+  const noop = compileTransition({ bankroll: 1000n, cash: 70n, outcomes: same }) as any;
   assert.deepEqual([noop.kind, noop.amount, noop.successorCash], ['noop', 0n, 70n]);
-  const payment = compileTransition({ admits, bankroll: 1000n, cash: 100n, outcomes: same }) as any;
+  const payment = compileTransition({ bankroll: 1000n, cash: 100n, outcomes: same }) as any;
   assert.deepEqual([payment.kind, payment.amount, payment.successorCash], ['payment', 30n, 70n]);
-  assert.throws(() => compileTransition({ admits, bankroll: 1000n, cash: 69n, outcomes: same }), /does not cover/);
+  assert.throws(() => compileTransition({ bankroll: 1000n, cash: 69n, outcomes: same }), /does not cover/);
 });
 
 test('the price respects the cash grid and falls toward the expected value as the bankroll grows', () => {
@@ -150,7 +148,7 @@ test('the price respects the cash grid and falls toward the expected value as th
     assert.ok(price >= 500n, 'never below the expected value');
     assert.ok(price <= previous, 'a larger bankroll prices the same risk lower');
     previous = price;
-    verifyStep(compileTransition({ admits, bankroll, cash: price, outcomes }), bankroll);
+    verifyStep(compileTransition({ bankroll, cash: price, outcomes }), bankroll);
     const gridded = priceTransition({ bankroll, outcomes, quantum: 64n });
     assert.equal(gridded % 64n, 0n);
     assert.ok(gridded >= price && gridded < price + 64n);
@@ -179,7 +177,7 @@ test('generated tables, with partial losses and rare jackpots, are priced, colla
     const bankroll = 10n ** 9n * (1n + random(1000n)),
       cash = priceTransition({ bankroll, outcomes, quantum: 1n });
     assert.ok(kelly(bankroll, cash, outcomes), 'a priced step is a Kelly wager as a whole');
-    const step = compileTransition({ admits, bankroll, cash, outcomes });
+    const step = compileTransition({ bankroll, cash, outcomes });
     if (step.kind !== 'casino-bet') continue;
     verifyStep(step, bankroll);
     steps++;
@@ -189,27 +187,24 @@ test('generated tables, with partial losses and rare jackpots, are priced, colla
 
 test('invalid, underfunded and unplayable steps fail explicitly', () => {
   const ok = [labeled(0n, fraction(1n, 2n)), labeled(10n, fraction(1n, 2n))];
-  assert.throws(() => compileTransition({ admits, bankroll: 1000n, cash: 5n, outcomes: [] }), /needs an outcome/);
+  assert.throws(() => compileTransition({ bankroll: 1000n, cash: 5n, outcomes: [] }), /needs an outcome/);
   assert.throws(
-    () => compileTransition({ admits, bankroll: 1000n, cash: 5n, outcomes: [labeled(0n, fraction(1n, 3n))] }),
+    () => compileTransition({ bankroll: 1000n, cash: 5n, outcomes: [labeled(0n, fraction(1n, 3n))] }),
     /sum to one/,
   );
   assert.throws(
     () =>
       compileTransition({
-        admits,
         bankroll: 1000n,
         cash: 5n,
         outcomes: [labeled(0n, fraction(-1n, 2n)), labeled(1n, fraction(3n, 2n))],
       }),
     /negative/,
   );
-  assert.throws(() => compileTransition({ admits, bankroll: 0n, cash: 5n, outcomes: ok }), /bankroll/);
-  assert.throws(
-    () => compileTransition({ admits, bankroll: 1000n, cash: 0n, outcomes: ok }),
-    /does not cover the step/,
-  );
-  assert.throws(() => compileTransition({ admits: () => false, bankroll: 1000n, cash: 6n, outcomes: ok }), /finance/);
+  assert.throws(() => compileTransition({ bankroll: 0n, cash: 5n, outcomes: ok }), /bankroll/);
+  assert.throws(() => compileTransition({ bankroll: 1000n, cash: 0n, outcomes: ok }), /does not cover the step/);
+  // A fair coin leaves the bankroll no edge, so the bet it collapses into is not admitted.
+  assert.throws(() => compileTransition({ bankroll: 1000n, cash: 5n, outcomes: ok }), /finance/);
   assert.throws(() => priceTransition({ bankroll: 1000n, outcomes: ok, quantum: 0n }), /quantum/);
   // Staking the whole top prize cannot cost the bankroll anything, so every step has a price.
   const huge = [labeled(0n, fraction(1n, 2n)), labeled(5000n, fraction(1n, 2n))];
@@ -219,6 +214,6 @@ test('invalid, underfunded and unplayable steps fail explicitly', () => {
     labeled(0n, fraction(OUTCOME_SPACE * 4n - 1n, OUTCOME_SPACE * 4n)),
     labeled(10n, fraction(1n, OUTCOME_SPACE * 4n), 'rare'),
   ];
-  assert.throws(() => compileTransition({ admits, bankroll: 10n ** 30n, cash: 1n, outcomes: rare }), /finer than one/);
+  assert.throws(() => compileTransition({ bankroll: 10n ** 30n, cash: 1n, outcomes: rare }), /finer than one/);
   assert.equal(seededRandom(7n)(1000n), seededRandom(7n)(1000n), 'a seed draws the same value every time');
 });

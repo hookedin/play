@@ -1,14 +1,15 @@
 import { ZeroAddress } from 'ethers';
 import { urlGameId } from '../protocol/protocol.ts';
-import { attachGameBridge, gameError } from './bridge.ts';
+import { attachGameBridge, gameError, SIGNS } from './bridge.ts';
 import { exact, h, methLabel } from './activity.ts';
 import { formatAmount, METH } from '../sdk/src/wire.ts';
 import * as readers from './readers.ts';
 import type { GameIdentity } from '../protocol/game-types.ts';
-import { $, showName, toast } from './page.ts';
+import { $, toast } from './page.ts';
 import { gamePath, showPage, walletRoute, type GameRoute } from './routes.ts';
 import { openWallet, task, uiBusy, wallet } from './sheet.ts';
 import { showReceipt } from './played.ts';
+import { gameCall } from './wallet-games.ts';
 
 interface ActiveGame {
   /** The channel this game is bound to; null until the wallet has a channel. */
@@ -310,46 +311,33 @@ export async function loadGame(url: string, gameRoute: GameRoute, push = true, p
     iframe: frame,
     origin: entry.origin,
     isCurrent,
+    // What the page does around a request, which `gameCall` answers: its cover goes once the game greets the wallet.
     onRequest: async (method, params) => {
       if (method === 'wallet.hello') {
         clearTimeout(silence);
         loading.remove();
-        return wallet.gameHello();
       }
       // The player is named once the wallet has heard from the casino, and a game finds its saved rounds by that name:
       // after a reload it waits for it.
-      if (method === 'wallet.info') {
-        await wallet.synced?.catch(() => {});
-        const info = await wallet.gameInfo();
-        if (isCurrent()) active!.uname = info.uname;
-        return info;
-      }
-      if (method === 'wallet.round') return wallet.gameRound(params.id);
+      if (method === 'wallet.info') await wallet.synced?.catch(() => {});
+      // The bet a game asks to show, the wallet shows over it.
       if (method === 'wallet.showBet') {
         const receipt = await wallet.gameBet(params.id);
         if (isCurrent()) showReceipt(receipt);
         return null;
       }
-      if (method === 'game.receipt') return wallet.gameReceipt(params.id);
-      if (method === 'game.history') return wallet.gameHistory(params.after, params.limit);
-      if (method === 'game.allowance') return wallet.gameAllowance(params.group);
-      if (method === 'game.end') {
-        await wallet.gameEnd(params.group, params.meta);
-        return null;
-      }
       // Its allowance dialog asks about developer bets from now on; only a published game has a developer to bet
       // against.
-      if (method === 'game.placesDeveloperBets') {
-        if (isCurrent()) active!.developerBets = true;
-        return null;
-      }
+      if (method === 'game.placesDeveloperBets' && isCurrent()) active!.developerBets = true;
       // What the player is doing in the wallet comes first; the wallet's own checks finish and the game's request
       // follows.
-      if (uiBusy) throw gameError('busy', 'The wallet is processing another operation.');
-      await wallet.actionDone;
-      if (method === 'game.casinoBet') return wallet.gameCasinoBet(params);
-      if (method === 'game.developerBet') return wallet.gameDeveloperBet(params);
-      return wallet.gamePayment(params);
+      if (SIGNS.has(method)) {
+        if (uiBusy) throw gameError('busy', 'The wallet is processing another operation.');
+        await wallet.actionDone;
+      }
+      const answer = await gameCall(wallet, method, params);
+      if (method === 'wallet.info' && isCurrent()) active!.uname = (answer as { uname: string | null }).uname;
+      return answer;
     },
     onError: message => toast(message, true),
   }));
@@ -403,7 +391,10 @@ export async function loadLibrary() {
   try {
     const house = readers.profile(await wallet.api(`/api/players/@${HOUSE}`));
     const mine = wallet.discordUsername === HOUSE ? [] : (wallet.profile?.games ?? []);
-    list.replaceChildren(...profileCards('@' + HOUSE, house.games), ...profileCards(showName(wallet.profile), mine));
+    list.replaceChildren(
+      ...profileCards('@' + HOUSE, house.games),
+      ...profileCards(readers.showName(wallet.profile), mine),
+    );
   } catch {
     list.textContent = 'The games could not be loaded. You can still open a game by its URL below.';
   }

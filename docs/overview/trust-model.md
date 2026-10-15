@@ -75,10 +75,10 @@ bankroll fund share each carry trust of their own, set out below. To trust the c
   the win to the queue.
 - **Keeping a published game up.** The casino can take a published game down, as its developer can: it leaves its
   developer's profile and earns nothing, but keeps its bank, the developer bets placed on it and its record.
-- **The bankroll overcommits.** Each quote admits bets against the whole virtual bankroll for a day, so the bets on many
-  quotes can together win more than the bankroll holds; what it cannot pay waits in the winnings queue
-  ([limitations](architecture.md#limitations)). The bankroll also counts house money the treasury holds off the
-  contract ([`reserve`](../casino-api/public.md#get-apistatus)), which pays no winnings until the treasury puts it in.
+- **The bankroll [overcommits](architecture.md#limitations).** The bets on many quotes can together win more than the
+  bankroll holds, and what it cannot pay waits in the winnings queue. The bankroll also counts house money the treasury
+  holds off the contract ([`reserve`](../casino-api/public.md#get-apistatus)), which pays no winnings until the treasury
+  puts it in.
 - **Sending withdrawals.** The casino takes on a withdrawal only when your deposits, your collateral and the house cash
   it can count on cover all of it, and declines it otherwise, so a withdrawal is normally paid in full the moment it is
   sent. It sends each it takes on to the contract once, oldest first and one transaction at a time, and owes it until a
@@ -127,11 +127,9 @@ verify is availability, liquidity and the code play.hookedin.com serves.
   state. A challenge with your newer evidence must be mined within 7 days of the close starting, or the older, lower
   balance becomes final. Opening the wallet does not send a challenge: you press **Challenge the close**, or run a
   [watchtower](../wallet/keys-and-recovery.md#the-watchtower).
-- **Dispute a covered bet the casino leaves unsettled.** A casino bet its quote covers that the casino declines or does
-  not answer stays saved in the wallet, which disputes it when you press **Close without the casino**, or **Challenge
-  the close** when the casino closes short of it. Its recovery bundle carries it, so a
-  [watchtower](../wallet/keys-and-recovery.md#the-watchtower) disputes it for you. The dispute must be mined before the
-  quote expires.
+- **Dispute a covered bet the casino leaves unsettled**, before its quote expires: **Close without the casino** does it,
+  or a [watchtower](../wallet/keys-and-recovery.md#the-watchtower) holding your recovery bundle
+  ([dispute a casino bet](../wallet/closing-and-claims.md#dispute-a-casino-bet)).
 - **Keep your key, and your evidence.** Your key is your account, and its passkey or key file is the only copy outside this browser. Your latest
   signed state is your proof. The wallet keeps it, and on another device takes up the casino's copy, which is the
   casino's word; export recovery bundles to settle without trusting it
@@ -162,10 +160,11 @@ A game cannot:
 - ask the wallet for any signature but its own bets and payments;
 - spend a wei beyond its allowance, or change who earns its commission.
 
-The wallet verifies each casino bet completely (its odds, its outcome and what it pays) and records its return, but it
-does not refuse a bet for paying back little. It does not check a game's advertised rules, the tables a game's steps
-offer or how they combine, or the files a game serves; it splits each table and draws its bet itself. Playing a game trusts its developer for its tables
-([games and their allowances](../wallet/getting-started.md#games-and-their-allowances)).
+The wallet verifies each casino bet completely (its odds, its outcome and what it pays) and records its house edge, but
+does not refuse a bet for paying back little ([settled trade-offs](architecture.md#settled-trade-offs)). It does not
+check a game's advertised rules, the tables a game's steps offer or how they combine, or the files a game serves; it
+splits each table and draws its bet itself. Playing a game trusts its developer for its tables ([games and their
+allowances](../wallet/getting-started.md#games-and-their-allowances)).
 
 ## Developer bets trust their developer
 

@@ -79,7 +79,7 @@ hashes its UTF-8 bytes (ethers `id`).
 
 ### The base
 
-A channel starts from its base, its zero checkpoint `(player, index, 0, 0x0, 0x0, 0, 0, 0, 0)`: zero but for its
+A channel starts from its base, its zero checkpoint `(player, index, 0, 0x0, 0x0, 0, 0, 0)`: zero but for its
 account and index, so the balance is 0 until a deposit operation, or a credit, adds to it. It needs no signature: a channel can
 close on it without the casino ever answering. Any other checkpoint the contract settles on is signed by both sides.
 
@@ -309,8 +309,8 @@ Each value is `keccak256` of its preimage. A debit into a game's bank, and the c
 it, name the game's ID instead; a credit that collects a developer bet's payout names the bet's hash; and a transfer
 names a player: its debit the player it pays, and the credit that collects it the player it came from,
 each written `~` and their uname, 24 characters of `23456789abcdefghijkmnopqrstvwxyz`.
-The other fixed tag is `HOOKEDIN/OUTCOME` (`0xede2fdd26760847d3c92bb2ebf4da0fdbdf441ed687b86dc1257f1962e3857ff`), in
-[the outcome](#the-outcome).
+The other fixed tags are `HOOKEDIN/OUTCOME`, in [the outcome](#the-outcome), and `HOOKEDIN/BRANCH` and
+`HOOKEDIN/RESULT`, which [draw a game's step](../games/collapsing-bets.md#the-wallet-draws-the-step).
 
 ## Games, rounds and the outcome
 
@@ -421,14 +421,14 @@ with every developer bet that key settles, so a wallet checks the settlement aga
 
 `Settlement(bet, player, casino)` settles a developer bet, signed by its game's server. `bet` is the bet's hash, the
 hash of the operation that placed it, which signed its meta and its round. `player` is what the player is paid and
-`casino` what the casino is given, both from the game's bank and each below 2^128. A settlement of a bet that names a
+`casino` what the casino is given, both from the game's bank and each below 2^96. A settlement of a bet that names a
 round comes with `secret` beside it, the secret whose `keccak256` is the round, which needs no signature since it
 proves itself; a settlement of any other bet has none.
 
 `BankCasinoBet(round, game, stake, chance, prize, group, seedHash, meta)` is a game's casino bet from its bank, on a
 round of its own, signed by its server. `game` is the game's ID; `stake`, `chance` and `prize` are as for any casino
-bet; `group` is the label the game gives the bets that belong together, 1 to 64 UTF-16 code units of well-formed text,
-without a NUL; `seedHash` is `keccak256(seed)` of the seed the request brings; `meta` is
+bet; `group` is the label the game gives the bets that belong together, 1 to 64 UTF-16 code units of printable text;
+`seedHash` is `keccak256(seed)` of the seed the request brings; `meta` is
 `keccak256(utf8(canonicalJSON(meta)))` of the game's own JSON, which the casino keeps with the reveal and never reads. A
 stake, chance and prize all zero is a _reveal_: it bets nothing and only reveals the round, and is signed, grouped and
 kept like any other.
@@ -502,7 +502,7 @@ canonical JSON of the rules they apply alike. An `encodeType` string is a struct
 `Access(address player,uint256 expiresAt)`. The rules:
 
 ```text
-{"bounds":{"group":64,"label":64,"meta":4096,"outcomeSpace":"18446744073709551616","pairs":64,"results":128,"weight":"115792089237316195423570985008687907853269984665640564039457584007913129639936"},"counterparties":{"depositFee":"0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530","player":"^~[23456789abcdefghijkmnopqrstvwxyz]{24}$"},"kinds":{"casinoBet":1,"credit":3,"debit":2,"deposit":4,"lockIn":6,"none":0,"withdrawal":5},"outcome":"HOOKEDIN/OUTCOME"}
+{"bounds":{"group":64,"label":64,"meta":4096,"outcomeSpace":"18446744073709551616","pairs":64,"results":128,"weight":"115792089237316195423570985008687907853269984665640564039457584007913129639936"},"counterparties":{"depositFee":"0x4a76f24c4a2e1baddfe7c90d2db7f7a9330453e17ca13b620770e752dd15ebaf","fund":"0x467fc5e32da989116c215bcba4b9354cdc62740ac7a21e74f31eb81d1f6c8530","player":"^~[23456789abcdefghijkmnopqrstvwxyz]{24}$"},"kinds":{"casinoBet":"1","credit":"3","debit":"2","deposit":"4","lockIn":"6","none":"0","withdrawal":"5"},"outcome":"HOOKEDIN/OUTCOME"}
 ```
 
 `DEVELOPER_PROTOCOL` fixes only what a game's server shares with the casino: the `encodeType` strings of
@@ -524,7 +524,7 @@ the hashing and pricing rules in numbers.
 
 | Key                             | Contents                                                                                                                                                                                                                                           |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, the developer `0x4444…44`, the recipient `0x5555…55` and the friend's uname `3byt9ocwnnzaxanmiz3stocj`                                             |
+| `identity`                      | Chain `31337` and contract `0x1111…11`, the domain of every hash below; the player `0x2222…22`, the recipient `0x5555…55` and the friend's uname `3byt9ocwnnzaxanmiz3stocj`                                                                        |
 | `protocol`, `developerProtocol` | [`PROTOCOL` and `DEVELOPER_PROTOCOL`](#bounds-and-the-protocol-revision)                                                                                                                                                                           |
 | `channel`                       | The player's first channel, whose `index` is `0`, with its ID                                                                                                                                                                                      |
 | `base`, `baseHash`              | The channel's base, and its hash                                                                                                                                                                                                                   |

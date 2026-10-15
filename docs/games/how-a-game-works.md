@@ -69,13 +69,11 @@ verified winnings.
 
 ### Groups
 
-The figure in the top bar must not give a result away before the page shows it, nor move while a round is played. So
-what a bet in a group wins stays with its group, out of the allowance and balance the player sees, until the page
-calls [`HookedIn.end(group)`](../sdk/hookedin.md#end); only the group's own bets stake it meanwhile. Give every bet a
-group, and end it once the result is on the page: when the ball lands, the reels stop or the round is over.
-`RoundClient` puts each step in its round's group; end it with [`round.end(state)`](../sdk/round.md#end). A multi-step
-round then moves the figure twice: down by the stake on its first step, and up by what it paid when it ends
-([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)).
+What a bet in a group wins stays with its group, out of the allowance the player sees, until the page calls
+[`HookedIn.end(group)`](../reference/bridge.md#gameend), so the figure never gives a result away
+([groups](../reference/bridge.md#groups-and-the-allowance-the-player-sees)). Give every bet a group, and end it once
+the result is on the page: when the ball lands, the reels stop or the round is over. `RoundClient` puts each step in
+its round's group; end it with [`round.end(state)`](../sdk/round.md#end).
 
 ## The bridge
 
@@ -167,9 +165,9 @@ casino answered it, which the wallet disputes before then; its round stays secre
 ## When a wallet has lost receipts
 
 A wallet on another device, or one that lost its browser's data, may not hold the receipt of an operation its player
-carried out on another channel. `game.receipt` returns `null` for it, and sending the request again fails with `id-used`: the operation was
-carried out, and its result is not in this wallet. Clear your record and tell the player. Do not send it again under
-another `id` without asking them.
+carried out on another channel. `game.receipt` returns `null` for it, and sending the request again fails with
+`id-used`, as `game.receipt` does from then on: the operation was carried out, and its result is not in this wallet.
+Clear your record and tell the player. Do not send it again under another `id` without asking them.
 
 ## Storage
 
@@ -187,11 +185,11 @@ is the page's path unless you pass one.
 
 ## History
 
-[`HookedIn.history()`](../sdk/hookedin.md#history) reads the player's history of your game, newest first, from whichever
+[`HookedIn.history()`](../reference/bridge.md#gamehistory) reads the player's history of your game, newest first, from whichever
 channel and device they played it on: each operation the casino carried out, as the receipt the wallet checked, and
 each group you ended with meta. A receipt says what was bet and what it paid, not what your page drew from it: plinko's
 rows, blackjack's cards, the tiles a mines player picked. So end each group with meta, your own JSON saying how it went,
-[`HookedIn.end(group, meta)`](../sdk/hookedin.md#end), and draw past plays from it. `RoundClient` does it for a round:
+[`HookedIn.end(group, meta)`](../reference/bridge.md#gameend), and draw past plays from it. `RoundClient` does it for a round:
 [`end(state)`](../sdk/round.md#end) keeps the state the round ended in, and [`past()`](../sdk/round.md#past) reads it
 back. A play that sends nothing to the casino, such as a step that places no bet, is only in your meta.
 

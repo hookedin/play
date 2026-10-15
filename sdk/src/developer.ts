@@ -125,7 +125,7 @@ export async function createDeveloper({
   game: string;
 }): Promise<Developer> {
   const signer = new Wallet(key),
-    game = named.toLowerCase(),
+    game = read.gameId(named),
     api = async (path: string, body?: unknown, headers: Record<string, string> = {}) => {
       // A request the casino never answers gives up after a minute, so a server that follows its bets asks again.
       const signal = AbortSignal.timeout(60_000),
@@ -160,7 +160,7 @@ export async function createDeveloper({
         status: 400,
         code: 'invalid',
       });
-    const bet = { round: round.toLowerCase(), game, stake, chance, prize, group },
+    const bet = { round: read.hash(round), game, stake, chance, prize, group },
       seed = await seedOf(bet.round),
       signature = await signer.signTypedData(d, BANK_CASINO_BET_TYPES, {
         ...bet,
@@ -185,7 +185,7 @@ export async function createDeveloper({
     virtualBankroll: async () => read.whole((await api('/api/status')).virtualBankroll),
     bank: async () => read.whole((await api(`/api/games/${game}?limit=1`)).bank),
     openRound: async () => read.round(await asServer('/api/rounds', { game })),
-    seedHash: async round => hashOfSeed(await seedOf(round.toLowerCase())),
+    seedHash: async round => hashOfSeed(await seedOf(read.hash(round))),
     round: async id => read.round(await api(`/api/rounds/${id}`)),
     casinoBet: placeCasinoBet,
     reveal: ({ round, group, meta }) => placeCasinoBet({ round, stake: 0n, chance: 0n, prize: 0n, group, meta }),

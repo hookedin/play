@@ -31,19 +31,18 @@ chain needs one.
 | Casino API | `https://casino.hookedin.com`    | The casino service, one process behind a TLS proxy: the [Casino API](../casino-api/index.md)                                                                                                                                                                                                                                                                                                                                                       |
 | Games      | `https://<id>-game.hookedin.com` | Each house game, a Cloudflare Worker of its own: dice, mines, plinko and samson from [games/](../../games/), blackjack from [hookedin/game-blackjack](https://github.com/hookedin/game-blackjack), roulette and crash with their servers from [hookedin/game-roulette](https://github.com/hookedin/game-roulette) and [hookedin/game-crash](https://github.com/hookedin/game-crash); crash is not yet published at the casino, so it takes no bets |
 
-A local stack runs the same services on `127.0.0.1`: an Anvil chain on port 8545, the casino on 4183, the wallet on
-4184 (`npm run dev` serves the wallet alone) and the games in [games/](../../games/) on 4187, apart from 4185, where
-`hookedin-game serve` serves a game of your own.
+Locally, `hookedin-game serve` serves a game of your own at `http://127.0.0.1:4185/`
+([quick start](../games/quick-start.md#run-it)).
 
 ## How the wallet pins its deployment
 
 A wallet release carries its configuration as `config.js`, built from
-[config/production.json](../../config/production.json); a local launcher serves its own. `config.js` is part of the
-release and holds nothing secret.
+[config/production.json](../../config/production.json); a local launcher builds the wallet with its own. `config.js` is
+part of the release and holds nothing secret. The wallet runs on Ethereum (chain 1) or a local Anvil chain (31337) and
+refuses any other.
 
 | Field                        | Type    | Meaning                                                                      |
 | ---------------------------- | ------- | ---------------------------------------------------------------------------- |
-| `network`                    | string  | `mainnet` or `local`: the chain the wallet requires                          |
 | `casino`                     | string  | The casino API's base URL                                                    |
 | `deployment`                 | object  | The pinned deployment                                                        |
 | `deployment.chainId`         | string  | The chain ID, a decimal string                                               |
@@ -60,12 +59,12 @@ On start the wallet:
    operator; otherwise it starts in [recovery mode](../wallet/keys-and-recovery.md#recovery-mode);
 2. loads its saved account, so the game library works from here on: it needs nothing from the chain;
 3. meanwhile, checks the deployment: it reads the code at the pinned address, at a confirmed block both of its RPCs
-   agree on, and requires the runtime pinned in [client/contract-artifact.ts](../../client/contract-artifact.ts) with
-   the immutables `signer` and `treasury` filled in, and that signer to be the pinned operator.
+   agree on, and requires the runtime pinned in [protocol/contract-artifact.ts](../../protocol/contract-artifact.ts)
+   with the immutables `signer` and `treasury` filled in, and that signer to be the pinned operator.
 
 Everything with ETH, such as a deposit, a bet or a close, waits for that check. One that fails is shown in a banner, and
-nothing with ETH goes ahead until a reload checks again. On Ethereum the check requires a pinned deployment; a local
-build without one takes the casino's word for its contract. The checks are in
+nothing with ETH goes ahead until a reload checks again. A wallet with no pinned deployment does not start. The checks
+are in
 [protocol/deployment.ts](../../protocol/deployment.ts) and [client/wallet.ts](../../client/wallet.ts).
 
 ## Where the current addresses are
@@ -76,8 +75,6 @@ build without one takes the casino's word for its contract. The checks are in
 - [catalog.json](../../catalog.json): the house developer, `developer`, the account that publishes the house games as
   `@hookedin`, and `games`, each game's name, such as `Dice` at `@hookedin/dice`, and its
   [URL](../games/publishing.md#the-games-url). The casino publishes these in `@hookedin`'s profile as it starts.
-  `trusted` lists the other developers whose games' developer bets take a deposit before the chain finalizes it, as
-  the house's do ([operations](../casino-api/channels.md#post-apichannelsidoperations)).
 - The casino itself: `contractAddress`, `operator`, `chainId`, `protocol` and `developerProtocol` in
   [`GET /api/config`](../casino-api/public.md#get-apiconfig), and the commit it runs in
   [`GET /api/status`](../casino-api/public.md#get-apistatus).
@@ -88,9 +85,9 @@ Everything a player has to trust is in this repository, so a release can be rebu
 
 **The contract.** After `npm ci`, `npm run compile` compiles [contracts/](../../contracts/) with solc 0.8.37, the
 optimizer at 200 runs, the IR pipeline, the Cancun EVM and no metadata hash, and fails if the runtime differs from the
-pin in `client/contract-artifact.ts`. It writes the compiler input and output to `build/compile-input.json` and
-`build/contracts.json`. Etherscan compiled the same input, with the contract its only source, to the code at the
-contract's address. With no metadata hash in the bytecode, the pin moves only when the compiled code does, never for
+pin in `protocol/contract-artifact.ts`. It writes the compiler input and output to `build/compile-input.json` and
+`build/contracts.json`. Etherscan compiled the contract alone, with the same settings, to the code at the contract's
+address. With no metadata hash in the bytecode, the pin moves only when the compiled code does, never for
 a comment or a name. `npm run release:artifact` rewrites the pin; maintainers run it after reviewing a contract change.
 
 **The served wallet.** `npm run build` compiles the contract, checks the pin, and writes the wallet to `dist/`:
@@ -99,7 +96,7 @@ a comment or a name. `npm run release:artifact` rewrites the pin; maintainers ru
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `main.js`, `main.js.map`                                      | Every wallet and protocol module, bundled by esbuild into one readable, unminified ES module, with its map |
 | `vendor/ethers.js`                                            | Byte for byte the `dist/ethers.min.js` of the ethers release in `package-lock.json`                        |
-| `config.js`                                                   | The deployment's settings, `export default { network, casino, deployment }`                                |
+| `config.js`                                                   | The deployment's settings, `export default { casino, deployment }`                                         |
 | `index.html`, `style.css`, `brand/`, `_headers`, `_redirects` | The page, its styles, the mark, the response headers and the rewrite for `/@username` routes               |
 
 `main.js` imports exactly `/config.js` and `/vendor/ethers.js`, and a test holds it to that. The headers set
@@ -117,7 +114,7 @@ curl -s https://play.hookedin.com/main.js | shasum -a 256
 shasum -a 256 dist/main.js
 ```
 
-**The tests.** `npm test` needs Node 26 or later, Foundry's `anvil` on `PATH` (or named by `ANVIL_BIN`) and an
+**The tests.** `npm test` needs Node 26 or later, Foundry's `anvil` on `PATH` and an
 installed Google Chrome. It builds everything, type-checks every source and test, checks the committed
 [test vectors](../../vectors/protocol.json), and runs every suite in [test/](../../test/), [sdk/test/](../../sdk/test/)
 and each game's `test/`. The contract's suites deploy it on disposable Anvil chains and sign evidence by hand

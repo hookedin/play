@@ -11,6 +11,7 @@
   },
   "exports": {
     "./sdk/engine": "./sdk/src/engine/index.ts",
+    "./sdk/bin/hookedin-game.js": "./sdk/bin/hookedin-game.js",
     "./sdk/*": "./sdk/src/*.ts",
     "./testing/game-wallet.ts": "./testing/game-wallet.ts"
   },
@@ -19,10 +20,10 @@
   },
   "scripts": {
     "build": "npm run compile && node scripts/build.ts && node sdk/bin/hookedin-game.js build games/*",
-    "dev": "npm run build && node scripts/static.ts",
+    "dev": "node scripts/build.ts && node scripts/static.ts",
     "compile": "node scripts/compile.ts",
     "release:artifact": "node scripts/compile.ts --update-artifact",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc",
     "test": "npm run build && npm run typecheck && node scripts/vectors.ts --check && node --test --test-timeout=180000 test/*.test.ts sdk/test/*.test.ts games/*/test/*.test.ts",
     "vectors": "node scripts/vectors.ts",
     "watchtower": "node scripts/watchtower.ts",

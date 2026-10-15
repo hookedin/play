@@ -1,17 +1,14 @@
 import { add, compare, divide, fraction, multiply, wholeWeights } from './rational.ts';
 import type { Rational } from './rational.ts';
-import { OUTCOME_SPACE, uint256 } from '../../../protocol/risk.ts';
+import { OUTCOME_SPACE, admits, uint256 } from '../../../protocol/risk.ts';
 
 /** A casino bet: a stake paid to enter, and a prize it pays when the round's outcome is below its chance, counted
  * in outcomes out of 2^64. */
-export interface Bet {
+interface Bet {
   readonly stake: bigint;
   readonly chance: bigint;
   readonly prize: bigint;
 }
-/** The casino's admission rule, supplied by the caller: would a bankroll of this size take this bet?
- * This library checks every bet it builds against it and never assumes what it is. */
-export type Admits = (bankroll: bigint, bet: Bet) => boolean;
 
 /** A labeled successor and the cash needed to continue from that state. */
 export interface CashOutcome {
@@ -21,7 +18,7 @@ export interface CashOutcome {
   readonly probability: Rational;
 }
 /** The successors of a step that need the same cash, and how likely they are together. */
-export interface CashClass {
+interface CashClass {
   readonly cash: bigint;
   readonly probability: Rational;
   readonly outcomes: readonly CashOutcome[];
@@ -36,7 +33,6 @@ type Branch =
   | { readonly kind: 'bet'; readonly weight: Rational; readonly bet: Bet; readonly win: number; readonly lose: number }
   | { readonly kind: 'none'; readonly weight: Rational; readonly class: number };
 interface TransitionInput {
-  readonly admits: Admits;
   readonly bankroll: bigint;
   readonly cash: bigint;
   readonly outcomes: readonly CashOutcome[];
@@ -53,8 +49,6 @@ export type TransitionPlan =
       readonly cash: bigint;
       readonly classes: readonly CashClass[];
       readonly branches: readonly Branch[];
-      /** How likely the step is to place a bet: every branch but the one that keeps the cash. */
-      readonly betMass: Rational;
       readonly outcomes: readonly CashOutcome[];
     }
   | {
@@ -219,7 +213,7 @@ function collapse(bankroll: bigint, cash: bigint, classes: readonly CashClass[])
 
 /** The branches for one step taken with `cash`, each bet checked with the casino's rule at the planning bankroll, or
  * the payment when nothing is left to chance. */
-export function compileTransition({ admits, bankroll, cash, outcomes }: TransitionInput): TransitionPlan {
+export function compileTransition({ bankroll, cash, outcomes }: TransitionInput): TransitionPlan {
   uint256(bankroll, 'bankroll', true);
   uint256(cash, 'cash');
   const classes = cashClasses(outcomes),
@@ -241,13 +235,11 @@ export function compileTransition({ admits, bankroll, cash, outcomes }: Transiti
   for (const branch of branches)
     if (branch.kind === 'bet' && !admits(bankroll, branch.bet))
       throw new RangeError('cash does not finance this step at the planning bankroll');
-  const kept = branches.find(branch => branch.kind === 'none');
   return Object.freeze({
     kind: 'casino-bet',
     cash,
     classes: Object.freeze(classes),
     branches: Object.freeze(branches),
-    betMass: kept ? add(ONE, fraction(-kept.weight.n, kept.weight.d)) : ONE,
     outcomes: live,
   });
 }
@@ -279,12 +271,10 @@ export type StepBranch = { weight: bigint } | { weight: bigint; stake: bigint; c
  * results all keep the cash is one branch without a bet. Throws a RangeError when the bankroll does not admit the step,
  * or the table cannot be one. */
 export function splitStep({
-  admits,
   bankroll,
   cash,
   results,
 }: {
-  admits: Admits;
   bankroll: bigint;
   cash: bigint;
   results: readonly { weight: bigint; cash: bigint }[];
@@ -299,7 +289,7 @@ export function splitStep({
     if (results[0]!.cash !== cash) throw new RangeError('a step of one amount keeps its cash');
     return [{ weight: 1n }];
   }
-  const step = compileTransition({ admits, bankroll, cash, outcomes });
+  const step = compileTransition({ bankroll, cash, outcomes });
   if (step.kind !== 'casino-bet') throw new RangeError('a step of one amount keeps its cash');
   const weights = wholeWeights(step.branches.map(branch => branch.weight));
   return step.branches.map((branch, i) =>

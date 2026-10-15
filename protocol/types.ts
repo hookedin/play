@@ -189,6 +189,19 @@ export interface CollateralOffer {
   };
   signature: string;
 }
+/** The fund as everyone sees it, signed when asked for (`FUND_TYPES`): what is in issue, what it is a claim on, and
+ * when, in seconds. */
+export interface Fund {
+  message: {
+    sequence: bigint;
+    totalShares: bigint;
+    houseShares: bigint;
+    equity: bigint;
+    overdrawn: bigint;
+    at: bigint;
+  };
+  signature: string;
+}
 export interface Step {
   operation: Operation;
   authorization: string;

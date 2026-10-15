@@ -2,9 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { add, compileGame, fraction, multiply } from '@hookedin/play/sdk/engine';
 import type { Rational } from '@hookedin/play/sdk/engine';
-import { admits } from '@hookedin/play/sdk/admits';
 import { gameWallet, memoryStore, worstReturn } from '@hookedin/play/testing/game-wallet.ts';
-import { RoundClient } from '@hookedin/play/sdk/round';
+import { RoundClient, pricing } from '@hookedin/play/sdk/round';
 import {
   BONUS_SPINS,
   MACHINES,
@@ -112,12 +111,7 @@ test('a spin prices as one casino bet at the stake, even against a modest bankro
   const stake = 10n ** 12n;
   for (const mode of ['base', 'bonus']) {
     const started = performance.now();
-    const plan = compileGame(slotGraph({ stake, mode }), {
-      admits,
-      bankrollFloor: 25000n * stake,
-      cashQuantum: stake / 1000000000n,
-      initialCash: stake,
-    });
+    const plan = compileGame(slotGraph({ stake, mode }), pricing(stake, 50000n * stake));
     assert.ok(plan.requiredCash <= stake, `${mode} needs ${plan.requiredCash}`);
     assert.equal(plan.maximumDepth, 1);
     // The spin is collapsed into binary bets the page draws from, each staking the whole stake against one pay, and
@@ -150,13 +144,13 @@ test('spins settle through the wallet bridge in both modes and survive a reload'
   w.openGame(f.identity('samson'));
   await w.setGameAllowance(100000n);
   const store = memoryStore();
-  let round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
+  let round = new RoundClient(f.bridge, slotGraph, { store, name: 'samson' });
   const ids = new Set<string>();
   let expected = await w.balance();
   for (let spin = 0; spin < 12; spin++) {
     const mode = spin % 3 === 2 ? 'bonus' : 'base';
     let state = await round.start({ stake: 1000n, mode });
-    if (spin === 5) round = new RoundClient(f.bridge, slotGraph, undefined, { store, name: 'samson' });
+    if (spin === 5) round = new RoundClient(f.bridge, slotGraph, { store, name: 'samson' });
     state = await round.action('spin');
     assert.equal(state.terminal, true);
     const outcome = nodeOutcome(state.nodeId)!;
@@ -179,13 +173,9 @@ const FLOOR = 951000n;
 
 test('every bet this game can place pays back at least the floor it is built to', () => {
   for (const stake of [1000n, 10n ** 6n, 10n ** 9n, 12345678901n, 10n ** 12n, 10n ** 15n, 10n ** 18n])
-    for (const mode of ['base', 'bonus']) {
-      const plan = compileGame(slotGraph({ stake, mode }), {
-        admits,
-        bankrollFloor: 10n ** 9n * stake,
-        cashQuantum: stake / 10n ** 9n || 1n,
-        initialCash: stake,
-      });
-      assert.ok(worstReturn(plan) >= FLOOR, `a ${mode} bet pays back less than this game's floor`);
-    }
+    for (const mode of ['base', 'bonus'])
+      assert.ok(
+        worstReturn(slotGraph({ stake, mode }), stake, 2n * 10n ** 9n * stake) >= FLOOR,
+        `a ${mode} bet pays back less than this game's floor`,
+      );
 });

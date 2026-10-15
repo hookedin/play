@@ -150,10 +150,8 @@ already counted in the player's signed balance. `equity`, what [bankroll fund](.
 claim on, is the same without `reserved`, `reserve` or the floor at 0: like withdrawals and collateral offers, it counts
 only what the contract holds. A dispute that finalizes above the signed obligation reduces equity as a loss shared by
 all holders, without burning house shares. Investors widen what the Kelly rule admits exactly as the treasury's funding does. Every quote names the whole
-virtual bankroll, and a quote binds the casino for a day: the quotes out at once are not divided between them, so the
-bankroll overcommits ([limitations](../overview/architecture.md#limitations)), and admitting against half the bankroll,
-half Kelly, is the margin for it. Kelly admission against the virtual bankroll neither enforces the casino's solvency
-nor reserves capital for a whole game.
+virtual bankroll for a day, so the bankroll [overcommits](../overview/architecture.md#limitations), with half Kelly as
+its margin: Kelly admission neither enforces the casino's solvency nor reserves capital for a whole game.
 
 [Collateral](contract.md#collateral) is house cash locked into a channel, by an offer bought or by a dispute, and
 stays the bankroll's: `claimLiabilities` counts only claims, so locking it moves neither the bankroll nor what quotes

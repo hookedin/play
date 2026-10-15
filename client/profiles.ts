@@ -1,10 +1,11 @@
 import { h, signedAmount } from './activity.ts';
-import { $, shortDate, showName, toast } from './page.ts';
+import { tone } from './bets.ts';
+import { $, copyText, shortDate, toast } from './page.ts';
 import { navigate } from './routes.ts';
 import { act, lookUpPayee, openWallet, renderWallet, uiBusy, wallet } from './sheet.ts';
 import { HOUSE, profileCards } from './games.ts';
 import * as readers from './readers.ts';
-import type { Profile } from './readers.ts';
+import { showName, type Profile } from './readers.ts';
 
 /** The page at a player's name: their profile once the casino answers. */
 let shown: { profile: Profile | null } | null = null;
@@ -64,7 +65,7 @@ function drawProfile(profile: Profile) {
       ? [
           h('strong', null, String(plays)),
           plays === 1 ? ' bet · ' : ' bets · ',
-          h('strong', { className: net < 0n ? 'negative' : net > 0n ? 'positive' : '' }, signedAmount(net)),
+          h('strong', { className: tone(net) }, signedAmount(net)),
           ' net',
         ]
       : ['No bets yet.']),
@@ -135,15 +136,14 @@ act('verify-discord', async () => {
   verifying = await wallet.discordCode();
   void watchVerify(verifying, wallet.profile?.discordVerified ?? null);
 });
-$('copy-verify-code').addEventListener('click', async () => {
-  if (!verifying) return;
-  try {
-    await navigator.clipboard.writeText(verifying.code);
-    toast('Code copied. Paste it into /verify in the HookedIn Discord.');
-  } catch {
-    getSelection()?.selectAllChildren($('verify-code'));
-    toast('The code is selected. Copy it with your browser’s copy command.');
-  }
+$('copy-verify-code').addEventListener('click', () => {
+  if (verifying)
+    void copyText(
+      verifying.code,
+      'Code copied. Paste it into /verify in the HookedIn Discord.',
+      'The code is selected. Copy it with your browser’s copy command.',
+      $('verify-code'),
+    );
 });
 act(
   'unlink-discord',
@@ -152,6 +152,6 @@ act(
 );
 $('menu-profile').addEventListener('click', event => {
   event.preventDefault();
-  $('account-menu').hidePopover?.();
+  $('account-menu').hidePopover();
   if (wallet.uname) void openProfile(showName(wallet));
 });

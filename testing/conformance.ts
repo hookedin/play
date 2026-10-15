@@ -279,12 +279,12 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
   test(`${name}: a round it ended is read back for the page to draw it, on any device`, async t => {
     const x = await open(t),
       stake = x.within.stake,
-      round = new RoundClient(x.bridge, flip(190n), undefined, { store: memoryStore(), name: 'past' });
+      round = new RoundClient(x.bridge, flip(190n), { store: memoryStore(), name: 'past' });
     await round.start({ stake });
     const state = await round.action('flip');
     assert.equal(await round.end(state, { coin: 'gold' }), null);
     const y = await x.forget(),
-      other = new RoundClient(y.bridge, flip(190n), undefined, { store: memoryStore(), name: 'past' }),
+      other = new RoundClient(y.bridge, flip(190n), { store: memoryStore(), name: 'past' }),
       { rounds } = await other.past();
     assert.deepEqual(
       rounds.map(({ at: _, ...past }) => past),
@@ -301,7 +301,7 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
         },
       ],
     );
-    const changed = new RoundClient(y.bridge, flip(180n), undefined, { store: memoryStore(), name: 'past' });
+    const changed = new RoundClient(y.bridge, flip(180n), { store: memoryStore(), name: 'past' });
     assert.deepEqual((await changed.past()).rounds, [], 'a round under other rules is left out');
   });
 
@@ -309,9 +309,9 @@ export function behaviour(name: string, open: (t: any) => Promise<Casino>) {
     const x = await open(t),
       store = memoryStore(),
       stake = x.within.stake;
-    const old = new RoundClient(x.bridge, flip(190n), undefined, { store, name: 'rules' });
+    const old = new RoundClient(x.bridge, flip(190n), { store, name: 'rules' });
     await old.start({ stake });
-    const changed = new RoundClient(x.bridge, flip(180n), undefined, { store, name: 'rules' });
+    const changed = new RoundClient(x.bridge, flip(180n), { store, name: 'rules' });
     await assert.rejects(changed.restore(), /rules this game does not play/);
     assert.equal(await changed.restore(), null, 'it is gone');
     await changed.start({ stake });

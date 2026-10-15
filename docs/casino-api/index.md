@@ -14,9 +14,8 @@ The routes are on three pages: [public](public.md), which need no authentication
 
 ## Base URL
 
-`https://casino.hookedin.com`. A wallet built without a configuration expects a local casino at
-`http://127.0.0.1:4183` ([deployment](../reference/deployment.md)). Every route is under `/api/`. There is no WebSocket
-or event stream: clients poll, and a developer's server [waits](public.md#get-apideveloper-bets) for its game's bets.
+`https://casino.hookedin.com`. Every route is under `/api/`. There is no WebSocket or event stream: clients poll, and a
+developer's server [waits](public.md#get-apideveloper-bets) for its game's bets.
 
 ## Requests and replies
 
@@ -40,8 +39,8 @@ x-content-type-options: nosniff
 
 Any origin may call the API, and no cookies are used. `OPTIONS` on any path answers `204` with these headers and no
 body, before any budget or body is read, so a browser's preflight is asked once in two hours. The API takes `GET` and
-`POST` only: a `GET` for a path with no `GET` route answers `404` `not-found`, and any other request without a route
-`405` `unsupported-method`.
+`POST` only. A request without a route answers `405` `unsupported-method`, but a `GET` answers `404` `not-found`, except
+on `/api/rounds`, `/api/rounds/:round/casino-bet` and `/api/developer-bets/settle`.
 
 A request must arrive whole, headers included, within 10 seconds. An idle connection is closed after 5 seconds, and the
 casino holds at most 512 connections at once.
@@ -52,9 +51,10 @@ casino holds at most 512 connections at once.
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Amounts, sequences and indexes             | Decimal strings: `"1000000000000000"` is 1,000 METH. Code holds them as bigints, and reads each back in that one form                                                                                                                                                                                           |
 | Hashes and IDs                             | `0x` followed by 64 lowercase hex digits, path parameters included                                                                                                                                                                                                                                              |
+| Game IDs                                   | A [UUID](../reference/signed-messages.md#game-ids) in lowercase                                                                                                                                                                                                                                                 |
 | Records and bets                           | A UUIDv7 in lowercase, which says when the casino made the record: a game record's bet `id`, a payout's `record`, a cursor, a history head's `record`                                                                                                                                                           |
 | Addresses                                  | Checksummed, in whatever the casino takes and answers                                                                                                                                                                                                                                                           |
-| Times in milliseconds since the Unix epoch | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                                                                                                                      |
+| Times in milliseconds since the Unix epoch | `createdAt`, `discordVerified`, `placedAt`, `settledAt`, `takenDownAt`, a Discord code's `expires`, a game record's `at`, `lastCheck`, `lastProgress`                                                                                                                                                           |
 | Times in Unix seconds                      | `expiresAt`, the fund's `at`, the observed block's `timestamp` and a channel's on-chain `deadline`                                                                                                                                                                                                              |
 | Counts                                     | JSON numbers: how many plays, bets or channels                                                                                                                                                                                                                                                                  |
 | Signed messages                            | Exactly their fields, each in one form: every `uint` a decimal string without a sign, a space or a leading zero, every hash and signature lowercase, every address checksummed. A signature is 65 bytes with an `s` of at most half the curve's order and a `v` of 27 or 28, the one form the contract recovers |
@@ -111,13 +111,13 @@ restore of its database. A settled cursor misses none: save it and resume from i
 The casino counts requests in fixed 60-second windows, each starting with a key's first request. A budget tracks at
 most 1,024 keys and drops the oldest to make room. A spent budget answers `429` `rate-limited`.
 
-| Budget                                                                                          | Per       | Requests a minute |
-| ----------------------------------------------------------------------------------------------- | --------- | ----------------- |
-| Every request but `OPTIONS`                                                                     | Client IP | 6,000             |
-| Registering a channel the casino does not know, asking a uname, a Discord code and unlinking it | Client IP | 60                |
-| Channel requests, after authentication                                                          | Channel   | 6,000             |
-| Game server requests, after authentication                                                      | Server    | 6,000             |
-| Publishing games                                                                                | Channel   | 200               |
+| Budget                                                                                          | Per                | Requests a minute |
+| ----------------------------------------------------------------------------------------------- | ------------------ | ----------------- |
+| Every request but `OPTIONS`                                                                     | Client IP          | 6,000             |
+| Registering a channel the casino does not know, asking a uname, a Discord code and unlinking it | Client IP          | 60                |
+| Channel and account requests, after authentication                                              | Channel or account | 6,000             |
+| Game server requests, after authentication                                                      | Server             | 6,000             |
+| Publishing games                                                                                | Account            | 200               |
 
 The client IP is the connection's address; behind the production proxy it is the last `X-Forwarded-For` entry.
 
@@ -132,9 +132,10 @@ of at most 4 games at once, and the casino holds at most 128 waits; one more ans
 The casino stops signing while its chain observation fails or is more than 60 seconds old, and after a start or a
 reorganisation of the chain, until it has read the contract's latest logs again (`reconciling`);
 [`GET /api/status`](public.md#get-apistatus) shows why, in `status`, `stale` and `observationError`. Meanwhile every
-`POST` answers `503` `paused`, except demo ETH, a uname, the activation of a channel the casino knows and an exact retry
-of a recorded operation; so do `GET /api/fund`, `GET /api/developer-bets`, `GET /api/account/payouts` and
-`GET /api/account/developer-bets`. Every other read goes on.
+`POST` answers `503` `paused`, except demo ETH, a Discord code, the uname of an account the casino has met, the
+activation of a channel the casino knows and an exact retry of a recorded operation; so do `GET /api/fund`,
+`GET /api/developer-bets`, `GET /api/account/payouts`, `GET /api/account/developer-bets` and
+`GET /api/account/game-history`. Every other read goes on.
 
 Once a write to its database fails, the casino stops until it restarts: every request, reads and `OPTIONS` included,
 answers `503` `paused`.
@@ -151,7 +152,7 @@ refusal, such as a database's, is answered `refused` with the text "Refused" and
 | -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid`            | 400    | A field, query parameter, cursor or signature in the request is malformed or does not match what it names, or the body holds text that is not well-formed or holds a NUL. An operation whose details break [the details rules](../reference/signed-messages.md#details-and-memo) answers `409` with this code         |
 | `unauthorized`       | 401    | The token is missing, expired, too far ahead, wrongly signed or another account's, the channel is unknown, or a key that is not a game's server asks for the game's rounds, casino bets, settlements or a wait for its bets                                                                                           |
-| `not-found`          | 404    | No such path, name, game, round, developer bet or history record, an account that verified no Discord account, or no demo ETH or Discord server here                                                                                                                                                                  |
+| `not-found`          | 404    | No such path, name, account, game, round, developer bet or history record, or no demo ETH or Discord server here. Unlinking from an account that verified no Discord account answers `409` with this code                                                                                                             |
 | `unsupported-method` | 405    | The path does not take this method                                                                                                                                                                                                                                                                                    |
 | `unacknowledged`     | 409    | The previous reply's checkpoint is not countersigned: the acknowledgment is missing or names another checkpoint                                                                                                                                                                                                       |
 | `channel-closed`     | 409    | The channel is closing or closed, or is not its account's current one                                                                                                                                                                                                                                                 |
@@ -167,7 +168,5 @@ refusal, such as a database's, is answered `refused` with the text "Refused" and
 | `busy`               | 429    | A queue is full, four channel registrations are in progress, or a wait for developer bets is one too many                                                                                                                                                                                                             |
 | `paused`             | 503    | The casino has stopped signing                                                                                                                                                                                                                                                                                        |
 
-A declined operation is not an error. It is a `200` reply with `status: "rejected"`, a rejection checkpoint and a
-`reason`; `used: true` marks a game's operation its player already carried out on another channel. The proposal has
-`casinoSignature: "0x"`. The wallet verifies and signs it, then repeats the operation with `rejectionSignature` for the
-casino to complete the joint checkpoint ([operations](channels.md#post-apichannelsidoperations)).
+A declined operation is not an error: it is a `200` reply with `status: "rejected"`
+([operations](channels.md#post-apichannelsidoperations)).

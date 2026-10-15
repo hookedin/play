@@ -54,18 +54,18 @@ import * as readers from './readers.ts';
 import type { Profile, Redeem } from './readers.ts';
 import {
   ChainObserver,
+  confirmationsOn,
   createRpcProvider,
   requireIndependentRpc,
-  requireCanonicalBlock,
 } from '../protocol/chain-observer.ts';
 import { mapBounded } from '../protocol/concurrency.ts';
 import { BrowserStore } from './storage.ts';
-import { saveAccounts, readAccounts } from './accounts.ts';
+import { saveAccount, readAccounts } from './accounts.ts';
 import { verifyDeployment } from '../protocol/deployment.ts';
-import trustedArtifact from './contract-artifact.ts';
+import trustedArtifact from '../protocol/contract-artifact.ts';
 import { GameSessions } from './wallet-games.ts';
 import { addressReceipt, inbound } from './wallet-transactions.ts';
-export interface WalletOptions {
+interface WalletOptions {
   casinoURL?: string;
   network?: string;
   onChange?: (wallet: CasinoWallet) => void;
@@ -113,7 +113,6 @@ export interface WalletChannel {
   /** The channel as the contract holds it, at the last look; null for one imported and not looked at yet. */
   onchain: OnchainChannel | null;
   claim?: Claim | null;
-  observedAt?: number;
   lastResponse?: { evidence: Evidence } | null;
   /** The casino's quote for this channel's next casino bet, from its reply to the last operation or asked for. */
   quote?: Quote;
@@ -175,7 +174,7 @@ export interface Fees {
   type?: number;
 }
 /** What the wallet shows of itself, worked out from its state on every render. */
-export interface PublicState {
+interface PublicState {
   address: string;
   /** The signed balance, with what was deposited into the channel and not taken in yet. */
   balance: bigint;
@@ -183,7 +182,6 @@ export interface PublicState {
   nativeBalance: bigint;
   channelId: string | null;
   channelStatus: bigint;
-  withdrawable: bigint;
   principal: bigint;
   collateral: bigint;
   protection: ReturnType<typeof protection> | null;
@@ -209,7 +207,6 @@ export interface PublicState {
     paid: bigint;
     winningsRemaining: bigint;
     collectable: bigint;
-    observedAt?: number;
   }[];
 }
 /** The game an operation belongs to, saved with the pending request so a reload can attribute its receipt. */
@@ -434,14 +431,7 @@ export class CasinoWallet extends GameSessions {
   get operator(): string {
     return this.config.operator;
   }
-  validateConfiguredNetwork() {
-    if (this.config?.chainId !== this.expectedChainId)
-      throw new Error(
-        `This client requires ${this.networkName} (chain ${this.expectedChainId}). The casino reports chain ${this.config?.chainId ?? 'unknown'}.`,
-      );
-  }
   async assertNetwork() {
-    this.validateConfiguredNetwork();
     // Read the current chain directly, then pin this same chain ID on the transaction.
     if (BigInt(await this.provider.send('eth_chainId', [])) !== this.expectedChainId)
       throw new Error(
@@ -483,9 +473,8 @@ export class CasinoWallet extends GameSessions {
     } catch (error: any) {
       serviceError = error.message;
     }
-    this.config = { ...casino, ...trusted, confirmations: this.network === 'local' ? 1 : 2 };
+    this.config = { ...casino, ...trusted, confirmations: confirmationsOn(this.expectedChainId) };
     this.recoveryOnly = Boolean(serviceError);
-    this.validateConfiguredNetwork();
     this.provider = createRpcProvider(this.config.rpcUrl, this.expectedChainId);
     if (this.network !== 'local') {
       requireIndependentRpc(this.config.rpcUrl, this.config.witnessRpcUrl);
@@ -606,10 +595,7 @@ export class CasinoWallet extends GameSessions {
         this.config.contractAddress.toLowerCase() +
         ':' +
         address.toLowerCase();
-      const saved = await saveAccounts(this.storage, this.expectedChainId, {
-        privateKeys: [signer.privateKey],
-        select,
-      });
+      const saved = await saveAccount(this.storage, this.expectedChainId, signer.privateKey, select);
       this.savedAddresses = Object.keys(saved.accounts);
       Object.assign(this, {
         signer,
@@ -774,14 +760,14 @@ export class CasinoWallet extends GameSessions {
   }
   /** Ask the casino something for this account itself, whatever its channels: its uname, and verifying its Discord
    * account. */
-  accountRequest(this: CasinoWallet, action: string) {
+  accountRequest(action: string) {
     return this.api(`/api/account/${action}`, {});
   }
   /** Ask the casino for this account's uname, with its profile: a uname is the account's before its first deposit,
    * and asking is how the casino meets an account that has none, so others find it by its name. Whether the casino
    * registers the account's channel before any deposit comes with it. A profile already here came from a later reply,
    * and stays. */
-  async lookUpNames(this: CasinoWallet) {
+  async lookUpNames() {
     if (this.recoveryOnly) return;
     const address = this.address;
     const { uname, profile, registers } = unameReply(await this.accountRequest('uname'));
@@ -793,43 +779,33 @@ export class CasinoWallet extends GameSessions {
   }
   /** Every channel reply carries both names its player answers to, and a registered channel means the casino has met
    * the account, so its public profile exists. */
-  noteNames(this: CasinoWallet, { uname, discordUsername }: { uname: string; discordUsername: string | null }) {
+  noteNames({ uname, discordUsername }: { uname: string; discordUsername: string | null }) {
     if (uname === this.uname && discordUsername === this.discordUsername && this.profile) return;
     Object.assign(this, { uname, discordUsername, profile: null });
     this.render();
-    void this.refreshProfile().catch(() => {});
-  }
-  /** This account's public record, read from the route everyone reads it from. */
-  async refreshProfile(this: CasinoWallet) {
-    if (!this.uname) return null;
-    const profile = readers.profile(await this.api(`/api/players/~${this.uname}`));
-    if (profile.uname === this.uname) {
-      this.profile = profile;
-      this.discordUsername = profile.discordUsername;
-      this.render();
-    }
-    return this.profile;
+    void this.refreshOwnProfile().catch(() => {});
   }
   /** A code to run `/verify` with in the HookedIn Discord, `{code, expires}`: the member who runs it gives this account
    * their Discord username to go by. */
-  async discordCode(this: CasinoWallet) {
+  async discordCode() {
     return read.object<{ code: string; expires: number }>({ code: read.text, expires: read.time })(
       await this.accountRequest('discord/code'),
     );
   }
-  /** This account's own profile, asked again: how the wallet learns the name `/verify` gave it. */
-  async refreshOwnProfile(this: CasinoWallet) {
+  /** This account's own profile, asked again: how the wallet learns the name `/verify` gave it, and the profile a
+   * channel's reply names. */
+  async refreshOwnProfile() {
     const address = this.address,
       { profile } = unameReply(await this.accountRequest('uname'));
     if (this.address === address) this.takeProfile(profile);
     return this.profile;
   }
   /** Give up the Discord account this account verified: it is shown by its uname again. */
-  async unlinkDiscord(this: CasinoWallet) {
+  async unlinkDiscord() {
     return this.takeProfile(readers.profile(await this.accountRequest('discord/unlink')));
   }
   /** This account's profile as the casino answers the account itself with it, and the names it shows. */
-  takeProfile(this: CasinoWallet, profile: Profile) {
+  takeProfile(profile: Profile) {
     Object.assign(this, { profile, uname: profile.uname, discordUsername: profile.discordUsername });
     this.render();
     return profile;
@@ -841,10 +817,10 @@ export class CasinoWallet extends GameSessions {
    * channel can still withdraw a game that turned out to be broken. Returns the account's profile, each game with the
    * ID the casino gave it.
    */
-  async publishGame(this: CasinoWallet, name: string, url: string | null, id?: string) {
+  async publishGame(name: string, url: string | null, id?: string) {
     if (url && !this.playable) throw new Error('Open a balance to publish games');
     return this.takeProfile(
-      readers.profile(await this.api('/api/account/games', { name: name.trim(), url, ...(id ? { game: id } : {}) })),
+      readers.profile(await this.api('/api/account/games', { name, url, ...(id ? { game: id } : {}) })),
     );
   }
   /** The withdrawals the contract owes from the channel `c`, in the order it records them, each with the deposits its
@@ -881,8 +857,6 @@ export class CasinoWallet extends GameSessions {
       nativeBalance: this.nativeBalance,
       channelId: c?.opening.channelId || null,
       channelStatus: onchain?.status ?? STATUS.active,
-      // What a withdrawal can take.
-      withdrawable: this.withdrawable(),
       // The deposits the contract still holds for this balance, and the collateral locked into it.
       principal: open ? onchain.principal : 0n,
       collateral: open ? onchain.collateral : 0n,
@@ -913,10 +887,8 @@ export class CasinoWallet extends GameSessions {
       disputeHold: ending?.disputeHold ?? 0n,
       // What the contract still owes: closed balances, under their channels, and withdrawals it has not paid in full.
       claims: [
-        ...Object.values(this.channels).flatMap(({ claim, opening, observedAt }) =>
-          claim
-            ? [{ id: opening.channelId, channelId: opening.channelId, to: claim.recipient, observedAt, ...claim }]
-            : [],
+        ...Object.values(this.channels).flatMap(({ claim, opening }) =>
+          claim ? [{ id: opening.channelId, channelId: opening.channelId, to: claim.recipient, ...claim }] : [],
         ),
         ...this.history
           .filter(entry => entry.withdrawal && entry.recorded && !entry.paid)
@@ -993,7 +965,6 @@ export class CasinoWallet extends GameSessions {
     for (const [key, onchain, claim] of records) {
       this.channels[key].onchain = onchain;
       this.channels[key].claim = claim;
-      this.channels[key].observedAt = Date.now();
     }
   }
   async refreshLocked({ channelId: also }: { channelId?: string | null } = {}) {
@@ -1101,10 +1072,7 @@ export class CasinoWallet extends GameSessions {
         const activity = new Map(
           (await this.observeTransactionHistory(observation.block, history)).map(entry => [entry.operationId, entry]),
         );
-        await observer.corroborate('wallet activity block', async rpc => {
-          await requireCanonicalBlock(rpc, observation.block);
-          return observation.block.hash;
-        });
+        await observer.requireCanonical(observation.block);
         await commit(() => {
           this.applyChannelObservations(
             records.filter(([key]) => key !== this.channelId && before.get(key) === json(this.channels[key])),
@@ -1276,23 +1244,15 @@ export class CasinoWallet extends GameSessions {
   disputesClose(channel: WalletChannel) {
     return this.disputable(channel) && channel.state.sequence + 1n > channel.onchain!.closingSequence;
   }
-  async withSavedRecord<T>(read: (record: any) => T | Promise<T>) {
+  /** The recovery bundle of a channel, the current one by default, as this browser saved it: its latest evidence, the
+   * withdrawals the contract may still owe something, and a casino bet the casino has not settled. */
+  async exportEvidence(channelId?: string | null): Promise<EvidenceBundle> {
     if (this.busy) throw new Error('Wait for the current wallet operation');
     this.busy = true;
     try {
       await this.refreshing?.catch(() => {});
       const record = await this.storage.get(this.storageKey);
       if (!record) throw new Error('No wallet record saved');
-      return await read(record);
-    } finally {
-      this.busy = false;
-      this.render();
-    }
-  }
-  /** The recovery bundle of a channel, the current one by default: its latest evidence, the withdrawals the contract
-   * may still owe something, and a casino bet the casino has not settled. */
-  async exportEvidence(channelId?: string | null): Promise<EvidenceBundle> {
-    return this.withSavedRecord(async record => {
       const c = record.channels[channelId ?? record.channelId ?? this.closingChannel?.opening.channelId];
       if (!c) throw new Error('No channel evidence saved');
       return {
@@ -1308,7 +1268,10 @@ export class CasinoWallet extends GameSessions {
         // A casino bet the casino has not settled, which a watchtower disputes before its quote expires.
         ...(this.disputable(c) ? { dispute: { step: this.disputeEvidence(c).step, quote: c.pending.quote } } : {}),
       };
-    });
+    } finally {
+      this.busy = false;
+      this.render();
+    }
   }
   /** Take up a recovery bundle the player picked, as JSON holds it. */
   async importEvidence(file: any) {
@@ -1348,7 +1311,7 @@ export class CasinoWallet extends GameSessions {
         } catch {
           throw new Error('The bundle names a withdrawal that is not one this account and the casino signed');
         }
-        const id = hashOperation(this.domain, op).toLowerCase();
+        const id = hashOperation(this.domain, op);
         if (known.has(id)) continue;
         known.add(id);
         withdrawals.push({

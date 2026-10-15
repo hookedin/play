@@ -411,6 +411,7 @@ label {
   border-left: 1px solid var(--line);
   background: none;
   color: inherit;
+  anchor-name: --game-title;
 }
 /* The menu under the game's name, which holds its proofs and its bets, says it is one. */
 .game-title::after {
@@ -427,9 +428,6 @@ label {
   color: #cfc2ff;
 }
 /* Under the game's name: its bets, the player's own and everyone's. */
-.game-title {
-  anchor-name: --game-title;
-}
 .account-menu.game-menu {
   inset: auto;
   width: auto;
@@ -1428,9 +1426,6 @@ body.elsewhere #elsewhere {
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.boxed + .boxed {
-  margin-top: 12px;
-}
 .boxed p {
   margin: 10px 0;
   font-size: 13px;
@@ -2142,30 +2137,6 @@ button.bet-row:hover {
   flex: 1 1 220px;
   width: auto;
 }
-.fold summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 14px;
-  list-style: none;
-  cursor: pointer;
-}
-.fold summary::-webkit-details-marker {
-  display: none;
-}
-.fold summary h3::after {
-  content: ' +';
-  color: var(--accent);
-}
-.fold[open] summary h3::after {
-  content: ' −';
-}
-.fold[open] summary {
-  margin-bottom: 14px;
-}
-.fold > p + p {
-  margin-top: 8px;
-}
 
 .footer {
   display: flex;
@@ -2212,7 +2183,6 @@ body:has(#page-play:not(.hidden)) .footer {
   }
   .brand span,
   .account-name,
-  .game-title .handle,
   .game-title .game-icon,
   /* Playing, a phone has room for one amount: the game's allowance. */
   .game-allowance:not(.hidden) + .wallet-button .wallet-button-amount {
