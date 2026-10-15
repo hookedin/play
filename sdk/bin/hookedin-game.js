@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// hookedin-game build [dir ...] | serve [dir] — turn a game's src/ into dist/, the folder any static host serves as is.
+// hookedin-game build [dir ...] | serve [dir] — turn a game's src/ into dist/, the folder any static host serves as is,
+// or serve it as it changes, beside a local wallet with pretend money.
 // A game is its URL: dist/index.html is the page the wallet frames, and dist/icon.svg the icon it shows the game by.
 import fs from 'node:fs';
 import http from 'node:http';
@@ -49,13 +50,30 @@ export async function buildGame(root = process.cwd(), dist = path.join(root, 'di
   );
 }
 
+/** What a page served while its sources are watched runs: it loads itself again whenever the server says so. A game
+ * that reloads itself keeps its allowance in the wallet. */
+const RELOAD =
+  "const reload = new EventSource('/__reload');\nreload.addEventListener('message', () => location.reload());\n// Closed as the page goes, the stream ends cleanly rather than cut off.\naddEventListener('pagehide', () => reload.close());\n";
+
 /**
  * Serve a built directory the way its static host does: its files, the headers of its `_headers` file, and the page
  * for any path without an extension. `config`, when given, replaces config.js, so a launcher can point the wallet at
  * its casino. `build`, when given, builds the directory again before every page load, so a change shows on reload.
+ * `watched`, when given, is the directory whose changes reload every page open from this server.
  */
-export function createStaticServer(dir, config, build) {
+export function createStaticServer(dir, config, build, watched) {
   let serving = Promise.resolve();
+  /** The open pages, each a stream the server tells to reload, a moment after the last change. */
+  const pages = new Set();
+  let changed;
+  const watcher =
+    watched &&
+    fs.watch(watched, { recursive: true }, () => {
+      clearTimeout(changed);
+      changed = setTimeout(() => {
+        for (const page of pages) page.write('data: reload\n\n');
+      }, 100);
+    });
   /** The headers every file is served with: the `/*` block of the `_headers` file. */
   const readHeaders = async () => {
     const headers = { 'Cache-Control': 'no-store' };
@@ -66,7 +84,16 @@ export function createStaticServer(dir, config, build) {
     }
     return headers;
   };
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
+    // A page's stream stays open, so it is answered here and not behind the rebuilds.
+    if (watcher && req.url === '/__reload') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' }).flushHeaders();
+      pages.add(res);
+      req.on('close', () => pages.delete(res));
+      return;
+    }
+    if (watcher && req.url === '/__reload.js')
+      return void res.writeHead(200, { 'Content-Type': types['.js'], 'Cache-Control': 'no-store' }).end(RELOAD);
     const respond = async () => {
       let headers = await readHeaders();
       if (req.method === 'OPTIONS') return void res.writeHead(204, headers).end();
@@ -97,6 +124,8 @@ export function createStaticServer(dir, config, build) {
           const file = path.join(dir, route ? 'index.html' : pathname);
           data = await fs.promises.readFile(file);
           type = types[path.extname(file)] ?? 'application/octet-stream';
+          if (watcher && file.endsWith('.html'))
+            data = data.toString().replace('</head>', '<script type="module" src="/__reload.js"></script></head>');
         }
         res.writeHead(200, { ...headers, 'Content-Type': type });
         res.end(req.method === 'HEAD' ? undefined : data);
@@ -109,6 +138,94 @@ export function createStaticServer(dir, config, build) {
     if (build) await (serving = serving.catch(() => {}).then(respond));
     else await respond();
   });
+  server.on('close', () => watcher?.close());
+  return server;
+}
+
+/** The local wallet's page: its top bar over the game, and its script, `local-wallet.ts`, built as the server starts. */
+const LOCAL_WALLET = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local wallet · HookedIn</title>
+    <link rel="icon" href="data:," />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; display: flex; flex-direction: column; height: 100vh; background: #0b0e15; color: #edf0f5;
+        font: 14px/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      header {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px;
+        border-bottom: 1px solid #252b39;
+      }
+      header > strong { margin-right: auto; }
+      small { color: #8a91a0; }
+      form { display: flex; align-items: center; gap: 6px; }
+      input {
+        width: 8em; padding: 6px 8px; border: 1px solid #343b4d; border-radius: 8px; background: #121722;
+        color: inherit; font: inherit;
+      }
+      button {
+        padding: 6px 12px; border: 0; border-radius: 8px; background: #a68cff; color: #150f26; font: inherit;
+        font-weight: 600; cursor: pointer;
+      }
+      #reload { border: 1px solid #343b4d; background: #181e2b; color: inherit; }
+      #problem { flex-basis: 100%; margin: 0; color: #ef7d95; }
+      #problem:empty { display: none; }
+      main { flex: 1; display: flex; }
+      iframe { flex: 1; border: 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <strong>Local wallet <small>· pretend money</small></strong>
+      <span><small>Balance</small> <span id="balance"></span></span>
+      <form id="allow">
+        <small>Allowance</small> <span id="allowance"></span>
+        <input id="amount" inputmode="numeric" placeholder="METH" aria-label="Allowance in METH" autocomplete="off" />
+        <button type="submit">Allow</button>
+      </form>
+      <button id="reload" type="button">Reload game</button>
+      <p id="problem" role="alert"></p>
+    </header>
+    <main id="game"></main>
+    <script type="module" src="/local-wallet.js"></script>
+  </body>
+</html>
+`;
+
+/**
+ * Serve the game in `root` at http://127.0.0.1:<port>/, built again on every page load and reloaded on every change to
+ * its src/, and beside it, at http://localhost:<port>/, the local wallet: the game framed with pretend money. One port
+ * under two names is two origins, as a wallet and its game always are. Resolves once the server listens.
+ */
+export async function serveGame(root, port) {
+  await buildGame(root);
+  const [script] = (
+    await build({
+      entryPoints: [path.join(sdk, 'local-wallet.ts')],
+      bundle: true,
+      minify: true,
+      format: 'esm',
+      platform: 'browser',
+      target: 'es2022',
+      write: false,
+    })
+  ).outputFiles;
+  const local = { '/': [LOCAL_WALLET, types['.html']], '/local-wallet.js': [script.contents, types['.js']] };
+  const game = createStaticServer(path.join(root, 'dist'), undefined, () => buildGame(root), path.join(root, 'src'));
+  const server = http.createServer((req, res) => {
+    if (new URL(`http://${req.headers.host}`).hostname !== 'localhost') return void game.emit('request', req, res);
+    const page = local[new URL(req.url, 'http://localhost').pathname];
+    if (!page) return void res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
+    res.writeHead(200, { 'Content-Type': page[1], 'Cache-Control': 'no-store' }).end(page[0]);
+  });
+  // The game's server stops watching its sources with this one.
+  server.on('close', () => game.close());
+  await new Promise(resolve => server.listen(port, '127.0.0.1', resolve));
+  return server;
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -121,13 +238,10 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
         console.log(`Built ${path.join(dir, 'dist')}/`);
       }
     else if (command === 'serve') {
-      const root = path.resolve(dirs[0] ?? '.'),
-        port = Number(process.env.PORT ?? 4185);
-      await buildGame(root);
-      createStaticServer(path.join(root, 'dist'), undefined, () => buildGame(root)).listen(port, '127.0.0.1', () =>
-        console.log(
-          `Game: http://127.0.0.1:${port}/\nIn the wallet, choose Open a game by its URL and paste that address.\nEvery page load rebuilds the game, so reload to see a change.`,
-        ),
+      const port = Number(process.env.PORT ?? 4185);
+      await serveGame(path.resolve(dirs[0] ?? '.'), port);
+      console.log(
+        `Try the game with pretend money: http://localhost:${port}/\nPlay it with ETH at https://play.hookedin.com: choose Open a game by its URL and paste http://127.0.0.1:${port}/\nSaving a file in src/ builds the game again and reloads it, keeping its allowance.`,
       );
     } else {
       console.error('Usage: hookedin-game build [dir ...] | serve [dir]');

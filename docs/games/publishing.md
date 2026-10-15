@@ -25,8 +25,12 @@ each game folder, the current one by default, it:
 4. adds the SDK's `shared.css` and `brand/hookedin-mark.svg`, and writes `_headers`.
 
 `dist/` is the whole game. `hookedin-game serve [dir]`, which the template's `npm run dev` runs, builds it and serves it
-at `http://127.0.0.1:4185/` (`PORT` moves it) with its `_headers`, building again on every page load, so a change shows
-on reload. A failure prints its message and exits with status 1.
+at `http://127.0.0.1:4185/` (`PORT` moves it) with its `_headers`. It builds again on every page load, and a change to
+a file in `src/` reloads every page open from it, through a script it adds to the page it serves and never to `dist/`:
+the game reloads wherever it is open, keeping its allowance in the wallet. Beside it, at `http://localhost:4185/`, it
+serves a local wallet that plays the game with pretend money
+([try it with pretend money](quick-start.md#try-it-with-pretend-money)). A failure prints its message and exits with
+status 1.
 
 ### The `_headers` file
 

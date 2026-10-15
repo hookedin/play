@@ -6,13 +6,14 @@ sidebar:
 ---
 
 A HookedIn game is a static web page that the wallet frames, known by its URL. This page takes you from the game
-template to a settled bet: you run the template's bridge probe on your machine and play it from the public wallet.
+template to a settled bet: you run the template's bridge probe on your machine, try it with pretend money, and play it
+from the public wallet.
 
 ## What you need
 
 - Node 26 or later.
-- A HookedIn wallet with a balance: open [play.hookedin.com](https://play.hookedin.com) and deposit ETH
-  ([getting started](../wallet/getting-started.md#deposit)).
+- To play it with ETH, a HookedIn wallet with a balance: open [play.hookedin.com](https://play.hookedin.com) and deposit
+  ETH ([getting started](../wallet/getting-started.md#deposit)).
 
 ## Create the game
 
@@ -30,8 +31,9 @@ npm test
 its rules ([testing](testing.md)): a first success, with no ETH. The template depends on `@hookedin/play` at its `main`
 branch ([packages and imports](../sdk/index.md)), which changes without notice during the
 [open beta](../index.md#open-beta). `src/` is the game: `index.html`, `style.css`, [`icon.svg`](publishing.md#the-icon)
-and `game.ts`, here the probe. The workflow deploys the game ([publishing](publishing.md)). There is nothing to
-configure: the account that publishes the game is its developer.
+and `game.ts`, here the probe. The workflow deploys the game ([publishing](publishing.md)), and `AGENTS.md` tells an AI
+coding agent where the docs and examples are and what a game does. There is nothing to configure: the account that
+publishes the game is its developer.
 
 ## Run it
 
@@ -39,8 +41,18 @@ configure: the account that publishes the game is its developer.
 npm run dev
 ```
 
-This runs [`hookedin-game serve`](publishing.md#build): it builds `src/` into `dist/`, serves it at
-`http://127.0.0.1:4185/` and builds again on every page load, so a change shows on reload. `PORT` moves it.
+This runs [`hookedin-game serve`](publishing.md#build): it builds `src/` into `dist/` and serves it at
+`http://127.0.0.1:4185/`. Saving a file in `src/` builds it again and reloads the game wherever it is open, in the
+wallet too, keeping its allowance. `PORT` moves it.
+
+## Try it with pretend money
+
+Open `http://localhost:4185/`, the local wallet `npm run dev` serves beside the game: it frames the game with a million
+pretend METH, and **Allow** in its top bar gives the game an allowance. Its wallet and bridge are the wallet's own, so
+the game behaves as it does at play.hookedin.com; its casino is the stand-in `npm test` uses, which settles every bet
+by the casino's rules, in the page. It needs no wallet, ETH or network. It takes casino bets and payments, and declines
+developer bets, which need the real casino. `wallet.showBet` prints the bet's receipt to the browser's console, and
+reloading the local wallet starts it afresh.
 
 ## Open it in the wallet
 
