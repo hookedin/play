@@ -1181,8 +1181,8 @@ export class CasinoWallet extends GameSessions {
       }
       headers.authorization = token.header;
     }
-    // A request that never reached the casino, or whose reply never came, says so in words: the browser's own text is
-    // a developer's.
+    // A request that never reached the casino, or whose reply never came, says so in words that stay true once the
+    // casino is back: the browser's own text is a developer's.
     const response = await fetch(this.casinoURL + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers,
@@ -1193,7 +1193,7 @@ export class CasinoWallet extends GameSessions {
       throw new Error(
         error.name === 'TimeoutError'
           ? 'The casino did not answer in time.'
-          : 'Can’t reach the casino. Check your connection.',
+          : 'Couldn’t reach the casino. Check your connection, then try again.',
       );
     });
     const reader = response.body!.getReader(),

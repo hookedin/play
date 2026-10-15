@@ -833,7 +833,7 @@ main:has(> #page-play:not(.hidden)) {
 .banner > span {
   flex: 1 1 280px;
 }
-main:has(> #page-play:not(.hidden)) > .banner {
+main:has(> #page-play:not(.hidden)) > #banners > .banner {
   margin: 12px 16px;
 }
 /* Popovers, so that they show above an open dialog. */

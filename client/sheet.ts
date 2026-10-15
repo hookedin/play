@@ -102,13 +102,13 @@ function pendingSummary({ kind, request, details, game, operationId, quote }: Pe
   const what = `${exact(request.amount)} METH ${OPERATIONS[kind]!.name}${game ? ` in ${game.name}` : ''}`,
     failed = wallet.pendingError?.operationId === operationId ? wallet.pendingError : null;
   return (
-    `Your ${what} is saved and unanswered (operation ${short(details.id)}, sequence ${wallet.channel!.state.sequence + 1n}). ` +
-    'Retry sends exactly the same request again.' +
+    `Your ${what} got no answer. Retry sends exactly the same request again.` +
     (wallet.disputable()
-      ? ` The casino's quote covers this bet until ${new Date(Number(quote!.message.expiresAt) * 1000).toLocaleString()}: Close without the casino disputes it, and the casino then has 7 days to settle it on-chain, or it counts as won.`
+      ? ` If the casino never answers, its quote covers this bet until ${new Date(Number(quote!.message.expiresAt) * 1000).toLocaleString()}: Close without the casino disputes it, and the casino then has 7 days to settle it on-chain, or it counts as won.`
       : wallet.bound()
         ? ' The casino left this bet unanswered until its quote expired, so it can no longer be disputed, and the wallet takes no decline of it: Close without the casino ends this balance, and the bet with it.'
         : '') +
+    ` Operation ${short(details.id)}, sequence ${wallet.channel!.state.sequence + 1n}.` +
     (failed ? ` Last attempt: ${failed.message.replace(/\.$/, '')}${failed.code ? ` (${failed.code})` : ''}.` : '')
   );
 }
@@ -307,6 +307,8 @@ export function showWallet(tab: WalletTab) {
     button.setAttribute('aria-selected', String(button.dataset.tab === tab));
   showPanel();
   const dialog = $<HTMLDialogElement>('wallet-dialog');
+  // The page's banners come into the sheet while it is open, where their buttons can be pressed.
+  if (!dialog.contains($('banners'))) dialog.querySelector('.sheet-head')!.after($('banners'));
   showSheet(dialog);
   // On a phone the tabs scroll sideways: the one shown is never cut off.
   dialog.querySelector<HTMLElement>(`[data-tab="${tab}"]`)!.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -351,7 +353,7 @@ const sendBlocked = ({ open, ready, closing }: SendState, verb: string) =>
           : inbound(wallet.pending?.kind)
             ? `A deposit is on its way into your balance. ${verb} once it has arrived.`
             : wallet.transactionIntent || wallet.pending
-              ? 'Finish the operation in flight first.'
+              ? 'Finish the operation above first.'
               : null;
 /** Withdraw: part of the signed balance, or all of it with Max, which the casino then pays to the address entered. */
 function renderWithdraw(state: SendState) {
@@ -1117,6 +1119,7 @@ $('wallet-dialog')
 // The player closed the wallet, where a route did not: the page it opened over comes back, as Back brings it, or the
 // lobby, under a wallet opened by its link.
 $('wallet-dialog').addEventListener('close', () => {
+  $('elsewhere').after($('banners'));
   wallet.showDeposit(false);
   if (!walletRoute()) return;
   if (history.state?.over) history.back();

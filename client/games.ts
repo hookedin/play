@@ -437,6 +437,10 @@ $<HTMLButtonElement>('allowance-deposit').addEventListener('click', () => {
   openWallet('deposit');
 });
 $('game-allowance').addEventListener('click', openAllowanceDialog);
+// Closed, the dialog hands the keyboard back to the game, whose own keys, such as Space to play, then work at once.
+$('allowance-dialog').addEventListener('close', () => {
+  if (active && !document.querySelector('dialog[open]')) active.frame.focus();
+});
 $<HTMLInputElement>('allowance-slider').addEventListener('input', () => {
   $<HTMLInputElement>('allowance-amount').value = String(
     sliderAmount(allowable(), $<HTMLInputElement>('allowance-slider').value) / METH,
