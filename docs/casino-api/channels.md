@@ -414,12 +414,14 @@ name: accents dropped, lowercase, each run of anything but `a-z` and `0-9` one h
 Without `game`, the slug says which game: a name whose slug one of the account's games has, taken down since or not, is
 that game, and any other a new one, whose developer the account becomes. With `game`, it is that game. The game is then
 published under `name` at `url`, which renames and moves it, or with a `url` of `null` taken down. A game keeps its ID,
-its bank, its server and its record under any name and at any URL, and publishing one taken down brings it back;
+its bank, its server and its record under any name and at any URL, and publishing one taken down brings it back,
+unless HookedIn holds it taken down;
 publishing a game under the name and at the URL it is published under changes nothing. A player's profile is public:
 [`GET /api/players/:name`](public.md#get-apiplayersname) shows it, and it is this route's reply. Publishing needs a
 balance that plays; taking a game down works whatever the account holds. `invalid` answers a name or URL those rules do
 not allow and a `game` that is not one of the account's ("This is another developer's game"), `refused` a name whose
-slug another of the account's games has ("Another of your games goes by super-dice"), `channel-closed` an account with
+slug another of the account's games has ("Another of your games goes by super-dice") and a game HookedIn holds taken
+down ("HookedIn has taken this game down. Write to support@hookedin.com."), `channel-closed` an account with
 no balance that plays ("Publish games from a balance that plays"), and `too-many` a profile that already publishes 100
 games.
 

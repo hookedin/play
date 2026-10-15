@@ -96,6 +96,11 @@ working. Either way it keeps its bets, its players' receipts, its bank and its p
 is another game, with an ID of its own. Taking it down takes it out of your profile and keeps the rest: publishing it
 again brings it back.
 
+HookedIn takes down a published game that misleads its players, such as one that asks for their keys. It is then
+taken down as if you had done it: it keeps its bank, which stays yours to take out, its server still settles the
+developer bets placed on it, and its record stays. You cannot publish it again until HookedIn lets it go; write to
+support@hookedin.com.
+
 A game with a server gets a key of its own for it. Make a key for the server, keep it there alone, and give its address
 beside the game on **Developer**, as its server key
 ([`POST /api/account/games/server`](../casino-api/channels.md#post-apiaccountgamesserver)): that key then settles the

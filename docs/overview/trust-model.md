@@ -73,6 +73,8 @@ bankroll fund share each carry trust of their own, set out below. To trust the c
   the treasury can withdraw. A dispute locks a disputed bet's win only out of house cash that is free when it is mined,
   as far as the payout limit allows: a treasury that withdraws first, or keeps no house cash, or a limit spent, leaves
   the win to the queue.
+- **Keeping a published game up.** The casino can take a published game down, as its developer can: it leaves its
+  developer's profile and earns nothing, but keeps its bank, the developer bets placed on it and its record.
 - **The bankroll overcommits.** Each quote admits bets against the whole virtual bankroll for a day, so the bets on many
   quotes can together win more than the bankroll holds; what it cannot pay waits in the winnings queue
   ([limitations](architecture.md#limitations)). The bankroll also counts house money the treasury holds off the
