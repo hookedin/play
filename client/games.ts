@@ -437,6 +437,11 @@ $<HTMLButtonElement>('allowance-deposit').addEventListener('click', () => {
   openWallet('deposit');
 });
 $('game-allowance').addEventListener('click', openAllowanceDialog);
+// The open game's page again, in place: it keeps what the player allowed it, as a page that reloads itself does.
+$('game-reload').addEventListener('click', () => {
+  $('game-menu').hidePopover();
+  active?.frame.contentWindow?.location.replace(active.frame.src);
+});
 // Closed, the dialog hands the keyboard back to the game, whose own keys, such as Space to play, then work at once.
 $('allowance-dialog').addEventListener('close', () => {
   if (active && !document.querySelector('dialog[open]')) active.frame.focus();

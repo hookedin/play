@@ -108,7 +108,15 @@ one closest to your game.
 | [Roulette](https://github.com/hookedin/game-roulette)   | Many players' developer bets on one spin, backed by the wheel's casino bets | The whole repository                                                                             |
 | [Crash](https://github.com/hookedin/game-crash)         | Many players on one flight, each a developer bet paid from the game's bank  | The whole repository                                                                             |
 
-The four static games live in play's [games/](../../games/) folder. From play's root, after `npm ci`,
-`node sdk/bin/hookedin-game.js serve games/<id>` serves one at `http://127.0.0.1:4185/`. To make one your own, start a
-repository from the template and copy the game's `src/` and `test/` over it. Blackjack, roulette and crash are
-repositories of their own, each with its README.
+The four static games come with `@hookedin/play`, in [games/](../../games/). To start from one, put it in place of the
+probe, here dice:
+
+```sh
+rm -rf src test
+cp -r node_modules/@hookedin/play/games/dice/src node_modules/@hookedin/play/games/dice/test .
+npm test
+npm run dev
+```
+
+Its tests pass as they are, and **Reload game** in the menu under the game's name loads it again after a change,
+keeping its allowance. Blackjack, roulette and crash are repositories of their own, each with its README.
