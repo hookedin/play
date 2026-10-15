@@ -45,5 +45,10 @@
   },
   "overrides": {
     "tmp": "0.2.7"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "fsevents": true,
+    "workerd": true
   }
 }
