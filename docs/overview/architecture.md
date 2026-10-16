@@ -6,7 +6,7 @@ sidebar:
 ---
 
 HookedIn is one immutable contract, one casino that signs, a wallet that checks everything it can, and games in
-sandboxed frames. The design keeps the fewest parts that are correct: clearly disclosed trust assumptions and manual
+sandboxed frames. The design keeps the fewest parts that are correct: disclosed trust assumptions and manual
 responsibilities are accepted in place of more protocol machinery, and every added authority, service, state or setting
 needs a concrete requirement. [How it works](how-it-works.md) walks through the parts, and [the trust
 model](trust-model.md) says what each is trusted for.
@@ -47,11 +47,11 @@ tables in any game, and with a developer bet for its payment and for whatever it
 
 ## Limitations
 
-**The bankroll overcommits.** A casino bet its quote covers is binding, and a quote holds for a day, so the casino
-cannot take one back once its bankroll has moved. The quotes out at once are not divided between them: each admits bets
-against the whole virtual bankroll as it was when quoted. Together the bets on them can stake more than the Kelly rule
-lets the bankroll take at once, and win more than it holds, which then waits in the winnings queue. The virtual
-bankroll is half the bankroll, a half-Kelly margin and the only one. Dividing the bankroll between the quotes out would
-bound it, at the cost of every player's limits shrinking with the number of players holding a quote. A player who wants
-winnings that wait for nothing buys [collateral](../wallet/closing-and-claims.md#collateral), which takes them out of
-the queue up to its amount.
+**The bankroll overcommits.** A covered casino bet is binding and a quote holds for a day, so the casino cannot take one
+back once its bankroll has moved. The quotes out at once are not divided between them: each admits bets against the
+whole virtual bankroll as it was when quoted. Together their bets can stake more than the Kelly rule lets the bankroll
+take at once, and win more than it holds, which then waits in the winnings queue. The virtual bankroll is half the
+bankroll, a half-Kelly margin and the only one. Dividing the bankroll between the quotes out would bound it, at the cost
+of every player's limits shrinking with the number of players holding a quote. A player who wants winnings that wait for
+nothing buys [collateral](../wallet/closing-and-claims.md#collateral), which takes them out of the queue up to its
+amount.

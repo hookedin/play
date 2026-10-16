@@ -5,11 +5,11 @@ sidebar:
   order: 4
 ---
 
-All amounts are integers in wei. A player's wallet chooses a stake, a chance and a prize. The casino admits the casino
-bet against the virtual bankroll its [quote](../overview/how-it-works.md#quotes) names, half the bankroll when it
-quoted, and sets its commission in the same decision, before it reads the round's secret. The wallet and the contract check the exact terms and the balance arithmetic. Commission is the casino's
-accounting: it is never a debit from the player, the signed operation does not carry it, and the wallet shows it on the
-receipt without verifying it.
+All amounts are integers in wei. The casino admits a casino bet against the virtual bankroll its
+[quote](../overview/how-it-works.md#quotes) names, half the bankroll when it quoted, and sets its commission in the same
+decision, before it reads the round's secret. The wallet and the contract check the exact terms and the balance
+arithmetic. Commission is the casino's accounting: never a debit from the player, not carried by the signed operation,
+and shown on the receipt without the wallet verifying it.
 
 A casino bet is a stake paid to enter and a prize it pays when the round's 64-bit outcome is below its chance. For the
 bankroll it is one wager with two outcomes, and the casino's rule, the Kelly condition for that wager, has a closed
@@ -25,16 +25,14 @@ form.
 | p = t / Q | The probability that the bet wins                                                              |
 | F         | The total commission, accrued on every completed casino bet, won or lost                       |
 
-The house edge the player faces is `e = 1 − pG/S`. The chance is whole outcomes, so the probability is exactly `t/Q`:
-a game chooses `t`, and nothing is rounded afterwards.
+The house edge the player faces is `e = 1 − pG/S`. The chance is whole outcomes, so the probability is exactly `t/Q`: a
+game chooses `t`, and nothing is rounded afterwards.
 
 ## The bankroll's residual wager
 
 Pricing treats the whole commission as removed: the bankroll gains `S − F` when the bet loses and loses `W + F` when it
 wins. The casino keeps its half of the commission in the bankroll's equity, but admission uses these conservative cash
-flows.
-
-For a wager with these two outcomes, the house's Kelly-optimal fraction is:
+flows. For a wager with these two outcomes, the house's Kelly-optimal fraction is:
 
 ```text
 f* = (1 − p) − p(W + F)/(S − F)
@@ -58,28 +56,26 @@ with `F < S` and `W + F < B`. With `F = 0` it reduces to:
 W / B ≤ 1 − p(S + W)/S = e
 ```
 
-A net win of 1% of the virtual bankroll needs at least a 1% house edge, and a bet with less edge is declined. A bet
-that can pay never risks the entire bankroll: the Kelly condition itself excludes that endpoint. There is no other
-percentage or prize cap; the 2^96 bound on amounts and the finite outcome space are the only other bounds. A virtual
-bankroll of nothing admits only a bet that pays less than its stake.
+A net win of 1% of the virtual bankroll needs at least a 1% house edge, and a bet with less edge is declined. A bet that
+can pay never risks the entire bankroll: the Kelly condition itself excludes that endpoint. There is no other percentage
+or prize cap; the 2^96 bound on amounts and the finite outcome space are the only other bounds. A virtual bankroll of
+nothing admits only a bet that pays less than its stake.
 
 ## A casino bet is one wager
 
-A casino bet has two outcomes, so the condition above is the whole of the casino's rule: it is exactly
-`E[X / (B + X)] ≥ 0`, with `X` the bankroll's cash flow and every `B + X > 0`. `assessBet` in
-[risk.ts](../../protocol/risk.ts) checks it in exact integers; its tests replay it against exhaustive small cases and an
-independent integer-root oracle. The casino reserves the bet's liability, `max(W, 0) + F`: what the bankroll can lose
-on it. The contract checks the same condition with `F = 0` when a covered bet is disputed: `W < B` and
-`(B − W)·S·Q ≥ B·t·(S + W)`, or `B + S > G` for a bet that pays at most its stake. Every amount and the virtual bankroll
-are below 2^96, so each side fits in 256 bits.
+A casino bet has two outcomes, so the condition above is the whole of the casino's rule: exactly `E[X / (B + X)] ≥ 0`,
+with `X` the bankroll's cash flow and every `B + X > 0`. `assessBet` in [risk.ts](../../protocol/risk.ts) checks it in
+exact integers, and its tests replay it against exhaustive small cases and an independent integer-root oracle. The
+casino reserves the bet's liability, `max(W, 0) + F`, what the bankroll can lose on it. The contract checks the same
+condition with `F = 0` when a covered bet is disputed: `W < B` and `(B − W)·S·Q ≥ B·t·(S + W)`, or `B + S > G` for a bet
+that pays at most its stake. Every amount and the virtual bankroll are below 2^96, so each side fits in 256 bits.
 
-A game with more outcomes than two plays them as casino bets of two outcomes each, each admitted by itself: a
-single-player game [collapses](../games/collapsing-bets.md) each step into one, and a shared draw is backed in
-[binary steps](../games/developer-bets.md#shared-games-binary-steps).
-
-The criterion is the expected logarithmic growth of
-[Edward Thorp's treatment of Kelly betting](https://web.williams.edu/Mathematics/sjmiller/public_html/341/handouts/Thorpe_KellyCriterion2007.pdf);
-the fee inequality is derived for this protocol's cash flows.
+A game of more outcomes than two plays them as casino bets of two outcomes each, each admitted by itself: a
+single-player game [collapses](../games/collapsing-bets.md) each step into one, and a shared draw is backed in [binary
+steps](../games/developer-bets.md#shared-games-binary-steps). The criterion is the expected logarithmic growth of
+[Edward Thorp's treatment of Kelly
+betting](https://web.williams.edu/Mathematics/sjmiller/public_html/341/handouts/Thorpe_KellyCriterion2007.pdf); the fee
+inequality is derived for this protocol's cash flows.
 
 ## Extracting and splitting the excess
 
@@ -90,19 +86,20 @@ smaller root of the quadratic in `F`, rounded down:
 F = ⌊(Q(B − W + S) − isqrt(Q²(B − W − S)² + 4QBtG)) / 2Q⌋
 ```
 
-`isqrt` is the integer square root, which can leave `F` one above the root: the casino checks the condition exactly,
-and takes one less when it fails. It rounds `F` down to an even number of wei and splits it equally:
+`isqrt` is the integer square root, which can leave `F` one above the root: the casino checks the condition exactly, and
+takes one less when it fails. It rounds `F` down to an even number of wei and splits it equally:
 
 ```text
 developer commission = F / 2
 casino commission    = F / 2
 ```
 
-The developer is the account that publishes the game, and its half goes into the game's bank. A game nobody publishes,
-or one taken down, has none, and all of its commission is the casino's. The rounding leaves under two wei in the bankroll. Every intermediate product is an exact integer.
+The developer is the account that publishes the game, and its half goes into the game's bank; a game nobody publishes,
+or one taken down, has none, and all of its commission is the casino's. The rounding leaves under two wei in the
+bankroll. Every intermediate product is an exact integer.
 
-This defines excess profit as what can be removed while leaving the bankroll a Kelly-compliant residual wager, which is
-[a settled trade-off](../overview/architecture.md#settled-trade-offs). Subtracting two advertised edge percentages is not
+This defines excess profit as what can be removed while leaving the bankroll a Kelly-compliant residual wager, a
+[settled trade-off](../overview/architecture.md#settled-trade-offs). Subtracting two advertised edge percentages is not
 generally correct: it ignores how an outcome-independent commission changes the bankroll's exposure.
 
 The integer examples in [the vectors](../../vectors/protocol.json) (`cases`), in six-decimal illustrative units:
@@ -116,45 +113,43 @@ The integer examples in [the vectors](../../vectors/protocol.json) (`cases`), in
 
 The first and the last lie on the Kelly boundary: the net win's share of the bankroll equals the edge. In the second,
 conservative pricing uses `−101.000100` for a player win and `+98.999900` for a loss, while the bankroll's equity
-changes by `−100.500050` or `+99.499950`, because the casino keeps its half of the commission. Expected revenue is not a
-profit on every bet.
+changes by `−100.500050` or `+99.499950`, because the casino keeps its half of the commission.
 
 A [developer bet](../games/developer-bets.md) is not the bankroll's: the casino neither admits it by Kelly nor prices
-its commission, and nothing in a game's bank is reserved. The casino's part of it is what the settlement of the game's
-server gives it ([the casino's share](../games/developer-bets.md#the-casinos-share)).
+its commission, and nothing in a game's bank is reserved. The casino's part of it is what the game's server's settlement
+gives it ([the casino's share](../games/developer-bets.md#the-casinos-share)).
 
 ## Available capital and concurrency
 
-The casino keeps its half of every commission in the bankroll's equity: a player's loss adds `S − F/2` to the bankroll
-and a win takes `W + F/2`, the developer's half going into the game's bank (a game nobody publishes leaves all of `F` in
-the bankroll). Admission uses the conservative full-fee condition against the quote's virtual bankroll and reserves
-`max(W, 0) + F` while the bet is decided, before it reads the round's secret, so a casino bet it admits settles with
-the commission its admission priced. A bet no quote covers gets a signed rejection, with no commission, revealing
-nothing. A game's casino bet is admitted against the virtual bankroll as it stands, and one that does not fit is
-declined with its round revealed. Reservations last only while a bet is decided, and lower the virtual bankroll quoted
-meanwhile: they do not fund a whole future hand, do not bound what the quotes out at once admit, and do not stop the
-treasury from withdrawing on-chain.
+A player's loss adds `S − F/2` to the bankroll and a win takes `W + F/2`, the developer's half going into the game's
+bank (a game nobody publishes leaves all of `F` in the bankroll). Admission uses the conservative full-fee condition
+against the quote's virtual bankroll and reserves `max(W, 0) + F` while the bet is decided, before it reads the round's
+secret, so a casino bet it admits settles with the commission its admission priced; a bet no quote covers gets a signed
+rejection, with no commission, revealing nothing. A game's casino bet is admitted against the virtual bankroll as it
+stands, and one that does not fit is declined with its round revealed. Reservations last only while a bet is decided,
+and lower the virtual bankroll quoted meanwhile: they do not fund a whole future hand, do not bound what the quotes out
+at once admit, and do not stop the treasury from withdrawing on-chain.
 
-At a consistent confirmed block, in the books that [`GET /api/status`](../casino-api/public.md#get-apistatus) reports
-and defines, the bankroll is:
+At a consistent confirmed block, in the books [`GET /api/status`](../casino-api/public.md#get-apistatus) reports and
+defines, the bankroll is:
 
 ```text
 bankroll = max(0, cash − activeLiabilities − claimLiabilities − reserved − escrow − banks − withdrawals + reserve)
 virtualBankroll = bankroll / 2
 ```
 
-`reserve` is house money the treasury holds off the contract, which the bankroll counts: winnings beyond the
-contract's house cash wait in the [winnings queue](contract.md#the-winnings-queue) until the treasury puts it in.
-`reserved` includes a disputed close's possible payout above the obligation already in the books. A settled win is
-already counted in the player's signed balance. `equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a
-claim on, is the same without `reserved`, `reserve` or the floor at 0: like withdrawals and collateral offers, it counts
-only what the contract holds. A dispute that finalizes above the signed obligation reduces equity as a loss shared by
-all holders, without burning house shares. Investors widen what the Kelly rule admits exactly as the treasury's funding does. Every quote names the whole
-virtual bankroll for a day, so the bankroll [overcommits](../overview/architecture.md#limitations), with half Kelly as
-its margin: Kelly admission neither enforces the casino's solvency nor reserves capital for a whole game.
+`reserve` is house money the treasury holds off the contract, which the bankroll counts: winnings beyond the contract's
+house cash wait in the [winnings queue](contract.md#the-winnings-queue) until the treasury puts it in. `reserved`
+includes a disputed close's possible payout above the obligation already in the books. A settled win is already counted
+in the player's signed balance. `equity`, what [bankroll fund](../wallet/bankroll-fund.md) shares are a claim on, is the
+same without `reserved`, `reserve` or the floor at 0, so it counts only what the contract holds; a dispute that
+finalizes above the signed obligation lowers it, as a loss every holder shares. Investors widen what the Kelly rule
+admits exactly as the treasury's funding does. Every quote names the whole virtual bankroll for a day, so the bankroll
+[overcommits](../overview/architecture.md#limitations), with half Kelly as its margin: Kelly admission neither enforces
+the casino's solvency nor reserves capital for a whole game.
 
-[Collateral](contract.md#collateral) is house cash locked into a channel, by an offer bought or by a dispute, and
-stays the bankroll's: `claimLiabilities` counts only claims, so locking it moves neither the bankroll nor what quotes
-admit, only the house cash a withdrawal can count on. What a channel's close is not owed of it returns to house cash. What
-collateral sells for, at `collateralRate`, a share of its amount paid once, is the bankroll's as the casino's half of a
-commission is: equity rises by it, and the house takes no shares for it.
+[Collateral](contract.md#collateral) is house cash locked into a channel, by an offer bought or by a dispute, and stays
+the bankroll's: `claimLiabilities` counts only claims, so locking it moves neither the bankroll nor what quotes admit,
+only the house cash a withdrawal can count on. What a channel's close is not owed of it returns to house cash. What
+collateral sells for, at `collateralRate`, is the bankroll's as the casino's half of a commission is: equity rises by
+it, and the house takes no shares for it.

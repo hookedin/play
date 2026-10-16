@@ -4,7 +4,7 @@ Pick a win chance, pick a stake, roll. A reference game for [HookedIn](https://p
 
 ## How to play
 
-1. Set what the game may spend from your wallet with **Allowance** in the wallet's top bar.
+1. Allow the game part of your balance with **Set allowance** in the wallet's top bar.
 2. Set the win chance with the slider, from 10% to 90% in steps of 0.5%, or type it.
 3. Enter a stake, or halve or double it with **½** and **2×**, and press **Roll dice** or Space.
 
@@ -24,7 +24,7 @@ To change the rules: the `9900n` in `winPayout` in [src/rules.ts](src/rules.ts) 
 
 ## Run it, test it, make it yours
 
-From play's root, `node sdk/bin/hookedin-game.js serve games/dice` serves the game at `http://127.0.0.1:4185/`, and `node --test games/dice/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it, [publishing](../../docs/games/publishing.md) how a game is hosted and listed, and [how it works](../../docs/overview/how-it-works.md) why nobody picks a round's outcome.
+From play's root, `node sdk/bin/hookedin-game.js serve games/dice` serves the game at `http://127.0.0.1:4185/`, and `node --test games/dice/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it.
 
 ## License
 

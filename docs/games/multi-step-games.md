@@ -5,21 +5,20 @@ sidebar:
   order: 4
 ---
 
-A game with decisions, such as blackjack or Mines, is played as a sequence of casino bets, one per step, each settled
-on its own. A player can walk away after any settled step with the cash that step left them: that is a
-[settled trade-off](../overview/architecture.md#settled-trade-offs), and it is what lets every step settle at once. You
-describe the game as a graph; the engine prices every state with the casino's own admission rule, and
-[`RoundClient`](../sdk/round.md#roundclient) plays it through the wallet.
+A game with decisions, such as blackjack or Mines, is a sequence of casino bets, one per step, each settled on its own,
+so a player can walk away after any settled step with the cash it left them: a [settled
+trade-off](../overview/architecture.md#settled-trade-offs). You describe the game as a graph; the engine prices every
+state with the casino's own admission rule, and [`RoundClient`](../sdk/round.md#roundclient) plays it through the
+wallet.
 
 ## Describe the game as a graph
 
 A [`GameGraph`](../sdk/engine.md#gamegraph) is a finite, acyclic graph of public states: `root`, the first node's ID,
 and `nodes`.
 
-- A **decision** node lists `actions`. Each action lists its `outcomes`: the `next` node, an exact `probability` made
-  with [`fraction`](../sdk/engine.md#fraction), and an optional `label` saying what happened, such as the card drawn,
-  which the wallet shows the player with the step's table.
-  An action's probabilities sum to one.
+- A **decision** node lists `actions`. Each action lists its `outcomes`, whose probabilities sum to one: the `next` node, an exact
+  `probability` made with [`fraction`](../sdk/engine.md#fraction), and an optional `label` saying what happened, such as
+  the card drawn, which the wallet shows with the step's table.
 - A **terminal** node has a `payout`: the gross cash the player ends with, as a bigint.
 
 Double up, a game of two flips:
@@ -87,62 +86,49 @@ for (const past of (await round.past({ limit: 10 })).rounds) renderPast(past);
 `render`, `renderPast` and `message` are your page's own.
 
 - `restore()` loads the player's saved round and resolves a step whose reply was lost. Call it on startup.
-- `start(setup)` starts a round. `setup.stake` is the stake in wei, and any other field is yours for the graph
-  function, such as Dice's `chanceBps`. It checks that the allowance covers the stake, prices the graph and saves the
-  round; no money moves until the first action.
-- `action(id)` plays one step: saved with a fresh operation ID before anything is signed, it sends the wallet the
-  step's table, and a payment first when the step pays the bankroll, and moves to the result the wallet landed on,
-  checked against the verified payout.
-- The state says where the round stands ([`RoundState`](../sdk/round.md#roundstate)): `cash` is what the round holds,
-  which the player keeps if they stop, and `events` are each step's action and label, to redraw the round after a
-  reload.
-- Each step's bet is in the round's group, `state.id`, so the allowance in the wallet's top bar drops by the stake on
-  the first step and then stands still, while the round's cash stays with the round.
-  [`end(state)`](../sdk/round.md#end), once the page has shown how the round ended, adds what it paid
-  ([groups](how-a-game-works.md#groups)) and keeps the round in the player's history.
-- [`past()`](../sdk/round.md#past) reads back the rounds the game ended, newest first, on any device of the player's:
-  each with the state it ended in, which the page draws as it did then.
+- `start(setup)` checks that the allowance covers `setup.stake`, prices the graph and saves the round; no money moves
+  until the first action. Any other field of `setup` is yours for the graph function, such as Dice's `chanceBps`.
+- `action(id)` plays one step, saved under a fresh operation ID before anything is signed, and moves to the result the
+  wallet landed on, checked against the verified payout.
+- The state ([`RoundState`](../sdk/round.md#roundstate)) says where the round stands: `cash` is what the round holds,
+  which the player keeps if they stop, and `events` each step's action and label, to redraw the round after a reload.
+- Each step is in the round's group, `state.id`, so the allowance in the wallet's top bar drops by the stake on the
+  first step and then stands still. [`end(state)`](../sdk/round.md#end), once the page has shown how the round ended,
+  adds what it paid ([groups](how-a-game-works.md#groups)) and keeps the round in the player's history, which
+  [`past()`](../sdk/round.md#past) reads back, newest first, on any device of the player's.
 
 ## One step is one bet
 
 When the player acts, `RoundClient` sends the step's table: each successor with its weight, the cash it needs and its
-label. The wallet groups the successors by the cash they need into cash classes. A step with one class places no bet,
-and any cash above that class's is paid to the bankroll as a payment first. Any other step places at most one casino
-bet, between a lower class and a higher one: it stakes the current cash less the lower class's, and its prize is the
-difference between the two, so whatever the outcome, the player's cash after it is exactly the reached class's. A step
-of more than two classes is collapsed: the wallet draws which pair to bet between, in proportions that reach every
-class exactly as often as the rules say, and then which successor of the class it reached
-([pricing and collapsing](collapsing-bets.md)).
-
-In Double up, `flip` from `start` stakes the stake for a prize of 1.9 stakes that wins on half the outcomes, and `take`
-moves no money: the 1.9 stakes are already in the player's balance.
+label. A step whose successors all need the same cash places no bet, paying any cash above it to the bankroll first; any
+other places at most one casino bet, after which the player's cash is exactly the reached successor's, and a step of
+more than two amounts is collapsed: the wallet draws which bet to place, reaching every successor exactly as often as
+the rules say ([pricing and collapsing](collapsing-bets.md)). In Double up, `flip` from `start` stakes the stake for a
+prize of 1.9 stakes on half the outcomes, and `take` moves no money: the 1.9 stakes are already in the player's balance.
 
 ## Pricing
 
 The engine works backward from the terminal payouts and gives every state its cash: the least that finances each of its
-actions with bets the casino's rule admits. That is more than the state's expected value, by a
-[risk premium](collapsing-bets.md#why-the-price-exceeds-the-expected-value) that shrinks as the bankroll grows, and
-every step needs an edge of its own at its state's cash.
-
-`RoundClient` prices against half the virtual bankroll `wallet.info` reports, on a grid of a billionth of the stake, and
-starts the round with the stake as its cash ([`pricing`](../sdk/round.md#pricing)). A stake the casino cannot back is refused before anything is signed, with
-an error naming about how much it can back. The next round with the same setup reuses the prices while the virtual
-bankroll still covers their conservative starting requirement.
+actions with bets the casino's rule admits. That is more than the state's expected value, by a [risk
+premium](collapsing-bets.md#why-the-price-exceeds-the-expected-value) that shrinks as the bankroll grows, so every step
+needs an edge of its own. `RoundClient` prices against half the virtual bankroll `wallet.info` reports
+([`pricing`](../sdk/round.md#pricing)), and refuses a stake the casino cannot back before anything is signed, with an
+error naming about how much it can back.
 
 ## Extra wagers
 
 An action can commit more of the player's money, such as a double, a split or insurance: give it `additionalCash`.
-`state.actionCosts` says what each action adds, and `state.contributed` what the player has put in so far. An action
-the allowance and what the round holds do not cover is refused with
+`state.actionCosts` says what each action adds, and `state.contributed` what the player has put in so far. An action the
+allowance and the round's cash do not cover is refused with
 [`HookedIn.NOT_ENOUGH_ALLOWANCE`](../sdk/hookedin.md#not_enough_allowance) before anything is sent.
 
 ## Precomputed prices
 
 Pricing a large graph in the page takes time. The constructor's `funding` option is a
-[`FundingTable`](../sdk/engine.md#fundingtable): each action's required cash at one stake, which `RoundClient` uses,
-scaled by an exact integer, when the stake is a multiple of the table's `initialCash` and the bankroll covers its
-`conservativeBankroll` times that multiple. [Blackjack](https://github.com/hookedin/game-blackjack) commits its table and
-passes it:
+[`FundingTable`](../sdk/engine.md#fundingtable), each action's required cash at one stake, which `RoundClient` scales by
+an exact integer when the stake is a multiple of the table's `initialCash` and the bankroll covers its
+`conservativeBankroll` times that multiple. [Blackjack](https://github.com/hookedin/game-blackjack) commits its table
+and passes it:
 
 ```ts
 const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: setup.stake }), {
@@ -150,11 +136,11 @@ const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: setup.
 });
 ```
 
-A table is right only for the rules it was generated from: blackjack's `npm run generate` compiles its rules with
-`compileGame` and writes every action's `requiredCash`, and its `npm test` fails when the table does not match.
+A table is right only for the rules it was generated from: blackjack's `npm run generate` writes it with `compileGame`,
+and its `npm test` fails when the table does not match.
 
 ## Changing the rules
 
-A saved round carries a hash of its rules: the graph the page builds for its setup. Once you change the graph, a round
-saved under the old one cannot be finished here: `restore()` throws once, with a message telling the player that what
-the round held is in their balance, and returns `null` after. Every step it took had already settled in the wallet.
+A saved round carries a hash of its rules, the graph the page builds for its setup. Once you change the graph, a round
+saved under the old one cannot be finished: `restore()` throws once, with a message telling the player that what the
+round held is in their balance, and returns `null` after. Every step it took had already settled.

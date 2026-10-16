@@ -5,10 +5,9 @@ sidebar:
   order: 4
 ---
 
-`import { createDeveloper } from '@hookedin/play/sdk/developer';` is the server side of a game with developer bets. The
-module is Node-safe and runs wherever `fetch` does: Node, a Cloudflare Worker, a browser. Every call goes to the
-casino's public API. [Developer bets](../games/developer-bets.md) is the guide, with the order of requests; the kit
-signs with the game's server key, which its developer names on the wallet's **Developer** page.
+`import { createDeveloper } from '@hookedin/play/sdk/developer';` is the server side of a game with developer bets, over
+the [casino's API](../casino-api/index.md), wherever `fetch` runs: Node, a Cloudflare Worker, a browser. [Developer
+bets](../games/developer-bets.md) is the guide.
 
 ```ts
 import { createDeveloper } from '@hookedin/play/sdk/developer';
@@ -33,94 +32,83 @@ const seedHash = await developer.seedHash(round.id); // commit to both before an
 | `game`      | The game's [ID](../reference/signed-messages.md#game-ids), which the wallet's **Developer** page shows beside the game |
 
 It throws an `Error` with code `invalid` for a `game` that is not a game ID in its one form, lowercase. It reads
-[`GET /api/config`](../casino-api/public.md#get-apiconfig) and throws an `Error` with code `protocol-mismatch`
-when the casino's `developerProtocol` is not the one this kit signs for: the casino speaks another revision of what a
-developer signs ([signed messages](../reference/signed-messages.md)).
+[`GET /api/config`](../casino-api/public.md#get-apiconfig) and throws an `Error` with code `protocol-mismatch` when the
+casino's `developerProtocol` is not [`DEVELOPER_PROTOCOL`](#developer_protocol).
 
-Every amount the kit takes and gives is a bigint of wei, and it reads every reply in its one form
-([JSON](json.md)), throwing an `Error` with code `invalid` for one in any other. Every member that calls the casino
-rejects with an `Error` when the casino refuses: its message is the casino's `error`, and it carries `status`, the HTTP
-status, and `code`, the casino's [error code](../casino-api/index.md#errors). A
-request only the game's server may make carries a `DeveloperAccess` token signed with the key and valid for 60
-seconds. A
-request the casino has not answered in a minute is abandoned, and rejects with a `TimeoutError`.
+Every amount the kit takes and gives is a bigint of wei, and it reads every reply in its one form ([JSON](json.md)),
+throwing an `Error` with code `invalid` for one in any other. Every member that calls the casino rejects with an `Error`
+when the casino refuses: its message is the casino's `error`, and it carries `status`, the HTTP status, and `code`, the
+casino's [error code](../casino-api/index.md#errors). A request only the game's server may make carries a
+`DeveloperAccess` token signed with the key and valid for 60 seconds. A request the casino has not answered in a minute
+is abandoned, and rejects with a `TimeoutError`.
 
 ### `Developer`
 
-What `createDeveloper` resolves with: one game's server. Besides the members below, `round(id)` reads
-a round as anyone may, revealed or not ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround)).
+What `createDeveloper` resolves with: one game's server. Besides the members below, `round(id)` reads a round as anyone
+may, revealed or not ([`GET /api/rounds/:round`](../casino-api/public.md#get-apiroundsround)).
 
 #### `virtualBankroll`
 
-The casino's virtual bankroll, half its bankroll, as it last reported it in
-[`GET /api/status`](../casino-api/public.md#get-apistatus): what it admits the game's casino bets against, and so
-what to price them against, such as a shared draw's [binary steps](steps.md#pricesteps), not a promise to admit them.
+The casino's virtual bankroll, half its bankroll, as [`GET /api/status`](../casino-api/public.md#get-apistatus) reports
+it: what it admits the game's casino bets against, and so what to price them against, such as a shared draw's [binary
+steps](steps.md#pricesteps), not a promise to admit them.
 
 #### `bank`
 
-What the game's bank holds now, from its public record
-([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)): what pays its settlements and its casino bets, the
-stakes of the developer bets placed in it included. A server that pays what its bets win from the bank seats only
-what the bank can pay: [game-crash](https://github.com/hookedin/game-crash) seats a flight's crew this way.
+What the game's bank holds now, from its public record ([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)):
+what pays its settlements and its casino bets, the stakes of the developer bets placed in it included.
 
 #### `openRound`
 
-A new round for the game's casino bet, named by the casino by the hash of a secret it keeps
-([`POST /api/rounds`](../casino-api/developers.md#post-apirounds)). Every call names another round, `open`.
+Opens a round for the game's casino bet, `open` ([`POST /api/rounds`](../casino-api/developers.md#post-apirounds)).
+Every call opens another.
 
 #### `seedHash`
 
-The hash of the seed the game's casino bet on a round brings. It makes no request: the seed is `keccak256` of the
-key's signature of the round (an Ethereum signed message over its 32 bytes), so only this key knows it before the bet,
-and the same round always gets the same seed. It throws an `Error` with code `invalid` for a round that is not a hash in
-its one form, lowercase hex.
+The hash of the seed the game's casino bet on a round brings. It makes no request: the seed is `keccak256` of the key's
+signature of the round (an Ethereum signed message over its 32 bytes), so only this key knows it before the bet, and the
+same round always gets the same seed. It throws an `Error` with code `invalid` for a round that is not a hash in its one
+form, lowercase hex.
 
 #### `casinoBet`
 
-Places the game's casino bet on one of its rounds, a [`BankCasinoBet`](#bankcasinobet), from its bank, and
-resolves with the revealed round
-([`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet)). It signs the round,
-the game, the stake, the chance, the prize, the group, the hash of the seed and the hash of `meta`, and sends the seed
-with it. The round's `casinoBet.accepted` says whether the bankroll took it; either way the round is revealed. Placing
-it again after a lost reply is the same bet and gets the same answer; a different casino bet on a revealed round is
-refused with `round-revealed`, and one the bank cannot pay with `bank-short`. It throws an `Error` with `status` 400 and
-code `invalid` before sending when `meta` is not a JSON object of up to 4,096 bytes of canonical JSON whose numbers are
-safe integers and whose text is well-formed, without a NUL; an `Error` with code `invalid` for a `round` that is not a
-hash in its one form; and an `Error` when the reply is not this bet's reveal: the secret must hash
+Places the game's casino bet on one of its rounds, a [`BankCasinoBet`](#bankcasinobet), from its bank, and resolves with
+the revealed round ([`POST /api/rounds/:round/casino-bet`](../casino-api/developers.md#post-apiroundsroundcasino-bet)).
+It signs the round, the game, the stake, the chance, the prize, the group, the seed's hash and `meta`'s hash, and sends
+the seed. Placed again after a lost reply, it is the same bet and gets the same answer. It rejects with `round-revealed`
+for a different casino bet on a revealed round and `bank-short` for one the bank cannot pay. It throws an `Error` with
+`status` 400 and code `invalid` before sending when `meta` is not a JSON object of up to 4,096 bytes of canonical JSON
+whose numbers are safe integers and whose text is well-formed, without a NUL; an `Error` with code `invalid` for a
+`round` that is not a hash in its one form; and an `Error` when the reply is not this bet's reveal: the secret must hash
 to the round, the seed and the signature must be this bet's, and the outcome must be their
 [`outcome`](outcome.md#outcome).
 
 #### `reveal`
 
-Reveals one of the game's rounds without betting anything: [`casinoBet`](#casinobet) with a stake, chance and prize
-of zero, in a group and with meta. It moves no money, `casinoBet.accepted` is `false`, and it throws as `casinoBet`
-does.
+Reveals one of the game's rounds without betting anything: [`casinoBet`](#casinobet) with a stake, chance and prize of
+zero, in a group and with meta. It moves no money, `casinoBet.accepted` is `false`, and it throws as `casinoBet` does.
 
 #### `settle`
 
-Settles the game's developer bets, each with a [`Settlement`](#settlement) signed here, paid from the game's bank
-([`POST /api/developer-bets/settle`](../casino-api/developers.md#post-apideveloper-betssettle)). It sends them 256 at
-a time; the casino takes each batch whole or refuses it with `bank-short`, and batches sent before a refused one stay
-settled. A bet settled before answers with what settled it. A bet that names a round is settled only with its
-`secret`, and only such a bet takes one: the casino refuses the batch with `invalid` otherwise. It resolves with the
-bets as settled, in order.
+Signs a [`Settlement`](#settlement) for each of the game's developer bets and settles them from the game's bank, 256 at
+a time ([`POST /api/developer-bets/settle`](../casino-api/developers.md#post-apideveloper-betssettle)), resolving with
+the bets as settled, in order. A batch the bank cannot pay is refused whole with `bank-short`, and the batches sent
+before it stay settled. A bet settled before answers with what settled it. A bet that names a round takes its `secret`,
+and only such a bet takes one, or the batch is refused with `invalid`.
 
 #### `bets`
 
-A page of the game's developer bets, `{ bets, cursor, more }`
-([`GET /api/developer-bets`](../casino-api/public.md#get-apideveloper-bets)), `open` ones by default: pass each page's
-`cursor` as `after` while `more` is `true`. Open bets come in the order they were placed, so a `cursor` goes on to the
-bets placed since; settled ones come in the order they settled, so a saved `cursor` never misses one. With `wait`, 1 to
-25 seconds, a page of open bets with none is held until a bet on the game is placed: the kit signs the request with the
-key, since only the game's server waits, one wait per game at a time
-([following bets](../games/developer-bets.md#your-server)).
+A page of the game's developer bets, `{ bets, cursor, more }`, `open` ones by default
+([`GET /api/developer-bets`](../casino-api/public.md#get-apideveloper-bets)): pass each page's `cursor` as `after` while
+`more` is `true` ([pages](../casino-api/index.md#pages)). With `wait`, 1 to 25 seconds, a page of open bets with none is
+held until a bet on the game is placed; the kit signs that request with the key, since only the game's server waits.
 
 ## The protocol
 
 ### `DEVELOPER_PROTOCOL`
 
-The revision of the protocol a game's server shares with the casino: the hash of the three structures it signs,
-the outcome rule and the bounds a bet is held to. A casino's [`GET /api/config`](../casino-api/public.md#get-apiconfig)
+The revision of the protocol a game's server shares with the casino: the hash of the three structures it signs, the
+outcome rule and the bounds a bet is held to. A casino's [`GET /api/config`](../casino-api/public.md#get-apiconfig)
 names it as `developerProtocol`, and [`createDeveloper`](#createdeveloper) takes no other; a stub casino in your
 server's tests answers with it. A change to what only a wallet signs leaves it alone.
 
@@ -129,18 +117,18 @@ server's tests answers with it. A change to what only a wallet signs leaves it a
 ### `Settlement`
 
 What one developer bet is paid, `{ bet, player, casino, secret? }`, from the game's bank: `player` to its player and
-`casino` to the casino. `bet` is the bet's hash ([the casino's share](../games/developer-bets.md#the-casinos-share)).
+`casino` to the casino ([the casino's share](../games/developer-bets.md#the-casinos-share)). `bet` is the bet's hash.
 `secret` goes with a bet that names a round, and only with one: the secret your server committed to, whose hash the
-round is ([a round of your own](../games/developer-bets.md#a-round-of-your-own)). It needs no signature, since it
-proves itself by hashing to the round the player signed; `settle` signs `{ bet, player, casino }`.
+round is ([a round of your own](../games/developer-bets.md#a-round-of-your-own)). It proves itself by hashing to the
+round the player signed, so `settle` signs only `{ bet, player, casino }`.
 
 ### `BankCasinoBet`
 
 The game's casino bet on one of its rounds, `{ round, stake, chance, prize, group, meta }`: its `stake` pays `prize`
 when the round's outcome is below `chance`, counted in outcomes out of 2^64. `group`, 1 to 64 characters, labels the
-bets that belong together, such as a spin's steps. `meta` is the game's own JSON, which the casino keeps
-with the reveal and never reads: what it commits to, it committed to before the outcome was revealed. A stake, chance
-and prize all zero is a [reveal](#reveal).
+bets that belong together, such as a spin's steps. `meta` is the game's own JSON, which the casino keeps with the reveal
+and never reads: what it commits to, it committed to before the outcome was revealed. A stake, chance and prize all zero
+is a [reveal](#reveal).
 
 ### `PublicDeveloperBet`
 

@@ -5,13 +5,10 @@ sidebar:
   order: 3
 ---
 
-`import { compileGame } from '@hookedin/play/sdk/engine';` prices games of several steps. The module is Node-safe: it
-touches no browser API, so it runs in a game page, a test and a build script alike. A game is a finite acyclic graph of
-public states with exact probabilities. The engine gives every state the least cash with which each of its actions is
-one wager the planning bankroll takes, and plays a step as at most one casino bet, drawn by the wallet, so that every
-successor is reached exactly as often as the rules say. It uses bigint arithmetic and exact fractions throughout.
-[`RoundClient`](round.md) plays a priced game through the wallet, and [pricing and collapsing](../games/collapsing-bets.md)
-derives the method.
+`import { compileGame } from '@hookedin/play/sdk/engine';` prices a game of several steps, a finite acyclic graph of
+public states with exact probabilities, in bigints and exact fractions. [Pricing and
+collapsing](../games/collapsing-bets.md) derives the method, [`RoundClient`](round.md) plays a priced game through the
+wallet, and the examples price [Double up](../games/multi-step-games.md#describe-the-game-as-a-graph).
 
 ```ts
 import { compileGame, evaluatePolicy, optimalExpectedValuePolicy } from '@hookedin/play/sdk/engine';
@@ -28,12 +25,10 @@ plan.conservativeBankroll; // 1000007220000n
 evaluatePolicy(plan, optimalExpectedValuePolicy(plan)).netEV; // { n: -50000n, d: 1n }: best play returns 95%
 ```
 
-[Double up](../games/multi-step-games.md#describe-the-game-as-a-graph) is the graph the examples on this page price.
-
 ## Exact fractions
 
-Game rules state probabilities as fractions, and nothing here rounds one. Every function returns a fraction in lowest
-terms with a positive denominator, frozen.
+Nothing here rounds a probability: every function returns a fraction in lowest terms with a positive denominator,
+frozen.
 
 ### `Rational`
 
@@ -62,8 +57,6 @@ bigints, and a `RangeError` for `d` of `0n`.
 
 ## The graph
 
-The graph a game's rules are written as ([describe the game as a graph](../games/multi-step-games.md#describe-the-game-as-a-graph)).
-
 ### `GameGraph`
 
 A finite, acyclic graph of public states, `{ root, nodes }`, entered at `root`. Node IDs are unique and not empty. An
@@ -83,7 +76,7 @@ besides the round's, such as a double or a split, `0n` by default. The outcomes'
 ### `GameOutcome`
 
 One way an action can go: `{ next, probability, label? }`, the node it leads to, its exact probability, and a label for
-presentation, 1 to 64 printable characters, which `RoundClient` sends with the step's table for the wallet to show, and
+presentation, 1 to 64 printable characters, which `RoundClient` sends with the step's table for the wallet to show and
 keeps in the round's [events](round.md#roundevent).
 
 ### `OUTCOME_SPACE`
@@ -94,17 +87,18 @@ keeps in the round's [events](round.md#roundevent).
 
 ### `compileGame`
 
-`compileGame(graph, { bankrollFloor, cashQuantum, initialCash? })` prices every legal action before any outcome exists,
-with no network or wallet access, and returns a [`GamePlan`](#gameplan). Every step is priced as the least cash on a
-grid of `cashQuantum` at which it is one wager `bankrollFloor` takes, and every bet it can place is checked against the
-casino's own rule, [`admits`](admits.md#admits), at `bankrollFloor`. `initialCash`, when given, is the cash the round
-starts with, such as the stake, and must cover the root's price; a terminal root's must equal its payout. A decision
-node's price is the most any of its actions needs less that action's `additionalCash`. [`pricing`](round.md#pricing)
-gives the options `RoundClient` prices a round with.
+`compileGame(graph, { bankrollFloor, cashQuantum, initialCash? })` prices every legal action, with no network or wallet
+access, and returns a [`GamePlan`](#gameplan). Every step is priced as the least cash on a grid of `cashQuantum` at
+which it is one wager `bankrollFloor` takes, and every bet it can place is checked against the casino's own rule,
+[`admits`](admits.md#admits), at `bankrollFloor`. A decision node's price is the most any of its actions needs less that
+action's `additionalCash`. `initialCash`, when given, is the cash the round starts with, such as the stake, and must
+cover the root's price; a terminal root's must equal its payout. [`pricing`](round.md#pricing) gives the options
+`RoundClient` prices a round with.
 
 Throws an `Error` for a cyclic graph, a missing or duplicate node, a decision node without actions, an action without
 outcomes, or a duplicate or empty action ID; and a `RangeError` for a negative probability, probabilities that do not
-sum to one, an amount outside uint256, or an `initialCash` below the root's price. A step is built the first time its `transition` is read, and throws then when a bet it can place is not admitted.
+sum to one, an amount outside uint256, or an `initialCash` below the root's price. A step is built the first time its
+`transition` is read, and throws then when a bet it can place is not admitted.
 
 ### `GamePlan`
 
@@ -130,8 +124,8 @@ their own `additionalCash`, and `transition`, the [step](#transitionplan) they p
 
 A step as it is played. A `casino-bet` step holds its cash `classes`, cheapest first, and the `branches` it collapses
 into at the planning bankroll. A step whose successors all need the same cash moves no money on chance: it is a `noop`
-when its `cash` equals that `successorCash`, or a `payment` of `amount`, the cash left over, to the bankroll.
-`outcomes` lists every successor of positive probability.
+when its `cash` equals that `successorCash`, or a `payment` of `amount`, the cash left over, to the bankroll. `outcomes`
+lists every successor of positive probability.
 
 ### `getNode`
 
@@ -142,10 +136,9 @@ unknown node.
 
 Prices computed at build time: a plan's `bankrollFloor`, `cashQuantum`, `initialCash` and `conservativeBankroll`, and
 `actions`, each decision node's actions' `requiredCash` in the graph's action order, keyed by node ID. They price a
-game; they are not settlement authority. Blackjack's `src/funding.ts`, which its
-[scripts/funding.ts](https://github.com/hookedin/game-blackjack/blob/main/scripts/funding.ts) writes at every build, is
-one: every action of its 14,055 decision nodes at a 1,000,000-wei stake, with a planning floor of 256 stakes and a
-one-wei grid.
+game; they are not settlement authority. Blackjack's `src/funding.ts`, written by its
+[scripts/funding.ts](https://github.com/hookedin/game-blackjack/blob/main/scripts/funding.ts) at every build, prices
+every action of its 14,055 decision nodes at a 1,000,000-wei stake, a planning floor of 256 stakes and a one-wei grid.
 
 ### `loadFundedGame`
 
@@ -172,9 +165,9 @@ Which action to take at a decision node. It must depend on the node alone.
 ### `evaluatePolicy`
 
 `evaluatePolicy(plan, policy)` plays `policy` exactly to a terminal node, with no stopping outside the graph's own
-actions, and returns `expectedPayout`; `expectedAdditionalCash`; and `netEV`, the expected payout less `initialCash`
-and the expected additional cash. A game's return on its initial stake is `1 + netEV / initialCash`. Throws an `Error`
-when the policy names an action a node does not offer.
+actions, and returns `expectedPayout`; `expectedAdditionalCash`; and `netEV`, the expected payout less `initialCash` and
+the expected additional cash. A game's return on its initial stake is `1 + netEV / initialCash`. Throws an `Error` when
+the policy names an action a node does not offer.
 
 ```ts
 import type { Policy } from '@hookedin/play/sdk/engine';
@@ -199,26 +192,23 @@ A uniform integer in `[0, limit)`, such as [`seededRandom`](#seededrandom) draws
 
 ### `prepareAction`
 
-`prepareAction(plan, { nodeId, cash, bankroll }, actionId)` takes an action before anything is drawn: the step it starts,
-for the wallet to draw. It returns `before`, the state it starts from, `actionId`, `additionalCash`, `kind`, `cash`,
-`amount`, `outcomes`, every successor of positive probability in the game's own order, each with the cash it needs and
-its label, and `weights`, whole numbers in the proportions of their probabilities: the step's table. A step whose
-successors need several amounts is a `casino-bet` that holds `cash`, which the wallet splits into casino bets at its
-quote's bankroll. A step whose successors all need one amount moves no money, a `noop`, or pays the bankroll what they
-do not need, a `payment` of `amount`; either way they need `cash`. The engine draws nothing: the wallet splits the
-table, draws a bet and lands on a successor, or draws which successor a step without a bet reaches when it has several
-([the wallet draws the step](../games/collapsing-bets.md#the-wallet-draws-the-step)). Throws an `Error` for a terminal
-node, a `cash` other than the node's, or an action the node does not offer, and a `RangeError` when the live bankroll is
-below the plan's floor.
+`prepareAction(plan, { nodeId, cash, bankroll }, actionId)` takes an action before anything is drawn and returns the
+step it starts: `before`, the state it starts from, `actionId`, `additionalCash`, `kind`, `cash`, `amount`, `outcomes`,
+every successor of positive probability in the game's own order, each with the cash it needs and its label, and
+`weights`, whole numbers in the proportions of their probabilities: the step's table, which the engine does not draw
+([the wallet draws the step](../games/collapsing-bets.md#the-wallet-draws-the-step)). A `casino-bet` holds `cash`; a
+`noop`, or a `payment` of `amount` to the bankroll, keeps `cash`, what every successor needs
+([`TransitionPlan`](#transitionplan)). Throws an `Error` for a terminal node, a `cash` other than the node's, or an
+action the node does not offer, and a `RangeError` when the live bankroll is below the plan's floor.
 
 ### `resolveTransition`
 
-`resolveTransition(prepared, result?)` applies a prepared step as the wallet landed it: `result` is the successor it
-reached, as its place in the step's `outcomes`, the receipt's `result`; a step with one successor takes none. It
-returns the `state` reached, with the cash that successor needs, and its `label`. The bankroll it reports takes what
-the step held less what the successor needs, and ignores the casino's commission, which only lowers it further. It
-proves no settlement and sends nothing. Throws a `TypeError` for a step `prepareAction` did not return, or a result
-missing, out of range or given to a step with one successor.
+`resolveTransition(prepared, result?)` applies a prepared step as the wallet landed it: `result` is the receipt's
+`result`, the successor's place in the step's `outcomes`; a step with one successor takes none. It returns the `state`
+reached, with the cash that successor needs, and its `label`. The bankroll it reports takes what the step held less what
+the successor needs, ignoring the casino's commission, which only lowers it further. It proves no settlement and sends
+nothing. Throws a `TypeError` for a step `prepareAction` did not return, or a result missing, out of range or given to a
+step with one successor.
 
 ```ts
 import { prepareAction, resolveTransition } from '@hookedin/play/sdk/engine';
@@ -230,6 +220,6 @@ resolveTransition(step, 0n).state; // where the flip leads when the wallet lands
 ### `seededRandom`
 
 A `RandomBelow` drawn from a 64-bit seed, such as the `draw` the wallet makes after a step's result: the SplitMix64
-stream from the seed's low 64 bits, rejection-sampled, so the same seed always draws the same values. It is for showing a result, never for
-drawing one: Plinko draws its ball's path with `seededRandom(state.settlement.draw)`
+stream from the seed's low 64 bits, rejection-sampled, so the same seed always draws the same values. It is for showing
+a result, never for drawing one: Plinko draws its ball's path with `seededRandom(state.settlement.draw)`
 ([`RoundState`](round.md#roundstate)), so a reload shows the same path into the same bucket.

@@ -7,8 +7,8 @@ sidebar:
 
 `import { json, plain, read } from '@hookedin/play/sdk/json';` is the JSON layer the wallet and the casino use, for a
 game's own JSON: what a page saves in its storage, and what its server stores, sends and receives. Code holds every
-whole number as a bigint; JSON holds it as a decimal string, and reads it back into a bigint in that one form or not at
-all. The module is Node-safe. The bridge needs none of it: `postMessage` carries bigints as they are.
+whole number as a bigint, and JSON as a decimal string, which reads back into a bigint in that one form or not at all.
+The module is Node-safe. The bridge needs none of it: `postMessage` carries bigints as they are.
 
 ```ts
 import { json, read } from '@hookedin/play/sdk/json';
@@ -34,8 +34,7 @@ const saved = read.object<{ id: string; stake: bigint }>({ id: read.text, stake:
 ### `read`
 
 The readers. Each takes a value as `JSON.parse` gives it and returns it as code holds it, every whole number a bigint,
-or throws an `Error` with `code` `invalid`: a value in any other form is refused, never read as something it might
-mean.
+or throws an `Error` with `code` `invalid`: a value in any other form is refused, never read as something it might mean.
 
 | Reader                                                             | Takes                                                                                            |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |

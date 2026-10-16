@@ -19,7 +19,7 @@ export const NOT_ENOUGH_ALLOWANCE =
 export const NO_DEVELOPER_BETS = 'Allow developer bets with the allowance in the top bar.';
 /** A refusal a game can act on. `code` is stable; the message is for people. The wallet's own codes:
  * `invalid-request`, `unknown-method`, `busy`, `insufficient-allowance`, `developer-bets-not-allowed`,
- * `pending-operation`, `id-conflict`, `id-used`, `not-found`, `game-closed` and `failed`; a refusal by the casino
+ * `pending-operation`, `id-conflict`, `id-used`, `not-covered`, `not-found`, `game-closed` and `failed`; a refusal by the casino
  * carries the casino's code. */
 export class HookedInError extends Error {
   code: string;

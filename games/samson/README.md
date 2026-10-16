@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Set what the game may spend from your wallet with **Allowance** in the wallet's top bar.
+1. Allow the game part of your balance with **Set allowance** in the wallet's top bar.
 2. Set the bet with − and +, and press **Spin** or Space. Press again to land the reels, or to cut a win short and spin again.
 3. **Turbo** spins faster. **Auto** plays 10 to 100 spins and stops at a bonus; **Stop** ends it.
 
@@ -73,7 +73,7 @@ To change the game, the theme is the SVGs in [src/symbols/](src/symbols/), the c
 
 ## Run it, test it, make it yours
 
-From play's root, `node sdk/bin/hookedin-game.js serve games/samson` serves the game at `http://127.0.0.1:4185/`, and `node --test games/samson/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it, [publishing](../../docs/games/publishing.md) how a game is hosted and listed, and [how it works](../../docs/overview/how-it-works.md) why nobody picks a round's outcome.
+From play's root, `node sdk/bin/hookedin-game.js serve games/samson` serves the game at `http://127.0.0.1:4185/`, and `node --test games/samson/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it.
 
 ## License
 

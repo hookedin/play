@@ -5,39 +5,36 @@ sidebar:
   order: 3
 ---
 
-A game's developer is the account that publishes it, and its server signs with the key the developer names for it
+A game's server signs with the key its developer, the account that publishes it, names for it
 ([`POST /api/account/games/server`](channels.md#post-apiaccountgamesserver)), the developer's own until they name
-another. The server proves itself with [developer access](index.md#authentication), signed by that key, and uses these
-three routes; it reads the game's rounds and developer bets through the public
-[`GET /api/rounds/:round`](public.md#get-apiroundsround) and [`GET /api/developer-bets`](public.md#get-apideveloper-bets),
-where it alone may wait for new bets. The key spends the game's bank on the game's casino bets and settlements and does
-nothing else: it publishes nothing, takes nothing out of the bank and holds no balance.
-[`createDeveloper`](../sdk/developer.md#createdeveloper) wraps all of it, and [developer bets](../games/developer-bets.md)
-walks through the order of requests. The signed structures are on
-[Signed messages](../reference/signed-messages.md#developer-messages).
+another. It proves itself with [developer access](index.md#authentication) signed by that key, and uses these three
+routes and the public [`GET /api/developer-bets`](public.md#get-apideveloper-bets). The key spends the game's bank on
+its casino bets and settlements and does nothing else: it publishes nothing, takes nothing out and holds no balance.
+[`createDeveloper`](../sdk/developer.md#createdeveloper) wraps all of it, [developer bets](../games/developer-bets.md)
+walks through the order of requests, and [Signed messages](../reference/signed-messages.md#developer-messages) specifies
+the signed structures.
 
 ## Rounds and casino bets
 
 ### `POST /api/rounds`
 
-Opens a round for a published game's own casino bet, and answers it as
-[`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it, `open`. Every call opens another. The casino picks
-the round's secret and keeps it until the game's casino bet on the round reveals it; a round it never bets on stays
-open. The body is `{game}`, the game's ID. `invalid` answers a game nobody publishes, and `unauthorized` a key that is
-not the game's server.
+Opens a new round for a published game's own casino bet, `{game}` naming the game's ID, and answers it, `open`, as
+[`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it. The casino keeps the round's secret until the game's
+casino bet on it reveals it; a round never bet on stays open. `invalid` answers a game nobody publishes, and
+`unauthorized` a key that is not the game's server.
 
 ### `POST /api/rounds/:round/casino-bet`
 
-Places the game's casino bet on one of its rounds, from its bank: it settles at once against the bankroll and reveals
-the round. The same bet again returns the round as it stands.
+Places the game's casino bet on one of its rounds, from its bank: it settles at once against the bankroll, reveals the
+round and answers it as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it. The same bet again returns
+the round as it stands.
 
-The casino checks the fields and the server's `BankCasinoBet` signature, that the round is the game's and not yet
-revealed, and that the bank holds the stake. It then admits the bet against the virtual bankroll as it stands, half the
-bankroll, by [the Kelly rule](../reference/economics.md#a-casino-bet-is-one-wager), before it reads the round's secret,
-and records the reveal: the seed, the secret and the bet, `accepted` or not. Accepted, the bank pays the stake, receives
-the prize when the round's outcome is below the chance, and takes half the bet's commission, as for any casino bet in
-the game; it is listed in the game's public record, in its group. Declined, no money moves. A stake, chance and prize of
-zero bet nothing: they only reveal the round, with no bank check and no admission, and `accepted` is false.
+The casino admits the bet against the virtual bankroll, half the bankroll, by [the Kelly
+rule](../reference/economics.md#a-casino-bet-is-one-wager) before it reads the round's secret, then records the reveal:
+the seed, the secret and the bet, `accepted` or not. Accepted, the bank pays the stake and takes the bet's payout and
+half its commission, as for any casino bet in the game, and the bet is listed in the game's public record, in its group.
+Declined, no money moves. A stake, chance and prize of zero only reveal the round, with no bank check or admission, and
+`accepted` false.
 
 | Body field  | Type    | Meaning                                                                                                                                                                    |
 | ----------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,22 +65,21 @@ zero bet nothing: they only reveal the round, with no bank check and no admissio
 }
 ```
 
-The reply is the revealed round as [`GET /api/rounds/:round`](public.md#get-apiroundsround) shows it. `invalid` answers
-a malformed field, a `round` other than the path's, a game nobody publishes, and a signature that is not the server's;
-`unauthorized` a key that is not the game's server; `not-found` a round that is unknown, a channel's or another game's;
-`round-revealed` another bet on a revealed round; and `bank-short` a bank that cannot pay the stake.
+`invalid` answers a malformed field, a `round` other than the path's, a game nobody publishes, and a signature that is
+not the server's; `unauthorized` a key that is not the game's server; `not-found` a round that is unknown, a channel's
+or another game's; `round-revealed` another bet on a revealed round; and `bank-short` a bank that cannot pay the stake.
 
 ## Settling developer bets
 
 ### `POST /api/developer-bets/settle`
 
 Settles developer bets on one game, each with its own signed
-[`Settlement`](../reference/signed-messages.md#developer-messages). The bank must hold the sum over every bet in the
-batch not yet settled, or nothing in the batch is settled (`bank-short`). A bet already settled is left as it is,
-unchecked, so a batch sent again answers as it stands. The server of a game taken down still settles the bets placed on
-it. A settled bet's payout is owed to its player: [`GET /api/account/payouts`](channels.md#get-apiaccountpayouts) lists
-it under the bet's hash. A bet whose player signed a round with it is settled only with that round's secret, which the
-reply shows ([a round of your own](../games/developer-bets.md#a-round-of-your-own)).
+[`Settlement`](../reference/signed-messages.md#developer-messages). Unless the bank holds the sum of what the batch's
+unsettled bets pay, nothing is settled (`bank-short`). A bet already settled is left as it is, unchecked, so a batch
+sent again answers as it stands. A settled bet's payout is owed to its player, listed by
+[`GET /api/account/payouts`](channels.md#get-apiaccountpayouts) under the bet's hash. A bet whose player signed a round
+with it is settled only with that round's secret, which the reply shows ([a round of your
+own](../games/developer-bets.md#a-round-of-your-own)).
 
 | Body field                | Type    | Meaning                                                                      |
 | ------------------------- | ------- | ---------------------------------------------------------------------------- |
@@ -109,7 +105,6 @@ reply shows ([a round of your own](../games/developer-bets.md#a-round-of-your-ow
 
 The reply lists every bet of the request, in its order, as
 [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) shows it. `invalid` answers an empty or oversized
-batch, a bet named twice, an amount that is not a whole decimal below 2^96, a signature that is not the server's, a
-bet that names a round settled without the secret that hashes to it, and a secret with a bet that names none;
-`not-found` a bet that is unknown, or a batch of more than one game's bets; and `unauthorized` a key that is not the
-game's server.
+batch, a bet named twice, an amount that is not a whole decimal below 2^96, a signature that is not the server's, a bet
+that names a round settled without the secret that hashes to it, and a secret with a bet that names none; `not-found` a
+bet that is unknown, or a batch of more than one game's bets; and `unauthorized` a key that is not the game's server.

@@ -5,15 +5,15 @@ sidebar:
   order: 8
 ---
 
-`import { createSynth } from '@hookedin/play/sdk/synth';` is a piece of the house games' pages that any game can use.
-It is Node-safe to import, and makes sound only in a browser.
+`import { createSynth } from '@hookedin/play/sdk/synth';` is the house games' sound, for any game. It is Node-safe to
+import, and makes sound only in a browser.
 
 ## Sound
 
 ### `createSynth`
 
-`createSynth()` makes short synthesized sounds, so a game hosts no audio files. The player's mute choice is kept in
-the game's `localStorage`, under `hookedin:muted`; a storage that fails is ignored. Delays and durations are in seconds,
+`createSynth()` makes short synthesized sounds, so a game hosts no audio files. It keeps the mute choice in
+`localStorage` under `hookedin:muted`, and ignores a storage that fails. Delays and durations are in seconds,
 frequencies in hertz.
 
 | Member                                       | What it does                                                                                                                                                                                                               |
@@ -40,7 +40,6 @@ document.getElementById('play')!.addEventListener('click', () => {
 
 The house games' stylesheet: a dark theme with the custom properties `--muted`, `--accent`, `--line`, `--panel` and
 `--dark`; and the page layout, from `main`, `.stage` and `.controls` to `.primary`, `.secondary`, `.tool`, `.status`,
-`.readout`, `.rules`, `.foot` and `.foot-tools`, where a game keeps switches such as its sound. A page holds only the
-game: the wallet's top bar names it and shows its allowance. It is `sdk/shared.css` in the package.
-[`hookedin-game build`](../games/publishing.md#build) copies it into `dist/shared.css`, and a page links `./shared.css`
-before its own `./style.css`.
+`.readout`, `.rules`, `.foot` and `.foot-tools`, where a game keeps switches such as its sound. It is `sdk/shared.css`
+in the package. [`hookedin-game build`](../games/publishing.md#build) copies it into `dist/shared.css`, and a page links
+`./shared.css` before its own `./style.css`.

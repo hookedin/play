@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Set what the game may spend from your wallet with **Allowance** in the wallet's top bar.
+1. Allow the game part of your balance with **Set allowance** in the wallet's top bar.
 2. Choose the rows (8, 12 or 16), the risk (low, medium or high) and the bet.
 3. Press **Drop ball**, or Space. Each press queues another ball, up to 20 ahead. **Auto** makes one press drop 10, 50 or 100 balls; the button then reads **Stop** and ends the run after the ball under way.
 
@@ -46,7 +46,7 @@ If you change a multiplier, keep `sum(C(rows, j) × multiplier_j)` equal to your
 
 ## Run it, test it, make it yours
 
-From play's root, `node sdk/bin/hookedin-game.js serve games/plinko` serves the game at `http://127.0.0.1:4185/`, and `node --test games/plinko/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it, [publishing](../../docs/games/publishing.md) how a game is hosted and listed, and [how it works](../../docs/overview/how-it-works.md) why nobody picks a round's outcome.
+From play's root, `node sdk/bin/hookedin-game.js serve games/plinko` serves the game at `http://127.0.0.1:4185/`, and `node --test games/plinko/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it.
 
 ## License
 

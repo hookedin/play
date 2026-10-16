@@ -7,17 +7,15 @@ sidebar:
 
 `import { priceSteps, stepBet, stepOutcome } from '@hookedin/play/sdk/steps';` walks a draw a game's players share down
 a fixed balanced binary tree of its `n` equally likely outcomes, one casino bet of the developer's per level, so the
-bankroll backs all of it. The module is Node-safe. [Shared games](../games/developer-bets.md#shared-games-binary-steps)
-is the guide, with the whole walk and the rules that keep it fair, and
-[roulette](https://github.com/hookedin/game-roulette) the worked example: its server walks every spin with this module,
-and its page checks every spin with `stepOutcome`.
+bankroll backs all of it. [Shared games](../games/developer-bets.md#shared-games-binary-steps) is the guide, and
+[roulette](https://github.com/hookedin/game-roulette) the worked example.
 
 ## The tree
 
 ### `StepNode`
 
-A node of the tree, `{ lo, hi }`: the outcomes `[lo, hi)`. The root of a draw of `n` outcomes is `{ lo: 0, hi: n }`,
-and a leaf holds one outcome.
+A node of the tree, `{ lo, hi }`: the outcomes `[lo, hi)`. The root of a draw of `n` outcomes is `{ lo: 0, hi: n }`, and
+a leaf holds one outcome.
 
 ### `Side`
 
@@ -57,12 +55,10 @@ A priced tree: what is `owed` on each leaf, the `bankroll` it was priced against
 draw's outcomes. A leaf needs what is owed on it, and a node whose children need the same cash needs that. Any other
 node needs the least cash whose bet between its children the casino's rule, [`admits`](admits.md#admits), takes at
 `bankroll`: a stake of the node's cash less the lower child's, paying the difference between the children with the
-dearer side's chance. More cash is never less safe for the bankroll, and a stake of the whole difference cannot lose it
-anything, so the search is a bisection. The casino admits a game's casino bet against its virtual bankroll when the
-bet arrives, so price against the virtual bankroll it reports, half its bankroll, as roulette does. Throws a
-`RangeError` unless `owed` holds at least one amount and every amount and `bankroll` is a nonnegative bigint. A bankroll
-of nothing admits no bet, so against it every node needs the cash of its dearer child: the game's bank carries the
-whole walk, and the casino declines its bets and reveals their rounds.
+dearer side's chance. Price against the [virtual bankroll](developer.md#virtualbankroll), which the casino admits the
+bets against when they arrive. A bankroll of nothing admits no bet, so against it every node needs the cash of its
+dearer child: the game's bank carries the whole walk, and the casino declines its bets and reveals their rounds. Throws
+a `RangeError` unless `owed` holds at least one amount and every amount and `bankroll` is a nonnegative bigint.
 
 ### `stepsCash`
 
@@ -75,19 +71,19 @@ One level's casino bet, `{ stake, chance, prize, side }`: its `stake` pays `priz
 
 ### `stepBet`
 
-The [`StepBet`](#stepbet) of one level of the plan's tree. It backs the child that needs more cash: it stakes the
-node's cash less the other child's, and its prize is the difference between the two, so won, the walk holds the backed
-child's cash, and lost, the other's. `null` where both children need the same cash: the level bets nothing, only reveals
-its round, and names the left.
+The [`StepBet`](#stepbet) of one level of the plan's tree. It backs the child that needs more cash: it stakes the node's
+cash less the other child's, and its prize is the difference between the two, so won, the walk holds the backed child's
+cash, and lost, the other's. `null` where both children need the same cash: the level bets nothing, only reveals its
+round, and names the left.
 
 ## Checking a spin
 
 ### `stepOutcome`
 
 `stepOutcome(n, steps)`: the leaf a spin's steps reach from the root of a tree of `n` outcomes. Each step gives its
-round's `outcome` and, for a bet, the `side` it named and its `chance`; a level that only revealed its round gives its
-outcome alone. Chances and outcomes are bigints, and a step's chance, when given, must be its side's share. Throws an `Error` when a step names neither side, a chance is not its side's share, or the steps go past a leaf
-or stop before one.
+round's `outcome` and, for a bet, the `side` it named and its `chance`, outcomes and chances being bigints; a level that
+only revealed its round gives its outcome alone. Throws an `Error` when a step names neither side, a chance is not its
+side's share, or the steps go past a leaf or stop before one.
 
 ```ts
 import { stepOutcome } from '@hookedin/play/sdk/steps';

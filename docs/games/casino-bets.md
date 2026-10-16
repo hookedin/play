@@ -6,15 +6,15 @@ sidebar:
 ---
 
 A casino bet is three numbers, a stake, a chance and a prize, settled against the casino's bankroll in the one request
-that places it. A game asks for one as a step: the cash the step holds, and the table of results it can end in, which
-the wallet turns into the bet. A coin flip is a table of two results, one casino bet; the wallet splits a table of more
-results into several such bets and draws which to place, and a hand of blackjack is
-[one casino bet per step](multi-step-games.md).
+that places it. A game asks for one as a step: the cash it holds and the table of results it can end in, which the
+wallet turns into the bet. A coin flip is a table of two results, one bet; the wallet [collapses](collapsing-bets.md) a
+table of more results into one bet it draws, a game of decisions plays [one casino bet per step](multi-step-games.md),
+and a draw many players share is backed in [binary steps](developer-bets.md#shared-games-binary-steps).
 
 ## The bet
 
-Every casino bet is on a round, whose outcome is a uniform integer in `[0, 2^64)` that the wallet checks before the game
-sees it ([how it works](../overview/how-it-works.md)). The bet pays `prize` when the outcome is below `chance`.
+The bet pays `prize` when the round's outcome, a uniform integer in `[0, 2^64)` that the wallet checks before the game
+sees it, is below `chance` ([how it works](../overview/how-it-works.md)):
 
 - `chance` counts winning outcomes out of 2^64, from 1 to 2^64 − 1: a sure win or a sure loss is not a bet.
 - `prize` is gross, what a winning bet pays: twice the stake is an even-money win, and a prize below the stake is a
@@ -22,9 +22,8 @@ sees it ([how it works](../overview/how-it-works.md)). The bet pays `prize` when
 - The bet moves the balance by `−stake`, and by `+prize` when it wins. Commission is never an extra debit.
 - The stake and the prize are above zero and below 2^96.
 
-A game never names these: it offers a step ([`game.casinoBet`](../reference/bridge.md#gamecasinobet)), and the bet a
-step of two results, its prize with weight `chance` and nothing with weight `2^64 − chance`, splits into is exactly
-this one.
+A game never names these: it offers a step ([`game.casinoBet`](../reference/bridge.md#gamecasinobet)), and a step of two
+results, the prize with weight `chance` and nothing with weight `2^64 − chance`, is exactly this bet.
 
 ## A coin flip
 
@@ -76,26 +75,19 @@ else show(`Declined: ${receipt.reason}`); // the balance is unchanged
 await HookedIn.end(receipt.id); // the flip is on the page
 ```
 
-`show` is your page's own. Every amount is a bigint of wei, as the bridge carries it. A `settled` receipt carries the
-bet the wallet placed, the round's `outcome`, the `payout`, the prize or 0, and `result`, the place in the table of the
-result the step landed on; a `rejected` one is a bet the casino declined, as when its quote expired while it waited,
-with the balance unchanged: offer the same step again under a fresh `id`. The saved `id` is
-what finds the result after a lost reply or a reload ([lost replies](how-a-game-works.md#lost-replies)), and what
-[`HookedIn.showBet(id)`](../reference/bridge.md#walletshowbet) shows the player the proof of, in the wallet.
-
-A game of more outcomes, such as a Plinko board or a slot, plays each step as one bet all the same: the page offers
-every result with its weight, and the wallet splits the table into bets and draws which to place, so that every result
-is reached as often as the table says and neither the page nor the casino chooses which
-([pricing and collapsing](collapsing-bets.md)).
-A game whose players share one draw walks a tree of its own casino bets instead
-([binary steps](developer-bets.md#shared-games-binary-steps)).
+`show` is your page's own, and every amount is a bigint of wei. A `settled` receipt carries the bet the wallet placed,
+the round's `outcome`, the `payout`, the prize or 0, and `result`, the place in the table of the result the step landed
+on. A `rejected` one is a bet the casino declined, as when its quote expired while it waited, with the balance
+unchanged: offer the step again under a fresh `id`. The saved `id` finds the result after a lost reply or a reload
+([lost replies](how-a-game-works.md#lost-replies)), and [`HookedIn.showBet(id)`](../reference/bridge.md#walletshowbet)
+shows the player its proof in the wallet.
 
 ## Leave the casino an edge
 
-The casino settles a casino bet when the virtual bankroll of its [quote](../overview/how-it-works.md#quotes), half the
-casino's bankroll, can take it by the Kelly criterion with no commission at all, so a bet with no edge is never
-admitted, and a bigger prize needs more edge ([pricing and commission](../reference/economics.md)). Check a bet before
-offering it, with the casino's own rule:
+The casino settles a casino bet only when the virtual bankroll of its [quote](../overview/how-it-works.md#quotes) can
+take it by the Kelly criterion with no commission at all, so a bet with no edge is never admitted, and a bigger prize
+needs more edge ([pricing and commission](../reference/economics.md)). Check a bet before offering it, with the casino's
+own rule:
 
 ```ts
 import { HookedIn } from '@hookedin/play/sdk/sdk';
@@ -108,21 +100,18 @@ const { virtualBankroll } = await HookedIn.info();
 if (!admits(virtualBankroll / 2n, flipBet(stake))) show('The casino cannot back this stake. Lower it.');
 ```
 
-[`admits`](../sdk/admits.md#admits) is [protocol/risk.ts](../../protocol/risk.ts), the code the casino runs, so a bet it
-admits at a virtual bankroll is one a quote naming that virtual bankroll covers. `wallet.info` reports the virtual
-bankroll of the wallet's latest quote; the wallet splits the step at the quote it holds when it signs, and a step that
-quote does not cover, in any bet of the split, is refused with `not-covered` before anything is drawn or signed.
+[`admits`](../sdk/admits.md#admits) is [protocol/risk.ts](../../protocol/risk.ts), the code the casino runs.
+`wallet.info` reports the virtual bankroll of the wallet's latest quote, and the wallet refuses a step that quote does
+not cover, in any bet of the split, with `not-covered` before anything is drawn or signed.
 
 ## Measured return
 
-No game states what it pays back ([house edge](../wallet/bets-and-receipts.md#house-edge)). The wallet works out the
-exact return of every casino bet from its terms before it signs, `prize × chance / (2^64 × stake)`.
-[`betReturn(bet)`](../sdk/admits.md#betreturn) is that computation, in millionths of the stake. Players see each bet's
-house edge, `stake − prize × chance / 2^64`, in METH: a bet drawn from a step pays back less of its own stake than the
-step does of what it held ([what is given up](collapsing-bets.md#what-is-given-up)), but its wallet draws each bet as
-often as the table says, so the edges of the bets drawn come, on average, to the step's. The wallet's My games and your
-game's public record ([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)) add up your players' bets' edges
-against what their rounds put in.
+Players see each bet's [house edge](../wallet/bets-and-receipts.md#house-edge) in METH, `stake − prize × chance / 2^64`,
+worked out from the bet they signed: no game states what it pays back. [`betReturn(bet)`](../sdk/admits.md#betreturn) is
+a bet's return, `prize × chance / (2^64 × stake)` in millionths of the stake, for your own tests. A bet drawn from a
+step pays back less of its own stake than the step does of what it held ([what is given
+up](collapsing-bets.md#what-is-given-up)), but the edges of the bets drawn come, on average, to the step's, and your
+game's public record ([`GET /api/games/:id`](../casino-api/public.md#get-apigamesid)) adds them up.
 
 A chance rounds to whole outcomes and a prize to whole units, so at dust stakes the units can move a return far. Prove
 your floor in a test ([proving a game's floor](testing.md#proving-a-games-floor)):
@@ -142,16 +131,16 @@ The flip keeps its edge in its chance and pays a whole multiple of the stake, so
 
 ## Draw the presentation from the receipt
 
-A receipt of a step carries `result`, the result the wallet landed on, which leaves the player what the bet paid, and
+A step's receipt carries `result`, the result the wallet landed on, which leaves the player what the bet paid, and
 `draw`, a 64-bit value the wallet drew after it. Show the result `result` names, such as which bucket, card or pay, and
 draw how it looks from `draw`, such as the ball's path or the reel stops: the picture and the money then cannot
-disagree. `RoundClient` keeps the value to draw from in `state.settlement.draw`, and
-[`seededRandom(draw)`](../sdk/engine.md#seededrandom) reads it as a generator, so a reload shows the same
-result: [Plinko](../../games/plinko/src/tables.ts) draws its ball's path with it, and
-[Samson](../../games/samson/src/math.ts) its reel stops.
+disagree. `RoundClient` keeps the value in `state.settlement.draw`, and
+[`seededRandom(draw)`](../sdk/engine.md#seededrandom) reads it as a generator, so a reload shows the same result:
+[Plinko](../../games/plinko/src/tables.ts) draws its ball's path with it, and [Samson](../../games/samson/src/math.ts)
+its reel stops.
 
 ## Payments
 
-A payment is a deterministic debit to the bankroll, [`game.payment`](../reference/bridge.md#gamepayment): no round, no
-outcome, no commission. `RoundClient` places one when a step leaves the player less cash with nothing to draw, such as a
-cash-out from a state priced above what it pays ([one step is one bet](multi-step-games.md#one-step-is-one-bet)).
+A payment, [`game.payment`](../reference/bridge.md#gamepayment), is a fixed debit to the bankroll: no round, no outcome,
+no commission. `RoundClient` places one when a step leaves the player less cash with nothing to draw, such as a cash-out
+from a state priced above what it pays ([one step is one bet](collapsing-bets.md#one-step-is-one-bet)).

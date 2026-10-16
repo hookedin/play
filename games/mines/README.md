@@ -6,7 +6,7 @@ Play it through the wallet: open [play.hookedin.com](https://play.hookedin.com) 
 
 ## How to play
 
-1. Set what the game may spend from your wallet with **Allowance** in the wallet's top bar.
+1. Allow the game part of your balance with **Set allowance** in the wallet's top bar.
 2. Choose a stake and how many of the 25 tiles are mines, then **Bet** (or press Space).
 3. Pick tiles, or let **Random tile** pick one. A gem raises what you can cash out; a mine ends the round at zero.
 4. **Cash out** (or Space) after any gem, for what the button shows.
@@ -51,7 +51,7 @@ To change the game, `TILES` and `multiplier` in [src/rules.ts](src/rules.ts) set
 
 ## Run it, test it, make it yours
 
-From play's root, `node sdk/bin/hookedin-game.js serve games/mines` serves the game at `http://127.0.0.1:4185/`, and `node --test games/mines/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it, [publishing](../../docs/games/publishing.md) how a game is hosted and listed, and [how it works](../../docs/overview/how-it-works.md) why nobody picks a round's outcome.
+From play's root, `node sdk/bin/hookedin-game.js serve games/mines` serves the game at `http://127.0.0.1:4185/`, and `node --test games/mines/test/*.test.ts` runs its tests. [The house games](../../docs/games/quick-start.md#the-house-games) says how to open it in the wallet and start a game of your own from it.
 
 ## License
 

@@ -3,21 +3,19 @@ title: Introduction
 description: What HookedIn is, the parts it is made of, and where to start.
 ---
 
-HookedIn is a casino on Ethereum that your own wallet checks. You deposit ETH into a contract, then play with signed
-messages instead of transactions: the wallet signs each bet, the casino signs the result, and the wallet verifies that
-result and saves the evidence before it shows you anything. The contract pays out what you withdraw, from your deposits
+HookedIn is a casino on Ethereum mainnet that your own wallet checks. You deposit ETH into a contract, then play with
+signed messages instead of transactions: the wallet signs each bet, the casino signs the result, and the wallet verifies
+that result and saves the evidence before it shows you anything. The contract pays what you withdraw, from your deposits
 first and the casino's bankroll for the rest, and settles your channel without the casino if you close it alone.
-HookedIn runs on Ethereum mainnet (chain 1).
 
 ## Open beta
 
-HookedIn is in open beta on Ethereum mainnet: anyone can play, deposit, withdraw and publish a game, with ETH. The
-contract stays as it is, and what your wallet signed and saved stays enough to close your channel and collect what you
-are owed from it ([changing the contract](reference/deployment.md#changing-the-contract)). The SDK, the game bridge and
-the casino API change without notice: a game that installs `@hookedin/play` from `main` takes each change when it next
-installs. Tell us what breaks in the [HookedIn Discord](https://discord.gg/C38EkHr7sG) or a [GitHub
-issue](https://github.com/hookedin/play/issues), and report a vulnerability privately, as [SECURITY.md](../SECURITY.md)
-says.
+HookedIn is in open beta: anyone can play, deposit, withdraw and publish a game, with ETH. The contract stays as it is,
+and what your wallet signed and saved stays enough to close your channel and collect what you are owed ([changing the
+contract](reference/deployment.md#changing-the-contract)). The SDK, the game bridge and the casino API change without
+notice: a game that installs `@hookedin/play` from `main` takes each change when it next installs. Tell us what breaks
+in the [HookedIn Discord](https://discord.gg/C38EkHr7sG) or a [GitHub issue](https://github.com/hookedin/play/issues),
+and report a vulnerability privately, as [SECURITY.md](../SECURITY.md) says.
 
 ## The parts
 
@@ -31,9 +29,9 @@ says.
 | SDK        | The wallet bridge, a round helper, exact step pricing, a developer kit and the build tool                                                                            | [Packages and imports](sdk/index.md)                            |
 | Watchtower | Challenges a stale close of your channel, or disputes a casino bet the casino left unsettled, from its exported evidence, on a machine you run                       | [The watchtower](wallet/keys-and-recovery.md#the-watchtower)    |
 
-Everything a player has to trust is in this repository. The casino service is private, and a player does not have to
-trust its code: the wallet checks every signature, revealed secret and balance change against the public protocol, and
-with its saved evidence a player can close a channel and collect what it is owed without the casino.
+Everything a player has to trust is in this repository. A player need not trust the private casino service's code: the
+wallet checks every signature, revealed secret and balance change against the public protocol, and with its saved
+evidence a player can close a channel and collect what it is owed without the casino.
 
 ## Where to start
 

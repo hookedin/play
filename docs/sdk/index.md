@@ -3,9 +3,8 @@ title: Packages and imports
 description: How a game installs @hookedin/play, and the import paths the SDK offers.
 ---
 
-The SDK is part of the `@hookedin/play` package, the repository that also holds the wallet, the contract and the
-house's games. It ships as TypeScript source, so your editor shows every signature and doc comment; these pages say
-what each export is for.
+The SDK is part of the `@hookedin/play` package, which also holds the wallet, the contract and the house's games. It
+ships as TypeScript source, so your editor shows every signature and doc comment; these pages say what each is for.
 
 ## Install
 
@@ -20,14 +19,14 @@ A game depends on play's `main` branch:
 ```
 
 The [template](https://github.com/hookedin/game-template)'s workflow runs `npm update @hookedin/play` before it tests
-and builds, so every deploy takes play's newest commit, and on `main` commits the lockfile it tested, so a local install
-starts from the play the last deploy took. There are no versions and no tags: a push to play's `main` is the release.
+and builds, so every deploy takes play's newest commit, and on `main` commits the lockfile it tested, which a local
+install starts from. There are no versions and no tags: a push to play's `main` is the release.
 
 - Node 26 or later.
 - The SDK's modules are raw `.ts` files, with no compiled JavaScript and no declaration files.
   [`hookedin-game build`](../games/publishing.md#build) bundles a page with esbuild.
-- TypeScript checks the SDK as source. The template's `tsconfig.json` (`module` and `moduleResolution` `NodeNext`,
-  `allowImportingTsExtensions`, `noEmit`, `strict`, the `DOM` library) is a configuration that does.
+- TypeScript checks the SDK as source, as the template's `tsconfig.json` does: `module` and `moduleResolution`
+  `NodeNext`, `allowImportingTsExtensions`, `noEmit`, `strict`, the `DOM` library.
 - Node does not strip types from files inside `node_modules`, so a game's Node tests load the SDK through tsx
   ([testing](../games/testing.md#running-tests)).
 
