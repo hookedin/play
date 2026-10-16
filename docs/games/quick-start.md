@@ -28,9 +28,9 @@ npm test
 `npm test` places casino and developer bets through the real wallet against a stub casino held to its rules
 ([testing](testing.md)), with no ETH. `src/` is the game: `index.html`, `style.css`,
 [`icon.svg`](publishing.md#the-icon) and `game.ts`, here a bridge probe. The template depends on `@hookedin/play` at its
-`main` branch ([packages and imports](../sdk/index.md)), its workflow deploys the game ([publishing](publishing.md)),
-and its `AGENTS.md` tells an AI coding agent where the docs and examples are. There is nothing to configure: the account
-that publishes the game is its developer.
+`main` branch ([packages and imports](../sdk/index.md)), its workflow deploys the game
+([deploying](publishing.md#deploy-to-cloudflare)), and its `AGENTS.md` tells an AI coding agent where the docs and
+examples are. There is nothing to configure: the account that publishes the game is its developer.
 
 ## Run it
 
@@ -40,11 +40,11 @@ open, in the wallet too, keeping its allowance.
 
 ## Try it with pretend money
 
-`http://localhost:4185/` is a local wallet, served beside the game, that frames it with a million pretend METH;
-**Allow** in its top bar gives the game an allowance. Its wallet and bridge are the real wallet's, so the game behaves
-as it does at play.hookedin.com, and its casino is the stand-in `npm test` uses, in the page: it needs no wallet, ETH or
-network. It takes casino bets and payments, and declines developer bets, which need the real casino. `wallet.showBet`
-prints the bet's receipt to the browser's console, and reloading starts it afresh.
+`http://localhost:4185/` is a local wallet, served beside the game, that frames it with a million pretend METH (1 METH
+is 0.000001 ETH, 10^12 wei); **Allow** in its top bar gives the game an allowance. Its wallet and bridge are the real
+wallet's, so the game behaves as it does at play.hookedin.com, and its casino is the stand-in `npm test` uses, in the
+page: it needs no wallet, ETH or network. It takes casino bets and payments, and declines developer bets, which need the
+real casino. `wallet.showBet` prints the bet's receipt to the browser's console, and reloading starts it afresh.
 
 ## Open it in the wallet
 
@@ -61,8 +61,9 @@ loads both. Developer bets need the game [published](publishing.md#publish-it) a
 
 1. Press **Set allowance** in the wallet's top bar and allow the game some METH. The **game.allowance** preset prints
    what the game may now stake.
-2. Press **game.casinoBet · 50% for 1.9×**, then **Send**: a step of two equally likely results, `Win` and `Nothing`,
-   which is one bet paying 1.9 times the stake on half the outcomes. The casino takes it:
+2. Press **game.casinoBet · 50% for 1.9×**, then **Send**: a step, the table of results a bet can land on, here two
+   equally likely results, `Win` and `Nothing`, which is one bet paying 1.9 times the stake on half the outcomes. The
+   casino takes it:
 
 ```json title="Reply"
 {
@@ -79,15 +80,25 @@ loads both. Developer bets need the game [published](publishing.md#publish-it) a
 }
 ```
 
-The probe shows every amount as a decimal string; on the bridge each is a bigint. `chance` is how many of the 2^64
-outcomes win. `outcome`, the round's value, which the wallet checked against the round it signed, is below it, so the
-prize paid, and the step landed on `result` 0, `Win`. `draw` is a value the wallet drew after it, for a game to show the
-result with. **wallet.showBet · last ID** shows the bet's proof in the wallet. The same request again returns the same
-receipt, and other terms under the same ID are refused with `id-conflict`.
+The probe shows every number as a decimal string; on the bridge each is a bigint, and amounts are in wei, so
+`"1000000000000"` is 1 METH.
+
+| Field     | What it is                                                                                     |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| `stake`   | What the bet put at risk                                                                       |
+| `chance`  | How many of the 2^64 outcomes win                                                              |
+| `prize`   | What it pays when it wins                                                                      |
+| `outcome` | The round's value, which the wallet checked against the round it signed: below `chance`, a win |
+| `result`  | The result the step landed on, by its place in the table: 0, `Win`                             |
+| `draw`    | A value the wallet drew after the outcome, for the game to show the result with                |
+| `payout`  | What the bet paid                                                                              |
+
+**wallet.showBet · last ID** shows the bet's proof in the wallet. The same request again returns the same receipt, and
+other terms under the same ID are refused with `id-conflict`.
 
 Press the preset again for a fresh ID, change the `Win` result's `cash` to `"2000000000000"`, twice the stake, and press
-**Send**. That leaves the casino no edge, so its quote does not cover the bet, and the wallet refuses it with
-`not-covered` before signing anything.
+**Send**. That leaves the casino no edge, the part of each stake it keeps, so its quote does not cover the bet, and the
+wallet refuses it with `not-covered` before signing anything.
 
 Replace the probe with your game in `src/`, and keep the probe in a branch: it is the quickest way to reproduce a reply
 you did not expect.

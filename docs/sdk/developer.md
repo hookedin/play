@@ -12,10 +12,11 @@ bets](../games/developer-bets.md) is the guide.
 ```ts
 import { createDeveloper } from '@hookedin/play/sdk/developer';
 
+// In a Worker, from its env: the game's server key, a secret, and the game's ID.
 const developer = await createDeveloper({
   casinoURL: 'https://casino.hookedin.com',
-  key: process.env.SERVER_KEY!,
-  game: process.env.GAME!,
+  key: env.SERVER_KEY,
+  game: env.GAME,
 });
 const round = await developer.openRound();
 const seedHash = await developer.seedHash(round.id); // commit to both before anybody bets
@@ -25,11 +26,11 @@ const seedHash = await developer.seedHash(round.id); // commit to both before an
 
 ### `createDeveloper`
 
-| Parameter   | Meaning                                                                                                                |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `casinoURL` | The casino's base URL, without a trailing slash: `https://casino.hookedin.com`, or `http://127.0.0.1:4183` locally     |
-| `key`       | The private key of the game's server, hex: the key its developer named, or the developer's own                         |
-| `game`      | The game's [ID](../reference/signed-messages.md#game-ids), which the wallet's **Developer** page shows beside the game |
+| Parameter   | Meaning                                                                                                                             |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `casinoURL` | The casino's base URL, without a trailing slash: `https://casino.hookedin.com`                                                      |
+| `key`       | The private key of the game's server, hex: the [key its developer named](../games/developer-bets.md#your-games-server-key-and-bank) |
+| `game`      | The game's [ID](../reference/signed-messages.md#game-ids), which the wallet's **Developer** page shows beside the game              |
 
 It throws an `Error` with code `invalid` for a `game` that is not a game ID in its one form, lowercase. It reads
 [`GET /api/config`](../casino-api/public.md#get-apiconfig) and throws an `Error` with code `protocol-mismatch` when the

@@ -1,5 +1,5 @@
 import { inbound } from './wallet-transactions.ts';
-import { $, casinoURL, toast } from './page.ts';
+import { $, toast } from './page.ts';
 import { parseRoute, route, showPage } from './routes.ts';
 import { refreshWallet, renderActivity, renderWallet, showWallet, storage, wallet } from './sheet.ts';
 import { loadLibrary, startup } from './games.ts';
@@ -35,7 +35,6 @@ async function takeWallet() {
 }
 
 $('deposit-instructions').textContent = `Send ETH on ${wallet.networkName} to your deposit address`;
-$<HTMLAnchorElement>('casino-status').href = casinoURL + '/api/status';
 await takeWallet();
 // Show the addressed page immediately; a game route waits for the wallet and the lobby.
 const initialRoute = parseRoute(new URL(location.href));

@@ -488,13 +488,15 @@ cast to-dec 0x$(cast keccak $(cast abi-encode "f(bytes32,bytes32,bytes32)" $(cas
               returned = table.reduce(function (sum, result) {
                 return sum + result[0] * result[1];
               }, 0n),
+              // What the step held less what it pays back on average, to the nearest wei.
+              edge = weight * cash - returned,
               exact = realizes(cash, table, branches);
             rows.push([
               'The table',
               table.length +
-                ' results, returning ' +
-                onScale((returned * SPACE) / (weight * cash), 4, true).text +
-                '% of what the step held',
+                ' results, at a house edge of ' +
+                (edge < 0n ? '−' + (-edge + weight / 2n) / weight : String((edge + weight / 2n) / weight)) +
+                ' wei',
             ]);
             rows.push([
               'The ways',

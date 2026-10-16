@@ -202,7 +202,7 @@ function openAllowanceDialog() {
   allowingDeveloperBets = Boolean(active.publisher) && (active.developerBets || wallet.game.developerBets);
   $('allowance-developer').hidden = !allowingDeveloperBets;
   $('allowance-developer-text').textContent =
-    `${active.identity.name} also bets against its developer, ${active.publisher}: your stake goes into the game's bank at once, and they decide what each bet pays. Your wallet checks that a bet riding on a round was fixed before you bet, but not what the game makes of it or what it pays, so allow this only for a developer you trust.`;
+    `In ${active.identity.name} you also bet against its developer, ${active.publisher}: your stake goes into the game's bank at once, and they decide what each bet pays. Your wallet checks that a bet riding on a round was fixed before you bet, but not what the game makes of it or what it pays, so allow this only for a developer you trust.`;
   // The dialog starts at the allowance as it stands: nothing, for a game just opened.
   const total = wholeMeth(allowable()),
     allowance = wholeMeth(wallet.game.allowance);
@@ -219,7 +219,7 @@ export function gameURL(value: string) {
   try {
     url = new URL(value);
   } catch {
-    throw new Error('Enter the full URL of the game, starting with https://.');
+    throw new Error('Enter the game’s full URL, such as https://your-game.example/.');
   }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
     throw new Error('Games must use an HTTP or HTTPS URL without credentials.');

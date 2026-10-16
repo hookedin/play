@@ -31,8 +31,9 @@ fetch from its origin and post messages to the wallet. It cannot reach the walle
 wallet extension; navigate the top window, open popups, submit forms, show `alert` or `confirm` dialogs, or start
 downloads. The wallet refuses a game on its own origin, and its host forbids framing its pages.
 
-The build's [`_headers`](publishing.md#the-_headers-file) keep the page to its own origin: no inline `<script>` or
-`<style>`, no scripts from a CDN and no third-party requests. Bundle what you need, and run a server on the page's own
+The build's [`_headers`](publishing.md#the-_headers-file) keep the page to its own origin: no inline `<script>`,
+`<style>` or `style` attribute (set styles from a script, or with classes), no scripts, styles, fonts or images from a
+CDN, and no requests to another origin, WebSockets included. Bundle what you need, and run a server on the page's own
 origin ([one Worker](developer-bets.md#one-cloudflare-worker)).
 
 ## The allowance
@@ -46,16 +47,17 @@ must fit it.
   with `insufficient-allowance`, whose message,
   [`HookedIn.NOT_ENOUGH_ALLOWANCE`](../sdk/hookedin.md#not_enough_allowance), tells the player what to do: show it, or
   your own, before anything is drawn.
-- Developer bets are allowed apart, after a warning that the game's developer takes their stakes and decides what they
-  pay. A game that places them says so as its page loads, with `HookedIn.placesDeveloperBets()`, and the dialog then
-  asks about them too.
+- A game that places developer bets says so as its page loads, with `HookedIn.placesDeveloperBets()`. The dialog then
+  warns that the game's developer takes their stakes and decides what they pay, and **Allow** allows them too.
 - `HookedIn.allowance()` reads it, with `pending` and `developerBets`, and `HookedIn.onAllowance` hears whenever any of
   it changes: take the no-allowance word, or a refusal, down then. Stakes and payments lower it as they are made;
   verified winnings raise it, a group's once the game has ended the group.
 - `pending: true` means the wallet holds a signed operation that has not resolved, and takes no other bet or payment
   until it does ([lost replies](#lost-replies)).
-- Leaving the game, reloading or closing the tab takes the allowance back, and the leave to place developer bets with
-  it: a game opens with nothing every time. The wallet runs in one tab at a time, and opens one game at a time.
+- Leaving the game, reloading the wallet's tab or closing it takes the allowance back, and the leave to place developer
+  bets with it: a game opens with nothing every time. The game's own page reloading, from **Reload game** in the game's
+  menu or `hookedin-game serve` after a save, keeps it. The wallet runs in one tab at a time, and opens one game at a
+  time.
 - The wallet's top bar names the game and shows its allowance, so a page shows no header, allowance or balance of its
   own: only the game.
 
@@ -117,11 +119,13 @@ if (saved) {
   if (receipt) {
     localStorage.removeItem(key); // the reply that was lost: apply it once
     show(receipt);
+    await HookedIn.end(saved.id); // shown, so its winnings join the allowance
   } else
     offer('Finish your flip', async () => {
       // No receipt in this wallet: the same request, under the same id.
       show(await HookedIn.casinoBet({ id: saved.id, ...flipStep(saved.stake), group: saved.id }));
       localStorage.removeItem(key);
+      await HookedIn.end(saved.id);
     });
 }
 ```
@@ -157,11 +161,11 @@ they can change. A guest has no uname: the wallet loads the page again when a gu
 when the player switches accounts. `RoundClient` saves its round under `hookedin:round:<name>:<chainId>:<uname>`, where
 `name` is the page's path unless you pass one.
 
-A reload takes back the allowance. The state at your origin survives, and every settled step's money is in the player's
-balance, so a resumed round asks for an allowance again. Saved state stays in this browser, and a round left unfinished
-leaves the player the cash it held. **Use here**, which moves the wallet to another tab, stops the game in the tab it
-leaves, as a reload does. A game with state beyond one round, such as a slot's bonus counter, applies each finished
-round once, by the round's `id`.
+Reloading the wallet's tab takes back the allowance. The state at your origin survives, and every settled step's money
+is in the player's balance, so a resumed round asks for an allowance again. Saved state stays in this browser, and a
+round left unfinished leaves the player the cash it held. **Use here**, which moves the wallet to another tab, stops the
+game in the tab it leaves, as a reload does. A game with state beyond one round, such as a slot's bonus counter, applies
+each finished round once, by the round's `id`.
 
 ## History
 

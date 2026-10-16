@@ -141,6 +141,8 @@ its reel stops.
 
 ## Payments
 
-A payment, [`game.payment`](../reference/bridge.md#gamepayment), is a fixed debit to the bankroll: no round, no outcome,
-no commission. `RoundClient` places one when a step leaves the player less cash with nothing to draw, such as a cash-out
-from a state priced above what it pays ([one step is one bet](collapsing-bets.md#one-step-is-one-bet)).
+A payment, [`game.payment`](../reference/bridge.md#gamepayment), sent with
+[`HookedIn.call`](../sdk/hookedin.md#call)`('game.payment', { id, amount })`, is a fixed debit to the bankroll: no
+round, no outcome, no commission. `RoundClient` places one when a step leaves the player less cash with nothing to draw,
+such as a cash-out from a state priced above what it pays ([one step is one
+bet](collapsing-bets.md#one-step-is-one-bet)).

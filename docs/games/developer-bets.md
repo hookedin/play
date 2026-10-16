@@ -2,7 +2,7 @@
 title: Developer bets
 description: Bets against you, settled by your server, and provably fair schemes on your rounds and your casino bets.
 sidebar:
-  order: 6
+  order: 7
 ---
 
 A developer bet is a bet against you, the game's developer, not the casino's bankroll: many players on one roulette
@@ -10,15 +10,26 @@ spin, a crash curve, a football match. The player's wallet places it with the ca
 game's bank, and your server settles it later, paying from that bank. Playing such a game trusts you: the player is paid
 what your settlement says, and whether you can pay is between you and your players, a [settled
 trade-off](../overview/architecture.md#settled-trade-offs) the wallet tells players of ([trust
-model](../overview/trust-model.md)).
+model](../overview/trust-model.md)). Trying one takes a stand-in casino or real ETH ([trying it](#trying-it)).
 
 ## Your game's server key and bank
 
 Your server signs with the game's **server key**, a key you make for it and name beside the game on the wallet's
 **Developer** page ([`POST /api/account/games/server`](../casino-api/channels.md#post-apiaccountgamesserver)); until you
-do, it is your account's own key, which holds everything the account holds. Only that key settles the game's developer
-bets, opens its rounds and places the casino bets that back them, spending the game's bank and nothing else: a key that
-leaks costs the game's bank at most, and naming another makes the old one nothing.
+do, it is your account's own key, which holds everything the account holds, so name one before your server runs. Only
+that key settles the game's developer bets, opens its rounds and places the casino bets that back them, spending the
+game's bank and nothing else: a key that leaks costs the game's bank at most, and naming another makes the old one
+nothing.
+
+Make it in your game's folder: this saves the key in `.dev.vars`, which `wrangler dev` reads and git ignores, and prints
+only its address.
+
+```sh
+node -e "const w = require('ethers').Wallet.createRandom(); require('fs').appendFileSync('.dev.vars', 'SERVER_KEY=' + w.privateKey + '\n'); console.log(w.address)"
+```
+
+Name that address on **Developer**, and give the deployed Worker the key with `npx wrangler secret put SERVER_KEY`. The
+key goes nowhere else: not into the wallet, a command line or a message.
 
 The game's **bank** is a balance at the casino ([earnings](publishing.md#earnings)): the stakes of its developer bets
 and half the commission of its casino bets go in, and its settlements and its own casino bets are paid from it. Nothing
@@ -50,9 +61,10 @@ const receipt = await HookedIn.developerBet({
 - Only a published game takes developer bets: a game opened by its URL alone is refused with `invalid-request`
   ([publishing](publishing.md#publish-it)). A deposit pays one only once the chain finalizes it, about 15 minutes after
   it; what the player won or was sent pays at once.
-- The player allows developer bets apart from casino bets: call `HookedIn.placesDeveloperBets()` as your page loads
-  ([the allowance](how-a-game-works.md#the-allowance)). Until they do, a developer bet is refused with
-  `developer-bets-not-allowed`, whose message is [`HookedIn.NO_DEVELOPER_BETS`](../sdk/hookedin.md#no_developer_bets).
+- The player allows developer bets with the allowance: call `HookedIn.placesDeveloperBets()` as your page loads, so the
+  dialog warns of them and **Allow** allows them too ([the allowance](how-a-game-works.md#the-allowance)). Until then, a
+  developer bet is refused with `developer-bets-not-allowed`, whose message is
+  [`HookedIn.NO_DEVELOPER_BETS`](../sdk/hookedin.md#no_developer_bets).
 - Once your server settles a bet, the wallet checks the settlement against your server key, collects what it pays into
   the bet's group, which joins the allowance when the page ends it with
   [`HookedIn.end`](../reference/bridge.md#gameend), and pushes the `settled` receipt as a `game.receipt` event. It looks
@@ -79,11 +91,12 @@ wherever `fetch` runs: Node, or a Cloudflare Worker.
 import { createDeveloper } from '@hookedin/play/sdk/developer';
 import type { PublicDeveloperBet } from '@hookedin/play/sdk/developer';
 
-// The game's server key, and the game's ID, which the Developer page shows beside the game.
+// A Worker's env holds the game's server key, as a secret, and the game's ID, which the Developer page shows beside
+// the game.
 const developer = await createDeveloper({
   casinoURL: 'https://casino.hookedin.com',
-  key: process.env.SERVER_KEY!,
-  game: process.env.GAME!,
+  key: env.SERVER_KEY,
+  game: env.GAME,
 });
 
 /** Every open bet of the game, a page at a time, in the order they were placed. */
@@ -332,3 +345,18 @@ Roulette's Durable Object follows the game's bets while a page watches and sends
 server-sent events. [Roulette's repository](https://github.com/hookedin/game-roulette) is a GitHub template with all of
 this in place: its `wrangler.jsonc` names the casino and the game's ID, as `GAME`, and its README sets `SERVER_KEY`, the
 key you name as the game's server, as a secret.
+
+## Trying it
+
+The local wallet [`hookedin-game serve`](quick-start.md#try-it-with-pretend-money) serves takes casino bets only: its
+casino lives in the page, out of your server's reach. Without ETH, a game with a server is tried two ways:
+
+- Its tests, where [`gameWallet`](testing.md#gamewallet)'s `developer` stands in for the `Developer` your server
+  creates, against the same stub casino as the wallet ([testing a server](testing.md#testing-a-server)).
+- A local preview that runs your page and your server against that stand-in, as crash's `npm run demo` does with its
+  [test/harness.ts](https://github.com/hookedin/game-crash/blob/main/test/harness.ts).
+
+With the real casino, developer bets take real ETH. From an account with a balance, publish the game at the URL your
+server runs on, `http://127.0.0.1:<port>/` while you work, name its server key, put a little in its bank if its casino
+bets need it, and play it at its name. Once it is deployed, publish the same name with the deployed URL: it keeps its
+ID, its bank and its server key.

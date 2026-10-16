@@ -253,7 +253,7 @@ function showBet(row: BetRow) {
       : undefined,
     place = round && round.length > 1 ? round.findIndex(other => other.operation === row.operation) : -1;
   openBetDialog(
-    kept ? 'A step without a bet' : place < 0 ? 'One bet' : `Bet ${place + 1} of a round of ${round!.length}`,
+    kept ? 'A step without a bet' : place < 0 ? 'One bet' : `Step ${place + 1} of ${round!.length} in a round`,
     row.game,
     ...(place < 0 && !(kept && round)
       ? []
@@ -269,10 +269,14 @@ function showBet(row: BetRow) {
             ),
           ),
         ]),
-    betDetail(row, opened => {
-      $<HTMLDialogElement>('bet-dialog').close();
-      if (opened.gameId) void openGameRecord(opened.gameId);
-    }),
+    betDetail(
+      row,
+      opened => {
+        $<HTMLDialogElement>('bet-dialog').close();
+        if (opened.gameId) void openGameRecord(opened.gameId);
+      },
+      place >= 0 || (kept && Boolean(round)),
+    ),
   );
 }
 /** A list is rebuilt only when what it shows has changed. The wallet renders on every poll, and a
@@ -640,7 +644,12 @@ $('game-verify').addEventListener('click', async () => {
     local = playing ? null : wallet.lastShownBet(id),
     recorded = playing ? null : (await recordedRows()).find(row => row.receipt?.kind !== 'payment'),
     last =
-      recorded && (!local || recorded.at > Date.parse(local.createdAt)) ? recorded : local ? receiptRow(local) : null;
+      recorded && (!local || recorded.at > Date.parse(local.createdAt)) ? recorded : local ? receiptRow(local) : null,
+    // A bet of a round of several shows the round, hand-first: what it put in and paid back.
+    round = last?.group
+      ? groupRows(ownBets()).find(rows => rows.some(row => row.operation === last.operation))
+      : undefined;
+  if (round && round.length > 1) return showGroup(round, showBet);
   if (last) return showBet(last);
   openBetDialog(
     'Your last bet',

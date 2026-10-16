@@ -2,7 +2,7 @@
 title: Testing
 description: Test a game against the real wallet and an in-memory casino that holds every bet to the casino's own rules, and the reference for @hookedin/play/testing/game-wallet.ts.
 sidebar:
-  order: 7
+  order: 4
 ---
 
 Game tests do not mock the wallet. `import { gameWallet } from '@hookedin/play/testing/game-wallet.ts';` builds the real
@@ -116,6 +116,7 @@ import { doubleUp } from '../src/rules.ts';
 test('a round of Double up settles one step at a time', async () => {
   const f = await gameWallet();
   f.wallet.openGame(f.identity('double-up'));
+  await f.wallet.setGameAllowance(200000n);
   const round = new RoundClient(f.bridge, doubleUp, { store: memoryStore(), name: 'double-up' });
   await round.start({ stake: 1000n });
   const state = await round.action('flip');

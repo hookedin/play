@@ -22,8 +22,9 @@ game showed it.
 
 While you play, the game's name in the top bar opens a menu:
 
-- **Verify your last bet** opens the game's latest bet, from this browser or the casino's record of your account. While
-  a round is in play it waits for the round to end, so it never gives a result away.
+- **Verify your last bet** opens the game's latest bet, from this browser or the casino's record of your account, or its
+  whole round when it was a step of one. While a round is in play it waits for the round to end, so it never gives a
+  result away.
 - **Next round**, before you bet, shows the round of your next casino bet: the hash of the secret the casino has already
   fixed for it. Once you have bet, the bet's proof shows the same round and the secret that hashes to it.
 - **Your bets in** the game lists your bets in it; **Everyone's bets in** it opens its [public
@@ -34,16 +35,16 @@ A game can also open any of its bets from its own page ([`wallet.showBet`](../re
 
 ### A bet in full
 
-Opening a bet shows everything its receipt holds, each figure worked out again by your wallet, and a bet of a round
-links the whole round. A casino bet shows its **House edge**; for a step, **What the game offered**, the table of
-results with what each leaves you and how likely it is, the result it **Landed on**, and **How your wallet drew it**,
-the bets your wallet split the table into and the one your seed drew, or none; **Where the round landed**, on a scale of
-0 to 100 against the line the bet wins under; **How the outcome was fixed**, your seed and the casino's secret checked
-against the hashes your bet signed, with [**Check it yourself**](#check-a-bet-yourself); and **The record you both
-signed**, with both signatures and the whole receipt as JSON. A developer bet shows its developer, the meta you signed,
-what the developer's signed settlement paid you and gave the casino, and for a bet that named a round, **Fixed before
-you bet**: the round and the secret its settlement revealed ([a round of your
-own](../games/developer-bets.md#a-round-of-your-own)).
+Opening a bet shows everything its receipt holds, each figure worked out again by your wallet. A step of a round shows
+what the round was worth before and after it, and links the whole round. A casino bet shows its **House edge**; for a
+step, **What the game offered**, the table of results with what each leaves you and how likely it is, the result it
+**Landed on**, and **How your wallet drew it**, the bets your wallet split the table into and the one your seed drew, or
+none; **Where the round landed**, on a scale of 0 to 100 against the line the bet wins under; **How the outcome was
+fixed**, your seed and the casino's secret checked against the hashes your bet signed, with [**Check it
+yourself**](#check-a-bet-yourself); and **The record you both signed**, with both signatures and the whole receipt as
+JSON. A developer bet shows its developer, the meta you signed, what the developer's signed settlement paid you and gave
+the casino, and for a bet that named a round, **Fixed before you bet**: the round and the secret its settlement revealed
+([a round of your own](../games/developer-bets.md#a-round-of-your-own)).
 
 ## Check a bet yourself
 

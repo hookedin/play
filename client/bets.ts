@@ -617,9 +617,10 @@ function stepSection(step: NonNullable<ReturnType<typeof drawnStep>>) {
  * One of this wallet's own bets, whole: for a casino bet, its chance drawn across the outcome space, where its round
  * landed in that space, and the seed and secret that fixed it; for a developer bet, what it was and how its developer
  * settled it. Every derived figure is worked out here from the receipt's own preimages, so it is checked in front of
- * the player rather than repeated back from what the casino said.
+ * the player rather than repeated back from what the casino said. A step of a round of several shows what the round
+ * was worth before and after it, since only the round as a whole is what the player put in and was paid.
  */
-export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
+export function betDetail(row: BetRow, onGame?: (row: BetRow) => void, inRound = false) {
   const net = row.payout - row.stake,
     receipt: Partial<Receipt> = row.receipt ?? {},
     step = receipt.proof?.step,
@@ -647,20 +648,28 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
     drawn = drawnStep(receipt, paid),
     body = document.createDocumentFragment();
 
-  const when = new Date(row.at);
+  const when = new Date(row.at),
+    before = row.stake + (row.kept ?? 0n),
+    after = row.payout + (row.kept ?? 0n);
   body.append(
     h(
       'p',
       { className: 'bet-detail-when' },
-      `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Broke even'} ${signedAmount(net)}` +
+      (inRound
+        ? `Worth ${formatAmount(before)} → ${formatAmount(after)} METH`
+        : `${net > 0n ? 'Won' : net < 0n ? 'Lost' : 'Broke even'} ${signedAmount(net)}`) +
         (Number.isNaN(when.getTime()) ? '' : ` · ${when.toLocaleString()}`),
     ),
     h(
       'div',
       { className: 'bet-detail-figures' },
-      figure(stakeLabel(row), `${exact(row.stake)} METH`),
-      figure('Paid', `${exact(row.payout)} METH`),
-      figure('Result', signedAmount(net), tone(net)),
+      ...(inRound
+        ? [figure('Worth before', `${exact(before)} METH`), figure('Worth after', `${exact(after)} METH`)]
+        : [
+            figure(stakeLabel(row), `${exact(row.stake)} METH`),
+            figure('Paid', `${exact(row.payout)} METH`),
+            figure('Result', signedAmount(net), tone(net)),
+          ]),
       edgeFigure(rowEdge(row), true),
     ),
   );
@@ -845,7 +854,7 @@ export function betDetail(row: BetRow, onGame?: (row: BetRow) => void) {
         receipt.balance !== undefined && ['Balance after it settled', `${exact(receipt.balance)} METH`],
         receipt.commission !== undefined && receipt.commission > 0n
           ? [
-              'The game’s commission',
+              'Commission, half of it to the bank of a published game',
               h('span', { title: `${exact(receipt.commission)} METH` }, `${formatAmount(receipt.commission)} METH`),
             ]
           : null,

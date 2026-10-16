@@ -82,10 +82,11 @@ What the casino checks and answers, by operation:
 
 Money another account takes, a developer bet, an investment, a bank deposit or a transfer, comes only out of deposits
 the chain has finalized, about 15 minutes after each: a reorganisation can still take back a newer one, and what it paid
-would stay paid. One a newer deposit would pay is declined ("Until the chain finalizes this balance's latest deposit, in
-about 15 minutes, it pays another account at most … METH"); what the balance won or was sent pays at once. A deposit
-pays at once a casino bet or a payment, which the house takes, a withdrawal or a lock-in, which the contract records on
-no checkpoint counting a deposit it does not hold, and a developer bet in one of the house's games.
+would stay paid. One a newer deposit would pay is declined ("Your latest deposit can go to another player, a developer
+or the bankroll once Ethereum finalizes it, about 15 minutes after it arrives; until then, at most … METH of your
+balance can"); what the balance won or was sent pays at once. A deposit pays at once a casino bet or a payment, which
+the house takes, a withdrawal or a lock-in, which the contract records on no checkpoint counting a deposit it does not
+hold, and a developer bet in one of the house's games.
 
 A developer bet is known afterwards by the hash of its operation, which
 [`GET /api/developer-bets/:bet`](public.md#get-apideveloper-betsbet) takes, and so is a withdrawal or a lock-in, whose

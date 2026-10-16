@@ -3,12 +3,12 @@ import { gameSlug, json, MAX_GAME_NAME, MAX_GAMES, same, validGameName } from '.
 import { exact, h, methLabel, percent, signedAmount } from './activity.ts';
 import { formatAmount } from '../sdk/src/wire.ts';
 import { edgeShare, tone } from './bets.ts';
-import { $, short, shortDate, toast } from './page.ts';
+import { $, copyText, short, shortDate, toast } from './page.ts';
 import { showName } from './readers.ts';
 import { gameFigures, gameRecord, openGameRecord, type Figure } from './played.ts';
 import { act, task, uiBusy, wallet } from './sheet.ts';
 import { gameIcon, gameURL, loadGame, loadLibrary } from './games.ts';
-import { amountRule, typedIn } from './withdrawal.ts';
+import { amountRule, inUnit, typedIn } from './withdrawal.ts';
 
 /** Why a name is not one a game can be published under. */
 const NAME_RULE = `A game name is 1 to ${MAX_GAME_NAME} characters, at least one of them a letter from A to Z or a digit.`;
@@ -109,7 +109,8 @@ function ownGame(owner: string, game: AccountGame) {
       placeholder: game.name,
       ariaLabel: `New name for ${game.name}`,
     }),
-    busy = uiBusy || !wallet.playable || Boolean(wallet.pending);
+    busy = uiBusy || !wallet.playable || Boolean(wallet.pending),
+    id = h('code', null, game.id);
   const moveBank = (into: boolean) =>
     task(async () => {
       const value = typedIn(amount.value, 'METH');
@@ -159,7 +160,28 @@ function ownGame(owner: string, game: AccountGame) {
           { href: game.url, target: '_blank', rel: 'noopener noreferrer' },
           `${published ? 'Served' : 'Last served'} from ${game.url} ↗`,
         ),
-        h('code', { title: 'The game’s ID: your server names the game by it' }, game.id),
+        h(
+          'span',
+          { className: 'game-line-id' },
+          'Game ID ',
+          id,
+          ' ',
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'text-button',
+              onclick: () =>
+                void copyText(
+                  game.id,
+                  'Game ID copied: your server names the game by it.',
+                  'The game ID is selected. Copy it with your browser’s copy command.',
+                  id,
+                ),
+            },
+            'Copy',
+          ),
+        ),
       ),
       h(
         'span',
@@ -178,6 +200,11 @@ function ownGame(owner: string, game: AccountGame) {
           'div',
           { className: 'field-row' },
           h('div', { className: 'amount-input' }, amount, h('span', null, methLabel())),
+          h(
+            'button',
+            { type: 'button', className: 'text-button', onclick: () => (amount.value = inUnit(bank, 'METH', true)) },
+            'Max',
+          ),
           h('button', { type: 'button', className: 'button', disabled: busy, onclick: () => moveBank(true) }, 'Put in'),
           h(
             'button',
@@ -261,23 +288,41 @@ function ownGame(owner: string, game: AccountGame) {
     h(
       'div',
       { className: 'game-actions' },
-      published
-        ? h('a', { className: 'button small primary', href: path, onclick: play }, 'Play')
-        : h(
-            'button',
-            {
-              type: 'button',
-              className: 'button small primary',
-              title: `Publish ${game.name} again at ${game.url}, with its bank and its record.`,
-              disabled: uiBusy || !wallet.playable || wallet.recoveryOnly,
-              onclick: () =>
-                task(async () => {
-                  await wallet.publishGame(game.name, game.url);
-                  await afterPublishing(`${game.name} is published again, at ${owner}/${game.slug}.`);
-                }),
-            },
-            'Publish again',
-          ),
+      ...(published
+        ? [
+            h('a', { className: 'button small primary', href: path, onclick: play }, 'Play'),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'button small',
+                onclick: () =>
+                  void copyText(
+                    `${location.origin}${path}`,
+                    'Link copied. Players find your game by it: their library lists only the house’s games.',
+                    'The browser did not copy the link.',
+                  ),
+              },
+              'Copy link',
+            ),
+          ]
+        : [
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'button small primary',
+                title: `Publish ${game.name} again at ${game.url}, with its bank and its record.`,
+                disabled: uiBusy || !wallet.playable || wallet.recoveryOnly,
+                onclick: () =>
+                  task(async () => {
+                    await wallet.publishGame(game.name, game.url);
+                    await afterPublishing(`${game.name} is published again, at ${owner}/${game.slug}.`);
+                  }),
+              },
+              'Publish again',
+            ),
+          ]),
       h(
         'button',
         { type: 'button', className: 'button small', onclick: () => void openGameRecord(game.id) },
@@ -314,6 +359,13 @@ export function renderDeveloper() {
     down = games.filter(game => game.takenDownAt !== null),
     banked = games.reduce((sum, game) => sum + game.bank, 0n);
   $<HTMLButtonElement>('publish-game').disabled = uiBusy || !wallet.playable || wallet.recoveryOnly;
+  const blocked = !wallet.playable
+    ? 'Publishing needs an open balance: deposit first. Taking a game down never does.'
+    : wallet.recoveryOnly
+      ? 'The casino is unavailable, so nothing can be published now.'
+      : '';
+  $('publish-blocked').hidden = !blocked;
+  $('publish-blocked').textContent = blocked;
   $('developer-banks').textContent = owned ? formatAmount(banked) : '—';
   $('developer-banks').title = `${exact(banked)} METH`;
   $('published-count').textContent = `${live.length}/${MAX_GAMES}`;
@@ -366,7 +418,8 @@ function renderGameAddress() {
     valid = validGameName(name);
   $('game-address').hidden = !name;
   $('game-address').textContent = valid
-    ? `It lives at ${location.host}/${showName(wallet)}/${gameSlug(name)}.`
+    ? `It lives at ${location.host}/${showName(wallet)}/${gameSlug(name)}.` +
+      (wallet.discordUsername ? '' : ' Verify your Discord on your page to go by @username instead.')
     : NAME_RULE;
   $('game-address').classList.toggle('check-failed', !valid);
 }

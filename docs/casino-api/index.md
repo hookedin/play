@@ -1,6 +1,8 @@
 ---
 title: Casino API
 description: The casino's HTTP API, with its base URL, conventions, authentication, retries, pages, budgets, pauses and every error code.
+sidebar:
+  order: 0
 ---
 
 The casino service answers one JSON-over-HTTP API, whose messages [Signed messages](../reference/signed-messages.md)

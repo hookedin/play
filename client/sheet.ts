@@ -1133,7 +1133,16 @@ function downloadEvidence(bundle: EvidenceBundle) {
 }
 act('export-evidence', async () => downloadEvidence(await wallet.exportEvidence()));
 for (const id of ['start-close', 'channel-start-close'])
-  act(id, () => wallet.startClose(), 'Close started. It can be challenged for 7 days; keep watching until it is done.');
+  act(id, async () => {
+    const warning = [
+      'Close this balance without the casino?',
+      'Nothing more can be played on it. The close can be challenged for 7 days with a newer saved state; then you finish it under Settings → Recovery and collect what it is owed in the Wallet.',
+      'Its network fees come from your deposit address. While the casino answers, Withdraw takes money out at once.',
+    ].join('\n\n');
+    if (!confirm(warning)) return;
+    await wallet.startClose();
+    toast('Close started. It can be challenged for 7 days; keep watching until it is done.');
+  });
 $('compare-states').addEventListener('click', () => void compareStates());
 act('take-casino-state', async () => {
   const { record, casino } = compared!,
@@ -1260,15 +1269,19 @@ async function renderStorage(ask: boolean) {
 }
 void renderStorage(false);
 $('keep-storage').addEventListener('click', () => void renderStorage(true));
-act(
-  'channel-lock',
-  async () => {
-    // All of the balance goes out and back in: the open game gives back what it holds.
-    closeGame();
-    await wallet.lockIn();
-  },
-  'Locking in: your balance, less the fee for sending it, goes into deposits the contract holds, in one transaction the casino sends.',
-);
+act('channel-lock', async () => {
+  const warning = [
+    'Lock in your balance?',
+    `All of it goes into deposits the contract holds, in one transaction the casino sends${wallet.withdrawalFee ? `, and your balance pays the casino ${formatAmount(wallet.withdrawalFee)} METH for sending it` : ''}. The open game stops.`,
+  ].join('\n\n');
+  if (!confirm(warning)) return;
+  // All of the balance goes out and back in: the open game gives back what it holds.
+  closeGame();
+  await wallet.lockIn();
+  toast(
+    'Locking in: your balance, less the fee for sending it, goes into deposits the contract holds, in one transaction the casino sends.',
+  );
+});
 for (const id of ['channel-challenge', 'challenge-now'])
   act(id, () => wallet.challengeClose(), 'Your latest saved balance is submitted.');
 act(

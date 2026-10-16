@@ -5,6 +5,15 @@ const input = new TextEncoder().encode('HOOKEDIN/ACCOUNT-KEY');
 const random = (length: number) => crypto.getRandomValues(new Uint8Array(length));
 const key = (secret: BufferSource) => new Wallet(hexlify(new Uint8Array(secret as ArrayBuffer))).privateKey;
 const unsupported = () => new Error("This device's passkeys cannot hold a wallet. Create a key file instead.");
+/** Bytes as WebAuthn names them in a signal: base64url, without padding. */
+const base64url = (bytes: Uint8Array) => encodeBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/** A passkey made here that holds no wallet, told to the password manager keeping it as unknown, so it may delete it,
+ * where the browser lets a site do that. */
+function forget(id: ArrayBuffer) {
+  void (PublicKeyCredential as any)
+    .signalUnknownCredential?.({ rpId: location.hostname, credentialId: base64url(new Uint8Array(id)) })
+    ?.catch(() => {});
+}
 
 /** A passkey's account: its key, the passkey's secret for the wallet's input, the same on every device the passkey
  * syncs to, and the passkey's user ID, by which the wallet names it to the password manager keeping it. `create` makes
@@ -35,7 +44,10 @@ export async function passkeyAccount(create = false): Promise<{ key: string; use
       })) as PublicKeyCredential;
       const prf = made.getClientExtensionResults().prf;
       if (prf?.results?.first) return { key: key(prf.results.first), user };
-      if (!prf?.enabled) throw unsupported();
+      if (!prf?.enabled) {
+        forget(made.rawId);
+        throw unsupported();
+      }
       // Some passkeys answer only when used: this one is used at once.
       id = made.rawId;
     }
@@ -48,7 +60,10 @@ export async function passkeyAccount(create = false): Promise<{ key: string; use
       },
     })) as PublicKeyCredential;
     const first = used.getClientExtensionResults().prf?.results?.first;
-    if (!first) throw unsupported();
+    if (!first) {
+      if (id) forget(id);
+      throw unsupported();
+    }
     return {
       key: key(first),
       user: user ?? new Uint8Array((used.response as AuthenticatorAssertionResponse).userHandle!),
@@ -66,8 +81,7 @@ export async function passkeyAccount(create = false): Promise<{ key: string; use
 /** Name a passkey, in the password manager keeping it, by the name its account goes by here, where the browser lets a
  * site do that: then a player with several tells them apart. */
 export function namePasskey(user: Uint8Array, name: string) {
-  const userId = encodeBase64(user).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   void (PublicKeyCredential as any)
-    .signalCurrentUserDetails?.({ rpId: location.hostname, userId, name, displayName: name })
+    .signalCurrentUserDetails?.({ rpId: location.hostname, userId: base64url(user), name, displayName: name })
     ?.catch(() => {});
 }

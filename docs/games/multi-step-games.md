@@ -2,7 +2,7 @@
 title: Multi-step games
 description: Games with decisions, described as a graph and played as one casino bet per step with RoundClient.
 sidebar:
-  order: 4
+  order: 6
 ---
 
 A game with decisions, such as blackjack or Mines, is a sequence of casino bets, one per step, each settled on its own,
@@ -16,9 +16,9 @@ wallet.
 A [`GameGraph`](../sdk/engine.md#gamegraph) is a finite, acyclic graph of public states: `root`, the first node's ID,
 and `nodes`.
 
-- A **decision** node lists `actions`. Each action lists its `outcomes`, whose probabilities sum to one: the `next` node, an exact
-  `probability` made with [`fraction`](../sdk/engine.md#fraction), and an optional `label` saying what happened, such as
-  the card drawn, which the wallet shows with the step's table.
+- A **decision** node lists `actions`. Each action lists its `outcomes`, whose probabilities sum to one: the `next`
+  node, an exact `probability` made with [`fraction`](../sdk/engine.md#fraction), and an optional `label` saying what
+  happened, such as the card drawn, which the wallet shows with the step's table.
 - A **terminal** node has a `payout`: the gross cash the player ends with, as a bigint.
 
 Double up, a game of two flips:
@@ -137,7 +137,7 @@ const round = new RoundClient(HookedIn, setup => createBlackjack({ stake: setup.
 ```
 
 A table is right only for the rules it was generated from: blackjack's `npm run generate` writes it with `compileGame`,
-and its `npm test` fails when the table does not match.
+and its `npm test` and `npm run build` generate it first, so it always matches the rules.
 
 ## Changing the rules
 

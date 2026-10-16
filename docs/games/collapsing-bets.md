@@ -2,7 +2,7 @@
 title: Pricing and collapsing
 description: How the engine prices a game's states backward from its payouts, and how the wallet plays a step's table of many results as one casino bet it draws, with exact odds, and what that gives up.
 sidebar:
-  order: 5
+  order: 8
 ---
 
 The [engine](../sdk/engine.md) turns a finite game into a sequence of casino bets. It prices every state backward from

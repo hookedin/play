@@ -34,11 +34,11 @@ Other commands: `npm run typecheck`, `npm run vectors` (regenerate the vectors),
 
 ## Deploy
 
-Pushing to `main` releases the wallet: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs the whole test suite, builds, publishes `dist/` as the static-assets Worker [wrangler.jsonc](wrangler.jsonc) describes, and publishes each game in [games/](games/) as the Worker its own `wrangler.jsonc` describes, at `https://<id>-game.hookedin.com`. Blackjack, roulette and crash publish themselves from their own repositories.
+Pushing to `main` releases the wallet: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) runs the whole test suite, builds, deploys `dist/` as the static-assets Worker [wrangler.jsonc](wrangler.jsonc) describes, and deploys each game in [games/](games/) as the Worker its own `wrangler.jsonc` describes, at `https://<id>-game.hookedin.com`. Blackjack, roulette and crash deploy themselves from their own repositories.
 
-By hand: `npm run build && npx wrangler deploy` publishes the wallet, and `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`, a game.
+By hand: `npm run build && npx wrangler deploy` deploys the wallet, and `node sdk/bin/hookedin-game.js build games/<id>`, then `npx wrangler deploy` from `games/<id>`, a game.
 
-The wallet's routes, such as `/wallet` and `/@<username>/<slug>`, are client-side: `wrangler.jsonc` sets the single-page fallback, and `dist/_redirects` serves `/@<username>` paths as written. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths. [config/production.json](config/production.json), the deployment the release pins, is published as `config.js` and holds nothing secret.
+The wallet's routes, such as `/wallet` and `/@<username>/<slug>`, are client-side: `wrangler.jsonc` sets the single-page fallback, and `dist/_redirects` serves `/@<username>` paths as written. `dist/_headers` carries the Content-Security-Policy and `frame-ancestors 'none'`; any other host must send the same headers and serve `index.html` for unknown paths. [config/production.json](config/production.json), the deployment the release pins, is served as `config.js` and holds nothing secret.
 
 ## Contributing
 
