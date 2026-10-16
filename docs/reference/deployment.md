@@ -19,7 +19,8 @@ https://hookedin.com/bankroll/ shows it live.
 
 The wallet and the casino refuse any other chain. On Ethereum each reads the chain through two RPC endpoints on
 different hosts, a primary and a witness, and accepts an observation only when both agree on the block; a local Anvil
-chain needs one.
+chain needs one. The wallet sends its transactions through the primary, and both must serve old receipts, state and
+logs: a transaction the wallet saved days ago is found through them.
 
 ## Services
 
