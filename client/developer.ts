@@ -241,7 +241,17 @@ function ownGame(owner: string, game: AccountGame) {
               'your other games or where the game is served.'
           : 'That key alone settles its developer bets, opens its rounds and places its casino bets from its bank.',
         ...(own
-          ? []
+          ? [
+              h(
+                'a',
+                {
+                  href: 'https://hookedin.com/docs/games/developer-bets/#your-games-server-key-and-bank',
+                  target: '_blank',
+                  rel: 'noopener noreferrer',
+                },
+                'Make one ↗',
+              ),
+            ]
           : [
               h(
                 'button',
