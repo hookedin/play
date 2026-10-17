@@ -26,6 +26,22 @@ import {
 import { assessBet, MAX_BALANCE } from '../protocol/risk.ts';
 import { loadArtifact } from '../protocol/deployment.ts';
 import { gasLimitFor } from '../protocol/transaction-recovery.ts';
+/** Anvil run with `args` so that it stops when this process does, however this process ends: a shell holds this
+ * process's end of a pipe and stops Anvil once it closes, or exits with Anvil. `stop` closes the pipe and waits. */
+export function spawnAnvil(args: string[]) {
+  const child = spawn(
+    'sh',
+    ['-c', 'exec 3<&0; anvil "$@" & a=$!; { read -r _ <&3; kill $a; } & wait $a', 'anvil', ...args],
+    { stdio: ['pipe', 'ignore', 'pipe'] },
+  );
+  const exited = once(child, 'exit').catch(() => {});
+  return Object.assign(child, {
+    async stop() {
+      child.stdin!.end();
+      await exited;
+    },
+  });
+}
 /** A local chain. It finalizes every block as it mines it, unless `epoch` says how many slots an epoch has: then the
  * finalized block is two epochs behind, as Ethereum's is. */
 export async function anvil(chainId = 31337n, { epoch = 0 } = {}) {
@@ -34,11 +50,15 @@ export async function anvil(chainId = 31337n, { epoch = 0 } = {}) {
   await once(probe, 'listening');
   const port = (probe.address()! as any).port;
   await new Promise(r => probe.close(r));
-  const child = spawn(
-    'anvil',
-    ['--port', String(port), '--chain-id', String(chainId), '--slots-in-an-epoch', String(epoch), '--silent'],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
-  );
+  const child = spawnAnvil([
+    '--port',
+    String(port),
+    '--chain-id',
+    String(chainId),
+    '--slots-in-an-epoch',
+    String(epoch),
+    '--silent',
+  ]);
   let error;
   child.on('error', e => (error = e));
   const provider = new JsonRpcProvider('http://127.0.0.1:' + port, undefined, {
@@ -48,6 +68,7 @@ export async function anvil(chainId = 31337n, { epoch = 0 } = {}) {
   provider.pollingInterval = 10;
   for (let i = 0; ; i++) {
     if (error) throw error;
+    if (child.exitCode !== null) throw new Error('Anvil exited');
     try {
       await provider.send('eth_chainId', []);
       break;
@@ -75,8 +96,7 @@ export async function anvil(chainId = 31337n, { epoch = 0 } = {}) {
     url: 'http://127.0.0.1:' + port,
     async close() {
       provider.destroy();
-      child.kill();
-      await once(child, 'exit').catch(() => {});
+      await child.stop();
     },
   };
 }
