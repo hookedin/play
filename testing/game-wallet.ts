@@ -130,20 +130,24 @@ const recordId = () => {
  * with its key, here the developer's own: what a game is tested against without the private casino. The stub holds
  * every casino bet to the casino's own admission rule and charges its commission, so a bet it takes is one the casino
  * takes. `bankroll` is what it covers casino bets with, and admits them against half of, as the casino's quotes do;
- * `bank` is what the game's bank holds before any developer bet pays its stake into it. The wallet's requests reach it
- * as the casino reads their JSON, and it answers with JSON, every whole number a decimal string; the stub developer
- * reads its answers as the developer kit does.
+ * `bank` is what the game's bank holds before any developer bet pays its stake into it; `key` is the private key the
+ * game's server signs with, a random one by default. The wallet's requests reach it as the casino reads their JSON, and
+ * it answers with JSON, every whole number a decimal string; the stub developer reads its answers as the developer kit
+ * does.
  */
 export async function gameWallet({
   bankroll: capital = 10n ** 12n,
   bank: funds = 10n ** 12n,
   deposit = 1000000n,
+  key = Wallet.createRandom().privateKey,
 } = {}) {
   const storage = new MemoryStore(),
     signer = Wallet.createRandom(),
     player = Wallet.createRandom(),
-    developerKey = Wallet.createRandom();
-  const casino = Wallet.createRandom().address,
+    developerKey = new Wallet(key);
+  // Every stub runs the same contract, so a game's server signing for one is understood by the next, as when
+  // `hookedin-game serve` starts its stand-in afresh.
+  const casino = '0x000000000000000000000000000000000000cA51',
     d = domain(31337n, casino);
   let bankroll = capital,
     bank = funds;

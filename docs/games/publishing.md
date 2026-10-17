@@ -26,7 +26,8 @@ its message and exits with status 1.
 `http://127.0.0.1:4185/` (`PORT` moves it). It builds again on every page load, and a change in `src/` reloads every
 page open from it, keeping its allowance in the wallet, through a script it adds to the page it serves and never to
 `dist/`. Beside it, at `http://localhost:4185/`, it serves a local wallet that plays the game with [pretend
-money](quick-start.md#try-it-with-pretend-money).
+money](quick-start.md#try-it-with-pretend-money). `hookedin-game serve <url>` serves the local wallet alone, framing a
+game served elsewhere, such as a Worker under `wrangler dev` ([trying it](developer-bets.md#trying-it)).
 
 ### The `_headers` file
 

@@ -42,9 +42,10 @@ open, in the wallet too, keeping its allowance.
 
 `http://localhost:4185/` is a local wallet, served beside the game, that frames it with a million pretend METH (1 METH
 is 0.000001 ETH, 10^12 wei); **Allow** in its top bar gives the game an allowance. Its wallet and bridge are the real
-wallet's, so the game behaves as it does at play.hookedin.com, and its casino is the stand-in `npm test` uses, in the
-page: it needs no wallet, ETH or network. It takes casino bets and payments, and declines developer bets, which need the
-real casino. `wallet.showBet` prints the bet's receipt to the browser's console, and reloading starts it afresh.
+wallet's, so the game behaves as it does at play.hookedin.com, and its casino is the stand-in `npm test` uses, in
+`hookedin-game serve`'s memory: it needs no wallet, ETH or network. It takes casino bets, payments and developer bets,
+which a game's server settles against it too ([trying it](developer-bets.md#trying-it)). `wallet.showBet` prints the
+bet's receipt to the browser's console, and restarting `npm run dev` starts it afresh.
 
 ## Open it in the wallet
 

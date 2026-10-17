@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// hookedin-game build [dir ...] | serve [dir] — turn a game's src/ into dist/, the folder any static host serves as is,
-// or serve it as it changes, beside a local wallet with pretend money.
+// hookedin-game build [dir ...] | serve [dir | url] — turn a game's src/ into dist/, the folder any static host serves as
+// is, or serve it as it changes, or a game served elsewhere by its URL, beside a local wallet with pretend money.
 // A game is its URL: dist/index.html is the page the wallet frames, and dist/icon.svg the icon it shows the game by.
 import fs from 'node:fs';
 import http from 'node:http';
@@ -188,55 +188,82 @@ const LOCAL_WALLET = `<!doctype html>
 </html>
 `;
 
+/** Whether `game` names a game served elsewhere, by its URL, rather than by its folder. */
+const elsewhere = game => /^https?:\/\//.test(game);
+
 /**
- * Serve the game in `root` at http://127.0.0.1:<port>/, built again on every page load and reloaded on every change to
- * its src/, and beside it, at http://localhost:<port>/, the local wallet: the game framed with pretend money. One port
- * under two names is two origins, as a wallet and its game always are. Resolves once the server listens.
+ * Serve the local wallet at http://localhost:<port>/: the game framed with pretend money, against a stand-in casino
+ * that the game's server, if it has one, reaches at the same address. `game` is the game's folder, served at
+ * http://127.0.0.1:<port>/, built again on every page load and reloaded on every change to its src/: one port under two
+ * names is two origins, as a wallet and its game always are. Or it is the URL of a game served elsewhere, such as its
+ * Worker's under `wrangler dev`. Resolves once the server listens, with it and what the game's server needs to play
+ * against the stand-in, as its `.dev.vars` holds it.
  */
-export async function serveGame(root, port) {
-  await buildGame(root);
-  const [script] = (
-    await build({
+export async function serveGame(game, port) {
+  const url = elsewhere(game) ? new URL(game).href : null;
+  if (!url) await buildGame(game);
+  const bundle = async options =>
+    (await build({ bundle: true, format: 'esm', target: 'es2022', write: false, ...options })).outputFiles[0].contents;
+  const [script, standIn] = await Promise.all([
+    bundle({
       entryPoints: [path.join(sdk, 'local-wallet.ts')],
-      bundle: true,
-      minify: true,
-      format: 'esm',
       platform: 'browser',
-      target: 'es2022',
-      write: false,
-    })
-  ).outputFiles;
-  const local = { '/': [LOCAL_WALLET, types['.html']], '/local-wallet.js': [script.contents, types['.js']] };
-  const game = createStaticServer(path.join(root, 'dist'), () => buildGame(root), path.join(root, 'src'));
+      minify: true,
+      define: { GAME: JSON.stringify(url ?? '') },
+    }),
+    bundle({ entryPoints: [path.join(sdk, 'local-casino.ts')], platform: 'node' }),
+  ]);
+  // The stand-in is TypeScript, which Node does not run from node_modules: it runs bundled, from memory.
+  const { localCasino, SERVER_KEY } = await import(
+    `data:text/javascript;base64,${Buffer.from(standIn).toString('base64')}`
+  );
+  const casino = await localCasino(url ?? `http://127.0.0.1:${port}/`);
+  const local = { '/': [LOCAL_WALLET, types['.html']], '/local-wallet.js': [script, types['.js']] };
+  const served = url
+    ? null
+    : createStaticServer(path.join(game, 'dist'), () => buildGame(game), path.join(game, 'src'));
   const server = http.createServer((req, res) => {
-    if (new URL(`http://${req.headers.host}`).hostname !== 'localhost') return void game.emit('request', req, res);
+    if (served && new URL(`http://${req.headers.host}`).hostname !== 'localhost')
+      return void served.emit('request', req, res);
     const page = local[new URL(req.url, 'http://localhost').pathname];
-    if (!page) return void res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found');
+    if (!page) return void casino.handle(req, res);
     res.writeHead(200, { 'Content-Type': page[1], 'Cache-Control': 'no-store' }).end(page[0]);
   });
   // The game's server stops watching its sources with this one.
-  server.on('close', () => game.close());
+  server.on('close', () => served?.close());
   await new Promise(resolve => server.listen(port, '127.0.0.1', resolve));
-  return server;
+  const env = { CASINO_URL: `http://localhost:${server.address().port}`, GAME: casino.game, SERVER_KEY };
+  return { server, env };
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [command, ...dirs] = process.argv.slice(2);
+  const [command, ...args] = process.argv.slice(2);
   // A build problem is the developer's to fix, not a stack trace to read.
   try {
     if (command === 'build')
-      for (const dir of dirs.length ? dirs : ['.']) {
+      for (const dir of args.length ? args : ['.']) {
         await buildGame(path.resolve(dir));
         console.log(`Built ${path.join(dir, 'dist')}/`);
       }
     else if (command === 'serve') {
-      const port = Number(process.env.PORT ?? 4185);
-      await serveGame(path.resolve(dirs[0] ?? '.'), port);
+      const port = Number(process.env.PORT ?? 4185),
+        [game = '.'] = args,
+        { env } = await serveGame(elsewhere(game) ? game : path.resolve(game), port);
       console.log(
-        `Try the game with pretend money: http://localhost:${port}/\nPlay it with ETH at https://play.hookedin.com: choose Open a game by its URL and paste http://127.0.0.1:${port}/\nSaving a file in src/ builds the game again and reloads it, keeping its allowance.`,
+        [
+          `Try the game with pretend money: http://localhost:${port}/`,
+          ...(elsewhere(game)
+            ? []
+            : [
+                `Play it with ETH at https://play.hookedin.com: choose Open a game by its URL and paste http://127.0.0.1:${port}/`,
+                'Saving a file in src/ builds the game again and reloads it, keeping its allowance.',
+              ]),
+          'Its server, if it has one, plays against the same pretend casino with these in its .dev.vars:',
+          ...Object.entries(env).map(([name, value]) => `${name}=${value}`),
+        ].join('\n'),
       );
     } else {
-      console.error('Usage: hookedin-game build [dir ...] | serve [dir]');
+      console.error('Usage: hookedin-game build [dir ...] | serve [dir | url]');
       process.exit(1);
     }
   } catch (error) {

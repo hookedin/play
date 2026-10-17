@@ -28,7 +28,7 @@ npm run dev      # build, then serve dist/ at http://127.0.0.1:4184
 npm test         # build, type-check, check the vectors, run every test suite (needs anvil and Chrome)
 ```
 
-`npm run dev` serves the wallet alone, on the deployment [config/production.json](config/production.json) pins; `PORT` moves it. caserver's `npm run dev` serves it on a local stack instead. To work on a game, `node sdk/bin/hookedin-game.js serve games/<id>` serves it at `http://127.0.0.1:4185/` and builds it again on every page load; in any wallet, choose **Open a game by its URL** and open that address.
+`npm run dev` serves the wallet alone, on the deployment [config/production.json](config/production.json) pins; `PORT` moves it. To work on a game, `node sdk/bin/hookedin-game.js serve games/<id>` serves it at `http://127.0.0.1:4185/` and builds it again on every page load, beside a local wallet at `http://localhost:4185/` that plays it with pretend money; in any wallet, choose **Open a game by its URL** and open that address.
 
 Other commands: `npm run typecheck`, `npm run vectors` (regenerate the vectors), `npm run format`, and `npm run watchtower` ([the watchtower](docs/wallet/keys-and-recovery.md#the-watchtower)).
 

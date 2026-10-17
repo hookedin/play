@@ -1,6 +1,6 @@
 ---
 title: Public endpoints
-description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the signing history, the bankroll fund, players, games' records, rounds, developer bets and demo ETH on a local stack.
+description: The routes anyone may call, for the deployment, health and books, the withdrawal fee, the signing history, the bankroll fund, players, games' records, rounds, developer bets and demo ETH.
 sidebar:
   order: 1
 ---
@@ -15,22 +15,21 @@ The deployment the casino runs: a wallet checks `protocol`, and a developer's se
 own before signing anything, and the wallet trusts nothing else here ([how it pins its
 deployment](../reference/deployment.md#how-the-wallet-pins-its-deployment)).
 
-| Response field       | Type           | Meaning                                                                                                                                                       |
-| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chainId`            | string         | `"1"` (Ethereum) or `"31337"` (Anvil)                                                                                                                         |
-| `rpcUrl`             | string         | The casino's primary RPC                                                                                                                                      |
-| `witnessRpcUrl`      | string         | Its witness RPC, on another host; absent when it has none                                                                                                     |
-| `contractAddress`    | address        | The HookedInCasino contract                                                                                                                                   |
-| `protocol`           | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#bounds-and-the-protocol-revision), the hash of everything a wallet and the casino agree on                       |
-| `developerProtocol`  | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                                           |
-| `operator`           | address        | The contract's signer: the casino's signing address                                                                                                           |
-| `networkName`        | string         | `"Ethereum"` or `"Anvil test chain"`                                                                                                                          |
-| `isLocalDevelopment` | boolean        | `true` only on a local stack that offers [demo ETH](#post-apidemo-eth)                                                                                        |
-| `explorerUrl`        | string or null | `"https://etherscan.io"` on Ethereum, `null` otherwise                                                                                                        |
-| `bounds`             | object         | `{outcomeSpace, meta, group, results, pairs, weight, label}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to |
-| `collateralRate`     | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                                                 |
-| `depositFeeLimit`    | string         | The most network fee the casino [pays](channels.md#post-apichannelsidoperations) of a deposit, in millionths of the deposit, as far as its daily budget goes  |
-| `discord`            | string or null | The invite to the HookedIn Discord, where players [verify their Discord accounts](channels.md#verifying-a-discord-account); `null` where there is none        |
+| Response field      | Type           | Meaning                                                                                                                                                       |
+| ------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chainId`           | string         | `"1"` (Ethereum) or `"31337"` (Anvil)                                                                                                                         |
+| `rpcUrl`            | string         | The casino's primary RPC                                                                                                                                      |
+| `witnessRpcUrl`     | string         | Its witness RPC, on another host; absent when it has none                                                                                                     |
+| `contractAddress`   | address        | The HookedInCasino contract                                                                                                                                   |
+| `protocol`          | bytes32        | [`PROTOCOL`](../reference/signed-messages.md#bounds-and-the-protocol-revision), the hash of everything a wallet and the casino agree on                       |
+| `developerProtocol` | bytes32        | `DEVELOPER_PROTOCOL`, the hash of what a developer's server and the casino agree on                                                                           |
+| `operator`          | address        | The contract's signer: the casino's signing address                                                                                                           |
+| `networkName`       | string         | `"Ethereum"` or `"Anvil test chain"`                                                                                                                          |
+| `explorerUrl`       | string or null | `"https://etherscan.io"` on Ethereum, `null` otherwise                                                                                                        |
+| `bounds`            | object         | `{outcomeSpace, meta, group, results, pairs, weight, label}`: [the bounds](../reference/signed-messages.md#bounds-and-the-protocol-revision) a bet is held to |
+| `collateralRate`    | string         | What [collateral](../reference/signed-messages.md#collateral-offers) costs, in millionths of its amount, once                                                 |
+| `depositFeeLimit`   | string         | The most network fee the casino [pays](channels.md#post-apichannelsidoperations) of a deposit, in millionths of the deposit, as far as its daily budget goes  |
+| `discord`           | string or null | The invite to the HookedIn Discord, where players [verify their Discord accounts](channels.md#verifying-a-discord-account); `null` where there is none        |
 
 ### `GET /api/status`
 
@@ -234,10 +233,9 @@ game is placed, the time is up or another wait on the game begins, and then read
 or for settled bets no settled bet. `unauthorized` answers a wait without the access of the published game's server, and
 `busy` one too many ([budgets](index.md#budgets-and-queues)).
 
-## Local development
+## Demo ETH
 
 ### `POST /api/demo-eth`
 
-Sends 2,000,000 METH on a local Anvil chain to `address`, for the wallet's demo setup, and answers `{txHash, amount}`; a
-request while another is being paid is `refused`. Where `GET /api/config` does not report `isLocalDevelopment`, it
-answers `404` `not-found`.
+Sends 2,000,000 METH on an Anvil chain to `address`, for the wallet's demo setup, and answers `{txHash, amount}`; a
+request while another is being paid is `refused`. A casino on Ethereum answers `404` `not-found`.

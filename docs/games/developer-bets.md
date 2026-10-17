@@ -348,13 +348,19 @@ key you name as the game's server, as a secret.
 
 ## Trying it
 
-The local wallet [`hookedin-game serve`](quick-start.md#try-it-with-pretend-money) serves takes casino bets only: its
-casino lives in the page, out of your server's reach. Without ETH, a game with a server is tried two ways:
+The local wallet that [`hookedin-game serve`](quick-start.md#try-it-with-pretend-money) runs plays your game against a
+stand-in casino with pretend money, and your server plays against the same one: the wallet places your page's developer
+bets, and your server, unchanged, opens its rounds and reads and settles the bets through `createDeveloper`, over HTTP.
+For a Worker that `npm run dev` serves at `http://127.0.0.1:8790/`, as roulette's does:
 
-- Its tests, where [`gameWallet`](testing.md#gamewallet)'s `developer` stands in for the `Developer` your server
-  creates, against the same stub casino as the wallet ([testing a server](testing.md#testing-a-server)).
-- A local preview that runs your page and your server against that stand-in, as crash's `npm run demo` does with its
-  [test/harness.ts](https://github.com/hookedin/game-crash/blob/main/test/harness.ts).
+1. In the game's folder, run `npx hookedin-game serve http://127.0.0.1:8790/`. It prints the `CASINO_URL`, `GAME` and
+   `SERVER_KEY` your server needs, the same every time: put them in `.dev.vars`. The key is made up for the stand-in,
+   and never your game's.
+2. Run `npm run dev` beside it, and open the local wallet at `http://localhost:4185/`.
+
+The stand-in lives in serve's memory: restarting serve starts it afresh, without the rounds and bets your server knows.
+Your server's tests run its code against the same stand-in without HTTP, as [`gameWallet`](testing.md#gamewallet)'s
+`developer` ([testing a server](testing.md#testing-a-server)).
 
 With the real casino, developer bets take real ETH. From an account with a balance, publish the game at the URL your
 server runs on, `http://127.0.0.1:<port>/` while you work, name its server key, put a little in its bank if its casino
