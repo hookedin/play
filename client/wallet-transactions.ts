@@ -838,10 +838,11 @@ export class WalletTransactions {
     );
   }
   /** Where a withdrawal stands on-chain. Once sent it is recorded, as its channel's `claimed` shows, and its event names
-   * the transaction that recorded it, looked for among recent blocks. What stays owed of it is a claim under its ID,
-   * paying the claim's recipient, which its account can change; it is paid once nothing is owed, and until then what
-   * can be collected now is read with it. One never recorded by the time its channel's close is final came back
-   * with the close. A withdrawal paid or returned keeps the block it was read at (`settledAt`). */
+   * the transaction that recorded it, looked for among the last day's 7,200 blocks, whose logs an RPC serves without a
+   * key. What stays owed of it is a claim under its ID, paying the claim's recipient, which its account can change; it
+   * is paid once nothing is owed, and until then what can be collected now is read with it. One never recorded by the
+   * time its channel's close is final came back with the close. A withdrawal paid or returned keeps the block it was
+   * read at (`settledAt`). */
   async withdrawalState(this: CasinoWallet, entry: Receipt, block: ChainBlock): Promise<Receipt> {
     const op = entry.proof.step.operation,
       here = { number: block.number, hash: block.hash };
@@ -863,11 +864,7 @@ export class WalletTransactions {
     const [event] = recordedIn
       ? []
       : await this.reader
-          .queryFilter(
-            this.reader.filters.Withdrawal(entry.withdrawal),
-            Math.max(0, block.number - 10000),
-            block.number,
-          )
+          .queryFilter(this.reader.filters.Withdrawal(entry.withdrawal), Math.max(0, block.number - 7200), block.number)
           .catch(() => []);
     const left: bigint = claim.protectedRemaining + claim.winningsRemaining;
     return {

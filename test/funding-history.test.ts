@@ -223,6 +223,34 @@ test('past the newest 100 receipts, a withdrawal or a lock-in stays until it is 
   await wallet.save({ kind: 'payment', operationId: 'payment 100', status, createdAt: at(110) });
   assert.equal(wallet.history.length, 100);
 });
+test("a recorded withdrawal's transaction is looked for in blocks whose logs an RPC serves without a key", async () => {
+  const wallet = new CasinoWallet({ network: 'local', storage: new MemoryStore() });
+  const account = '0x1111111111111111111111111111111111111111',
+    looked: number[][] = [];
+  wallet.observer = {
+    contractRead: async (_: unknown, method: string) =>
+      method === 'claims'
+        ? { beneficiary: account, recipient: account, protectedRemaining: 0n, winningsRemaining: 0n }
+        : { status: 0n, claimed: 1500n },
+  } as any;
+  wallet.reader = {
+    filters: { Withdrawal: () => ({}) },
+    queryFilter: async (_: unknown, from: number, to: number) => (looked.push([from, to]), []),
+  } as any;
+  const entry = {
+    kind: 'withdrawal',
+    withdrawal: '0xaa',
+    proof: {
+      base: { player: account, index: 0n, withdrawn: 0n },
+      step: { operation: { recipient: account, amount: 1500n } },
+    },
+  };
+  await wallet.withdrawalState(entry as any, { number: 30000, hash: '0x1' } as any);
+  // An RPC without a key can refuse logs from 10,000 blocks below its head, as publicnode does, and the confirmed block
+  // can be a few below it.
+  const [[from, to]] = looked;
+  assert.ok(to === 30000 && to - from < 9990, `looked from ${from} to ${to}`);
+});
 test('a withdrawal is read again when its recording is taken back, or the block that read it paid leaves the chain', async () => {
   const wallet = new CasinoWallet({ network: 'local', storage: new MemoryStore() });
   const account = '0x1111111111111111111111111111111111111111',
